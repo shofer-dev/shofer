@@ -18,7 +18,7 @@ GitIndexManager (per workspace, sibling to CodeIndexManager)
  ├── CodeIndexServiceFactory    — REUSED: creates IEmbedder + QdrantVectorStore (dedicated collection)
  ├── GitHistoryOrchestrator     — drives indexing (extract → embed → upsert)
  │    ├── GitLogExtractor       — runs `git log --format=...` for structured output
- │    └── GitWatcher            — polls for new commits (stub in Phase 1)
+ │    └── GitWatcher            — polls for new commits via setInterval (git log --since=<lastCommitDate>); implemented (Phase 2)
  └── GitSearchService           — embeds query → cosine search against git Qdrant collection
 ```
 
@@ -359,7 +359,7 @@ _These items were identified during verification of this document against the li
 
 7. **No mention of `GitCacheManager.lastCommitDate`** — the data model section (§Data Model) describes `GitCommitBlock` and the Qdrant point structure but does not mention the `lastCommitDate` field persisted in the cache, which drives Phase 2 incremental indexing.
 
-8. **`GitWatcher` described as "stub in Phase 1" in architecture diagram but not updated** — the architecture tree (line 21) still says `GitWatcher — polls for new commits (stub in Phase 1)` even though Phase 2 is marked ✅ Complete and the watcher is fully implemented.
+8. ~~**`GitWatcher` described as "stub in Phase 1"**~~ — ✅ fixed: the architecture tree now reflects the implemented Phase 2 `setInterval`/`git log --since` watcher (`git-watcher.ts`, ~199 lines).
 
 9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts:417) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
 
