@@ -138,10 +138,11 @@ A custom extension to standard `git worktree`. The file `.shofer/worktreeinclude
 
 ### How It Works
 
-1. When a worktree is created, the system reads both `.shofer/worktreeinclude` and `.gitignore`
+1. When a worktree is created (and "Copy files per worktreeinclude" is checked in the UI), the system reads both `.shofer/worktreeinclude` and `.gitignore`
 2. It computes the **intersection** of patterns from both files
 3. Only files matching **both** pattern sets are copied using native OS commands (`cp -r` / `robocopy`)
 4. Progress is streamed back to the UI via `worktreeCopyProgress` IPC messages
+5. If the user unchecks the option, this step is skipped — the new worktree contains only tracked files from the branch
 
 ### Why Intersection?
 
@@ -169,9 +170,9 @@ Worktrees are disabled when the VS Code workspace root is a subdirectory of the 
 
 ### Submodule Auto-Initialization
 
-When a worktree is created, Shofer automatically runs `git submodule update --init --depth 1` in the new worktree. This is a **shallow clone** — only the latest commit of each submodule is fetched, not the full history.
+When a worktree is created, Shofer can optionally run `git submodule update --init --depth 1` in the new worktree. This is a **shallow clone** — only the latest commit of each submodule is fetched, not the full history.
 
-- **Trigger**: runs automatically after every worktree creation (via [`handleCreateWorktree`](../src/core/webview/worktree/handlers.ts)), immediately after worktreeinclude file copy.
+- **Trigger**: enabled by default via the "Initialize submodules" checkbox in the [`CreateWorktreeModal`](../webview-ui/src/components/worktrees/CreateWorktreeModal.tsx). When unchecked, submodule init is skipped entirely. The auto-create flow (new ad-hoc tasks) also defaults to enabled.
 - **.gitmodules guard**: if the repository has no `.gitmodules` file, the init is silently skipped (no submodules to initialize).
 - **Hard failure**: if the submodule clone/init fails (network, auth, etc.), the worktree is torn down (directory removed, branch deleted) and the operation fails — a half-initialized worktree with empty submodule directories is not useful.
 - **Depth**: `--depth 1` is the current default. This keeps the clone fast and lightweight for most use cases.
@@ -185,21 +186,21 @@ When a worktree is created, Shofer automatically runs `git submodule update --in
 
 ### From Webview to Extension
 
-| Message Type               | Payload                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------- |
-| `listWorktrees`            | (none)                                                                            |
-| `createWorktree`           | `worktreePath`, `worktreeBranch`, `worktreeBaseBranch`, `worktreeCreateNewBranch` |
-| `deleteWorktree`           | `worktreePath`, `worktreeForce`                                                   |
-| `getWorktreeDefaults`      | (none)                                                                            |
-| `getWorktreeIncludeStatus` | (none)                                                                            |
-| `getAvailableBranches`     | (none)                                                                            |
-| `createWorktreeInclude`    | `worktreeIncludeContent`                                                          |
-| `branchWorktreeInclude`    | `worktreeBranch`                                                                  |
-| `checkoutBranch`           | `worktreeBranch`                                                                  |
-| `browseForWorktreePath`    | (none)                                                                            |
-| `newTask`                  | `text`, `images?`, `worktreeDir?`, `autoCreateWorktree?`                          |
-| `createParallelTask`       | `taskName?`, `text?`, `images?`, `worktreeDir?`                                   |
-| `getWorktreeStatus`        | (none)                                                                            |
+| Message Type               | Payload                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `listWorktrees`            | (none)                                                                                                                       |
+| `createWorktree`           | `worktreePath`, `worktreeBranch`, `worktreeBaseBranch`, `worktreeCreateNewBranch`, `initSubmodules?`, `copyWorktreeInclude?` |
+| `deleteWorktree`           | `worktreePath`, `worktreeForce`                                                                                              |
+| `getWorktreeDefaults`      | (none)                                                                                                                       |
+| `getWorktreeIncludeStatus` | (none)                                                                                                                       |
+| `getAvailableBranches`     | (none)                                                                                                                       |
+| `createWorktreeInclude`    | `worktreeIncludeContent`                                                                                                     |
+| `branchWorktreeInclude`    | `worktreeBranch`                                                                                                             |
+| `checkoutBranch`           | `worktreeBranch`                                                                                                             |
+| `browseForWorktreePath`    | (none)                                                                                                                       |
+| `newTask`                  | `text`, `images?`, `worktreeDir?`, `autoCreateWorktree?`                                                                     |
+| `createParallelTask`       | `taskName?`, `text?`, `images?`, `worktreeDir?`                                                                              |
+| `getWorktreeStatus`        | (none)                                                                                                                       |
 
 ### From Extension to Webview
 
