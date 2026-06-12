@@ -1,32 +1,44 @@
 #!/usr/bin/env bash
 #
-# Shofer CLI smoke-test harness.
+# Shofer CLI test harness — the single entry point for all CLI test suites.
 #
-# Runs TWO suites:
+# Runs THREE parts:
 #
 #   Part 1 — CLI scenarios (docs/test_harness.md §1-25).
 #            Sequential by design (some scenarios share session/filesystem state).
 #
-#   Part 2 — Workflow conformance (23 _-prefixed .slang fixtures).
-#            Parallelised via xargs (process-per-flow isolation) to keep total
-#            wall-clock time reasonable against real providers. Uses the existing
-#            MATCH= knob so each child process runs exactly one fixture.
+#   Part 2 — Integration protocol cases (apps/cli/scripts/integration/cases/*.ts,
+#            excluding workflow-conformance). Stream-protocol cases for
+#            cancellation, follow-ups, queue ordering and process lifecycle.
+#            Parallelised via xargs (process-per-case). They drive genuinely slow
+#            multi-turn tool flows, so they need a real provider and are skipped
+#            on the hermetic `mock` preset.
 #
-# Presets (same as before):
+#   Part 3 — Workflow conformance (23 _-prefixed .slang fixtures).
+#            Parallelised via xargs (process-per-flow isolation) to keep total
+#            wall-clock time reasonable against real providers. Uses the MATCH=
+#            knob so each child process runs exactly one fixture.
+#
+# Presets:
 #   mock    Hermetic mock provider — no network, no credentials, deterministic.
 #   ds      DeepSeek via the local llm-router (http://localhost:30081/v1).
 #
 # Override knobs (env):
-#   PROVIDER   provider flags (e.g. "--provider mock --api-key x")
-#   MODEL      model flag    (e.g. "--model mock-model")
-#   ROUTER_URL base URL for the `ds` preset (default http://localhost:30081/v1)
-#   DS_MODEL   model for the `ds` preset    (default deepseek/deepseek-v4-pro)
-#   TIMEOUT    per-scenario timeout seconds (default 120)
-#   TIMEOUT_WF per-workflow timeout seconds for Part 2 (default 600)
-#   WF_PARALLEL max concurrent workflow processes (default 4)
-#   SKIP_PART2 skip workflow conformance (default unset; set to 1 to skip)
+#   PROVIDER        provider flags (e.g. "--provider mock --api-key x")
+#   MODEL           model flag    (e.g. "--model mock-model")
+#   ROUTER_URL      base URL for the `ds` preset (default http://localhost:30081/v1)
+#   DS_MODEL        model for the `ds` preset    (default deepseek/deepseek-v4-pro)
+#   TIMEOUT         per-scenario timeout seconds, Part 1 (default 120)
+#   TIMEOUT_INT     per-case timeout seconds, Part 2    (default 180)
+#   TIMEOUT_WF      per-workflow timeout seconds, Part 3 (default 600)
+#   INT_PARALLEL    max concurrent integration cases (default 4)
+#   WF_PARALLEL     max concurrent workflow processes (default 4)
+#   MATCH           substring filter for Part 2 case names / Part 3 fixture names
+#   SKIP_CLI        skip Part 1 (default 0)
+#   SKIP_INTEGRATION skip Part 2 (default 0)
+#   SKIP_WORKFLOW   skip Part 3 (default 0; legacy alias: SKIP_PART2)
 #
-# Exit code: 0 if all scenarios in both parts pass, 1 otherwise.
+# Exit code: 0 if all scenarios in every part pass, 1 otherwise.
 set -u
 
 PRESET="${1:-mock}"
@@ -41,9 +53,14 @@ WS_ROOT="$(cd "${EXT_DIR}/../.." && pwd)"             # repo root
 ROUTER_URL="${ROUTER_URL:-http://localhost:30081/v1}"
 DS_MODEL="${DS_MODEL:-deepseek/deepseek-v4-pro}"
 TIMEOUT="${TIMEOUT:-120}"
+TIMEOUT_INT="${TIMEOUT_INT:-180}"
 TIMEOUT_WF="${TIMEOUT_WF:-600}"
+INT_PARALLEL="${INT_PARALLEL:-4}"
 WF_PARALLEL="${WF_PARALLEL:-4}"
-SKIP_PART2="${SKIP_PART2:-0}"
+SKIP_CLI="${SKIP_CLI:-0}"
+SKIP_INTEGRATION="${SKIP_INTEGRATION:-0}"
+# SKIP_PART2 is the legacy name for the workflow-conformance skip.
+SKIP_WORKFLOW="${SKIP_WORKFLOW:-${SKIP_PART2:-0}}"
 
 # Provider/model presets (override via env to use any other provider).
 case "${PRESET}" in
@@ -95,6 +112,10 @@ echo "  MODEL:    ${MODEL}"
 echo "  WS:       ${WS_ROOT}"
 echo ""
 
+if [[ "${SKIP_CLI}" == "1" ]]; then
+	echo ""
+	echo "Part 1 (CLI scenarios) — SKIPPED (SKIP_CLI=1)"
+else
 echo "============================================"
 echo " Part 1: CLI scenarios (sequential)"
 echo "============================================"
@@ -149,7 +170,7 @@ echo "=== 8 session persistence ==="
 SID="018f7fc8-0000-7000-8000-0000000000$(printf '%02d' $((RANDOM % 100)))"
 SL --print --create-with-session-id "$SID" "Remember the number 42. Reply with: STORED" >/dev/null
 # Resume must NOT pass a positional prompt alongside --session-id (the CLI rejects
-# that combo, run.ts:105). Deliver the follow-up turn through the stdin NDJSON
+# that combo). Deliver the follow-up turn through the stdin NDJSON
 # stream: --session-id resumes the task, then a `message` command drives the turn.
 # shellcheck disable=SC2086
 out=$(printf '{"command":"message","requestId":"r1","prompt":"What number did I tell you to remember? Reply with just the number."}\n' | timeout "${TIMEOUT}" $CLI $PROVIDER $MODEL $WS --print --output-format stream-json --stdin-prompt-stream --session-id "$SID" 2>/dev/null)
@@ -220,17 +241,109 @@ echo "================= PART 1 SUMMARY (${PRESET}) ================="
 for r in "${RESULTS[@]}"; do echo "$r"; done
 echo "------------------------------------------------------"
 echo "PASS=$PASS FAIL=$FAIL"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────
-# Part 2 — Workflow conformance (process-per-flow parallel)
+# Part 2 — Integration protocol cases (process-per-case parallel)
 # ─────────────────────────────────────────────────────────────────────────
-if [[ "${SKIP_PART2}" == "1" ]]; then
+# These stream-protocol cases drive genuinely slow multi-turn tool flows
+# (e.g. start-while-busy needs the first task to still be running), so they
+# require a provider that actually executes tools and are skipped on `mock`
+# — the same rule as the real-provider-only CLI scenarios in Part 1.
+INT_DIR="${CLI_DIR}/scripts/integration/cases"
+if [[ "${SKIP_INTEGRATION}" == "1" ]]; then
 	echo ""
-	echo "Part 2 (workflow conformance) — SKIPPED (SKIP_PART2=1)"
+	echo "Part 2 (integration cases) — SKIPPED (SKIP_INTEGRATION=1)"
+elif [[ "${PRESET}" == "mock" ]]; then
+	echo ""
+	echo "Part 2 (integration cases) — SKIPPED (need a real provider; preset='mock')"
 else
 	echo ""
 	echo "============================================"
-	echo " Part 2: Workflow conformance (parallel x${WF_PARALLEL})"
+	echo " Part 2: Integration cases (parallel x${INT_PARALLEL})"
+	echo "============================================"
+
+	# Provider env each case inherits (stream-harness.ts reads these).
+	INT_ENV="PROVIDER=shofer API_KEY=shofer MODEL=${DS_MODEL} BASE_URL=${ROUTER_URL}"
+
+	# Discover case files, excluding workflow-conformance (its own Part 3).
+	shopt -s nullglob
+	CASES=()
+	for f in "${INT_DIR}"/*.ts; do
+		base="$(basename "$f" .ts)"
+		[[ "$base" == "workflow-conformance" ]] && continue
+		# Optional MATCH substring filter for single-case runs.
+		if [[ -n "${MATCH:-}" && "$base" != *"${MATCH}"* ]]; then continue; fi
+		CASES+=( "$base" )
+	done
+
+	INT_LOG_DIR="$(mktemp -d)"
+	# Logs persist after exit for inspection; clean up manually (rm -rf /tmp/tmp.XXXX).
+	INT_CLI_DIR="${CLI_DIR}"
+	export INT_ENV INT_LOG_DIR TIMEOUT_INT INT_CLI_DIR
+
+	INT_SCRIPT="${INT_LOG_DIR}/_int_worker.sh"
+	cat > "${INT_SCRIPT}" <<'IWORKER_EOF'
+#!/usr/bin/env bash
+set -u
+name="$1"
+log="${INT_LOG_DIR}/${name}.log"
+cd "${INT_CLI_DIR}" || exit 2
+# Pass/fail is the case's own exit code; record a sentinel so the parent can
+# collect results from the per-case log (xargs hides child exit codes).
+if timeout "${TIMEOUT_INT}" \
+	env ROO_CLI_ROOT="${INT_CLI_DIR}" TIMEOUT_MS="$((TIMEOUT_INT * 1000))" ${INT_ENV} \
+	pnpm --filter @shofer/cli exec tsx "scripts/integration/cases/${name}.ts" \
+	> "${log}" 2>&1
+then
+	echo "__CASE_PASS__" >> "${log}"
+else
+	echo "__CASE_FAIL__ rc=$?" >> "${log}"
+fi
+IWORKER_EOF
+	chmod +x "${INT_SCRIPT}"
+
+	INT_PASS=0
+	INT_FAIL=0
+	if [[ ${#CASES[@]} -gt 0 ]]; then
+		if [[ "${INT_PARALLEL}" -gt 1 ]]; then
+			printf '%s\n' "${CASES[@]}" | xargs -P "${INT_PARALLEL}" -I{} "${INT_SCRIPT}" "{}"
+		else
+			for name in "${CASES[@]}"; do "${INT_SCRIPT}" "${name}"; done
+		fi
+	fi
+
+	for name in "${CASES[@]}"; do
+		log="${INT_LOG_DIR}/${name}.log"
+		if grep -qF "__CASE_PASS__" "$log" 2>/dev/null; then
+			echo "  ✅ ${name}"
+			INT_PASS=$((INT_PASS + 1))
+			TOTAL_PASS=$((TOTAL_PASS + 1))
+		else
+			rc="$(grep -oE "__CASE_FAIL__ rc=[0-9]+" "$log" 2>/dev/null | grep -oE "[0-9]+")"
+			echo "  ✗  ${name}  -- rc=${rc:-timeout/NO_OUTPUT}"
+			echo "     log: ${log}"
+			INT_FAIL=$((INT_FAIL + 1))
+			TOTAL_FAIL=$((TOTAL_FAIL + 1))
+		fi
+	done
+
+	echo ""
+	echo "================= PART 2 SUMMARY (${PRESET}) ================="
+	echo "PASS=${INT_PASS}  FAIL=${INT_FAIL}"
+	echo "------------------------------------------------------"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────
+# Part 3 — Workflow conformance (process-per-flow parallel)
+# ─────────────────────────────────────────────────────────────────────────
+if [[ "${SKIP_WORKFLOW}" == "1" ]]; then
+	echo ""
+	echo "Part 3 (workflow conformance) — SKIPPED (SKIP_WORKFLOW=1)"
+else
+	echo ""
+	echo "============================================"
+	echo " Part 3: Workflow conformance (parallel x${WF_PARALLEL})"
 	echo "============================================"
 
 	WF_DIR="${CLI_DIR}/scripts/integration/fixtures"
@@ -244,7 +357,10 @@ else
 	shopt -s nullglob
 	FIXTURES=()
 	for f in "${WF_DIR}"/_*.slang; do
-		FIXTURES+=( "$(basename "$f" .slang)" )
+		base="$(basename "$f" .slang)"
+		# Optional MATCH substring filter for single-fixture runs.
+		if [[ -n "${MATCH:-}" && "$base" != *"${MATCH}"* ]]; then continue; fi
+		FIXTURES+=( "$base" )
 	done
 
 	WF_LOG_DIR="$(mktemp -d)"
@@ -327,7 +443,7 @@ WORKER_EOF
 	done
 
 	echo ""
-	echo "================= PART 2 SUMMARY (${PRESET}) ================="
+	echo "================= PART 3 SUMMARY (${PRESET}) ================="
 	echo "PASS=${WF_PASS}  FAIL=${WF_FAIL}"
 	echo "------------------------------------------------------"
 fi

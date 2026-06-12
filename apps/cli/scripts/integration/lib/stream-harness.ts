@@ -67,18 +67,32 @@ export async function runStreamCase(options: RunStreamCaseOptions): Promise<void
 	const cliRoot = process.env.ROO_CLI_ROOT ? path.resolve(process.env.ROO_CLI_ROOT) : defaultCliRoot
 	const timeoutMs = options.timeoutMs ?? 120_000
 
-	const child = execa(
-		"pnpm",
-		["dev", "--print", "--stdin-prompt-stream", "--provider", "shofer", "--output-format", "stream-json"],
-		{
-			cwd: cliRoot,
-			stdin: "pipe",
-			stdout: "pipe",
-			stderr: "pipe",
-			reject: false,
-			forceKillAfterDelay: 2_000,
-		},
-	)
+	// Provider/model are env-driven (same var names the workflow runner uses) so
+	// the unified harness can drive these stream-protocol cases under any preset
+	// — `mock` (hermetic) or `ds` (local llm-router) — not just the shofer cloud.
+	// Defaults preserve the original behaviour (shofer provider, settings model).
+	const provider = process.env.PROVIDER || "shofer"
+	const cliArgs = [
+		"dev",
+		"--print",
+		"--stdin-prompt-stream",
+		"--provider",
+		provider,
+		"--output-format",
+		"stream-json",
+	]
+	if (process.env.MODEL) cliArgs.push("--model", process.env.MODEL)
+	if (process.env.API_KEY) cliArgs.push("--api-key", process.env.API_KEY)
+	if (process.env.BASE_URL) cliArgs.push("--base-url", process.env.BASE_URL)
+
+	const child = execa("pnpm", cliArgs, {
+		cwd: cliRoot,
+		stdin: "pipe",
+		stdout: "pipe",
+		stderr: "pipe",
+		reject: false,
+		forceKillAfterDelay: 2_000,
+	})
 
 	child.stderr?.on("data", (chunk) => {
 		process.stderr.write(chunk)
