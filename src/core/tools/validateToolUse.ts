@@ -138,7 +138,11 @@ const MUTATION_GATING_PARAMS: Record<string, string[]> = {
 	sed: ["pattern", "replacement"],
 	file: ["subcommand"],
 	create_directory: [],
-	create_new_workspace: ["name"],
+	// create_new_workspace mutates `${path}/${name}`; getMutatedPaths needs BOTH
+	// to resolve a target, so both are listed here. Until both have streamed,
+	// getMutatedPaths returns [] and enforcement is a safe no-op. Both are
+	// schema-required, so a complete call always carries both and is enforced.
+	create_new_workspace: ["path", "name"],
 	generate_image: ["prompt"],
 	search_replace: ["old_string", "new_string"],
 	edit_file: ["old_string", "new_string"],
@@ -163,8 +167,20 @@ function getMutatedPaths(tool: string, toolParams: Record<string, any>): string[
 		case "sed":
 			return toolParams.path ? [toolParams.path] : []
 
-		case "insert_edit":
+		case "insert_edit": {
+			const p = toolParams.path || toolParams.filePath
+			return p ? [p] : []
+		}
+
 		case "rename_symbol": {
+			// KNOWN LIMITATION: rename_symbol applies a WorkspaceEdit across every
+			// file referencing the symbol (see RenameSymbolTool), but the full set
+			// is only computed by VS Code's LSP at execution time — it cannot be
+			// derived from the call params here. We therefore validate fileRegex
+			// only against the declaration file (`path`). A restricted mode could
+			// thus still mutate referencing files outside its fileRegex.
+			// TODO: enforce fileRegex against every affected path inside
+			// RenameSymbolTool.execute(), after the WorkspaceEdit is resolved.
 			const p = toolParams.path || toolParams.filePath
 			return p ? [p] : []
 		}
@@ -383,6 +399,12 @@ export function isToolAllowedForMode(
 				// Streaming partial-params gate: skip enforcement until at least one
 				// mutation-indicator param is present, so we don't reject a partial
 				// {path: "test.js"} before the model streams {content: ...}.
+				//
+				// Presence is tested with `!== undefined`, NOT truthiness: an
+				// intentionally-empty value (e.g. `content: ""` to clear a file, or
+				// `pattern: ""`) is a real mutation and MUST be enforced. Using
+				// truthiness here would treat those as "absent" and silently bypass
+				// fileRegex. Do not "simplify" this back to `toolParams?.[p]`.
 				const gatingParams = MUTATION_GATING_PARAMS[tool]
 				const hasMutationParams =
 					!gatingParams || gatingParams.length === 0

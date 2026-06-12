@@ -704,6 +704,19 @@ describe("isToolAllowedForMode", () => {
 					path: "test.js",
 				}),
 			).toThrow(FileRestrictionError)
+			// create_new_workspace resolves its target from BOTH path and name;
+			// a partial stream carrying only one cannot resolve a path, so
+			// enforcement is deferred (no premature rejection).
+			expect(
+				isToolAllowedForMode("create_new_workspace", "markdown-editor", customModes, undefined, {
+					name: "test.js",
+				}),
+			).toBe(true)
+			expect(
+				isToolAllowedForMode("create_new_workspace", "markdown-editor", customModes, undefined, {
+					path: "/tmp",
+				}),
+			).toBe(true)
 		})
 	})
 
