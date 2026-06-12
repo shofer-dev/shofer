@@ -378,7 +378,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 			})
 		})
 
-		describe(`${klass.name}#hasNestedGitRepositories`, () => {
+		describe(`${klass.name}#getNestedGitRepository`, () => {
 			it("succeeds when nested git repositories are detected (GIT_DIR prevents submodule detection)", async () => {
 				// Create a new temporary workspace and service for this test.
 				const shadowDir = path.join(tmpDir, `${prefix}-nested-git-${Date.now()}`)

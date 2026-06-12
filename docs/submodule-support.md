@@ -219,8 +219,8 @@ bearing on the file-changes panel — it always used the working-directory backe
 `GIT_CEILING_DIRECTORIES` matters is not discussed in this doc or in
 [`checkpoints.md`](checkpoints.md).
 
-### 2. Spec describe block name mismatch
+### 2. ~~Spec describe block name mismatch~~ — ✅ fixed
 
-The spec file's describe block is labeled `#hasNestedGitRepositories` but the
-actual method on `ShadowCheckpointService` is `getNestedGitRepository`. The
-method was renamed but the describe block was not updated.
+The spec describe block was relabeled from `#hasNestedGitRepositories` to
+`#getNestedGitRepository` to match the actual private method on
+`ShadowCheckpointService`.
