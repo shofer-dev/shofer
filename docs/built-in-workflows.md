@@ -142,8 +142,14 @@ Two IPC message types govern the workflow lifecycle:
 The webview requests the list of discovered workflows. The handler:
 
 1. Calls `discoverWorkflows(provider.cwd)` to get all `.slang` sources.
-2. Parses each source with `parseSlang()` to extract metadata (`name`, `params`).
-3. Posts a `workflowsList` message with `{ name, params }[]` to the webview.
+2. Parses each source with `parseSlang()` and reads `ast.flows[0]` to extract the
+   full launcher metadata: `name` (machine id), `title` (falls back to `name`),
+   `description`, `icon`, `agents` (the `AgentDecl` names in the flow body), and
+   `params` (each `{ name, type, description }`). Unparseable `.slang` files fall
+   back to `{ name, title: name, description: "", icon: undefined, agents: [], params: [] }`.
+3. Posts a `workflowsList` message with that `{ name, title, description, icon, agents, params }[]`
+   array — this is what populates the LauncherView cards (title, description, icon,
+   agent list), not just `{ name, params }`.
 
 ### 4.2 `createWorkflow`
 
