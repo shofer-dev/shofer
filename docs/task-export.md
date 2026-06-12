@@ -361,9 +361,9 @@ The JSON export mirrors the chrome-extension's in-task trace format ([`sidepanel
 
 ## Gaps and Known Issues
 
-### Source comment inaccuracy
+### Source comment inaccuracy — ✅ fixed
 
-The `apiProtocol` field comment in [`export-json.ts:19`](../src/integrations/misc/export-json.ts:19) says `(e.g. "anthropic", "openai-native")`. Runtime values produced by [`getApiProtocol()`](../packages/types/src/provider-settings.ts:549) are `"anthropic"` and `"openai"` — `"openai-native"` never appears as an `apiProtocol`. The source comment should be corrected to match runtime reality.
+The `apiProtocol` field comment in [`export-json.ts`](../src/integrations/misc/export-json.ts) said `(e.g. "anthropic", "openai-native")`. Runtime values from [`getApiProtocol()`](../packages/types/src/provider-settings.ts) are only `"anthropic"` and `"openai"`; `"openai-native"` is a provider name, never an `apiProtocol`. Comment corrected.
 
 ### Markdown example accuracy
 

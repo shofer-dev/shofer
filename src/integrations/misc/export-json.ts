@@ -16,7 +16,7 @@ import type { ExtendedContentBlock } from "./export-markdown"
 export interface JsonExportCall {
 	/** 1-based index of this API call within the task. */
 	index: number
-	/** Provider (e.g. "anthropic", "openai-native"). */
+	/** API protocol from getApiProtocol(): "anthropic" or "openai". */
 	apiProtocol?: string
 	/** Model ID used for this request. */
 	model?: string
