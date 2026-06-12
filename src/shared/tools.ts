@@ -263,8 +263,11 @@ export type NativeToolArgs = {
 		wait?: boolean | null
 		timeout_sec?: number | null
 	}
-	// `wait` is an alias for attempt_completion; both params are optional/advisory
-	// and get host-side defaults (rating -> "well", reason -> "waiting").
+	// `wait` is an alias for attempt_completion. `rating` is required by the schema
+	// (assesses the work done so far); `reason` is optional (defaults to "waiting").
+	// `rating` is kept optional in this runtime type as a defensive measure — like
+	// attempt_completion, the handler tolerates a missing rating from non-strict
+	// providers and falls back to a default ("well").
 	wait: { rating?: string; reason?: string }
 	// Add more tools as they are migrated to native protocol
 }

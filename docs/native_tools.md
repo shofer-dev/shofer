@@ -568,12 +568,12 @@ The optional `feedback` parameter captures concrete observations about tooling o
 
 A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended for message-driven / orchestrator flows: after sending a message to a peer (`send_message_to_task`), call `wait` to yield, and you are automatically resumed when a reply/message arrives.
 
-The handler ([`WaitTool.ts`](../src/core/tools/WaitTool.ts)) maps the canned params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. Both params are optional and advisory (host-side defaults applied in the handler — note `attempt_completion` itself defaults a missing rating to `"poor"`, but `wait` defaults to `"well"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
+The handler ([`WaitTool.ts`](../src/core/tools/WaitTool.ts)) maps the params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. `rating` is **required** (it covers the work completed so far); `reason` is optional and defaults to `"waiting"`. The handler keeps a defensive `"well"` fallback for the rating only for providers that don't enforce strict schemas (mirroring `attempt_completion`, which defaults a missing rating to `"poor"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
 
-| Param    | Type           | Required | Description                                                                              |
-| -------- | -------------- | :------: | ---------------------------------------------------------------------------------------- |
-| `rating` | string \| null |    –     | Self-assessment of the work so far: `"poor"`, `"well"`, `"excellent"`. Default `"well"`. |
-| `reason` | string \| null |    –     | Short note on what you are waiting for. Default `"waiting"`.                             |
+| Param    | Type           | Required | Description                                                                                        |
+| -------- | -------------- | :------: | -------------------------------------------------------------------------------------------------- |
+| `rating` | string         |    ✅    | Self-assessment of the work completed so far, up to this point: `"poor"`, `"well"`, `"excellent"`. |
+| `reason` | string \| null |    –     | Short note on what you are waiting for. Default `"waiting"`.                                       |
 
 See [`adding-new-tools.md` § "Alias Tools"](adding-new-tools.md) for the delegating-alias pattern.
 

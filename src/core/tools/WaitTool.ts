@@ -18,19 +18,20 @@ const DEFAULT_WAIT_REASON = "waiting"
 /**
  * `wait` is a thin convenience alias for `attempt_completion`.
  *
- * The agent calls `wait` (with optional `rating` / `reason`) to yield control
+ * The agent calls `wait` (required `rating`, optional `reason`) to yield control
  * as a self-declared terminal state without having to formulate a full result.
- * We map the canned/advisory params onto `attempt_completion`'s params and
- * delegate to its handler, so all of the terminal/delegation/peer-sync logic
- * lives in exactly one place:
+ * We map the params onto `attempt_completion`'s params and delegate to its
+ * handler, so all of the terminal/delegation/peer-sync logic lives in exactly
+ * one place:
  *
  *   - reason -> result   (the human/orchestrator-facing completion message)
- *   - rating -> rating   (self-assessment of the work done so far)
+ *   - rating -> rating   (self-assessment of the work completed so far)
  *
- * Both params are optional; host-side defaults are applied here (NOT in the
- * schema, which is intentionally non-strict). Note that `attempt_completion`
- * defaults a missing rating to "poor", so we must resolve the `wait` default
- * ("well") ourselves before delegating.
+ * `rating` is required by the schema; the "well" fallback below is only a
+ * defensive safety net for providers that don't enforce strict schemas (e.g.
+ * vscode-lm), mirroring how `attempt_completion` itself defaults a missing
+ * rating (it defaults to "poor", so we must resolve the `wait` default
+ * ourselves before delegating). `reason` is optional and defaults to "waiting".
  */
 export class WaitTool extends BaseTool<"wait"> {
 	readonly name = "wait" as const

@@ -10,30 +10,31 @@ Typical triggers — call \`wait\` immediately if any of these is true:
 - You have been told to wait for further instructions or for an event.
 - You have completed everything you can do until someone messages you.
 
-Mechanically this yields control like \`attempt_completion\` (it ends the current turn and returns control), but you do NOT need to formulate a full result — just optionally say why you are waiting. Both parameters are optional.
+Mechanically this yields control like \`attempt_completion\` (it ends the current turn and returns control), but you do NOT need to formulate a full result — just rate the work done so far and optionally say what you are waiting for.
 
 Parameters:
-- rating: (optional) A self-assessment of the work done so far. One of "poor", "well", or "excellent". Defaults to "well" if omitted.
+- rating: (required) A self-assessment of the work you have completed so far, up to this point of waiting. One of "poor" (significant issues or incomplete), "well" (acceptable, room for improvement), or "excellent" (high quality).
 - reason: (optional) A short note on what you are waiting for. Defaults to "waiting" if omitted.
 
-Example: { "reason": "waiting for a reply from the research task", "rating": "well" }`
+Example: { "rating": "well", "reason": "waiting for a reply from the research task" }`
 
 export default {
 	type: "function",
 	function: {
 		name: "wait",
 		description: WAIT_DESCRIPTION,
-		// Both parameters are advisory/optional with host-side defaults, so this
-		// schema is intentionally NOT strict (OpenAI Structured Outputs with
-		// strict: true would force the model to emit every property). See the
-		// Advisory Parameter Defaults Rule in docs/adding-new-tools.md.
+		// `rating` is required, but `reason` is optional/advisory with a host-side
+		// default, so this schema is intentionally NOT strict (OpenAI Structured
+		// Outputs with strict: true would force the model to emit every property,
+		// including `reason`). See the Advisory Parameter Defaults Rule in
+		// docs/adding-new-tools.md.
 		parameters: {
 			type: "object",
 			properties: {
 				rating: {
 					type: "string",
 					description:
-						"Self-assessment of the work so far: 'poor', 'well', or 'excellent'. Defaults to 'well'.",
+						"Self-assessment of the work you have completed so far: 'poor', 'well', or 'excellent'.",
 					enum: ["poor", "well", "excellent"],
 				},
 				reason: {
@@ -41,7 +42,7 @@ export default {
 					description: "Short reason for waiting / what you are waiting on. Defaults to 'waiting'.",
 				},
 			},
-			required: [],
+			required: ["rating"],
 			additionalProperties: false,
 		},
 	},

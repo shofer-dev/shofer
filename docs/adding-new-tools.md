@@ -294,19 +294,25 @@ Checklist deltas for a delegating alias:
   `NativeToolArgs`, parser cases, router case). The alias is in
   `ALWAYS_AVAILABLE_TOOLS` if its target is (`attempt_completion` is), so it needs
   no `TOOL_GROUPS` entry.
-- **Parser must emit `nativeArgs` even when all params are optional.** With no
-  required param, do **not** guard the assignment (`if (args.x)`) — emit
-  `nativeArgs` unconditionally, or the dispatcher rejects the call as "missing
-  nativeArgs". (`wait`'s parser cases set `{ rating, reason }` with no guard.)
+- **Parser must emit `nativeArgs` for the alias's no-blocking-param case.** Do
+  **not** add a missing-field check or guard the assignment (`if (args.x)`) for
+  params the handler defaults — emit `nativeArgs` unconditionally, or the
+  dispatcher rejects the call as "missing nativeArgs". (`wait`'s parser cases set
+  `{ rating, reason }` with no guard. Note `wait`'s `rating` is schema-_required_
+  but, like `attempt_completion`'s rating, gets no parser-level missing check
+  because the handler applies a defensive default — the schema enforces it at the
+  model boundary, the handler tolerates non-strict providers.)
 - **Handler delegates via `.execute()`, not `.handle()`.** Call the target's
   `execute(mappedParams, task, callbacks)` directly so you control the params.
   The router constructs whatever callback bag the target needs (for `wait`, the
   same `AttemptCompletionCallbacks` the `attempt_completion` case builds).
-- **Resolve advisory defaults in the alias, not the target.** Defaults can differ:
+- **Resolve defaults in the alias, not the target.** Defaults can differ:
   `attempt_completion` defaults a missing rating to `"poor"`, but `wait` wants
   `"well"`, so `WaitTool.execute` resolves `"well"` _before_ delegating. Keep the
-  schema non-strict (optional params absent from `required`) per the Advisory
-  Parameter Defaults Rule.
+  schema non-strict whenever any param is optional (e.g. `wait`'s `reason`), since
+  strict mode would force the model to emit every property — even when other
+  params (e.g. `wait`'s `rating`) are required, per the Advisory Parameter
+  Defaults Rule.
 - **Auto-approval / `ShoferSayTool` / `ChatRow` (Steps 8–11) may be unneeded.**
   `attempt_completion` never calls `askApproval` — it is terminal and just
   `say`s `completion_result` — so `wait` inherits that rendering and needs none
