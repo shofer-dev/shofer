@@ -64,6 +64,7 @@ const COLOURS = {
 	toolBar: "var(--vscode-charts-orange, #f97316)",
 	toolBarWait: "var(--vscode-charts-cyan, #06b6d4)",
 	toolBarSleep: "var(--vscode-charts-yellow, #eab308)",
+	toolBarMcp: "var(--vscode-charts-indigo, #6366f1)",
 	toolBarError: "var(--vscode-charts-red, #dc2626)",
 	toolBarSkipped: "var(--vscode-descriptionForeground)",
 
@@ -490,13 +491,16 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								const toolSleeps = ts.toolName === "sleep"
 								const toolWaits =
 									!toolSleeps && (ts.waitsForTask === true || ts.toolName === "wait_for_task")
+								const toolMcp = !toolSleeps && !toolWaits && ts.toolName.startsWith("mcp:")
 								const toolFill = toolError
 									? COLOURS.toolBarError
 									: toolSleeps
 										? COLOURS.toolBarSleep
 										: toolWaits
 											? COLOURS.toolBarWait
-											: COLOURS.toolBar
+											: toolMcp
+												? COLOURS.toolBarMcp
+												: COLOURS.toolBar
 
 								return (
 									<g key={ti}>

@@ -166,6 +166,10 @@ export async function presentAssistantMessage(shofer: Task) {
 			// Store approval feedback to merge into tool result (GitHub #10465)
 			let approvalFeedback: { text: string; images?: string[] } | undefined
 
+			// Task Visualization — MCP tool span timing (set right before execution).
+			let toolSpanStartedAt = 0
+			let toolSpanRecorded = false
+
 			// Resolve experiments flag before pushToolResult so the sync closure
 			// can gate tool_result emission without awaiting inside it.
 			const mcpState = await shofer.providerRef.deref()?.getState()
@@ -236,6 +240,27 @@ export async function presentAssistantMessage(shofer: Task) {
 							output: mcpTruncatedOutput,
 						} satisfies import("@shofer/types").ShoferSayToolResult),
 					)
+				}
+
+				// Task Visualization — record the MCP call as a tool span so it is
+				// counted and listed in the Stats/Trace (with an "mcp:" prefix).
+				if (!toolSpanRecorded && Array.isArray(shofer._pendingToolSpans)) {
+					toolSpanRecorded = true
+					let toolResultIsError = false
+					try {
+						toolResultIsError = JSON.parse(resultContent)?.status === "error"
+					} catch {
+						// Non-JSON result is plain success output.
+					}
+					const finishedAt = performance.now()
+					shofer._pendingToolSpans.push({
+						startedAtOffsetMs: (toolSpanStartedAt || finishedAt) - shofer.timelineOriginMs,
+						finishedAtOffsetMs: finishedAt - shofer.timelineOriginMs,
+						toolName: `mcp:${mcpBlock.serverName}/${mcpBlock.toolName}`,
+						toolId: toolCallId ?? "",
+						resultSizeChars: resultContent.length,
+						isError: toolResultIsError,
+					})
 				}
 
 				hasToolResult = true
@@ -329,6 +354,7 @@ export async function presentAssistantMessage(shofer: Task) {
 				},
 			}
 
+			toolSpanStartedAt = performance.now()
 			await useMcpToolTool.handle(shofer, syntheticToolUse, {
 				askApproval,
 				handleError,

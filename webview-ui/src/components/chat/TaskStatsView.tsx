@@ -16,13 +16,14 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * processing) is shown as "Overhead":
  *   • Setup (task init → first request: checkpoint/shadow-git kickoff, etc.)
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
- *   • Tool execution   • Waiting for task (wait_for_task, a blocking new_task,
- *     or a sync send_message_to_task)   • Sleeping (the sleep tool)   • Overhead
+ *   • Tool execution   • MCP calls (spans named `mcp:<server>/<tool>`)
+ *   • Waiting for task (wait_for_task, a blocking new_task, or a sync
+ *     send_message_to_task)   • Sleeping (the sleep tool)   • Overhead
  */
 
 // ── Categories ──
 
-type CatKey = "setup" | "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask" | "sleeping"
+type CatKey = "setup" | "llm" | "thinking" | "streaming" | "tool" | "mcp" | "waiting_subtask" | "sleeping"
 
 interface CatMeta {
 	key: CatKey
@@ -39,6 +40,7 @@ const CATEGORIES: CatMeta[] = [
 	{ key: "thinking", label: "Thinking", color: "var(--vscode-charts-purple, #a855f7)", prio: 1 },
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
+	{ key: "mcp", label: "MCP calls", color: "var(--vscode-charts-indigo, #6366f1)", prio: 2 },
 	{ key: "waiting_subtask", label: "Waiting for task", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
 	{ key: "sleeping", label: "Sleeping", color: "var(--vscode-charts-yellow, #eab308)", prio: 2 },
 ]
@@ -53,6 +55,7 @@ const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
 
 const WAIT_FOR_TASK_TOOL = "wait_for_task"
 const SLEEP_TOOL = "sleep"
+const MCP_PREFIX = "mcp:" // MCP tool spans are named `mcp:<server>/<tool>`
 
 // ── Helpers ──
 
@@ -128,7 +131,8 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 			// blocking inter-task tools (fall back to the tool name for older spans).
 			const isSleep = span.toolName === SLEEP_TOOL
 			const isWait = !isSleep && (span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL)
-			const cat: CatKey = isSleep ? "sleeping" : isWait ? "waiting_subtask" : "tool"
+			const isMcp = !isSleep && !isWait && span.toolName.startsWith(MCP_PREFIX)
+			const cat: CatKey = isSleep ? "sleeping" : isWait ? "waiting_subtask" : isMcp ? "mcp" : "tool"
 			segments.push({ start: s, end: e, cat, prio: 2 })
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
@@ -154,6 +158,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		thinking: 0,
 		streaming: 0,
 		tool: 0,
+		mcp: 0,
 		waiting_subtask: 0,
 		sleeping: 0,
 	}
@@ -192,6 +197,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		totals.thinking +
 		totals.streaming +
 		totals.tool +
+		totals.mcp +
 		totals.waiting_subtask +
 		totals.sleeping
 
@@ -391,7 +397,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 			{breakdown.toolTotals.length > 0 && (
 				<div className="mt-5">
 					<div className="text-[10px] uppercase tracking-wide text-[var(--vscode-descriptionForeground)] mb-1.5">
-						Tool execution by tool
+						Tool &amp; MCP calls by tool
 					</div>
 					<div className="flex flex-col gap-1">
 						{breakdown.toolTotals.map((tool) => (
@@ -406,7 +412,9 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 										className="block h-full rounded-sm"
 										style={{
 											width: `${maxToolMs > 0 ? (tool.ms / maxToolMs) * 100 : 0}%`,
-											backgroundColor: CAT_BY_KEY.tool.color,
+											backgroundColor: tool.name.startsWith(MCP_PREFIX)
+												? CAT_BY_KEY.mcp.color
+												: CAT_BY_KEY.tool.color,
 										}}
 									/>
 								</span>
