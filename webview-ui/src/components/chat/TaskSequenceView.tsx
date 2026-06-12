@@ -53,9 +53,17 @@ function truncate(text: string, max = 26): string {
 	return t.length > max ? `${t.slice(0, max - 1)}…` : t
 }
 
+function formatMs(ms: number): string {
+	if (ms < 1000) return `${Math.round(ms)}ms`
+	const s = ms / 1000
+	if (s < 60) return `${s.toFixed(1)}s`
+	return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
+}
+
 const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHistory }) => {
 	const [interactions, setInteractions] = useState<TaskInteractionPayload[]>([])
 	const [loading, setLoading] = useState(true)
+	const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
 
 	// Request the aggregated interactions for this root, and refresh when the
 	// focused root changes. Ignore responses for a stale root.
@@ -164,7 +172,9 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 	)
 	const [viewBox, setViewBox] = useState<ViewBox>(fitBox)
 	useEffect(() => setViewBox(fitBox()), [fitBox])
-	const { isPanning, zoomBy, handlers } = useSvgPanZoom(svgRef, viewBox, setViewBox)
+	const { isPanning, zoomBy, handlers } = useSvgPanZoom(svgRef, viewBox, setViewBox, {
+		noPanSelector: ".seq-arrow",
+	})
 
 	if (!rootTaskId || (!loading && interactions.length === 0)) {
 		return (
@@ -315,6 +325,28 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 						const dash = ix.async ? "5 3" : undefined
 						const label = truncate(`${meta.label}${ix.label ? ": " + ix.label : ""}`, 34)
 
+						// Hover metadata (like the Trace tooltip): kind, endpoints, the
+						// time it occurred (elapsed from the root task's start), sync/async
+						// and failure state.
+						const fromName = titleOf.get(ix.fromTaskId) ?? ix.fromTaskId.slice(0, 8)
+						const toName = ix.toTaskId ? (titleOf.get(ix.toTaskId) ?? ix.toTaskId.slice(0, 8)) : null
+						const tip = [
+							`${meta.label}${ix.async ? " · async" : " · sync"}${ix.isError ? " · failed" : ""}`,
+							`From: ${fromName}`,
+							toName ? `To: ${toName}` : null,
+							`Time: t+${formatMs(ix.rootOffsetMs)}`,
+							ix.label ? `Detail: ${ix.label}` : null,
+						]
+							.filter(Boolean)
+							.join("\n")
+						const hover = {
+							onMouseEnter: (e: React.MouseEvent) =>
+								setTooltip({ x: e.clientX, y: e.clientY, content: tip }),
+							onMouseMove: (e: React.MouseEvent) =>
+								setTooltip({ x: e.clientX, y: e.clientY, content: tip }),
+							onMouseLeave: () => setTooltip(null),
+						}
+
 						// Self / unresolved target → a short stub on the source lifeline.
 						if (fromX === null || toX === null || fromX === toX) {
 							const x = fromX ?? toX
@@ -344,6 +376,18 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 									<text x={x + 36} y={y + 3.5} fontSize={10} fill={color}>
 										{label}
 									</text>
+									{/* Wide transparent hit area for hover. */}
+									<line
+										className="seq-arrow"
+										x1={x}
+										y1={y}
+										x2={x + 30}
+										y2={y}
+										stroke="transparent"
+										strokeWidth={16}
+										style={{ cursor: "pointer" }}
+										{...hover}
+									/>
 								</g>
 							)
 						}
@@ -388,13 +432,39 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 									fontSize={10}
 									fontWeight={500}
 									fill={color}>
-									<title>{ix.label || meta.label}</title>
 									{label}
 								</text>
+								{/* Wide transparent hit area for hover. */}
+								<line
+									className="seq-arrow"
+									x1={fromX}
+									y1={y}
+									x2={toX}
+									y2={y}
+									stroke="transparent"
+									strokeWidth={16}
+									style={{ cursor: "pointer" }}
+									{...hover}
+								/>
 							</g>
 						)
 					})}
 				</svg>
+
+				{/* Hover tooltip (mirrors the Trace view). */}
+				{tooltip && (
+					<div
+						className="fixed z-50 px-2 py-1 text-xs rounded shadow-lg pointer-events-none whitespace-pre"
+						style={{
+							left: tooltip.x + 10,
+							top: tooltip.y - 10,
+							backgroundColor: "var(--vscode-editorWidget-background)",
+							border: "1px solid var(--vscode-widget-border)",
+							color: "var(--vscode-foreground)",
+						}}>
+						{tooltip.content}
+					</div>
+				)}
 			</div>
 		</div>
 	)
