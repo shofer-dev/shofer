@@ -105,10 +105,18 @@ The signal is exposed to tool implementations via `task.abortSignal`.
 
 ### 3. Tool call sites
 
-- [`UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts):
-  `mcpHub.callTool(server, name, args, task.taskId, task.abortSignal)`
-- [`accessMcpResourceTool.ts`](../src/core/tools/accessMcpResourceTool.ts):
-  `mcpHub.readResource(server, uri, undefined, task.abortSignal)`
+The two MCP tool classes thread the signal differently — note the indirection
+for `callTool` (see the "MCP Call-Site Indirection Rule" in `AGENTS.md`):
+
+- **Tool calls** go through the shared helper
+  [`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:232), **not** the tool
+  classes directly. `UseMcpToolTool.ts` and `CallMcpToolAsyncTool.ts` both delegate
+  to it, and it is where the signal is actually passed:
+  `mcpHub.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)`.
+  A reader sent to `UseMcpToolTool.ts` will find no direct `mcpHub.callTool` there.
+- **Resource reads** are called directly in
+  [`accessMcpResourceTool.ts`](../src/core/tools/accessMcpResourceTool.ts:56):
+  `mcpHub.readResource(server, uri, undefined, task.abortSignal)`.
 
 ### 4. McpHub — [`McpHub.ts`](../src/services/mcp/McpHub.ts)
 
@@ -193,15 +201,12 @@ harmless no-op because `cleanup` has removed the entry.
 
 ## Gaps and Known Issues
 
-### 1. Tool call site indirection omitted from the diagram
+### 1. Tool call site indirection — ✅ resolved
 
-The doc's §3 ("Tool call sites") lists [`UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts)
-as the file that calls `mcpHub.callTool()`. In reality `UseMcpToolTool` delegates to
-[`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:172), which is the shared
-helper that actually passes `task.abortSignal` into `mcpHub.callTool()`. A reader sent
-to `UseMcpToolTool.ts` will find no direct `mcpHub.callTool` call there.
-
-The doc should mention `use-mcp-shared.ts` as the shared call site for both tools.
+§3 now documents the indirection: `callTool` is threaded by the shared
+[`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:232) helper (which
+`UseMcpToolTool` and `CallMcpToolAsyncTool` delegate to), while `readResource` is
+called directly in `accessMcpResourceTool.ts`.
 
 ### 2. Async MCP tool calls (`call_mcp_tool_async`) not covered
 
