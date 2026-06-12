@@ -178,11 +178,11 @@ Symlinks are followed. Files are sorted alphabetically. Cache files
 
 ### `.shofer/rules-{mode}/` — Mode-Specific Rules
 
-| Property     | Details                                                         |
-| ------------ | --------------------------------------------------------------- |
-| **Format**   | Any text files (read recursively)                               |
-| **Scope**    | Applies only when the specified mode is active                  |
-| **Examples** | `rules-code/`, `rules-architect/`, `rules-debug/`, `rules-ask/` |
+| Property     | Details                                                                 |
+| ------------ | ----------------------------------------------------------------------- |
+| **Format**   | Any text files (read recursively)                                       |
+| **Scope**    | Applies only when the specified mode is active                          |
+| **Examples** | `rules-code/`, `rules-architect/`, `rules-debug/`, `rules-code-search/` |
 
 Example: `.shofer/rules-code/` rules only load in Code mode. When a
 workspace `.shofer/rules-<mode>/` exists, it takes precedence over the
@@ -418,9 +418,10 @@ These files cannot be modified by the LLM without explicit user approval
 | `.shofer/**`           | `.shofer/rules/`, `.shofer/commands/`, `.shofer/mcp.json`, etc. |
 | `.vscode/**`           | `.vscode/settings.json`, `.vscode/tasks.json`                   |
 | `*.code-workspace`     | `my-project.code-workspace`                                     |
+| `.shoferprotected`     | `.shoferprotected` (reserved; the pattern is active today)      |
 | `AGENTS.md`            | `AGENTS.md`, `AGENT.md`                                         |
 
-Implementation: [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts)
+Implementation: [`ShoferProtectedController.PROTECTED_PATTERNS`](../src/core/protect/ShoferProtectedController.ts) — the literal list is `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the `.shofer/shoferignore` and `.shofer/shofermodes` rows above are subsumed by `.shofer/**`). There is **no** `.shoferrules*` entry.
 
 ---
 
@@ -451,26 +452,26 @@ that did not exist anywhere in the source code. `ShoferIgnoreController`
 returns booleans (or `undefined` for commands); no tool produces the quoted
 wording. Replaced with a factual description of the controller's API.
 
-### 2. `ShoferIgnoreController` is dead code
+### 2. `ShoferIgnoreController` — ✅ NOT dead code (this gap was stale)
 
-[`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
-is defined but **never imported or instantiated** anywhere in the `extensions/`
-directory. The `.shofer/shoferignore` enforcement path is either implemented
-elsewhere (e.g., in the worktree extensions) or not yet wired. If the file
-is truly unused, it should be removed or integrated.
+The 2026-05-20 audit claimed [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
+was never imported. It is now a **central, widely-used** component (wired after that
+audit): instantiated in `Task.ts` (every task gets one via `new ShoferIgnoreController(this.cwd)`),
+the code indexer (`manager.ts`, `scanner.ts`, `file-watcher.ts`), the assistant agent
+(`directory-tree.ts`, `file-watcher.ts`, `manager.ts`), and consumed by
+`tree-sitter`, `ripgrep`, `context-management`, and `webviewMessageHandler`. The
+`.shofer/shoferignore` enforcement path is live via its `validateAccess()`.
 
-### 3. Duplicate `.shoferrules*` in `PROTECTED_PATTERNS`
+### 3. ~~Duplicate `.shoferrules*` in `PROTECTED_PATTERNS`~~ — stale
 
-[`ShoferProtectedController.PROTECTED_PATTERNS`](../src/core/protect/ShoferProtectedController.ts:16-27)
-lists `.shoferrules*` twice (lines 18-19). Harmless but redundant.
+`PROTECTED_PATTERNS` no longer contains any `.shoferrules*` entry (it was removed
+since the 2026-05-20 audit). The current list is `.shofer/**`, `.vscode/**`,
+`*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` — no duplicates.
 
-### 4. Missing patterns in write-protected summary table
+### 4. `.shoferprotected` missing from the summary table — ✅ fixed
 
-The write-protected summary table (§ Summary: Write-Protected Files) does
-not list `.shoferrules*` or `.shoferprotected`, even though both are in
-`PROTECTED_PATTERNS`. `.shoferrules*` is NOT covered by `.shofer/**` because
-`.shoferrules*` files live at the workspace root. The table should list all
-protected patterns.
+The write-protected summary table now lists `.shoferprotected`. (`.shoferrules*` is
+no longer a protected pattern, so the earlier concern about it is moot.)
 
 ### 5. `.shoferprotected` is reserved but has a pattern entry
 
@@ -479,9 +480,8 @@ However, it is already an active entry in `PROTECTED_PATTERNS`, meaning
 any file named `.shoferprotected` at the workspace root would be
 write-protected today, despite no subsystem loading it.
 
-### 6. Legacy rules files NOT in legacy compatibility table
+### 6. ~~Legacy rules files NOT in legacy compatibility table~~ — stale
 
-§ Legacy Compatibility Files does not list `.shoferrules` / `.shoferrules-<mode>`
-as a legacy filename, yet `.shoferrules*` is in `PROTECTED_PATTERNS`.
-Either this was an intentional intermediate rebrand name or it should be
-documented alongside `.roorules` / `.clinerules`.
+This was premised on `.shoferrules*` being in `PROTECTED_PATTERNS`. It no longer is
+(see #3), so there is nothing to reconcile — `.shoferrules*` is not a recognized
+special file. Legacy rule filenames remain `.roorules` / `.clinerules` only.
