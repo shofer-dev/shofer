@@ -28,6 +28,7 @@ import {
 	type TerminalActionId,
 	type TerminalActionPromptType,
 	type HistoryItem,
+	type TaskInteractionPayload,
 	// CloudUserInfo removed
 	// CloudOrganizationMembership removed
 	type CreateTaskOptions,
@@ -2854,6 +2855,41 @@ export class ShoferProvider
 		})
 
 		return { historyItem, aggregatedCosts }
+	}
+
+	/**
+	 * Collect every `task_interaction` event recorded by any task sharing the
+	 * given root, sorted by their root-relative offset. Powers the Sequence
+	 * view, which draws inter-task arrows (spawn/message/await/answer/cancel)
+	 * across all tasks under one root on a shared timeline.
+	 */
+	async getTaskInteractions(rootTaskId: string): Promise<TaskInteractionPayload[]> {
+		const history = this.getGlobalState("taskHistory") ?? []
+		const taskIds = history.filter((i) => (i.rootTaskId ?? i.id) === rootTaskId).map((i) => i.id)
+
+		const { readTaskMessages } = await import("../task-persistence/taskMessages")
+		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
+
+		const interactions: TaskInteractionPayload[] = []
+		for (const id of taskIds) {
+			try {
+				const messages = await readTaskMessages({ taskId: id, globalStoragePath })
+				for (const m of messages) {
+					if (m.say === "task_interaction" && m.text) {
+						try {
+							interactions.push(JSON.parse(m.text) as TaskInteractionPayload)
+						} catch {
+							// Skip malformed payloads.
+						}
+					}
+				}
+			} catch {
+				// Task messages unreadable (pruned / different session) — skip.
+			}
+		}
+
+		interactions.sort((a, b) => a.rootOffsetMs - b.rootOffsetMs)
+		return interactions
 	}
 
 	/**

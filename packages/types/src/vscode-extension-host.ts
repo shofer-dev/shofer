@@ -7,7 +7,7 @@ import type { HistoryItem, CostLimit, TaskState } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
 import type { TelemetrySetting } from "./telemetry.js"
 import type { Experiments } from "./experiment.js"
-import type { ShoferMessage, QueuedMessage } from "./message.js"
+import type { ShoferMessage, QueuedMessage, TaskInteractionPayload } from "./message.js"
 import {
 	type MarketplaceItem,
 	type MarketplaceInstalledMetadata,
@@ -157,6 +157,7 @@ export interface ExtensionMessage {
 		| "customToolsResult"
 		| "modes"
 		| "taskWithAggregatedCosts"
+		| "taskInteractions"
 		| "openAiCodexRateLimits"
 		// Parallel task response types
 		| "parallelTasksUpdated"
@@ -282,6 +283,7 @@ export interface ExtensionMessage {
 		ownCost: number
 		childrenCost: number
 	}
+	taskInteractions?: TaskInteractionPayload[] // For taskInteractions response (Sequence view)
 	// Workflow response properties
 	workflows?: Array<LauncherWorkflow>
 	// Parallel task response properties
@@ -749,6 +751,7 @@ export interface WebviewMessage {
 		| "updateSettings"
 		| "allowedCommands"
 		| "getTaskWithAggregatedCosts"
+		| "getTaskInteractions"
 		| "deniedCommands"
 		| "openDebugApiHistory"
 		| "openDebugUiHistory"

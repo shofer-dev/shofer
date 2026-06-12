@@ -471,7 +471,7 @@ export type ApiRequestFinishedPayload = z.infer<typeof apiRequestFinishedPayload
 export const taskInteractionPayloadSchema = z.object({
 	fromTaskId: z.string(),
 	toTaskId: z.string().optional(),
-	kind: z.enum(["spawn", "message", "await", "answer", "cancel"]),
+	kind: z.enum(["spawn", "message", "await", "answer", "cancel", "question"]),
 	label: z.string(),
 	rootOffsetMs: z.number(),
 	/** Whether the interaction failed. Renders as dashed red arrow in Sequence view. */

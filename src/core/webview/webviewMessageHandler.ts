@@ -1119,6 +1119,29 @@ export const webviewMessageHandler = async (
 			}
 			break
 		}
+		case "getTaskInteractions": {
+			try {
+				const rootTaskId = message.text
+				if (!rootTaskId) {
+					throw new Error("Root task ID is required")
+				}
+				const interactions = await provider.getTaskInteractions(rootTaskId)
+				await provider.postMessageToWebview({
+					type: "taskInteractions",
+					// Keyed by root task id so the Sequence view can correlate.
+					text: rootTaskId,
+					taskInteractions: interactions,
+				})
+			} catch (error) {
+				webviewLog.error("Error getting task interactions:", error)
+				await provider.postMessageToWebview({
+					type: "taskInteractions",
+					text: message.text,
+					error: error instanceof Error ? error.message : String(error),
+				})
+			}
+			break
+		}
 		case "importSettings": {
 			await importSettingsWithFeedback({
 				providerSettingsManager: provider.providerSettingsManager,

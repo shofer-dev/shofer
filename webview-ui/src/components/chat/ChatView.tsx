@@ -39,6 +39,7 @@ import TaskHeader from "./TaskHeader"
 import TaskTreeView from "./TaskTreeView"
 import TaskTraceView from "./TaskTraceView"
 import TaskStatsView from "./TaskStatsView"
+import TaskSequenceView from "./TaskSequenceView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -201,8 +202,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-	// Task visualization tab: "chat" | "tree" | "trace" | "stats". Reset to "chat" on task switch.
-	const [chatTab, setChatTab] = useState<"chat" | "tree" | "trace" | "stats">("chat")
+	// Task visualization tab: "chat" | "tree" | "sequence" | "trace" | "stats". Reset to "chat" on task switch.
+	const [chatTab, setChatTab] = useState<"chat" | "tree" | "sequence" | "trace" | "stats">("chat")
 	useEffect(() => {
 		setChatTab("chat")
 	}, [currentTaskItem?.id])
@@ -2099,10 +2100,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				<>
 					{/* Tab bar for task visualizations */}
 					<div className="flex items-center gap-1 px-3 pt-1 pb-0">
-						{(["chat", "tree", "trace", "stats"] as const).map((tab) => {
+						{(["chat", "tree", "sequence", "trace", "stats"] as const).map((tab) => {
 							const labels: Record<string, string> = {
 								chat: t("chat:tabChat"),
 								tree: t("chat:tabTree"),
+								sequence: t("chat:tabSequence"),
 								trace: t("chat:tabTrace"),
 								stats: t("chat:tabStats"),
 							}
@@ -2256,6 +2258,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					{chatTab === "tree" && (
 						<div className="grow flex relative">
 							<TaskTreeView
+								taskHistory={taskHistory}
+								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
+							/>
+						</div>
+					)}
+					{chatTab === "sequence" && (
+						<div className="grow flex relative overflow-hidden">
+							<TaskSequenceView
 								taskHistory={taskHistory}
 								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
 							/>

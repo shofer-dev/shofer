@@ -1535,6 +1535,7 @@ export async function presentAssistantMessage(shofer: Task) {
  *
  *   new_task → spawn │ send_message_to_task → message │ wait_for_task → await
  *   answer_subtask_question → answer │ cancel_tasks → cancel
+ *   ask_followup_question → question (child → parent)
  *
  * Emitted only when the tool actually produced a result (a tool span was
  * recorded for this call) — skipped / partial / rejected calls produce no
@@ -1587,6 +1588,13 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 		case "cancel_tasks":
 			for (const id of toIds(block.params.task_ids)) {
 				await emit("cancel", id, "cancel")
+			}
+			break
+		case "ask_followup_question":
+			// A subtask's clarifying question routes up to its parent (when it has
+			// one — otherwise it surfaces to the user, which isn't an inter-task event).
+			if (shofer.parentTaskId) {
+				await emit("question", shofer.parentTaskId, truncate(block.params.question))
 			}
 			break
 		default:
