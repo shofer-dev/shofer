@@ -537,5 +537,6 @@
 	},
 	"tabChat": "Chat",
 	"tabTree": "Tree",
-	"tabTrace": "Trace"
+	"tabTrace": "Trace",
+	"tabStats": "Stats"
 }

@@ -38,6 +38,7 @@ import { ChatTextArea } from "./ChatTextArea"
 import TaskHeader from "./TaskHeader"
 import TaskTreeView from "./TaskTreeView"
 import TaskTraceView from "./TaskTraceView"
+import TaskStatsView from "./TaskStatsView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -200,8 +201,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-	// Task visualization tab: "chat" | "tree" | "trace". Reset to "chat" on task switch.
-	const [chatTab, setChatTab] = useState<"chat" | "tree" | "trace">("chat")
+	// Task visualization tab: "chat" | "tree" | "trace" | "stats". Reset to "chat" on task switch.
+	const [chatTab, setChatTab] = useState<"chat" | "tree" | "trace" | "stats">("chat")
 	useEffect(() => {
 		setChatTab("chat")
 	}, [currentTaskItem?.id])
@@ -2098,11 +2099,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				<>
 					{/* Tab bar for task visualizations */}
 					<div className="flex items-center gap-1 px-3 pt-1 pb-0">
-						{(["chat", "tree", "trace"] as const).map((tab) => {
+						{(["chat", "tree", "trace", "stats"] as const).map((tab) => {
 							const labels: Record<string, string> = {
 								chat: t("chat:tabChat"),
 								tree: t("chat:tabTree"),
 								trace: t("chat:tabTrace"),
+								stats: t("chat:tabStats"),
 							}
 							return (
 								<button
@@ -2262,6 +2264,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					{chatTab === "trace" && (
 						<div className="grow flex relative">
 							<TaskTraceView messages={messages} />
+						</div>
+					)}
+					{chatTab === "stats" && (
+						<div className="grow flex relative overflow-hidden">
+							<TaskStatsView messages={messages} />
 						</div>
 					)}
 				</>
