@@ -370,8 +370,16 @@ export class AssistantAgentManager implements vscode.Disposable {
 			}
 
 			// ── Build the agent loop's prompt + initial conversation ───────
-			const systemPrompt = this._buildSystemPrompt(recentlyModified, softLimits)
-			let baseConversation = this._buildBaseConversation(question)
+			// The system prompt holds ONLY content that is stable across
+			// questions (directory tree, file-context manifest, folded system
+			// markers) so the provider's KV/attention cache survives from one
+			// question to the next. Per-question volatile hints (recently-
+			// modified files, soft constraints) ride on the trailing question
+			// turn instead — putting them in the system prefix would bust the
+			// cache on every question, defeating the eviction-avoidance design.
+			const systemPrompt = this._buildSystemPrompt()
+			const questionHints = this._buildQuestionHints(recentlyModified, softLimits)
+			let baseConversation = this._buildBaseConversation(question, questionHints)
 			const tools = this._getToolCatalog()
 			const executor = this._getToolExecutor()
 
@@ -532,7 +540,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 				this._window.enforceLimit()
 				this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
 
-				const freshBase = this._buildBaseConversation(question)
+				const freshBase = this._buildBaseConversation(question, questionHints)
 				conversation.splice(0, baseLength, ...freshBase)
 				baseLength = freshBase.length
 			}
@@ -793,17 +801,19 @@ export class AssistantAgentManager implements vscode.Disposable {
 	// ─── Message Construction ────────────────────────────────────────────
 
 	/**
-	 * Build the system prompt for the assistant agent. This is stable across
-	 * all iterations of a single question — directory tree, file contexts,
-	 * recently-modified hints, and soft constraints don't change mid-loop.
+	 * Build the system prompt for the assistant agent. This holds ONLY content
+	 * that is stable from one question to the next — the directory tree, the
+	 * file-context manifest, and folded-in system markers — so the provider's
+	 * prompt/KV cache survives across questions. Per-question volatile hints
+	 * (recently-modified files, soft constraints) deliberately live on the
+	 * trailing question turn instead (see `_buildQuestionHints`); placing them
+	 * in this prefix would invalidate the cache on every question and defeat
+	 * the eviction-avoidance design. Stable within a single question's loop too.
 	 *
-	 * System-role messages from the persisted window are also folded in so
+	 * System-role messages from the persisted window are folded in so
 	 * truncation markers and other system notes survive trimming.
 	 */
-	private _buildSystemPrompt(
-		recentlyModifiedFiles: string[],
-		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
-	): string {
+	private _buildSystemPrompt(): string {
 		const treeContent = this._directoryTreeString
 			? `[Workspace structure:\n${this._directoryTreeString}\n\nshoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
@@ -815,18 +825,6 @@ export class AssistantAgentManager implements vscode.Disposable {
 				`[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
 			)
 		}
-
-		if (recentlyModifiedFiles.length > 0) {
-			parts.push(
-				`[Note: the following files have been modified since you last read them: ${recentlyModifiedFiles.join(", ")}. Consider re-reading them if relevant to this question.]`,
-			)
-		}
-
-		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC
-		const softResultLength = softLimits.softResultLength ?? DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH
-		parts.push(
-			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
-		)
 
 		// Fold in system-role messages from the persisted window (e.g.
 		// truncation markers, file-context notes) so they survive trimming.
@@ -840,19 +838,49 @@ export class AssistantAgentManager implements vscode.Disposable {
 	}
 
 	/**
+	 * Build the per-question hint block (recently-modified files + soft
+	 * constraints). Returns "" when there is nothing to add. This rides on the
+	 * trailing question turn rather than the system prefix so it never busts
+	 * the cross-question KV cache.
+	 */
+	private _buildQuestionHints(
+		recentlyModifiedFiles: string[],
+		softLimits: { softTimeoutSec?: number; softResultLength?: number } = {},
+	): string {
+		const parts: string[] = []
+
+		if (recentlyModifiedFiles.length > 0) {
+			parts.push(
+				`[Note: the following files have been modified since you last read them: ${recentlyModifiedFiles.join(", ")}. Consider re-reading them if relevant to this question.]`,
+			)
+		}
+
+		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC
+		const softResultLength = softLimits.softResultLength ?? DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH
+		parts.push(
+			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
+		)
+
+		return parts.join("\n\n")
+	}
+
+	/**
 	 * Build the base conversation array from the persisted window messages
 	 * plus the current question. This is refreshable — after
 	 * enforceLimit() trims the window, a fresh call produces a shorter
-	 * base that leaves more room for in-flight tool results.
+	 * base that leaves more room for in-flight tool results. The per-question
+	 * hint block (if any) is appended to the trailing question turn so the
+	 * stable system prefix stays cache-friendly.
 	 */
-	private _buildBaseConversation(question: string): Anthropic.Messages.MessageParam[] {
+	private _buildBaseConversation(question: string, questionHints = ""): Anthropic.Messages.MessageParam[] {
 		const conv: Anthropic.Messages.MessageParam[] = []
 		for (const msg of this._window.messages) {
 			if (msg.role !== "system") {
 				conv.push({ role: msg.role as "user" | "assistant", content: msg.content })
 			}
 		}
-		conv.push({ role: "user", content: question })
+		const questionContent = questionHints ? `${question}\n\n${questionHints}` : question
+		conv.push({ role: "user", content: questionContent })
 		return conv
 	}
 

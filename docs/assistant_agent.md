@@ -321,13 +321,24 @@ On the next question:
 ```
 Question dequeued from queue
   → Drain recentlyModifiedFiles set
-  → Attach as metadata to the question:
-      "[Note: the following files have been modified since you last read them:
-        src/foo.ts, src/bar.ts. Consider re-reading them if relevant to this question.]"
-  → List is also passed to the assistant agent's LLM call as a system-level hint
+  → Append the note to the trailing QUESTION turn (NOT the system prompt):
+      "<question>\n\n[Note: the following files have been modified since you last
+        read them: src/foo.ts, src/bar.ts. Consider re-reading them if relevant
+        to this question.]"
   → The model can then use read_file to re-read stale files if needed
   → recentlyModifiedFiles set is cleared after being attached
 ```
+
+> **Placement matters for the KV cache.** The recently-modified note (and the
+> per-question soft constraints) are appended to the **trailing question turn**,
+> never to the system-prompt prefix. Providers cache on the longest stable
+> prefix; injecting per-question-varying content into the system prefix would
+> invalidate the cache on every question — defeating the very eviction-avoidance
+> this mechanism exists to protect. `_buildSystemPrompt()` therefore carries only
+> cross-question-stable content (directory tree, file-context manifest, folded
+> system markers); `_buildQuestionHints()` produces the volatile suffix that
+> rides on the question. (Earlier revisions placed these hints in the system
+> prompt — a self-inconsistency with the cache-preservation goal, now fixed.)
 
 This approach:
 
@@ -1054,6 +1065,6 @@ Additional fix: **`notifyFileModified()` now filters through `.shofer/shoferigno
 
 13. **No test coverage for `tool-executor.ts`, `directory-tree.ts`, `file-watcher.ts`, `llm-client.ts`** — Tests exist only for `ConversationStore`, `QuestionQueue`, and `ContextWindow`. The other modules are untested.
 
-14. **Agent loop max tool-call iteration cap unverified** — The design doc claims "max 25 tool-call iterations" but this constant was not found during the review. The cap may be elsewhere or differently enforced.
+14. **Agent loop max tool-call iteration cap** — ✅ Verified present. `AssistantAgentManager.MAX_AGENT_ITERATIONS = 25` (manager.ts) is enforced at the top of the agent loop; on hitting the cap the loop breaks with a "could not finish within N tool iterations" answer rather than looping unbounded.
 
 15. **`AssistantAgentChatProvider` test coverage** — The 467-line webview panel manager has no spec file.
