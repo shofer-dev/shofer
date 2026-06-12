@@ -7503,7 +7503,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			startedAtOffsetMs: this._pendingRequestStartOffset,
 			finishedAtOffsetMs: performance.now() - this.timelineOriginMs,
 			ttfbMs: this._pendingTtfbMs,
-			model: modelId,
+			model: modelId ?? "",
 			apiProtocol: apiProtocol as "anthropic" | "openai",
 			retryAttempt: existingData.retryAttempt ?? 0,
 			tokensIn,
@@ -7513,6 +7513,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			cost,
 			status,
 			cancelReason,
+			// Structured error captured via snapshotApiReqError() on the
+			// api_req_started message; surfaced in the Trace tooltip on error rows.
+			error: existingData.error,
 			actualModel: existingData.actualModel,
 			attempts: existingData.attempts,
 			responseError: existingData.responseError,

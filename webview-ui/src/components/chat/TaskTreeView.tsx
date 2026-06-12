@@ -202,6 +202,12 @@ function TaskTreeRow({ node }: { node: TaskTreeNode }) {
 
 export interface TaskTreeViewProps {
 	taskHistory: HistoryItem[]
+	/**
+	 * Effective root task id of the currently focused task. When provided, the
+	 * tree is scoped to the tasks sharing this root (the design's "all tasks
+	 * under the same rootTaskId"). When omitted, the full forest is rendered.
+	 */
+	rootTaskId?: string
 }
 
 /**
@@ -211,8 +217,15 @@ export interface TaskTreeViewProps {
  *
  * Rows show: state dot, [number], title, mode badge, active time, tokens, cost.
  */
-const TaskTreeView: React.FC<TaskTreeViewProps> = ({ taskHistory }) => {
-	const tree = useMemo(() => buildFlatTree(taskHistory), [taskHistory])
+const TaskTreeView: React.FC<TaskTreeViewProps> = ({ taskHistory, rootTaskId }) => {
+	// Scope to the focused task's tree: keep items whose effective root
+	// (rootTaskId, falling back to the item's own id for root tasks) matches.
+	const scoped = useMemo(() => {
+		if (!rootTaskId) return taskHistory
+		return taskHistory.filter((i) => (i.rootTaskId ?? i.id) === rootTaskId)
+	}, [taskHistory, rootTaskId])
+
+	const tree = useMemo(() => buildFlatTree(scoped), [scoped])
 
 	if (tree.length === 0) {
 		return (

@@ -2253,7 +2253,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					)}
 					{chatTab === "tree" && (
 						<div className="grow flex relative">
-							<TaskTreeView taskHistory={taskHistory} />
+							<TaskTreeView
+								taskHistory={taskHistory}
+								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
+							/>
 						</div>
 					)}
 					{chatTab === "trace" && (

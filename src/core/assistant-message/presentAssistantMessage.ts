@@ -582,8 +582,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						block.params && Object.keys(block.params).length > 0
 							? ` Received partial params: ${JSON.stringify(block.params)}.`
 							: ""
-					const errorMessage =
-						`Invalid tool call for '${block.name}': missing nativeArgs.${details}${receivedParams}`
+					const errorMessage = `Invalid tool call for '${block.name}': missing nativeArgs.${details}${receivedParams}`
 
 					shofer.consecutiveMistakeCount++
 					try {
@@ -610,6 +609,12 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			// Store approval feedback to merge into tool result (GitHub #10465)
 			let approvalFeedback: { text: string; images?: string[] } | undefined
+
+			// Task Visualization — tool span timing. `toolSpanStartedAt` is set
+			// immediately before the tool's `handle()`/`execute()` dispatch below;
+			// the span is recorded once when the tool produces its result.
+			let toolSpanStartedAt = 0
+			let toolSpanRecorded = false
 
 			const pushToolResult = (content: ToolResponse) => {
 				// Native tool calling: only allow ONE tool_result per tool call
@@ -651,6 +656,32 @@ export async function presentAssistantMessage(shofer: Task) {
 
 				if (imageBlocks.length > 0) {
 					shofer.userMessageContent.push(...imageBlocks)
+				}
+
+				// Task Visualization — record an immutable tool span for the
+				// waterfall trace. Recorded once per tool_use (the duplicate guard
+				// above already returned for repeat calls). `isError` is derived
+				// from the standard `{ status: "error" }` shape produced by
+				// `formatResponse.toolError` and the other error responses.
+				if (!toolSpanRecorded) {
+					toolSpanRecorded = true
+					let toolResultIsError = false
+					try {
+						const parsed = JSON.parse(resultContent)
+						toolResultIsError = parsed?.status === "error"
+					} catch {
+						// Non-JSON results are plain success output.
+					}
+					const finishedAt = performance.now()
+					shofer._pendingToolSpans.push({
+						startedAtOffsetMs: (toolSpanStartedAt || finishedAt) - shofer.timelineOriginMs,
+						finishedAtOffsetMs: finishedAt - shofer.timelineOriginMs,
+						toolName: block.name,
+						toolId: toolCallId,
+						resultSizeChars: resultContent.length,
+						isError: toolResultIsError,
+						spawnedTaskId: block.name === "new_task" ? (shofer.childTaskId ?? undefined) : undefined,
+					})
 				}
 
 				// Emit tool result to the webview so ChatRow can show an expandable
@@ -902,6 +933,11 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				}
 			}
+
+			// Task Visualization — mark the start of tool execution (after all
+			// approval/validation gating) so the recorded span reflects execution
+			// latency rather than user idle time at the approval prompt.
+			toolSpanStartedAt = performance.now()
 
 			switch (block.name) {
 				case "write_to_file":

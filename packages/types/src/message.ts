@@ -401,7 +401,12 @@ export const toolSpanSchema = z.object({
 export type ToolSpan = z.infer<typeof toolSpanSchema>
 
 /**
- * ApiReqError: structured error info for a failed API request.
+ * Zod schema validating the structured error info for a failed API request.
+ *
+ * The inferred type is intentionally NOT re-exported here — the canonical
+ * `ApiReqError` interface lives in `vscode-extension-host.ts`. This schema
+ * exists only to validate the `error` field of `apiRequestFinishedPayloadSchema`
+ * at the JSON boundary; its shape mirrors that interface.
  */
 export const apiReqErrorSchema = z.object({
 	message: z.string(),
@@ -409,8 +414,6 @@ export const apiReqErrorSchema = z.object({
 	statusCode: z.number().optional(),
 	stack: z.string().optional(),
 })
-
-export type ApiReqError = z.infer<typeof apiReqErrorSchema>
 
 /**
  * ApiRequestFinishedPayload: immutable per-API-request span emitted as an
