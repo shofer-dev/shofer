@@ -390,7 +390,7 @@ export function isToolAllowedForMode(
 						: gatingParams.some((p) => toolParams?.[p] !== undefined)
 
 				if (hasMutationParams) {
-					const mutatedPaths = getMutatedPaths(tool, toolParams)
+					const mutatedPaths = getMutatedPaths(tool, toolParams || {})
 
 					// apply_patch: also extract paths from embedded patch markers
 					const allPaths =

@@ -448,6 +448,48 @@ function renderNode(nm, meta) {
 	return s
 }
 
+// Point on a node's rectangular border along the ray from its center toward
+// (towardX, towardY). Lets edges anchor to whichever side actually faces the
+// other node, so they stay connected when boxes are dragged to any position.
+function rectBorderPoint(cx, cy, halfW, halfH, towardX, towardY) {
+	var dx = towardX - cx,
+		dy = towardY - cy
+	if (dx === 0 && dy === 0) return { x: cx + halfW, y: cy }
+	var sx = dx !== 0 ? halfW / Math.abs(dx) : Infinity
+	var sy = dy !== 0 ? halfH / Math.abs(dy) : Infinity
+	var s = Math.min(sx, sy)
+	return { x: cx + dx * s, y: cy + dy * s }
+}
+
+// Border-to-border edge geometry used when dagre's routed sections are stale
+// (i.e. after a node drag). Anchors both endpoints on the node borders facing
+// each other so the arrow stays attached regardless of relative position.
+// Back-edges (source layer >= target layer) bow perpendicular to the line so an
+// opposing forward edge between the same pair stays visually distinct.
+// Returns { d, cx, cy } — path data plus the label anchor point.
+function fallbackEdgeGeometry(fnX, fnY, tnX, tnY, fromLayer, toLayer) {
+	var c1x = fnX + NODE_W / 2,
+		c1y = fnY + NODE_H / 2,
+		c2x = tnX + NODE_W / 2,
+		c2y = tnY + NODE_H / 2
+	var p1 = rectBorderPoint(c1x, c1y, NODE_W / 2, NODE_H / 2, c2x, c2y)
+	var p2 = rectBorderPoint(c2x, c2y, NODE_W / 2, NODE_H / 2, c1x, c1y)
+	var dx = p2.x - p1.x,
+		dy = p2.y - p1.y
+	var len = Math.sqrt(dx * dx + dy * dy) || 1
+	var bend = fromLayer != null && toLayer != null && fromLayer >= toLayer ? Math.max(40, len * 0.25) : 0
+	var nx = -dy / len,
+		ny = dx / len
+	var midX = (p1.x + p2.x) / 2,
+		midY = (p1.y + p2.y) / 2
+	var d =
+		bend === 0
+			? "M" + p1.x + "," + p1.y + " L" + p2.x + "," + p2.y
+			: "M" + p1.x + "," + p1.y + " Q" + (midX + nx * bend) + "," + (midY + ny * bend) + " " + p2.x + "," + p2.y
+	// Label sits on the curve midpoint (t=0.5 of the quadratic ≈ mid + 0.5·offset).
+	return { d: d, cx: midX + nx * bend * 0.5, cy: midY + ny * bend * 0.5 }
+}
+
 function edgePathData(fnX, fnY, tnX, tnY, sections, fromLayer, toLayer) {
 	// If dagre provided bend-point sections, use them directly.
 	if (sections && sections.length > 0) {
@@ -466,19 +508,9 @@ function edgePathData(fnX, fnY, tnX, tnY, sections, fromLayer, toLayer) {
 		}
 		return d
 	}
-	// Fallback bezier (used during drag when sections are stale).
-	var x1 = fnX + NODE_W,
-		y1 = fnY + NODE_H / 2,
-		x2 = tnX,
-		y2 = tnY + NODE_H / 2
-	// Back-edge / same-layer edge: arc above nodes instead of through them.
-	if (fromLayer != null && toLayer != null && fromLayer >= toLayer) {
-		var arcH = Math.max(60, Math.abs(fromLayer - toLayer) * 50 + 20)
-		return "M" + x1 + "," + y1 + " C" + x1 + "," + (y1 - arcH) + " " + x2 + "," + (y2 - arcH) + " " + x2 + "," + y2
-	}
-	var dx = Math.abs(x2 - x1)
-	var curve = Math.min(dx * 0.45, 140)
-	return "M" + x1 + "," + y1 + " C" + (x1 + curve) + "," + y1 + " " + (x2 - curve) + "," + y2 + " " + x2 + "," + y2
+	// Fallback (used during drag when sections are stale): border-to-border
+	// geometry that stays connected regardless of the nodes' relative positions.
+	return fallbackEdgeGeometry(fnX, fnY, tnX, tnY, fromLayer, toLayer).d
 }
 
 function renderEdge(e, layout, layers) {
@@ -1544,37 +1576,24 @@ function updateConnectedEdges(agent) {
 		var fn = _layout[e.from],
 			tn = _layout[e.to]
 		if (!fn || !tn) continue
-		// Sections from dagre layout are stale after drag — use bezier fallback with layer info.
-		var d = edgePathData(fn.x, fn.y, tn.x, tn.y, null, _layers[e.from], _layers[e.to])
+		// Sections from dagre layout are stale after drag — use border-to-border
+		// fallback geometry (path + label anchor) so the arrow follows the node.
+		var geo = fallbackEdgeGeometry(fn.x, fn.y, tn.x, tn.y, _layers[e.from], _layers[e.to])
 		var eg = _svgEl.querySelector(
 			'.edge-group[data-edge="' + esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx + '"]',
 		)
 		if (!eg) continue
 		var hit = eg.querySelector(".edge-hit"),
 			path = eg.querySelector(".edge-path")
-		if (hit) hit.setAttribute("d", d)
-		if (path) path.setAttribute("d", d)
+		if (hit) hit.setAttribute("d", geo.d)
+		if (path) path.setAttribute("d", geo.d)
 		var lblRect = eg.querySelector(".edge-label-bg"),
 			lblText = eg.querySelector(".edge-label")
 		if (lblRect && lblText && e.label) {
-			var ecx,
-				ecy,
-				x1 = fn.x + NODE_W,
-				y1 = fn.y + NODE_H / 2,
-				x2 = tn.x,
-				y2 = tn.y + NODE_H / 2
-			if (_layers[e.from] >= _layers[e.to]) {
-				var arcH2 = Math.max(60, Math.abs(_layers[e.from] - _layers[e.to]) * 50 + 20)
-				ecx = (x1 + x2) / 2
-				ecy = (y1 + y2) / 2 - arcH2 * 0.7
-			} else {
-				ecx = (x1 + x2) / 2
-				ecy = (y1 + y2) / 2
-			}
-			lblRect.setAttribute("x", ecx - (e.label.length * 6.5 + 10) / 2)
-			lblRect.setAttribute("y", ecy - 9)
-			lblText.setAttribute("x", ecx)
-			lblText.setAttribute("y", ecy + 5)
+			lblRect.setAttribute("x", geo.cx - (e.label.length * 6.5 + 10) / 2)
+			lblRect.setAttribute("y", geo.cy - 9)
+			lblText.setAttribute("x", geo.cx)
+			lblText.setAttribute("y", geo.cy + 5)
 		}
 	}
 }
