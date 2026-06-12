@@ -68,7 +68,7 @@ On the **initial** open (standalone editor), the full HTML shell is built once. 
 │  ┌───────────────────────────┐│  │  └──────────────────────────────┘ │
 │  │ flow-header               ││  │                                   │
 │  │ .view-selector-tabs       ││  │  ┌─ React tab bar ──────────────┐ │
-│  │ graph-hint                ││  │  │  Chat|Topo|Seq|Swim          │ │
+│  │ graph-hint                ││  │  │  Events|Tree|Topo|Seq|State  │ │
 │  │ runtime-banner            ││  │  │  → postMessage(switchView)   │ │
 │  │ .zoom-controls            ││  │  └──────────────────────────────┘ │
 │  │ <svg> diagram             ││  │                                   │
@@ -97,7 +97,7 @@ On the **initial** open (standalone editor), the full HTML shell is built once. 
 ### View Switching
 
 - **Standalone editor**: Tab buttons are `.tab-btn[data-view]` elements wired by JS event listeners. Clicking invokes `switchView(viewName)` → `_currentView = viewName` → `safeRender(null)`.
-- **WorkflowView**: The React tab bar in [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx) manages `workflowTab` state. On tab change, [`SlangViz`](../webview-ui/src/components/chat/SlangViz.tsx) sends `postMessage({type:"switchView", view})` into the iframe. The render engine's `"message"` listener handles `switchView` by setting `_currentView` and re-rendering — **no srcdoc rebuild**, preserving zoom and pan state.
+- **WorkflowView**: The React tab bar in [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx) manages `workflowTab` state. Its tabs are **`[ Events ] [ Tree ] [ Topology ] [ Sequence ] [ State ]`** — the message feed is labelled "Events" (not "Chat"), "Swimlane" is labelled "State", and a "Tree" tab embeds the task-hierarchy [`TaskTreeView`](../webview-ui/src/components/chat/TaskTreeView.tsx) rooted at the workflow task (see [`task_visualization.md`](task_visualization.md)). The three slang views (Topology/Sequence/State) drive the iframe: on tab change, [`SlangViz`](../webview-ui/src/components/chat/SlangViz.tsx) sends `postMessage({type:"switchView", view})` (the `view` key is still `swimlane` for the "State" tab); the render engine's `"message"` listener sets `_currentView` and re-renders — **no srcdoc rebuild**, preserving zoom and pan state. The Events/Tree tabs render natively in React, not the iframe.
 
 ### Theme Inheritance (iframe only)
 
@@ -149,16 +149,16 @@ A vertical timeline showing message-passing chronology across agent lifelines.
 
 Per-agent flowchart showing internal control structure.
 
-| Feature               | Implementation                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Lanes**             | One column per agent with a vertical spine line                                                                     |
-| **Operations**        | `STAKE`, `AWAIT`, `LET`, `SET`, `ESCALATE`, `COMMIT` as colored rects                                               |
-| **Diamonds**          | `WHEN: <cond>` and `REPEAT UNTIL: <cond>` as SVG polygons                                                           |
-| **OTHERWISE**         | Gray diamond + indented body for else branch                                                                        |
-| **Recursion**         | `renderOp()` → `renderOpList()` descends into `WhenBlock`/`RepeatBlock` bodies                                      |
-| **Depth opacity**     | Nested operations get `opacity="0.7"` for visual hierarchy                                                          |
-| **Runtime highlight** | The operation block matching the agent's `opIndex` gets the `.flow-executing` CSS class with a colored fill overlay |
-| **Lane sizing**       | `countOps()` recursively counts operations for height estimation                                                    |
+| Feature               | Implementation                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lanes**             | One column per agent with a vertical spine line                                                                                                                                                                                 |
+| **Operations**        | `STAKE`, `AWAIT`, `LET`, `SET`, `ESCALATE`, `COMMIT` as colored rects                                                                                                                                                           |
+| **Diamonds**          | `WHEN: <cond>` and `REPEAT UNTIL: <cond>` as SVG polygons                                                                                                                                                                       |
+| **OTHERWISE**         | Gray diamond + indented body for else branch                                                                                                                                                                                    |
+| **Recursion**         | `renderOp()` → `renderOpList()` descends into `WhenBlock`/`RepeatBlock` bodies                                                                                                                                                  |
+| **Depth opacity**     | Nested operations get `opacity="0.7"` for visual hierarchy                                                                                                                                                                      |
+| **Runtime highlight** | The operation block matching the agent's `opIndex` is marked with a left-pointing ▶ arrow (`flow-exec-arrow`) in the lane gutter — far easier to spot than a fill tint. (Previously a `.flow-executing` colored-fill overlay.) |
+| **Lane sizing**       | `countOps()` recursively counts operations for height estimation                                                                                                                                                                |
 
 ---
 
@@ -179,7 +179,7 @@ When a workflow is executing (or has completed), the `runState` field in the pay
 
 ### Swimlane
 
-- **OpIndex highlighting**: Each operation block in a lane is assigned a 1-based index via `_opCounter`. When an agent's `opIndex` matches a block's index, that block gets the `.flow-executing` CSS class with a colored fill: orange for STAKE, purple for AWAIT, green for COMMIT, and a thicker stroke.
+- **OpIndex marker**: Each operation block in a lane is assigned a 1-based index via `_opCounter`. When an agent's `opIndex` matches a block's index, a left-pointing ▶ arrow (`flow-exec-arrow`, filled `var(--z-stake)`) is drawn in the gutter beside that block. The block is no longer tinted (`flow-executing` / `data-optype` are not applied).
 - **Lane header badge**: Per-lane status badge (e.g. "running @5") shown in the top-right of each swimlane.
 
 ### CSS additions for runtime overlays
@@ -199,18 +199,8 @@ When a workflow is executing (or has completed), the `runState` field in the pay
 	}
 }
 
-/* Swimlane: currently executing operation block */
-.flow-box.flow-executing {
-	fill: var(--z-stake);
-	opacity: 0.18;
-	stroke-width: 2.8;
-}
-.flow-box.flow-executing[data-optype="await"] {
-	fill: var(--z-await);
-}
-.flow-box.flow-executing[data-optype="commit"] {
-	fill: var(--z-agent);
-}
+/* Swimlane: the executing op is flagged by a ▶ arrow drawn inline
+   (fill="var(--z-stake)"), not a fill tint — no .flow-executing rule. */
 
 /* Sequence: pending (undelivered) messages */
 .sequence-group.sequence-pending .sequence-line {
@@ -380,7 +370,7 @@ The visualization adapts to VS Code themes via CSS variables. In the standalone 
 - ✅ Drag-and-drop node repositioning in topology view
 - ✅ Runtime-aware topology: agent status/opIndex badges, active edge pulsing via `sendingTo`/`waitingFor`
 - ✅ Runtime-aware sequence: mailbox-history-sourced timeline with pending-send indicators
-- ✅ Runtime-aware swimlane: opIndex highlighting on currently executing blocks
+- ✅ Runtime-aware swimlane: ▶ arrow marker on the currently executing op (opIndex)
 - ✅ Mailbox history persistence across VS Code restarts
 - ✅ Sequence arrow tooltips showing tokens, cost, and duration
 - ✅ Edge labels, multi-edge offset, back-edge arcs
@@ -471,7 +461,7 @@ Decoupled the flow header metadata from the srcdoc iframe:
 
 - **Topology**: Active edges (matched via `sendingTo`/`waitingFor`) get pulsing animation.
 - **Sequence**: Timeline built from `mailboxHistory` (runtime) with static AST fallback. Pending sends shown as dashed entries. Arrow tooltips show tokens/cost/duration.
-- **Swimlane**: Operation block matching agent `opIndex` gets `.flow-executing` highlight with colored fill.
+- **Swimlane**: Operation block matching agent `opIndex` is marked with a ▶ arrow in the gutter (replacing the earlier `.flow-executing` colored-fill highlight).
 
 ### Mailbox history
 
