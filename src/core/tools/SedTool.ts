@@ -108,7 +108,17 @@ export class SedTool extends BaseTool<"sed"> {
 			if (!regexMode) {
 				// Literal mode — escape all metacharacters and compile immediately.
 				const escaped = pattern.replace(METACHAR_REGEX, "\\$&")
-				regex = new RegExp(escaped, global ? "g" : "")
+				try {
+					regex = new RegExp(escaped, global ? "g" : "")
+				} catch (literalErr) {
+					task.consecutiveMistakeCount++
+					task.recordToolError("sed")
+					const formattedError = `Invalid literal pattern (could not compile as regex even after escaping): ${pattern}\n\n<error_details>\n${literalErr instanceof Error ? literalErr.message : String(literalErr)}\n</error_details>`
+					await task.say("error", formattedError)
+					task.didToolFailInCurrentTurn = true
+					pushToolResult(formattedError)
+					return
+				}
 				matchSource = "literal"
 			} else {
 				try {

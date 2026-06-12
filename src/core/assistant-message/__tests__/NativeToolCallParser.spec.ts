@@ -335,6 +335,125 @@ describe("NativeToolCallParser", () => {
 					}
 				})
 			})
+
+			describe("vscode-lm XML leak recovery", () => {
+				it("should recover apply_diff path from XML-leaked parameter suffix in diff string", () => {
+					// Simulates the real-world vscode-lm bug where the model emits:
+					//   { "diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">PATH" }
+					const diffContent =
+						`<<<<<<< SEARCH\n:start_line:1532\n\told code\n` +
+						`=======\n\tnew code\n` +
+						`>>>>>>> REPLACE\n` +
+						`<parameter name="path" string="true">extensions/shofer/src/core/workflow/WorkflowTask.ts`
+
+					const toolCall = {
+						id: "toolu_xml_leak",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({ diff: diffContent }),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).not.toBeNull()
+					expect(result?.type).toBe("tool_use")
+					if (result?.type === "tool_use") {
+						expect(result.nativeArgs).toBeDefined()
+						const nativeArgs = result.nativeArgs as { path: string; diff: string }
+						expect(nativeArgs.path).toBe("extensions/shofer/src/core/workflow/WorkflowTask.ts")
+						// The diff must NOT contain the leaked suffix
+						expect(nativeArgs.diff).not.toContain("<parameter")
+						// The diff must still contain the SEARCH/REPLACE content
+						expect(nativeArgs.diff).toContain("<<<<<<< SEARCH")
+						expect(nativeArgs.diff).toContain(">>>>>>> REPLACE")
+					}
+				})
+
+				it("should handle apply_diff with normal args (no regression)", () => {
+					const toolCall = {
+						id: "toolu_normal_diff",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({
+							path: "src/test.ts",
+							diff: "<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE",
+						}),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).not.toBeNull()
+					expect(result?.type).toBe("tool_use")
+					if (result?.type === "tool_use") {
+						const nativeArgs = result.nativeArgs as { path: string; diff: string }
+						expect(nativeArgs.path).toBe("src/test.ts")
+						expect(nativeArgs.diff).toBe("<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE")
+					}
+				})
+
+				it("should handle apply_diff with filePath alias", () => {
+					const toolCall = {
+						id: "toolu_filepath_alias",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({
+							filePath: "src/filepath-test.ts",
+							diff: "<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE",
+						}),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).not.toBeNull()
+					expect(result?.type).toBe("tool_use")
+					if (result?.type === "tool_use") {
+						const nativeArgs = result.nativeArgs as { path: string; diff: string }
+						expect(nativeArgs.path).toBe("src/filepath-test.ts")
+					}
+				})
+
+				it("should prefer path over filePath when both present", () => {
+					const toolCall = {
+						id: "toolu_both",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({
+							path: "src/right.ts",
+							filePath: "src/wrong.ts",
+							diff: "test",
+						}),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).not.toBeNull()
+					expect(result?.type).toBe("tool_use")
+					if (result?.type === "tool_use") {
+						const nativeArgs = result.nativeArgs as { path: string; diff: string }
+						expect(nativeArgs.path).toBe("src/right.ts")
+					}
+				})
+
+				it("should return null when both path and diff are missing and no XML leak", () => {
+					const toolCall = {
+						id: "toolu_no_args",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({}),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).toBeNull()
+				})
+
+				it("should return null when diff is missing and path is present", () => {
+					const toolCall = {
+						id: "toolu_no_diff",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({ path: "src/test.ts" }),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).toBeNull()
+				})
+			})
 		})
 	})
 
@@ -388,7 +507,7 @@ describe("NativeToolCallParser", () => {
 			})
 
 			it("should return null when required arg is missing (guard-UNblock regression test)", () => {
-				// REGRESSION: The bug in docs/tool-call-failures.md §B/§C was that
+				// REGRESSION: The bug in docs/tool-call-failures.md §B/C was that
 				// finalizeStreamingToolCall() returns null (correct), but
 				// createPartialToolUse had already populated a stale partial
 				// nativeArgs that Task.ts's null-branch did NOT clear, so the
@@ -404,7 +523,7 @@ describe("NativeToolCallParser", () => {
 				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ path: "src/incomplete.ts" }))
 
 				// Now feed an overwriting chunk that is valid JSON but is MISSING
-				// the required 'path' field — the final parse must fail.
+				// the required 'path' field -- the final parse must fail.
 				NativeToolCallParser.processStreamingChunk(id, JSON.stringify({ mode: "slice", offset: 10 }))
 
 				const result = NativeToolCallParser.finalizeStreamingToolCall(id)

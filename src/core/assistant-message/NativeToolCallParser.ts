@@ -326,6 +326,83 @@ export class NativeToolCallParser {
 		return finalToolUse
 	}
 
+	/**
+	 * Some models (particularly vscode-lm with composite shofer/* models) leak
+	 * XML-style <parameter> tags into JSON string values when the parameter
+	 * list is complex. This is most commonly observed with apply_diff, where
+	 * the model embeds a trailing "\n<parameter name=\"path\" string=\"true\">PATH"
+	 * suffix inside the `diff` string value instead of emitting `path` as a
+	 * separate JSON key. The JSON is structurally valid ({ "diff": "content" }),
+	 * so JSON.parse succeeds, but the `path` guard in the parser switch case
+	 * then fails because `args.path` is undefined.
+	 *
+	 * This helper attempts to recover a `path` from the suffix of a string value
+	 * that ends with the proprietary <parameter> leak pattern. Returns the
+	 * extracted path and the sanitized string, or null if no leak is detected.
+	 */
+	private static extractPathFromXMLLeak(value: unknown): { path: string; sanitized: string } | null {
+		if (typeof value !== "string") return null
+		// Pattern: newline + <parameter name="path" string="true">VALUE at end of string
+		// The closing </parameter> may or may not be present.
+		const match = value.match(/\n<parameter\s+name="path"\s+string="true">([^\n<]+)\s*(?:<\/parameter>)?\s*$/)
+		if (!match) return null
+		const extractedPath = match[1].trim()
+		if (!extractedPath) return null
+		const sanitized = value.slice(0, match.index!)
+		return { path: extractedPath, sanitized }
+	}
+
+	/**
+	 * Return the list of required fields that are missing from the parsed
+	 * arguments for the given tool. Used by the generic error message in
+	 * parseToolCall to tell the model exactly what it forgot.
+	 */
+	private static missingRequiredFields(toolName: ToolName, args: Record<string, unknown>): string[] {
+		const missing: string[] = []
+		switch (toolName) {
+			case "apply_diff":
+				if (args.path === undefined && args.filePath === undefined) missing.push("path")
+				if (args.diff === undefined) missing.push("diff")
+				break
+			case "write_to_file":
+				if (args.path === undefined && args.filePath === undefined) missing.push("path")
+				if (args.content === undefined) missing.push("content")
+				break
+			case "execute_command":
+				if (args.command === undefined) missing.push("command")
+				break
+			case "grep_search":
+				if (args.path === undefined && args.filePath === undefined) missing.push("path")
+				if (args.query === undefined && args.pattern === undefined) missing.push("query")
+				break
+			case "rag_search":
+				if (args.query === undefined) missing.push("query")
+				break
+			case "read_file":
+				if (args.path === undefined && args.filePath === undefined) missing.push("path")
+				break
+			case "sed":
+				if (args.path === undefined && args.filePath === undefined) missing.push("path")
+				if (args.pattern === undefined) missing.push("pattern")
+				if (args.replacement === undefined) missing.push("replacement")
+				break
+			case "attempt_completion":
+				if (args.result === undefined) missing.push("result")
+				break
+			case "switch_mode":
+				if (args.mode_slug === undefined) missing.push("mode_slug")
+				if (args.reason === undefined) missing.push("reason")
+				break
+			case "new_task":
+				if (args.mode === undefined) missing.push("mode")
+				if (args.message === undefined) missing.push("message")
+				break
+			default:
+				break
+		}
+		return missing
+	}
+
 	private static coerceOptionalNumber(value: unknown): number | undefined {
 		if (typeof value === "number" && Number.isFinite(value)) {
 			return value
@@ -521,9 +598,21 @@ export class NativeToolCallParser {
 					partialArgs.filePath !== undefined ||
 					partialArgs.diff !== undefined
 				) {
+					let path = (partialArgs.path ?? partialArgs.filePath) as string | undefined
+					let diff = partialArgs.diff as string | undefined
+
+					// Recovery: same XML-leak pattern can occur during streaming too.
+					if (path === undefined && diff !== undefined) {
+						const recovered = this.extractPathFromXMLLeak(diff)
+						if (recovered) {
+							path = recovered.path
+							diff = recovered.sanitized
+						}
+					}
+
 					nativeArgs = {
-						path: partialArgs.path ?? partialArgs.filePath,
-						diff: partialArgs.diff,
+						path,
+						diff,
 					}
 				}
 				break
@@ -1158,11 +1247,31 @@ export class NativeToolCallParser {
 					break
 
 				case "apply_diff":
-					if ((args.path !== undefined || args.filePath !== undefined) && args.diff !== undefined) {
-						nativeArgs = {
-							path: args.path ?? args.filePath,
-							diff: args.diff,
-						} as NativeArgsFor<TName>
+					if (args.diff !== undefined) {
+						let path = args.path ?? (args.filePath as string | undefined)
+						let diff = args.diff as string
+
+						// Recovery: some vscode-lm models leak <parameter name="path"> XML tags
+						// into the `diff` string value instead of emitting `path` as a
+						// separate JSON key.  If `path` is missing, attempt to extract it
+						// from the `diff` suffix before failing.
+						if (path === undefined) {
+							const recovered = this.extractPathFromXMLLeak(diff)
+							if (recovered) {
+								path = recovered.path
+								diff = recovered.sanitized
+								webviewLog.warn(
+									`[NativeToolCallParser] Recovered apply_diff path "${path}" from malformed diff suffix (vscode-lm XML leak).`,
+								)
+							}
+						}
+
+						if (path !== undefined) {
+							nativeArgs = {
+								path,
+								diff,
+							} as NativeArgsFor<TName>
+						}
 					}
 					break
 
@@ -1660,10 +1769,14 @@ export class NativeToolCallParser {
 			// External tools pass raw args and are validated by the tool's own schema.
 			// If we couldn't construct it, the model produced an invalid tool call payload.
 			if (!nativeArgs && !customToolRegistry.has(resolvedName) && !isPrivateLmTool(resolvedName)) {
+				// Identify which required fields are missing so the model can fix the call.
+				const missingFields = this.missingRequiredFields(resolvedName, args)
+				const receivedSnippet = JSON.stringify(args).slice(0, 500)
 				throw new Error(
 					`[NativeToolCallParser] Invalid arguments for tool '${resolvedName}'. ` +
 						`Native tool calls require a valid JSON payload matching the tool schema. ` +
-						`Received: ${JSON.stringify(args)}`,
+						(missingFields.length > 0 ? `Missing required field(s): ${missingFields.join(", ")}. ` : "") +
+						`Received (truncated): ${receivedSnippet}`,
 				)
 			}
 

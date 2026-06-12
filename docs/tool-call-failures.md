@@ -22,7 +22,8 @@ Every tool call goes through this pipeline. Failures at any stage short-circuit 
     ▼
 Stage A — Structural validation
     ├─ Missing tool_use.id (XML tool calls unsupported)
-    └─ Missing nativeArgs (streaming truncation / malformed JSON)
+    ├─ Missing nativeArgs (streaming truncation / malformed JSON)
+    └─ Valid JSON but required fields missing (vscode-lm XML leak into string values)
     │
     ▼
 Stage B — Semantic validation (validateToolUse)
@@ -97,6 +98,27 @@ Stage F — Escalation (after tool returns)
 - Custom tools (from `customToolRegistry`) and private LM tools are exempt (they carry raw args)
 
 **Recovery:** LLM receives the tool_result error and must retry with valid arguments.
+
+---
+
+### A3. Valid JSON but Required Fields Missing (vscode-lm XML Leak)
+
+**Trigger:** A vscode-lm model (particularly composite `shofer/*` models via `LanguageModelToolCallPart`) emits structurally valid JSON but embeds a trailing `<parameter name="..." string="true">VALUE` XML suffix inside one of the string values instead of as a separate JSON key. Example: `{"diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">extensions/shofer/src/core/workflow/WorkflowTask.ts"}`. `JSON.parse()` succeeds because the `<parameter>` text is just literal content inside the diff string. The parser's `apply_diff` guard `(args.path !== undefined || ...)` then fails because `args.path` is `undefined`.
+
+**Error message:**
+
+> Tool call failed for "apply_diff": the parser could not produce a valid tool invocation. Reason: [NativeToolCallParser] Invalid arguments for tool 'apply_diff'. Native tool calls require a valid JSON payload matching the tool schema. Received: {"diff":"...<parameter name=\"path\"...\"}
+
+**Location:** [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — `parseToolCall()` switch case at L1198–1222, XML leak recovery helper `extractPathFromXMLLeak()` at L329–353
+
+**Effect:**
+
+- `consecutiveMistakeCount++`
+- `recordToolError(name, errorMessage)` called
+- Error surfaced to chat UI via `shofer.say("error", …)`
+- Tool call is dropped — LLM must retry
+
+**Recovery:** `NativeToolCallParser` now has an automatic recovery path: when `path` is missing but `diff` is present, `extractPathFromXMLLeak()` attempts to recover the path from a trailing `<parameter name="path" string="true">VALUE` suffix on the diff string. If found, the suffix is stripped and the extracted path is used. A warning is logged to the webview log. This is best-effort — if the XML markup is malformed or absent, the original error is still thrown.
 
 ---
 
