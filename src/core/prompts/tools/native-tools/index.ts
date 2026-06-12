@@ -91,6 +91,7 @@ import waitForMcpCall from "./wait_for_mcp_call"
 import sed from "./sed"
 import sendMessageToTask from "./send_message_to_task"
 import sleep from "./sleep"
+import wait from "./wait"
 import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
 
@@ -178,6 +179,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		sed,
 		sendMessageToTask,
 		sleep,
+		wait,
 		viewImage,
 		writeToFile,
 	]

@@ -94,6 +94,8 @@ export const toolNames = [
 	"wait_for_mcp_call",
 	// Peer messaging
 	"send_message_to_task",
+	// Alias for attempt_completion with canned params (yield / wait)
+	"wait",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)
@@ -169,6 +171,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	check_mcp_call_status: "check async mcp call status",
 	wait_for_mcp_call: "wait for async mcp calls",
 	send_message_to_task: "send messages to peer tasks",
+	wait: "wait / yield",
 } as const
 
 /**
@@ -254,6 +257,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"give_feedback",
 	"list_background_tasks",
 	"send_message_to_task",
+	"wait",
 ] as const
 
 /**

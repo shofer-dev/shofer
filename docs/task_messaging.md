@@ -192,6 +192,8 @@ The sender receives immediate confirmation:
 Message sent to task <task_id> ("<title>"). Delivery: on the recipient's next turn (resuming it if idle).
 ```
 
+> **Yielding while awaiting an async reply.** Because async never blocks the sender, a sender that has nothing left to do until the recipient replies should call **[`wait`](native_tools.md#wait)** to yield its turn rather than spin or fabricate busywork. `wait` is an alias for `attempt_completion` — it ends the current turn as a terminal state — and the recipient's eventual reply arrives as a Form B annotated user-turn that **wakes the sender back up** (the same `MessageQueueService` path that resumes any idle task). This is the intended idiom for message-driven coordination: send → `wait` → resume on reply.
+
 **Response mechanism differs by mode.** There is no `respond_to_peer` tool:
 
 - **Async** has no blocking sender, so a "response" is optional and is just a fresh `send_message_to_task` notification from B back to A (the sender's `task_id` is in the delivered prompt, so B knows whom to address).

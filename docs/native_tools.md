@@ -395,6 +395,7 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | ------------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
 | `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
 | `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
+| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield / wait for a message  |
 | `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                |
 | `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
 | `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
@@ -563,6 +564,19 @@ The `rating` parameter provides a self-assessment of how well the task was compl
 
 The optional `feedback` parameter captures concrete observations about tooling or system prompt shortcomings encountered during the task. This feedback is routed to Shofer.Dev developers for continuous improvement.
 
+### `wait`
+
+A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended for message-driven / orchestrator flows: after sending a message to a peer (`send_message_to_task`), call `wait` to yield, and you are automatically resumed when a reply/message arrives.
+
+The handler ([`WaitTool.ts`](../src/core/tools/WaitTool.ts)) maps the canned params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. Both params are optional and advisory (host-side defaults applied in the handler — note `attempt_completion` itself defaults a missing rating to `"poor"`, but `wait` defaults to `"well"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
+
+| Param    | Type           | Required | Description                                                                              |
+| -------- | -------------- | :------: | ---------------------------------------------------------------------------------------- |
+| `rating` | string \| null |    –     | Self-assessment of the work so far: `"poor"`, `"well"`, `"excellent"`. Default `"well"`. |
+| `reason` | string \| null |    –     | Short note on what you are waiting for. Default `"waiting"`.                             |
+
+See [`adding-new-tools.md` § "Alias Tools"](adding-new-tools.md) for the delegating-alias pattern.
+
 ### `skills`
 
 Load and execute a skill by name. Skills provide specialized instructions for common tasks.
@@ -689,6 +703,7 @@ Checkmark (✓) means the tool is available in that mode by default.
 | **Always available**      |
 | `ask_followup_question`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `attempt_completion`      |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
+| `wait`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `switch_mode`             |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `new_task`                |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
 | `update_todo_list`        |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |

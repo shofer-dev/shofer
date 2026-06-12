@@ -554,6 +554,15 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "wait":
+				// Both params optional — always emit nativeArgs so the dispatcher
+				// does not reject the call as "missing nativeArgs".
+				nativeArgs = {
+					rating: partialArgs.rating,
+					reason: partialArgs.reason,
+				}
+				break
+
 			case "execute_command":
 				if (partialArgs.command) {
 					nativeArgs = {
@@ -1234,6 +1243,15 @@ export class NativeToolCallParser {
 							feedback: args.feedback,
 						} as NativeArgsFor<TName>
 					}
+					break
+
+				case "wait":
+					// Both params optional — always emit nativeArgs so the dispatcher
+					// does not reject the call as "missing nativeArgs".
+					nativeArgs = {
+						rating: args.rating,
+						reason: args.reason,
+					} as NativeArgsFor<TName>
 					break
 
 				case "execute_command":

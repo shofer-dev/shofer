@@ -32,6 +32,7 @@ import { switchModeTool } from "../tools/SwitchModeTool"
 import { setTaskTitleTool } from "../tools/SetTaskTitleTool"
 import { giveFeedbackTool } from "../tools/GiveFeedbackTool"
 import { attemptCompletionTool, AttemptCompletionCallbacks } from "../tools/AttemptCompletionTool"
+import { waitTool } from "../tools/WaitTool"
 import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
@@ -474,6 +475,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.question}']`
 					case "attempt_completion":
 						return `[${block.name}]`
+					case "wait":
+						return `[${block.name}${block.params.reason ? `: ${block.params.reason}` : ""}]`
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.task_id ? ` for task ${block.params.task_id}` : ""}${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
 					case "set_task_title":
@@ -1188,6 +1191,35 @@ export async function presentAssistantMessage(shofer: Task) {
 						block as ToolUse<"attempt_completion">,
 						completionCallbacks,
 					)
+					break
+				}
+				case "wait": {
+					// `wait` is an alias for attempt_completion with canned params — it
+					// is the same self-declared terminal state, so it shares the
+					// duplicate-completion guard (see the attempt_completion case above).
+					if (!block.partial) {
+						if (shofer.didExecuteAttemptCompletion) {
+							webviewLog.info(
+								`[presentAssistantMessage] Skipping duplicate completion via wait (tool_use_id: ${toolCallId})`,
+							)
+							pushToolResult(
+								formatResponse.toolError(
+									"Skipped duplicate completion. Only one attempt_completion / wait is allowed per response.",
+								),
+							)
+							break
+						}
+						shofer.didExecuteAttemptCompletion = true
+					}
+
+					const waitCallbacks: AttemptCompletionCallbacks = {
+						askApproval,
+						handleError,
+						pushToolResult,
+						askFinishSubTaskApproval,
+						toolDescription,
+					}
+					await waitTool.handle(shofer, block as ToolUse<"wait">, waitCallbacks)
 					break
 				}
 				case "run_slash_command":

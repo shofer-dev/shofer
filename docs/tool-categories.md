@@ -118,7 +118,7 @@ When a mode requests tools, each tool's group is checked against the mode's allo
 
 These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TOOLS`](../packages/types/src/tool.ts) constant:
 
-`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`
+`attempt_completion`, `wait`, `update_todo_list`, `run_slash_command`, `skills`, `set_task_title`, `give_feedback`, `list_background_tasks`, `send_message_to_task`
 
 ### MCP tools without group
 

@@ -263,6 +263,9 @@ export type NativeToolArgs = {
 		wait?: boolean | null
 		timeout_sec?: number | null
 	}
+	// `wait` is an alias for attempt_completion; both params are optional/advisory
+	// and get host-side defaults (rating -> "well", reason -> "waiting").
+	wait: { rating?: string; reason?: string }
 	// Add more tools as they are migrated to native protocol
 }
 

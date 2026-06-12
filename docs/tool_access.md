@@ -226,10 +226,10 @@ The check order documented in §Decision rule describes
 deny → tools_allowed → groups → false. The actual implementation in
 [`isToolAllowedForMode()`](../src/core/tools/validateToolUse.ts:200) has a
 fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
-`attempt_completion`, `update_todo_list`, `run_slash_command`, `skills`,
+`attempt_completion`, `wait`, `update_todo_list`, `run_slash_command`, `skills`,
 `set_task_title`, `give_feedback`, `list_background_tasks`, and
 `send_message_to_task`) unconditionally returns `true`. This
-means these eight tools always pass mode-level checks regardless of `groups`,
+means these nine tools always pass mode-level checks regardless of `groups`,
 `tools_allowed`, or `tools_denied`. Disabling them requires the `disabledTools`
 setting (checked earlier in `validateToolUse()` via `toolRequirements`), not
 mode configuration.
