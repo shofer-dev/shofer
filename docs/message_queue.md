@@ -328,7 +328,7 @@ factual review. They are not immediate correctness problems but
 represent missing coverage that future write-ups should address.
 
 1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](extensions/shofer/src/core/message-queue/MessageQueueService.ts:41)
-   wraps each message as `{ id: string (uuidv7), timestamp: number,
+   wraps each message as `{ id: string (uuidv4), timestamp: number,
 text: string, images?: string[] }`. The `timestamp` and `id` fields
    are never mentioned in this doc; the `id` is relevant because
    `prependMessage` assigns a **new** uuid rather than restoring the
