@@ -2,6 +2,7 @@
 
 > **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean.  
 > ✅ **Least-privilege `knownPeers` default** (Shofer v1.0.85): `knownPeers` is always set for background tasks; `undefined` means deny-all (was: full same-root access). Baseline at spawn: `{ parentTaskId }` only — siblings require an explicit grant via `peer_task_ids` on `new_task`, or the `peers: [@Ref]` meta field in a slang agent declaration.  
+> ✅ **Symmetric peer grants** (Shofer v1.0.86): a `peer_task_ids` grant is now bidirectional — the granted peer also gets the new child in its `knownPeers`, so a single grant opens a two-way channel. Mirrors the explicit edge only (not transitive). See [Symmetric peering](#symmetric-peering-bidirectional-grants).  
 > See [Remaining & Future Items](#remaining--future-items) for known gaps.
 
 Design for direct communication between tasks sharing the same root task, enabling A2A-style collaboration without routing through the parent.
@@ -146,12 +147,12 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 
 ### Scope validation
 
-> ⚠️ See also: [`peer_task_ids` grants are unidirectional](#peer_task_ids-on-new_task----opt-in-scope-restrictor) — having a task ID does not mean that task can message you back. Each direction requires its own grant.
+> ℹ️ See also: [`peer_task_ids` grants are symmetric](#symmetric-peering-bidirectional-grants) — a grant opens a two-way channel, so a peer you were granted can message you back. (Receiving a message is still not itself a grant, and symmetry is not transitive.)
 
 1. `caller.rootTaskId` must be set (not a top-level task), unless the caller is the root task itself — the root can message any task in its tree.
 2. `target.rootTaskId === caller.rootTaskId`.
 3. `target.taskId !== caller.taskId`.
-4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership. **Receiving a PEER MESSAGE from a task does NOT add that sender to your `knownPeers`.** The reply path requires its own independent grant.
+4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership. **Receiving a PEER MESSAGE from a task does NOT add that sender to your `knownPeers`** — but because `peer_task_ids` grants are [symmetric](#symmetric-peering-bidirectional-grants), any peer you were granted at spawn time already has you in its set and can reply without a separate grant.
     > **Removed (commit `e640a4578`):** Scope validation rule #5 (`isBackgroundTask` check) was removed. Any task — foreground or background, root or subtask — can send and receive peer messages. Rules #1–#4 are sufficient.
 
 > **Removed (commit `e640a4578`):** The `isBackgroundTask` restriction was removed from `send_message_to_task`. Any task — foreground or background — can be caller or target. The parent/child sync routing table below is retained for historical reference; the `pendingSyncResolvers` map now serves all initiators uniformly, keyed by recipient `taskId`.
@@ -288,49 +289,56 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 
 ---
 
-> ⚠️ **CRITICAL: `peer_task_ids` is a PER-TASK, UNIDIRECTIONAL allowlist. It does NOT establish a mutual-pairing relationship between tasks.**
+> ✅ **`peer_task_ids` grants are SYMMETRIC (bidirectional) as of Shofer v1.0.86.** Granting a child access to a peer also grants that peer access back to the child — a single grant opens a two-way channel.
 >
 > **What this means in practice:**
 >
-> - Granting task A access to task B lets A send messages **TO** B, discover B in `list_background_tasks(scope="peers")`, and check B's status.
-> - It does **NOT** grant B access to A in return. The `peer_task_ids` granted to A are invisible to B.
-> - **Receiving a PEER MESSAGE from a task does NOT auto-add that task to your `knownPeers` set.** You cannot reply unless YOU were also granted the sender's ID at spawn time.
+> - Spawning a child with `peer_task_ids=[B]` lets the child send messages **TO** B, discover B in `list_background_tasks(scope="peers")`, and check B's status — **and** the reverse edge is mirrored onto B, so B can send to / discover / check the child too.
+> - This is enforced at grant time in [`NewTaskTool`](../src/core/tools/NewTaskTool.ts): the child's `taskId` is added to each granted peer's `knownPeers` (live instance) and persisted onto the peer's history row, so it survives restarts.
+> - **Receiving a PEER MESSAGE from a task still does NOT auto-add that task to your `knownPeers` set.** Only an explicit `peer_task_ids` grant (or being someone's parent/child) creates an edge. But because grants are now symmetric, any peer you were _granted_ can already reach you — so the old "I messaged them, they can't reply" footgun no longer occurs for grant-created edges.
 >
-> **Bidirectional communication table:**
+> **Why symmetric:** spawn-time grants can only name tasks that already exist, so a grant is _necessarily_ one-directional at the moment it is written (the later sibling references the earlier one). Mirroring the edge turns that single expressible grant into a working conversation channel. See [Symmetric peering](#symmetric-peering-bidirectional-grants) below.
 >
-> | Grant configuration   | A → B (A sends to B) | B → A (B sends to A) | A sees B in `peers` | B sees A in `peers` |
-> | --------------------- | -------------------- | -------------------- | ------------------- | ------------------- |
-> | Only A has B's ID     | ✅                   | ❌                   | ✅                  | ❌                  |
-> | Only B has A's ID     | ❌                   | ✅                   | ❌                  | ✅                  |
-> | Both have each other  | ✅                   | ✅                   | ✅                  | ✅                  |
-> | Neither has the other | ❌                   | ❌                   | ❌                  | ❌                  |
+> **Communication table (post-v1.0.86):**
 >
-> **Common pitfall — "I sent a message, why can't they reply?":**
+> | Grant configuration                              | A → B | B → A | A sees B in `peers` | B sees A in `peers` |
+> | ------------------------------------------------ | ----- | ----- | ------------------- | ------------------- |
+> | A granted B via `peer_task_ids` (auto-symmetric) | ✅    | ✅    | ✅                  | ✅                  |
+> | Parent ↔ child (always symmetric)               | ✅    | ✅    | ✅                  | ✅                  |
+> | Neither granted, not parent/child                | ❌    | ❌    | ❌                  | ❌                  |
 >
-> 1. You send `send_message_to_task(task_id="peer-123", message="Hello")` to a sibling.
-> 2. Your message is delivered via a PEER MESSAGE notification — it includes YOUR task ID in the sender field.
-> 3. The recipient tries to reply with `send_message_to_task(task_id="<your-id>", ...)`.
-> 4. **It fails with `"not in your allowed peer set"`** — because the recipient was never granted your ID.
+> **Residual asymmetries (symmetry does NOT cover these):**
 >
-> This is working as designed. The PEER MESSAGE notification text says "You may respond using `send_message_to_task`" — but this is only a prompt suggestion; it doesn't override the `knownPeers` scope check. **If you need bidirectional communication, both tasks must mutually grant each other's task IDs at spawn time.** Pre-spawn both children, collect their IDs, and pass each child the other's ID via `peer_task_ids`.
+> - **Symmetry is not transitivity.** Mirroring only the _explicit_ edge means a parent holding both Alpha and Beta does NOT connect Alpha and Beta to each other. To make two siblings talk, spawn the later one with `peer_task_ids=[earlierSibling]`; the mirror makes that single grant two-way. (No need to pre-spawn both and cross-grant anymore.)
+> - **Root omnipotence is not mirrored.** The root task can message any task in its tree without a `knownPeers` edge; that implicit reach is one-way. A non-direct-child being messaged by the root can only reply if it independently has the root in its `knownPeers`.
 
 ## `peer_task_ids` on `new_task` — Opt-in Scope Restrictor
 
 New optional parameter on [`NewTaskParams`](../src/core/tools/NewTaskTool.ts:16):
 
-| Param           | Type             | Required | Description                                                                                                                                                                                                                                                                           |
-| --------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `peer_task_ids` | string[] \| null | –        | If provided, extends the spawned child's peer grant to include these task IDs (in addition to the parent and any tasks it itself spawns). If omitted/null, the child defaults to **least-privilege scope**: parent + own children only — no sibling access unless explicitly granted. |
+| Param           | Type             | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------- | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `peer_task_ids` | string[] \| null | –        | If provided, extends the spawned child's peer grant to include these task IDs (in addition to the parent and any tasks it itself spawns). **Grants are symmetric** — each listed peer also gets the new child added to _its_ `knownPeers`, opening a two-way channel. If omitted/null, the child defaults to **least-privilege scope**: parent + own children only — no sibling access unless explicitly granted. |
 
 ### Implementation
 
-When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` (runtime-only; this is a `Set<string>` field on the `Task` class, NOT a persisted `@shofer/types` cross-boundary schema — see [Data Model Additions](#data-model-additions)) containing the union of:
+When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` (runtime-only field on the `Task` class; the grants are also persisted as `HistoryItem.peerIds` and rehydrated into `knownPeers` on restart — see [`Task` constructor](../src/core/task/Task.ts:887)) containing the union of:
 
 - `peer_task_ids` (explicitly listed peers)
 - The parent's `taskId` (always allowed)
 - Any task the child itself spawns via `new_task` (dynamically added)
 
 The "dynamically added" union member is mutated in the [`NewTaskTool`](../src/core/tools/NewTaskTool.ts) handler: when a task with a non-`undefined` `knownPeers` spawns a child, the new child's `taskId` is added to the spawner's `knownPeers` at spawn time. (Spawned children are also tracked in `backgroundChildIds`, but `knownPeers` is the scope-authority for peer tools and must be updated explicitly.)
+
+#### Symmetric peering (bidirectional grants)
+
+For each id in `peer_task_ids`, `NewTaskTool` also writes the **reverse edge** — it adds the new child's `taskId` to that peer's `knownPeers` (on the live `Task` instance, immediately and race-free) and persists it onto the peer's `HistoryItem.peerIds` (so it survives a restart). The reverse-edge persist targets the _peer's_ history row, which already exists because the peer was spawned before the child — so, unlike the child's own forward-edge write, it does not hit the child-not-yet-registered persistence race.
+
+Rationale and limits:
+
+- **Why:** a spawn-time grant can only name an already-existing task, so it is unavoidably expressed one-directionally (the later sibling references the earlier). Mirroring turns that single grant into a usable two-way conversation channel.
+- **Not transitive:** only the explicit edge is mirrored. A parent holding both Alpha and Beta does not connect them; spawn the later sibling with `peer_task_ids=[earlierSibling]`.
+- **Safety:** symmetry changes _reachability_, not _blocking semantics_. The sync-messaging deadlock guard (fail-fast on busy targets, [`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts)) and sync timeouts are lifecycle-based and unaffected. The only residual is behavioral async ping-pong, bounded by per-turn/cost limits (a hop/TTL cap on relayed messages is a possible future hardening).
 
 `peer_task_ids` values SHOULD be validated at spawn time: each listed id must correspond to an existing task sharing the spawner's `rootTaskId`. Unknown ids are rejected (fail loud) rather than silently producing an over-restrictive scope that fails opaquely on a later `send_message_to_task`.
 

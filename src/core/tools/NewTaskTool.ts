@@ -305,6 +305,53 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					taskLog.error(`[NewTaskTool] Failed to persist peerIds for child ${child.taskId}: ${err}`)
 				}
 
+				// ── Symmetric peering ───────────────────────────────────────────
+				// A granted peer edge is bidirectional: the child can already reach
+				// each granted peer (childPeers above), so mirror the reverse edge —
+				// add the child to each granted peer's knownPeers — so the peer can
+				// reach the child too. Spawn-time grants can only name tasks that
+				// already exist, so a grant is necessarily expressed one-directionally;
+				// without this mirror, child→peer works but peer→child is blocked,
+				// which breaks any back-and-forth conversation.
+				//
+				// Note: symmetry only mirrors edges the spawner EXPLICITLY granted via
+				// peer_task_ids. It does NOT transitively connect siblings that merely
+				// share a parent — to make two siblings talk, spawn the later one with
+				// peer_task_ids=[earlierSibling]; this mirror makes that single grant
+				// two-way. The reverse edge is written to the peer's record, which
+				// already exists (the peer predates the child), so this persist does
+				// not hit the child-not-yet-registered race that the child's own
+				// forward-edge write above does.
+				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
+					for (const peerId of params.peer_task_ids) {
+						// Live, in-memory mirror — immediate and race-free this session.
+						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
+						if (peerLive) {
+							if (!peerLive.knownPeers) {
+								peerLive.knownPeers = new Set<string>()
+							}
+							peerLive.knownPeers.add(child.taskId)
+						}
+						// Persist the reverse edge onto the peer's history row so it
+						// survives restarts (rehydrated via historyItem.peerIds in the
+						// Task constructor).
+						try {
+							const { historyItem: peerHistory } = await provider.getTaskWithId(peerId)
+							const peerIds = Array.from(new Set([...(peerHistory.peerIds ?? []), child.taskId]))
+							await provider.updateTaskHistory({
+								id: peerId,
+								peerIds,
+							} as HistoryItem)
+						} catch (err) {
+							// Non-fatal: the live mirror (if any) still works this
+							// session; only restart-survival of the reverse edge is lost.
+							taskLog.error(
+								`[NewTaskTool] Failed to persist symmetric peer edge ${peerId}→${child.taskId}: ${err}`,
+							)
+						}
+					}
+				}
+
 				pushToolResult(`Child task started: ${child.taskId}\nStatus: starting`)
 				return
 			} else {
