@@ -1,12 +1,13 @@
 # Task Visualization
 
-This document describes three visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView` (matching the pattern used by [`WorkflowView`](../webview-ui/src/components/chat/WorkflowView.tsx) with its `[ Chat ] [ Topology ] [ Sequence ] [ Swimlane ]` tabs):
+This document describes four visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView` (matching the pattern used by [`WorkflowView`](../webview-ui/src/components/chat/WorkflowView.tsx) with its `[ Events ] [ Tree ] [ Topology ] [ Sequence ] [ State ]` tabs):
 
 1. **Tree** — hierarchical view showing parent/child task relationships under a common root, like `TaskSelector` renders.
-2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel) across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).
+2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel, question) across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).
 3. **Trace** — a Chrome DevTools Network-panel-style waterfall for a single task, showing every API request and tool execution on a horizontal time axis.
+4. **Stats** — a donut chart breaking down the focused task's active time by phase (model wait, thinking, streaming, tool execution, waiting for task, sleeping, overhead).
 
-All three share a common data model foundation: offsets from a per-task `timelineOriginMs`, task identity from `taskId`/`parentTaskId`, and interaction events from inter-task tool invocations.
+The Trace and Stats share a common data model: offsets from a per-task `timelineOriginMs` recorded on each `api_req_finished` message. The Tree and Sequence draw on task identity (`taskId`/`parentTaskId`/`rootTaskId`) and inter-task interaction events.
 
 ## Tab Bar Layout
 
@@ -41,14 +42,14 @@ The tree view shows all tasks sharing a common root, rendering the same parent-c
 
 ### Data Source
 
-| Field                 | From                                      |
-| --------------------- | ----------------------------------------- |
-| Task identity + title | `HistoryItem.id`, `.task`, `.number`      |
-| Tree structure        | `HistoryItem.parentTaskId`, `.rootTaskId` |
-| State                 | `TaskState` (lifecycle + rating)          |
-| Active time           | `HistoryItem.activeTimeMs`                |
-| Tokens + cost         | `HistoryItem.tokensIn/Out`, `.totalCost`  |
-| Mode                  | `HistoryItem.mode`                        |
+| Field                 | From                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| Task identity + title | `HistoryItem.id`; title via `getTaskDisplayName` (`set_task_title`/`name`, else prompt) |
+| Tree structure        | `HistoryItem.parentTaskId`, `.rootTaskId`                                               |
+| State                 | `TaskState` (lifecycle + rating)                                                        |
+| Active time           | `HistoryItem.activeTimeMs`                                                              |
+| Tokens + cost         | `HistoryItem.tokensIn/Out`, `.totalCost`                                                |
+| Mode                  | `HistoryItem.mode`                                                                      |
 
 All of this data already exists in `ExtensionState.taskHistory` — no new persistence needed.
 
@@ -57,12 +58,12 @@ All of this data already exists in `ExtensionState.taskHistory` — no new persi
 A simple React tree component using indentation + collapse/expand for child nodes. Each row shows:
 
 ```
- ╶ [3] search-subtask          📁  2m 15s   ⸱ 12.3K tokens  ⸱ $0.04
-    ├─ [4] file-reader         📁  45s      ⸱ 1.2K tokens   ⸱ $0.01
-    └─ [5] code-explorer       ⚡  1m 12s    ⸱ 8.4K tokens   ⸱ $0.03
+ ╶ search auth module          📁  2m 15s   ⸱ 12.3K tokens  ⸱ $0.04
+    ├─ read UserService        📁  45s      ⸱ 1.2K tokens   ⸱ $0.01
+    └─ explore call sites      ⚡  1m 12s    ⸱ 8.4K tokens   ⸱ $0.03
 ```
 
-Rows are sorted by `number` (creation order), children indented under parents. State indicators (colored dots) match `TaskSelector`'s visual mapping. The tree renders **all** tasks under the same `rootTaskId`, not just direct children. Collapse/expand controls at each parent node.
+Siblings are sorted by creation time (newest first, matching `TaskSelector`), children indented under parents. Each row shows the task title (no longer a `[number]` prefix — `HistoryItem.number` is a global, deletion-sensitive index, so it was dropped as unhelpful), state dot, mode badge, active time, tokens, cost. The tree renders **all** tasks under the focused task's `rootTaskId`, not just direct children, and clicking a row navigates to that task (`focusParallelTask`).
 
 ---
 
@@ -76,23 +77,16 @@ A lifeline-based sequence diagram showing inter-task communication across the ta
 
 Inter-task communication is extracted from tool invocations at execution time and recorded as `say: "task_interaction"` `ShoferSay` messages in `ui_messages.json`:
 
-```typescript
-interface TaskInteractionPayload {
-	fromTaskId: string
-	toTaskId?: string
-	kind: "spawn" | "message" | "await" | "answer" | "cancel"
-	label: string
-	rootOffsetMs: number // from root's timelineOriginMs
-}
-```
+See the [`TaskInteractionPayload`](#task-interaction-events) shape under Data Model. Each tool maps to a kind:
 
-| Tool                      | Kind      | Description                     |
-| ------------------------- | --------- | ------------------------------- |
-| `new_task`                | `spawn`   | Parent → child creation         |
-| `send_message_to_task`    | `message` | Task → peer communication       |
-| `wait_for_task`           | `await`   | Parent blocks on child          |
-| `answer_subtask_question` | `answer`  | Parent answers child's question |
-| `cancel_tasks`            | `cancel`  | Parent terminates child         |
+| Tool                      | Kind       | Description                            |
+| ------------------------- | ---------- | -------------------------------------- |
+| `new_task`                | `spawn`    | Parent → child creation                |
+| `send_message_to_task`    | `message`  | Task → peer communication              |
+| `wait_for_task`           | `await`    | Caller blocks on target                |
+| `answer_subtask_question` | `answer`   | Parent answers child's question        |
+| `cancel_tasks`            | `cancel`   | Parent terminates child                |
+| `ask_followup_question`   | `question` | Child asks its parent (child → parent) |
 
 ### Rendering
 
@@ -115,11 +109,11 @@ interface TaskInteractionPayload {
 ── Tooltips on arrows: label + duration
 ```
 
-The diagram ports lifeline rendering, arrow drawing, and activation boxes directly from `compileSequenceSVG`. The key difference: lifelines represent tasks (not Slang agents), and arrows represent control-plane tool invocations (not stake/await data flow).
+The diagram mirrors `compileSequenceSVG`'s aesthetics (dashed lifeline tracks, rounded header boxes, `<marker>` arrowheads, activation boxes on both endpoints). The key difference: lifelines represent tasks (not Slang agents), arrows represent control-plane tool invocations, and lifelines are ordered left-to-right by task creation time (root leftmost). Arrowheads use one SVG `<marker>` per kind colour so they auto-orient and land exactly on the target lifeline. Pan/zoom is shared with the Trace via the [`useSvgPanZoom`](../webview-ui/src/hooks/useSvgPanZoom.ts) hook.
 
 ### Scope
 
-Deferred from v1. The `TaskInteraction` data model and instrumentation (recording at tool execution time in the inter-task tool handlers) are part of v1. The SVG compiler and `[ Sequence ]` tab are v2.
+Implemented (v1). Because `task_interaction` events live in every task's `ui_messages.json` (not just the focused task), they are aggregated host-side: `getTaskInteractions` (webview → host) → [`ShoferProvider.getTaskInteractions(rootTaskId)`](../src/core/webview/ShoferProvider.ts) reads every task under the root via `readTaskMessages`, extracts the payloads, and returns them sorted by `rootOffsetMs` (the `taskInteractions` response).
 
 ---
 
@@ -228,6 +222,11 @@ interface ApiRequestFinishedPayload {
 	 *  the first content-bearing stream chunk.  Null when neither is
 	 *  available (e.g. instant error without metadata). */
 	ttfbMs: number | null
+	/** Offset (ms from request start, same basis as ttfbMs) at which output
+	 *  generation began — the first non-reasoning chunk (text or tool call). The
+	 *  window between ttfbMs and this is the model's "thinking"/reasoning phase.
+	 *  Optional/null when not captured (no reasoning, or legacy spans). */
+	genStartOffsetMs?: number | null
 	/** Requested model ID. */
 	model: string
 	/** Wire protocol. */
@@ -278,6 +277,11 @@ interface ToolSpan {
 	/** When the tool is `new_task` and it spawned a subtask: the child
 	 *  task's taskId.  Used by the Sequence view for spawn arrows. */
 	spawnedTaskId?: string
+	/** True when this span represents the task *blocking on another task* rather
+	 *  than doing its own work: `wait_for_task`, a foreground (blocking)
+	 *  `new_task`, or a sync (`wait=true`) `send_message_to_task`. Rendered as the
+	 *  "Waiting for task" category in the Stats/Trace views. */
+	waitsForTask?: boolean
 }
 ```
 
@@ -293,13 +297,14 @@ Inter-task communication is recorded as `say: "task_interaction"` `ShoferSay` me
 interface TaskInteractionPayload {
 	fromTaskId: string
 	toTaskId?: string
-	kind: "spawn" | "message" | "await" | "answer" | "cancel"
+	kind: "spawn" | "message" | "await" | "answer" | "cancel" | "question"
 	label: string
-	rootOffsetMs: number // from root's timelineOriginMs (Sequence view only)
+	rootOffsetMs: number // offset from the root task's timelineOriginMs (Sequence view)
+	isError?: boolean // failed interaction → dashed red arrow
 }
 ```
 
-Extracted from tool invocations: `new_task` → `spawn`, `send_message_to_task` → `message`, `wait_for_task` → `await`, `answer_subtask_question` → `answer`, `cancel_tasks` → `cancel`.
+Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskInteraction`, after the tool dispatch): `new_task` → `spawn`, `send_message_to_task` → `message`, `wait_for_task` → `await`, `answer_subtask_question` → `answer`, `cancel_tasks` → `cancel`, `ask_followup_question` → `question` (child → parent, only when the task has a parent). `rootOffsetMs` is filled in by `Task.emitTaskInteraction` from the root task's origin — all tasks in the host share one `performance.now()` clock, so origins are directly comparable.
 
 ### Invariants
 
@@ -320,67 +325,74 @@ this.timelineOriginMs = performance.now()
 this._pendingToolSpans = []
 this._pendingRequestStartOffset = 0
 this._pendingTtfbMs = null
+this._pendingGenStartMs = null // first non-reasoning chunk → thinking/streaming split
+this._pendingApiReqNeedsEmit = false // double-emit guard (see §2)
 this._currentRequestIndex = 0
 ```
 
 ### 2. `recursivelyMakeShoferRequests()` — request span lifecycle
 
 ```
-Before rate-limit gate:
-  this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
-
-After stream loop exits (success / cancel / error):
-  Build ApiRequestFinishedPayload:
-    requestIndex = this._currentRequestIndex
-    taskId = this.taskId
-    parentTaskId = this.parentTaskId ?? null
-    startedAtOffsetMs = this._pendingRequestStartOffset
-    finishedAtOffsetMs = performance.now() - this.timelineOriginMs
-    ttfbMs = this._pendingTtfbMs
-    status = "completed" | "cancelled" | "error"
-    toolSpans = drain this._pendingToolSpans[]
-    // ... fill model, apiProtocol, retryAttempt, tokens, cost, error, ...
-
-  Emit via this.say("api_req_finished", JSON.stringify(payload))
+At request start (per iteration, before the streaming call):
   this._pendingToolSpans = []
   this._pendingTtfbMs = null
-  this._currentRequestIndex++
+  this._pendingGenStartMs = null
+  this._pendingApiReqNeedsEmit = true
+  this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
+
+AFTER the tools for this request have executed
+(i.e. after `await pWaitFor(() => this.userMessageContentReady)`, NOT at
+stream-read end — otherwise toolSpans[] would be drained empty because tool
+execution runs in presentAssistantMessage *after* the stream finishes reading):
+  emitApiReqFinished("completed")
 ```
 
-### 3. Stream loop — TTFB capture
+`emitApiReqFinished(status, cancelReason?)` builds the immutable payload
+(requestIndex, offsets, ttfbMs, genStartOffsetMs, model, tokens/cost from the
+`api_req_started` message, structured `error`, and the drained `toolSpans[]`)
+and emits it via `this.say("api_req_finished", …)`. It is **idempotent** — it
+returns early unless `_pendingApiReqNeedsEmit` is set, then clears the flag. So
+whichever path fires first wins (normal post-tools emit, `abortStream`, or
+`abortTask` — see §5); the rest are no-ops, and `_currentRequestIndex` advances
+exactly once per request.
+
+### 3. Stream loop — TTFB + generation-start capture (`_markStreamProgress`)
+
+In the chunk-processing loop, every chunk calls `_markStreamProgress(isReasoning)`:
 
 ```typescript
-// In the chunk-processing loop, on the first non-placeholder chunk:
-if (this._pendingTtfbMs === null && !isPlaceholderChunk(chunk)) {
-	this._pendingTtfbMs = performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
+private _markStreamProgress(isReasoning: boolean) {
+	const offset = performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
+	if (this._pendingTtfbMs === null) this._pendingTtfbMs = offset // first chunk of any kind
+	if (!isReasoning && this._pendingGenStartMs === null) this._pendingGenStartMs = offset // first text/tool_call
 }
+// reasoning chunk → _markStreamProgress(true); text / tool_call / tool_call_partial → (false)
 ```
 
-When provider `response_metadata` arrives later with its own `ttfbMs`, our value takes precedence if already set (we trust our own measurement). If ours is null, the provider's value is used.
+`ttfbMs` is the time to the first content-bearing chunk; the window between it
+and `genStartOffsetMs` (first non-reasoning chunk) is the model's reasoning /
+"thinking" phase.
 
 ### 4. `presentAssistantMessage()` — tool span capture
 
-```typescript
-// In presentAssistantMessage, around each tool's execute() call:
-const toolStartedAt = performance.now()
-// ... execute tool via BaseTool.handle() ...
-const toolFinishedAt = performance.now()
+Tool spans are recorded at the single `pushToolResult` chokepoint (so every
+dispatched tool that produces a result is captured exactly once). `toolName =
+block.name`, timing from a `toolSpanStartedAt` stamped just before the dispatch
+switch, `isError` derived from the `{status:"error"}` result shape,
+`spawnedTaskId = shofer.childTaskId` for `new_task`, and `waitsForTask = true`
+for blocking inter-task tools (`wait_for_task`, a foreground `new_task`, or a
+sync `send_message_to_task`). `maybeRecordTaskInteraction()` runs after the
+dispatch switch to emit the `task_interaction` events (§ Sequence).
 
-this._pendingToolSpans.push({
-	startedAtOffsetMs: toolStartedAt - this.timelineOriginMs,
-	finishedAtOffsetMs: toolFinishedAt - this.timelineOriginMs,
-	toolName: block.name,
-	toolId: block.id,
-	resultSizeChars: computeResultSize(resultContent),
-	isError: resultIsError,
-	// If tool is new_task and spawned a subtask:
-	spawnedTaskId: childTaskId ?? undefined,
-})
-```
+### 5. `abortTask()` — flush the in-flight request
 
-### 5. `abortTask()` + `cancelAndProcessQueuedMessages()` — cancellation marking
-
-When a request is interrupted, the accumulated `api_req_finished` message is still emitted — its `status` is set to `"cancelled"` and `cancelReason` is set accordingly. Partial `toolSpans[]` (tools that completed before cancellation) are included.
+When a request is interrupted (user cancel, error) **or** ends via the terminal
+`attempt_completion` turn — which calls `abortTask(reason="completed")` and
+disposes the task before the §2 emit point is reached — `abortTask` flushes the
+in-flight span before teardown: `status` is `"completed"` when
+`didExecuteAttemptCompletion`, else `"cancelled"`. Partial `toolSpans[]` (tools
+that ran before the interruption) are included. The §2 idempotency guard
+prevents a double-emit when the normal path already fired.
 
 ## Rendering Technology — Custom SVG
 
@@ -500,20 +512,24 @@ interface TaskInteractionPayload {
 
 ## Key Files
 
-| File                                                                                     | Role                                                                                                            |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [`Task.ts`](../src/core/task/Task.ts)                                                    | Timeline origin, request span lifecycle, tool span capture, stream TTFB measurement, `TaskInteraction` emission |
-| [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) | Tool execution timing; per-tool `TaskInteraction` recording                                                     |
-| [`message.ts`](../packages/types/src/message.ts)                                         | `shoferSaySchema` — `"api_req_finished"` and `"task_interaction"` type discriminants                            |
-| [`TaskTraceView.tsx`](../webview-ui/src/components/chat/TaskTraceView.tsx)               | Waterfall SVG React component (v1)                                                                              |
-| [`TaskTreeView.tsx`](../webview-ui/src/components/chat/TaskTreeView.tsx)                 | Tree hierarchy React component                                                                                  |
-| [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx)         | Sequence diagram (future)                                                                                       |
+| File                                                                                     | Role                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Task.ts`](../src/core/task/Task.ts)                                                    | Timeline origin; request span lifecycle + idempotent `emitApiReqFinished`; `_markStreamProgress` (TTFB + gen-start); `abortTask` flush; `emitTaskInteraction` |
+| [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) | Tool span capture (incl. `waitsForTask`) at the `pushToolResult` chokepoint; `maybeRecordTaskInteraction`                                                     |
+| [`message.ts`](../packages/types/src/message.ts)                                         | Zod schemas: `apiRequestFinishedPayloadSchema`, `toolSpanSchema`, `taskInteractionPayloadSchema`; `shoferSays`                                                |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `getTaskInteractions(rootTaskId)` — host-side aggregation for the Sequence view                                                                               |
+| [`TaskTreeView.tsx`](../webview-ui/src/components/chat/TaskTreeView.tsx)                 | Tree hierarchy React component                                                                                                                                |
+| [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx)         | Sequence lifeline diagram (v1)                                                                                                                                |
+| [`TaskTraceView.tsx`](../webview-ui/src/components/chat/TaskTraceView.tsx)               | Waterfall SVG React component (phase-segmented bars, collapsed-time axis)                                                                                     |
+| [`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStatsView.tsx)               | Active-time donut breakdown                                                                                                                                   |
+| [`useSvgPanZoom.ts`](../webview-ui/src/hooks/useSvgPanZoom.ts)                           | Shared drag-pan + cursor-anchored wheel zoom for Trace & Sequence                                                                                             |
 
 ## Gaps & Areas for Improvement
 
-1. **No per-chunk timing within streaming**: the current design times tool execution but doesn't distinguish between "model is thinking" and "model is streaming tokens" within a request. Could be refined later by instrumenting text-delta chunk arrival times.
+1. ~~**No per-chunk thinking vs streaming split**~~ ✅ Done — `genStartOffsetMs` splits reasoning ("Thinking") from output ("Streaming"). Finer per-text-delta timing within streaming is still possible.
 2. **No request queuing visualization**: if multiple concurrent tasks share a provider rate-limit lane, one task's request may wait before starting. `maybeWaitForProviderRateLimit` time isn't captured — it's folded into `startedAtOffsetMs` (the span starts after the wait).
-3. **No historical timeline comparison**: the timeline is per-task. Cross-task comparison (e.g. "was this task slower than average?") would require aggregating timelines in the webview.
+3. **No historical timeline comparison**: the timeline is per-task. Cross-task comparison (e.g. "was this task slower than average?") would require aggregating timelines in the webview. (Stats is also single-task — it does not aggregate child tasks.)
 4. **No export integration yet**: `api_req_finished` payloads are not yet wired into the JSON task export (`export-json.ts`). This is a follow-up.
-5. **ChatRow should hide `api_req_finished` and `task_interaction` rows**: these messages are in the same `shoferMessages` array as regular chat messages. `ChatRow` needs a guard to skip rendering them in the main chat view (they're only consumed by the visualization tabs).
-6. **Sequence diagram not implemented**: the `TaskInteraction` data model is ready, but the SVG compiler and `[ Sequence ]` tab are deferred.
+5. ~~**ChatRow should hide `api_req_finished` and `task_interaction` rows**~~ ✅ Done — both are filtered from the chat feed (`api_req_finished` was pre-hidden; `task_interaction` is hidden on first render too).
+6. ~~**Sequence diagram not implemented**~~ ✅ Done — implemented as `TaskSequenceView` with host-side aggregation.
+7. **Cross-restart offset alignment**: `rootOffsetMs`/span offsets use `performance.now()`, which resets per process; interactions/spans spanning a VS Code restart can mis-order or mis-measure (see also the Overhead caveat in the Stats section).
