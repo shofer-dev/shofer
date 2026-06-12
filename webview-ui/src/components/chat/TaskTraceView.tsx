@@ -187,12 +187,6 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 		return h + PADDING_Y * 2
 	}, [rows])
 
-	// Fit viewBox when data changes.
-	useEffect(() => {
-		const w = svgRef.current?.clientWidth ?? 800
-		setViewBox({ x: -PADDING_X, y: 0, w: w, h: Math.max(400, totalHeight + PADDING_Y) })
-	}, [totalHeight])
-
 	// Map a compressed-axis value → SVG X coordinate.
 	const compToX = useCallback(
 		(comp: number) => {
@@ -206,14 +200,60 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 	const timeToX = useCallback((offsetMs: number) => compToX(compress(offsetMs)), [compToX, compress])
 
 	// Drag-to-pan + cursor-anchored wheel zoom (shared with the Sequence view).
-	const { isPanning, zoomBy, handlers } = useSvgPanZoom(svgRef, viewBox, setViewBox, {
+	const {
+		isPanning,
+		zoomBy: rawZoomBy,
+		handlers: rawHandlers,
+	} = useSvgPanZoom(svgRef, viewBox, setViewBox, {
 		noPanSelector: ".trace-bar, .tooltip-trigger",
 	})
 
+	// Once the user zooms, stop auto-refitting so we don't fight their view.
+	const userAdjusted = useRef(false)
+	const zoomBy = useCallback(
+		(scale: number) => {
+			userAdjusted.current = true
+			rawZoomBy(scale)
+		},
+		[rawZoomBy],
+	)
+	const handlers = {
+		...rawHandlers,
+		onWheel: (e: React.WheelEvent<SVGSVGElement>) => {
+			userAdjusted.current = true
+			rawHandlers.onWheel(e)
+		},
+	}
+
+	// Fit = fill all available space at 1:1. The viewBox is sized to the SVG's
+	// own pixel box (clientWidth × clientHeight) so its aspect ratio matches the
+	// element exactly — `preserveAspectRatio="meet"` then scales by 1 with no
+	// letterboxing. (Sizing the viewBox to the *content* height instead made a
+	// tall trace force a uniform down-scale, shrinking the drawing into a small
+	// centred box — the bug this replaces.) The horizontal layout fills
+	// `viewBox.w` (see `compToX`), so the waterfall always spans the full width.
 	const fitToView = useCallback(() => {
-		const w = svgRef.current?.clientWidth ?? 800
-		setViewBox({ x: -PADDING_X, y: 0, w, h: Math.max(400, totalHeight + PADDING_Y) })
-	}, [totalHeight])
+		const el = svgRef.current
+		const w = el?.clientWidth ?? 800
+		const h = el?.clientHeight ?? 400
+		userAdjusted.current = false
+		setViewBox({ x: -PADDING_X, y: 0, w, h })
+	}, [])
+
+	// Keep the trace fitted to the available space: on mount, when the data
+	// changes, and whenever the container resizes (e.g. the panel grows after the
+	// chat input is hidden) — unless the user has manually zoomed.
+	useEffect(() => {
+		const el = svgRef.current
+		if (!el) return
+		const refit = () => {
+			if (!userAdjusted.current) fitToView()
+		}
+		refit()
+		const ro = new ResizeObserver(refit)
+		ro.observe(el)
+		return () => ro.disconnect()
+	}, [fitToView, totalHeight])
 
 	if (rows.length === 0) {
 		return (
