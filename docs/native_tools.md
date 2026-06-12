@@ -663,64 +663,32 @@ These are alternative edit tool implementations selectable per-model. They map t
 
 ---
 
-## Mode × Tool Availability Matrix
+## Mode × Tool Availability
 
-Checkmark (✓) means the tool is available in that mode by default.
+Rather than maintain a hand-written tool×mode grid (which drifts — earlier
+revisions listed a non-existent "Ask" mode and miscategorised mode/subtask tools
+as always-available), availability follows one mechanical rule:
 
-| Tool                      | 🏗️ Architect | 💻 Code | ❓ Ask | 🪲 Debug | Always |
-| ------------------------- | :----------: | :-----: | :----: | :------: | :----: |
-| **Read group**            |
-| `read_file`               |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `grep_search`             |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_files`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `find_files`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `read_project_structure`  |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `view_image`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `list_code_usages`        |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_errors`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_project_setup_info`  |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `get_changed_files`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `rag_search`              |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| `lsp_search`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `git_search`              |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `fetch_web_page`          |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `ask_assistant_agent`     |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| **Write group**           |
-| `apply_diff`              |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `write_to_file`           |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `insert_edit`             |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `rename_symbol`           |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_directory`        |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `create_new_workspace`    |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `sed`                     |    ✓ (md)    |    ✓    |        |    ✓     |        |
-| `generate_image`          |    ✓ (md)    |    ✓    |        |    ✓     |   🔒   |
-| **Execute group**         |
-| `execute_command`         |              |    ✓    |        |    ✓     |        |
-| `read_command_output`     |              |    ✓    |        |    ✓     |        |
-| `sleep`                   |              |    ✓    |        |    ✓     |        |
-| **MCP group**             |
-| `use_mcp_tool`            |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `access_mcp_resource`     |      ✓       |    ✓    |   ✓    |    ✓     |   🔒   |
-| `call_mcp_tool_async`     |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `check_mcp_call_status`   |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| `wait_for_mcp_call`       |      ✓       |    ✓    |   ✓    |    ✓     |        |
-| **Always available**      |
-| `ask_followup_question`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `attempt_completion`      |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `wait`                    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `switch_mode`             |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `new_task`                |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `update_todo_list`        |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `check_task_status`       |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `wait_for_task`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `cancel_tasks`            |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `answer_subtask_question` |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `list_background_tasks`   |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `send_message_to_task`    |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `skills`                  |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `set_task_title`          |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `give_feedback`           |      ✓       |    ✓    |   ✓    |    ✓     |   ✓    |
-| `run_slash_command`       |      ✓       |    ✓    |   ✓    |    ✓     |  ✓ 🔒  |
+> **A tool is available in a mode iff** the mode's `groups` include the tool's
+> **group**, **or** the tool is in `ALWAYS_AVAILABLE_TOOLS`. Feature-gated tools
+> (🔒) are additionally removed when their gate is off.
+
+To read off availability for any tool:
+
+1. Find the tool's group in the per-group sections above (Read / Write / Execute /
+   MCP / Mode / Subtasks / Questions), or note it as always-available.
+2. Look up the mode's `groups` in [§ Mode Availability](#mode-availability) (or the
+   authoritative [`built-in-modes.md`](built-in-modes.md) / `DEFAULT_MODES`).
+3. The tool is available iff the group is present. Architect's `write` group is
+   **`.md`-only** (`fileRegex`), enforced at execution time.
+
+`ALWAYS_AVAILABLE_TOOLS` (available in every mode): `attempt_completion`,
+`update_todo_list`, `run_slash_command` (🔒), `skills`, `set_task_title`,
+`give_feedback`, `list_background_tasks`, `send_message_to_task`, `wait`. Note
+`switch_mode` is **not** always-available — it lives in the `mode` group (only
+`code` carries it), and the `subtasks` tools (`new_task`, `check_task_status`,
+`wait_for_task`, `cancel_tasks`, `answer_subtask_question`) require the `subtasks`
+group (absent from `code-search` and `web-search`).
 
 ---
 
@@ -749,7 +717,7 @@ During a source-verification pass, the following factual inaccuracies were found
 
 - **`access_mcp_resource` feature gate**: Marked 🔒 ("Requires MCP resources") — this is a deployment dependency, not a code-level feature flag. The tool works whenever MCP servers expose resources. The gate indicator may overstate the restriction.
 - **`generate_image` parameters**: The feature-gated tools table lists `generate_image` but the detail section is omitted. If the tool is permanently gated, a brief parameter summary would still help readers understand its interface.
-- **Orchestrator mode groups**: The Mode Availability table says "varies" for the Orchestrator row. In actuality Orchestrator mode has `groups: []` (empty) in [`DEFAULT_MODES`](../packages/types/src/mode.ts). The mode delegates entirely via `new_task`.
+- ~~**Orchestrator mode groups**~~: ✅ removed. There is **no** Orchestrator (or Ask) mode in `DEFAULT_MODES` — those rows were stale RooCode-isms. The six built-in modes are `code`, `architect`, `debug`, `code-search`, `web-search`, `reviewer` (see [§ Mode Availability](#mode-availability)). "Orchestrator" is a separate API-consumer **extension** (`extensions/orchestrator/`), not a mode.
 - **`new_task` `task_id` parameter**: Present in [`NewTaskParams`](../src/core/tools/NewTaskTool.ts) but not documented in the parameter table. Used internally for resumption.
 - **`read_file` description text**: The File Operations summary table says "Read file contents with line range" — this under-sells the tool, which supports two reading modes (slice + indentation with full parameterization). Consider updating to reflect the richer capability.
 
