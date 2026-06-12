@@ -59,11 +59,11 @@ filters. They no longer bypass the transport with direct `outputChannel.appendLi
 
 | Component          | File                                                                                                                  | Role                                                                                                                                                               |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CompactTransport` | [`src/utils/logging/CompactTransport.ts`](../src/utils/logging/CompactTransport.ts)                                   | Filters by level + categories, writes to Output Channel and optional file                                                                                          |
+| `CompactTransport` | [`src/utils/logging/CompactTransport.ts`](../src/utils/logging/CompactTransport.ts)                                   | Filters by level + categories, writes to Output Channel and optional file; also keeps the public ring buffer and per-task buffers for the Logs tab (see below)      |
 | `CompactLogger`    | [`src/utils/logging/CompactLogger.ts`](../src/utils/logging/CompactLogger.ts)                                         | Variadic `ILogger` implementation with `child()` for subsystem scoping                                                                                             |
 | `ILogger` / types  | [`src/utils/logging/types.ts`](../src/utils/logging/types.ts)                                                         | Interfaces and config types                                                                                                                                        |
 | `index.ts`         | [`src/utils/logging/index.ts`](../src/utils/logging/index.ts)                                                         | `bootstrapLogging()`, `setLogLevel()`, `setLogCategories()`, `getLogger()`                                                                                         |
-| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | 17 pre-scoped logger instances (Task, Webview, Git, …)                                                                                                             |
+| Subsystem loggers  | [`src/utils/logging/subsystems.ts`](../src/utils/logging/subsystems.ts)                                               | Pre-scoped logger instances (Task, Webview, Git, Tools, …)                                                                                                          |
 | LoggingSettings    | [`webview-ui/src/components/settings/LoggingSettings.tsx`](../webview-ui/src/components/settings/LoggingSettings.tsx) | Settings → Logging UI panel; renders checkboxes from live `logCategoriesKnown`                                                                                     |
 | Settings schema    | [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                   | `logLevel` and `logCategories` Zod schemas                                                                                                                         |
 | ExtensionState     | [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)                       | `ExtensionState` picks `logLevel`, `logCategories`, and `logCategoriesKnown`                                                                                       |
@@ -130,6 +130,7 @@ The `ctx` is the tag shown in the output channel.
 | `Marketplace`    | `marketplaceLog`    | Marketplace browsing and the item installer.                                               |
 | `Metrics`        | `metricsLog`        | Metrics collection and the Prometheus exporter.                                            |
 | `Workflow`       | `workflowLog`       | The `.slang` workflow engine — parsing, execution, and stake resolution.                   |
+| `Tools`          | `toolsLog`          | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
 | `I18n`           | `i18nLog`           | Translation loading and locale resolution.                                                 |
 | `Scroll`         | `scrollLog`         | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.             |
 | `Utils`          | `utilLog`           | General-purpose utilities (token counting, path handling, perf timing, …).                 |
@@ -155,6 +156,40 @@ Format: `YYYY-MM-DD HH:MM:SS.mmm LEVEL [ctx] message {optional JSON data}`
 ```
 
 File output is disabled by default. Enable it via `CompactTransportConfig.fileOutput`.
+
+## Per-Task Attribution & the Logs Tab
+
+The webview **Logs tab** (in both the Task view / `ChatView` and the Workflow
+view / `WorkflowView`) shows the log lines emitted *while a specific task or
+workflow was executing*, scoped to that single instance — not the whole task
+tree. It is a **consumer of the same `CompactTransport`**, not a separate
+pipeline: every line still passes through `write()` and is gated by the same
+level + category filters that feed the Output Channel. The Logs tab only adds
+per-instance keying on top.
+
+Log entries carry only a subsystem `ctx`, never a task id, and the line is
+emitted from deep utility code (API providers, MCP, git) that has no task
+reference. To attribute without touching the 100+ call sites, an
+[`AsyncLocalStorage`](../src/utils/logging/logContext.ts) **log context** is
+installed around each task's run loop:
+
+| Layer            | Mechanism                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Context install  | [`Task._runTaskLoop`](../src/core/task/Task.ts) and [`WorkflowTask.slangLoop`](../src/core/workflow/WorkflowTask.ts) wrap execution in `runWithLogTaskContext({ taskId, rootTaskId }, …)`. The store propagates across awaits, promise chains, and timers — so synchronous *and* async work spawned by the loop is attributed. A nested task (e.g. a workflow's child agent) installs its own context, overriding the parent's for its subtree, so child logs are attributed to the child, not the tree. |
+| Capture          | [`CompactTransport.captureForTask`](../src/utils/logging/CompactTransport.ts) runs alongside the ring-buffer push (after the level + category filters). It reads `getLogTaskContext()` and, when a task is active, appends a `TaskScopedLogLine` to that task's bounded ring (2000 lines/task, LRU-capped at 64 tasks) and notifies live listeners. |
+| Snapshot (host)  | `getTaskLogs(taskId)` returns the buffered lines; `webviewMessageHandler` answers `requestTaskLogs` with a `taskLogs` snapshot.             |
+| Live stream      | `ShoferProvider` registers a transport listener (`addTaskLogListener`) and streams new lines for the task the Logs tab is **watching** (set via `requestTaskLogs`). Lines are coalesced and flushed every 100 ms as a `taskLogAppended` batch (`taskLogLines[]`) so high-frequency debug logging cannot flood the IPC channel. |
+| Render (webview) | [`TaskLogsView`](../webview-ui/src/components/chat/TaskLogsView.tsx) requests a snapshot on mount and appends live batches; on unmount it clears the host-side watch so streaming stops. |
+
+Because capture sits **after** the level + category filters, the Logs tab
+honours Settings → Logging exactly: a category unchecked there (or a line below
+the configured level) appears in neither the Output Channel nor the Logs tab.
+A trivial task therefore shows mostly `[Task]` lines at `info` — the API/MCP/Git
+subsystems emit little on a successful happy path; raising the level to `debug`
+(and the `[Tools]`/`[MCP]` instrumentation above) surfaces more.
+
+Buffers are **in-memory only** (like the public ring buffer) — they do not
+survive a reload, and a task's lines persist until the LRU cap evicts them.
 
 ## Lifecycle
 
