@@ -52,15 +52,20 @@ overlay on top.
 
 ### Lifecycle visuals
 
-| Lifecycle       | Icon                           | Color                               |
-| --------------- | ------------------------------ | ----------------------------------- |
-| `idle`          | `codicon-circle-large-outline` | description foreground              |
-| `running`       | `codicon-sync` (spinning)      | charts blue                         |
-| `waiting_input` | `codicon-question`             | charts yellow                       |
-| `waiting`       | `codicon-watch`                | charts blue                         |
-| `paused`        | `codicon-debug-pause`          | charts orange                       |
-| `completed`     | `codicon-pass`                 | charts green (overridden by rating) |
-| `error`         | `codicon-error`                | error foreground                    |
+Each entry has a `dot` (status dot) and an `icon`/`borderColor`. For every
+lifecycle except `running` the dot and icon share one color; `running` is the
+exception — **green dot, blue spinning icon** (the green dot reads "alive", the
+blue icon "in progress").
+
+| Lifecycle       | Icon                           | Color                                      |
+| --------------- | ------------------------------ | ------------------------------------------ |
+| `idle`          | `codicon-circle-large-outline` | description foreground                     |
+| `running`       | `codicon-sync` (spinning)      | **dot** charts green, **icon** charts blue |
+| `waiting_input` | `codicon-question`             | charts yellow                              |
+| `waiting`       | `codicon-watch`                | charts blue                                |
+| `paused`        | `codicon-debug-pause`          | charts orange                              |
+| `completed`     | `codicon-pass`                 | charts green (overridden by rating)        |
+| `error`         | `codicon-error`                | error foreground                           |
 
 ### Completion rating overlays (lifecycle = `completed`)
 
