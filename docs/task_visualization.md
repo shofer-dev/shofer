@@ -182,7 +182,7 @@ i.e. **active time that isn't attributed to any instrumented span.** Concretely 
 1. **Between-cycle work that is still `running`** — checkpoint saves, context assembly/condensation, applying diffs, processing tool results, building the next request, `setImmediate` yields.
 2. **Edges** — task setup before the first request, and any active tail after the last span.
 3. **Clock skew** — the lifecycle clock (`Date.now`) and span clock (`performance.now`) differ slightly, so Overhead is never exactly zero.
-4. **Un-instrumented activity** — anything active that produced no span (e.g. a reasoning-only response, or a tool that bypassed the span chokepoint).
+4. **Un-instrumented activity** — active work that produced no span at all. Note this is _not_ reasoning: every `api_req_finished` span fully covers its request's wall-clock (`llm` + `thinking` + `streaming` partition `[reqStart, reqEnd]`), so reasoning is always counted (as `thinking`). The genuine gap is a tool whose handler finishes without calling `pushToolResult` — spans are recorded _inside_ that closure (`presentAssistantMessage.ts`), so a tool that returns by another path (e.g. an interactive tool cancelled mid-flight) leaves its execution time in the surrounding request's overhead.
 
 Keeping both mechanisms is intentional: the Overhead slice **makes their divergence visible** rather than hiding it. A consistently small Overhead means the two agree well; a large Overhead is a signal (heavy checkpointing/processing, or missing instrumentation worth chasing). If `activeMs` is unavailable, the pie falls back to the span sum as its total (no Overhead slice).
 
