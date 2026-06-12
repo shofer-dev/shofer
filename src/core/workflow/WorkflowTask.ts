@@ -15,7 +15,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import os from "os"
 
-import type { CompletionRating, HistoryItem, TaskHandle } from "@shofer/types"
+import type { CompletionRating, HistoryItem, TaskHandle, WorkflowVizMeta } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
 
 import { Task, type TaskOptions } from "../task/Task"
@@ -1324,14 +1324,18 @@ export class WorkflowTask extends Task {
 			}
 		}
 
-		// Push to the WorkflowView webview. The self-contained HTML page is
-		// pushed once (it carries the static topology); thereafter only the
-		// serialized FlowState is pushed so SlangViz can forward it as a
+		// Push to the WorkflowView webview. The flow header metadata and the
+		// self-contained diagram HTML are each pushed once; thereafter only
+		// the serialized FlowState is pushed so SlangViz can forward it as a
 		// `runtimeState` postMessage and the render engine patches the
 		// diagrams in-place — no iframe reload, no lost zoom/pan/view.
 		const provider = this.providerRef.deref()
 		if (provider) {
 			if (!this._vizHtmlPushed) {
+				// Flow header metadata rendered natively in TaskHeader.
+				const meta = buildWorkflowVizMeta(this.slangSource)
+				if (meta) provider.postConfigUpdate("workflowVizMeta", meta)
+
 				const html = buildWorkflowVizHtml(this.slangSource, this.flowState, runState)
 				if (html) {
 					provider.postConfigUpdate("workflowVizHtml", html)
@@ -1516,13 +1520,88 @@ async function loadFromDir(dir: string, workflows: Map<string, string>): Promise
 	}
 }
 
-// ── Workflow Viz HTML Builder (for WorkflowView webview) ──
+// ── Workflow Viz Meta + HTML Builder (for WorkflowView webview) ──
+
+/**
+ * Extracts flow metadata from a parsed Slang source for native rendering
+ * in the WorkflowView TaskHeader. Companion to buildWorkflowVizHtml() —
+ * together they replace the old monolithic all-in-one iframe approach.
+ */
+export function buildWorkflowVizMeta(slangSource: string): WorkflowVizMeta | undefined {
+	if (!slangSource) return undefined
+
+	const { ast, errors } = parseSlangFull(slangSource)
+	if (errors.length > 0 || ast.flows.length === 0) return undefined
+
+	const flowDeclaration = ast.flows[0]
+
+	const meta: WorkflowVizMeta = {
+		icon: flowDeclaration.icon,
+		displayTitle: flowDeclaration.title || flowDeclaration.name,
+		flowName: flowDeclaration.title ? flowDeclaration.name : undefined,
+		description: flowDeclaration.description,
+		params: flowDeclaration.params?.map((p) => ({ name: p.name, type: p.paramType, description: p.description })),
+		agentCount: 0,
+	}
+
+	// Extract param descriptions from ParamMetaDecl nodes and count agents
+	const paramDescriptions = new Map<string, string>()
+	for (const item of flowDeclaration.body) {
+		if (item.type === "ParamMetaDecl" && item.description) {
+			paramDescriptions.set(item.name, item.description)
+		}
+		if (item.type === "AgentDecl") meta.agentCount++
+	}
+
+	// Enrich param entries with descriptions from ParamMetaDecl
+	if (meta.params) {
+		for (const p of meta.params) {
+			const desc = paramDescriptions.get(p.name)
+			if (desc) p.description = desc
+		}
+	}
+
+	// Extract convergence condition and budgets
+	for (const item of flowDeclaration.body) {
+		if (item.type === "ConvergeStmt" && item.condition) {
+			meta.convergeCondition = _exprStr(item.condition)
+		}
+		if (item.type === "BudgetStmt" && item.items) {
+			meta.budgets = item.items.map((b) => ({ kind: b.kind, value: _exprStr(b.value) }))
+		}
+	}
+
+	return meta
+}
+
+/** Simple expression-to-string for converge conditions and budget values. */
+function _exprStr(e: Expr): string {
+	switch (e.type) {
+		case "NumberLit":
+			return String(e.value)
+		case "StringLit":
+			return `"${e.value.replace(/"/g, '\\"')}"`
+		case "BoolLit":
+			return String(e.value)
+		case "Ident":
+			return e.name
+		case "AgentRef":
+			return "@" + e.name
+		default:
+			return e.type
+	}
+}
 
 /**
  * Builds a self-contained HTML page that renders the three slang
  * visualization diagrams (topology, sequence, swimlane) with live
  * runtime state overlays. The page is meant to be rendered in a
  * sandboxed iframe in WorkflowView via srcdoc.
+ *
+ * The header (.flow-header), tab bar (.view-selector-tabs), and
+ * runtime banner (.runtime-banner) are now rendered natively in the
+ * WorkflowView React tree (TaskHeader + tab bar), so this HTML only
+ * contains the diagram SVG and zoom controls.
  *
  * We read slang-render.js, slang-render.css and dagre.min.js at module
  * init time (same files SlangEditorProvider ships to dist/) and inline
@@ -1564,6 +1643,7 @@ export function buildWorkflowVizHtml(
 
 	const payload = JSON.stringify({
 		type: "render",
+		context: "workflowView", // distinguishes from standalone .slang editor
 		fileName: flowState.sourcePath ?? "workflow",
 		flow,
 		diags,
@@ -1576,6 +1656,10 @@ export function buildWorkflowVizHtml(
 	// dagre, the render engine and the bootstrap are all inlined and
 	// nonce-stamped (placeholder replaced by SlangViz) so they execute under
 	// the parent webview's inherited CSP without any network access.
+	//
+	// The HTML no longer includes the flow header, tab bar, or runtime
+	// banner — those are rendered natively in the WorkflowView React tree.
+	// The iframe only holds the diagram SVG + zoom controls.
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>

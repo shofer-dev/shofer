@@ -91,6 +91,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		setPendingWorktreeDir,
 		workflowVizHtml,
 		workflowVizRunState,
+		workflowVizMeta,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -1964,6 +1965,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
 								: undefined) ?? currentTaskItem?.activeTimeMs
 						}
+						workflowVizMeta={workflowVizMeta}
 					/>
 				</>
 			) : (
@@ -2015,7 +2017,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 						</div>
 					)}
 					{workflowVizHtml && workflowTab !== "chat" && (
-						<SlangViz html={workflowVizHtml} runState={workflowVizRunState} initialView={workflowTab} />
+						<SlangViz html={workflowVizHtml} runState={workflowVizRunState} view={workflowTab} />
 					)}
 					{(!workflowVizHtml || workflowTab === "chat") && (
 						<div className="flex relative grow" ref={scrollContainerRef}>

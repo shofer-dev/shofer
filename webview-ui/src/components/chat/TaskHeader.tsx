@@ -1,9 +1,9 @@
 import { memo, useRef, useState, useMemo, useCallback } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
+import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft, Rocket } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage, WorkflowVizMeta } from "@shofer/types"
 
 import { getModelMaxOutputTokens } from "@shofer/shared/api"
 
@@ -45,6 +45,8 @@ export interface TaskHeaderProps {
 	onUpdateCostLimit?: (next: { maxUsd: number; action: "pause" | "abort" | "kill" }) => void
 	/** Accumulated active wall-clock time in ms (excludes idle, waiting, paused). */
 	activeTimeMs?: number
+	/** Workflow flow metadata rendered natively (was in the srcdoc iframe header). */
+	workflowVizMeta?: WorkflowVizMeta
 }
 
 const TaskHeader = ({
@@ -65,9 +67,11 @@ const TaskHeader = ({
 	costLimit,
 	onUpdateCostLimit,
 	activeTimeMs,
+	workflowVizMeta,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
 	const { apiConfiguration, currentTaskItem, parallelTasks } = useExtensionState()
+	const wfMeta = workflowVizMeta
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
 
@@ -346,6 +350,74 @@ const TaskHeader = ({
 							</div>
 						</div>
 						{task.images && task.images.length > 0 && <Thumbnails images={task.images} />}
+
+						{/* Flow metadata rendered natively (was srcdoc iframe header) */}
+						{wfMeta && (
+							<div className="mt-2 p-3 rounded-md border-l-4 border-l-vscode-charts-blue bg-vscode-editorWidget-background/40">
+								<h3 className="text-sm font-semibold flex items-center gap-2 mb-1 text-vscode-foreground">
+									<Rocket className="size-3.5 text-vscode-charts-blue" />
+									{wfMeta.displayTitle}
+								</h3>
+								{wfMeta.flowName && (
+									<div className="text-[0.72em] text-vscode-descriptionForeground mb-1 font-mono">
+										flow "{wfMeta.flowName}"
+									</div>
+								)}
+								{wfMeta.description && (
+									<div className="text-xs text-vscode-descriptionForeground mb-2 whitespace-pre-wrap leading-relaxed">
+										{wfMeta.description}
+									</div>
+								)}
+								{wfMeta.params && wfMeta.params.length > 0 && (
+									<div className="text-[0.72em] text-vscode-descriptionForeground mb-1.5">
+										Params:{" "}
+										{Object.entries(
+											wfMeta.params.reduce<Record<string, { type: string; description?: string }[]>>(
+												(acc, p) => {
+													if (!acc[p.name]) acc[p.name] = []
+													acc[p.name].push({ type: p.type, description: p.description })
+													return acc
+												},
+												{},
+											),
+										).map(([name, entries], i, arr) => (
+											<span key={name}>
+												<code className="bg-vscode-textCodeBlock-background px-1.5 py-0.5 rounded text-[1.05em]">
+													{name}: {entries.map((e) => `"${e.type}"`).join(" | ")}
+												</code>
+												{i < arr.length - 1 ? ", " : ""}
+											</span>
+										))}
+									</div>
+								)}
+								{(wfMeta.convergeCondition || wfMeta.budgets) && (
+									<div className="text-[0.72em] text-vscode-descriptionForeground flex flex-wrap gap-x-4 gap-y-1">
+										{wfMeta.convergeCondition ? (
+											<span>
+												🎯 Converge when:{" "}
+												<code className="bg-vscode-textCodeBlock-background px-1.5 py-0.5 rounded font-mono">
+													{wfMeta.convergeCondition}
+												</code>
+											</span>
+										) : (
+											<span className="opacity-50">No converge statement</span>
+										)}
+										{wfMeta.budgets ? (
+											wfMeta.budgets.map((b) => (
+												<span key={b.kind}>
+													💰 {b.kind}:{" "}
+													<code className="bg-vscode-textCodeBlock-background px-1.5 py-0.5 rounded font-mono">
+														{b.value}
+													</code>
+												</span>
+											))
+										) : (
+											<span className="opacity-50">No budget (unlimited)</span>
+										)}
+									</div>
+								)}
+							</div>
+						)}
 
 						<div onClick={(e) => e.stopPropagation()}>
 							<TaskActions item={currentTaskItem} buttonsDisabled={buttonsDisabled} />

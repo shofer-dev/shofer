@@ -3615,8 +3615,9 @@ export class ShoferProvider
 				}
 			})(),
 			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
-			workflowVizHtml: undefined, // pushed once via postConfigUpdate from WorkflowTask.notifySlangEditor()
+			workflowVizHtml: undefined, // pushed once via postConfigUpdate from WorkflowTask.notifySlangEditor() — diagram only
 			workflowVizRunState: undefined, // pushed per round/step from WorkflowTask.notifySlangEditor()
+			workflowVizMeta: undefined, // pushed once — flow header rendered natively in TaskHeader
 		}
 	}
 

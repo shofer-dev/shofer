@@ -56,6 +56,31 @@ export interface LauncherWorkflow {
 }
 
 /**
+ * Pushed once alongside workflowVizHtml. Contains the flow header metadata
+ * that was previously rendered inside the srcdoc iframe. Now rendered natively
+ * in TaskHeader (integrated with existing token/cost/context info) so the
+ * iframe only needs to hold the diagram + zoom controls.
+ */
+export interface WorkflowVizMeta {
+	/** Icon key (e.g. "rocket", "gear"). TaskHeader maps to a lucide icon. */
+	icon?: string
+	/** Display title (flow.title || flow.name). */
+	displayTitle: string
+	/** Machine name of the flow (shown only when title ≠ name). */
+	flowName?: string
+	/** Markdown description of the flow. */
+	description?: string
+	/** Input parameters with optional descriptions. */
+	params?: Array<{ name: string; type: string; description?: string }>
+	/** Convergence condition expression (from ConvergeStmt). */
+	convergeCondition?: string
+	/** Budget items (from BudgetStmt). */
+	budgets?: Array<{ kind: string; value: string }>
+	/** Number of agents in this flow. */
+	agentCount: number
+}
+
+/**
  * ExtensionMessage
  * Extension -> Webview | CLI
  */
@@ -456,10 +481,12 @@ export type ExtensionState = Pick<
 
 	// Workflow management
 	workflows?: Array<LauncherWorkflow>
-	/** Self-contained HTML page for the workflow visualization iframe (pushed once). */
+	/** Self-contained HTML page for the workflow visualization iframe (diagram only, pushed once). */
 	workflowVizHtml?: string
 	/** Serialized FlowState pushed on each round/step for in-place viz overlays. */
 	workflowVizRunState?: Record<string, unknown>
+	/** Flow metadata rendered natively in TaskHeader (deduped from iframe header). */
+	workflowVizMeta?: WorkflowVizMeta
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string

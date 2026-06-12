@@ -88,6 +88,10 @@ window.switchView = function (viewName) {
 // state instead of rebuilding the entire webview DOM on every keystroke.
 // Runtime state updates (from WorkflowTask.slangLoop) arrive as
 // { type: "runtimeState", runState } and are merged into _lastPayload.
+//
+// View switches originate from the React tab bar in WorkflowView and arrive
+// as { type: "switchView", view } — this replaces the old inline <.tab-btn>
+// approach since the tab bar lives outside the iframe now.
 window.addEventListener("message", function (event) {
 	var msg = event.data
 	if (msg && msg.type === "render") {
@@ -100,6 +104,9 @@ window.addEventListener("message", function (event) {
 			_lastPayload.runState = msg.runState
 			safeRender(null)
 		}
+	} else if (msg && msg.type === "switchView" && msg.view) {
+		_currentView = msg.view
+		safeRender(null)
 	}
 })
 
@@ -1630,9 +1637,6 @@ function agentStatusColor(status) {
 }
 
 function handleRender(payload) {
-	// CSP debugging: warn in console so devs know where to look if interactivity breaks
-	console.log("[Slang] Render starting \u2014 if tab buttons don\u2019t work, check CSP blocks inline handlers")
-
 	var flow = payload.flow,
 		diags = payload.diags || []
 	_runState = payload.runState || null
@@ -1643,132 +1647,133 @@ function handleRender(payload) {
 		return
 	}
 
-	// Build a param-description lookup from ParamMetaDecl nodes.
-	var paramDescriptions = {}
-	for (var pi = 0; pi < (flow.body || []).length; pi++) {
-		var pItem = flow.body[pi]
-		if (pItem.type === "ParamMetaDecl" && pItem.description) {
-			paramDescriptions[pItem.name] = pItem.description
-		}
-	}
+	// ── Dual-mode rendering ──
+	// context === "workflowView": header/tabs/banner are rendered natively
+	//   in the WorkflowView React tree — this iframe is diagram-only.
+	// context absent (undefined): standalone .slang editor — render the
+	//   full header, tab bar, runtime banner, and graph hints.
+	var isEmbedded = payload.context === "workflowView"
+	var h = ""
 
-	var displayTitle = flow.title || flow.name
-	var iconEmoji = flow.icon ? iconToEmoji(flow.icon) : "\u26A1" // ⚡ default
-	var h = '<div class="flow-header"><h2><span>' + esc(iconEmoji) + "</span> " + esc(displayTitle) + "</h2>"
-	if (flow.title && flow.title !== flow.name) {
-		h += '<div class="flow-id">flow "' + esc(flow.name) + '"</div>'
-	}
-	if (flow.description) {
-		h += '<div class="flow-desc">' + renderMarkdown(flow.description) + "</div>"
-	}
-	if (flow.params && flow.params.length > 0) {
-		h += '<div class="params">Params: '
-		for (var i = 0; i < flow.params.length; i++) {
-			var pDesc = paramDescriptions[flow.params[i].name]
-			h +=
-				'<span class="param-tip"><code>' +
-				esc(flow.params[i].name) +
-				': "' +
-				esc(flow.params[i].paramType) +
-				'"</code>' +
-				(pDesc ? '<span class="param-tooltip">' + renderMarkdown(pDesc) + "</span>" : "") +
-				"</span>" +
-				(i < flow.params.length - 1 ? ", " : "")
-		}
-		h += "</div>"
-	}
-	h += '<div class="constraints">'
-	var hasCon = false,
-		hasBud = false
-	for (var bi = 0; bi < (flow.body || []).length; bi++) {
-		var bItem = flow.body[bi]
-		if (bItem.type === "ConvergeStmt") {
-			hasCon = true
-			h +=
-				'<span>\uD83C\uDFAF Converge when: <span class="badge">' +
-				esc(exprStr(bItem.condition)) +
-				"</span></span>"
-		}
-		if (bItem.type === "BudgetStmt" && bItem.items) {
-			hasBud = true
-			for (var bj = 0; bj < bItem.items.length; bj++)
-				h +=
-					"<span>\uD83D\uDCB0 " +
-					esc(bItem.items[bj].kind) +
-					': <span class="badge">' +
-					esc(exprStr(bItem.items[bj].value)) +
-					"</span></span>"
-		}
-	}
-	if (!hasCon) h += '<span style="opacity:0.5">No converge statement</span>'
-	if (!hasBud) h += '<span style="opacity:0.5">No budget (unlimited)</span>'
-	h += "</div></div>"
-
-	// Dynamic tab rendering interface block — data-view attributes (not onclick)
-	// because the CSP script-src nonce blocks inline event handlers.
-	h +=
-		'<div class="view-selector-tabs">' +
-		'<button class="tab-btn' +
-		(_currentView === "topology" ? " active" : "") +
-		'" data-view="topology">Topology Network</button>' +
-		'<button class="tab-btn' +
-		(_currentView === "sequence" ? " active" : "") +
-		'" data-view="sequence">Sequence Timeline</button>' +
-		'<button class="tab-btn' +
-		(_currentView === "swimlane" ? " active" : "") +
-		'" data-view="swimlane">Agent Logic Flow</button>' +
-		"</div>"
-
-	var zoomLabel = " &nbsp;|&nbsp; \uD83D\uDD0D Scroll to zoom, drag background to pan"
-	if (_currentView === "topology") {
-		h +=
-			'<div class="graph-hint">\uD83D\uDD90\uFE0F Drag nodes to rearrange &nbsp;|&nbsp; \uD83D\uDD04 Auto-layout from topology layers' +
-			zoomLabel +
-			"</div>"
-	} else if (_currentView === "sequence") {
-		h +=
-			'<div class="graph-hint">\u23F1\uFE0F Message-passing chronology mapped top-to-bottom across processing tracks' +
-			zoomLabel +
-			"</div>"
-	} else {
-		h +=
-			'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane' +
-			zoomLabel +
-			"</div>"
-	}
-
-	// ── Runtime state banner (when a workflow is actively executing) ──
-	if (_runState && _runState.round !== undefined) {
-		var committed = 0
-		if (_runState.agents) {
-			for (var rsi = 0; rsi < _runState.agents.length; rsi++) {
-				if (_runState.agents[rsi][1].status === "committed") committed++
+	if (!isEmbedded) {
+		// ── Standalone header (.slang editor) ──
+		var paramDescriptions = {}
+		for (var pi = 0; pi < (flow.body || []).length; pi++) {
+			var pItem = flow.body[pi]
+			if (pItem.type === "ParamMetaDecl" && pItem.description) {
+				paramDescriptions[pItem.name] = pItem.description
 			}
 		}
-		var totalAgents = _runState.agents ? _runState.agents.length : 0
-		h +=
-			'<div class="runtime-banner">' +
-			"\uD83D\uDD04 Round " +
-			esc(String(_runState.round)) +
-			" &middot; " +
-			esc(String(committed)) +
-			"/" +
-			esc(String(totalAgents)) +
-			" committed" +
-			' &middot; Status: <span style="color:' +
-			agentStatusColor(_runState.status || "running") +
-			';font-weight:600">' +
-			esc(_runState.status || "running") +
-			"</span></div>"
-	}
 
-	// ── Zoom controls (all views) ──
-	h +=
-		'<div class="zoom-controls">' +
-		'<button class="zoom-btn" data-zoom="in" title="Zoom in">+</button>' +
-		'<button class="zoom-btn" data-zoom="out" title="Zoom out">\u2212</button>' +
-		'<button class="zoom-btn" data-zoom="fit" title="Fit to view">\u26F6</button>' +
-		"</div>"
+		var displayTitle = flow.title || flow.name
+		var iconEmoji = flow.icon ? iconToEmoji(flow.icon) : "\u26A1"
+		h += '<div class="flow-header"><h2><span>' + esc(iconEmoji) + "</span> " + esc(displayTitle) + "</h2>"
+		if (flow.title && flow.title !== flow.name) {
+			h += '<div class="flow-id">flow "' + esc(flow.name) + '"</div>'
+		}
+		if (flow.description) {
+			h += '<div class="flow-desc">' + renderMarkdown(flow.description) + "</div>"
+		}
+		if (flow.params && flow.params.length > 0) {
+			h += '<div class="params">Params: '
+			for (var pj = 0; pj < flow.params.length; pj++) {
+				var pDesc = paramDescriptions[flow.params[pj].name]
+				h +=
+					'<span class="param-tip"><code>' +
+					esc(flow.params[pj].name) +
+					': "' +
+					esc(flow.params[pj].paramType) +
+					'"</code>' +
+					(pDesc ? '<span class="param-tooltip">' + renderMarkdown(pDesc) + "</span>" : "") +
+					"</span>" +
+					(pj < flow.params.length - 1 ? ", " : "")
+			}
+			h += "</div>"
+		}
+		h += '<div class="constraints">'
+		var hasCon = false,
+			hasBud = false
+		for (var bi = 0; bi < (flow.body || []).length; bi++) {
+			var bItem = flow.body[bi]
+			if (bItem.type === "ConvergeStmt") {
+				hasCon = true
+				h +=
+					'<span>\uD83C\uDFAF Converge when: <span class="badge">' +
+					esc(exprStr(bItem.condition)) +
+					"</span></span>"
+			}
+			if (bItem.type === "BudgetStmt" && bItem.items) {
+				hasBud = true
+				for (var bj = 0; bj < bItem.items.length; bj++)
+					h +=
+						"<span>\uD83D\uDCB0 " +
+						esc(bItem.items[bj].kind) +
+						': <span class="badge">' +
+						esc(exprStr(bItem.items[bj].value)) +
+						"</span></span>"
+			}
+		}
+		if (!hasCon) h += '<span style="opacity:0.5">No converge statement</span>'
+		if (!hasBud) h += '<span style="opacity:0.5">No budget (unlimited)</span>'
+		h += "</div></div>"
+
+		// Tab bar (standalone only — WorkflowView has its own tab bar)
+		h +=
+			'<div class="view-selector-tabs">' +
+			'<button class="tab-btn' +
+			(_currentView === "topology" ? " active" : "") +
+			'" data-view="topology">Topology Network</button>' +
+			'<button class="tab-btn' +
+			(_currentView === "sequence" ? " active" : "") +
+			'" data-view="sequence">Sequence Timeline</button>' +
+			'<button class="tab-btn' +
+			(_currentView === "swimlane" ? " active" : "") +
+			'" data-view="swimlane">Agent Logic Flow</button>' +
+			"</div>"
+
+		var zoomLabel = " &nbsp;|&nbsp; \uD83D\uDD0D Scroll to zoom, drag background to pan"
+		if (_currentView === "topology") {
+			h +=
+				'<div class="graph-hint">\uD83D\uDD90\uFE0F Drag nodes to rearrange &nbsp;|&nbsp; \uD83D\uDD04 Auto-layout from topology layers' +
+				zoomLabel +
+				"</div>"
+		} else if (_currentView === "sequence") {
+			h +=
+				'<div class="graph-hint">\u23F1\uFE0F Message-passing chronology mapped top-to-bottom across processing tracks' +
+				zoomLabel +
+				"</div>"
+		} else {
+			h +=
+				'<div class="graph-hint">\uD83E\uDDEC Sequential operation blocks and branching statements broken down per agent lane' +
+				zoomLabel +
+				"</div>"
+		}
+
+		// Runtime state banner
+		if (_runState && _runState.round !== undefined) {
+			var committed = 0
+			if (_runState.agents) {
+				for (var rsi = 0; rsi < _runState.agents.length; rsi++) {
+					if (_runState.agents[rsi][1].status === "committed") committed++
+				}
+			}
+			var totalAgents = _runState.agents ? _runState.agents.length : 0
+			h +=
+				'<div class="runtime-banner">' +
+				"\uD83D\uDD04 Round " +
+				esc(String(_runState.round)) +
+				" &middot; " +
+				esc(String(committed)) +
+				"/" +
+				esc(String(totalAgents)) +
+				" committed" +
+				' &middot; Status: <span style="color:' +
+				agentStatusColor(_runState.status || "running") +
+				';font-weight:600">' +
+				esc(_runState.status || "running") +
+				"</span></div>"
+		}
+	}
 
 	var agentNames = {},
 		agentMeta = {}
@@ -1782,6 +1787,14 @@ function handleRender(payload) {
 			hasLoop: scanForLoops(agent.operations),
 		}
 	}
+
+	// ── Zoom controls (both modes) ──
+	h +=
+		'<div class="zoom-controls">' +
+		'<button class="zoom-btn" data-zoom="in" title="Zoom in">+</button>' +
+		'<button class="zoom-btn" data-zoom="out" title="Zoom out">\u2212</button>' +
+		'<button class="zoom-btn" data-zoom="fit" title="Fit to view">\u26F6</button>' +
+		"</div>"
 
 	var renderingBox = ""
 	if (_currentView === "topology") {
@@ -1813,15 +1826,16 @@ function handleRender(payload) {
 		diagsEl.innerHTML = ""
 	}
 
-	// Wire tab buttons via JS (CSP-safe, no inline onclick)
-	var tabBtns = document.querySelectorAll(".tab-btn[data-view]")
-	for (var ti = 0; ti < tabBtns.length; ti++) {
-		tabBtns[ti].addEventListener("click", function () {
-			var view = this.getAttribute("data-view")
-			console.log("[slang-render] tab clicked: " + view)
-			_currentView = view
-			safeRender(null)
-		})
+	// Wire standalone tab buttons (only present when !isEmbedded).
+	if (!isEmbedded) {
+		var tabBtns = document.querySelectorAll(".tab-btn[data-view]")
+		for (var ti = 0; ti < tabBtns.length; ti++) {
+			tabBtns[ti].addEventListener("click", function () {
+				var view = this.getAttribute("data-view")
+				_currentView = view
+				safeRender(null)
+			})
+		}
 	}
 
 	_svgn = document
