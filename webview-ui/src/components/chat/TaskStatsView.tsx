@@ -14,6 +14,7 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * waiting on a task, excluding idle). The spans subdivide it into what the task
  * was doing; active time not covered by any span (checkpointing, inter-request
  * processing) is shown as "Overhead":
+ *   • Setup (task init → first request: checkpoint/shadow-git kickoff, etc.)
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
  *   • Tool execution   • Waiting for task (wait_for_task, a blocking new_task,
  *     or a sync send_message_to_task)   • Sleeping (the sleep tool)   • Overhead
@@ -21,7 +22,7 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
 
 // ── Categories ──
 
-type CatKey = "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask" | "sleeping"
+type CatKey = "setup" | "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask" | "sleeping"
 
 interface CatMeta {
 	key: CatKey
@@ -33,6 +34,7 @@ interface CatMeta {
 
 // Shared phase palette (kept in sync with TaskTraceView).
 const CATEGORIES: CatMeta[] = [
+	{ key: "setup", label: "Setup", color: "var(--vscode-charts-pink, #ec4899)", prio: 0 },
 	{ key: "llm", label: "Waiting for model", color: "var(--vscode-charts-blue, #3b82f6)", prio: 1 },
 	{ key: "thinking", label: "Thinking", color: "var(--vscode-charts-purple, #a855f7)", prio: 1 },
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
@@ -147,6 +149,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	// segment) are idle / between-prompt time and are dropped — we only account
 	// for time the task was actually running.
 	const totals: Record<CatKey, number> = {
+		setup: 0,
 		llm: 0,
 		thinking: 0,
 		streaming: 0,
@@ -154,6 +157,11 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		waiting_subtask: 0,
 		sleeping: 0,
 	}
+	// Setup = time from task construction (timelineOrigin) to the first request,
+	// i.e. the smallest request start offset. Captures task init + checkpoint /
+	// shadow-git kickoff that happens before any API call — previously folded
+	// into Overhead.
+	totals.setup = Math.max(0, minStart)
 	const points = Array.from(new Set([minStart, maxEnd, ...segments.flatMap((s) => [s.start, s.end])])).sort(
 		(a, b) => a - b,
 	)
@@ -179,7 +187,13 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		.sort((x, y) => y.ms - x.ms)
 
 	const totalMs =
-		totals.llm + totals.thinking + totals.streaming + totals.tool + totals.waiting_subtask + totals.sleeping
+		totals.setup +
+		totals.llm +
+		totals.thinking +
+		totals.streaming +
+		totals.tool +
+		totals.waiting_subtask +
+		totals.sleeping
 
 	return { totals, toolTotals, totalMs, requestCount }
 }
@@ -423,7 +437,8 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 			<p className="mt-5 text-[10px] leading-relaxed text-[var(--vscode-descriptionForeground)]">
 				Total equals the active time shown in the header (running + waiting on tasks) — idle time (tool-approval
 				prompts and the pauses between re-prompts) is excluded. The per-phase spans break that total down;
-				“Overhead” is active time not captured by a span (checkpointing, processing between requests).
+				“Setup” is task init before the first request (checkpoint / shadow-git kickoff, etc.), and “Overhead” is
+				any remaining active time not captured by a span (e.g. processing between requests).
 			</p>
 		</div>
 	)
