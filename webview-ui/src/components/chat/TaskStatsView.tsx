@@ -231,7 +231,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 	return (
 		<div className="h-full w-full overflow-y-auto p-4">
 			<div className="flex items-center justify-between mb-3">
-				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Running-time breakdown</span>
+				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Runtime breakdown</span>
 				<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
 					{breakdown.requestCount} request{breakdown.requestCount === 1 ? "" : "s"} · {formatMs(total)}{" "}
 					running
