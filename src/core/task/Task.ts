@@ -5244,8 +5244,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				this.didCompleteReadingStream = true
 
-				// Emit the immutable api_req_finished span for this request.
-				await this.emitApiReqFinished("completed")
+				// NOTE: api_req_finished is emitted later, after the tools for this
+				// request have actually executed (see below, post-pWaitFor). Emitting
+				// here would drain an empty `_pendingToolSpans` — tool execution runs
+				// in presentAssistantMessage *after* the stream finishes reading.
 
 				// Set any blocks to be complete to allow `presentAssistantMessage`
 				// to finish and set `userMessageContentReady` to true.
@@ -5574,6 +5576,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// }
 
 					await pWaitFor(() => this.userMessageContentReady)
+
+					// Tools for this request have now executed, so `_pendingToolSpans`
+					// is fully populated. Emit the immutable api_req_finished span here
+					// (not at stream-read end) so its toolSpans[] actually reflect the
+					// tools that ran during this request.
+					await this.emitApiReqFinished("completed")
 
 					this.diagLog(
 						`[DIAG recursivelyMakeShoferRequests] After tools executed: taskId=${this.taskId}.${this.instanceId}, abort=${this.abort}, userMessageContent length=${this.userMessageContent.length}`,
