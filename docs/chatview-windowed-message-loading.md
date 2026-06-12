@@ -1,6 +1,25 @@
 # ChatView — Windowed Message Loading (H2)
 
-> **Status:** ❌ Reverted (2026-05-30)
+> **Status:** ❌ This **specific approach (H2)** was reverted (2026-05-30) — **but
+> windowed message loading DID ship.** The goal was re-implemented as a simpler,
+> lower-risk design, **H24 / T1.B** (tail-only JSONL read on cold switch), which is
+> live today. See [`performance_optimizations.md` §"H24 (T1.B) implementation
+> details"](performance_optimizations.md#h24-t1b-implementation-details) for the
+> authoritative current design.
+>
+> The two differ:
+>
+> | Aspect        | H2 (reverted, below)                           | H24 / T1.B (live)                                                                                     |
+> | ------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+> | Cold window   | last **100** (`DEFAULT_WINDOW_LIMIT`)          | last **200** (`COLD_LOAD_TAIL_WINDOW`)                                                                |
+> | Older loading | **paginated** (`beforeTs`/`limit`, repeatable) | **one-shot**: `loadOlderShoferMessages()` loads all older at once, then `hasMoreShoferMessages=false` |
+> | IPC delta     | `olderMessagesLoaded`                          | `shoferMessagesPrepended`                                                                             |
+> | Scroll anchor | `firstItemIndex` / `H2_PREPEND_BASE`           | Virtuoso `Header` sentinel + union-by-`ts` merge                                                      |
+> | Re-window bug | re-windowed to 100 on every state push         | full history resident after expand — no re-collapse                                                   |
+>
+> Note: the `loadOlderMessages` `WebviewMessage` variant and the webview
+> "Load older messages…" sentinel are **not** dead H2 leftovers — H24/T1.B reuses
+> them (`webviewMessageHandler.ts case "loadOlderMessages"` → `loadOlderShoferMessages()`).
 >
 > This implementation was reverted due to issues, but worth revisiting later.
 >
