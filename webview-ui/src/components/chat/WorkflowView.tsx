@@ -2156,114 +2156,126 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 				</>
 			)}
 
-			<QueuedMessages
-				queue={messageQueue}
-				onRemove={(index) => {
-					if (messageQueue[index]) {
-						vscode.postMessage({ type: "removeQueuedMessage", text: messageQueue[index].id })
-					}
-				}}
-				onUpdate={(index, newText) => {
-					if (messageQueue[index]) {
-						vscode.postMessage({
-							type: "editQueuedMessage",
-							payload: { id: messageQueue[index].id, text: newText, images: messageQueue[index].images },
-						})
-					}
-				}}
-				onForceSend={() => {
-					vscode.postMessage({ type: "cancelAndSendQueuedMessages" })
-				}}
-			/>
-			{showRetiredProviderWarning && (
-				<div className="px-[15px] py-1">
-					<WarningRow
-						title={t("chat:retiredProvider.title")}
-						message={t("chat:retiredProvider.message")}
-						actionText={t("chat:retiredProvider.openSettings")}
-						onAction={() => vscode.postMessage({ type: "switchTab", tab: "settings" })}
-					/>
-				</div>
-			)}
-			{/* Dropped context file tags — displayed as removable chips above the text area */}
-			{droppedContextFiles.length > 0 && (
-				<div className="flex flex-wrap items-center gap-1.5 px-[15px] py-1.5">
-					{droppedContextFiles.map((f) => (
-						<span
-							key={f.path}
-							className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
-							style={{
-								backgroundColor: "var(--vscode-badge-background)",
-								color: "var(--vscode-badge-foreground)",
-							}}
-							title={f.path}>
-							<span className={`codicon ${f.isFile ? "codicon-file" : "codicon-folder"} text-xs`} />
-							<span>{f.path.split("/").pop() || f.path}</span>
-							<button
-								aria-label={`Remove ${f.path}`}
-								className="inline-flex items-center justify-center w-4 h-4 ml-0.5 rounded-sm opacity-60 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer"
-								style={{ color: "var(--vscode-badge-foreground)" }}
-								onClick={() => handleRemoveContextFile(f.path)}>
-								<span className="codicon codicon-close text-xs" />
-							</button>
-						</span>
-					))}
-					<button
-						aria-label="Clear all context files"
-						className="inline-flex items-center justify-center w-5 h-5 rounded-sm opacity-50 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer ml-1"
-						style={{ color: "var(--vscode-descriptionForeground)" }}
-						onClick={handleClearContextFiles}
-						title="Clear all">
-						<span className="codicon codicon-clear-all text-xs" />
-					</button>
-				</div>
-			)}
-			<ChatTextArea
-				ref={textAreaRef}
-				inputValue={inputValue}
-				setInputValue={setInputValue}
-				sendingDisabled={sendingDisabled || isProfileDisabled}
-				selectApiConfigDisabled={sendingDisabled && shoferAsk !== "api_req_failed"}
-				placeholderText={placeholderText}
-				selectedImages={selectedImages}
-				setSelectedImages={setSelectedImages}
-				onSend={() => handleSendMessage(inputValue, selectedImages)}
-				onSelectImages={selectImages}
-				shouldDisableImages={shouldDisableImages}
-				onHeightChange={() => {
-					if (isAtBottomRef.current && scrollPhaseRef.current !== "USER_BROWSING_HISTORY") {
-						scrollToBottomAuto()
-					}
-				}}
-				mode={mode}
-				setMode={setMode}
-				modeShortcutText={modeShortcutText}
-				isStreaming={isStreaming}
-				canStop={canStop}
-				onStop={handleStopTask}
-				onEnqueueMessage={handleEnqueueCurrentMessage}
-				isWorkflow={true}
-				workflowName={currentTaskItem?.mode}
-				workflowAwaitingInput={!!shoferAsk && !sendingDisabled}
-				onContextFilesDropped={(files: DroppedContextFile[]) =>
-					setDroppedContextFiles((prev) => {
-						const seen = new Set(prev.map((f) => f.path))
-						const merged = [...prev]
-						for (const f of files) {
-							if (!seen.has(f.path)) {
-								seen.add(f.path)
-								merged.push(f)
+			{/* Input footer — only on the Events (chat) tab; the diagram tabs take
+			    this space. */}
+			{workflowTab === "chat" && (
+				<>
+					<QueuedMessages
+						queue={messageQueue}
+						onRemove={(index) => {
+							if (messageQueue[index]) {
+								vscode.postMessage({ type: "removeQueuedMessage", text: messageQueue[index].id })
 							}
+						}}
+						onUpdate={(index, newText) => {
+							if (messageQueue[index]) {
+								vscode.postMessage({
+									type: "editQueuedMessage",
+									payload: {
+										id: messageQueue[index].id,
+										text: newText,
+										images: messageQueue[index].images,
+									},
+								})
+							}
+						}}
+						onForceSend={() => {
+							vscode.postMessage({ type: "cancelAndSendQueuedMessages" })
+						}}
+					/>
+					{showRetiredProviderWarning && (
+						<div className="px-[15px] py-1">
+							<WarningRow
+								title={t("chat:retiredProvider.title")}
+								message={t("chat:retiredProvider.message")}
+								actionText={t("chat:retiredProvider.openSettings")}
+								onAction={() => vscode.postMessage({ type: "switchTab", tab: "settings" })}
+							/>
+						</div>
+					)}
+					{/* Dropped context file tags — displayed as removable chips above the text area */}
+					{droppedContextFiles.length > 0 && (
+						<div className="flex flex-wrap items-center gap-1.5 px-[15px] py-1.5">
+							{droppedContextFiles.map((f) => (
+								<span
+									key={f.path}
+									className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+									style={{
+										backgroundColor: "var(--vscode-badge-background)",
+										color: "var(--vscode-badge-foreground)",
+									}}
+									title={f.path}>
+									<span
+										className={`codicon ${f.isFile ? "codicon-file" : "codicon-folder"} text-xs`}
+									/>
+									<span>{f.path.split("/").pop() || f.path}</span>
+									<button
+										aria-label={`Remove ${f.path}`}
+										className="inline-flex items-center justify-center w-4 h-4 ml-0.5 rounded-sm opacity-60 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer"
+										style={{ color: "var(--vscode-badge-foreground)" }}
+										onClick={() => handleRemoveContextFile(f.path)}>
+										<span className="codicon codicon-close text-xs" />
+									</button>
+								</span>
+							))}
+							<button
+								aria-label="Clear all context files"
+								className="inline-flex items-center justify-center w-5 h-5 rounded-sm opacity-50 hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer ml-1"
+								style={{ color: "var(--vscode-descriptionForeground)" }}
+								onClick={handleClearContextFiles}
+								title="Clear all">
+								<span className="codicon codicon-clear-all text-xs" />
+							</button>
+						</div>
+					)}
+					<ChatTextArea
+						ref={textAreaRef}
+						inputValue={inputValue}
+						setInputValue={setInputValue}
+						sendingDisabled={sendingDisabled || isProfileDisabled}
+						selectApiConfigDisabled={sendingDisabled && shoferAsk !== "api_req_failed"}
+						placeholderText={placeholderText}
+						selectedImages={selectedImages}
+						setSelectedImages={setSelectedImages}
+						onSend={() => handleSendMessage(inputValue, selectedImages)}
+						onSelectImages={selectImages}
+						shouldDisableImages={shouldDisableImages}
+						onHeightChange={() => {
+							if (isAtBottomRef.current && scrollPhaseRef.current !== "USER_BROWSING_HISTORY") {
+								scrollToBottomAuto()
+							}
+						}}
+						mode={mode}
+						setMode={setMode}
+						modeShortcutText={modeShortcutText}
+						isStreaming={isStreaming}
+						canStop={canStop}
+						onStop={handleStopTask}
+						onEnqueueMessage={handleEnqueueCurrentMessage}
+						isWorkflow={true}
+						workflowName={currentTaskItem?.mode}
+						workflowAwaitingInput={!!shoferAsk && !sendingDisabled}
+						onContextFilesDropped={(files: DroppedContextFile[]) =>
+							setDroppedContextFiles((prev) => {
+								const seen = new Set(prev.map((f) => f.path))
+								const merged = [...prev]
+								for (const f of files) {
+									if (!seen.has(f.path)) {
+										seen.add(f.path)
+										merged.push(f)
+									}
+								}
+								return merged
+							})
 						}
-						return merged
-					})
-				}
-			/>
+					/>
 
-			{isProfileDisabled && (
-				<div className="px-3">
-					<ProfileViolationWarning />
-				</div>
+					{isProfileDisabled && (
+						<div className="px-3">
+							<ProfileViolationWarning />
+						</div>
+					)}
+				</>
 			)}
 
 			{/* Task notifications for background tasks */}
