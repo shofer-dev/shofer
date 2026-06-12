@@ -55,6 +55,8 @@ export interface TaskHeaderProps {
 	activeTimeMs?: number
 	/** Workflow flow metadata rendered natively (was in the srcdoc iframe header). */
 	workflowVizMeta?: WorkflowVizMeta
+	/** True when a task is actively running — applies shimmer highlight to the header. */
+	isRunning?: boolean
 }
 
 const TaskHeader = ({
@@ -76,6 +78,7 @@ const TaskHeader = ({
 	onUpdateCostLimit,
 	activeTimeMs,
 	workflowVizMeta,
+	isRunning = false,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
 	const { apiConfiguration, currentTaskItem, parallelTasks } = useExtensionState()
@@ -182,6 +185,7 @@ const TaskHeader = ({
 					"text-vscode-foreground/80 hover:text-vscode-foreground",
 					"shadow-lg shadow-vscode-sideBar-background/50 rounded-xl",
 					hasTodos && "border-b-0",
+					isRunning && "task-header-shimmer",
 				)}
 				onClick={(e) => {
 					// Don't expand if clicking on todos section

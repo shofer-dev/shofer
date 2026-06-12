@@ -649,30 +649,34 @@ input[cmdk-input]:focus {
    augmented by `box-shadow` for the glow halo.
    Falls back to a static teal outline under prefers-reduced-motion. */
 
-@keyframes chat-shimmer-pulse {
+@keyframes task-header-shimmer-pulse {
 	0%,
 	100% {
 		outline: 3px solid #14b8a6;
 		outline-offset: 1px;
-		box-shadow: 0 0 12px 3px rgba(20, 184, 166, 0.5);
+		box-shadow:
+			0 0 12px 3px rgba(20, 184, 166, 0.5),
+			inset 0 0 15px 8px rgba(20, 184, 166, 0.1);
 	}
 	50% {
 		outline: 3px solid #06b6d4;
 		outline-offset: 1px;
-		box-shadow: 0 0 18px 6px rgba(6, 182, 212, 0.6);
+		box-shadow:
+			0 0 18px 6px rgba(6, 182, 212, 0.6),
+			inset 0 0 20px 10px rgba(6, 182, 212, 0.15);
 	}
 }
 
-.chat-textarea-shimmer {
-	border-radius: var(--radius-lg);
-	animation: chat-shimmer-pulse 1.5s ease-in-out infinite;
+.task-header-shimmer {
+	border-radius: var(--radius-xl);
+	animation: task-header-shimmer-pulse 1.5s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.chat-textarea-shimmer {
+	.task-header-shimmer {
 		animation: none;
 		outline: 3px solid #14b8a6;
 		outline-offset: 1px;
-		box-shadow: none;
+		box-shadow: inset 0 0 15px 8px rgba(20, 184, 166, 0.1);
 	}
 }
