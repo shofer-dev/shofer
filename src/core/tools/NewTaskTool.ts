@@ -189,6 +189,36 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			}
 
 			if (is_background) {
+				// Compute the child's peer grants BEFORE creating it, so they can be
+				// seeded at construction via initialKnownPeers. The child then persists
+				// its own HistoryItem.peerIds from its first save (see
+				// _refreshTaskMetadata) — there is no racy post-creation write by the
+				// spawner (the old "Task not found" path), and the grant — including the
+				// parent edge — survives restarts.
+				//
+				// Baseline: parent only (least-privilege). Extended with peer_task_ids
+				// when explicitly granted, validated to share the spawner's rootTaskId.
+				// Validating before createTask also avoids spawning an orphan child that
+				// we then reject.
+				const childPeers = new Set<string>([task.taskId])
+				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
+					// When the spawner is the root (no rootTaskId), use its own taskId;
+					// children inherit rootTaskId from the root.
+					const spawnerRoot = task.rootTaskId ?? task.taskId
+					for (const peerId of params.peer_task_ids) {
+						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
+						if (peerLive && peerLive.rootTaskId !== spawnerRoot) {
+							pushToolResult(
+								formatResponse.toolError(
+									`peer_task_ids validation: task ${peerId} does not share your root task.`,
+								),
+							)
+							return
+						}
+						childPeers.add(peerId)
+					}
+				}
+
 				// Async background path: create the child WITHOUT touching the parent's stack
 				// position. We call createTask() with openInStack=false so the child runs
 				// concurrently while the parent continues uninterrupted.
@@ -213,6 +243,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						// Pass result length and estimated timeout to the child task.
 						softResultLength: clampedResultLength,
 						softTimeoutSec: effectiveSoftTimeoutSec,
+						// Seed the child's peer grants at construction so its FIRST persisted
+						// HistoryItem.peerIds already carries them — no post-creation race.
+						initialKnownPeers: Array.from(childPeers),
 					},
 					undefined, // configuration
 					undefined,
@@ -225,38 +258,13 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				// Register the child with TaskManager so it is tracked as a managed background task.
 				provider.taskManager.registerBackgroundTask(child)
 
-				// Grant the parent (root↔child) messaging to this child. Done before the
-				// history write below so the parent's peer grant is persisted in the same
-				// update and survives restarts — otherwise parent→child messaging breaks
-				// on reload while child→parent still works (the rehydration is one-sided).
+				// Grant the parent (root↔child) messaging to this child. The child side
+				// was seeded via initialKnownPeers above; this is the parent's own grant,
+				// persisted in the history write below so parent→child survives restarts.
 				if (!task.knownPeers) {
 					task.knownPeers = new Set<string>()
 				}
 				task.knownPeers.add(child.taskId)
-
-				// Baseline knownPeers for the child: parent only (least-privilege default).
-				const childPeers = new Set<string>([task.taskId])
-
-				// Extend with peer_task_ids if explicitly granted.
-				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
-					// Validate all peer_task_ids share the spawner's rootTaskId.
-					// When the spawner is the root (no rootTaskId), use its own
-					// taskId; children inherit rootTaskId from the root.
-					const spawnerRoot = task.rootTaskId ?? task.taskId
-					for (const peerId of params.peer_task_ids) {
-						const peerLive = provider.taskManager.getManagedTaskInstance(peerId)
-						if (peerLive && peerLive.rootTaskId !== spawnerRoot) {
-							pushToolResult(
-								formatResponse.toolError(
-									`peer_task_ids validation: task ${peerId} does not share your root task.`,
-								),
-							)
-							return
-						}
-						childPeers.add(peerId)
-					}
-				}
-				child.knownPeers = childPeers
 
 				// Persist the parent-child relationship AND the parent's peer grant WITHOUT
 				// changing status or setting awaitingChildId (parent must remain "active").
@@ -288,40 +296,23 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					parentTaskId: task.taskId,
 				})
 
-				// Persist the child's peer grants so they survive restarts. Guard with
-				// getTaskWithId, which throws if the child's history isn't persisted yet:
-				// this both degrades gracefully to runtime-only grants and prevents the
-				// minimal-delta upsert from materializing a malformed partial item when no
-				// row exists to merge into. The write is a minimal delta for the same
-				// lost-update reason as the parent write above.
-				try {
-					await provider.getTaskWithId(child.taskId)
-					await provider.updateTaskHistory({
-						id: child.taskId,
-						peerIds: Array.from(childPeers),
-					} as HistoryItem)
-				} catch (err) {
-					// Non-fatal: peer grants will be runtime-only for this session.
-					taskLog.error(`[NewTaskTool] Failed to persist peerIds for child ${child.taskId}: ${err}`)
-				}
-
 				// ── Symmetric peering ───────────────────────────────────────────
 				// A granted peer edge is bidirectional: the child can already reach
-				// each granted peer (childPeers above), so mirror the reverse edge —
-				// add the child to each granted peer's knownPeers — so the peer can
-				// reach the child too. Spawn-time grants can only name tasks that
-				// already exist, so a grant is necessarily expressed one-directionally;
-				// without this mirror, child→peer works but peer→child is blocked,
-				// which breaks any back-and-forth conversation.
+				// each granted peer (seeded into the child's knownPeers above), so
+				// mirror the reverse edge — add the child to each granted peer's
+				// knownPeers — so the peer can reach the child too. Spawn-time grants
+				// can only name tasks that already exist, so a grant is necessarily
+				// expressed one-directionally; without this mirror, child→peer works
+				// but peer→child is blocked, which breaks any back-and-forth
+				// conversation.
 				//
 				// Note: symmetry only mirrors edges the spawner EXPLICITLY granted via
 				// peer_task_ids. It does NOT transitively connect siblings that merely
 				// share a parent — to make two siblings talk, spawn the later one with
 				// peer_task_ids=[earlierSibling]; this mirror makes that single grant
-				// two-way. The reverse edge is written to the peer's record, which
-				// already exists (the peer predates the child), so this persist does
-				// not hit the child-not-yet-registered race that the child's own
-				// forward-edge write above does.
+				// two-way. The reverse edge targets the peer's record, which already
+				// exists (the peer predates the child), so — unlike a write to the
+				// just-spawned child's own row — it persists cleanly.
 				if (params.peer_task_ids && params.peer_task_ids.length > 0) {
 					for (const peerId of params.peer_task_ids) {
 						// Live, in-memory mirror — immediate and race-free this session.

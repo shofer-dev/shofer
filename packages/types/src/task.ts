@@ -190,6 +190,16 @@ export interface CreateTaskOptions {
 	 * remains the universal floor.
 	 */
 	completionSchema?: Record<string, unknown>
+	/**
+	 * Initial peer-messaging grants for this task, seeded at construction. Used
+	 * for freshly-spawned tasks so the task's `knownPeers` — and the persisted
+	 * `HistoryItem.peerIds` derived from it on the very first save — already
+	 * carry the spawn-time grant. This avoids the post-creation race where the
+	 * spawner's `updateTaskHistory({ peerIds })` would fail with "Task not found"
+	 * because the child's history row does not exist yet. Ignored when a
+	 * `historyItem` is provided (restore path), which rehydrates peers instead.
+	 */
+	initialKnownPeers?: string[]
 }
 
 export enum TaskStatus {

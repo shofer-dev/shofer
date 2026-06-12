@@ -855,6 +855,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		softResultLength,
 		softTimeoutSec,
 		completionSchema,
+		initialKnownPeers,
 	}: TaskOptions) {
 		super()
 
@@ -893,6 +894,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (rehydratedPeers.size > 0) {
 				this.knownPeers = rehydratedPeers
 			}
+		} else if (initialKnownPeers && initialKnownPeers.length > 0) {
+			// Fresh task (no persisted history yet): seed knownPeers from the
+			// spawn-time grant so the first persisted HistoryItem.peerIds carries
+			// it (see getHistoryExtension-adjacent peerIds write in
+			// _refreshTaskMetadata). This removes the post-creation persistence
+			// race the spawner would otherwise hit ("Task not found").
+			this.knownPeers = new Set<string>(initialKnownPeers)
 		}
 		this.childTaskId = undefined
 
@@ -2188,11 +2196,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// - Final state is emitted when updates stop (trailing: true)
 			this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 
+			// Persist this task's peer-messaging grants on EVERY metadata write,
+			// derived from the live `knownPeers` authority. This is what makes a
+			// freshly-spawned task's HistoryItem.peerIds exist from its first save
+			// (no racy post-creation write by the spawner) and keeps the grant —
+			// including the parent edge — surviving restarts (rehydrated in the
+			// constructor). Omitted when knownPeers is unset (root/omnipotent or
+			// non-peer tasks), leaving any existing persisted peerIds untouched.
+			const peerExtension =
+				this.knownPeers && this.knownPeers.size > 0 ? { peerIds: Array.from(this.knownPeers) } : {}
+
 			// Subclasses (e.g. WorkflowTask) may contribute extra persisted
 			// fields. Merging here guarantees the extension is present on EVERY
 			// history write, so the webview sees it from the very first
 			// postInitState rather than only after the first checkpoint.
-			await this.providerRef.deref()?.updateTaskHistory({ ...historyItem, ...this.getHistoryExtension() })
+			await this.providerRef
+				.deref()
+				?.updateTaskHistory({ ...historyItem, ...peerExtension, ...this.getHistoryExtension() })
 
 			return true
 		} catch (error) {

@@ -3,6 +3,7 @@
 > **Status:** ✅ Implemented in Shofer v1.0.84. The core `send_message_to_task` tool, scope-relaxed peer tools (`check_task_status`, `wait_for_task`, `list_background_tasks` with `scope=peers`), `peer_task_ids` opt-in restrictor, and telemetry are all wired and compile clean.  
 > ✅ **Least-privilege `knownPeers` default** (Shofer v1.0.85): `knownPeers` is always set for background tasks; `undefined` means deny-all (was: full same-root access). Baseline at spawn: `{ parentTaskId }` only — siblings require an explicit grant via `peer_task_ids` on `new_task`, or the `peers: [@Ref]` meta field in a slang agent declaration.  
 > ✅ **Symmetric peer grants** (Shofer v1.0.86): a `peer_task_ids` grant is now bidirectional — the granted peer also gets the new child in its `knownPeers`, so a single grant opens a two-way channel. Mirrors the explicit edge only (not transitive). See [Symmetric peering](#symmetric-peering-bidirectional-grants).  
+> ✅ **Persisted peer grants** (Shofer v1.0.86): `knownPeers` is now seeded at construction (`CreateTaskOptions.initialKnownPeers`) and persisted onto `HistoryItem.peerIds` on every save, so grants survive restarts and the spawner no longer races the child's not-yet-created history row (the old `Failed to persist peerIds … Task not found` error). See [State Restore](#state-restore).  
 > See [Remaining & Future Items](#remaining--future-items) for known gaps.
 
 Design for direct communication between tasks sharing the same root task, enabling A2A-style collaboration without routing through the parent.
@@ -322,17 +323,19 @@ New optional parameter on [`NewTaskParams`](../src/core/tools/NewTaskTool.ts:16)
 
 ### Implementation
 
-When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` (runtime-only field on the `Task` class; the grants are also persisted as `HistoryItem.peerIds` and rehydrated into `knownPeers` on restart — see [`Task` constructor](../src/core/task/Task.ts:887)) containing the union of:
+When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` containing the union of:
 
 - `peer_task_ids` (explicitly listed peers)
 - The parent's `taskId` (always allowed)
 - Any task the child itself spawns via `new_task` (dynamically added)
 
+This grant is **seeded at construction** via `CreateTaskOptions.initialKnownPeers` (`NewTaskTool` computes the child's grant set _before_ `createTask`), and the live `knownPeers` is persisted onto `HistoryItem.peerIds` on every metadata save and rehydrated on restart (see [`Task` constructor](../src/core/task/Task.ts:887)). Seeding at construction is what lets the child's **first** persisted row already carry `peerIds` — replacing the old post-spawn `updateTaskHistory({ peerIds })` write, which raced the child's not-yet-created history row and failed with "Task not found".
+
 The "dynamically added" union member is mutated in the [`NewTaskTool`](../src/core/tools/NewTaskTool.ts) handler: when a task with a non-`undefined` `knownPeers` spawns a child, the new child's `taskId` is added to the spawner's `knownPeers` at spawn time. (Spawned children are also tracked in `backgroundChildIds`, but `knownPeers` is the scope-authority for peer tools and must be updated explicitly.)
 
 #### Symmetric peering (bidirectional grants)
 
-For each id in `peer_task_ids`, `NewTaskTool` also writes the **reverse edge** — it adds the new child's `taskId` to that peer's `knownPeers` (on the live `Task` instance, immediately and race-free) and persists it onto the peer's `HistoryItem.peerIds` (so it survives a restart). The reverse-edge persist targets the _peer's_ history row, which already exists because the peer was spawned before the child — so, unlike the child's own forward-edge write, it does not hit the child-not-yet-registered persistence race.
+For each id in `peer_task_ids`, `NewTaskTool` also writes the **reverse edge** — it adds the new child's `taskId` to that peer's `knownPeers` (on the live `Task` instance, immediately and race-free) and persists it onto the peer's `HistoryItem.peerIds` (so it survives a restart). The reverse-edge persist targets the _peer's_ history row, which already exists because the peer was spawned before the child, so it persists cleanly. (The child's own forward edge is no longer written here — it is seeded via `initialKnownPeers` and self-persisted by the child; see [Implementation](#implementation) above.)
 
 Rationale and limits:
 
@@ -474,7 +477,7 @@ interface NewTaskParams {
 
 ### `HistoryItem`
 
-No changes needed. Peer relationships are runtime-only — `rootTaskId` and `parentTaskId` already capture the tree structure. `backgroundChildIds` continues to track direct children for the parent.
+Peer grants **are** persisted via `HistoryItem.peerIds` (plus `rootTaskId` / `parentTaskId` / `backgroundChildIds` for the tree structure). `peerIds` is written on every metadata save from the live `knownPeers` authority (see [`_refreshTaskMetadata`](../src/core/task/Task.ts)), so a freshly-spawned task's row carries the grant from its first save and it survives restarts.
 
 ---
 
@@ -485,7 +488,7 @@ On extension restart:
 1. `TaskManager.restoreManagedTasks()` rehydrates the managed-task map from persisted history.
 2. Tasks are re-created with their `rootTaskId` from `HistoryItem`.
 3. `pendingPeerMessages` are **not** persisted — undelivered Form A notifications are lost across restarts. This is acceptable: the sender's sync call would have aborted on timeout, and async notifications are fire-and-forget by nature.
-4. `knownPeers` is **not** persisted — it is a runtime construct set at spawn time by `NewTaskTool` (for `new_task`) or `WorkflowTask.spawnAgentTask` (for slang agents). On restore, a task's `knownPeers` is `undefined` (deny-all) until the task is re-spawned. Tasks rehydrated from history into an existing peer tree must have their `knownPeers` re-established by whoever spawns them.
+4. `knownPeers` grants **survive restarts** (as of Shofer v1.0.86). The live `knownPeers` set is a runtime construct, but its contents are persisted onto `HistoryItem.peerIds` on every metadata save (derived from `knownPeers` in [`_refreshTaskMetadata`](../src/core/task/Task.ts)). On restore, the [`Task` constructor](../src/core/task/Task.ts:887) rehydrates `knownPeers` from `peerIds ∪ childIds ∪ backgroundChildIds`. A freshly-spawned task is seeded at construction via `CreateTaskOptions.initialKnownPeers` (set by `NewTaskTool` / `WorkflowTask.spawnAgentTask`), so its first persisted `peerIds` already carries the grant — there is no longer a post-spawn `updateTaskHistory({ peerIds })` write by the spawner (which previously failed with "Task not found" because the child's row did not exist yet, and left the grant runtime-only).
 
 ---
 
