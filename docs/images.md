@@ -356,20 +356,21 @@ The assistant agent has a separate implementation in [`tool-executor.ts`](../../
   Verified against [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx:60–61):
   `width: 34, height: 34` inline styles — correct.
 
-- **Open (source code, not doc): capability side-channel namespace inconsistency** — The
-  `vscode-lm` capability lookup actually invokes `shofer.router.*` commands
-  ([`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255), `:1081`), which are registered by the
-  `shofer-router` extension ([`shofer-router/src/main.ts:679-680`](../../shofer-router/src/main.ts:679)) —
-  the live path, under which image capability resolves correctly. However, the doc-comments and all
-  three catch-block warning strings inside `vscode-lm.ts` still name `shofer.llm.*` (12 occurrences),
-  so a developer debugging "images disabled on a vision model" sees a log naming a command the code
-  never calls. Separately, a **second** extension, `llm-provider`, registers the same logical commands
-  under `shofer.llm.*` ([`llm-provider/src/main.ts:467,477`](../../llm-provider/src/main.ts:467)); if a
-  deployment ships `llm-provider` instead of `shofer-router`, the `shofer.router.*` lookup silently
-  fails and (per the fail-closed behavior above) images are stripped from vision-capable models. Both
-  are **source-code** coherence issues — fixing them means aligning `vscode-lm.ts`'s comments/warnings
-  to `shofer.router.*` and consolidating the two extensions onto one canonical namespace; they are not
-  defects in this document.
+- **Capability side-channel namespace — diagnostics fixed; architecture wart remains.** The
+  `vscode-lm` capability/pricing lookup invokes `shofer.router.*` commands
+  ([`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `executeCommand("shofer.router.getModelCapabilities"…)`),
+  registered by the **`shofer-router`** extension ([`shofer-router/src/main.ts:679-680`](../../shofer-router/src/main.ts:679)).
+  Previously the doc-comments and all three catch-block warning strings inside `vscode-lm.ts` still named
+  `shofer.llm.*` and "Shofer LLM Model Provider extension" (12 occurrences), so a developer debugging
+  "images disabled on a vision model" saw a log naming a command the code never calls. **✅ Fixed** — the
+  warnings/comments now name `shofer.router.*` / the Shofer Router extension, matching the executed command.
+  **Remaining wart (not fixed here):** a **second** extension, `llm-provider`, registers the same logical
+  commands under `shofer.llm.*` ([`llm-provider/src/main.ts:467,477`](../../llm-provider/src/main.ts:467)),
+  and the gating setting is still named `enableLlmProviderIntegration`. Whether the canonical companion is
+  `shofer-router` (what the code calls) or `llm-provider` (what the setting name and registry suggest) is an
+  unresolved architectural ambiguity; if a deployment ships only `llm-provider`, the `shofer.router.*`
+  lookup fails and images are stripped from vision-capable models. Consolidating the two extensions onto one
+  namespace (and renaming the setting) is the proper follow-up.
 
 ## Changelog History
 

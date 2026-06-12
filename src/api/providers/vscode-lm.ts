@@ -66,7 +66,7 @@ function convertToVsCodeLmTools(tools: OpenAI.Chat.ChatCompletionTool[]): vscode
  */
 export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHandler {
 	/**
-	 * Latches so we only warn once per session when the shofer.llm.*
+	 * Latches so we only warn once per session when the shofer.router.*
 	 * commands are missing (e.g. the llm-provider extension isn't
 	 * installed or its command names don't match).
 	 */
@@ -99,8 +99,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	/**
 	 * Pricing in USD per 1M tokens for the currently selected model, when
 	 * known. Populated asynchronously after `initializeClient` by querying
-	 * the well-known `shofer.llm.getModelPricing` command exposed by the
-	 * Shofer LLM Model Provider extension. The VS Code LM Chat API itself
+	 * the well-known `shofer.router.getModelPricing` command exposed by the
+	 * Shofer Router extension. The VS Code LM Chat API itself
 	 * carries no pricing fields, so without this side channel `getModel()`
 	 * would have to keep returning `inputPrice: 0`/`outputPrice: 0`, which
 	 * makes Shofer's downstream `calculateApiCostOpenAI` produce `0` and the
@@ -118,8 +118,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	/**
 	 * Capability flags for the active client's model, fetched from the
-	 * Shofer LLM Model Provider extension via the well-known
-	 * `shofer.llm.getModelCapabilities` command. The VS Code LM Chat API's
+	 * Shofer Router extension via the well-known
+	 * `shofer.router.getModelCapabilities` command. The VS Code LM Chat API's
 	 * `LanguageModelChatProviderCapabilities` only models `imageInput` and
 	 * `toolCalling`, with no slot for prompt-cache support — and even those
 	 * two we prefer to source from llm-router's registry rather than rely on
@@ -227,7 +227,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				if (!VsCodeLmHandler._warnedMissingPricing) {
 					VsCodeLmHandler._warnedMissingPricing = true
 					getOutputChannel()?.appendLine(
-						"[vscode-lm] shofer.llm.getModelPricing command not found — is the Shofer LLM Model Provider extension installed and active?",
+						"[vscode-lm] shofer.router.getModelPricing command not found — is the Shofer Router extension installed and active?",
 					)
 				}
 			}
@@ -236,8 +236,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 	/**
 	 * Look up capability flags for the active client's model via the
-	 * Shofer LLM Model Provider extension's well-known
-	 * `shofer.llm.getModelCapabilities` command. Mirrors
+	 * Shofer Router extension's well-known
+	 * `shofer.router.getModelCapabilities` command. Mirrors
 	 * {@link refreshShoferPricing} in identifier-resolution strategy. Sets
 	 * `this.shoferCapabilities` on success; silently leaves it untouched on
 	 * miss/failure (e.g. when the shofer extension isn't installed).
@@ -262,7 +262,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				if (!VsCodeLmHandler._warnedMissingCapabilities) {
 					VsCodeLmHandler._warnedMissingCapabilities = true
 					getOutputChannel()?.appendLine(
-						"[vscode-lm] shofer.llm.getModelCapabilities command not found — is the Shofer LLM Model Provider extension installed and active?",
+						"[vscode-lm] shofer.router.getModelCapabilities command not found — is the Shofer Router extension installed and active?",
 					)
 				}
 			}
@@ -272,7 +272,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	/**
 	 * Pull the running USD cost for `this.conversationId` from the Shofer
 	 * LLM Model Provider extension via the well-known
-	 * `shofer.llm.getRequestCost` command. Returns `undefined` when the
+	 * `shofer.router.getRequestCost` command. Returns `undefined` when the
 	 * command isn't registered (no shofer extension), when the provider
 	 * has no cost data for this conversation (e.g. no completion has
 	 * routed through a model whose pricing the router can compute), or on
@@ -302,7 +302,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			if (!VsCodeLmHandler._warnedMissingRequestCost) {
 				VsCodeLmHandler._warnedMissingRequestCost = true
 				getOutputChannel()?.appendLine(
-					"[vscode-lm] shofer.llm.getRequestCost command not found — is the Shofer LLM Model Provider extension installed and active?",
+					"[vscode-lm] shofer.router.getRequestCost command not found — is the Shofer Router extension installed and active?",
 				)
 			}
 			return undefined
@@ -586,7 +586,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		// Snapshot the per-conversation cumulative cost ledger BEFORE the
 		// request so we can yield a per-request delta after the stream
 		// completes. The Shofer LLM Model Provider's
-		// `shofer.llm.getRequestCost` returns a running cumulative across
+		// `shofer.router.getRequestCost` returns a running cumulative across
 		// the whole conversation; if we yielded that as the chunk's
 		// `totalCost`, Shofer would then store it on each `apiReqInfo` message
 		// and re-sum across messages in `consolidateTokenUsage`, multiplying
@@ -827,7 +827,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 			}
 
 			// Pull the per-conversation USD cost computed by llm-router and
-			// accumulated by the Shofer LLM Model Provider extension. This
+			// accumulated by the Shofer Router extension. This
 			// is the only reliable cost source for composite (`shofer/*`)
 			// models, where the underlying that served the request is
 			// selected at request time and `getModel().info.inputPrice` is
@@ -1004,8 +1004,8 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 const VSCODE_LM_STATIC_BLACKLIST: string[] = ["claude-3.7-sonnet", "claude-3.7-sonnet-thought"]
 
 /**
- * Capability flags exposed by the Shofer LLM Model Provider extension via
- * the `shofer.llm.getModelCapabilities` side-channel command. Mirrors the
+ * Capability flags exposed by the Shofer Router extension via
+ * the `shofer.router.getModelCapabilities` side-channel command. Mirrors the
  * shape of llm-router's `/v1/models` `capabilities` block.
  */
 export interface shoferLmCapabilities {
@@ -1015,8 +1015,8 @@ export interface shoferLmCapabilities {
 }
 
 /**
- * Pricing flags exposed by the Shofer LLM Model Provider extension via the
- * `shofer.llm.getModelPricing` side-channel command. USD per 1M tokens.
+ * Pricing flags exposed by the Shofer Router extension via the
+ * `shofer.router.getModelPricing` side-channel command. USD per 1M tokens.
  */
 export interface shoferLmPricing {
 	inputPrice: number
@@ -1050,7 +1050,7 @@ export interface VsCodeLmModelDescriptor {
  * each entry with Shofer capability/pricing data fetched from llm-provider.
  *
  * The enrichment uses two side-channel commands
- * (`shofer.llm.getModelCapabilities`, `shofer.llm.getModelPricing`) keyed
+ * (`shofer.router.getModelCapabilities`, `shofer.router.getModelPricing`) keyed
  * tolerantly on the model id and the slash-free `family` identifier; this
  * mirrors {@link VsCodeLmHandler.refreshShoferCapabilities} so both the
  * runtime handler and the webview see the same source of truth. Failures

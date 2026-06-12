@@ -118,13 +118,18 @@ Model selector for the VS Code Language Model API. Configures which
 | Scope   | window    |
 | Since   | 3.56.x    |
 
-Enable integration with the Shofer LLM Model Provider extension
-(`extensions/llm-provider/`). When enabled, the `vscode-lm` provider
-queries well-known commands for:
+Enable the companion-extension integration. When enabled, the `vscode-lm`
+provider queries well-known commands for:
 
-- `shofer.llm.getModelPricing` — per-token USD rates (Path 1)
-- `shofer.llm.getRequestCost` — per-conversation cumulative cost (Path 2)
-- `shofer.llm.getModelCapabilities` — tool calling, image input, prompt cache
+- `shofer.router.getModelPricing` — per-token USD rates (Path 1)
+- `shofer.router.getRequestCost` — per-conversation cumulative cost (Path 2)
+- `shofer.router.getModelCapabilities` — tool calling, image input, prompt cache
+
+> **Naming wart:** despite the `LlmProvider` in the setting name, `vscode-lm.ts`
+> actually calls the `shofer.router.*` commands registered by the **`shofer-router`**
+> extension (`extensions/shofer-router/`), not the `shofer.llm.*` commands of
+> `extensions/llm-provider/`. Both register the same logical commands under different
+> namespaces — an unresolved inconsistency (see [`images.md`](images.md) gaps).
 
 These are **required** for cost-limit enforcement
 ([`cost-calculation-and-limits.md`](cost-calculation-and-limits.md)) and for the API Cost row to show

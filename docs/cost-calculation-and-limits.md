@@ -652,11 +652,18 @@ When enabled, both cost paths depend on well-known VS Code commands
 registered by the **Shofer LLM Model Provider** extension
 ([`extensions/llm-provider/`](../../../extensions/llm-provider/)):
 
-| Command                           | Registers in                                                           | Consumed by                                         | Role                                                     |
-| --------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `shofer.llm.getModelPricing`      | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
-| `shofer.llm.getRequestCost`       | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
-| `shofer.llm.getModelCapabilities` | [`llm-provider/main.ts`](../../../extensions/llm-provider/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
+| Command                              | Registers in                                                             | Consumed by                                         | Role                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------- |
+| `shofer.router.getModelPricing`      | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
+| `shofer.router.getRequestCost`       | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
+| `shofer.router.getModelCapabilities` | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
+
+> **Naming wart:** `vscode-lm.ts` actually calls the **`shofer.router.*`** commands
+> registered by the **`shofer-router`** extension (verified in source), not the
+> `shofer.llm.*` commands of `llm-provider` — even though the gating setting is named
+> `enableLlmProviderIntegration`. Both extensions register the same logical commands
+> under different namespaces; this is an unresolved architectural inconsistency (see
+> [`images.md`](images.md#gaps-issues--improvement-areas)).
 
 If the llm-provider extension is **not installed**, **not activated**,
 or its command names **don't match** what the vscode-lm provider
