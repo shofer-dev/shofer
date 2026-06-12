@@ -3890,6 +3890,8 @@ export const webviewMessageHandler = async (
 						branch: message.worktreeBranch,
 						baseBranch: message.worktreeBaseBranch,
 						createNewBranch: message.worktreeCreateNewBranch,
+						initSubmodules: message.initSubmodules,
+						copyWorktreeInclude: message.copyWorktreeInclude,
 					},
 					(progress) => {
 						provider.postMessageToWebview({

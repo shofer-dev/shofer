@@ -948,6 +948,10 @@ export interface WebviewMessage {
 	worktreeCreateNewBranch?: boolean
 	worktreeForce?: boolean
 	worktreeIncludeContent?: string
+	/** When true, run git submodule update --init in the new worktree. */
+	initSubmodules?: boolean
+	/** When true, copy .shofer/worktreeinclude files into the new worktree. */
+	copyWorktreeInclude?: boolean
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {

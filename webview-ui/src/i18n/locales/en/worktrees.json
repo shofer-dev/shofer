@@ -44,6 +44,8 @@
 	"copyingFiles": "Copying files...",
 	"copyingProgress": "{{item}} — {{copied}} copied",
 	"cancel": "Cancel",
+	"initSubmodules": "Initialize submodules",
+	"copyWorktreeInclude": "Copy files per worktreeinclude",
 
 	"deleteWorktree": "Delete Worktree",
 	"deleteWarning": "This can't be undone. It will delete:",

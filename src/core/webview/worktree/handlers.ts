@@ -155,6 +155,8 @@ export async function handleCreateWorktree(
 		branch?: string
 		baseBranch?: string
 		createNewBranch?: boolean
+		initSubmodules?: boolean
+		copyWorktreeInclude?: boolean
 	},
 	onCopyProgress?: CopyProgressCallback,
 	onStep?: (step: string, detail?: string) => void,
@@ -184,8 +186,8 @@ export async function handleCreateWorktree(
 
 	const result = await worktreeService.createWorktree(cwd, options)
 
-	// If successful and worktreeinclude exists, copy the files.
-	if (result.success && result.worktree) {
+	// If successful, optionally copy worktreeinclude files.
+	if (result.success && result.worktree && options.copyWorktreeInclude !== false) {
 		try {
 			onStep?.("Copying worktreeinclude files…")
 			const copiedItems = await worktreeIncludeService.copyWorktreeIncludeFiles(
@@ -202,10 +204,12 @@ export async function handleCreateWorktree(
 			provider.log(`Warning: Failed to copy worktreeinclude files: ${error}`)
 			onStep?.("Copying worktreeinclude files…", "skipped (error)")
 		}
+	}
 
-		// Shallow submodule initialization.
-		// On failure, tear down the worktree — half-initialized worktrees are
-		// useless (submodules appear as empty directories) and confusing.
+	// Optionally initialize submodules (shallow).
+	// On failure, tear down the worktree — half-initialized worktrees are
+	// useless (submodules appear as empty directories) and confusing.
+	if (result.success && result.worktree && options.initSubmodules !== false) {
 		onStep?.("Initializing submodules…")
 		const submoduleResult = await worktreeService.initSubmodules(result.worktree.path, 1)
 		onStep?.("Initializing submodules…", submoduleResult.success ? "done" : "failed")

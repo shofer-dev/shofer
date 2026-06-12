@@ -6,6 +6,7 @@ import type { WorktreeDefaultsResponse, BranchInfo, WorktreeIncludeStatus } from
 import { vscode } from "@/utils/vscode"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Button, Input } from "@/components/ui"
+import { Checkbox } from "@/components/ui/checkbox"
 import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select"
 import { CornerDownRight, Folder, Info } from "lucide-react"
 
@@ -52,6 +53,8 @@ export const CreateWorktreeModal = ({
 	// UI state
 	const [isCreating, setIsCreating] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [initSubmodules, setInitSubmodules] = useState(true)
+	const [copyWorktreeInclude, setCopyWorktreeInclude] = useState(true)
 	const [copyProgress, setCopyProgress] = useState<{
 		bytesCopied: number
 		itemName: string
@@ -143,8 +146,10 @@ export const CreateWorktreeModal = ({
 			worktreeBranch: branchName,
 			worktreeBaseBranch: baseBranch,
 			worktreeCreateNewBranch: true,
+			initSubmodules,
+			copyWorktreeInclude,
 		})
-	}, [worktreePath, branchName, baseBranch])
+	}, [worktreePath, branchName, baseBranch, initSubmodules, copyWorktreeInclude])
 
 	const isValid = branchName.trim() && worktreePath.trim() && baseBranch.trim()
 
@@ -231,6 +236,26 @@ export const CreateWorktreeModal = ({
 							className="rounded-full flex-1 bg-vscode-input-background opacity-80 cursor-default"
 							tabIndex={-1}
 						/>
+					</div>
+
+					{/* Options checkboxes */}
+					<div className="flex flex-col gap-2 ml-8">
+						<label className="flex items-center gap-2 cursor-pointer">
+							<Checkbox
+								checked={initSubmodules}
+								onCheckedChange={(checked) => setInitSubmodules(checked === true)}
+								disabled={isCreating}
+							/>
+							<span className="text-sm text-vscode-foreground">{t("worktrees:initSubmodules")}</span>
+						</label>
+						<label className="flex items-center gap-2 cursor-pointer">
+							<Checkbox
+								checked={copyWorktreeInclude}
+								onCheckedChange={(checked) => setCopyWorktreeInclude(checked === true)}
+								disabled={isCreating}
+							/>
+							<span className="text-sm text-vscode-foreground">{t("worktrees:copyWorktreeInclude")}</span>
+						</label>
 					</div>
 
 					{/* Error message */}
