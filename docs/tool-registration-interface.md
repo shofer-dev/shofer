@@ -42,18 +42,20 @@ configuration `shofer.privateToolProviders` in its `package.json`:
 
 Alternatively, providers can be set in `settings.json`:
 
-```json
+```jsonc
 {
 	"shofer.privateToolProviders": {
 		"vscode-tools": {
 			"getDefinitionsCommand": "arkware.vscodeTools.getDefinitions",
-			"invokeToolCommand": "arkware.vscodeTools.invokeTool"
+			"invokeToolCommand": "arkware.vscodeTools.invokeTool",
 		},
+		// Illustrative only — the browser-tools extension does not (yet) implement
+		// the getDefinitions/invokeTool private-tool-provider contract.
 		"browser-tools": {
 			"getDefinitionsCommand": "arkware.browserTools.getDefinitions",
-			"invokeToolCommand": "arkware.browserTools.invokeTool"
-		}
-	}
+			"invokeToolCommand": "arkware.browserTools.invokeTool",
+		},
+	},
 }
 ```
 
@@ -155,13 +157,14 @@ provider-level config for vscode-tools. Either `IdeToolDefinition` should be ext
 with an optional `group`, or the documentation should clarify that tool-level `group`
 is an optional contract extension that providers can opt into.
 
-### `browser-tools` provider is hypothetical
+### `browser-tools` provider entry is illustrative (commands not implemented)
 
 The `settings.json` example includes a `"browser-tools"` provider entry with
-`arkware.browserTools.*` commands. No such extension exists in the codebase, and no
-matching commands (`arkware.browserTools.getDefinitions`, `arkware.browserTools.invokeTool`)
-are registered anywhere. The example should be replaced with a real second provider, or
-annotated as hypothetical.
+`arkware.browserTools.*` commands. The `extensions/browser-tools/` extension **does
+exist**, but it only registers `browserTools.showExecutors` / `showOutput` /
+`showPreview` — it does **not** implement the private-tool-provider contract
+(`getDefinitions` / `invokeTool`). So those example commands are not real. The entry
+is annotated as illustrative below; `vscode-tools` is the only working reference provider.
 
 ### No built-in `shofer.privateToolProviders` schema contribution
 
