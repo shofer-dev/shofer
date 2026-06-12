@@ -146,10 +146,12 @@ Always-available tool. Sends a message to a peer task. Two modes: async (fire-an
 
 ### Scope validation
 
+> ⚠️ See also: [`peer_task_ids` grants are unidirectional](#peer_task_ids-on-new_task----opt-in-scope-restrictor) — having a task ID does not mean that task can message you back. Each direction requires its own grant.
+
 1. `caller.rootTaskId` must be set (not a top-level task), unless the caller is the root task itself — the root can message any task in its tree.
 2. `target.rootTaskId === caller.rootTaskId`.
 3. `target.taskId !== caller.taskId`.
-4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership.
+4. `task_id` must be in the caller's `knownPeers` set — unless the caller is the root task (no `rootTaskId`), which is omnipotent within its tree. For sub-tasks, `knownPeers` is **always set**; when the set does not contain `task_id`, the call is rejected regardless of same-root membership. **Receiving a PEER MESSAGE from a task does NOT add that sender to your `knownPeers`.** The reply path requires its own independent grant.
     > **Removed (commit `e640a4578`):** Scope validation rule #5 (`isBackgroundTask` check) was removed. Any task — foreground or background, root or subtask — can send and receive peer messages. Rules #1–#4 are sufficient.
 
 > **Removed (commit `e640a4578`):** The `isBackgroundTask` restriction was removed from `send_message_to_task`. Any task — foreground or background — can be caller or target. The parent/child sync routing table below is retained for historical reference; the `pendingSyncResolvers` map now serves all initiators uniformly, keyed by recipient `taskId`.
@@ -283,6 +285,32 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 3. **Decouple bookkeeping from routing.** Run `resumeBlockingParent`'s stack-pop + parent-history rewrite **only when the initiator is the structural parent** (initiator `===` `parentTaskId`, and the recipient is the stack frame directly above it). For a **peer** initiator, skip the stack/history manipulation entirely and just fire the resolver — the peer initiator lives elsewhere in the task tree, not below the recipient in `shoferStack`.
 
 ---
+
+> ⚠️ **CRITICAL: `peer_task_ids` is a PER-TASK, UNIDIRECTIONAL allowlist. It does NOT establish a mutual-pairing relationship between tasks.**
+>
+> **What this means in practice:**
+>
+> - Granting task A access to task B lets A send messages **TO** B, discover B in `list_background_tasks(scope="peers")`, and check B's status.
+> - It does **NOT** grant B access to A in return. The `peer_task_ids` granted to A are invisible to B.
+> - **Receiving a PEER MESSAGE from a task does NOT auto-add that task to your `knownPeers` set.** You cannot reply unless YOU were also granted the sender's ID at spawn time.
+>
+> **Bidirectional communication table:**
+>
+> | Grant configuration   | A → B (A sends to B) | B → A (B sends to A) | A sees B in `peers` | B sees A in `peers` |
+> | --------------------- | -------------------- | -------------------- | ------------------- | ------------------- |
+> | Only A has B's ID     | ✅                   | ❌                   | ✅                  | ❌                  |
+> | Only B has A's ID     | ❌                   | ✅                   | ❌                  | ✅                  |
+> | Both have each other  | ✅                   | ✅                   | ✅                  | ✅                  |
+> | Neither has the other | ❌                   | ❌                   | ❌                  | ❌                  |
+>
+> **Common pitfall — "I sent a message, why can't they reply?":**
+>
+> 1. You send `send_message_to_task(task_id="peer-123", message="Hello")` to a sibling.
+> 2. Your message is delivered via a PEER MESSAGE notification — it includes YOUR task ID in the sender field.
+> 3. The recipient tries to reply with `send_message_to_task(task_id="<your-id>", ...)`.
+> 4. **It fails with `"not in your allowed peer set"`** — because the recipient was never granted your ID.
+>
+> This is working as designed. The PEER MESSAGE notification text says "You may respond using `send_message_to_task`" — but this is only a prompt suggestion; it doesn't override the `knownPeers` scope check. **If you need bidirectional communication, both tasks must mutually grant each other's task IDs at spawn time.** Pre-spawn both children, collect their IDs, and pass each child the other's ID via `peer_task_ids`.
 
 ## `peer_task_ids` on `new_task` — Opt-in Scope Restrictor
 

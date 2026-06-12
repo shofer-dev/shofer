@@ -322,7 +322,10 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					const promptText =
 						`PEER MESSAGE from task ${task.taskId} ("${senderTitle}"):\n` +
 						`${message}\n\n` +
-						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...).\n` +
+						`You may respond using send_message_to_task(task_id="${task.taskId}", message=...)\n` +
+						`IF the sender's task ID was granted to you via peer_task_ids at spawn time.\n` +
+						`(Receiving this message does NOT auto-grant you permission to reply — check\n` +
+						`your knownPeers scope first. If you cannot reply, notify your parent instead.)\n` +
 						`This is a notification — no response is required. If the message is not urgent,\n` +
 						`you may finish your current work first and respond later.`
 
