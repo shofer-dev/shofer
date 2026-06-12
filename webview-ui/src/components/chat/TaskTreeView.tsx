@@ -158,11 +158,6 @@ function TaskTreeRow({ node }: { node: TaskTreeNode }) {
 				)}
 			/>
 
-			{/* Task number */}
-			<span className="text-[var(--vscode-descriptionForeground)] opacity-70 font-mono min-w-[2ch]">
-				[{item.number}]
-			</span>
-
 			{/* Task title (set_task_title / name, falling back to the prompt) */}
 			<span className="truncate font-medium text-[var(--vscode-foreground)]" title={item.task}>
 				{getTaskDisplayName(item)}

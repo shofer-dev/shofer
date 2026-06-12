@@ -89,7 +89,7 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 		const title = new Map<string, string>()
 		for (const item of inRoot) {
 			ids.push(item.id)
-			title.set(item.id, `[${item.number}] ${getTaskDisplayName(item)}`)
+			title.set(item.id, getTaskDisplayName(item))
 		}
 		for (const ix of interactions) {
 			for (const id of [ix.fromTaskId, ix.toTaskId]) {
