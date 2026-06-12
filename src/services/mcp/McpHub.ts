@@ -1889,6 +1889,10 @@ export class McpHub {
 		}
 
 		const mcpT0 = performance.now()
+		// One [MCP] line per call (start + finish) so the per-task "Logs" tab shows
+		// MCP activity; this path runs inside the task's tool dispatch and is
+		// attributed to the owning task via the ambient log context.
+		mcpSysLog.info(`▶ ${serverName}/${toolName}`)
 		try {
 			const result = await connection.client.request(
 				{
@@ -1901,8 +1905,10 @@ export class McpHub {
 					...(signal ? { signal } : {}),
 				},
 			)
-			recordMcpDuration(serverName, toolName, performance.now() - mcpT0)
+			const dur = performance.now() - mcpT0
+			recordMcpDuration(serverName, toolName, dur)
 			incMcpCalls(serverName, toolName, "success")
+			mcpSysLog.info(`✔ ${serverName}/${toolName} done in ${Math.round(dur)}ms`)
 			return result
 		} catch (error) {
 			const dur = performance.now() - mcpT0
@@ -1912,6 +1918,9 @@ export class McpHub {
 			// shared helper so the mapping lives in one place.
 			incMcpCalls(serverName, toolName, mcpErrorTypeToStatus(errorType))
 			incMcpErrors(serverName, toolName, errorType)
+			mcpSysLog.warn(
+				`✖ ${serverName}/${toolName} failed after ${Math.round(dur)}ms (${errorType}): ${error instanceof Error ? error.message : String(error)}`,
+			)
 			throw error
 		}
 	}

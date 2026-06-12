@@ -57,6 +57,9 @@ export const metricsLog = getLogger().child({ ctx: "Metrics" })
 /** Workflow engine (.slang) */
 export const workflowLog = getLogger().child({ ctx: "Workflow" })
 
+/** Tool execution — one line per native tool call (start / finish / error). */
+export const toolsLog = getLogger().child({ ctx: "Tools" })
+
 /** i18n / translations */
 export const i18nLog = getLogger().child({ ctx: "I18n" })
 

@@ -2,7 +2,7 @@ import type { ToolName, ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog, toolsLog } from "../../utils/logging/subsystems"
 import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "../../metrics/registry"
 
 /**
@@ -177,19 +177,46 @@ export abstract class BaseTool<TName extends ToolName> {
 			return
 		}
 
-		// Execute with typed parameters — instrument tool duration for Prometheus.
+		// Execute with typed parameters — instrument tool duration for Prometheus
+		// and emit one [Tools] log line per call (start + finish) so the per-task
+		// "Logs" tab shows tool/MCP activity. Both lines carry the taskId so they
+		// can be correlated even when the output channel interleaves tasks.
 		const execT0 = performance.now()
+		toolsLog.info(`▶ ${this.name} ${summarizeToolParams(params)} (task ${task.taskId})`)
 		try {
 			await this.execute(params, task, callbacks)
 			const dur = performance.now() - execT0
 			recordToolDuration(this.name, dur)
 			incToolCalls(this.name, "success")
+			toolsLog.info(`✔ ${this.name} done in ${Math.round(dur)}ms (task ${task.taskId})`)
 		} catch (err) {
 			const dur = performance.now() - execT0
 			recordToolDuration(this.name, dur)
 			incToolCalls(this.name, "error")
 			incToolErrors(this.name, classifyToolError(err))
+			toolsLog.warn(
+				`✖ ${this.name} failed after ${Math.round(dur)}ms: ${err instanceof Error ? err.message : String(err)} (task ${task.taskId})`,
+			)
 			throw err
 		}
 	}
+}
+
+/**
+ * Render a short, single-line summary of a tool's parameters for the [Tools]
+ * log. Keeps the most useful identifying fields (path, command, server/tool,
+ * query) and truncates so a single call never floods the log.
+ */
+function summarizeToolParams(params: unknown): string {
+	if (!params || typeof params !== "object") return ""
+	const p = params as Record<string, unknown>
+	const pick = ["path", "command", "server_name", "tool_name", "query", "mode", "url", "task_id"]
+	const parts: string[] = []
+	for (const key of pick) {
+		const v = p[key]
+		if (typeof v === "string" && v.length > 0) {
+			parts.push(`${key}=${v.length > 60 ? v.slice(0, 59) + "…" : v}`)
+		}
+	}
+	return parts.join(" ")
 }
