@@ -2692,10 +2692,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.askResponseImages = images
 
 		// Create a checkpoint whenever the user sends a message.
-		// Use allowEmpty=true to ensure a checkpoint is recorded even if there are no file changes.
-		// Suppress the checkpoint_saved chat row for this particular checkpoint to keep the timeline clean.
+		// Pass force=true so allowEmpty=true and a checkpoint is recorded even
+		// when there are no file changes — otherwise saveCheckpoint() no-ops on
+		// an empty diff and the user message gets no rollback anchor, defeating
+		// the "create a checkpoint when the user sends a message" feature.
+		// Suppress the checkpoint_saved chat row for this checkpoint to keep the timeline clean.
 		if (askResponse === "messageResponse") {
-			void this.checkpointSave(false, true)
+			void this.checkpointSave(true, true)
 		}
 
 		// Mark the last follow-up question as answered

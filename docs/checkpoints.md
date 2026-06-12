@@ -135,12 +135,22 @@ The `pWaitFor` guard handles the race where a tool calls `getCheckpointService` 
 
 ## Saving Checkpoints
 
-`checkpointSave(task, force?, suppressMessage?)` is called:
+`checkpointSave(task, force?, suppressMessage?)` has two call sites with **different
+blocking semantics**:
 
-- Before every file-mutating tool execution (`checkpointSaveAndMark` in `presentAssistantMessage.ts`).
-- On `force=true` to create an empty baseline commit even if no files changed.
+- **Pre-tool (blocking):** `checkpointSaveAndMark` in `presentAssistantMessage.ts`
+  does `await task.checkpointSave(true)` **before** a file-mutating tool runs. The
+  `await` is essential — it guarantees the checkpoint stages the workspace **before**
+  the mutation, so it captures the pre-mutation state. It is guarded by
+  `currentStreamingDidCheckpoint`, so at most one pre-tool checkpoint is taken per
+  streaming turn no matter how many file-mutating tools that turn issues.
+- **On user message (fire-and-forget):** when the user sends a message,
+  `Task.ts` calls `void this.checkpointSave(true, true)` — `force=true` so
+  `allowEmpty=true` records an anchor even with no file changes, and
+  `suppressMessage=true` hides the `checkpoint_saved` row. This one is not awaited
+  (the user isn't blocked on it).
 
-Internally: `git add . --ignore-errors` → `git commit -m "Task: <taskId>, Time: <epoch>"`. If git reports nothing to commit, `saveCheckpoint` returns `undefined` (not an error). On success the service emits `"checkpoint"` with `{ fromHash, toHash, suppressMessage }`.
+Internally: `git add . --ignore-errors` → `git commit -m "Task: <taskId>, Time: <epoch>"`. When `allowEmpty` is false and git reports nothing to commit, `saveCheckpoint` returns `undefined` (not an error). On success the service emits `"checkpoint"` with `{ fromHash, toHash, suppressMessage }`.
 
 The `suppressMessage` flag lets callers suppress the `checkpoint_saved` chat bubble (used for automatic pre-tool checkpoints that would otherwise flood the chat).
 
@@ -317,7 +327,7 @@ They do not share a backend and operate independently.
 
 **Per-task shadow repo** — keyed by `taskId` rather than workspace path. Concurrent tasks in the same workspace get independent histories. Cleanup is done by `ShadowCheckpointService.deleteTask()` (called when a task is deleted from history).
 
-**Background `checkpointSave`** — `checkpointSave` launches `saveCheckpoint` as a floating Promise (`.catch` only, no `await`). This keeps tool execution latency from growing with checkpoint size. The `allowEmpty: force` option is used for forced baseline commits.
+**Blocking vs. background `checkpointSave`** — `checkpointSave` returns the `saveCheckpoint` promise with an internal `.catch` (which disables checkpoints on error). The **caller** decides whether to block: the pre-tool path **awaits** it (tool execution must wait so the snapshot precedes the mutation — see "Saving Checkpoints"), while the user-message path uses `void` (fire-and-forget). The `allowEmpty: force` mapping means `force=true` commits even with an empty diff (forced baselines and the per-user-message rollback anchor).
 
 ---
 
