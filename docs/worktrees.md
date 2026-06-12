@@ -70,18 +70,18 @@ When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/wo
 
 **Guarded tools:**
 
-| Tool                   | What is validated                                                      |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `write_to_file`        | `path`                                                                 |
-| `apply_diff`           | `path`                                                                 |
-| `create_directory`     | `path`                                                                 |
-| `file` (rm)            | `path`                                                                 |
-| `file` (mv)            | `path` + `destination`                                                 |
-| `insert_edit`          | `filePath`                                                             |
-| `sed`                  | `path`                                                                 |
-| `rename_symbol`        | `filePath` (the symbol location)                                       |
-| `create_new_workspace` | `projectRoot` (path + name)                                            |
-| `execute_command`      | sandboxed on Linux (Landlock/bwrap), advisory warning on macOS/Windows |
+| Tool                   | What is validated                                                        |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `write_to_file`        | `path`                                                                   |
+| `apply_diff`           | `path`                                                                   |
+| `create_directory`     | `path`                                                                   |
+| `file` (rm)            | `path`                                                                   |
+| `file` (mv)            | `path` + `destination`                                                   |
+| `insert_edit`          | `filePath`                                                               |
+| `sed`                  | `path`                                                                   |
+| `rename_symbol`        | the source `filePath` **and** every file the LSP `WorkspaceEdit` touches |
+| `create_new_workspace` | `projectRoot` (path + name)                                              |
+| `execute_command`      | sandboxed on Linux (Landlock/bwrap), advisory warning on macOS/Windows   |
 
 **Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
 
