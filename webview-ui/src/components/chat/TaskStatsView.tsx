@@ -10,13 +10,13 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * live on one monotonic axis we can *paint* them with priority and read off
  * non-overlapping per-category totals — no wall-clock/epoch alignment needed.
  *
- * Only running time is counted — idle gaps between request cycles (tool-approval
- * waits, checkpointing, and the pauses between re-prompts of the same task) are
- * dropped. The running time, summed across every prompt, is subdivided into what
- * the task was actually doing:
+ * The total is the task's *active time* (the header's "Active Time": running +
+ * waiting on a task, excluding idle). The spans subdivide it into what the task
+ * was doing; active time not covered by any span (checkpointing, inter-request
+ * processing) is shown as "Overhead":
  *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
  *   • Tool execution   • Waiting for task (wait_for_task, a blocking new_task,
- *     or a sync send_message_to_task)
+ *     or a sync send_message_to_task)   • Overhead
  */
 
 // ── Categories ──
@@ -261,10 +261,9 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4">
 			<div className="flex items-center justify-between mb-3">
-				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Runtime breakdown</span>
+				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Active-time breakdown</span>
 				<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
-					{breakdown.requestCount} request{breakdown.requestCount === 1 ? "" : "s"} · {formatMs(total)}{" "}
-					runtime
+					{breakdown.requestCount} request{breakdown.requestCount === 1 ? "" : "s"} · {formatMs(total)} active
 				</span>
 			</div>
 
@@ -318,7 +317,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages, activeMs }) => 
 						textAnchor="middle"
 						fill="var(--vscode-descriptionForeground)"
 						fontSize={11}>
-						{hoveredSlice ? hoveredSlice.cat.label : "runtime"}
+						{hoveredSlice ? hoveredSlice.cat.label : "active"}
 					</text>
 				</svg>
 
