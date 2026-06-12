@@ -880,10 +880,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.rootTaskId = historyItem ? historyItem.rootTaskId : (rootTask?.rootTaskId ?? rootTask?.taskId)
 		this.parentTaskId = historyItem ? historyItem.parentTaskId : parentTask?.taskId
 
-		// Rehydrate knownPeers from persisted peerIds so peer communication
-		// grants survive extension restarts.
-		if (historyItem?.peerIds && historyItem.peerIds.length > 0) {
-			this.knownPeers = new Set(historyItem.peerIds)
+		// Rehydrate knownPeers so peer communication grants survive extension
+		// restarts: persisted peerIds plus this task's own children (parent↔child
+		// is always allowed). Including children also covers tasks persisted before
+		// peerIds existed, keeping parent→child messaging working after a reload.
+		if (historyItem) {
+			const rehydratedPeers = new Set<string>([
+				...(historyItem.peerIds ?? []),
+				...(historyItem.childIds ?? []),
+				...(historyItem.backgroundChildIds ?? []),
+			])
+			if (rehydratedPeers.size > 0) {
+				this.knownPeers = rehydratedPeers
+			}
 		}
 		this.childTaskId = undefined
 

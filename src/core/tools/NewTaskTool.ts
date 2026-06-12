@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
 import { TodoItem } from "@shofer/types"
+import type { HistoryItem } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
@@ -224,35 +225,10 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				// Register the child with TaskManager so it is tracked as a managed background task.
 				provider.taskManager.registerBackgroundTask(child)
 
-				// Persist the parent-child relationship in parent's history WITHOUT changing
-				// status or setting awaitingChildId (parent must remain "active").
-				try {
-					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
-					const backgroundChildIds = Array.from(
-						new Set([...(parentHistory.backgroundChildIds ?? []), child.taskId]),
-					)
-					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), child.taskId]))
-					await provider.updateTaskHistory({
-						...parentHistory,
-						// Deliberately NOT changing status or setting awaitingChildId.
-						backgroundChildIds,
-						childIds,
-					})
-				} catch (err) {
-					// Non-fatal: parent history metadata may be stale but child still runs.
-					taskLog.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
-				}
-
-				// Track in-memory handle on the parent task instance.
-				task.backgroundChildren.set(child.taskId, {
-					taskId: child.taskId,
-					status: "starting",
-					createdAt: Date.now(),
-					parentTaskId: task.taskId,
-				})
-
-				// Initialize knownPeers lazily so the root task can also
-				// send messages to its children (not just child↔child).
+				// Grant the parent (root↔child) messaging to this child. Done before the
+				// history write below so the parent's peer grant is persisted in the same
+				// update and survives restarts — otherwise parent→child messaging breaks
+				// on reload while child→parent still works (the rehydration is one-sided).
 				if (!task.knownPeers) {
 					task.knownPeers = new Set<string>()
 				}
@@ -282,13 +258,48 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				}
 				child.knownPeers = childPeers
 
-				// Persist peer grants so they survive restarts.
+				// Persist the parent-child relationship AND the parent's peer grant WITHOUT
+				// changing status or setting awaitingChildId (parent must remain "active").
+				// Write a minimal delta keyed by id: updateTaskHistory → upsert merges over
+				// the live cached item, so we don't clobber fields the parent updated
+				// concurrently (the lost-update hazard of spreading a stale full snapshot).
 				try {
-					const { historyItem: childHistory } = await provider.getTaskWithId(child.taskId)
+					const { historyItem: parentHistory } = await provider.getTaskWithId(task.taskId)
+					const backgroundChildIds = Array.from(
+						new Set([...(parentHistory.backgroundChildIds ?? []), child.taskId]),
+					)
+					const childIds = Array.from(new Set([...(parentHistory.childIds ?? []), child.taskId]))
 					await provider.updateTaskHistory({
-						...childHistory,
+						id: task.taskId,
+						backgroundChildIds,
+						childIds,
+						peerIds: Array.from(task.knownPeers),
+					} as HistoryItem)
+				} catch (err) {
+					// Non-fatal: parent history metadata may be stale but child still runs.
+					taskLog.error(`[NewTaskTool] Failed to update parent history for background child: ${err}`)
+				}
+
+				// Track in-memory handle on the parent task instance.
+				task.backgroundChildren.set(child.taskId, {
+					taskId: child.taskId,
+					status: "starting",
+					createdAt: Date.now(),
+					parentTaskId: task.taskId,
+				})
+
+				// Persist the child's peer grants so they survive restarts. Guard with
+				// getTaskWithId, which throws if the child's history isn't persisted yet:
+				// this both degrades gracefully to runtime-only grants and prevents the
+				// minimal-delta upsert from materializing a malformed partial item when no
+				// row exists to merge into. The write is a minimal delta for the same
+				// lost-update reason as the parent write above.
+				try {
+					await provider.getTaskWithId(child.taskId)
+					await provider.updateTaskHistory({
+						id: child.taskId,
 						peerIds: Array.from(childPeers),
-					})
+					} as HistoryItem)
 				} catch (err) {
 					// Non-fatal: peer grants will be runtime-only for this session.
 					taskLog.error(`[NewTaskTool] Failed to persist peerIds for child ${child.taskId}: ${err}`)
