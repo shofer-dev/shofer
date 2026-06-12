@@ -85,9 +85,11 @@ Stage F — Escalation (after tool returns)
 
 **Error message:**
 
-> Invalid tool call for '\<name\>': missing nativeArgs. This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.
+> Invalid tool call for '\<name\>': missing nativeArgs.\<details\>\<receivedParams\>
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L569-594
+Where `\<details\>` is ` Parser error: <parseError>` when the parser captured a specific failure (via `NativeToolCallParser.consumeLastParseError()`), otherwise the fallback ` This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`; and `\<receivedParams\>` is ` Received partial params: <json>.` when partial params exist.
+
+**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L572-608 (message construction L578-586)
 
 **Effect:**
 
@@ -107,9 +109,11 @@ Stage F — Escalation (after tool returns)
 
 **Error message:**
 
-> Tool call failed for "apply_diff": the parser could not produce a valid tool invocation. Reason: [NativeToolCallParser] Invalid arguments for tool 'apply_diff'. Native tool calls require a valid JSON payload matching the tool schema. Received: {"diff":"...<parameter name=\"path\"...\"}
+> [NativeToolCallParser] Invalid arguments for tool 'apply_diff'. Native tool calls require a valid JSON payload matching the tool schema. Missing required field(s): path. Received (truncated): {"diff":"...<parameter name=\"path\"...\"}
 
-**Location:** [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — `parseToolCall()` switch case at L1198–1222, XML leak recovery helper `extractPathFromXMLLeak()` at L329–353
+This is the literal string thrown by `parseToolCall()`. It reaches the chat as the `Parser error:` portion of the missing-`nativeArgs` envelope described in A2 (the `apply_diff` guard fails on the missing `path`, so `nativeArgs` is never produced and the call falls through to the A2 path).
+
+**Location:** [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — `parseToolCall()` `apply_diff` case at L1249–1276, error thrown at L1776–1779, XML leak recovery helper `extractPathFromXMLLeak()` at L343–353 (JSDoc from L329)
 
 **Effect:**
 
@@ -135,7 +139,7 @@ Stage F — Escalation (after tool returns)
 **Effect:**
 
 - `consecutiveMistakeCount++`
-- Error `tool_result` pushed (validation catch block at L811-828 of `presentAssistantMessage.ts`)
+- Error `tool_result` pushed (`validateToolUse(…)` call at L816, validation catch block at L825 of `presentAssistantMessage.ts`)
 - `didAlreadyUseTool` **not** set
 
 **Recovery:** LLM must pick a valid tool from the listed names. No automatic recovery.
@@ -186,11 +190,13 @@ Stage F — Escalation (after tool returns)
 
 **Error message:**
 
-> File \<path\> is outside the allowed pattern: \<regex\>. Description: \<description\>. Tool: \<tool\>.
+> Tool '\<tool\>' in mode '\<mode\>' can only edit files matching pattern: \<regex\> (\<description\>). Got: \<path\>
 
-**Type:** `FileRestrictionError` (custom error class)
+When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only edit files matching pattern: …`. The `(\<description\>)` clause is omitted when `description` is unset.
 
-**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `doesFileMatchRegex` at L294-296, L302-310
+**Type:** `FileRestrictionError` (custom error class — message defined in [`modes.ts`](../src/shared/modes.ts) L180-188)
+
+**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `doesFileMatchRegex` at L252-260, `FileRestrictionError` thrown at L402-409
 
 **Effect:**
 
@@ -248,7 +254,7 @@ Stage F — Escalation (after tool returns)
 
 > Shofer tried to use \<tool\> without value for required parameter '\<param\>'. Retrying...
 
-**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L3055
+**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L3096 (message at L3099-3101)
 
 **Effect:**
 
@@ -287,7 +293,7 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 **Trigger:** A write tool targets a file matching `ShoferProtectedController.PROTECTED_PATTERNS` or excluded by `.shoferignore`.
 
-**Files covered by `PROTECTED_PATTERNS`:** `.shofer/`, `.vscode/`, `AGENTS.md`, `.shoferignore`, `.shofermodes`, `.shoferrules*`, `*.code-workspace`.
+**Files covered by `PROTECTED_PATTERNS`:** `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the exact array at [`ShoferProtectedController.ts`](../src/core/protect/ShoferProtectedController.ts) L16-23). The separate `.shoferignore` exclusion is enforced by the ignore-controller pipeline, **not** by `PROTECTED_PATTERNS`; `.shofermodes` / `.shoferrules*` are not in the protected list.
 
 **Location:** [`ShoferProtectedController.ts`](../src/core/protect/ShoferProtectedController.ts)
 
@@ -308,7 +314,7 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 > "mistake_limit_reached" ask type — user is prompted for guidance.
 
-**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeShoferRequests` at L4198
+**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeShoferRequests`: mistake-limit gate at L4219-4220, `mistake_limit_reached` ask at L4239
 
 **Effect:**
 
