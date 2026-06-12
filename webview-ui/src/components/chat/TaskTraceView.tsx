@@ -74,6 +74,9 @@ const HEADER_HEIGHT = 30
 const PADDING_X = 20
 const PADDING_Y = 10
 
+/** Idle gaps at least this long get a dashed "skipped" marker on the axis. */
+const GAP_LABEL_THRESHOLD_MS = 1000
+
 function formatMs(ms: number): string {
 	if (ms < 1000) return `${Math.round(ms)}ms`
 	return `${(ms / 1000).toFixed(1)}s`
@@ -112,17 +115,54 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 	const [isPanning, setIsPanning] = useState(false)
 	const panStart = useRef({ x: 0, y: 0, vbX: 0, vbY: 0 })
 
-	// Compute total time range.
-	const { minOffset, maxOffset } = useMemo(() => {
-		if (rows.length === 0) return { minOffset: 0, maxOffset: 1 }
-		let min = Infinity
-		let max = -Infinity
-		for (const r of rows) {
-			if (r.startOffsetMs < min) min = r.startOffsetMs
-			if (r.endOffsetMs > max) max = r.endOffsetMs
+	// Collapsed-time model: a task is only "running" while a request cycle (the
+	// request span + its tool spans) is active. The idle gaps between cycles —
+	// approval waits, and especially the long pauses between re-prompts of the
+	// same task — carry no information and dominate the axis, so we remove them.
+	// Each row's [startOffsetMs, endOffsetMs] is one active interval; we merge
+	// overlaps and lay the intervals end-to-end on a compressed axis whose length
+	// is the total running time. Gaps above a threshold get a dashed marker.
+	const timeline = useMemo(() => {
+		const raw = rows.map((r) => ({ start: r.startOffsetMs, end: r.endOffsetMs })).sort((a, b) => a.start - b.start)
+		const merged: { start: number; end: number }[] = []
+		for (const iv of raw) {
+			const last = merged[merged.length - 1]
+			if (last && iv.start <= last.end) {
+				last.end = Math.max(last.end, iv.end)
+			} else {
+				merged.push({ start: iv.start, end: iv.end })
+			}
 		}
-		return { minOffset: min, maxOffset: max === min ? max + 1 : max }
+		let cum = 0
+		const intervals = merged.map((iv) => {
+			const compStart = cum
+			cum += iv.end - iv.start
+			return { start: iv.start, end: iv.end, compStart }
+		})
+		const gaps: { comp: number; skippedMs: number }[] = []
+		for (let i = 0; i < merged.length - 1; i++) {
+			const skipped = merged[i + 1].start - merged[i].end
+			if (skipped >= GAP_LABEL_THRESHOLD_MS) {
+				gaps.push({ comp: intervals[i].compStart + (merged[i].end - merged[i].start), skippedMs: skipped })
+			}
+		}
+		return { intervals, totalActive: cum > 0 ? cum : 1, gaps }
 	}, [rows])
+
+	// Map a raw offset onto the compressed (running-only) axis.
+	const compress = useCallback(
+		(offset: number) => {
+			const ivs = timeline.intervals
+			if (ivs.length === 0) return 0
+			for (const iv of ivs) {
+				if (offset < iv.start) return iv.compStart // in a collapsed gap
+				if (offset <= iv.end) return iv.compStart + (offset - iv.start)
+			}
+			const last = ivs[ivs.length - 1]
+			return last.compStart + (last.end - last.start)
+		},
+		[timeline],
+	)
 
 	const totalHeight = useMemo(() => {
 		let h = HEADER_HEIGHT
@@ -138,14 +178,17 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 		setViewBox({ x: -PADDING_X, y: 0, w: w, h: Math.max(400, totalHeight + PADDING_Y) })
 	}, [totalHeight])
 
-	// Map offset → SVG X coordinate.
-	const timeToX = useCallback(
-		(offsetMs: number) => {
-			const ratio = (offsetMs - minOffset) / (maxOffset - minOffset)
+	// Map a compressed-axis value → SVG X coordinate.
+	const compToX = useCallback(
+		(comp: number) => {
+			const ratio = comp / timeline.totalActive
 			return GUTTER_WIDTH + PADDING_X + ratio * (viewBox.w - GUTTER_WIDTH - PADDING_X * 2)
 		},
-		[minOffset, maxOffset, viewBox.w],
+		[timeline.totalActive, viewBox.w],
 	)
+
+	// Map a raw offset → SVG X coordinate (through the collapsed axis).
+	const timeToX = useCallback((offsetMs: number) => compToX(compress(offsetMs)), [compToX, compress])
 
 	// Pan handlers.
 	const handleMouseDown = useCallback(
@@ -214,12 +257,13 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 		yCursor += ROW_HEIGHT + r.payload.toolSpans.length * TOOL_ROW_HEIGHT
 	}
 
-	// Grid tick count.
-	const rangeMs = maxOffset - minOffset
+	// Axis ticks live on the compressed (running-only) axis and are labelled with
+	// elapsed running time, so 0 → totalActive regardless of wall-clock gaps.
+	const rangeMs = timeline.totalActive
 	const tickStep =
 		rangeMs < 1000 ? 200 : rangeMs < 5000 ? 500 : rangeMs < 20000 ? 1000 : rangeMs < 60000 ? 5000 : 10000
 	const ticks: number[] = []
-	for (let t = Math.ceil(minOffset / tickStep) * tickStep; t <= maxOffset; t += tickStep) {
+	for (let t = 0; t <= rangeMs; t += tickStep) {
 		ticks.push(t)
 	}
 
@@ -271,7 +315,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 						strokeWidth={1}
 					/>
 					{ticks.map((t) => {
-						const x = timeToX(t)
+						const x = compToX(t)
 						return (
 							<g key={t}>
 								<line
@@ -288,7 +332,34 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 									textAnchor="middle"
 									fill={COLOURS.muted}
 									fontSize={10}>
-									{formatMs(t - minOffset)}
+									{formatMs(t)}
+								</text>
+							</g>
+						)
+					})}
+					{/* Collapsed-gap markers: dashed line + skipped idle duration. */}
+					{timeline.gaps.map((gap, gi) => {
+						const x = compToX(gap.comp)
+						return (
+							<g key={`gap-${gi}`}>
+								<line
+									x1={x}
+									y1={HEADER_HEIGHT}
+									x2={x}
+									y2={viewBox.h}
+									stroke={COLOURS.muted}
+									strokeWidth={1}
+									strokeDasharray="2 3"
+									opacity={0.5}
+								/>
+								<text
+									x={x}
+									y={HEADER_HEIGHT - 8}
+									textAnchor="middle"
+									fill={COLOURS.muted}
+									fontSize={9}
+									opacity={0.8}>
+									⋯ {formatMs(gap.skippedMs)}
 								</text>
 							</g>
 						)

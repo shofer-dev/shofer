@@ -10,16 +10,17 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * live on one monotonic axis we can *paint* them with priority and read off
  * non-overlapping per-category totals — no wall-clock/epoch alignment needed.
  *
- * The "running" lifecycle is subdivided into what the task was actually doing:
+ * Only running time is counted — idle gaps between request cycles (tool-approval
+ * waits, checkpointing, and the pauses between re-prompts of the same task) are
+ * dropped. The running time, summed across every prompt, is subdivided into what
+ * the task was actually doing:
  *   • Waiting for model (TTFB)   • Streaming response   • Tool execution
  *   • Waiting on subtasks (wait_for_task)
- * Everything between request cycles (tool-approval waits, checkpointing,
- * context processing, user idle) falls into "Idle / waiting".
  */
 
 // ── Categories ──
 
-type CatKey = "llm" | "streaming" | "tool" | "waiting_subtask" | "idle"
+type CatKey = "llm" | "streaming" | "tool" | "waiting_subtask"
 
 interface CatMeta {
 	key: CatKey
@@ -34,7 +35,6 @@ const CATEGORIES: CatMeta[] = [
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
 	{ key: "waiting_subtask", label: "Waiting on subtasks", color: "var(--vscode-charts-purple, #a855f7)", prio: 2 },
-	{ key: "idle", label: "Idle / waiting for input", color: "var(--vscode-descriptionForeground)", prio: 0 },
 ]
 
 const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
@@ -62,7 +62,8 @@ interface Breakdown {
 	totals: Record<CatKey, number>
 	/** Per-tool execution time (excludes wait_for_task), largest first. */
 	toolTotals: Array<{ name: string; ms: number }>
-	totalSpan: number
+	/** Total running time: sum of all categories. Excludes idle/inter-prompt gaps. */
+	totalMs: number
 	requestCount: number
 }
 
@@ -122,8 +123,10 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	if (requestCount === 0 || !isFinite(minStart) || maxEnd <= minStart) return null
 
 	// Sweep: for each elementary interval between segment boundaries, attribute
-	// its length to the highest-priority covering segment (or idle if none).
-	const totals: Record<CatKey, number> = { llm: 0, streaming: 0, tool: 0, waiting_subtask: 0, idle: 0 }
+	// its length to the highest-priority covering segment. Gaps (no covering
+	// segment) are idle / between-prompt time and are dropped — we only account
+	// for time the task was actually running.
+	const totals: Record<CatKey, number> = { llm: 0, streaming: 0, tool: 0, waiting_subtask: 0 }
 	const points = Array.from(new Set([minStart, maxEnd, ...segments.flatMap((s) => [s.start, s.end])])).sort(
 		(a, b) => a - b,
 	)
@@ -141,14 +144,16 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 				if (best.prio === 2) break // max priority — can't be beaten
 			}
 		}
-		totals[best ? best.cat : "idle"] += len
+		if (best) totals[best.cat] += len
 	}
 
 	const toolTotals = Array.from(toolMap.entries())
 		.map(([name, ms]) => ({ name, ms }))
 		.sort((x, y) => y.ms - x.ms)
 
-	return { totals, toolTotals, totalSpan: maxEnd - minStart, requestCount }
+	const totalMs = totals.llm + totals.streaming + totals.tool + totals.waiting_subtask
+
+	return { totals, toolTotals, totalMs, requestCount }
 }
 
 // ── Donut geometry ──
@@ -193,7 +198,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 
 	const slices = useMemo<Slice[]>(() => {
 		if (!breakdown) return []
-		const total = breakdown.totalSpan
+		const total = breakdown.totalMs
 		if (total <= 0) return []
 		let angle = -Math.PI / 2
 		const out: Slice[] = []
@@ -219,17 +224,17 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 		)
 	}
 
-	const total = breakdown.totalSpan
+	const total = breakdown.totalMs
 	const isSingle = slices.length === 1
 	const maxToolMs = breakdown.toolTotals.length > 0 ? breakdown.toolTotals[0].ms : 0
 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4">
 			<div className="flex items-center justify-between mb-3">
-				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Time breakdown</span>
+				<span className="text-xs font-medium text-[var(--vscode-foreground)]">Running-time breakdown</span>
 				<span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
 					{breakdown.requestCount} request{breakdown.requestCount === 1 ? "" : "s"} · {formatMs(total)}{" "}
-					tracked
+					running
 				</span>
 			</div>
 
@@ -283,7 +288,7 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 						textAnchor="middle"
 						fill="var(--vscode-descriptionForeground)"
 						fontSize={11}>
-						{hovered ? CAT_BY_KEY[hovered].label : "total"}
+						{hovered ? CAT_BY_KEY[hovered].label : "running"}
 					</text>
 				</svg>
 
@@ -356,9 +361,8 @@ const TaskStatsView: React.FC<TaskStatsViewProps> = ({ messages }) => {
 			)}
 
 			<p className="mt-5 text-[10px] leading-relaxed text-[var(--vscode-descriptionForeground)]">
-				Measured from the first API request to the last recorded activity. “Idle / waiting” covers everything
-				between request cycles — tool-approval prompts, checkpointing, context processing, and time spent
-				waiting on you.
+				Only counts time the task was actively running, summed across every prompt. Idle time between request
+				cycles — tool-approval prompts, checkpointing, and the pauses between re-prompts — is excluded.
 			</p>
 		</div>
 	)
