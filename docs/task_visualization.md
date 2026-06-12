@@ -376,6 +376,10 @@ The timeline visualization is structurally simpler than what `slang-render.js` a
 │      └ read_file      ░░░░░░░░░░░░░░░░░░░░██░░░░░░░░░░░   45ms   │
 │                                                                  │
 │  [2] claude-sonnet-4  ████ (cancelled)                    0.8s    │
+│  [3] claude-sonnet-4  ██████████████████ERR█                2.3s    │
+│      ├ read_file      ░░░░░███░░░░░░░░░░░░░░░░░░░░░░░░  170ms   │
+│      ├ execute_cmd    ░░░░░░░░░░▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ ERR: EACCES  │
+│      └ write_to_file  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  skipped   │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 
@@ -383,19 +387,56 @@ The timeline visualization is structurally simpler than what `slang-render.js` a
    ░  Light gray  = queuing / pre-processing (start → first tool / first content)
    ██ Blue        = TTFB / waiting for LLM
    ██ Green       = streaming / receiving content
-   ██ Orange      = tool execution (ToolSpan sub-bars)
-   ██ Red         = error
+   ██ Orange      = tool execution (ToolSpan sub-bars, success)
+   ▓▓ Red/maroon   = failed tool execution (ToolSpan with isError: true)
+   ERR            = API request error (ApiRequestFinishedPayload.status === "error")
+   skipped        = tool was not executed (didRejectTool path)
 
 ── Row info (left gutter):
    [index] model
    tokensIn │ tokensOut │ cost
    status icon (✓ / ⚡ / ⨯)
+   error summary on error rows
+```
+
+### Error Visualization
+
+#### Trace — Tool Failures
+
+Failed tool calls (`ToolSpan.isError === true`) render as **red/maroon** bars instead of orange. The bar width still represents execution duration (showing how long the failure took). The left gutter or a badge on the bar shows a truncated error prefix.
+
+When a tool is **skipped** (not executed at all — the `didRejectTool` path where a previous tool was rejected and subsequent tools are bypassed), the bar is rendered as a gray placeholder with `"skipped"` label.
+
+When an entire API request fails (`status === "error"`), the request row shows an `ERR` badge and the row is tinted red. The structured `error` field (message, type, statusCode) is shown in the hover tooltip. Tool bars that completed before the error are still shown in orange/green; tools that never ran are absent.
+
+Hovering a failed tool bar shows:
+
+```
+execute_command
+ 170ms ─ error: EACCES: permission denied, mkdir '/root'
+```
+
+#### Sequence — Interaction Failures
+
+`TaskInteractionPayload` carries an optional `isError` field for failed inter-task operations (e.g., `cancel_tasks` that couldn't find the target, `send_message_to_task` rejected because the target was busy). Failed interactions render as red dashed arrows instead of solid colored arrows.
+
+```typescript
+interface TaskInteractionPayload {
+	fromTaskId: string
+	toTaskId?: string
+	kind: "spawn" | "message" | "await" | "answer" | "cancel"
+	label: string
+	rootOffsetMs: number
+	/** Whether the interaction failed. Red dashed arrow in Sequence view. */
+	isError?: boolean
+}
 ```
 
 ### Interaction
 
 - **Hover on request row** → tooltip with full metadata: model, apiProtocol, tokens, cost, retryAttempt, actualModel, attempts, error details
-- **Hover on tool sub-row** → tooltip with toolName, toolId, duration, resultSizeChars, spawnedTaskId (if `new_task`)
+- **Hover on tool sub-row** → tooltip with toolName, toolId, duration, resultSizeChars, spawnedTaskId (if `new_task`), error message (if failed)
+- **Hover on error row** → tooltip with structured error: type, statusCode, message, stack
 - **Click on request row** → expand inline detail panel showing wireRequest (if captured)
 - **Click on tool sub-row** → scroll to that tool call's chat row in `ChatView`
 - **Zoom/pan** → horizontal scroll + pinch; time axis auto-scales to fit visible range
