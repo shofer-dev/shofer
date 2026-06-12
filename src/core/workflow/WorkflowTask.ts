@@ -498,6 +498,11 @@ export class WorkflowTask extends Task {
 			`[WorkflowTask#${this.taskId}] #TRACE slangLoop start — flow='${this.flowState.flowName}' budgetRounds=${budgetRounds} budgetTokens=${budgetTokens} budgetTime=${budgetTime}`,
 		)
 
+		// Push the initial (round 0) visualization before the loop runs so the
+		// WorkflowView tab bar and diagrams appear immediately — even before
+		// the first agent is dispatched — rather than only after round 1.
+		this.notifySlangEditor()
+
 		while (
 			(budgetRounds === 0 || this.flowState.round < budgetRounds) &&
 			(budgetTokens === 0 || this.flowState.tokensUsed < budgetTokens) &&
@@ -592,6 +597,9 @@ export class WorkflowTask extends Task {
 				`🔄 Round ${this.flowState.round}: dispatching ${stakes.length} agent(s) — ${stakes.map((n) => `\`${n}\``).join(", ")}`,
 			)
 			await this.dispatchStakes(stakes)
+			// Reflect the freshly-dispatched "running" agents in the viz before
+			// we block waiting on them, so progress is visible mid-round.
+			this.notifySlangEditor()
 			await this.waitForStakes(stakes)
 			await this.collectStakeResults(stakes)
 
@@ -1316,13 +1324,26 @@ export class WorkflowTask extends Task {
 			}
 		}
 
-		// Push the self-contained HTML viz to the WorkflowView webview.
+		// Push to the WorkflowView webview. The self-contained HTML page is
+		// pushed once (it carries the static topology); thereafter only the
+		// serialized FlowState is pushed so SlangViz can forward it as a
+		// `runtimeState` postMessage and the render engine patches the
+		// diagrams in-place — no iframe reload, no lost zoom/pan/view.
 		const provider = this.providerRef.deref()
 		if (provider) {
-			const html = buildWorkflowVizHtml(this.slangSource, this.flowState, runState)
-			provider.postConfigUpdate("workflowVizHtml", html)
+			if (!this._vizHtmlPushed) {
+				const html = buildWorkflowVizHtml(this.slangSource, this.flowState, runState)
+				if (html) {
+					provider.postConfigUpdate("workflowVizHtml", html)
+					this._vizHtmlPushed = true
+				}
+			}
+			provider.postConfigUpdate("workflowVizRunState", runState)
 		}
 	}
+
+	/** Whether the static viz HTML has been pushed to the webview yet. */
+	private _vizHtmlPushed = false
 
 	private async persistCheckpoint(): Promise<void> {
 		try {
@@ -1495,7 +1516,7 @@ async function loadFromDir(dir: string, workflows: Map<string, string>): Promise
 	}
 }
 
-// ── Workflow Viz HTML Builder (for WorkflowView webview) ── (for WorkflowView webview) ──
+// ── Workflow Viz HTML Builder (for WorkflowView webview) ──
 
 /**
  * Builds a self-contained HTML page that renders the three slang
@@ -1503,10 +1524,15 @@ async function loadFromDir(dir: string, workflows: Map<string, string>): Promise
  * runtime state overlays. The page is meant to be rendered in a
  * sandboxed iframe in WorkflowView via srcdoc.
  *
- * We read slang-render.js and slang-render.css at module init time
- * (same pattern as SlangEditorProvider) and inline them into the HTML
- * so no external file references are needed. dagre is loaded from
- * unpkg CDN — it's a tiny (17KB gzip) pure-JS layout library.
+ * We read slang-render.js, slang-render.css and dagre.min.js at module
+ * init time (same files SlangEditorProvider ships to dist/) and inline
+ * them so the iframe needs no external network access — important
+ * because the parent webview CSP (default-src 'none', strict-dynamic)
+ * is inherited by the srcdoc iframe and would block a CDN load.
+ *
+ * Each <script> carries a `{{CSP_NONCE}}` placeholder that SlangViz
+ * replaces with the live webview nonce before assigning srcdoc, so the
+ * scripts satisfy the inherited 'nonce-…' policy.
  *
  * The rendering is initialised via a `safeRender()` call in an inline
  * script that passes both the parsed flow AST and the serialized
@@ -1529,11 +1555,12 @@ export function buildWorkflowVizHtml(
 	const flow = stripSpans(flowDeclaration)
 	const diags: string[] = []
 
-	// Load the render engine and CSS (read once, cached after first call).
-	// In the bundled output, __dirname is src/dist/ (where extension.js lives).
-	// slang-render.js and slang-render.css are copied to the same directory by esbuild.
+	// Load the render engine, CSS and dagre (read once, cached after first
+	// call). In the bundled output, __dirname is src/dist/ (where extension.js
+	// lives); esbuild copies these three assets to the same directory.
 	const RENDER_JS = _lazyReadFile(path.join(__dirname, "slang-render.js"))
 	const RENDER_CSS = _lazyReadFile(path.join(__dirname, "slang-render.css"))
+	const DAGRE_JS = _lazyReadFile(path.join(__dirname, "dagre.min.js"))
 
 	const payload = JSON.stringify({
 		type: "render",
@@ -1546,10 +1573,9 @@ export function buildWorkflowVizHtml(
 		.replace(/>/g, "\\u003e")
 		.replace(/&/g, "\\u0026")
 
-	// NOTE: dagre is loaded from CDN. This is acceptable for a
-	// developer-oriented tool (not user-facing content), and keeps
-	// the bundle size small. The CDN URL is pinned to a specific
-	// version to avoid supply-chain drift.
+	// dagre, the render engine and the bootstrap are all inlined and
+	// nonce-stamped (placeholder replaced by SlangViz) so they execute under
+	// the parent webview's inherited CSP without any network access.
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1561,9 +1587,9 @@ export function buildWorkflowVizHtml(
 <body>
 <div id="app"></div>
 <div id="diags" class="diag-section"></div>
-<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"><\\/script>
-<script>${RENDER_JS}</script>
-<script>(function () { "use strict"; var __payload = ${payload}; safeRender(__payload); })();</script>
+<script nonce="{{CSP_NONCE}}">${DAGRE_JS}</script>
+<script nonce="{{CSP_NONCE}}">${RENDER_JS}</script>
+<script nonce="{{CSP_NONCE}}">(function () { "use strict"; var __payload = ${payload}; safeRender(__payload); })();</script>
 </body>
 </html>`
 }
@@ -1583,16 +1609,14 @@ function stripSpans(obj: unknown): unknown {
 	return out
 }
 
-let _renderJsCache: string | null = null
-let _renderCssCache: string | null = null
+const _fileCache = new Map<string, string>()
 
 function _lazyReadFile(filePath: string): string {
-	if (filePath.endsWith(".js") && _renderJsCache) return _renderJsCache
-	if (filePath.endsWith(".css") && _renderCssCache) return _renderCssCache
+	const cached = _fileCache.get(filePath)
+	if (cached !== undefined) return cached
 	try {
 		const content = readFileSync(filePath, "utf-8")
-		if (filePath.endsWith(".js")) _renderJsCache = content
-		if (filePath.endsWith(".css")) _renderCssCache = content
+		_fileCache.set(filePath, content)
 		return content
 	} catch {
 		workflowLog.warn(`[WorkflowViz] Failed to read ${filePath}; viz will be empty`)

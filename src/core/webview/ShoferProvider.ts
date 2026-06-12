@@ -2084,6 +2084,9 @@ export class ShoferProvider
 			`media-src ${webview.cspSource}`,
 			`script-src 'unsafe-eval' ${webview.cspSource} https://* https://*.posthog.com http://${localServerUrl} http://0.0.0.0:${localPort} 'nonce-${nonce}'`,
 			`connect-src ${webview.cspSource} ${openRouterDomain} https://* https://*.posthog.com ws://${localServerUrl} ws://0.0.0.0:${localPort} http://${localServerUrl} http://0.0.0.0:${localPort}`,
+			// frame-src is required so the SlangViz srcdoc iframe (workflow
+			// visualization) is permitted under default-src 'none'.
+			"frame-src 'self'",
 			"clipboard-read 'self'",
 			"clipboard-write 'self'",
 		]
@@ -2101,6 +2104,10 @@ export class ShoferProvider
 						window.IMAGES_BASE_URI = "${imagesUri}"
 						window.AUDIO_BASE_URI = "${audioUri}"
 						window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
+						// Exposed so SlangViz can stamp the CSP nonce onto the
+						// script tags inside its srcdoc iframe (which inherits
+						// this document's policy).
+						window.__shofer_csp_nonce__ = "${nonce}"
 					</script>
 					<title>Shofer</title>
 				</head>
@@ -2173,13 +2180,16 @@ export class ShoferProvider
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
             <meta name="theme-color" content="#000000">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https://storage.googleapis.com https://img.clerk.com data:; media-src ${webview.cspSource}; script-src ${webview.cspSource} 'wasm-unsafe-eval' 'nonce-${nonce}' https://ph.shofer.dev 'strict-dynamic'; connect-src ${webview.cspSource} ${openRouterDomain} https://api.requesty.ai https://ph.shofer.dev; clipboard-read 'self'; clipboard-write 'self';">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https://storage.googleapis.com https://img.clerk.com data:; media-src ${webview.cspSource}; script-src ${webview.cspSource} 'wasm-unsafe-eval' 'nonce-${nonce}' https://ph.shofer.dev 'strict-dynamic'; connect-src ${webview.cspSource} ${openRouterDomain} https://api.requesty.ai https://ph.shofer.dev; frame-src 'self'; clipboard-read 'self'; clipboard-write 'self';">
             <link rel="stylesheet" type="text/css" href="${stylesUri}">
 			<link href="${codiconsUri}" rel="stylesheet" />
 			<script nonce="${nonce}">
 				window.IMAGES_BASE_URI = "${imagesUri}"
 				window.AUDIO_BASE_URI = "${audioUri}"
 				window.MATERIAL_ICONS_BASE_URI = "${materialIconsUri}"
+				// Exposed so SlangViz can stamp the CSP nonce onto the script
+				// tags inside its srcdoc iframe (which inherits this policy).
+				window.__shofer_csp_nonce__ = "${nonce}"
 			</script>
             <title>Shofer</title>
           </head>
@@ -3605,7 +3615,8 @@ export class ShoferProvider
 				}
 			})(),
 			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
-			workflowVizHtml: undefined, // pushed live via postConfigUpdate from WorkflowTask.notifySlangEditor()
+			workflowVizHtml: undefined, // pushed once via postConfigUpdate from WorkflowTask.notifySlangEditor()
+			workflowVizRunState: undefined, // pushed per round/step from WorkflowTask.notifySlangEditor()
 		}
 	}
 

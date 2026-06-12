@@ -456,7 +456,10 @@ export type ExtensionState = Pick<
 
 	// Workflow management
 	workflows?: Array<LauncherWorkflow>
+	/** Self-contained HTML page for the workflow visualization iframe (pushed once). */
 	workflowVizHtml?: string
+	/** Serialized FlowState pushed on each round/step for in-place viz overlays. */
+	workflowVizRunState?: Record<string, unknown>
 	// Parallel task management
 	parallelTasks?: Array<{
 		id: string
