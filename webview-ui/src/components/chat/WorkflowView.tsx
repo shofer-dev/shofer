@@ -2008,7 +2008,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 									onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
 									{
 										{
-											chat: "Chat",
+											chat: "Events",
 											tree: "Tree",
 											topology: "Topology",
 											sequence: "Sequence",
