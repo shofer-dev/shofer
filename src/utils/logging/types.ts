@@ -31,6 +31,25 @@ export interface CompactLogEntry {
 	d?: unknown
 }
 
+/**
+ * A log line attributed to a specific task/workflow instance, accumulated in
+ * the transport's per-task ring buffer and surfaced to the webview "Logs" tab.
+ * Structurally identical to (and assignable to) `TaskLogLine` in `@shofer/types`.
+ */
+export interface TaskScopedLogLine {
+	/** Absolute timestamp in ms. */
+	ts: number
+	/** Severity ("debug" | "info" | "warn" | "error" | "fatal"). */
+	level: string
+	/** Subsystem context tag, if any. */
+	ctx?: string
+	/** Human-readable message including any stringified data payload. */
+	message: string
+}
+
+/** Listener invoked once per log line attributed to a task. */
+export type TaskLogListener = (taskId: string, line: TaskScopedLogLine) => void
+
 /** Available log levels in ascending order of severity. */
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "fatal"] as const
 /** Type representing valid log levels. */

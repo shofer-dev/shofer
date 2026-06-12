@@ -9,7 +9,16 @@
 import { writeFileSync, mkdirSync } from "fs"
 import { dirname } from "path"
 import type * as vscode from "vscode"
-import { CompactTransportConfig, ICompactTransport, CompactLogEntry, LogLevel, LOG_LEVELS } from "./types"
+import {
+	CompactTransportConfig,
+	ICompactTransport,
+	CompactLogEntry,
+	LogLevel,
+	LOG_LEVELS,
+	TaskScopedLogLine,
+	TaskLogListener,
+} from "./types"
+import { getLogTaskContext } from "./logContext"
 
 /**
  * Default configuration: Output Channel only (no file output), all levels
@@ -44,6 +53,17 @@ function formatHumanLine(entry: CompactLogEntry): string {
 /** Maximum number of recent human-readable log lines kept in memory. */
 const RING_BUFFER_CAPACITY = 5000
 
+/** Maximum number of log lines retained per task in the per-task buffers. */
+const TASK_RING_CAPACITY = 2000
+
+/**
+ * Maximum number of distinct tasks whose log buffers are retained at once.
+ * Bounds memory when many tasks run over a session; the oldest task buffer is
+ * evicted when a new task exceeds this cap. Explicit `clearTaskLogs()` on task
+ * disposal keeps this from being hit in normal use.
+ */
+const MAX_TASK_BUFFERS = 64
+
 /**
  * Implements the compact logging transport using VS Code Output Channel.
  * @implements {ICompactTransport}
@@ -61,6 +81,13 @@ export class CompactTransport implements ICompactTransport {
 	/** Ring buffer of recent human-readable log lines for the public API. */
 	private _ringBuffer: string[] = []
 	private _ringBufferIndex = 0
+	/**
+	 * Per-task log buffers keyed by task id, populated from the ambient log
+	 * context (see `logContext.ts`). Map insertion order is used for eviction.
+	 */
+	private _taskBuffers: Map<string, TaskScopedLogLine[]> = new Map()
+	/** Listeners notified for every task-attributed line (live streaming). */
+	private _taskLogListeners: Set<TaskLogListener> = new Set()
 
 	/**
 	 * Creates a new CompactTransport instance.
@@ -218,6 +245,11 @@ export class CompactTransport implements ICompactTransport {
 			this._ringBufferIndex++
 		}
 
+		// Per-task buffering: attribute this line to the task whose run loop is
+		// currently on the async call stack (if any) so the webview "Logs" tab can
+		// show logs scoped to a single task/workflow.
+		this.captureForTask(entry)
+
 		// Optional JSON-lines file output (compact, delta-timestamps)
 		if (this.filePath) {
 			const deltaT = entry.t - this.lastTimestamp
@@ -255,6 +287,64 @@ export class CompactTransport implements ICompactTransport {
 		const start = this._ringBufferIndex % RING_BUFFER_CAPACITY
 		const ordered = [...buf.slice(start), ...buf.slice(0, start)]
 		return ordered.slice(-maxLines).join("\n")
+	}
+
+	/**
+	 * Append a log entry to the per-task buffer for the task that owns the
+	 * current async context, and notify the live listener. No-op when no task
+	 * context is active (e.g. activation/idle logging).
+	 */
+	private captureForTask(entry: CompactLogEntry): void {
+		const ctx = getLogTaskContext()
+		if (!ctx) return
+
+		const line: TaskScopedLogLine = {
+			ts: entry.t,
+			level: entry.l,
+			ctx: entry.c,
+			message: entry.d !== undefined ? `${entry.m} ${JSON.stringify(entry.d)}` : entry.m,
+		}
+
+		let buf = this._taskBuffers.get(ctx.taskId)
+		if (!buf) {
+			// Evict the oldest task buffer when at capacity (insertion-ordered Map).
+			if (this._taskBuffers.size >= MAX_TASK_BUFFERS) {
+				const oldest = this._taskBuffers.keys().next().value
+				if (oldest !== undefined) this._taskBuffers.delete(oldest)
+			}
+			buf = []
+			this._taskBuffers.set(ctx.taskId, buf)
+		}
+
+		buf.push(line)
+		if (buf.length > TASK_RING_CAPACITY) {
+			buf.splice(0, buf.length - TASK_RING_CAPACITY)
+		}
+
+		for (const listener of this._taskLogListeners) {
+			listener(ctx.taskId, line)
+		}
+	}
+
+	/** Return a snapshot of the buffered log lines for a task (oldest first). */
+	getTaskLogs(taskId: string): TaskScopedLogLine[] {
+		const buf = this._taskBuffers.get(taskId)
+		return buf ? buf.slice() : []
+	}
+
+	/**
+	 * Register a listener notified once per task-attributed log line. Used by the
+	 * provider to stream new lines to the focused task's webview. Returns an
+	 * unsubscribe function.
+	 */
+	addTaskLogListener(listener: TaskLogListener): () => void {
+		this._taskLogListeners.add(listener)
+		return () => this._taskLogListeners.delete(listener)
+	}
+
+	/** Drop the buffered logs for a task (call on task disposal). */
+	clearTaskLogs(taskId: string): void {
+		this._taskBuffers.delete(taskId)
 	}
 
 	/**

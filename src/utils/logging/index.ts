@@ -21,7 +21,11 @@
 import type * as vscode from "vscode"
 import { CompactLogger } from "./CompactLogger"
 import { CompactTransport } from "./CompactTransport"
-import type { ILogger, LogLevel } from "./types"
+import type { ILogger, LogLevel, TaskScopedLogLine, TaskLogListener } from "./types"
+
+export { runWithLogTaskContext, getLogTaskContext } from "./logContext"
+export type { LogTaskContext } from "./logContext"
+export type { TaskScopedLogLine, TaskLogListener } from "./types"
 
 /** Shared transport — all loggers write through this single instance. */
 let _transport: CompactTransport | undefined
@@ -159,4 +163,27 @@ export function getLogLevel(): LogLevel {
  */
 export function getRecentLogs(maxLines: number = 2000): string {
 	return _transport?.getRecentLogs(maxLines) ?? ""
+}
+
+/**
+ * Return a snapshot of the buffered log lines attributed to a specific task /
+ * workflow instance (oldest first). Powers the on-demand fetch for the "Logs"
+ * tab. Returns an empty array before bootstrap or for unknown task ids.
+ */
+export function getTaskLogs(taskId: string): TaskScopedLogLine[] {
+	return _transport?.getTaskLogs(taskId) ?? []
+}
+
+/**
+ * Register a listener notified for every task-attributed log line. The provider
+ * uses this to stream new lines to the focused task's webview "Logs" tab.
+ * Returns an unsubscribe function (a no-op before bootstrap).
+ */
+export function addTaskLogListener(listener: TaskLogListener): () => void {
+	return _transport?.addTaskLogListener(listener) ?? (() => {})
+}
+
+/** Drop the buffered logs for a task — call when a task is disposed. */
+export function clearTaskLogs(taskId: string): void {
+	_transport?.clearTaskLogs(taskId)
 }

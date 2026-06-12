@@ -22,6 +22,7 @@ import { Task, type TaskOptions } from "../task/Task"
 import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "../../utils/logging/subsystems"
+import { runWithLogTaskContext } from "../../utils/logging"
 import { waitForTasksEventDriven } from "./wait-for-task-helper"
 
 import {
@@ -483,7 +484,17 @@ export class WorkflowTask extends Task {
 		}
 	}
 
-	private async slangLoop(): Promise<void> {
+	/**
+	 * Establish the ambient log context so every line emitted while the workflow
+	 * orchestration loop runs is attributed to this workflow instance for the
+	 * "Logs" tab. Child agent tasks spawned within install their own context,
+	 * so their logs are attributed to the child, not the workflow.
+	 */
+	private slangLoop(): Promise<void> {
+		return runWithLogTaskContext({ taskId: this.taskId, rootTaskId: this.rootTaskId }, () => this.slangLoopInner())
+	}
+
+	private async slangLoopInner(): Promise<void> {
 		this.slangLoopEntered = true
 		const provider = this.providerRef.deref()
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")

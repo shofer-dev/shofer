@@ -39,6 +39,7 @@ import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
 import SlangViz from "./SlangViz"
+import TaskLogsView from "./TaskLogsView"
 
 export interface WorkflowViewProps {
 	isHidden: boolean
@@ -97,8 +98,10 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
-	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane"
-	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "topology" | "sequence" | "swimlane">("chat")
+	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs"
+	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs">(
+		"chat",
+	)
 
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
 
@@ -1992,7 +1995,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							style={{
 								borderBottom: "1px solid var(--vscode-widget-border, #3c3c3c)",
 							}}>
-							{(["chat", "tree", "topology", "sequence", "swimlane"] as const).map((tab) => (
+							{(["chat", "tree", "topology", "sequence", "swimlane", "logs"] as const).map((tab) => (
 								<button
 									key={tab}
 									type="button"
@@ -2013,14 +2016,19 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 											topology: "Topology",
 											sequence: "Sequence",
 											swimlane: "State",
+											logs: "Logs",
 										}[tab]
 									}
 								</button>
 							))}
 						</div>
 					)}
-					{workflowVizHtml && workflowTab !== "chat" && workflowTab !== "tree" && (
-						<SlangViz html={workflowVizHtml} runState={workflowVizRunState} view={workflowTab} />
+					{workflowVizHtml && workflowTab !== "chat" && workflowTab !== "tree" && workflowTab !== "logs" && (
+						<SlangViz
+							html={workflowVizHtml}
+							runState={workflowVizRunState}
+							view={workflowTab as "topology" | "sequence" | "swimlane"}
+						/>
 					)}
 					{workflowVizHtml && workflowTab === "tree" && (
 						<div className="flex relative grow">
@@ -2028,6 +2036,11 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								taskHistory={taskHistory}
 								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
 							/>
+						</div>
+					)}
+					{workflowVizHtml && workflowTab === "logs" && (
+						<div className="flex relative grow overflow-hidden">
+							<TaskLogsView taskId={currentTaskItem?.id} />
 						</div>
 					)}
 					{(!workflowVizHtml || workflowTab === "chat") && (

@@ -81,6 +81,25 @@ export interface WorkflowVizMeta {
 }
 
 /**
+ * A single log line attributed to a specific Task / Workflow instance.
+ *
+ * Produced by the logging transport: every entry emitted while a task's run
+ * loop is on the async call stack is stamped with that task's id (via the
+ * AsyncLocalStorage log context) and accumulated in a per-task ring buffer.
+ * Rendered by the "Logs" tab in ChatView / WorkflowView.
+ */
+export interface TaskLogLine {
+	/** Absolute timestamp in ms (Date.now() when the line was written). */
+	ts: number
+	/** Severity: "debug" | "info" | "warn" | "error" | "fatal". */
+	level: string
+	/** Subsystem context tag (e.g. "Task", "API", "MCP"); absent for un-tagged lines. */
+	ctx?: string
+	/** Human-readable message (already includes any stringified extra args). */
+	message: string
+}
+
+/**
  * ExtensionMessage
  * Extension -> Webview | CLI
  */
@@ -99,6 +118,9 @@ export interface ExtensionMessage {
 		| "messageUpdated"
 		| "shoferMessageAppended"
 		| "shoferMessagesPrepended"
+		// Per-task/workflow logs for the "Logs" tab: snapshot response + live append.
+		| "taskLogs"
+		| "taskLogAppended"
 		| "blobContent"
 		| "mcpServers"
 		| "enhancedPrompt"
@@ -228,6 +250,12 @@ export interface ExtensionMessage {
 	shoferMessage?: ShoferMessage
 	/** Batch for shoferMessagesPrepended (older pages loaded in one IPC round-trip). */
 	shoferMessages?: ShoferMessage[]
+	/** taskLogs: full snapshot of the requested task's log ring buffer. */
+	taskLogs?: TaskLogLine[]
+	/** taskLogAppended: single newly-emitted log line for the focused task. */
+	taskLogLine?: TaskLogLine
+	/** taskLogs / taskLogAppended: the task/workflow id these logs belong to. */
+	taskLogTaskId?: string
 	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
 	blob?: { sha256: string; bytes: number; content?: string; error?: string }
 	routerModels?: RouterModels
@@ -810,6 +838,8 @@ export interface WebviewMessage {
 		| "launchTask"
 		// Diagnostic logging from webview → extension OutputChannel
 		| "webviewLog"
+		// Logs tab: request the current snapshot of a task/workflow's logs (uses `taskId`)
+		| "requestTaskLogs"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
 	text?: string

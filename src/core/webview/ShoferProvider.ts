@@ -105,6 +105,7 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { ipcLog, webviewLog } from "../../utils/logging/subsystems"
+import { addTaskLogListener } from "../../utils/logging"
 import { time } from "../../utils/perf"
 
 import { setProviderReady } from "../../metrics/server"
@@ -342,6 +343,23 @@ export class ShoferProvider
 					timestamp: notification.timestamp,
 				},
 			})
+		})
+
+		// Stream task-attributed log lines to the webview "Logs" tab. Only the
+		// task the user is currently looking at (focused, or current on the
+		// stack — same dual-check Task.addToShoferMessages uses) is streamed;
+		// other tasks' lines are still buffered and fetched on demand when the
+		// user switches to them. The unsubscribe is disposed with the provider.
+		this.disposables.push({
+			dispose: addTaskLogListener((taskId, line) => {
+				if (this.taskManager?.getFocusedTaskId() === taskId || this.getCurrentTask()?.taskId === taskId) {
+					void this.postMessageToWebview({
+						type: "taskLogAppended",
+						taskLogTaskId: taskId,
+						taskLogLine: line,
+					})
+				}
+			}),
 		})
 
 		// Start configuration loading (which might trigger indexing) in the background.

@@ -40,6 +40,7 @@ import TaskTreeView from "./TaskTreeView"
 import TaskTraceView from "./TaskTraceView"
 import TaskStatsView from "./TaskStatsView"
 import TaskSequenceView from "./TaskSequenceView"
+import TaskLogsView from "./TaskLogsView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -202,8 +203,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-	// Task visualization tab: "chat" | "tree" | "sequence" | "trace" | "stats". Reset to "chat" on task switch.
-	const [chatTab, setChatTab] = useState<"chat" | "tree" | "sequence" | "trace" | "stats">("chat")
+	// Task visualization tab: "chat" | "tree" | "sequence" | "trace" | "stats" | "logs". Reset to "chat" on task switch.
+	const [chatTab, setChatTab] = useState<"chat" | "tree" | "sequence" | "trace" | "stats" | "logs">("chat")
 	useEffect(() => {
 		setChatTab("chat")
 	}, [currentTaskItem?.id])
@@ -2074,6 +2075,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
 								: undefined) ?? currentTaskItem?.activeTimeMs
 						}
+						isRunning={canStop}
 					/>
 
 					{checkpointWarning && (
@@ -2106,13 +2108,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				<>
 					{/* Tab bar for task visualizations */}
 					<div className="flex items-center gap-1 px-3 pt-1 pb-0">
-						{(["chat", "tree", "sequence", "trace", "stats"] as const).map((tab) => {
+						{(["chat", "tree", "sequence", "trace", "stats", "logs"] as const).map((tab) => {
 							const labels: Record<string, string> = {
 								chat: t("chat:tabChat"),
 								tree: t("chat:tabTree"),
 								sequence: t("chat:tabSequence"),
 								trace: t("chat:tabTrace"),
 								stats: t("chat:tabStats"),
+								logs: "Logs",
 							}
 							return (
 								<button
@@ -2292,6 +2295,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 										: undefined) ?? currentTaskItem?.activeTimeMs
 								}
 							/>
+						</div>
+					)}
+					{chatTab === "logs" && (
+						<div className="grow flex relative overflow-hidden">
+							<TaskLogsView taskId={currentTaskItem?.id} />
 						</div>
 					)}
 				</>

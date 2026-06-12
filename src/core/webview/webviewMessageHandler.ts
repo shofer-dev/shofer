@@ -575,6 +575,20 @@ export const webviewMessageHandler = async (
 			provider.debug?.(`[webview] ${text}`)
 			break
 		}
+		case "requestTaskLogs": {
+			// On-demand snapshot for the "Logs" tab. The webview asks for a
+			// specific task/workflow id; we return the buffered lines. Live
+			// updates thereafter arrive via the `taskLogAppended` stream.
+			const taskLogTaskId = typeof message.taskId === "string" ? message.taskId : undefined
+			if (!taskLogTaskId) break
+			const { getTaskLogs } = await import("../../utils/logging")
+			await provider.postMessageToWebview({
+				type: "taskLogs",
+				taskLogTaskId,
+				taskLogs: getTaskLogs(taskLogTaskId),
+			})
+			break
+		}
 		case "getBlobContent": {
 			// §4.3: webview-side resolution of a `<shofer-blob/>` reference.
 			// The renderer requests by sha256; we route to the currently
