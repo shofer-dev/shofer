@@ -396,6 +396,13 @@ export const toolSpanSchema = z.object({
 	isError: z.boolean(),
 	/** When the tool spawned a subtask (new_task): the child task's taskId. */
 	spawnedTaskId: z.string().optional(),
+	/**
+	 * True when this span represents the task *blocking on another task* rather
+	 * than doing its own work: wait_for_task, a foreground (blocking) new_task,
+	 * or a sync (wait=true) send_message_to_task. Categorised as "waiting on
+	 * subtasks" in the Stats/Trace views.
+	 */
+	waitsForTask: z.boolean().optional(),
 })
 
 export type ToolSpan = z.infer<typeof toolSpanSchema>
@@ -432,6 +439,15 @@ export const apiRequestFinishedPayloadSchema = z.object({
 	finishedAtOffsetMs: z.number(),
 	/** Time to first byte in ms. Null when unavailable. */
 	ttfbMs: z.number().nullable(),
+	/**
+	 * Offset (ms, relative to request start — same basis as ttfbMs) at which
+	 * output *generation* began: the first non-reasoning chunk (text or tool
+	 * call). The gap between ttfbMs and this is the model's "thinking"
+	 * (reasoning) phase. Null/undefined when no reasoning model or not captured;
+	 * equals ttfbMs when there was no reasoning before output. Optional for
+	 * backward-compatibility with spans recorded before this field existed.
+	 */
+	genStartOffsetMs: z.number().nullable().optional(),
 	/** Requested model ID. */
 	model: z.string(),
 	/** Wire protocol. */

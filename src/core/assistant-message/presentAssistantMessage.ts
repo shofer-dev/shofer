@@ -674,6 +674,17 @@ export async function presentAssistantMessage(shofer: Task) {
 						// Non-JSON results are plain success output.
 					}
 					const finishedAt = performance.now()
+					// Does this span represent blocking on another task? wait_for_task
+					// always; a foreground (non-background) new_task; a sync (wait=true)
+					// send_message_to_task. These render as "waiting on subtasks".
+					const truthy = (v: string | undefined) => {
+						const s = String(v ?? "").toLowerCase()
+						return s === "true" || s === "1" || s === "yes"
+					}
+					const waitsForTask =
+						block.name === "wait_for_task" ||
+						(block.name === "new_task" && !truthy(block.params.is_background)) ||
+						(block.name === "send_message_to_task" && truthy(block.params.wait))
 					shofer._pendingToolSpans.push({
 						startedAtOffsetMs: (toolSpanStartedAt || finishedAt) - shofer.timelineOriginMs,
 						finishedAtOffsetMs: finishedAt - shofer.timelineOriginMs,
@@ -682,6 +693,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						resultSizeChars: resultContent.length,
 						isError: toolResultIsError,
 						spawnedTaskId: block.name === "new_task" ? (shofer.childTaskId ?? undefined) : undefined,
+						waitsForTask: waitsForTask || undefined,
 					})
 				}
 

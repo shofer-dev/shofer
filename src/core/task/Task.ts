@@ -580,6 +580,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	_pendingTtfbMs: number | null = null
 
 	/**
+	 * Offset (ms from request start) at which output generation began — the
+	 * first non-reasoning chunk (text or tool call). The window between
+	 * `_pendingTtfbMs` and this is the model's reasoning/"thinking" phase.
+	 * `null` until the first non-reasoning chunk arrives.
+	 */
+	_pendingGenStartMs: number | null = null
+
+	/**
 	 * 0-based monotonic index assigned to each API request span within
 	 * this task.
 	 */
@@ -4282,6 +4290,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// Reset per-request timeline state before each API request.
 			this._pendingToolSpans = []
 			this._pendingTtfbMs = null
+			this._pendingGenStartMs = null
 			this._pendingRequestStartOffset = performance.now() - this.timelineOriginMs
 
 			await this.say(
@@ -4628,11 +4637,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 						switch (chunk.type) {
 							case "reasoning": {
-								// Capture TTFB on the first content-bearing chunk.
-								if (this._pendingTtfbMs === null) {
-									this._pendingTtfbMs =
-										performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
-								}
+								// Reasoning chunk: marks TTFB but not generation start.
+								this._markStreamProgress(true)
 								reasoningMessage += chunk.text
 								// Only apply formatting if the message contains sentence-ending punctuation followed by **
 								let formattedReasoning = reasoningMessage
@@ -4707,6 +4713,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								break
 							}
 							case "tool_call_partial": {
+								// Tool-call chunk: generation has started (no preceding text).
+								this._markStreamProgress(false)
 								// Process raw tool call chunk through NativeToolCallParser
 								// which handles tracking, buffering, and emits events
 								const events = NativeToolCallParser.processRawChunk({
@@ -4838,6 +4846,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							}
 
 							case "tool_call": {
+								// Tool-call chunk: generation has started (no preceding text).
+								this._markStreamProgress(false)
 								// Legacy: Handle complete tool calls (for backward compatibility)
 								// Convert native tool call to ToolUse format
 								const toolUse = NativeToolCallParser.parseToolCall({
@@ -4897,11 +4907,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								break
 							}
 							case "text": {
-								// Capture TTFB on the first content-bearing chunk.
-								if (this._pendingTtfbMs === null) {
-									this._pendingTtfbMs =
-										performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
-								}
+								// Text chunk: marks both TTFB and generation start.
+								this._markStreamProgress(false)
 								assistantMessage += chunk.text
 
 								// Native tool calling: text chunks are plain text.
@@ -7463,6 +7470,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
+	 * Record stream-timing milestones for the Trace/Stats phase breakdown.
+	 * The first chunk of any kind sets TTFB; the first non-reasoning chunk
+	 * (text or tool call) sets the generation start — the gap between them is
+	 * the model's reasoning/"thinking" phase.
+	 */
+	private _markStreamProgress(isReasoning: boolean): void {
+		const offset = performance.now() - this.timelineOriginMs - this._pendingRequestStartOffset
+		if (this._pendingTtfbMs === null) {
+			this._pendingTtfbMs = offset
+		}
+		if (!isReasoning && this._pendingGenStartMs === null) {
+			this._pendingGenStartMs = offset
+		}
+	}
+
+	/**
 	 * Emit an immutable `api_req_finished` ShoferSay message.
 	 *
 	 * Called at stream end (success, cancellation, or error) to record the
@@ -7511,6 +7534,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			startedAtOffsetMs: this._pendingRequestStartOffset,
 			finishedAtOffsetMs: performance.now() - this.timelineOriginMs,
 			ttfbMs: this._pendingTtfbMs,
+			genStartOffsetMs: this._pendingGenStartMs,
 			model: modelId ?? "",
 			apiProtocol: apiProtocol as "anthropic" | "openai",
 			retryAttempt: existingData.retryAttempt ?? 0,

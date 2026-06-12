@@ -56,7 +56,12 @@ const COLOURS = {
 
 	requestBar: "var(--vscode-charts-blue, #3b82f6)",
 	requestBarError: "var(--vscode-errorForeground, #ef4444)",
+	// Shared phase palette (kept in sync with TaskStatsView).
+	phaseWaiting: "var(--vscode-charts-blue, #3b82f6)",
+	phaseThinking: "var(--vscode-charts-purple, #a855f7)",
+	phaseStreaming: "var(--vscode-charts-green, #16a34a)",
 	toolBar: "var(--vscode-charts-orange, #f97316)",
+	toolBarWait: "var(--vscode-charts-cyan, #06b6d4)",
 	toolBarError: "var(--vscode-charts-red, #dc2626)",
 	toolBarSkipped: "var(--vscode-descriptionForeground)",
 
@@ -387,6 +392,17 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 					const isError = row.payload.status === "error"
 					const isCancelled = row.payload.status === "cancelled"
 
+					// Phase boundaries: waiting (TTFB) → thinking (reasoning) → streaming.
+					const p = row.payload
+					const reqDur = Math.max(p.finishedAtOffsetMs - p.startedAtOffsetMs, 0)
+					const ttfb = Math.min(Math.max(p.ttfbMs ?? 0, 0), reqDur)
+					const genStart =
+						p.genStartOffsetMs != null ? Math.min(Math.max(p.genStartOffsetMs, ttfb), reqDur) : ttfb
+					const xTtfb = timeToX(p.startedAtOffsetMs + ttfb)
+					const xGen = timeToX(p.startedAtOffsetMs + genStart)
+					const xEnd = Math.max(timeToX(p.finishedAtOffsetMs), reqX + 4)
+					const thinkingMs = genStart - ttfb
+
 					return (
 						<g key={ri}>
 							{/* Row background */}
@@ -430,7 +446,49 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								)}
 							</g>
 
-							{/* Request bar */}
+							{/* Request bar — phase segments (waiting / thinking / streaming) */}
+							{isError || isCancelled ? (
+								<rect
+									x={reqX}
+									y={y + 4}
+									width={reqW}
+									height={12}
+									rx={2}
+									fill={isError ? COLOURS.requestBarError : COLOURS.muted}
+									opacity={0.7}
+								/>
+							) : (
+								<>
+									{xTtfb > reqX + 0.3 && (
+										<rect
+											x={reqX}
+											y={y + 4}
+											width={xTtfb - reqX}
+											height={12}
+											fill={COLOURS.phaseWaiting}
+										/>
+									)}
+									{xGen > xTtfb + 0.3 && (
+										<rect
+											x={xTtfb}
+											y={y + 4}
+											width={xGen - xTtfb}
+											height={12}
+											fill={COLOURS.phaseThinking}
+										/>
+									)}
+									{xEnd > xGen + 0.3 && (
+										<rect
+											x={xGen}
+											y={y + 4}
+											width={xEnd - xGen}
+											height={12}
+											fill={COLOURS.phaseStreaming}
+										/>
+									)}
+								</>
+							)}
+							{/* Transparent hover target spanning the whole request bar */}
 							<rect
 								className="trace-bar"
 								x={reqX}
@@ -438,10 +496,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								width={reqW}
 								height={12}
 								rx={2}
-								fill={
-									isError ? COLOURS.requestBarError : isCancelled ? COLOURS.muted : COLOURS.requestBar
-								}
-								opacity={isError || isCancelled ? 0.7 : 1}
+								fill="transparent"
 								style={{ cursor: "pointer" }}
 								onMouseEnter={(e) => {
 									const rect = svgRef.current?.getBoundingClientRect()
@@ -450,14 +505,15 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 										x: e.clientX,
 										y: e.clientY,
 										content: [
-											`Request #${row.payload.requestIndex} — ${row.payload.model} (${row.payload.apiProtocol})`,
-											`Retry #${row.payload.retryAttempt}`,
-											`TTFB: ${row.payload.ttfbMs != null ? formatMs(row.payload.ttfbMs) : "n/a"}`,
-											`Duration: ${formatMs(row.payload.finishedAtOffsetMs - row.payload.startedAtOffsetMs)}`,
-											`${row.payload.actualModel ? `Model: ${row.payload.actualModel}` : ""}`,
-											`${row.payload.attempts != null ? `Attempts: ${row.payload.attempts}` : ""}`,
-											`${row.payload.responseError ? `Error: ${row.payload.responseError}` : ""}`,
-											`${row.payload.error ? `Error: ${row.payload.error.message}` : ""}`,
+											`Request #${p.requestIndex} — ${p.model} (${p.apiProtocol})`,
+											`Retry #${p.retryAttempt}`,
+											`TTFB: ${p.ttfbMs != null ? formatMs(p.ttfbMs) : "n/a"}`,
+											`${thinkingMs > 1 ? `Thinking: ${formatMs(thinkingMs)}` : ""}`,
+											`Duration: ${formatMs(p.finishedAtOffsetMs - p.startedAtOffsetMs)}`,
+											`${p.actualModel ? `Model: ${p.actualModel}` : ""}`,
+											`${p.attempts != null ? `Attempts: ${p.attempts}` : ""}`,
+											`${p.responseError ? `Error: ${p.responseError}` : ""}`,
+											`${p.error ? `Error: ${p.error.message}` : ""}`,
 										]
 											.filter(Boolean)
 											.join("\n"),
@@ -472,6 +528,13 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 								const tX = timeToX(ts.startedAtOffsetMs)
 								const tW = Math.max(timeToX(ts.finishedAtOffsetMs) - tX, 3)
 								const toolError = ts.isError
+								// Blocking inter-task tools render as "waiting for task" (cyan).
+								const toolWaits = ts.waitsForTask === true || ts.toolName === "wait_for_task"
+								const toolFill = toolError
+									? COLOURS.toolBarError
+									: toolWaits
+										? COLOURS.toolBarWait
+										: COLOURS.toolBar
 
 								return (
 									<g key={ti}>
@@ -492,7 +555,7 @@ const TaskTraceView: React.FC<TaskTraceViewProps> = ({ messages }) => {
 											width={tW}
 											height={TOOL_ROW_HEIGHT - 4}
 											rx={2}
-											fill={toolError ? COLOURS.toolBarError : COLOURS.toolBar}
+											fill={toolFill}
 											opacity={0.8}
 											style={{ cursor: "pointer" }}
 											onMouseEnter={(e) => {

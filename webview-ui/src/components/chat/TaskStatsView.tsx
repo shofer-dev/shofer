@@ -14,13 +14,14 @@ import type { ShoferMessage, ApiRequestFinishedPayload } from "@shofer/types"
  * waits, checkpointing, and the pauses between re-prompts of the same task) are
  * dropped. The running time, summed across every prompt, is subdivided into what
  * the task was actually doing:
- *   • Waiting for model (TTFB)   • Streaming response   • Tool execution
- *   • Waiting on subtasks (wait_for_task)
+ *   • Waiting for model (TTFB)   • Thinking (reasoning)   • Streaming response
+ *   • Tool execution   • Waiting for task (wait_for_task, a blocking new_task,
+ *     or a sync send_message_to_task)
  */
 
 // ── Categories ──
 
-type CatKey = "llm" | "streaming" | "tool" | "waiting_subtask"
+type CatKey = "llm" | "thinking" | "streaming" | "tool" | "waiting_subtask"
 
 interface CatMeta {
 	key: CatKey
@@ -30,11 +31,13 @@ interface CatMeta {
 	prio: number
 }
 
+// Shared phase palette (kept in sync with TaskTraceView).
 const CATEGORIES: CatMeta[] = [
 	{ key: "llm", label: "Waiting for model", color: "var(--vscode-charts-blue, #3b82f6)", prio: 1 },
+	{ key: "thinking", label: "Thinking", color: "var(--vscode-charts-purple, #a855f7)", prio: 1 },
 	{ key: "streaming", label: "Streaming response", color: "var(--vscode-charts-green, #16a34a)", prio: 1 },
 	{ key: "tool", label: "Tool execution", color: "var(--vscode-charts-orange, #f97316)", prio: 2 },
-	{ key: "waiting_subtask", label: "Waiting on subtasks", color: "var(--vscode-charts-purple, #a855f7)", prio: 2 },
+	{ key: "waiting_subtask", label: "Waiting for task", color: "var(--vscode-charts-cyan, #06b6d4)", prio: 2 },
 ]
 
 const CAT_BY_KEY: Record<CatKey, CatMeta> = CATEGORIES.reduce(
@@ -99,18 +102,27 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 
 		const reqStart = payload.startedAtOffsetMs
 		const reqEnd = Math.max(payload.finishedAtOffsetMs, reqStart)
+		const reqDur = reqEnd - reqStart
 		// TTFB is a duration relative to request start; clamp into the span.
-		const ttfb = Math.min(Math.max(payload.ttfbMs ?? 0, 0), reqEnd - reqStart)
+		const ttfb = Math.min(Math.max(payload.ttfbMs ?? 0, 0), reqDur)
+		// Generation start (first non-reasoning chunk). The window between TTFB and
+		// it is the model's reasoning/"thinking" phase. Falls back to ttfb (no
+		// thinking) when not captured.
+		const genStart =
+			payload.genStartOffsetMs != null ? Math.min(Math.max(payload.genStartOffsetMs, ttfb), reqDur) : ttfb
 
 		segments.push({ start: reqStart, end: reqStart + ttfb, cat: "llm", prio: 1 })
-		segments.push({ start: reqStart + ttfb, end: reqEnd, cat: "streaming", prio: 1 })
+		segments.push({ start: reqStart + ttfb, end: reqStart + genStart, cat: "thinking", prio: 1 })
+		segments.push({ start: reqStart + genStart, end: reqEnd, cat: "streaming", prio: 1 })
 		minStart = Math.min(minStart, reqStart)
 		maxEnd = Math.max(maxEnd, reqEnd)
 
 		for (const span of payload.toolSpans) {
 			const s = span.startedAtOffsetMs
 			const e = Math.max(span.finishedAtOffsetMs, s)
-			const isWait = span.toolName === WAIT_FOR_TASK_TOOL
+			// `waitsForTask` flags blocking inter-task tools; fall back to the tool
+			// name for spans recorded before that flag existed.
+			const isWait = span.waitsForTask === true || span.toolName === WAIT_FOR_TASK_TOOL
 			segments.push({ start: s, end: e, cat: isWait ? "waiting_subtask" : "tool", prio: 2 })
 			minStart = Math.min(minStart, s)
 			maxEnd = Math.max(maxEnd, e)
@@ -126,7 +138,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 	// its length to the highest-priority covering segment. Gaps (no covering
 	// segment) are idle / between-prompt time and are dropped — we only account
 	// for time the task was actually running.
-	const totals: Record<CatKey, number> = { llm: 0, streaming: 0, tool: 0, waiting_subtask: 0 }
+	const totals: Record<CatKey, number> = { llm: 0, thinking: 0, streaming: 0, tool: 0, waiting_subtask: 0 }
 	const points = Array.from(new Set([minStart, maxEnd, ...segments.flatMap((s) => [s.start, s.end])])).sort(
 		(a, b) => a - b,
 	)
@@ -151,7 +163,7 @@ function computeBreakdown(messages: ShoferMessage[]): Breakdown | null {
 		.map(([name, ms]) => ({ name, ms }))
 		.sort((x, y) => y.ms - x.ms)
 
-	const totalMs = totals.llm + totals.streaming + totals.tool + totals.waiting_subtask
+	const totalMs = totals.llm + totals.thinking + totals.streaming + totals.tool + totals.waiting_subtask
 
 	return { totals, toolTotals, totalMs, requestCount }
 }
