@@ -1,6 +1,8 @@
 # Prometheus / Observability for Shofer VS Code Extension
 
-> **Status:** Phases 1–2 fully implemented (metrics infrastructure, prom-client registry, HTTP server, LLM/tool/MCP/task instrumentation). Phase 3 (latency histograms, GC observer) and Phase 4 (webview push) are pending. Phase 5 (Grafana dashboard) is pending.
+> **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. **Genuinely still missing:** the GC observer (§7.11 — only a code comment exists; `nodejs_gc_duration_seconds` from `collectDefaultMetrics` covers it for free), LLM **cost/token** counters, the real embedder queue-depth value (currently stubbed to `0`), and the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
+>
+> **Gating:** the entire `/metrics` server only starts when the `PROMETHEUS_METRICS` experiment is enabled (`extension.ts` checks `EXPERIMENT_IDS.PROMETHEUS_METRICS` before `startMetricsServer`). When the experiment is off, no server binds and no metrics are exposed.
 >
 > **Motivation:** Shofer has no operational dashboard. A Prometheus-scraped HTTP endpoint inside the extension host gives real-time insight into latency distributions, memory health, task throughput, and resource usage — all exposed as standard Prometheus metrics, viewable in Grafana alongside the rest of the arkware.ai infrastructure.
 
@@ -16,9 +18,11 @@ The extension host runs per VS Code window — one process, one server.
   A static port lets Prometheus point at a fixed target with no file-SD sidecar.
   If the port is already bound when a second VS Code window tries to start,
   `startMetricsServer` rejects and the extension logs an error — one window wins.
-- **Start**: on `activate()` or `ShoferProvider` construction.
+- **Start**: during `activate()`, **gated behind the `PROMETHEUS_METRICS`
+  experiment** (`extension.ts` checks `EXPERIMENT_IDS.PROMETHEUS_METRICS` before
+  calling `startMetricsServer`). With the experiment off, the server never binds.
   A per-PID metadata file (`globalStorage/metrics-ports/<pid>-<windowId>.json`)
-  is still written for windowId / workspace labelling.
+  is written for windowId / workspace labelling.
 - **Stop**: on `deactivate()`, close the server.
 - **Readiness**: the server returns `200 OK` from `/health` once the provider
   is fully initialized (`taskHistoryStoreInitialized === true`).
@@ -215,6 +219,12 @@ All metrics in this section are collected via direct instrumentation in
 and independent of user telemetry opt-in. They are scraped by Prometheus via the
 `/metrics` endpoint (§1).
 
+> **Also exposed but not enumerated below:** the full `prom-client` > `collectDefaultMetrics()` family (`process_*`, `nodejs_*`, including
+> `nodejs_gc_duration_seconds`) is enabled in `registry.ts`, and a catch-all
+> `shofer_generic_duration_ms{operation}` histogram captures any `time()` key
+> that isn't explicitly routed to a named histogram. These appear on `/metrics`
+> alongside the `shofer_*` series specified here.
+
 ### 4.1 Availability (calls, errors, error types)
 
 | Metric                           | Type      | Labels                             | Description                                                                            |
@@ -244,17 +254,17 @@ and independent of user telemetry opt-in. They are scraped by Prometheus via the
 
 ### 4.2 Latency (p50, p95, p99)
 
-| Metric                             | Type      | Labels                | Description                      |
-| ---------------------------------- | --------- | --------------------- | -------------------------------- |
-| `shofer_llm_duration_ms`           | Histogram | `provider`, `modelId` | LLM API call duration            |
-| `shofer_tool_duration_ms`          | Histogram | `tool`                | Tool execution duration          |
-| `shofer_mcp_duration_ms`           | Histogram | `server`, `tool`      | MCP call duration                |
-| `shofer_task_switch_duration_ms`   | Histogram | —                     | Task context switch duration     |
-| `shofer_save_messages_duration_ms` | Histogram | —                     | `saveShoferMessages` duration    |
-| `shofer_preload_duration_ms`       | Histogram | —                     | `preloadShoferMessages` duration |
-| `shofer_post_state_duration_ms`    | Histogram | —                     | `postStateToWebview` duration    |
-| `shofer_index_load_duration_ms`    | Histogram | —                     | `_index.json` load duration      |
-| `shofer_index_write_duration_ms`   | Histogram | —                     | `_index.json` write duration     |
+| Metric                               | Type      | Labels                | Description                                                                                                    |
+| ------------------------------------ | --------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `shofer_llm_duration_ms`             | Histogram | `provider`, `modelId` | LLM API call duration                                                                                          |
+| `shofer_tool_duration_ms`            | Histogram | `tool`                | Tool execution duration                                                                                        |
+| `shofer_mcp_duration_ms`             | Histogram | `server`, `tool`      | MCP call duration                                                                                              |
+| `shofer_task_switch_duration_ms`     | Histogram | —                     | Task context switch duration                                                                                   |
+| `shofer_save_messages_duration_ms`   | Histogram | —                     | `saveShoferMessages` duration                                                                                  |
+| `shofer_preload_duration_ms`         | Histogram | —                     | `preloadShoferMessages` duration                                                                               |
+| `shofer_post_init_state_duration_ms` | Histogram | —                     | `postInitState` duration (the actual emitted name; an earlier draft called it `shofer_post_state_duration_ms`) |
+| `shofer_index_load_duration_ms`      | Histogram | —                     | `_index.json` load duration                                                                                    |
+| `shofer_index_write_duration_ms`     | Histogram | —                     | `_index.json` write duration                                                                                   |
 
 **Histogram buckets** (ms): `[5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]`
 
@@ -295,10 +305,10 @@ endpoint.
 
 ### 4.5 Code-index metrics (always-on)
 
-| Metric                        | Type  | Labels     | Description                               |
-| ----------------------------- | ----- | ---------- | ----------------------------------------- |
-| `shofer_code_index_files`     | Gauge | —          | Number of indexed files                   |
-| `shofer_embedder_queue_depth` | Gauge | `provider` | Embedder pending-queue depth per provider |
+| Metric                        | Type  | Labels     | Description                                                                                                                                                                                                                                                                                       |
+| ----------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shofer_code_index_files`     | Gauge | —          | Number of indexed files                                                                                                                                                                                                                                                                           |
+| `shofer_embedder_queue_depth` | Gauge | `provider` | Embedder pending-queue depth per provider. **⚠️ Currently stubbed:** `updateCodeIndexMetrics` is always called with `embedderQueueDepth = 0` (`services/code-index/manager.ts`), so the series exists but is meaningless. Wire the real per-provider concurrency-lane depth before relying on it. |
 
 ---
 
@@ -315,7 +325,7 @@ endpoint.
 ### Phase 2 — Metrics endpoint + availability counters ✅
 
 - [`src/metrics/identity.ts`](../src/metrics/identity.ts) — per-window `windowId` + workspace label.
-- [`src/metrics/server.ts`](../src/metrics/server.ts) — `http.Server` on `127.0.0.1:0`; per-PID port discovery files.
+- [`src/metrics/server.ts`](../src/metrics/server.ts) — `http.Server` on `127.0.0.1:<SHOFER_METRICS_PORT>` (static, default **30099** — not a random `:0` port); per-PID port discovery files. `/health` gates on an internal `_providerReady` flag (set via `setProviderReady()` from `ShoferProvider`), not a field literally named `taskHistoryStoreInitialized`.
 - [`src/metrics/registry.ts`](../src/metrics/registry.ts) — `prom-client`-backed registry with
   `windowId` default label, `collectDefaultMetrics()`, and `shofer_window_info` gauge.
 - `time()` wired to registry histograms via `setHistogramCallback`.
@@ -324,20 +334,32 @@ endpoint.
 - Availability counters: `BaseTool.execute()`, MCP call sites, task lifecycle.
 - Code-index Gauges (§4.5).
 
-### Phase 3 — Latency histograms + memory diagnostics (pending)
+### Phase 3 — Latency histograms + memory diagnostics (mostly ✅)
 
-- `arkware.heapSnapshot` command.
-- `perf_hooks` GC observer (when `--expose-gc` is available).
-- Event listener count Gauge.
-- `BaseTool.execute()` instrumentation for `shofer_tool_duration_ms`.
-- LLM API response handler instrumentation for `shofer_llm_duration_ms` and
-  `shofer_llm_calls_total` with error classification.
+- ✅ `arkware.heapSnapshot` command (writes to workspace `.shofer/heap-snapshots/`;
+  see §7.10 for the remaining hardening).
+- ✅ Event listener count Gauge (`shofer_event_listeners_total`).
+- ✅ `BaseTool.execute()` instrumentation for `shofer_tool_duration_ms` +
+  `shofer_tool_calls_total` / `shofer_tool_errors_total`.
+- ✅ LLM call-site instrumentation for `shofer_llm_duration_ms`,
+  `shofer_llm_calls_total`, and `shofer_llm_errors_total` with error
+  classification (wired in `Task.ts`).
+- ✅ MCP call-site instrumentation (`shofer_mcp_*`, wired in `McpHub`).
+- ❌ **`perf_hooks` GC observer — NOT implemented** (§7.11). Only a doc comment
+  exists. `collectDefaultMetrics()` already exposes `nodejs_gc_duration_seconds`,
+  so a bespoke `shofer_gc_*` family may be redundant.
+- ❌ **LLM cost/token counters — not yet added** (`shofer_llm_cost_usd_total`,
+  `shofer_llm_tokens_total`); the data already flows past the same `Task.ts`
+  call site where duration is recorded.
 
-### Phase 4 — Webview metrics (pending)
+### Phase 4 — Webview metrics (host side ✅, sender ❌)
 
-- `WebviewMessage` variant `pushMetrics` (from webview → extension host).
-- Webview-side instrumentation for `shofer_webview_*` metrics.
-- Periodic push from webview to extension host (every 30 s).
+- ✅ `WebviewMessage` variant `pushMetrics`, typed `webviewMetricsPushSchema`
+  (`packages/types/src/metrics.ts`), `safeParse` validation, and `/metrics`
+  exposure are all built host-side (`webviewMessageHandler.ts`).
+- ❌ **No webview-side sender exists** — `webview-ui/src` never calls
+  `pushMetrics`, so the `shofer_webview_*` series are never populated. The
+  inbound endpoint is currently dead until a webview emitter + 30 s flush is added.
 
 ### Phase 5 — Grafana dashboard & scrape config (pending)
 
@@ -380,7 +402,16 @@ endpoint.
 
 The Phase 1–2 implementation under [`src/metrics/`](../src/metrics/) and [`src/utils/perf.ts`](../src/utils/perf.ts) surfaced gaps in the original design that were corrected before Phase 3 lands. The items below are design-level changes — concrete code bugs are tracked separately in the original review.
 
-**Status (May 2026):** §7.1 – §7.12 all implemented in [`src/metrics/`](../src/metrics/).
+**Status (verified May 2026):** §7.1, §7.2, §7.3, §7.4, §7.5, §7.7, §7.8, §7.9,
+and §7.12 are implemented in [`src/metrics/`](../src/metrics/). **Three are NOT
+fully done:** §7.6 (canonical provider label) is **unfixed** — `Task.ts` still
+uses `apiConfiguration?.apiProvider ?? "unknown"`, so a misconfigured handler
+silently emits `provider="unknown"` on every LLM series; §7.10 (heapSnapshot)
+is **partial** — it passes an explicit path but writes to the workspace
+`.shofer/heap-snapshots/` rather than `globalStoragePath`, and has no modal
+confirmation; §7.11 (GC observer) is **not implemented at all** — `registry.ts`
+contains only a doc comment describing it, with no `PerformanceObserver`,
+no `perf_hooks` import, and no `shofer_gc_*` metric anywhere.
 
 ### 7.1 Switch from `@perf` decorator to a `time(key, fn)` helper ✅
 

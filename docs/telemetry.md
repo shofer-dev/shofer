@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-  <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
@@ -125,6 +125,9 @@ The service provides typed convenience methods for every event type. Each method
 | [`captureTitleButtonClicked`](packages/telemetry/src/TelemetryService.ts:303)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
 | [`captureTelemetrySettingsChanged`](packages/telemetry/src/TelemetryService.ts:312) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
 | [`captureCodeIndexSegmentDedup`](packages/telemetry/src/TelemetryService.ts:346)    | `CODE_INDEX_SEGMENT_DEDUP`   | `{fileCount, totalBlocks, reused, embedded, deleted}`                             |
+| [`capturePeerMessageSent`](packages/telemetry/src/TelemetryService.ts:346)          | `TASK_PEER_MESSAGE_SENT`     | `taskId`, peer-message metadata                                                   |
+| [`capturePeerMessageReceived`](packages/telemetry/src/TelemetryService.ts:350)      | `TASK_PEER_MESSAGE_RECEIVED` | `taskId`, peer-message metadata                                                   |
+| [`capturePeerDiscovery`](packages/telemetry/src/TelemetryService.ts:354)            | `TASK_PEER_DISCOVERY`        | `taskId`, discovery metadata                                                      |
 | [`isTelemetryEnabled`](packages/telemetry/src/TelemetryService.ts:323)              | —                            | Returns `true` if any client has telemetry enabled                                |
 
 ### `PostHogTelemetryClient`
@@ -308,6 +311,11 @@ enum TelemetryEventName {
 	MCP_ASYNC_CALL_COMPLETED = "MCP Async Call Completed",
 	MCP_ASYNC_CALL_CANCELLED = "MCP Async Call Cancelled",
 	MCP_ASYNC_CALL_TIMED_OUT = "MCP Async Call Timed Out",
+
+	// Peer messaging (task-to-task)
+	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
+	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
+	TASK_PEER_DISCOVERY = "Task Peer Discovery",
 }
 ```
 
@@ -558,6 +566,17 @@ Caller (e.g., Task.ts, Provider code)
 | `MCP_ASYNC_CALL_CANCELLED` | `cancel_tasks` during async MCP call | `taskId`, `callId`, `serverName`, `toolName`, `durationMs`            |
 | `MCP_ASYNC_CALL_TIMED_OUT` | Async MCP call exceeds timeout       | `taskId`, `callId`, `serverName`, `toolName`, `timeoutSec`            |
 
+### Peer Messaging Events (task-to-task)
+
+Emitted when running tasks exchange messages directly (`send_message_to_task`,
+async peer delivery, and peer discovery via `list_background_tasks`).
+
+| Event                        | Where Emitted                                 | Properties                   |
+| ---------------------------- | --------------------------------------------- | ---------------------------- |
+| `TASK_PEER_MESSAGE_SENT`     | `SendMessageToTaskTool.ts` (peer send)        | `taskId`, message metadata   |
+| `TASK_PEER_MESSAGE_RECEIVED` | `Task.ts` (async peer-message delivery)       | `taskId`, message metadata   |
+| `TASK_PEER_DISCOVERY`        | `ListBackgroundTasksTool.ts` (peer discovery) | `taskId`, discovery metadata |
+
 ---
 
 ## Privacy & Data Filtering
@@ -778,7 +797,9 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **`packages/cloud/` does not exist.** The Cloud Telemetry Client section was removed from this document because `packages/cloud/src/TelemetryClient.ts` and `packages/cloud/src/retry-queue/` are not present in this version of the codebase. If cloud-side telemetry is planned, a new package must be created and this document updated.
 
-- **`webview-ui/src/components/cloud/CloudView.tsx` does not exist.** The `cloud/` components directory under the webview is empty. Account connect/logout telemetry events (`ACCOUNT_CONNECT_CLICKED`, `ACCOUNT_LOGOUT_CLICKED`, `ACCOUNT_LOGOUT_SUCCESS`) currently have no webview-side source file. Their event names exist in the enum but may never be emitted.
+- **`webview-ui/src/components/cloud/CloudView.tsx` does not exist.** The `cloud/` components directory under the webview is empty.
+
+- **Eight enum events are defined but never emitted (dead entries).** A codebase-wide grep for emission sites (both `captureEvent(TelemetryEventName.X)` and the `capture*()` convenience methods) finds **no emitter anywhere** for: `ACCOUNT_CONNECT_CLICKED`, `ACCOUNT_CONNECT_SUCCESS`, `ACCOUNT_LOGOUT_CLICKED`, `ACCOUNT_LOGOUT_SUCCESS`, `AUTHENTICATION_INITIATED`, `FEATURED_PROVIDER_CLICKED`, `UPSELL_DISMISSED`, and `UPSELL_CLICKED`. Note the tables above (Webview UI Events / Cloud & Marketplace Events) cite source files for `ACCOUNT_CONNECT_SUCCESS`, `UPSELL_DISMISSED`, and `UPSELL_CLICKED` (e.g. `useCloudUpsell.ts:28`, `DismissibleUpsell.tsx`) — **those citations are aspirational; the events do not actually fire from those files.** Either wire up emission or remove the dead enum entries (and correct/annotate those table rows).
 
 ### Missing from Documentation
 
@@ -792,4 +813,28 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **No `captureException` for non-PostHog clients.** `TelemetryService` delegates `captureException` to all registered clients, but only `PostHogTelemetryClient` implements meaningful exception capture. If a second client is registered, it must also implement `captureException`.
 
-- **Enum ordering in telemetry.ts vs. doc.** The `TelemetryEventName` enum in [`telemetry.ts`](packages/types/src/telemetry.ts:20) places `ASSISTANT_AGENT_ERROR` and `CODE_INDEX_SEGMENT_DEDUP` at lines 74 and 79, between `CODE_INDEX_ERROR` and `TELEMETRY_SETTINGS_CHANGED`. The `shoferTelemetryEventSchema` discriminated union in the same file exhaustively lists members — adding a new enum value without updating the schema will cause type errors at compile time.
+- **The `shoferTelemetryEventSchema` union does NOT enforce enum parity (correctness gap).** A previous version of this doc claimed the `shoferTelemetryEventSchema` discriminated union ([`telemetry.ts:178`](packages/types/src/telemetry.ts:178)) "exhaustively lists members" so that adding an enum value without updating the schema "will cause type errors at compile time." **This is false.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is no compile-time safety net. In fact three emitted events — `ASSISTANT_AGENT_ERROR` (enum line 74), `BUDGET_EXCEEDED` (line 78), and `CODE_INDEX_SEGMENT_DEDUP` (line 79) — are **absent from the union** and emit unvalidated today. If schema parity is desired it must be enforced explicitly (e.g. validate in `captureEvent`, or a test asserting every `TelemetryEventName` appears in the union).
+
+### Coverage Gaps (features without telemetry)
+
+These flagship features currently emit **no** telemetry, leaving notable
+product/operational blind spots. Listed for awareness; wiring them is tracked
+separately.
+
+| Feature                         | Source (no emitter)                   | Proposed signal                                                        |
+| ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| Subtask / orchestrator spawning | `core/tools/NewTaskTool.ts`           | `SUBTASK_SPAWNED { parentTaskId, mode, isBackground }`                 |
+| Task cancellation / abort       | `core/tools/CancelTasksTool.ts`       | `TASK_CANCELLED { taskId, reason }`                                    |
+| User tool rejection             | per-tool `!didApprove` in `Task.ts`   | `TOOL_REJECTED { tool }`                                               |
+| RAG / `codebase_search` usage   | `core/tools/RagSearchTool.ts`         | `RAG_SEARCH_PERFORMED { resultCount, latencyMs }`                      |
+| Skill load                      | `core/tools/SkillsTool.ts`            | `SKILL_LOADED { skillName }`                                           |
+| Image generation                | `core/tools/GenerateImageTool.ts`     | `IMAGE_GENERATED { model, success }`                                   |
+| assistantAgent success/usage    | `services/assistant-agent/manager.ts` | `ASSISTANT_AGENT_INVOKED { success, turnCount }` (error already emits) |
+
+Additionally, **only 9 of ~36 provider implementations call `captureException`**
+(the AI Providers table above lists them). The remaining providers — including
+`deepseek`, `openai`, `openai-compatible`, `vertex`, `anthropic-vertex`,
+`vscode-lm`, `native-ollama`, `requesty`, `unbound`, `lite-llm`,
+`vercel-ai-gateway`, `baseten`, `sambanova`, `moonshot`, `minimax`, `zai`,
+`qwen-code`, `lm-studio`, `fireworks`, `shofer` — swallow API errors with no
+telemetry. Provider error coverage is partial, not complete.
