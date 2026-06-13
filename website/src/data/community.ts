@@ -14,7 +14,7 @@ export const communityLinks: CommunityLink[] = [
 	},
 	{
 		label: "Reddit",
-		href: "https://reddit.com/r/Shofer_dev",
+		href: "https://www.reddit.com/r/Shofer_dev/",
 		description: "Community discussions and tips",
 		icon: "MessageSquare",
 	},

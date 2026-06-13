@@ -1,6 +1,11 @@
-- Is worktree inherrited? Auto-approvals?
-
-- Revisit build-in modes
+migration guide for claude code
+migration guide for opencode
+Finalize the UI aspect of the workflows (visualization, etc)
+fix workflows
+- "Running" commands don't seem to have the ability to kill
+- parent can give title (workflow does) and then the agent should not change it
+- Maybe update the HistoryView for Workflows
+- new_task can have a name param for each task
 
 - Improve README, walkthrough, and video (update changelog)
 
@@ -10,12 +15,6 @@
 - make the dir name same as worktree & branch:
   alsterg@laptop:~/Projects/arkware.ai/.shofer/worktrees/arkware.ai-kom7c$ git branch
 
-* master
-* worktree/task_messaging
-* worktree/test
-  worktree/w3
-
-- worktree/workflow_design
 
 * DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
     - project documentation standarization/structure
@@ -35,15 +34,9 @@
 
 - new logo
 
-- move all shofer special files under .shofer e.g. .shofer/shoferignore
-
-- TEST RAG indexer for code changes
-
-- FIX pasting images
+- TEST pasting images
 
 === P2
-
-- worktree tool?
 
 - test: /migrate-from-copilot /migrate-from-roocode
 

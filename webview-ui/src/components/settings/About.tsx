@@ -105,7 +105,7 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 							<Trans
 								i18nKey="settings:about.community"
 								components={{
-									redditLink: <VSCodeLink href="https://reddit.com/r/Shofer" />,
+									redditLink: <VSCodeLink href="https://www.reddit.com/r/Shofer_dev/" />,
 									discordLink: <VSCodeLink href="https://discord.gg/shofer" />,
 								}}
 							/>

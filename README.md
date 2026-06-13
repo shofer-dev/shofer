@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer"><img src="https://raster.shields.io/badge/VS_Code_Marketplace-007ACC?style=flat&logo=visualstudiocode&logoColor=white" alt="VS Code Marketplace" height="20"></a>
   <a href="https://discord.gg/x39UEEQ2"><img src="https://raster.shields.io/badge/Join%20Discord-5865F2?style=flat&logo=discord&logoColor=white" alt="Discord" height="20"></a>
-  <a href="https://reddit.com/r/Shofer_dev"><img src="https://raster.shields.io/badge/Join%20r%2FShofer__dev-D84315?style=flat&logo=reddit&logoColor=white" alt="Reddit" height="20"></a>
+  <a href="https://www.reddit.com/r/Shofer_dev/"><img src="https://raster.shields.io/badge/Join%20r%2FShofer__dev-D84315?style=flat&logo=reddit&logoColor=white" alt="Reddit" height="20"></a>
 </p>
 
 <p align="center">
@@ -172,7 +172,7 @@ Key recommendations: start with auto-approval toggles **OFF** and enable increme
 ## Community
 
 - **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
-- **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
+- **[Reddit](https://www.reddit.com/r/Shofer_dev/)** — Community discussions and tips
 - **[GitHub Issues](https://github.com/shofer-dev/shofer/issues)** — Bug reports and tracking
 
 Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).

@@ -8,7 +8,7 @@ export const siteConfig = {
 	links: {
 		github: "https://github.com/shofer-dev/shofer",
 		discord: "https://discord.gg/x39UEEQ2",
-		reddit: "https://reddit.com/r/Shofer_dev",
+		reddit: "https://www.reddit.com/r/Shofer_dev/",
 		docs: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md",
 	},
 }
