@@ -1038,17 +1038,6 @@ export const webviewMessageHandler = async (
 				provider.exportTaskWithIdJson(currentTaskIdJson)
 			}
 			break
-		case "shareCurrentTask":
-			const shareTaskId = provider.getCurrentTask()?.taskId
-			const shoferMessages = provider.getCurrentTask()?.shoferMessages
-
-			if (!shareTaskId) {
-				vscode.window.showErrorMessage(t("common:errors.share_no_active_task"))
-				break
-			}
-
-			vscode.window.showErrorMessage(t("common:errors.share_not_available"))
-			break
 		case "showTaskWithId":
 			await provider.focusTask(message.text!)
 			break
@@ -2272,6 +2261,40 @@ export const webviewMessageHandler = async (
 						`Error load api configuration by ID: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
 					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+				}
+			}
+			break
+		case "setTaskApiConfiguration":
+			// Scope a provider-profile change to the focused task ONLY. Unlike
+			// `loadApiConfigurationById` (which activates the profile globally and
+			// thereby changes the default inherited by new tasks), this rebinds just
+			// this task's API handler + sticky profile name and persists it to the
+			// task's own history. The global `currentApiConfigName` is left untouched,
+			// so future new tasks still resolve their config from the mode / global
+			// default chosen in Settings → Provider.
+			if (message.text) {
+				const currentTask = provider.getCurrentTask()
+				if (currentTask) {
+					try {
+						const profile = await provider.providerSettingsManager.getProfile({ id: message.text })
+						if (profile?.apiProvider) {
+							currentTask.updateApiConfiguration(profile)
+						}
+						currentTask.setTaskApiConfigName(profile.name)
+						try {
+							const { historyItem } = await provider.getTaskWithId(currentTask.taskId)
+							await provider.updateTaskHistory({ ...historyItem, apiConfigName: profile.name })
+						} catch {
+							// Brand-new task not yet in history — it will persist its
+							// apiConfigName via its own metadata write. Non-fatal.
+						}
+						await provider.postInitState()
+					} catch (error) {
+						provider.log(
+							`Error setting task API configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+						)
+						vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					}
 				}
 			}
 			break

@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-      <!-- /TOC -->
+  <!-- /TOC -->
 
 ---
 
@@ -427,10 +427,6 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 | UI Component          | Event                                   | Source                                                                                                   |
 | --------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Mode Selector         | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx:56)                                 |
-| Share Button          | `SHARE_BUTTON_CLICKED`                  | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx:108)                                  |
-| Share → Organization  | `SHARE_ORGANIZATION_CLICKED`            | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx:88)                                   |
-| Share → Public        | `SHARE_PUBLIC_CLICKED`                  | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx:90)                                   |
-| Share → Connect Cloud | `SHARE_CONNECT_TO_CLOUD_CLICKED`        | [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx:113)                                  |
 | Marketplace Tab       | `MARKETPLACE_TAB_VIEWED`                | [`App.tsx`](webview-ui/src/App.tsx:224)                                                                  |
 | Marketplace Install   | `MARKETPLACE_INSTALL_BUTTON_CLICKED`    | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx:82) |
 | (webview)             | `ACCOUNT_CONNECT_CLICKED`               | — (source file not yet present)                                                                          |
@@ -712,7 +708,6 @@ Provider implementations capture errors via `TelemetryService.instance.captureEx
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [`App.tsx`](webview-ui/src/App.tsx)                                                                   | Initializes `telemetryClient` on state hydration |
 | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx)                                 | `MODE_SELECTOR_OPENED`                           |
-| [`ShareButton.tsx`](webview-ui/src/components/chat/ShareButton.tsx)                                   | Share interaction events                         |
 | [`useCloudUpsell.ts`](webview-ui/src/hooks/useCloudUpsell.ts)                                         | `ACCOUNT_CONNECT_SUCCESS`                        |
 | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx)                     | Upsell interaction events                        |
 | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx) | Marketplace install events                       |

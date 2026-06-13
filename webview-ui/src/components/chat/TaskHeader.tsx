@@ -198,7 +198,6 @@ const TaskHeader = ({
 						e.target instanceof Element &&
 						(e.target.closest("button") ||
 							e.target.closest('[role="button"]') ||
-							e.target.closest(".share-button") ||
 							e.target.closest("[data-radix-popper-content-wrapper]") ||
 							e.target.closest("img") ||
 							e.target.tagName === "IMG")
