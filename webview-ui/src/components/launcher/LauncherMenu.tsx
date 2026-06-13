@@ -19,7 +19,7 @@ const ITEMS: { stage: Stage; icon: ReactNode; title: string; subtitle: string }[
 		stage: "task",
 		icon: <MessageSquarePlus className="size-5" />,
 		title: "New Task",
-		subtitle: "Work in any mode — can go multi-agent ad hoc",
+		subtitle: "Enlist one or more agents to tackle a specific prompt",
 	},
 	{
 		stage: "workflow",
