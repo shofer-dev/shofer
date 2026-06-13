@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ListChecks, Rocket, Beaker, Code, Cog, Search, Shield, Star, X, type LucideIcon } from "lucide-react"
 
+import { Mode } from "@shofer/shared/modes"
+
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { Tab, TabContent, TabHeader } from "../common/Tab"
 
 /**
@@ -110,6 +113,7 @@ const LauncherCard = ({
 
 export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
+	const { setMode } = useExtensionState()
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -129,10 +133,16 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 
 	const handlePickMode = useCallback(
 		(slug: string) => {
+			// Set the shared mode draft BEFORE leaving the launcher, mirroring the
+			// chat ModeSelector's home-screen path. This makes the chat ModeSelector
+			// show the chosen mode and lets ChatTextArea's home-screen effect sync
+			// the ApiConfigSelector to modeApiConfigs[mode]. Without this the new
+			// task (and both selectors) would keep the previous/stale mode + profile.
+			setMode(slug as Mode)
 			vscode.postMessage({ type: "launchTask", mode: slug })
 			onClose()
 		},
-		[onClose],
+		[onClose, setMode],
 	)
 
 	const handlePickWorkflow = useCallback(
