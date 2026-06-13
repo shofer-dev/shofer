@@ -45,7 +45,7 @@ interface FileSnapshot {
 
 ### Diff computation
 
-Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/package/diff) package) comparing `base/<relPath>` against current on-disk content. This replaces the old line-count heuristic.
+Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/package/diff) package) comparing `base/<relPath>` against `final/<relPath>` — both task-owned copies. This replaces the old line-count heuristic. (It is **not** computed against the live workspace file; see [Concurrency isolation](#concurrency-isolation).)
 
 ### Lifecycle
 
@@ -62,17 +62,30 @@ least once during the current Task**. Files modified solely by the user
 Consequences:
 
 - The candidate paths come from `FileContextTracker.getFilesEditedByRoo()`
-  (authoritative for "who touched what").
-- Net state for each candidate is computed by comparing current on-disk
-  content against the per-task `base/<relPath>` copy via hash comparison
-  and unified diff — it answers "is this file currently different from task
-  start?", not "which files changed?".
-- A file Shofer edited but whose disk content currently matches the task's
-  base is **dropped** from the list regardless of whether a final
-  snapshot exists. Files with zero net change (+0/−0) have no effective
-  diff to surface and are filtered out.
-- A file Shofer edited that the user _also_ edited stays in the list (Shofer
-  touched it); the per-file revert flow surfaces a user-edits warning.
+  (authoritative for "who touched what" — only `shofer_edited` files of **this**
+  task).
+- Net state for each candidate is computed by diffing the task-owned
+  `base/<relPath>` copy against the task-owned `final/<relPath>` copy — it answers
+  "what did **this task** produce in this file?". It does **not** read the live
+  workspace file for the diff, so a concurrent task editing the same file cannot
+  alter this task's counts (see [Concurrency isolation](#concurrency-isolation)).
+- A candidate whose `base` equals its `final` (the task's own net change is empty
+  — e.g. a tool added a line then removed it) is **dropped**: +0/−0 has no
+  effective diff.
+- The live workspace file is consulted for exactly **one** thing: detecting a
+  user-initiated revert (the file currently matches `base`), which drops the entry.
+
+### Concurrency isolation
+
+The changelist is **self-contained to the hosting task**. `base/<relPath>` (the
+file as it was when this task first touched it) and `final/<relPath>` (what this
+task last wrote) are both per-task copies, and `captureFinal` runs **only** on
+this task's own `shofer_edited` writes — a parallel task's edit to the same file
+is seen by this task's watcher as `user_edited` and never updates this task's
+`final/`. Therefore parallel tasks/sessions running in the **same worktree/branch**
+do not leak their changes into each other's panels, even though they share the
+underlying files on disk. The click-to-diff view likewise compares `base` ↔ `final`
+(not the live file) for the same reason.
 
 ## Unified source of truth
 
@@ -110,7 +123,7 @@ export async function acceptAll(task: Task): Promise<void>
 
 | Operation            | Mechanism                                                                                                                    |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `getChangedFiles`    | Hash disk content vs. `base/` copy; compute unified diff for insertions/deletions                                            |
+| `getChangedFiles`    | Unified diff of `base/` ↔ `final/` (task-owned) for insertions/deletions; live disk read only to detect a user revert       |
 | `getOriginalContent` | Read `base/<relPath>` (returns "" for absent, null for missing)                                                              |
 | `getFinalContent`    | Read `final/<relPath>`                                                                                                       |
 | `restoreFile`        | Copy `base/<relPath>` → workspace (or delete if absent)                                                                      |
@@ -123,13 +136,15 @@ export async function acceptAll(task: Task): Promise<void>
 `getChangedFiles` iterates the candidate set from
 `FileContextTracker.getFilesEditedByRoo(taskId)` and for each candidate:
 
-- Reads the original snapshot (kind + hash) and current on-disk content.
-- Compares the disk content hash against the captured original hash.
-- Drops candidates whose current state matches the original (zero net change).
-- Computes insertions/deletions via unified diff of the captured base copy
-  against current disk content.
-- Candidates whose current disk state matches base are dropped even when
-  a final snapshot exists — zero net change means no effective diff to show.
+- Reads the `base` snapshot/content and the `final` snapshot/content (both
+  task-owned). If no `final` snapshot exists yet (captureFinal is best-effort and
+  async), it falls back to the live disk content for that one file.
+- Drops candidates whose `base` equals `final` (the task's own net change is zero).
+- Drops candidates whose **live file currently matches `base`** (user reverted it
+  via the panel) — the only place the live workspace file is read.
+- Computes insertions/deletions via unified diff of `base` against `final`.
+- Derives `added` / `deleted` / `modified` from the `base`/`final` existence (not
+  the live file).
 
 The backend is always `"working"` — there is no git dependency.
 
@@ -216,15 +231,17 @@ hand also drops out automatically.
 ### Click-to-diff
 
 Clicking a row opens a VS Code diff editor in the main area, comparing the
-**original** content (left, virtual `shofer-original:` URI, read-only)
-against the **current on-disk** content (right). The intent is to show
-_Roo's cumulative effect on this file_, not the working-tree diff.
+**original** content (left, virtual `shofer-original:` URI, read-only) against
+this task's **`final`** content (right, also a virtual `shofer-original:` URI).
+Both sides are task-owned copies, so the diff shows _this task's effect on this
+file_ and is immune to edits other tasks/sessions made to the live file (see
+[Concurrency isolation](#concurrency-isolation)). If no `final` snapshot exists
+yet, the right side falls back to the live workspace file.
 
 Implementation: `shofer-original:` is a `TextDocumentContentProvider`
 registered in `extension.ts`; the body is base64-encoded into the URI
-query. The host handler resolves original content via
-`getOriginalContent`, which transparently falls back to the checkpoint
-shadow git as described above.
+query. The host handler (`changedFiles/showDiff`) resolves the left via
+`getOriginalContent` and the right via `getFinalContent`.
 
 The row's click is disabled only when `!entry.hasOriginalContent`, which
 in practice means a missing original snapshot.

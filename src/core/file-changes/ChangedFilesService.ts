@@ -108,60 +108,79 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 	for (const relPath of candidates) {
 		const original = await task.fileContextTracker.getOriginalSnapshot(relPath)
 		const final = await task.fileContextTracker.getFinalSnapshot(relPath)
-		const currentExists = await readDiskExists(task.cwd, relPath)
-		const currentContent = currentExists ? await readDiskText(task.cwd, relPath) : undefined
+		const baseText = await task.fileContextTracker.getBaseContent(relPath)
 
-		// If disk matches the captured original, keep the entry as "reverted"
-		// only when a final snapshot exists (for Redo); otherwise drop it.
-		let matchesBase = false
-		if (original) {
-			if (original.kind === "absent" && !currentExists) matchesBase = true
-			else if (
-				original.kind === "text" &&
-				currentContent !== undefined &&
-				original.hash === sha256(currentContent)
-			) {
-				matchesBase = true
-			}
+		// The changelist reflects what THIS task produced: a diff of the task-owned
+		// base/<relPath> copy (the file when this task first touched it) against the
+		// task-owned final/<relPath> copy (what this task last wrote). Both are
+		// captured per-task and are NOT updated by other tasks' edits — captureFinal
+		// only runs on this task's own `shofer_edited` writes — so concurrent
+		// tasks/sessions editing the same file in the same worktree do not leak into
+		// this task's changelist. The live workspace file is consulted ONLY to detect
+		// a user-initiated revert (disk back to base); the diff never depends on disk.
+		let finalText: string | undefined
+		let finalExists: boolean
+		if (final) {
+			finalText = final.kind === "absent" ? undefined : await task.fileContextTracker.getFinalContent(relPath)
+			finalExists = final.kind !== "absent"
+		} else {
+			// No final snapshot yet (captureFinal is best-effort/async, or a binary
+			// tool that skips it) — fall back to the live disk so the entry isn't
+			// lost. This is the only path where an external edit could still leak,
+			// and it is transient (the next shofer_edited write captures `final`).
+			const diskExists = await readDiskExists(task.cwd, relPath)
+			finalText = diskExists ? await readDiskText(task.cwd, relPath) : undefined
+			finalExists = diskExists
 		}
-		if (matchesBase) {
-			// Drop entries where the file matches the original base — regardless
-			// of whether a final snapshot exists. A file with zero net change
-			// (e.g. a tool added a line then removed it) has no effective diff
-			// and should not appear in the change list.
+
+		const baseAbsent = !original || original.kind === "absent"
+
+		// Net-zero (task's own base -> final delta is empty): e.g. a tool added a
+		// line then removed it, or created then deleted a file within this task.
+		if (baseAbsent && !finalExists) continue
+		if (!baseAbsent && finalExists && baseText !== undefined && finalText !== undefined && baseText === finalText) {
 			continue
 		}
 
-		// Compute exact diff stats: unified diff of base content vs. current disk.
+		// User-revert detection (the ONLY disk read used for visibility): if the
+		// live file currently matches the base copy, the user reverted this file via
+		// the panel — drop it, mirroring the prior behavior. A concurrent task can
+		// only trigger this by coincidentally restoring the exact base content.
+		const diskExists = await readDiskExists(task.cwd, relPath)
+		const diskText = diskExists ? await readDiskText(task.cwd, relPath) : undefined
+		let diskMatchesBase = false
+		if (baseAbsent && !diskExists) {
+			diskMatchesBase = true
+		} else if (original?.kind === "text" && diskText !== undefined && original.hash === sha256(diskText)) {
+			diskMatchesBase = true
+		}
+		if (diskMatchesBase) continue
+
+		// Compute exact diff stats: unified diff of base vs. final (task-owned).
 		let insertions = 0
 		let deletions = 0
-		const baseText = await task.fileContextTracker.getBaseContent(relPath)
-		if (baseText !== undefined && currentContent !== undefined) {
-			const stats = computeUnifiedDiffStats(baseText, currentContent, relPath)
+		if (baseText !== undefined && finalText !== undefined) {
+			const stats = computeUnifiedDiffStats(baseText, finalText, relPath)
 			insertions = stats.inserted
 			deletions = stats.deleted
-		} else if (baseText === undefined && currentContent !== undefined) {
-			// Only treat as new file when the snapshot confirms it was absent.
-			// If the snapshot says the file existed but the base copy is missing
-			// (e.g. captureOriginal skipped writing base/), report 0/0 rather
-			// than falsely counting every line as an insertion.
-			const wasAbsent = !original || original.kind === "absent"
-			if (wasAbsent) {
-				const lines = currentContent.split("\n").length - 1
+		} else if (baseText === undefined && finalText !== undefined) {
+			// New file (base absent). If the snapshot says the file existed but the
+			// base copy is missing (captureOriginal skipped base/), report 0/0.
+			if (baseAbsent) {
+				const lines = finalText.split("\n").length - 1
 				insertions = Math.max(0, lines)
 			} else {
 				fsLog.warn(
 					`[ChangedFilesService] base copy missing for ${relPath} (snapshot says text), diff stats unavailable`,
 				)
 			}
-		} else if (baseText !== undefined && currentContent === undefined) {
-			const wasNew = original?.kind === "absent"
-			if (!wasNew) {
-				// File existed at base but is now gone — genuine deletion.
+		} else if (baseText !== undefined && finalText === undefined) {
+			if (!baseAbsent) {
+				// File existed at base but the task deleted it — genuine deletion.
 				const lines = baseText.split("\n").length - 1
 				deletions = Math.max(0, lines)
 			}
-			// If wasNew: file was created then deleted → net zero, already 0/0.
+			// If baseAbsent: created then deleted → net zero (already handled above).
 		}
 
 		entries.push({
@@ -169,7 +188,7 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 			insertions,
 			deletions,
 			binary: false,
-			state: deriveState(original, currentExists),
+			state: deriveState(original, finalExists),
 			source: "working",
 			hasOriginalContent: original !== undefined,
 			hasFinalContent: final !== undefined,
@@ -184,10 +203,10 @@ export async function getChangedFiles(task: Task): Promise<ChangedFilesPayload> 
 	return { taskId: task.taskId, entries: effective, backend: "working" }
 }
 
-function deriveState(original: FileSnapshot | undefined, currentExists: boolean): "modified" | "added" | "deleted" {
+function deriveState(original: FileSnapshot | undefined, finalExists: boolean): "modified" | "added" | "deleted" {
 	const originallyAbsent = original?.kind === "absent"
-	if (originallyAbsent && currentExists) return "added"
-	if (!originallyAbsent && !currentExists) return "deleted"
+	if (originallyAbsent && finalExists) return "added"
+	if (!originallyAbsent && !finalExists) return "deleted"
 	return "modified"
 }
 

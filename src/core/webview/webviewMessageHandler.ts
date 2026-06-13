@@ -1533,7 +1533,7 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			try {
-				const { getOriginalContent } = await import("../file-changes/ChangedFilesService")
+				const { getOriginalContent, getFinalContent } = await import("../file-changes/ChangedFilesService")
 				const original = (await getOriginalContent(task, relPath)) ?? ""
 				const cwd = getCurrentCwd()
 				if (!cwd) break
@@ -1542,7 +1542,18 @@ export const webviewMessageHandler = async (
 				const leftUri = vscode.Uri.parse(
 					`shofer-original:/${encodeURIComponent(relPath)}?${Buffer.from(original, "utf8").toString("base64")}`,
 				)
-				const rightUri = vscode.Uri.file(absPath)
+				// Right side = this task's own "final" copy (what it last wrote), NOT the
+				// live workspace file. This keeps the diff consistent with the changelist
+				// (base -> final) and immune to edits made by other tasks/sessions in the
+				// same worktree. Fall back to the live file only when no final snapshot
+				// exists yet (captureFinal is best-effort/async).
+				const finalContent = await getFinalContent(task, relPath)
+				const rightUri =
+					finalContent !== null
+						? vscode.Uri.parse(
+								`shofer-original:/${encodeURIComponent(relPath)}?${Buffer.from(finalContent, "utf8").toString("base64")}`,
+							)
+						: vscode.Uri.file(absPath)
 				const title = `${path.basename(relPath)} (Shofer changes)`
 				await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title)
 			} catch (err) {
