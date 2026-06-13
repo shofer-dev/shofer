@@ -2,11 +2,10 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { type ExtensionMessage, TelemetryEventName, MARKETPLACE_ENABLED } from "@shofer/types"
+import { type ExtensionMessage } from "@shofer/types"
 import { getAllModes } from "@shofer/shared/modes"
 
 import TranslationProvider from "./i18n/TranslationContext"
-import { MarketplaceViewStateManager } from "./components/marketplace/MarketplaceViewStateManager"
 
 import { vscode } from "./utils/vscode"
 import { telemetryClient } from "./utils/TelemetryClient"
@@ -20,7 +19,6 @@ import SettingsView, { SettingsViewRef } from "./components/settings/SettingsVie
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
 import { LauncherView } from "./components/launcher/LauncherView"
 import { LauncherMenu } from "./components/launcher/LauncherMenu"
-import { MarketplaceView } from "./components/marketplace/MarketplaceView"
 import { CheckpointRestoreDialog } from "./components/chat/CheckpointRestoreDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
 import ErrorBoundary from "./components/ErrorBoundary"
@@ -28,7 +26,7 @@ import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonI
 import { TooltipProvider } from "./components/ui/tooltip"
 import { STANDARD_TOOLTIP_DELAY } from "./components/ui/standard-tooltip"
 
-type Tab = "settings" | "history" | "chat" | "marketplace" | "launcher"
+type Tab = "settings" | "history" | "chat" | "launcher"
 
 interface DeleteMessageDialogState {
 	isOpen: boolean
@@ -53,7 +51,6 @@ const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]
 	settingsButtonClicked: "settings",
 	historyButtonClicked: "history",
 	launcherButtonClicked: "launcher",
-	...(MARKETPLACE_ENABLED ? { marketplaceButtonClicked: "marketplace" as const } : {}),
 }
 
 const App = () => {
@@ -105,9 +102,6 @@ const App = () => {
 		return () => window.removeEventListener("message", onMessage)
 	}, [])
 
-	// Create a persistent state manager (only when marketplace is enabled)
-	const marketplaceStateManager = useMemo(() => (MARKETPLACE_ENABLED ? new MarketplaceViewStateManager() : null), [])
-
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [tab, setTab] = useState<Tab>("chat")
 
@@ -140,7 +134,6 @@ const App = () => {
 			}
 
 			setCurrentSection(undefined)
-			setCurrentMarketplaceTab(undefined)
 
 			if (settingsRef.current?.checkUnsaveChanges) {
 				settingsRef.current.checkUnsaveChanges(() => setTab(newTab))
@@ -152,7 +145,6 @@ const App = () => {
 	)
 
 	const [currentSection, setCurrentSection] = useState<string | undefined>(undefined)
-	const [currentMarketplaceTab, setCurrentMarketplaceTab] = useState<string | undefined>(undefined)
 	// Which stage the launcher opens at, set by the native New Task / New
 	// Workflow title-bar dropdown items ("task" → mode cards, "workflow" →
 	// workflow cards).
@@ -209,17 +201,14 @@ const App = () => {
 					// Extract targetSection from values if provided
 					const targetSection = message.values?.section as string | undefined
 					setCurrentSection(targetSection)
-					setCurrentMarketplaceTab(undefined)
 				} else {
 					// Handle other actions using the mapping
 					const newTab = tabsByMessageAction[message.action]
 					const section = message.values?.section as string | undefined
-					const marketplaceTab = message.values?.marketplaceTab as string | undefined
 
 					if (newTab) {
 						switchTab(newTab)
 						setCurrentSection(section)
-						setCurrentMarketplaceTab(marketplaceTab)
 						if (message.action === "launcherButtonClicked") {
 							const stage = message.values?.launcherStage as "task" | "workflow" | undefined
 							setLauncherStage(stage === "workflow" ? "workflow" : "task")
@@ -306,12 +295,6 @@ const App = () => {
 			}
 		}, [renderContext]),
 	)
-	// Track marketplace tab views (only when marketplace is enabled)
-	useEffect(() => {
-		if (MARKETPLACE_ENABLED && tab === "marketplace") {
-			telemetryClient.capture(TelemetryEventName.MARKETPLACE_TAB_VIEWED)
-		}
-	}, [tab])
 
 	if (!didHydrateState) {
 		return null
@@ -344,13 +327,6 @@ const App = () => {
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}
-			{MARKETPLACE_ENABLED && tab === "marketplace" && marketplaceStateManager && (
-				<MarketplaceView
-					stateManager={marketplaceStateManager}
-					onDone={() => switchTab("chat")}
-					targetTab={currentMarketplaceTab as "mcp" | "mode" | undefined}
-				/>
-			)}
 			<ChatView
 				ref={chatViewRef}
 				isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
@@ -369,7 +345,7 @@ const App = () => {
 			/>
 			{/* TaskSelector drawer — rendered at App level so it is always
 			 * mounted regardless of which tab is active. ChatView gets
-			 * display:none when history/settings/marketplace is shown, which
+			 * display:none when history/settings is shown, which
 			 * would hide a fixed-position drawer nested inside it. */}
 			<TaskSelector
 				taskHistory={taskHistory || []}
