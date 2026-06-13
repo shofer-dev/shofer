@@ -140,6 +140,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			currentApiConfigName,
 			setCurrentApiConfigName,
 			listApiConfigMeta,
+			modeApiConfigs,
 			customModes,
 			customModePrompts,
 			cwd,
@@ -330,6 +331,43 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 		const hasInputContent = useMemo(() => {
 			return inputValue.trim().length > 0 || selectedImages.length > 0
 		}, [inputValue, selectedImages])
+
+		// Disambiguate WHY images are disabled. `shouldDisableImages` is true
+		// either because the selected model lacks vision OR the per-message cap
+		// is reached. A non-vision model can never have accumulated images (paste/
+		// drop/pick are all blocked), so a non-empty `selectedImages` at the cap is
+		// the only way to be disabled-by-cap.
+		const imagesDisabledByCap = shouldDisableImages && selectedImages.length >= MAX_IMAGES_PER_MESSAGE
+		const imageButtonTooltip = !shouldDisableImages
+			? t("chat:addImages")
+			: imagesDisabledByCap
+				? t("chat:maxImagesReached", { count: MAX_IMAGES_PER_MESSAGE })
+				: t("chat:imagesNotSupportedByModel")
+
+		// Transient inline notice shown when a paste/drop of an image is rejected,
+		// so the rejection is never silent. Auto-clears after a few seconds.
+		const [imageRejectedNotice, setImageRejectedNotice] = useState<string | null>(null)
+		const imageRejectedTimeoutRef = useRef<number | null>(null)
+		const notifyImagesRejected = useCallback(() => {
+			const message = imagesDisabledByCap
+				? t("chat:imagesRejectedMaxReached", { count: MAX_IMAGES_PER_MESSAGE })
+				: t("chat:imagesRejectedNotSupported")
+			setImageRejectedNotice(message)
+			if (imageRejectedTimeoutRef.current !== null) {
+				window.clearTimeout(imageRejectedTimeoutRef.current)
+			}
+			imageRejectedTimeoutRef.current = window.setTimeout(() => {
+				setImageRejectedNotice(null)
+				imageRejectedTimeoutRef.current = null
+			}, 4000)
+		}, [imagesDisabledByCap, t])
+		useEffect(() => {
+			return () => {
+				if (imageRejectedTimeoutRef.current !== null) {
+					window.clearTimeout(imageRejectedTimeoutRef.current)
+				}
+			}
+		}, [])
 
 		// Compute the key combination text for the send button tooltip based on enterBehavior
 		const sendKeyCombination = useMemo(() => {
@@ -778,7 +816,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return type === "image" && acceptedTypes.includes(subtype)
 				})
 
-				if (shouldDisableImages) {
+				if (shouldDisableImages && imageItems.length > 0) {
+					// Surface a visible reason instead of silently dropping the paste.
+					notifyImagesRejected()
 					vscode.postMessage({
 						type: "webviewLog",
 						text: `[paste] images disabled, imageItems=${imageItems.length}`,
@@ -832,7 +872,15 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					})
 				}
 			},
-			[shouldDisableImages, setSelectedImages, cursorPosition, setInputValue, inputValue, t],
+			[
+				shouldDisableImages,
+				setSelectedImages,
+				cursorPosition,
+				setInputValue,
+				inputValue,
+				t,
+				notifyImagesRejected,
+			],
 		)
 
 		const handleMenuMouseDown = useCallback(() => {
@@ -970,8 +1018,20 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				}
 
 				// 2. Image file drops.
+				const acceptedTypes = ["png", "jpeg", "webp"]
 				const files = Array.from(e.dataTransfer.files)
 				if (files.length === 0 || shouldDisableImages) {
+					// If actual image files were dropped on a model that can't take
+					// them, surface a visible reason instead of silently ignoring.
+					if (
+						shouldDisableImages &&
+						files.some((file) => {
+							const [type, subtype] = file.type.split("/")
+							return type === "image" && acceptedTypes.includes(subtype)
+						})
+					) {
+						notifyImagesRejected()
+					}
 					if (files.length === 0 && !payload) {
 						vscode.postMessage({
 							type: "webviewLog",
@@ -981,7 +1041,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					return
 				}
 
-				const acceptedTypes = ["png", "jpeg", "webp"]
 				const imageFiles = files.filter((file) => {
 					const [type, subtype] = file.type.split("/")
 					return type === "image" && acceptedTypes.includes(subtype)
@@ -1020,7 +1079,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 					console.warn(t("chat:noValidImages"))
 				}
 			},
-			[cwd, onContextFilesDropped, shouldDisableImages, setSelectedImages, t],
+			[cwd, onContextFilesDropped, shouldDisableImages, setSelectedImages, t, notifyImagesRejected],
 		)
 
 		const [isTtsPlaying, setIsTtsPlaying] = useState(false)
@@ -1043,7 +1102,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				setMode(value)
 				// With a focused task, the mode switch is scoped to that task on the
 				// host. On the home screen the selection is a pure tier-1 draft that
-				// rides along with the next `newTask`, so no host round-trip.
+				// rides along with the next `newTask`, so no host round-trip. The
+				// home-screen effect below keeps the API-config draft in sync with the
+				// mode's association.
 				if (hasActiveTask) {
 					vscode.postMessage({ type: "mode", text: value })
 				}
@@ -1051,12 +1112,37 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			[setMode, hasActiveTask],
 		)
 
+		// Home screen (no focused task): keep the API-config draft pointed at the
+		// active mode's association (modeApiConfigs[mode]) so a new task started on a
+		// mode uses that mode's profile — even when the mode was not just changed
+		// (e.g. carried over from a previous session, or after returning from a task).
+		// Keyed on the resolved config *id* (a stable primitive) rather than the
+		// modeApiConfigs object, which is a fresh reference on every state push — that
+		// keeps a manual selector override (which changes only currentApiConfigName,
+		// not the mode) from being clobbered on the next state update.
+		const modeConfigId = modeApiConfigs?.[mode]
+		useEffect(() => {
+			if (hasActiveTask) {
+				return
+			}
+			const name = modeConfigId ? listApiConfigMeta?.find((c) => c.id === modeConfigId)?.name : undefined
+			if (name && name !== currentApiConfigName) {
+				setCurrentApiConfigName(name)
+			}
+			// currentApiConfigName is intentionally omitted: a manual override must
+			// persist until the mode (and thus modeConfigId) changes.
+			// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, [mode, hasActiveTask, modeConfigId])
+
 		// Helper function to handle API config change
 		const handleApiConfigChange = useCallback(
 			(value: string) => {
 				if (hasActiveTask) {
-					// Active task: activate the selected profile on the host as before.
-					vscode.postMessage({ type: "loadApiConfigurationById", text: value })
+					// Active task: scope the profile change to THIS task only. The host
+					// rebinds the task's API handler + sticky profile without activating
+					// the profile globally, so the default for future new tasks
+					// (Settings → Provider) is left untouched.
+					vscode.postMessage({ type: "setTaskApiConfiguration", text: value })
 					return
 				}
 				// Home screen: pure tier-1 draft. Map the selected config id back to
@@ -1256,9 +1342,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								/>
 
 								<div className="absolute bottom-2 right-1 z-30 flex flex-col items-center gap-0">
-									<StandardTooltip content={t("chat:addImages")}>
+									<StandardTooltip content={imageButtonTooltip}>
 										<button
-											aria-label={t("chat:addImages")}
+											aria-label={imageButtonTooltip}
 											disabled={shouldDisableImages}
 											onClick={!shouldDisableImages ? onSelectImages : undefined}
 											className={cn(
@@ -1268,9 +1354,13 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 												"text-vscode-descriptionForeground hover:text-vscode-foreground",
 												"transition-all duration-1000",
 												"cursor-pointer",
+												// Disabled styling is owned by the `shouldDisableImages` block
+												// below (greyed + grayscale). Keep the button non-interactive
+												// here but do NOT set opacity-0 — it conflicted with the
+												// opacity-40 below, leaving the rendered state ambiguous.
 												!shouldDisableImages
 													? "opacity-50 hover:opacity-100 delay-750 pointer-events-auto"
-													: "opacity-0 pointer-events-none duration-200 delay-0",
+													: "pointer-events-none duration-200 delay-0",
 												!shouldDisableImages &&
 													"hover:bg-[rgba(255,255,255,0.03)] hover:border-[rgba(255,255,255,0.15)]",
 												"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
@@ -1428,6 +1518,15 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 								)}
 							</div>
 						</div>
+					</div>
+				)}
+
+				{imageRejectedNotice && (
+					<div
+						role="status"
+						className="flex items-center gap-1.5 px-3 py-1 text-xs text-vscode-descriptionForeground">
+						<Image className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
+						<span>{imageRejectedNotice}</span>
 					</div>
 				)}
 
