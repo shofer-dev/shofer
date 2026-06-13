@@ -449,7 +449,12 @@ export const WorktreeIndicator = () => {
 				open={modalOpen}
 				onClose={() => setModalOpen(false)}
 				onSuccess={handleCreateSuccess}
-				openAfterCreate={true}
+				// For an editable (not-yet-started) workflow, creating a worktree must
+				// NOT spawn a parallel task — that navigates away to ChatView. Instead
+				// just create it and re-point the workflow in place via
+				// handleCreateSuccess → setWorkflowWorktree, staying in WorkflowView.
+				// Other surfaces keep opening a task in the new worktree.
+				openAfterCreate={!isEditableWorkflow}
 			/>
 		</>
 	)
