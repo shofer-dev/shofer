@@ -58,7 +58,7 @@ During this phase the scroll-to-bottom button is **hidden** (a not-at-bottom sig
 
 The list is pinned to the bottom. Virtuoso's `followOutput` prop returns `"auto"`, so Virtuoso itself scrolls to the bottom when new items are appended.
 
-> **Immune window**: when any input signal triggers `enterUserBrowsingHistory`, a 500 ms timer is started (`userDisengagedRef`). Any `atBottomStateChange(true)` signal that arrives while the timer is active — typically from an in-flight `scrollToBottomAuto()` issued just before the user scrolled up — is ignored and does not snap the user back to `ANCHORED_FOLLOWING`. This prevents the flickering loop that would otherwise occur during heavy streaming.
+> **Immune window**: when any input signal triggers `enterUserBrowsingHistory`, a 500 ms timer is started (`userDisengagedRef`). Any `atBottomStateChange(true)` signal that arrives while the timer is active — typically from an in-flight `scrollToBottomAuto()` issued just before the user scrolled up — is ignored and does not snap the user back to `ANCHORED_FOLLOWING`. This prevents the flickering loop that would otherwise occur during heavy streaming. When the timer expires, the hook re-checks `isAtBottomRef`: if the user is still at the bottom in `USER_BROWSING_HISTORY` (e.g. they scrolled up and back down within the 500 ms window, so the in-window `atBottomStateChange(true)` was suppressed), it re-engages `ANCHORED_FOLLOWING` then — otherwise the user would be stranded in browse mode while sitting at the bottom with the button showing.
 
 When a message row grows taller (e.g. streaming text arriving, a tool result expanding), `handleRowHeightChange(isTaller)` triggers an additional imperative `scrollToBottomAuto()`:
 
@@ -67,11 +67,26 @@ When a message row grows taller (e.g. streaming text arriving, a tool result exp
 
 Both variants use `behavior: "auto"` (instant follow, no compositor animation).
 
-The scroll-to-bottom button is **hidden**.
+Since Cause D was fixed, **every** row — not just the literal last one — reports its height change to `handleRowHeightChange` (see [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)); the hook still decides whether to scroll, so a tool result expanding or an image loading mid-list now pulls the viewport down while anchored.
+
+The scroll-to-bottom button is **shown whenever the list is not at the bottom** (see § "Scroll-to-bottom button visibility"), except during the streaming safety-net, where it stays hidden because an auto-rescroll is imminent.
 
 ### `USER_BROWSING_HISTORY`
 
-Sticky follow is disabled. Virtuoso's `followOutput` returns `false`. The scroll-to-bottom button is **shown**.
+Sticky follow is disabled. Virtuoso's `followOutput` returns `false`. The scroll-to-bottom button is **always shown** in this phase.
+
+### Scroll-to-bottom button visibility
+
+The button is **not** a per-phase boolean — its visibility is recomputed on every `atBottomStateChange` and on every phase transition (`enterUserBrowsingHistory` → show, `enterAnchoredFollowing` and task-switch → hide). The unified rule, computed at the top of [`atBottomStateChangeCallback`](../webview-ui/src/hooks/useScrollLifecycle.ts):
+
+```
+streamingSafetyNet = ANCHORED_FOLLOWING && isStreaming && !userIntentScrollUpRef
+shouldShow = (phase === USER_BROWSING_HISTORY)
+               ? true                                  // always show while browsing
+               : !isAtBottom && !isHydrating && !streamingSafetyNet
+```
+
+In words: show the button whenever the user is **not at the bottom**, with two suppressions — during the hydration window (`isHydratingRef`), and during the streaming safety-net (a not-at-bottom blip in `ANCHORED_FOLLOWING` that is about to be corrected by an auto-rescroll). This model replaced an earlier "button shown only in `USER_BROWSING_HISTORY`" design, so the button is now visible whenever it is actionable — including a non-streaming `ANCHORED_FOLLOWING` row that drifts off the bottom.
 
 ## Disengaging Sticky Follow (Entering `USER_BROWSING_HISTORY`)
 
@@ -100,6 +115,8 @@ Clicking the `codicon-chevron-down` button calls `handleScrollToBottomClick`:
 
 When `isAtBottom` becomes `false` while already in `ANCHORED_FOLLOWING` during streaming (a transient not-at-bottom blip from rapid content growth), the hook calls `scrollToBottomAuto()` and keeps the button hidden — a safety net that prevents Virtuoso from momentarily dropping the follow anchor.
 
+When `isAtBottom` becomes `false` while in `ANCHORED_FOLLOWING` and **not** streaming, the hook only disengages to `USER_BROWSING_HISTORY` if `userIntentScrollUpRef` is already set by a real input gesture (Cause C fix). A bare not-at-bottom with no corroborating gesture — a row collapsing, a late image loading, the `FileChangesPanel` resizing — leaves the user in `ANCHORED_FOLLOWING` instead of spuriously ejecting them.
+
 ## Scroll Commands
 
 There is a single scroll command. Row-height changes and all follow re-engagements use `behavior: "auto"` (instant) — no compositor animation, no debounce, no "smooth" path.
@@ -127,16 +144,18 @@ All scroll lifecycle instrumentation posts to the Shofer Output Channel via `vsc
 
 A root-cause analysis identified six contributing causes (A–F) behind the four competing "pin to bottom" mechanisms that were fighting each other during streaming.
 
-| Cause | Summary                                                                | Status    |
-| ----- | ---------------------------------------------------------------------- | --------- |
-| A     | `behavior: "smooth"` restarted the compositor animation every ~10 ms   | **Fixed** |
-| B     | `atBottomThreshold={1}` fired a per-frame not-at-bottom scroll storm   | **Fixed** |
-| F     | ~a dozen ungated `webviewLog` IPC posts per scroll flooded the bridge  | **Fixed** |
-| C     | Non-streaming disengage treats any not-at-bottom as user scroll-up     | Open      |
-| D     | Only the literal last row reports height; mid-list growth is invisible | Open      |
-| E     | Per-task snapshot capture runs during the render phase (StrictMode)    | Open      |
+| Cause | Summary                                                                | Status                |
+| ----- | ---------------------------------------------------------------------- | --------------------- |
+| A     | `behavior: "smooth"` restarted the compositor animation every ~10 ms   | **Fixed**             |
+| B     | `atBottomThreshold={1}` fired a per-frame not-at-bottom scroll storm   | **Fixed**             |
+| C     | Non-streaming disengage treats any not-at-bottom as user scroll-up     | **Fixed**             |
+| D     | Only the literal last row reports height; mid-list growth is invisible | **Fixed**             |
+| E     | Per-task snapshot capture runs during the render phase                 | **Not a bug** (below) |
+| F     | ~a dozen ungated `webviewLog` IPC posts per scroll flooded the bridge  | **Fixed**             |
 
-The three fixes (Causes A, B, F) are implemented in the working tree across [`useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts) and [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx). They are detailed below. Causes C, D, and E remain open and are described in § "Open Issues (Causes C, D, E)".
+In addition, a latent immune-window stuck-state was fixed (scrolling up then back to the bottom within the 500 ms window could strand the user in browse mode — see the immune-window note under `ANCHORED_FOLLOWING`).
+
+Causes A, B, F are detailed below. Causes C and D are described in § "Resolved: Causes C and D", and the reclassification of Cause E in § "Cause E — render-phase capture is correct, not a bug".
 
 ## Fixes Applied
 
@@ -170,21 +189,29 @@ File changed:
 
 - [`useScrollLifecycle.ts`](../webview-ui/src/hooks/useScrollLifecycle.ts) — line 34, plus guards at: task-switch block (line 181), `transitionScrollPhase` (line 203), `scrollToBottomAuto` (line 221), `enterUserBrowsingHistory` (line 253), `finishHydrationWindow` retry (line 312), `finishHydrationWindow` exhausted (line 326), `startHydrationWindow` (line 340), `handleRowHeightChange` force-pin (line 439), `atBottomStateChangeCallback` safety-net (line 509).
 
-## Open Issues (Causes C, D, E)
+## Resolved: Causes C and D
 
-These are genuine scroll-behavior issues identified by the root-cause analysis that are **not yet fixed**. Each is a residual source of the churn that the applied fixes (A, B, F) did not address.
+### Cause C — Non-streaming disengage false positives (Fixed)
 
-### Cause C — Non-streaming disengage false positives
+In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` used to treat **any** `isAtBottom === false` as a user scroll-up and transition to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, [`FileChangesPanel`](../webview-ui/src/components/chat/ChatView.tsx) resizing) spuriously ejected the user from follow and flashed the scroll-to-bottom button.
 
-In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` ([line 526](../webview-ui/src/hooks/useScrollLifecycle.ts:526)) treats **any** `isAtBottom === false` as a user scroll-up and transitions to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, [`FileChangesPanel`](../webview-ui/src/components/chat/ChatView.tsx:2136) resizing) spuriously eject the user from follow and flash the scroll-to-bottom button. **Proposed fix:** require a corroborating signal (the wheel/pointer/keyboard `userIntentScrollUpRef` already being set) or a measured `scrollTop` delta before disengaging, rather than trusting the bare not-at-bottom flag.
+**Fix:** the non-streaming disengage branch now also requires `userIntentScrollUpRef.current` to be set. Genuine scroll-up gestures (`wheel-up`, `keyboard-nav-up`, `pointer-scroll-up`) set that flag and disengage via their own handlers, so the at-bottom callback only acts on a corroborated gesture and ignores bare layout-driven not-at-bottom blips.
 
-### Cause D — Mid-list height growth is invisible to the hook
+### Cause D — Mid-list height growth is invisible to the hook (Fixed)
 
-`ChatRow` receives `onHeightChange={handleRowHeightChange}` from `ChatView` ([`ChatView.tsx` line 1811](../webview-ui/src/components/chat/ChatView.tsx:1811)). The implementation inside `ChatRow` uses `useSize` from `react-use`, which wraps the row in an extra measuring `<div>` and reports `height`; an effect fires `onHeightChange(height > prevHeightRef.current)` **only when the row `isLast`** ([`ChatRow.tsx` lines 215–227](../webview-ui/src/components/chat/ChatRow.tsx:215), `isLast` guard at line 221). A row growing in the middle of the list (a tool result expanding above the last message) therefore never notifies the hook, so the viewport is not pulled down. **Proposed fix:** report height changes for any row near the bottom of the list, not just the literal last one, or rely on Virtuoso's own `followOutput` measurement instead of the per-row callback.
+`ChatRow` reports its measured `height` (via `useSize` from `react-use`) to `handleRowHeightChange`. The effect previously fired `onHeightChange(...)` **only when the row was `isLast`**, so a row growing in the middle of the list (a tool result expanding or an image loading above the last message) never notified the hook and the viewport was not pulled down.
 
-### Cause E — Per-task snapshot capture runs during the render phase
+**Fix:** the `isLast` guard was removed — every row now reports its height changes. The scroll decision stays in the hook (`handleRowHeightChange`), which only pins when at-bottom or streaming and is a no-op while the user is browsing history, so reporting from every row is safe. This is complementary to the `"row-expansion"` disengage: a **user** expanding a row first transitions to `USER_BROWSING_HISTORY` (so they keep reading the expansion), and the subsequent height notification is a no-op; only **non-user** growth (streaming, image loads) reaches the pull-down path.
 
-`ChatView` calls `virtuosoRef.current?.getState(...)` and writes to `virtuosoStateByTaskTsRef` during the React **render phase** at [lines 204–220](../webview-ui/src/components/chat/ChatView.tsx:204). Under React StrictMode (double-invoked render) these run twice; the `ranges.length > 0` guard at [line 214](../webview-ui/src/components/chat/ChatView.tsx:214) is a mitigation, not a fix. **Proposed fix:** move the snapshot capture into `useLayoutEffect` so it is a committed side effect, not a render-phase one.
+## Cause E — render-phase capture is correct, not a bug
+
+An earlier revision of this doc flagged the per-task snapshot capture as a bug and proposed moving it into `useLayoutEffect`. **That proposal is wrong and would break scroll restoration.**
+
+`ChatView` calls `virtuosoRef.current?.getState(...)` and writes to `virtuosoStateByTaskTsRef` during the React render phase, gated by `taskTs !== prevHydratableTaskTsRef.current`. Because `<Virtuoso key={task.ts}>` is **keyed by the task**, it unmounts and remounts on every task switch. `virtuosoRef` therefore points at the **outgoing** instance only during the render phase — by the time any post-commit effect (`useLayoutEffect`/`useEffect`) runs, the ref has already been reassigned to the **incoming** task's instance. Capturing from an effect would snapshot the wrong task. The render-phase capture is correct _by necessity_ for this keyed-remount design.
+
+The StrictMode concern (render runs twice in dev) is already neutralized by the `prevHydratableTaskTsRef` gate: the second invoke sees `taskTs === prevHydratableTaskTsRef.current` and skips the block, so the capture is idempotent. `virtuosoRef` still points at the outgoing instance in both invokes, and StrictMode double-invoke does not occur in production at all. The `snapshot.ranges.length > 0 || snapshot.scrollTop > 0` guard additionally prevents storing an empty snapshot from a transient double-mount.
+
+The only genuinely cleaner alternative would be to capture the current task's state through a committed side-effect path (e.g. Virtuoso's `isScrolling` stop callback, keyed by the _current_ `taskTs`) and drop the render-phase `getState` — but that trades the render-phase impurity for a small correctness gap (a never-scrolled overflowing task could miss its final position) and was judged not worth the regression risk on a subsystem this sensitive.
 
 ## Doc-vs-Source Discrepancies (Lower Priority)
 
