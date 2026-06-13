@@ -1027,16 +1027,27 @@ inside a `useMemo` rather than rebuilt inline each render.
 > from H0–H24 / H15–H22 (verified above) and from the known-open H7. Two of them
 > (H25, H26) attack the **~1 s warm-floor** identified in
 > [Task-Switch Latency](#task-switch-latency-hot--cold--warm-paths) — the part of
-> the cold/warm cost the landed hot-path work did **not** touch. None is started.
+> the cold/warm cost the landed hot-path work did **not** touch.
+>
+> **All four landed 2026-06-13** (implementation notes under each item below).
+> H26 shipped as a mutation-version gate rather than a new delta channel — the
+> existing `taskHistoryItemUpdated` / `taskHistoryUpdated` deltas already cover
+> streaming updates, so the win was suppressing the _redundant_ full-array
+> re-send in unchanged init snapshots without depending on delta coverage.
 
 | #       | Item                                             | Path          | Description                                                                                                                                     | Risk       | Status  |
 | ------- | ------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- |
-| **H25** | Cache sorted+filtered `taskHistory` in the store | Host (state)  | `TaskHistoryStore.getAll()` re-sorts the whole map and `getStateToPostToWebview()` re-filters it on **every** state push                        | 🟢 Low     | ❌ Open |
-| **H26** | Lazy / delta `taskHistory` IPC channel           | Host↔Webview | The full `taskHistory` array is serialized + structured-cloned across IPC on every `postInitState`, even when it didn't change                  | 🟡 Medium  | ❌ Open |
-| **H27** | Fuse the per-request history-prep passes         | Host (build)  | Five sequential O(n) allocating walks (`getEffectiveApiHistory`→`getMessagesSinceLastSummary`→`merge`→`stripImages`→`clean`) run per round-trip | 🟡 Low–Med | ❌ Open |
-| **H28** | O(n) child-map for `TaskSelector.buildFlatTree`  | Webview       | O(n²) nested `filter` to find each node's children when building the task tree                                                                  | 🟢 Low     | ❌ Open |
+| **H25** | Cache sorted+filtered `taskHistory` in the store | Host (state)  | `TaskHistoryStore.getAll()` re-sorts the whole map and `getStateToPostToWebview()` re-filters it on **every** state push                        | 🟢 Low     | ✅ Done |
+| **H26** | Lazy / delta `taskHistory` IPC channel           | Host↔Webview | The full `taskHistory` array is serialized + structured-cloned across IPC on every `postInitState`, even when it didn't change                  | 🟡 Medium  | ✅ Done |
+| **H27** | Fuse the per-request history-prep passes         | Host (build)  | Five sequential O(n) allocating walks (`getEffectiveApiHistory`→`getMessagesSinceLastSummary`→`merge`→`stripImages`→`clean`) run per round-trip | 🟡 Low–Med | ✅ Done |
+| **H28** | O(n) child-map for `TaskSelector.buildFlatTree`  | Webview       | O(n²) nested `filter` to find each node's children when building the task tree                                                                  | 🟢 Low     | ✅ Done |
 
 ### 🟢 H25: Cache the Sorted+Filtered `taskHistory` in `TaskHistoryStore`
+
+> **✅ Done (2026-06-13).** `getAll()` memoizes the sorted snapshot in
+> `_sortedCache`; all cache mutations funnel through `setCacheEntry` /
+> `deleteCacheEntry` / `clearCache`, which bust it. A defensive copy is returned
+> for the public-API caller. Covered by the `TaskHistoryStore` suites.
 
 **Targets:**
 [`TaskHistoryStore.getAll()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L142),
@@ -1075,6 +1086,15 @@ call site).
 
 ### 🟡 H26: Lazy / Delta `taskHistory` IPC Channel on Init
 
+> **✅ Done (2026-06-13)** — shipped as a mutation-version gate (simpler and
+> safer than a new delta channel). `TaskHistoryStore` exposes
+> `getMutationVersion()` (bumped in the same centralized mutation helpers as
+> H25). `postInitState` records the version it last sent the array at and omits
+> `taskHistory` when unchanged; `mergeExtensionState` already preserves the
+> webview's copy when the field is absent. The version is read **before** the
+> async snapshot build (a racing mutation can only force a redundant re-send,
+> never drop an update), and reset per webview load in `_onWebviewLaunched`.
+
 **Target:**
 [`postInitState()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3252) →
 [`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3590)
@@ -1102,6 +1122,15 @@ Rule). Sequence carefully so a switch that lands mid-mutation can't drop an
 update — mirror the `ts`/`taskId` guards used by the message deltas.
 
 ### 🟡 H27: Fuse the Per-Request History-Prep Passes
+
+> **✅ Done (2026-06-13)** — shipped as per-pass early-outs (not a single fused
+> pass, which was higher-risk for marginal gain): `mergeConsecutiveApiMessages`
+> returns the input unchanged when no adjacent pair is mergeable;
+> `maybeRemoveImageBlocks` returns the input when the model supports images;
+> `getMessagesSinceLastSummary` scans backwards instead of cloning + reversing.
+> Cross-round-trip caching was deliberately **not** attempted (the H14
+> index-delta reversion trap). Covered by the merge / image-cleaning / condense
+> suites.
 
 **Target:**
 [`Task.attemptApiRequest()`](extensions/shofer/src/core/task/Task.ts#L6579)
@@ -1141,6 +1170,11 @@ existing API-history fixtures to assert byte-identical output to the current
 five-pass pipeline (including the reasoning-block and image-strip edge cases).
 
 ### 🟢 H28: O(n) Child-Map for `TaskSelector.buildFlatTree`
+
+> **✅ Done (2026-06-13).** Children are bucketed into a
+> `Map<parentId, HistoryItem[]>` in one O(n) pass and each group sorted once;
+> byte-identical tree output. Applied to **both** copies of the function
+> (`TaskSelector.tsx` and `TaskTreeView.tsx`).
 
 **Target:**
 [`buildFlatTree()`](extensions/shofer/webview-ui/src/components/chat/TaskSelector.tsx#L43)
