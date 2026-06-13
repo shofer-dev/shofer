@@ -60,10 +60,7 @@
 			"label": "Discovered a vulnerability?",
 			"link": "Follow our disclosure process"
 		},
-		"contact": {
-			"label": "Need to talk to us? Write to "
-		},
-		"community": "Want tips or to just hang out with other Shofer users? Join <redditLink>reddit.com/r/Shofer</redditLink> or <discordLink>discord.gg/shofer</discordLink>",
+		"community": "Want tips or to just hang out with other Shofer users? Join <redditLink>reddit.com/r/Shofer_dev</redditLink> or <discordLink>discord.gg/shofer</discordLink>",
 		"contactAndCommunity": "Contact & Community",
 		"manageSettings": "Manage Settings",
 		"debugMode": {

@@ -573,7 +573,7 @@ The **Assistant Agent Status** badge in the Shofer sidebar shows whether the age
 ## 14. Community
 
 - **[Discord](https://discord.gg/x39UEEQ2)** — Chat with the team, get help, share feedback
-- **[Reddit](https://www.reddit.com/r/Shofer_dev/)** — Community discussions and tips
+- **[Reddit](https://reddit.com/r/Shofer_dev)** — Community discussions and tips
 - **[GitHub Issues and Feature Requests](https://github.com/shofer-dev/shofer/issues)** — Bug reports, feature requests, and tracking
 
 Shofer is open source (Apache 2.0). Contributions are welcome — read [`CONTRIBUTING.md`](https://github.com/shofer-dev/shofer/blob/main/CONTRIBUTING.md) and check the [roadmap](https://github.com/orgs/shofer/projects/1).

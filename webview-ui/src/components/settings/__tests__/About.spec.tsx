@@ -83,14 +83,14 @@ describe("About", () => {
 		expect(screen.getByText("settings:about.securityIssue.link")).toBeInTheDocument()
 	})
 
-	it("renders the contact section with label and email", () => {
+	it("does not render a personal contact email", () => {
 		render(
 			<TranslationProvider>
 				<About {...defaultProps} />
 			</TranslationProvider>,
 		)
-		expect(screen.getByText("settings:about.contact.label")).toBeInTheDocument()
-		expect(screen.getByText("alsterg@gmail.com")).toBeInTheDocument()
+		expect(screen.queryByText("settings:about.contact.label")).not.toBeInTheDocument()
+		expect(screen.queryByText("alsterg@gmail.com")).not.toBeInTheDocument()
 	})
 
 	it("renders export, import, and reset buttons", () => {

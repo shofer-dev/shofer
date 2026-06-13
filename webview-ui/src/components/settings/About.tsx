@@ -1,7 +1,7 @@
 import { HTMLAttributes } from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { Trans } from "react-i18next"
-import { Download, Upload, TriangleAlert, Bug, Lightbulb, Shield, MessageCircle, MessagesSquare } from "lucide-react"
+import { Download, Upload, TriangleAlert, Bug, Lightbulb, Shield, MessagesSquare } from "lucide-react"
 import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
 import type { TelemetrySetting } from "@shofer/types"
@@ -93,19 +93,12 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						</span>
 					</div>
 					<div className="flex items-start gap-2">
-						<MessageCircle className="size-4 text-vscode-descriptionForeground shrink-0" />
-						<span>
-							{t("settings:about.contact.label")}{" "}
-							<VSCodeLink href="mailto:alsterg@gmail.com">alsterg@gmail.com</VSCodeLink>
-						</span>
-					</div>
-					<div className="flex items-start gap-2">
 						<MessagesSquare className="size-4 text-vscode-descriptionForeground shrink-0" />
 						<span>
 							<Trans
 								i18nKey="settings:about.community"
 								components={{
-									redditLink: <VSCodeLink href="https://www.reddit.com/r/Shofer_dev/" />,
+									redditLink: <VSCodeLink href="https://reddit.com/r/Shofer_dev" />,
 									discordLink: <VSCodeLink href="https://discord.gg/shofer" />,
 								}}
 							/>
