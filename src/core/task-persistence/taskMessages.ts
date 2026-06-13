@@ -31,7 +31,6 @@ import {
 	dedupeByKey,
 	disposeAppendHandle,
 	readJsonLines,
-	readJsonLinesTail,
 	serializeJsonLines,
 	writeJsonLines,
 } from "./jsonlLog"
@@ -159,27 +158,35 @@ export type ReadTaskMessagesTailOptions = {
 }
 
 /**
- * Read the last `maxMessages` records from the task's JSONL log.
+ * Read the last `maxMessages` *unique* messages from the task's JSONL log.
  *
- * Returns `[messages, hasMore]` — `hasMore` is `true` when there are
- * older messages not included in the returned window. Used on cold
- * task-switch to avoid reading + parsing the full history for long tasks.
+ * Returns `[messages, hasMore]` — `hasMore` is `true` when there are older
+ * messages not included in the returned window. Used on cold task-switch to
+ * bound the payload sent to the webview for long tasks.
  *
- * Falls back to `readTaskMessages` when the file is empty or `maxMessages`
- * is zero/negative.
+ * **Windows by deduped message, not by raw line.** The log is append-only and
+ * re-appends a line on *every* message mutation (one per streaming chunk, per
+ * `api_req_started` usage update, …), so the line count can be many times the
+ * unique-message count. A naive line-tail (`readJsonLinesTail`) therefore
+ * returned the wrong slice on logs that weren't fully compacted: it could
+ * dedupe down to a handful of messages — sometimes only the last — and set
+ * `hasMore=true` for tasks with well under `maxMessages` real messages (the
+ * spurious "Load older messages" sentinel). We dedupe the full log first, then
+ * take the last window. This reads + parses the whole UI-messages file (the
+ * api-conversation history is already read in full on this path), trading that
+ * read cost for a correct window; the webview still only receives `maxMessages`.
+ *
+ * Falls back to the full deduped log when `maxMessages` is zero/negative or the
+ * task has `<= maxMessages` unique messages.
  */
 export async function readTaskMessagesTail({
 	taskId,
 	globalStoragePath,
 	maxMessages,
 }: ReadTaskMessagesTailOptions): Promise<[ShoferMessage[], boolean]> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
-	const filePath = path.join(taskDir, GlobalFileNames.uiMessages)
-	const tailResult = await readJsonLinesTail<ShoferMessage>(filePath, maxMessages)
-	if (tailResult === null) {
-		await unlinkLegacyIfPresent(taskDir)
-		return [[], false]
+	const all = await readTaskMessages({ taskId, globalStoragePath })
+	if (maxMessages <= 0 || all.length <= maxMessages) {
+		return [all, false]
 	}
-	const [records, hasMore] = tailResult
-	return [dedupeByKey(records, (m) => m.ts), hasMore]
+	return [all.slice(-maxMessages), true]
 }

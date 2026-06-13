@@ -14,7 +14,7 @@ import * as os from "os"
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { appendTaskMessage, readTaskMessages, saveTaskMessages } from "../taskMessages"
+import { appendTaskMessage, readTaskMessages, readTaskMessagesTail, saveTaskMessages } from "../taskMessages"
 
 let tmpBaseDir: string
 
@@ -142,5 +142,66 @@ describe("taskMessages.readTaskMessages", () => {
 	it("returns [] when no file exists", async () => {
 		const result = await readTaskMessages({ taskId: "nonexistent", globalStoragePath: tmpBaseDir })
 		expect(result).toEqual([])
+	})
+})
+
+describe("taskMessages.readTaskMessagesTail (windows by unique message, not line)", () => {
+	it("returns all unique messages with hasMore=false when an uncompacted log has more LINES than messages", async () => {
+		// 3 unique messages, but the last one is re-appended 50 times (as a
+		// streamed message would be). The raw log has 52 lines — a line-based
+		// tail of, say, 5 would dedupe to ~1 message and report hasMore=true.
+		const taskId = "tail-uncompacted"
+		const gsp = tmpBaseDir
+		await appendTaskMessage({
+			message: { ts: 1, type: "say", say: "text", text: "first prompt" } as any,
+			taskId,
+			globalStoragePath: gsp,
+		})
+		await appendTaskMessage({
+			message: { ts: 2, type: "say", say: "api_req_started", text: "{}" } as any,
+			taskId,
+			globalStoragePath: gsp,
+		})
+		for (let i = 0; i < 50; i++) {
+			await appendTaskMessage({
+				message: { ts: 3, type: "say", say: "text", text: `chunk ${i}`, partial: i < 49 } as any,
+				taskId,
+				globalStoragePath: gsp,
+			})
+		}
+
+		const [messages, hasMore] = await readTaskMessagesTail({ taskId, globalStoragePath: gsp, maxMessages: 5 })
+		expect(hasMore).toBe(false)
+		expect(messages.map((m) => m.ts)).toEqual([1, 2, 3])
+		// Latest value wins for the deduped ts.
+		expect(messages[2].text).toBe("chunk 49")
+		// The originating prompt is present at index 0.
+		expect(messages[0].text).toBe("first prompt")
+	})
+
+	it("returns the last `maxMessages` unique messages with hasMore=true for a genuinely long task", async () => {
+		const taskId = "tail-long"
+		const gsp = tmpBaseDir
+		for (let ts = 1; ts <= 10; ts++) {
+			await appendTaskMessage({
+				message: { ts, type: "say", say: "text", text: `m${ts}` } as any,
+				taskId,
+				globalStoragePath: gsp,
+			})
+		}
+
+		const [messages, hasMore] = await readTaskMessagesTail({ taskId, globalStoragePath: gsp, maxMessages: 4 })
+		expect(hasMore).toBe(true)
+		expect(messages.map((m) => m.ts)).toEqual([7, 8, 9, 10])
+	})
+
+	it("returns [] with hasMore=false for a missing log", async () => {
+		const [messages, hasMore] = await readTaskMessagesTail({
+			taskId: "nope",
+			globalStoragePath: tmpBaseDir,
+			maxMessages: 5,
+		})
+		expect(messages).toEqual([])
+		expect(hasMore).toBe(false)
 	})
 })

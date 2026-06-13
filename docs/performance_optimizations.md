@@ -197,11 +197,24 @@ between simdjson and a tail-read.
 
 ### H24 (T1.B) implementation details
 
-- **Tail read**: `preloadShoferMessages` with `maxMessages` uses
-  `readJsonLinesTail` (last N lines) for `shoferMessages` only. The API
-  conversation history is read in full (tail-reading it is wasted work —
-  `resumeTaskFromHistory` re-reads the full file before building any LLM
-  request).
+- **Tail read**: `preloadShoferMessages` with `maxMessages` reads the
+  `shoferMessages` window via `readTaskMessagesTail`. The API conversation
+  history is read in full (tail-reading it is wasted work — `resumeTaskFromHistory`
+  re-reads the full file before building any LLM request).
+    > **Correctness fix (2026-06-13).** The original implementation windowed by
+    > raw JSONL **lines** (`readJsonLinesTail`, last N lines). Because the log is
+    > append-only and re-appends a line on every message mutation (one per
+    > streaming chunk, per `api_req_started` usage update), the line count can far
+    > exceed the unique-message count on logs that aren't fully compacted. That
+    > made a line-tail dedupe down to a handful of messages — sometimes only the
+    > last (`attempt_completion`) — and set `hasMore=true` (spurious "Load older
+    > messages" sentinel) for tasks with well under N real messages.
+    > `readTaskMessagesTail` now **dedupes the full log first, then slices the last
+    > N unique messages** and derives `hasMore` from the unique-message count. This
+    > re-parses the whole UI-messages file (the api-conversation history on this
+    > path is already read in full), trading that read cost for a correct window;
+    > the webview still receives only `maxMessages`. The genuinely-long-task header
+    > drift is addressed separately on the webview side (see note below).
 - **Batch delivery**: `loadOlderShoferMessages` sends the older page in a
   single `shoferMessagesPrepended` IPC with an ordered (oldest-first)
   array, applied by the webview in one `setState`. No O(n) round-trips, no
