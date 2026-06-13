@@ -1684,6 +1684,70 @@ function agentStatusColor(status) {
 	}
 }
 
+// ─── Legend (color key) ────────────────────────────────────────────────
+// Maps each diagram's colors to their meaning. Built from the same COLORS /
+// status palette the renderers draw with, so the swatches always match the
+// graph. Mirrors the Task Sequence view's legend.
+function _legendSwatch(color) {
+	return (
+		'<span style="display:inline-block;width:14px;height:3px;border-radius:1px;background:' +
+		color +
+		';margin-right:5px;vertical-align:middle"></span>'
+	)
+}
+function _legendDot(color) {
+	return (
+		'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' +
+		color +
+		';margin-right:5px;vertical-align:middle"></span>'
+	)
+}
+function _legendItem(swatch, label) {
+	return (
+		'<span style="display:inline-flex;align-items:center;margin-right:14px;white-space:nowrap">' +
+		swatch +
+		"<span>" +
+		esc(label) +
+		"</span></span>"
+	)
+}
+function buildLegend(view) {
+	var items = []
+	if (view === "topology") {
+		// Edges by relationship kind.
+		items.push(_legendItem(_legendSwatch(COLORS.stake), "stake →"))
+		items.push(_legendItem(_legendSwatch(COLORS.await), "await ←"))
+		items.push(_legendItem(_legendSwatch(COLORS.peer), "direct message"))
+		// Nodes: colored by runtime status when a run is active, else by role.
+		if (_runState && _runState.round !== undefined) {
+			items.push(_legendItem(_legendDot(COLORS.agent), "running"))
+			items.push(_legendItem(_legendDot(COLORS.await), "blocked"))
+			items.push(_legendItem(_legendDot(COLORS.meta), "committed"))
+			items.push(_legendItem(_legendDot(COLORS.flow), "idle"))
+			items.push(_legendItem(_legendDot("var(--z-err,#f87171)"), "error"))
+		} else {
+			items.push(_legendItem(_legendDot(COLORS.agent), "agent"))
+			items.push(_legendItem(_legendDot(COLORS.flow), "@Human"))
+		}
+	} else if (view === "sequence") {
+		items.push(_legendItem(_legendDot(COLORS.agent), "agent lifeline"))
+		items.push(_legendItem(_legendDot(COLORS.flow), "@Human"))
+		items.push(_legendItem(_legendSwatch(COLORS.stake), "stake →"))
+		items.push(_legendItem(_legendSwatch(COLORS.await), "await ←"))
+	} else {
+		// swimlane ("Agent Logic Flow" / State)
+		items.push(_legendItem(_legendSwatch(COLORS.agent), "agent lane"))
+		items.push(_legendItem(_legendSwatch(COLORS.stake), "stake"))
+		items.push(_legendItem(_legendSwatch(COLORS.await), "await"))
+		items.push(_legendItem(_legendSwatch(COLORS.flow), "control flow"))
+	}
+	return (
+		'<div class="graph-legend" style="display:flex;flex-wrap:wrap;align-items:center;padding:4px 10px;font-size:11px;line-height:1.7;opacity:0.85">' +
+		items.join("") +
+		"</div>"
+	)
+}
+
 function handleRender(payload) {
 	var flow = payload.flow,
 		diags = payload.diags || []
@@ -1853,6 +1917,9 @@ function handleRender(payload) {
 		renderingBox = compileSwimlaneSVG(flow, agentNames)
 	}
 
+	// Color-key legend for the active view (rendered in both embedded and
+	// standalone, above the diagram). Colors mirror what the renderers draw.
+	h += buildLegend(_currentView)
 	h += '<div class="graph-container">' + renderingBox + "</div>"
 	app.innerHTML = h
 
