@@ -837,6 +837,9 @@ export interface WebviewMessage {
 		// Workflow messages
 		| "listWorkflows"
 		| "createWorkflow"
+		// Re-point a running WorkflowTask (and its future agents) at a worktree
+		// the user selects/creates on the workflow surface.
+		| "setWorkflowWorktree"
 		// Launcher: start a fresh task in the chosen mode (replaces the old plus → new chat)
 		| "launchTask"
 		// Diagnostic logging from webview → extension OutputChannel

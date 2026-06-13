@@ -4543,6 +4543,32 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "setWorkflowWorktree": {
+			// Re-point a running WorkflowTask at a worktree the user selected/created
+			// on the workflow surface. Only applies to WorkflowTasks: the workflow
+			// root does no filesystem work itself, and each agent reads the workflow's
+			// cwd at spawn, so agents spawned after this change run in the new
+			// worktree. Already-running agents keep their own cwd.
+			const dir = message.worktreeDir
+			const current = provider.getCurrentTask()
+			if (dir && current) {
+				const { WorkflowTask } = await import("../workflow/index")
+				if (current instanceof WorkflowTask) {
+					current.reassignCwd(dir)
+					// Persist so the chip and a later rehydrate reflect the new worktree.
+					try {
+						const { historyItem } = await provider.getTaskWithId(current.taskId)
+						await provider.updateTaskHistory({ ...historyItem, cwd: dir })
+					} catch {
+						// Not yet in history — the task's next metadata save carries cwd.
+					}
+					await provider.postInitState()
+					provider.log(`[setWorkflowWorktree] WorkflowTask ${current.taskId} re-pointed to ${dir}`)
+				}
+			}
+			break
+		}
+
 		case "requestParallelTasks": {
 			try {
 				const managedTasks = provider.getManagedTasks()

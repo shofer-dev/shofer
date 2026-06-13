@@ -57,6 +57,15 @@ export const WorktreeIndicator = () => {
 	// Switching/creating worktrees is only allowed before that point.
 	const hasActiveTask = (shoferMessages?.length ?? 0) > 0
 
+	// Workflows are the exception: a running WorkflowTask makes no filesystem
+	// changes itself (only the agents it spawns do, and they read the workflow's
+	// cwd at spawn), so its worktree stays editable. Selecting/creating a worktree
+	// re-points the workflow and every agent it spawns afterward.
+	const isWorkflowTask = currentTaskItem?.isWorkflow === true
+
+	// The worktree control is read-only only for ordinary running tasks.
+	const locked = hasActiveTask && !isWorkflowTask
+
 	// The "current" worktree from the list reflects the workspace's git
 	// checkout (always master in the embedded model). Once a task is active,
 	// derive what to display from the task's cwd (currentTaskItem.cwd) so the
@@ -181,19 +190,26 @@ export const WorktreeIndicator = () => {
 	const handleSelect = useCallback(
 		(wt: Worktree) => {
 			setOpen(false)
-			if (hasActiveTask) {
-				// Worktree is locked once a task is running; clicking is a no-op.
+			if (locked) {
+				// Worktree is locked once an ordinary task is running; no-op.
+				return
+			}
+			if (hasActiveTask && isWorkflowTask) {
+				// Running workflow: re-point it (and its future agents) at this
+				// worktree live. Send a concrete path even for the current worktree
+				// (its path is the repo root).
+				vscode.postMessage({ type: "setWorkflowWorktree", worktreeDir: wt.path })
 				return
 			}
 			// Pre-task: just record the selection. The worktreeDir is forwarded
-			// when the user submits the first message (see ChatView.handleSendMessage).
+			// when the user submits the first message / launches a workflow.
 			if (wt.isCurrent) {
 				setPendingWorktreeDir(null)
 			} else {
 				setPendingWorktreeDir(wt.path)
 			}
 		},
-		[hasActiveTask, setPendingWorktreeDir],
+		[locked, hasActiveTask, isWorkflowTask, setPendingWorktreeDir],
 	)
 
 	const handleCreate = useCallback(() => {
@@ -206,10 +222,15 @@ export const WorktreeIndicator = () => {
 		(createdPath?: string) => {
 			refresh()
 			if (createdPath) {
-				setPendingWorktreeDir(createdPath)
+				if (hasActiveTask && isWorkflowTask) {
+					// Running workflow: re-point it at the freshly-created worktree live.
+					vscode.postMessage({ type: "setWorkflowWorktree", worktreeDir: createdPath })
+				} else {
+					setPendingWorktreeDir(createdPath)
+				}
 			}
 		},
-		[refresh, setPendingWorktreeDir],
+		[refresh, hasActiveTask, isWorkflowTask, setPendingWorktreeDir],
 	)
 
 	return (
@@ -369,8 +390,8 @@ export const WorktreeIndicator = () => {
 							</div>
 						)}
 
-						{/* "New worktree" option (pre-task only) */}
-						{!hasActiveTask && (
+						{/* "New worktree" option (editable pre-task and on a running workflow) */}
+						{!locked && (
 							<>
 								<div className="border-t border-vscode-dropdown-border" />
 								<button
@@ -388,8 +409,8 @@ export const WorktreeIndicator = () => {
 							</>
 						)}
 
-						{/* (c) Select another worktree (pre-task only) */}
-						{!hasActiveTask && selectableWorktrees.length > 1 && (
+						{/* (c) Select another worktree (editable pre-task and on a running workflow) */}
+						{!locked && selectableWorktrees.length > 1 && (
 							<>
 								<div className="border-t border-vscode-dropdown-border" />
 								<div className="px-3 pt-2 pb-1 text-[11px] font-semibold text-vscode-descriptionForeground uppercase tracking-wide">

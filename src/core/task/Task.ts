@@ -7244,10 +7244,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Tools resolve paths relative to this directory, git operations use it
 	 * as their working tree, and terminal processes are spawned here.
 	 */
-	private readonly _cwd: string
+	private _cwd: string
 
 	public get cwd() {
 		return this._cwd
+	}
+
+	/**
+	 * Re-point this task's working directory. Used only to move a running
+	 * WorkflowTask to a worktree the user selects on the workflow surface: safe
+	 * because the WorkflowTask root performs no filesystem work itself, and
+	 * agents read `this.cwd` at spawn time — so agents spawned after the change
+	 * run in the new worktree. Not for ordinary LLM tasks, whose cwd is bound to
+	 * their tools/checkpoints once running.
+	 */
+	public reassignCwd(newCwd: string): void {
+		this._cwd = newCwd
 	}
 
 	/**
