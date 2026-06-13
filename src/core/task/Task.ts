@@ -2955,6 +2955,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 		await this.overwriteApiConversationHistory(messages)
 
+		// Clear loaded skills BEFORE the persisting `say` below. The overwrite
+		// above drops the previously-loaded skill instructions from the
+		// conversation, so they must no longer count as "loaded". Clearing here
+		// (rather than after the say) ensures the metadata save the say triggers
+		// persists the cleared set — otherwise a crash between that save and a
+		// later clear would leave history claiming a skill is loaded whose
+		// instructions are gone, and the no-op guard would block reloading it.
+		this.loadedSkills.clear()
+		// H15: Condensation invalidates the system prompt cache (context changed).
+		this._cachedSystemPromptBase = null
+		this._cachedSystemPromptKey = ""
+
 		const contextCondense: ContextCondense = {
 			summary,
 			cost,
@@ -2972,12 +2984,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			{ isNonInteractive: true } /* options */,
 			contextCondense,
 		)
-
-		// Clear loaded skills — summarization invalidates previously loaded skill instructions
-		this.loadedSkills.clear()
-		// H15: Condensation invalidates the system prompt cache (context changed).
-		this._cachedSystemPromptBase = null
-		this._cachedSystemPromptKey = ""
 
 		// Process any queued messages after condensing completes
 		this.processQueuedMessages()
@@ -6302,6 +6308,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.overwriteApiConversationHistory(truncateResult.messages)
 			}
 
+			// Clear loaded skills BEFORE the persisting `say` calls below — the
+			// truncation/overwrite above drops previously-loaded skill
+			// instructions from the conversation, so the metadata save those
+			// `say`s trigger must persist the cleared set (see condenseContext for
+			// the crash-window rationale).
+			this.loadedSkills.clear()
+			// H15: Context-window-exceeded (truncation/condensation) invalidates the cache.
+			this._cachedSystemPromptBase = null
+			this._cachedSystemPromptKey = ""
+
 			if (truncateResult.summary) {
 				const { summary, cost, prevContextTokens, newContextTokens = 0 } = truncateResult
 				const contextCondense: ContextCondense = { summary, cost, newContextTokens, prevContextTokens }
@@ -6335,12 +6351,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					contextTruncation,
 				)
 			}
-
-			// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
-			this.loadedSkills.clear()
-			// H15: Context-window-exceeded (truncation/condensation) invalidates the cache.
-			this._cachedSystemPromptBase = null
-			this._cachedSystemPromptKey = ""
 		} finally {
 			// Notify webview that context management is complete (removes in-progress spinner)
 			// IMPORTANT: Must always be sent to dismiss the spinner, even on error
@@ -6526,6 +6536,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				if (truncateResult.messages !== this.apiConversationHistory) {
 					await this.overwriteApiConversationHistory(truncateResult.messages)
 				}
+
+				// Clear loaded skills BEFORE the persisting `say` calls below — the
+				// overwrite above drops previously-loaded skill instructions from the
+				// conversation, so the metadata save those `say`s trigger must persist
+				// the cleared set (see condenseContext for the crash-window rationale).
+				this.loadedSkills.clear()
+				// H15: In-request context management invalidates the cache.
+				this._cachedSystemPromptBase = null
+				this._cachedSystemPromptKey = ""
+
 				if (truncateResult.error) {
 					if (truncateResult.truncationId) {
 						// Condensation failed but sliding window truncation succeeded as fallback.
@@ -6581,12 +6601,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						contextTruncation,
 					)
 				}
-
-				// Clear loaded skills — context truncation/summarization invalidates previously loaded skill instructions
-				this.loadedSkills.clear()
-				// H15: In-request context management invalidates the cache.
-				this._cachedSystemPromptBase = null
-				this._cachedSystemPromptKey = ""
 			} finally {
 				// Notify webview that context management is complete (sets isCondensing = false)
 				// This removes the in-progress spinner and allows the completed result to show

@@ -273,13 +273,21 @@ export class SkillsManager {
 
 		if (!skill) return null
 
-		// Read skill content from disk
-		const fileContent = await fs.readFile(skill.path, "utf-8")
-		const { content: body } = matter(fileContent)
+		// Read skill content from disk. Guard the read+parse so a file that was
+		// deleted/moved between discovery and now (TOCTOU) — or a SKILL.md that
+		// became unparseable — yields the documented `null` instead of throwing.
+		// Callers (skillInvocation, mentions) rely on the `| null` contract.
+		try {
+			const fileContent = await fs.readFile(skill.path, "utf-8")
+			const { content: body } = matter(fileContent)
 
-		return {
-			...skill,
-			instructions: body.trim(),
+			return {
+				...skill,
+				instructions: body.trim(),
+			}
+		} catch (error) {
+			skillsLog.error(`Failed to read skill content for "${name}" at ${skill.path}:`, error)
+			return null
 		}
 	}
 
