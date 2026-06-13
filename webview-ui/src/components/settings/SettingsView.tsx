@@ -32,6 +32,7 @@ import {
 	GitCommitVertical,
 	GraduationCap,
 	Wrench,
+	ScrollText,
 } from "lucide-react"
 
 import {
@@ -493,7 +494,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// refreshed. activate=false when saving a different profile so the
 			// global default is not clobbered.
 			const activate = editingConfigName === currentApiConfigName
-			vscode.postMessage({ type: "upsertApiConfiguration", text: editingConfigName, apiConfiguration, bool: activate })
+			vscode.postMessage({
+				type: "upsertApiConfiguration",
+				text: editingConfigName,
+				apiConfiguration,
+				bool: activate,
+			})
 
 			// Persist the pending default config name (if changed) so the Save
 			// button applies the Default Configuration dropdown selection.
@@ -630,7 +636,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
 			{ id: "language", icon: Globe },
-			{ id: "logging", icon: Info },
+			{ id: "logging", icon: ScrollText },
 			{ id: "about", icon: Info },
 		],
 		[], // No dependencies needed now
@@ -852,13 +858,19 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 										editingConfigName={editingConfigName}
 										listApiConfigMeta={listApiConfigMeta}
 										onSelectConfigForEdit={(configName: string) => {
-											setEditingConfigName(configName)
-											checkUnsaveChanges(() =>
+											// Commit the edit-target switch ONLY after the unsaved-changes
+											// guard resolves. If editingConfigName were set before the guard
+											// and the user then cancelled the discard dialog, the dropdown
+											// would show the new profile while ApiOptions still held the old
+											// profile's apiConfiguration — and a subsequent Save would write
+											// the old data under the new profile's name (data corruption).
+											checkUnsaveChanges(() => {
+												setEditingConfigName(configName)
 												vscode.postMessage({
 													type: "loadApiConfigurationForEdit",
 													text: configName,
-												}),
-											)
+												})
+											})
 										}}
 										onSelectConfigAsDefault={(configName: string) => {
 											// Buffer the selection locally — do NOT persist

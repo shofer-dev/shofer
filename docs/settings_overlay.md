@@ -1303,3 +1303,128 @@ SecretStorage-individual + SecretStorage-blob + files) to 3 (globalState +
 SecretStorage-blob + files). Only `customStoragePath` and `autoImportSettingsPath`
 must remain in vscode config due to bootstrapping timing (read before
 ContextProxy initializes).
+
+---
+
+## 16. Settings View (Webview UI) — Mechanism, Bugs & UX Opportunities
+
+§§1–15 above document the **storage/merge backends**. This section documents the
+**front-end Settings View** — the React component that renders the tabbed Settings
+overlay and orchestrates the staged-save flow — and records bugs and simplification
+opportunities found auditing it (2026-06-13).
+
+### 16a. How the Settings View Works
+
+The view is a single component,
+[`SettingsView.tsx`](../webview-ui/src/components/settings/SettingsView.tsx), built
+around a **staged-save (buffered) pattern**:
+
+- **`cachedState`** is a local copy of the host's `ExtensionStateContext`. Every edit
+  writes to `cachedState` (via `setCachedStateField` / `setApiConfigurationField`),
+  **not** to the host. The host is only updated when the user clicks **Save**
+  (`handleSubmit` posts `updateSettings`, `upsertApiConfiguration`, etc.).
+- **`isChangeDetected`** is the dirty flag. It gates the Save button and triggers the
+  "unsaved changes" discard dialog via `checkUnsaveChanges()` on tab switch / leaving.
+- Some sub-views hold **their own buffers** that `cachedState` cannot reach and are
+  committed/dropped imperatively on Save/Discard:
+  [`ModesView`](../webview-ui/src/components/modes/ModesView.tsx) (`commitBuffers()` /
+  `discardBuffers()`) and
+  [`RagIndexerSettings`](../webview-ui/src/components/settings/RagIndexerSettings.tsx)
+  (`saveCodeIndexSecrets()`).
+- The **API-profile editing model** deliberately splits two concepts:
+  `editingConfigName` (which profile the Providers tab is editing) vs. the global
+  default (`currentApiConfigName`). The default dropdown is itself buffered in
+  `pendingDefaultConfigName` and only persisted on Save, with a `savingDefault` ref +
+  re-sync `useEffect` suppressing a new→old→new flicker during the host round-trip
+  (`SettingsView.tsx:158-170`, `559-567`).
+- **Search indexing:** to make every setting searchable, on mount the view cycles
+  `indexingTabIndex` through all `sectionNames`, mounting each tab once (rendered at
+  `opacity-0`) so each setting self-registers, then returns to the initial tab
+  (`SettingsView.tsx:684-714`).
+
+### 16b. Bugs
+
+#### 16b-1. Edit-profile switch bypassed the unsaved-changes guard — ✅ fixed
+
+In the Providers tab, selecting a different profile to edit ran
+`setEditingConfigName(configName)` **before** `checkUnsaveChanges()`
+(`SettingsView.tsx:854`). The `loadApiConfigurationForEdit` host round-trip was
+correctly gated behind the guard, but the local `editingConfigName` was not. So with
+unsaved edits present, if the user picked another profile and then **cancelled** the
+discard dialog:
+
+- the edit dropdown showed the **new** profile name, while `ApiOptions` still rendered
+  the **old** profile's `apiConfiguration` (never reloaded), and
+- a subsequent **Save** wrote the old profile's data under the **new** profile's name
+  (`handleSubmit` upserts `apiConfiguration` under `editingConfigName`) — silently
+  **corrupting/overwriting** the other profile.
+
+**Fix:** move `setEditingConfigName(configName)` _inside_ the `checkUnsaveChanges`
+callback so the edit-target only commits when the user proceeds (or there were no
+unsaved changes). The dropdown name and the loaded `apiConfiguration` now stay
+consistent.
+
+#### 16b-2. Duplicate tab icon (`logging` vs `about`) — ✅ fixed
+
+Both the **Logging** and **About** tabs used the same `Info` icon
+(`SettingsView.tsx:633-634`). In **compact mode** (container < 500px the sidebar
+collapses to icons only, `SettingsView.tsx:602`), the two tabs were visually
+indistinguishable. **Fix:** Logging now uses the `ScrollText` icon; About keeps `Info`.
+
+### 16c. UX / Simplification Opportunities (not yet addressed)
+
+#### 16c-1. Search indexing mounts every tab on each open → request burst
+
+The index pass (§16a) mounts **every** tab once per Settings open. Several tabs fire
+backend requests on mount, so each open triggers a burst of redundant work even for
+tabs the user never views:
+
+| Tab mounted during indexing | Fires on mount                                                                                               | Source                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Modes                       | `checkRulesDirectory`                                                                                        | [`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx)                            |
+| Skills                      | `requestSkills` (filesystem scan)                                                                            | [`SkillsSettings.tsx`](../webview-ui/src/components/settings/SkillsSettings.tsx)               |
+| Slash Commands              | `requestCommands` (filesystem scan)                                                                          | [`SlashCommandsSettings.tsx`](../webview-ui/src/components/settings/SlashCommandsSettings.tsx) |
+| Worktrees                   | `listWorktrees` + `getWorktreeIncludeStatus` (git ops); a 3s poll is set then immediately cleared on unmount | [`WorktreesView.tsx`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                |
+| Providers (Ollama selected) | `requestOllamaModels`                                                                                        | `providers/Ollama.tsx`                                                                         |
+
+The tab the user actually opens on also **double-fetches** — once during the indexing
+pass and again when it becomes the active tab. The mounts are cheap-ish individually,
+but coupling side-effectful data fetches to a search-indexing mechanism is fragile.
+**Opportunities:** (a) gate mount-time fetches behind an `isIndexing` flag passed to
+children, (b) register searchable metadata **statically** (a manifest) instead of by
+mounting each tab, or (c) lazily index a tab the first time it is actually shown.
+
+#### 16c-2. Profile delete / rename / add skip the unsaved-changes guard
+
+Only `onSelectConfigForEdit` routes through `checkUnsaveChanges`. `onDeleteConfig`,
+`onRenameConfig`, and `onUpsertConfig` (`SettingsView.tsx:870-890`) do not, so acting
+on a profile while edits are pending can silently drop or mis-attribute them (rename,
+for instance, persists the current in-buffer `apiConfiguration` under the new name as a
+side effect). These three paths should share the same guard as the edit switch.
+
+#### 16c-3. Default-config dropdown buffering is over-engineered
+
+A single value (the global default profile) is coordinated across **three** pieces of
+state: `pendingDefaultConfigName`, the `savingDefault` ref, and a re-sync `useEffect`
+that conditionally skips reverting the buffer (`SettingsView.tsx:158-170`, `559-567`) —
+all to suppress a one-frame new→old→new flicker. This is a candidate for
+simplification (e.g. derive the displayed value, or have the host echo the optimistic
+value back so no local buffer is needed).
+
+#### 16c-4. Fragile dirty-detection heuristic in `setApiConfigurationField`
+
+`setApiConfigurationField` carries an `areValuesEqual` / `isInitialSync` heuristic
+(`SettingsView.tsx:300-322`) whose sole purpose is to avoid marking the form dirty when
+child components auto-sync values on mount. This is a workaround for children writing
+back during initialization; a cleaner contract (children never write on mount, or a
+distinct "initialize" path) would remove the heuristic and the class of false-dirty
+bugs it guards against.
+
+#### 16c-5. Two independent tab orderings can drift
+
+`sectionNames` (`SettingsView.tsx:105`, the type source + indexing/search order) and
+`sections` (`SettingsView.tsx:613`, the visual sidebar order) are maintained
+separately and list the tabs in different orders. A tab added to one but not the other
+silently misbehaves (missing from search index, or rendered without an icon).
+Consider deriving one from the other, or a single source-of-truth array of
+`{ id, icon }` with display order, with `sectionNames` computed from it.
