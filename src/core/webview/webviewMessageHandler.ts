@@ -2780,7 +2780,7 @@ export const webviewMessageHandler = async (
 		case "walkthroughOpen": {
 			await vscode.commands.executeCommand(
 				"workbench.action.openWalkthrough",
-				"shoferdev.shofer#shofer.getStarted",
+				`${Package.publisher}.${Package.name}#shofer.getStarted`,
 				false,
 			)
 			break
