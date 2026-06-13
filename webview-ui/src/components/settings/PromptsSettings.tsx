@@ -25,6 +25,14 @@ interface PromptsSettingsProps {
 	setCustomSupportPrompts: (prompts: Record<string, string | undefined>) => void
 	includeTaskHistoryInEnhance?: boolean
 	setIncludeTaskHistoryInEnhance?: (value: boolean) => void
+	/**
+	 * Save-gated wiring (from SettingsView): the staged `enhancementApiConfigId`
+	 * and a setter that writes the SettingsView `cachedState`, so the choice is
+	 * applied on Save rather than immediately. Falls back to the live context
+	 * value/setter when rendered standalone (e.g. tests).
+	 */
+	enhancementApiConfigId?: string
+	setEnhancementApiConfigId?: (value: string) => void
 }
 
 const PromptsSettings = ({
@@ -32,12 +40,14 @@ const PromptsSettings = ({
 	setCustomSupportPrompts,
 	includeTaskHistoryInEnhance: propsIncludeTaskHistoryInEnhance,
 	setIncludeTaskHistoryInEnhance: propsSetIncludeTaskHistoryInEnhance,
+	enhancementApiConfigId: propsEnhancementApiConfigId,
+	setEnhancementApiConfigId: propsSetEnhancementApiConfigId,
 }: PromptsSettingsProps) => {
 	const { t } = useAppTranslation()
 	const {
 		listApiConfigMeta,
-		enhancementApiConfigId,
-		setEnhancementApiConfigId,
+		enhancementApiConfigId: contextEnhancementApiConfigId,
+		setEnhancementApiConfigId: contextSetEnhancementApiConfigId,
 		includeTaskHistoryInEnhance: contextIncludeTaskHistoryInEnhance,
 		setIncludeTaskHistoryInEnhance: contextSetIncludeTaskHistoryInEnhance,
 	} = useExtensionState()
@@ -45,6 +55,8 @@ const PromptsSettings = ({
 	// Use props if provided, otherwise fall back to context
 	const includeTaskHistoryInEnhance = propsIncludeTaskHistoryInEnhance ?? contextIncludeTaskHistoryInEnhance ?? true
 	const setIncludeTaskHistoryInEnhance = propsSetIncludeTaskHistoryInEnhance ?? contextSetIncludeTaskHistoryInEnhance
+	const enhancementApiConfigId = propsEnhancementApiConfigId ?? contextEnhancementApiConfigId
+	const setEnhancementApiConfigId = propsSetEnhancementApiConfigId ?? contextSetEnhancementApiConfigId
 
 	const [testPrompt, setTestPrompt] = useState("")
 	const [isEnhancing, setIsEnhancing] = useState(false)
@@ -166,12 +178,11 @@ const PromptsSettings = ({
 								<Select
 									value={enhancementApiConfigId || "-"}
 									onValueChange={(value) => {
+										// Save-gated: stage into SettingsView cachedState; applied
+										// on Save (handleSubmit posts enhancementApiConfigId), not
+										// immediately.
 										const newConfigId = value === "-" ? "" : value
 										setEnhancementApiConfigId(newConfigId)
-										vscode.postMessage({
-											type: "enhancementApiConfigId",
-											text: value,
-										})
 									}}>
 									<SelectTrigger data-testid="api-config-select" className="w-full">
 										<SelectValue
@@ -207,12 +218,8 @@ const PromptsSettings = ({
 											return
 										}
 
+										// Save-gated: stage only; persisted on Save by handleSubmit.
 										setIncludeTaskHistoryInEnhance(target.checked)
-
-										vscode.postMessage({
-											type: "updateSettings",
-											updatedSettings: { includeTaskHistoryInEnhance: target.checked },
-										})
 									}}>
 									<span className="font-medium">
 										{t("prompts:supportPrompts.enhance.includeTaskHistory")}

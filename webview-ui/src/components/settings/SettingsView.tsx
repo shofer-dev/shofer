@@ -233,6 +233,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		includeDiagnosticMessages,
 		maxDiagnosticMessages,
 		includeTaskHistoryInEnhance,
+		enhancementApiConfigId,
 		imageGenerationProvider,
 		openRouterImageApiKey,
 		openRouterImageGenerationSelectedModel,
@@ -465,6 +466,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					alwaysAllowFollowupQuestions: alwaysAllowFollowupQuestions ?? false,
 					followupAutoApproveTimeoutMs,
 					includeTaskHistoryInEnhance: includeTaskHistoryInEnhance ?? true,
+					enhancementApiConfigId: enhancementApiConfigId ?? "",
 					reasoningBlockCollapsed: reasoningBlockCollapsed ?? true,
 					enterBehavior: enterBehavior ?? "send",
 					includeCurrentTime: includeCurrentTime ?? true,
@@ -1061,6 +1063,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								includeTaskHistoryInEnhance={includeTaskHistoryInEnhance}
 								setIncludeTaskHistoryInEnhance={(value) =>
 									setCachedStateField("includeTaskHistoryInEnhance", value)
+								}
+								enhancementApiConfigId={enhancementApiConfigId}
+								setEnhancementApiConfigId={(value) =>
+									setCachedStateField("enhancementApiConfigId", value)
 								}
 							/>
 						)}
