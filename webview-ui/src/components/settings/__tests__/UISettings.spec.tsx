@@ -6,6 +6,8 @@ describe("UISettings", () => {
 	const defaultProps = {
 		reasoningBlockCollapsed: false,
 		enterBehavior: "send" as const,
+		experiments: {},
+		setExperimentEnabled: vi.fn(),
 		setCachedStateField: vi.fn(),
 	}
 

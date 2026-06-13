@@ -40,7 +40,7 @@
 		"terminal": "Terminal",
 		"slashCommands": "Slash Commands",
 		"prompts": "Prompts",
-		"ui": "UI",
+		"ui": "UI/UX",
 		"experimental": "Advanced",
 		"language": "Language",
 		"codebaseIndex": "RAG Indexer",

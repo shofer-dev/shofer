@@ -207,9 +207,6 @@ vi.mock("../Section", () => ({
 vi.mock("../CheckpointSettings", () => ({
 	CheckpointSettings: () => null,
 }))
-vi.mock("../NotificationSettings", () => ({
-	NotificationSettings: () => null,
-}))
 vi.mock("../ContextManagementSettings", () => ({
 	ContextManagementSettings: () => null,
 }))

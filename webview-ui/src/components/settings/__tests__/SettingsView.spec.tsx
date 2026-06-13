@@ -341,8 +341,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		const ttsCheckbox = within(content).getByTestId("tts-enabled-checkbox")
@@ -356,8 +356,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		const soundCheckbox = within(content).getByTestId("sound-enabled-checkbox")
@@ -371,8 +371,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		const ttsCheckbox = within(content).getByTestId("tts-enabled-checkbox")
@@ -399,8 +399,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		const soundCheckbox = within(content).getByTestId("sound-enabled-checkbox")
@@ -427,8 +427,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		// Enable tts
@@ -445,8 +445,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		// Enable sound
@@ -463,8 +463,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		// Enable tts
@@ -494,8 +494,8 @@ describe("SettingsView - Sound Settings", () => {
 		// Render once and get the activateTab helper
 		const { activateTab, getSettingsContent } = renderSettingsView()
 
-		// Activate the notifications tab
-		activateTab("notifications")
+		// Activate the UI tab (TTS/sound moved here from Notifications)
+		activateTab("ui")
 
 		const content = getSettingsContent()
 		// Enable sound
@@ -635,8 +635,8 @@ describe("SettingsView - Allowed Commands", () => {
 			// Render once and get the activateTab helper
 			const { activateTab, getSettingsContent } = renderSettingsView()
 
-			// Activate the notifications tab
-			activateTab("notifications")
+			// Activate the UI tab (TTS/sound moved here from Notifications)
+			activateTab("ui")
 
 			const content = getSettingsContent()
 			// Make a change to create unsaved changes

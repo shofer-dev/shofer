@@ -85,7 +85,9 @@ export const ExperimentalSettings = ({
 				</SearchableSetting>
 
 				{Object.entries(experimentConfigsMap)
-					.filter(([key]) => key in EXPERIMENT_IDS)
+					// PREVENT_FOCUS_DISRUPTION ("Background editing") is surfaced under
+					// the UI section instead — see UISettings.
+					.filter(([key]) => key in EXPERIMENT_IDS && key !== "PREVENT_FOCUS_DISRUPTION")
 					.map((config) => {
 						// Use the same translation key pattern as ExperimentalFeature
 						const experimentKey = config[0]

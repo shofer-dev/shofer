@@ -12,7 +12,6 @@ import React, {
 import {
 	CheckCheck,
 	GitBranch,
-	Bell,
 	MessageCircle,
 	Archive,
 	Database,
@@ -71,7 +70,6 @@ import ApiConfigManager from "./ApiConfigManager"
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
-import { NotificationSettings } from "./NotificationSettings"
 import { AssistantAgentSettings } from "./AssistantAgentSettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
@@ -110,7 +108,6 @@ export const sectionNames = [
 	"slashCommands",
 	"skills",
 	"checkpoints",
-	"notifications",
 	"assistantAgent",
 	"contextManagement",
 	"terminal",
@@ -637,7 +634,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
 			{ id: "checkpoints", icon: GitCommitVertical },
-			{ id: "notifications", icon: Bell },
 			{ id: "assistantAgent", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
@@ -974,17 +970,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
-						{/* Notifications Section */}
-						{renderTab === "notifications" && (
-							<NotificationSettings
-								ttsEnabled={ttsEnabled}
-								ttsSpeed={ttsSpeed}
-								soundEnabled={soundEnabled}
-								soundVolume={soundVolume}
-								setCachedStateField={setCachedStateField}
-							/>
-						)}
-
 						{/* Assistant Agent Section */}
 						{renderTab === "assistantAgent" && (
 							<AssistantAgentSettings
@@ -1081,6 +1066,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							<UISettings
 								reasoningBlockCollapsed={reasoningBlockCollapsed ?? true}
 								enterBehavior={enterBehavior ?? "send"}
+								ttsEnabled={ttsEnabled}
+								ttsSpeed={ttsSpeed}
+								soundEnabled={soundEnabled}
+								soundVolume={soundVolume}
+								experiments={experiments}
+								setExperimentEnabled={setExperimentEnabled}
 								setCachedStateField={setCachedStateField}
 							/>
 						)}

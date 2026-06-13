@@ -204,9 +204,6 @@ vi.mock("../AutoApproveSettings", () => ({
 vi.mock("../CheckpointSettings", () => ({
 	CheckpointSettings: vi.fn(() => <div>CheckpointSettings</div>),
 }))
-vi.mock("../NotificationSettings", () => ({
-	NotificationSettings: vi.fn(() => <div>NotificationSettings</div>),
-}))
 vi.mock("../ContextManagementSettings", () => ({
 	ContextManagementSettings: vi.fn(() => <div>ContextManagementSettings</div>),
 }))
