@@ -225,6 +225,7 @@ export interface ExtensionMessage {
 		| "marketplaceButtonClicked"
 		| "tasksButtonClicked"
 		| "launcherButtonClicked"
+		| "newMenuButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"

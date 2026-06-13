@@ -19,6 +19,7 @@ import HistoryView from "./components/history/HistoryView"
 import SettingsView, { SettingsViewRef } from "./components/settings/SettingsView"
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
 import { LauncherView } from "./components/launcher/LauncherView"
+import { LauncherMenu } from "./components/launcher/LauncherMenu"
 import { MarketplaceView } from "./components/marketplace/MarketplaceView"
 import { CheckpointRestoreDialog } from "./components/chat/CheckpointRestoreDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
@@ -157,6 +158,11 @@ const App = () => {
 	// workflow cards).
 	const [launcherStage, setLauncherStage] = useState<"task" | "workflow">("task")
 
+	// The native "+" title-bar button opens this in-webview chooser (anchored
+	// below the button) rather than a native QuickPick, so it can show per-item
+	// icons + a one-line description. Picking an item opens LauncherView.
+	const [newMenuOpen, setNewMenuOpen] = useState(false)
+
 	const onMessage = useCallback(
 		(e: MessageEvent) => {
 			const message: ExtensionMessage = e.data
@@ -168,6 +174,14 @@ const App = () => {
 				// without us having to thread state through the component tree.
 				if (message.action === "tasksButtonClicked") {
 					window.dispatchEvent(new CustomEvent("shofer.taskSidebarToggle"))
+					return
+				}
+
+				// The "+" title-bar button opens the in-webview New Task / New
+				// Workflow chooser (anchored under the button), staying on the
+				// current tab until the user picks.
+				if (message.action === "newMenuButtonClicked") {
+					setNewMenuOpen(true)
 					return
 				}
 
@@ -296,6 +310,15 @@ const App = () => {
 			{tab === "launcher" && (
 				<LauncherView modes={launcherModes} initialStage={launcherStage} onClose={() => switchTab("chat")} />
 			)}
+			<LauncherMenu
+				open={newMenuOpen}
+				onOpenChange={setNewMenuOpen}
+				onPick={(stage) => {
+					setNewMenuOpen(false)
+					setLauncherStage(stage)
+					switchTab("launcher")
+				}}
+			/>
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}
