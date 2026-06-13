@@ -39,8 +39,8 @@ describe("ShoferTips Component", () => {
 		})
 
 		test("renders only the top two tips", () => {
-			// Ensure only two tips are present plus the docs link in the Trans component (3 total links)
-			expect(screen.getAllByRole("link")).toHaveLength(3)
+			// One link per docs entry: README, Claude Code, Copilot, and OpenCode migration guides.
+			expect(screen.getAllByRole("link")).toHaveLength(4)
 		})
 	})
 })
