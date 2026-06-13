@@ -48,3 +48,15 @@ export function getEmbedderLane(provider: EmbedderProvider): LimitFunction {
 	}
 	return lane
 }
+
+/**
+ * Current depth of a provider's embedder lane = running (`activeCount`) plus
+ * queued (`pendingCount`) `createEmbeddings` calls. Used for the
+ * `shofer_embedder_queue_depth` metric. Returns 0 when the lane hasn't been
+ * created yet (no embeddings have run for this provider).
+ */
+export function getEmbedderLaneDepth(provider: string): number {
+	const lane = lanes.get(provider as EmbedderProvider)
+	if (!lane) return 0
+	return lane.activeCount + lane.pendingCount
+}

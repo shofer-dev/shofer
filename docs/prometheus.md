@@ -1,6 +1,6 @@
 # Prometheus / Observability for Shofer VS Code Extension
 
-> **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. LLM **cost/token** counters (`shofer_llm_cost_usd_total`, `shofer_llm_tokens_total`) were added alongside the duration/call metrics. **Genuinely still missing:** the GC observer (§7.11 — only a code comment exists; `nodejs_gc_duration_seconds` from `collectDefaultMetrics` covers it for free), the real embedder queue-depth value (currently stubbed to `0`), and the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
+> **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. LLM **cost/token** counters (`shofer_llm_cost_usd_total`, `shofer_llm_tokens_total`) were added alongside the duration/call metrics. `shofer_embedder_queue_depth` is now wired to the real per-provider concurrency-lane depth (no longer stubbed to `0`), and GC pause visibility is provided by `collectDefaultMetrics`' `nodejs_gc_duration_seconds` (a bespoke `shofer_gc_*` family is intentionally not implemented — redundant). **Genuinely still missing:** only the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
 >
 > **Gating:** the entire `/metrics` server only starts when the `PROMETHEUS_METRICS` experiment is enabled (`extension.ts` checks `EXPERIMENT_IDS.PROMETHEUS_METRICS` before `startMetricsServer`). When the experiment is off, no server binds and no metrics are exposed.
 >
@@ -192,12 +192,17 @@ also be exposed via an admin MCP tool so it's accessible from the chat UI.
 
 ### 3.4 Garbage-collection monitoring
 
-If running with `--expose-gc`, expose:
+GC pause monitoring is provided **for free** by `prom-client`'s
+`collectDefaultMetrics()`, which is enabled in `registry.ts`:
 
-| Metric                  | Type      | Description                                                                     |
-| ----------------------- | --------- | ------------------------------------------------------------------------------- |
-| `shofer_gc_duration_ms` | Histogram | Last GC pause duration (from `perf_hooks` `PerformanceObserver` on `gc` events) |
-| `shofer_gc_total_ms`    | Counter   | Cumulative GC time since process start                                          |
+| Metric                       | Type      | Description                                                |
+| ---------------------------- | --------- | ---------------------------------------------------------- |
+| `nodejs_gc_duration_seconds` | Histogram | GC pause duration by kind (`major`/`minor`/`incremental`). |
+
+No V8 flag (`--expose-gc`) is required, and no bespoke `shofer_gc_*` family is
+implemented — it would be redundant. (An earlier draft of this doc specified
+`shofer_gc_duration_ms` / `shofer_gc_total_ms`; those were never implemented and
+are superseded by `nodejs_gc_duration_seconds`.)
 
 ### 3.5 Key design decisions
 
@@ -280,18 +285,17 @@ and independent of user telemetry opt-in. They are scraped by Prometheus via the
 
 ### 4.3 Memory and process health
 
-| Metric                         | Type      | Description                             |
-| ------------------------------ | --------- | --------------------------------------- |
-| `shofer_heap_used_bytes`       | Gauge     | `process.memoryUsage().heapUsed`        |
-| `shofer_heap_total_bytes`      | Gauge     | `process.memoryUsage().heapTotal`       |
-| `shofer_rss_bytes`             | Gauge     | `process.memoryUsage().rss`             |
-| `shofer_messages_total`        | Gauge     | `shoferMessages.length` of focused task |
-| `shofer_messages_bytes`        | Gauge     | `JSON.stringify(shoferMessages).length` |
-| `shofer_tasks_total`           | Gauge     | `taskHistoryStore.getAll().length`      |
-| `shofer_active_tasks`          | Gauge     | Managed tasks with `abort === false`    |
-| `shofer_event_listeners_total` | Gauge     | `ShoferProvider.listenerCount()`        |
-| `shofer_gc_duration_ms`        | Histogram | GC pause duration (when `--expose-gc`)  |
-| `shofer_gc_total_ms`           | Counter   | Cumulative GC time (when `--expose-gc`) |
+| Metric                         | Type      | Description                                                                                    |
+| ------------------------------ | --------- | ---------------------------------------------------------------------------------------------- |
+| `shofer_heap_used_bytes`       | Gauge     | `process.memoryUsage().heapUsed`                                                               |
+| `shofer_heap_total_bytes`      | Gauge     | `process.memoryUsage().heapTotal`                                                              |
+| `shofer_rss_bytes`             | Gauge     | `process.memoryUsage().rss`                                                                    |
+| `shofer_messages_total`        | Gauge     | `shoferMessages.length` of focused task                                                        |
+| `shofer_messages_bytes`        | Gauge     | `JSON.stringify(shoferMessages).length`                                                        |
+| `shofer_tasks_total`           | Gauge     | `taskHistoryStore.getAll().length`                                                             |
+| `shofer_active_tasks`          | Gauge     | Managed tasks with `abort === false`                                                           |
+| `shofer_event_listeners_total` | Gauge     | `ShoferProvider.listenerCount()`                                                               |
+| `nodejs_gc_duration_seconds`   | Histogram | GC pause duration (from `collectDefaultMetrics`; replaces the never-implemented `shofer_gc_*`) |
 
 ### 4.4 Webview-side metrics (browser)
 
@@ -307,10 +311,10 @@ endpoint.
 
 ### 4.5 Code-index metrics (always-on)
 
-| Metric                        | Type  | Labels     | Description                                                                                                                                                                                                                                                                                       |
-| ----------------------------- | ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shofer_code_index_files`     | Gauge | —          | Number of indexed files                                                                                                                                                                                                                                                                           |
-| `shofer_embedder_queue_depth` | Gauge | `provider` | Embedder pending-queue depth per provider. **⚠️ Currently stubbed:** `updateCodeIndexMetrics` is always called with `embedderQueueDepth = 0` (`services/code-index/manager.ts`), so the series exists but is meaningless. Wire the real per-provider concurrency-lane depth before relying on it. |
+| Metric                        | Type  | Labels     | Description                                                                                                                                           |
+| ----------------------------- | ----- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shofer_code_index_files`     | Gauge | —          | Number of indexed files                                                                                                                               |
+| `shofer_embedder_queue_depth` | Gauge | `provider` | Embedder concurrency-lane depth (running + queued `createEmbeddings` calls) per provider, read live from `getEmbedderLaneDepth` (`embedder-lane.ts`). |
 
 ---
 
@@ -347,9 +351,10 @@ endpoint.
   `shofer_llm_calls_total`, and `shofer_llm_errors_total` with error
   classification (wired in `Task.ts`).
 - ✅ MCP call-site instrumentation (`shofer_mcp_*`, wired in `McpHub`).
-- ❌ **`perf_hooks` GC observer — NOT implemented** (§7.11). Only a doc comment
-  exists. `collectDefaultMetrics()` already exposes `nodejs_gc_duration_seconds`,
-  so a bespoke `shofer_gc_*` family may be redundant.
+- ✅ **GC monitoring resolved** (§7.11). Rather than a bespoke `perf_hooks`
+  observer + `shofer_gc_*` family (redundant), GC pause visibility comes from
+  `collectDefaultMetrics()`' `nodejs_gc_duration_seconds`. The dead doc-comment
+  describing the unbuilt observer was removed from `registry.ts`.
 - ✅ LLM cost/token counters (`shofer_llm_cost_usd_total`,
   `shofer_llm_tokens_total`), recorded next to `captureLlmCompletion` in
   `Task.ts` (fires at most once per request).
@@ -405,15 +410,17 @@ endpoint.
 The Phase 1–2 implementation under [`src/metrics/`](../src/metrics/) and [`src/utils/perf.ts`](../src/utils/perf.ts) surfaced gaps in the original design that were corrected before Phase 3 lands. The items below are design-level changes — concrete code bugs are tracked separately in the original review.
 
 **Status (verified May 2026):** §7.1, §7.2, §7.3, §7.4, §7.5, §7.7, §7.8, §7.9,
-and §7.12 are implemented in [`src/metrics/`](../src/metrics/). **Three are NOT
-fully done:** §7.6 (canonical provider label) is **unfixed** — `Task.ts` still
-uses `apiConfiguration?.apiProvider ?? "unknown"`, so a misconfigured handler
+§7.11, and §7.12 are implemented (or resolved) in
+[`src/metrics/`](../src/metrics/). **Two remain partial:** §7.6 (canonical
+provider label) is **unfixed** — `Task.ts` still uses
+`apiConfiguration?.apiProvider ?? "unknown"`, so a misconfigured handler
 silently emits `provider="unknown"` on every LLM series; §7.10 (heapSnapshot)
 is **partial** — it passes an explicit path but writes to the workspace
 `.shofer/heap-snapshots/` rather than `globalStoragePath`, and has no modal
-confirmation; §7.11 (GC observer) is **not implemented at all** — `registry.ts`
-contains only a doc comment describing it, with no `PerformanceObserver`,
-no `perf_hooks` import, and no `shofer_gc_*` metric anywhere.
+confirmation. §7.11 (GC observer) is **resolved by design** — rather than a
+bespoke `perf_hooks` observer, GC visibility comes from
+`collectDefaultMetrics()`' `nodejs_gc_duration_seconds`; the dead doc-comment
+was removed from `registry.ts`.
 
 ### 7.1 Switch from `@perf` decorator to a `time(key, fn)` helper ✅
 
@@ -512,6 +519,11 @@ v8.writeHeapSnapshot(filePath)
 Also: heap snapshot is a synchronous, multi-hundred-ms event-loop stall that can produce > 1 GB files. Add a confirmation prompt (`vscode.window.showWarningMessage` with Modal: true) before triggering, and write to `globalStoragePath` rather than the workspace by default (workspace heap dumps risk being committed by accident — the **Protected Files Rule** suggests `.shofer/` is workspace-relative configuration, not a dump ground).
 
 ### 7.11 GC observer must use the top-level `PerformanceObserver` export
+
+> **Resolution (superseded):** no bespoke GC observer is implemented. GC pause
+> visibility comes from `collectDefaultMetrics()`' `nodejs_gc_duration_seconds`
+> instead, which is correct out of the box and needs no V8 flag. The advice
+> below is retained only as a record of why a hand-rolled observer was avoided.
 
 The implementation reads `PerformanceObserver` off the `performance` object and gates on `globalThis.gc`. Both are wrong:
 

@@ -19,11 +19,10 @@
  *   multiple VS Code windows on one host produce disambiguable series.
  * - `registerCollector()` lets the HTTP server pull fresh gauge values
  *   synchronously at scrape time, so memory / queue depth are never stale.
- * - GC observation uses the top-level `PerformanceObserver` export of
- *   `perf_hooks` (NOT a property of `performance`); no V8 flag required.
- *   `prom-client`'s default metrics also include a GC histogram, but the
- *   Shofer-specific `shofer_gc_*` metrics keep the prefix consistent with
- *   the rest of the catalog.
+ * - GC pause metrics come for free from `collectDefaultMetrics()` as
+ *   `nodejs_gc_duration_seconds` (a histogram, no V8 flag required). A
+ *   bespoke `shofer_gc_*` family would be redundant, so it is intentionally
+ *   not implemented — query `nodejs_gc_duration_seconds` instead.
  */
 
 import client from "prom-client"

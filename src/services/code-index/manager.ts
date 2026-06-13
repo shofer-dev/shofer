@@ -18,6 +18,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { codeIndexLog } from "../../utils/logging/subsystems"
 import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
+import { getEmbedderLaneDepth } from "./embedders/embedder-lane"
 
 export class CodeIndexManager {
 	// --- Singleton Implementation ---
@@ -585,14 +586,12 @@ export class CodeIndexManager {
 	}
 
 	/**
-	 * Push gauge snapshots for the code-index dashboard row.
-	 *
-	 * embedderQueueDepth is set to 0 here — wiring the per-provider
-	 * concurrency-lane depth requires deeper instrumentation in the embedder
-	 * pipeline and is tracked as a future improvement.
+	 * Push gauge snapshots for the code-index dashboard row. The embedder
+	 * queue depth is the live per-provider concurrency-lane depth (running +
+	 * queued `createEmbeddings` calls); it reads `0` when the lane is idle.
 	 */
 	private _emitCodeIndexMetrics(fileCount: number): void {
 		const provider = this._configManager?.currentEmbedderProvider ?? "unknown"
-		updateCodeIndexMetrics(fileCount, 0, provider)
+		updateCodeIndexMetrics(fileCount, getEmbedderLaneDepth(provider), provider)
 	}
 }
