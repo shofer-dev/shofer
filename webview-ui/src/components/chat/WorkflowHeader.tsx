@@ -15,7 +15,7 @@ import Thumbnails from "../common/Thumbnails"
 import { TaskActions } from "./TaskActions"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
-import { getTaskDisplayName, resolveStateVisual } from "./TaskSelector"
+import { resolveStateVisual } from "./TaskSelector"
 import { BudgetLimitDialog } from "./BudgetLimitDialog"
 
 /**
@@ -48,6 +48,8 @@ export interface WorkflowHeaderProps {
 	workflowVizMeta?: WorkflowVizMeta
 	/** True while the workflow is actively running — applies the shimmer highlight. */
 	isRunning?: boolean
+	/** Text of the most recent chat event — shown on the collapsed header line. */
+	lastEventText?: string
 	todos?: any[]
 }
 
@@ -65,6 +67,7 @@ const WorkflowHeader = ({
 	activeTimeMs,
 	workflowVizMeta,
 	isRunning = false,
+	lastEventText,
 	todos,
 }: WorkflowHeaderProps) => {
 	const { t } = useTranslation()
@@ -96,7 +99,9 @@ const WorkflowHeader = ({
 		[onUpdateCostLimit],
 	)
 
-	const currentTitle = currentTaskItem ? getTaskDisplayName(currentTaskItem) : ""
+	// Top title is always "Workflow: <flow name as written in the .slang>".
+	const flowLabel = wfMeta?.flowName || wfMeta?.displayTitle
+	const workflowTitle = flowLabel ? `Workflow: ${flowLabel}` : t("chat:task.title")
 	const currentRuntime = currentTaskItem ? parallelTasks?.find((p) => p.id === currentTaskItem.id) : undefined
 	const currentState = currentRuntime?.state ?? currentTaskItem?.taskState ?? { lifecycle: "idle" as const }
 	const currentStateConfig = resolveStateVisual(currentState)
@@ -118,9 +123,9 @@ const WorkflowHeader = ({
 							)}
 						/>
 					)}
-					<StandardTooltip content={currentTitle || t("chat:task.title")}>
+					<StandardTooltip content={workflowTitle}>
 						<span className="truncate text-sm font-medium text-vscode-foreground">
-							{currentTitle || t("chat:task.title")}
+							{workflowTitle}
 						</span>
 					</StandardTooltip>
 				</div>
@@ -166,7 +171,7 @@ const WorkflowHeader = ({
 							{isTaskExpanded && <span className="font-bold">{t("chat:task.title")}</span>}
 							{!isTaskExpanded && (
 								<div className="flex items-center gap-2 whitespace-nowrap overflow-hidden text-ellipsis">
-									<Mention text={task.text} />
+									<Mention text={lastEventText || task.text} />
 								</div>
 							)}
 						</div>

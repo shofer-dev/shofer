@@ -346,6 +346,20 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	const lastMessage = useMemo(() => messages.at(-1), [messages])
 	const secondLastMessage = useMemo(() => messages.at(-2), [messages])
 
+	// Text of the most recent chat event — the latest progress line the workflow
+	// posted (sayProgress → say:"text"), or a completion result. Shown on the
+	// collapsed WorkflowHeader so the header doubles as a live status line.
+	const lastEventText = useMemo(() => {
+		for (let i = modifiedMessages.length - 1; i >= 0; i--) {
+			const m = modifiedMessages[i]
+			if (m === task) continue
+			if (m.type !== "say") continue
+			if (m.say !== "text" && m.say !== "completion_result") continue
+			if (typeof m.text === "string" && m.text.trim().length > 0) return m.text
+		}
+		return undefined
+	}, [modifiedMessages, task])
+
 	const volume = typeof soundVolume === "number" ? soundVolume : 0.5
 	const [playNotification] = useSound(`${audioBaseUri}/notification.wav`, { volume, soundEnabled, interrupt: true })
 	const [playCelebration] = useSound(`${audioBaseUri}/celebration.wav`, { volume, soundEnabled, interrupt: true })
@@ -2042,6 +2056,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								: undefined) ?? currentTaskItem?.activeTimeMs
 						}
 						workflowVizMeta={workflowVizMeta}
+						lastEventText={lastEventText}
 					/>
 				</>
 			) : (
