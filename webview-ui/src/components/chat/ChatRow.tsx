@@ -1671,8 +1671,7 @@ export const ChatRowContent = ({
 							} else {
 								// Non-HTTP-status-code error message - store full text as errorDetails
 								body = t("chat:apiRequest.errorMessage.unknown")
-								docsURL =
-									"mailto:alsterg@gmail.com?subject=Unknown API Error&body=[Please include full error details]"
+								docsURL = "https://discord.gg/x39UEEQ2"
 							}
 						}
 
