@@ -281,17 +281,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// ─── End Assistant Agent Chat View ───────────────────────────────────
 
-	// Native TreeView used as a reliable file drop target.  See
+	// Native TreeView used as a reliable file drop target on Desktop.  See
 	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default
 	// via the view contribution in package.json so it stays out of the way.
-	const contextDropZoneProvider = new ContextDropZoneProvider()
-	contextDropZoneProvider.setShoferProvider(provider)
-	context.subscriptions.push(
-		vscode.window.createTreeView(ContextDropZoneProvider.viewId, {
-			treeDataProvider: contextDropZoneProvider,
-			dragAndDropController: contextDropZoneProvider,
-		}),
-	)
+	//
+	// In code-server / VSCode Web the webview-root drop handler
+	// (ChatView.handleWebviewDrop) receives drops onto the main chat window
+	// directly — the Electron overlay that swallows those events is
+	// Desktop-only — so the TreeView is redundant in web and we skip it.
+	// The matching `"when": "!isWeb"` clause on the view contribution in
+	// package.json keeps the view itself hidden there.
+	if (vscode.env.uiKind === vscode.UIKind.Desktop) {
+		const contextDropZoneProvider = new ContextDropZoneProvider()
+		contextDropZoneProvider.setShoferProvider(provider)
+		context.subscriptions.push(
+			vscode.window.createTreeView(ContextDropZoneProvider.viewId, {
+				treeDataProvider: contextDropZoneProvider,
+				dragAndDropController: contextDropZoneProvider,
+			}),
+		)
+	}
 
 	// Explorer context-menu command: "Add to Shofer Context".  This is the
 	// fallback for runtimes where HTML5 drag/drop into the webview iframe is

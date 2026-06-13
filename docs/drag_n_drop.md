@@ -8,16 +8,53 @@ chat input and are prepended to the message text on Send.
 
 ## Why a native TreeView?
 
-The webview's HTML5 `drop` events are unreliable: VSCode Desktop's
-cross-origin webview overlay swallows `dragstart` / `dragover` / `drop`
-events at the iframe root, and the same limitation is inherited by
-code-server. Even native form-control descendants do not consistently
-receive these events in this runtime.
+The webview's HTML5 `drop` events are unreliable on Desktop. VSCode Desktop
+renders the webview as a **cross-origin `<iframe>` inside an Electron
+`<webview>`**, and Electron's security model breaks DOM drag & drop there in
+two ways:
 
-To work around this, we register a **native VSCode TreeView** as the drop
-target. TreeViews use VSCode's `TreeDragAndDropController` API, which
-operates outside the webview sandbox and is therefore reliable on both
-Desktop and code-server.
+1. **`dataTransfer.getData()` is sanitized to empty** for cross-origin frames.
+   The `dragover` / `drop` events still fire and `dataTransfer.types` may even
+   be populated, but every `getData()` call returns `""` — so the payload can
+   never be read inside the webview.
+2. **`File.path` was removed** from webview `File` objects (recent Electron),
+   so even when `dataTransfer.files` is populated (OS-file drags), only the
+   file _name_ is available, not the absolute path needed to build an
+   `@mention`. Only image content survives (read via `FileReader`).
+
+> **code-server / VSCode Web behave differently.** Both breakages above are
+> **Electron-specific**, not generically "cross-origin." code-server runs in a
+> real browser, where the HTML drag-data store _is_ readable during the `drop`
+> event (the spec's "protected mode" only blocks `getData()` during
+> `dragenter`/`dragover`, not `drop`). So on code-server the **webview-root
+> handler** ([`ChatView.handleWebviewDrop`](../webview-ui/src/components/chat/ChatView.tsx:876))
+> fires on the **main chat window** — you can drop directly onto it, not just
+> onto the TreeView. The code's own comments confirm this: the root handler
+> "works on code-server / VSCode Web," while the overlay that swallows
+> root-level events is described as Desktop-only. (Caveat: the `cwd` bug in
+> "Known issues" #3 still applies, so paths come out absolute; and OS-file
+> drags into the browser still yield no usable path — only VSCode-internal
+> drags carry `text/uri-list`.)
+>
+> Because of this, the TreeView is **not registered in web**: `extension.ts`
+> only calls `createTreeView` when `vscode.env.uiKind === vscode.UIKind.Desktop`,
+> and the view contribution carries `"when": "!isWeb"` so it is hidden in
+> code-server / VSCode Web. The chat webview's drop handler covers web there.
+
+To work around the **Desktop** limitation, we register a **native VSCode
+TreeView** as the drop target. TreeViews use VSCode's `TreeDragAndDropController` API, whose
+`handleDrop` runs in the **extension host** (outside the webview sandbox) and
+reads the payload via `dataTransfer.get("text/uri-list").asString()` — not
+subject to the sanitization above. It is therefore the only reliable in-app
+drop target on Desktop.
+
+> **Important caveat:** a `TreeDragAndDropController` only receives drags that
+> **originate inside VSCode** (the Explorer or an editor tab). Files dragged
+> from the **OS file manager** (Finder / Windows Explorer / desktop) are _not_
+> delivered to a custom tree's `handleDrop` at all. The only native target
+> that accepts OS-file drops is VSCode's own Explorer — drop there first, then
+> use the Explorer right-click command (below) or drag from the Explorer into
+> the drop zone.
 
 The TreeView is registered with `"initialSize": 1` so it appears
 as a single thin row at the bottom of the Shofer sidebar — minimal
@@ -132,34 +169,99 @@ incoming task's state — including `droppedContextFiles`. This
 prevents file tags from one task leaking into another, and
 preserves tags per task across task switches.
 
-## Gaps & improvements
+## Troubleshooting: "drag & drop doesn't work on Desktop"
 
-- **Missing component in the Architecture diagram**: The diagram only
-  shows the native TreeView → ChatView path. The ChatTextArea drop
-  handler and the shared `droppedContextFiles.ts` utility module are
-  not represented, giving an incomplete picture of the data flow.
+The three drop paths behave very differently on Desktop. This table reflects a
+full trace of the live code (2026-06-13):
 
-- **Missing `addUrisToContext` entry in the Components table**: The
-  exported helper function that is shared between the TreeView drop
-  handler and the Explorer context-menu command
-  (`shofer.addFilesToContext`) is not documented. It handles
-  the `postMessageToWebview`, status-bar message, and sidebar-focus
-  side effects.
+| Path                                                       | Runs in        | Fires on Desktop?                            | Recovers correct path?              | Logging    |
+| ---------------------------------------------------------- | -------------- | -------------------------------------------- | ----------------------------------- | ---------- |
+| **Native TreeView** (`ContextDropZoneProvider.handleDrop`) | extension host | ✅ for VSCode-internal drags only            | ✅ via `provider.cwd`               | ❌ none    |
+| **Textarea** (`ChatTextArea.handleDrop`)                   | webview        | ⚠️ event fires, `getData()` usually stripped | ⚠️ no — `cwd` never passed (see #3) | ✅ verbose |
+| **Webview root** (`ChatView.handleWebviewDrop`)            | webview        | ❌ swallowed by the overlay                  | ❌ no — `window.CWD` unset (see #3) | ✅ verbose |
 
-- **No test coverage listed**: The doc does not reference the existing
-  test coverage. The `ChatTextArea` drop handler has tests in
+### Diagnosis steps
+
+1. **Identify the drag source.** OS file manager → only VSCode's Explorer can
+   accept it (see the caveat under "Why a native TreeView?"). VSCode Explorer
+   or an editor tab → the native TreeView should accept it.
+2. **Enable webview logging.** Drop logs are emitted at **info** level under
+   the **"webview"** category (`webviewLog` is handled in
+   [`webviewMessageHandler.ts:565`](../src/core/webview/webviewMessageHandler.ts:565)).
+   If Settings → Logging is at `warn`/`error`, or the webview category is off,
+   these logs are invisible — set it to `info`/`debug` first.
+3. **Drop on the chat input box** and look for `[drop:textarea] fired … types=[…] payloads={…}`.
+   If `types` is non-empty but `payloads` is `{}`, that confirms the Electron
+   `getData()` sanitization — the webview path **cannot** work on Desktop, and
+   the native TreeView (or the Explorer command) is the only option.
+4. **Fall back to the Explorer command.** Right-click in the Explorer →
+   _Add to Shofer Context_ (`shofer.addFilesToContext`,
+   [`extension.ts:303`](../src/extension.ts:303)) bypasses drag entirely and
+   uses the correct-`cwd` code path. This is the most reliable route on Desktop.
+
+## Known issues (confirmed)
+
+These are concrete defects found tracing the code, in rough priority order for
+fixing the Desktop experience:
+
+1. **The drop zone is physically un-hittable.** The TreeView is registered with
+   `"initialSize": 1` ([`src/package.json`](../src/package.json), the
+   `shofer.contextDropZone` view) — a ~1px sliver beneath the chat webview. A
+   `TreeDragAndDropController` only fires `handleDrop` when the drop lands on the
+   tree's rows, and there is effectively no row to hit. This alone can make every
+   attempt silently miss. **Fix idea:** give it a usable `initialSize`, or make
+   the view expand/highlight while a drag is in progress.
+
+2. **The native path has zero logging.**
+   [`ContextDropZoneProvider.handleDrop`](../src/core/webview/ContextDropZoneProvider.ts:124)
+   emits nothing, so the one path expected to work on Desktop is completely
+   unobservable. **Fix idea:** enumerate the dropped `dataTransfer` MIME types
+   and the parsed URI count via `webviewLog`, mirroring the webview handlers.
+
+3. **`cwd` is never wired into either webview drop path**, so even a _successful_
+   webview drop emits **absolute** paths instead of workspace-relative
+   `@/path` mentions (the `if (cwd && …)` branch in
+   [`parseDroppedUris`](../webview-ui/src/utils/droppedContextFiles.ts:79) is
+   skipped):
+
+    - `ChatTextArea` is rendered **without a `cwd` prop**
+      ([`ChatView.tsx:2375`](../webview-ui/src/components/chat/ChatView.tsx:2375));
+      inside, `cwd` is `undefined`.
+    - `handleWebviewDrop` reads `(window as any).CWD`
+      ([`ChatView.tsx:888`](../webview-ui/src/components/chat/ChatView.tsx:888)),
+      but **`window.CWD` is never assigned anywhere** in the codebase.
+
+    Only the native TreeView path (`addUrisToContext`, using `provider.cwd`,
+    [`ContextDropZoneProvider.ts:35`](../src/core/webview/ContextDropZoneProvider.ts:35))
+    produces correct relative paths.
+
+4. **`dropMimeTypes` advertises only `text/uri-list`.** The native controller
+   declares `dropMimeTypes = ["text/uri-list"]`
+   ([`ContextDropZoneProvider.ts:104`](../src/core/webview/ContextDropZoneProvider.ts:104)).
+   `handleDrop` is only invoked when an advertised type is present; some VSCode
+   builds deliver internal drags under additional MIME types
+   (`application/vnd.code.tree.*`, `resourceurls`). The webview-side
+   [`extractUriPayload`](../webview-ui/src/utils/droppedContextFiles.ts:23)
+   already probes seven candidate types, but the native controller does not.
+   **Fix idea:** advertise the extra types so `handleDrop` fires and can at
+   least log the payload for diagnosis.
+
+## Documentation gaps (lower priority)
+
+- **Architecture diagram is incomplete**: it shows only the native TreeView →
+  ChatView path. The ChatTextArea and webview-root handlers, and the shared
+  `droppedContextFiles.ts` module, are not represented.
+
+- **No test coverage for the native path**: the `ChatTextArea` handler has tests in
   [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)
-  covering path drops, empty lines, image drops, long paths, special
-  characters, and outside-workspace paths. The native
-  `ContextDropZoneProvider` and the `droppedContextFiles.ts` parser
-  have no dedicated tests.
+  (path drops, empty lines, image drops, long paths, special characters,
+  outside-workspace paths), but the native `ContextDropZoneProvider` and the
+  `droppedContextFiles.ts` parser have no dedicated tests.
 
-- **`ShoferIgnoreController` not mentioned**: The doc describes files
-  being added to context unconditionally. The
-  [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
-  (currently defined but not wired) would filter dropped files against
-  `.shofer/shoferignore` rules. The doc should note this pending integration.
+- **`ShoferIgnoreController` interaction unstated**: dropped files are added to
+  context without filtering against `.shofer/shoferignore`. (Note:
+  `ShoferIgnoreController` is now widely wired across the codebase — see
+  `settings_overlay.md` — so this is a genuine missing integration in the drop
+  path, not merely a doc omission.)
 
-- **No light/dark theme screenshot**: The UI section describes the
-  drop-zone appearance in prose but lacks a screenshot showing what it
-  actually looks like in the sidebar.
+- **No light/dark theme screenshot** of the drop zone in the sidebar.

@@ -88,7 +88,8 @@
 					"type": "tree",
 					"id": "shofer.contextDropZone",
 					"name": "%views.dropZone.name%",
-					"initialSize": 1
+					"initialSize": 1,
+					"when": "!isWeb"
 				}
 			]
 		},
