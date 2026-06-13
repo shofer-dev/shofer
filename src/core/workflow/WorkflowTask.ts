@@ -1033,8 +1033,32 @@ export class WorkflowTask extends Task {
 				agentTask.completionSchema = outputSchema ? contractToJsonSchema(outputSchema) : undefined
 			}
 			agentTask?.messageQueueService.addMessage(prompt)
+
+			// CRITICAL: clear the task's stale terminal markers.
+			//
+			// When this agent finished its PREVIOUS stake it called
+			// attempt_completion, which drove its Task to a terminal "completed"
+			// lifecycle (it now sits in the `completion_result` ask). Queuing the
+			// next prompt above revives it, but that revival is asynchronous —
+			// the queued message isn't drained until the ask's next poll tick.
+			//
+			// Meanwhile waitForStakes decides whether to wait by inspecting the
+			// background-child handle and the TaskManager lifecycle. If we leave
+			// them reading "completed", waitForStakes' preseed sees a terminal
+			// task, treats the stake as already done, and returns in ~0ms WITHOUT
+			// the agent ever running. collectStakeResults then reads the STALE
+			// prior completion (e.g. a readiness ack instead of the evaluate
+			// verdict), which fails the output contract, retries out, and
+			// dead-locks the flow.
+			//
+			// Resetting both markers to "running" synchronously — before
+			// waitForStakes runs — makes the wait block on the genuine next
+			// TaskCompleted event, so we collect the FRESH result.
+			const handle = this.backgroundChildren.get(agentState.taskId)
+			if (handle) handle.status = "running"
+			provider.taskManager.setState(agentState.taskId, { lifecycle: "running" })
 			workflowLog.info(
-				`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' prompt queued (${prompt.length} chars)`,
+				`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' prompt queued (${prompt.length} chars), terminal markers cleared`,
 			)
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to resume agent '${agentName}':`, error)
