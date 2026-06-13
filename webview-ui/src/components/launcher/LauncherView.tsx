@@ -113,7 +113,7 @@ const LauncherCard = ({
 
 export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps) => {
 	const { t } = useAppTranslation()
-	const { setMode } = useExtensionState()
+	const { setMode, pendingWorktreeDir, setPendingWorktreeDir } = useExtensionState()
 	const [workflows, setWorkflows] = useState<LauncherWorkflow[]>([])
 	const [workflowsLoaded, setWorkflowsLoaded] = useState(false)
 
@@ -147,10 +147,15 @@ export const LauncherView = ({ modes, initialStage, onClose }: LauncherViewProps
 
 	const handlePickWorkflow = useCallback(
 		(name: string) => {
-			vscode.postMessage({ type: "createWorkflow", flowName: name })
+			// Forward the worktree the user picked via WorktreeIndicator before
+			// launching, so the whole workflow tree (the WorkflowTask and every
+			// agent it spawns) runs inside that worktree. Mirrors the newTask path;
+			// clear the pending selection after consuming it.
+			vscode.postMessage({ type: "createWorkflow", flowName: name, worktreeDir: pendingWorktreeDir ?? undefined })
+			if (pendingWorktreeDir) setPendingWorktreeDir(null)
 			onClose()
 		},
-		[onClose],
+		[onClose, pendingWorktreeDir, setPendingWorktreeDir],
 	)
 
 	const title = useMemo(() => {

@@ -4454,9 +4454,33 @@ export const webviewMessageHandler = async (
 				provider.log(
 					`[createWorkflow] Slang source for '${flowName}' is ${slangSource.length} chars. First 200: ${slangSource.slice(0, 200)}`,
 				)
-				const task = await createWorkflowTask(provider, slangSource, flowParams)
+				// Resolve the worktree the user picked in the chat dropdown before
+				// launching (same path as `newTask`): an explicit worktree, or an
+				// auto-created one when the webview signals `autoCreateWorktree` and
+				// none was picked. The whole workflow tree runs inside this cwd —
+				// the WorkflowTask and every agent it spawns (see spawnAgentTask).
+				let worktreeDir = message.worktreeDir
+				if (message.autoCreateWorktree && !worktreeDir) {
+					const defaults = await handleGetWorktreeDefaults(provider)
+					const createResult = await handleCreateWorktree(provider, {
+						path: defaults.suggestedPath,
+						branch: defaults.suggestedBranch,
+						baseBranch: undefined, // defaults to HEAD
+						createNewBranch: true,
+					})
+					if (createResult.success && createResult.worktree) {
+						worktreeDir = createResult.worktree.path
+					} else {
+						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
+						vscode.window.showErrorMessage(`Failed to create worktree: ${createResult.message}`)
+						break
+					}
+				}
+
+				const task = await createWorkflowTask(provider, slangSource, flowParams, worktreeDir)
 				provider.log(
-					`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}' — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
+					`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}'` +
+						`${worktreeDir ? ` in worktree ${worktreeDir}` : ""} — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
 				)
 
 				// Pop the current task to the background (parallel execution)

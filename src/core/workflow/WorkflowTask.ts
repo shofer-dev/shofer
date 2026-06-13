@@ -838,6 +838,10 @@ export class WorkflowTask extends Task {
 				openInStack: false,
 				keepCurrentTask: true,
 				completionSchema,
+				// Inherit the workflow's worktree: every agent in the tree operates
+				// inside the same directory the WorkflowTask runs in (the worktree the
+				// user selected at launch, or the workspace root when none was picked).
+				cwd: this.cwd,
 			})
 			if (task) {
 				// Register with TaskManager so the ManagedTask event listeners
@@ -1436,6 +1440,12 @@ export async function createWorkflowTask(
 	provider: ShoferProvider,
 	slangSource: string,
 	flowParams?: Record<string, unknown>,
+	/**
+	 * Worktree directory the whole workflow runs in. When set, the WorkflowTask
+	 * and every agent it spawns operate inside this worktree (see
+	 * {@link WorkflowTask.spawnAgentTask}). Falls back to the workspace root.
+	 */
+	cwd?: string,
 ): Promise<WorkflowTask> {
 	const { ast, errors } = parseSlang(slangSource)
 	if (errors.length > 0) throw new Error(`Slang parse errors:\n${errors.join("\n")}`)
@@ -1458,6 +1468,9 @@ export async function createWorkflowTask(
 		slangSource,
 		flowDecl,
 		flowParams,
+		// Run the workflow root inside the selected worktree (if any); child
+		// agents inherit this via spawnAgentTask.
+		cwd,
 		// Wire the same provider-level event forwarding that createTask() gets,
 		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
 		onCreated: provider.onTaskCreated,
