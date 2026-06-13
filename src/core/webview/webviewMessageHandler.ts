@@ -2299,25 +2299,12 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "setModeApiConfig":
-			// Per-mode API-config association, set from Settings → Modes. Writes
-			// modeApiConfigs[mode] = configId WITHOUT activating the profile (the
-			// edited mode may not be the active one) and WITHOUT touching the global
-			// default (that is Settings → Providers). The association is applied when
-			// a task is started in / switched to that mode (getModeConfigId).
+			// Per-mode API-config association, set from Settings → Modes. Keeps
+			// modeApiConfigs + the custom-mode YAML provider + the contextProxy copy
+			// 1:1; does NOT activate the profile or touch the global default.
 			if (message.mode && typeof message.text === "string") {
 				try {
-					await provider.providerSettingsManager.setModeConfig(message.mode, message.text)
-					// Keep the contextProxy copy the webview reads in sync with the
-					// providerProfiles store we just wrote, then push it.
-					const currentModeApiConfigs = (provider.contextProxy.getValues().modeApiConfigs ?? {}) as Record<
-						string,
-						string
-					>
-					await provider.contextProxy.setValue("modeApiConfigs", {
-						...currentModeApiConfigs,
-						[message.mode]: message.text,
-					})
-					await provider.postInitState()
+					await provider.setModeApiConfig(message.mode as Mode, message.text)
 				} catch (error) {
 					provider.log(
 						`Error setting mode API configuration: ${error instanceof Error ? error.message : String(error)}`,

@@ -2440,6 +2440,27 @@ export class ShoferProvider
 	}
 
 	/**
+	 * Set the PER-MODE API-config association for `mode` (Settings → Modes),
+	 * WITHOUT activating the profile or changing the global default (that is
+	 * Settings → Providers). Keeps all three sources of truth 1:1:
+	 *  - `modeApiConfigs[mode]` in the providerProfiles store (read by
+	 *    `getModeConfigId` for mode switch / task creation),
+	 *  - the custom-mode YAML `provider:` field (read FIRST in
+	 *    `handleUserModeSwitch` — without syncing it a stale value would win),
+	 *  - the `contextProxy` `modeApiConfigs` copy the webview reads.
+	 * Then pushes the new state.
+	 */
+	public async setModeApiConfig(mode: Mode, configId: string): Promise<void> {
+		await this.providerSettingsManager.setModeConfig(mode, configId)
+		const listApiConfig = await this.providerSettingsManager.listConfig()
+		const configName = listApiConfig.find((c) => c.id === configId)?.name
+		await this.syncCustomModeProviderToYaml(mode, configName)
+		const currentModeApiConfigs = (this.contextProxy.getValues().modeApiConfigs ?? {}) as Record<string, string>
+		await this.contextProxy.setValue("modeApiConfigs", { ...currentModeApiConfigs, [mode]: configId })
+		await this.postInitState()
+	}
+
+	/**
 	 * Mirrors the per-mode API config selection back into the custom-mode YAML's
 	 * `provider:` field, so the YAML and the saved `modeApiConfigs` mapping stay 1:1.
 	 *
