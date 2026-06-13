@@ -29,10 +29,11 @@ Drag image files from the OS file manager onto the chat textarea. The [`handleDr
 
 Click the image icon (🖼️) in the bottom-right corner of the textarea. This triggers `onSelectImages`, which opens a native OS file picker dialog.
 
-The button is hidden (opacity 0) when:
-
-- No input is present (text or images)
-- The model doesn't support images ([`shouldDisableImages`](#model-aware-gating) is `true`)
+The button is greyed out (dimmed + desaturated, `pointer-events: none`) when
+[`shouldDisableImages`](#model-aware-gating) is `true` — i.e. the selected model
+doesn't support images, or the per-message image cap is reached. Its tooltip
+names the reason ("The selected model doesn't support images" or "Maximum N
+images per message reached") rather than the generic "Add images" label.
 
 ## Supported Image Formats
 
@@ -52,17 +53,20 @@ The lookup is **fail-closed**: if the side-channel command is unavailable (provi
 
 When `shouldDisableImages` is `true`:
 
-- Pasting images is silently ignored
-- Drag-dropping images is ignored
-- The image button is hidden
-- The placeholder text omits image instructions
+- Pasting or drag-dropping an image surfaces a **transient inline notice**
+  ("Image not added — …", auto-clears after a few seconds) instead of being
+  silently ignored
+- The image button is **greyed out and non-interactive**, and its tooltip
+  names the reason (model lacks vision vs. per-message cap reached)
+- The placeholder bottom hint omits the word "images" (`drag files to add to
+context` vs. `drag files/images to add to context`)
 
 The full chain:
 
 1. Model catalog (fetcher) sets `supportsImages` per model
 2. The API handler exposes `getModel().info.supportsImages`
 3. The provider checks this before constructing the system prompt
-4. The webview derives `shouldDisableImages` in [`ChatView.tsx:1248`](../webview-ui/src/components/chat/ChatView.tsx:1248) as `!model?.supportsImages || selectedImages.length >= MAX_IMAGES_PER_MESSAGE` — so images are gated off both when the model lacks vision support **and** once the per-message image cap is reached
+4. The webview derives `shouldDisableImages` in [`ChatView.tsx:1294`](../webview-ui/src/components/chat/ChatView.tsx:1294) as `!model?.supportsImages || selectedImages.length >= MAX_IMAGES_PER_MESSAGE` — so images are gated off both when the model lacks vision support **and** once the per-message image cap is reached
 5. [`ChatTextArea`](../webview-ui/src/components/chat/ChatTextArea.tsx) receives `shouldDisableImages` as a prop and uses it to gate paste/drop/button
 
 ## Image Display in the Chat
