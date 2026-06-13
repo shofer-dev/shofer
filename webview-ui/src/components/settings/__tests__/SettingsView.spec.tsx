@@ -603,16 +603,12 @@ describe("SettingsView - Allowed Commands", () => {
 		const removeButton = within(content).getByTestId("remove-command-0")
 		fireEvent.click(removeButton)
 
-		// Verify command was removed
+		// Verify command was removed from the list.
 		expect(within(content).queryByText("npm test")).not.toBeInTheDocument()
 
-		// Verify VSCode message was sent
-		expect(vscode.postMessage).toHaveBeenLastCalledWith({
-			type: "updateSettings",
-			updatedSettings: {
-				allowedCommands: [],
-			},
-		})
+		// Like handleAddCommand, removal only updates cachedState — it does NOT
+		// post updateSettings. Persistence happens on the SettingsView "Save"
+		// button click, so no postMessage assertion here.
 	})
 
 	describe("SettingsView - Tab Navigation", () => {

@@ -23,7 +23,12 @@ vi.mock("@src/utils/vscode", () => ({
 // The shared test-utils render wrapper does not provide ExtensionStateContextProvider,
 // so stub the hook (matching the pattern in MarkdownBlock.spec.tsx).
 vi.mock("@src/context/ExtensionStateContext", () => ({
-	useExtensionState: () => ({ renderContext: "sidebar" }),
+	useExtensionState: () => ({
+		renderContext: "sidebar",
+		setMode: vi.fn(),
+		pendingWorktreeDir: undefined,
+		setPendingWorktreeDir: vi.fn(),
+	}),
 }))
 
 // Mock TranslationProvider to pass through children

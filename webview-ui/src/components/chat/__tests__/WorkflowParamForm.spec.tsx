@@ -31,7 +31,7 @@ describe("WorkflowParamForm", () => {
 		const textInput = screen.getByLabelText(/^feature/) as HTMLInputElement
 		const numberInput = screen.getByLabelText(/^count/) as HTMLInputElement
 		const checkbox = screen.getByLabelText(/^enabled/) as HTMLInputElement
-		expect(textInput.type).toBe("text")
+		expect(textInput.type).toBe("textarea") // string params render as a multiline textarea
 		expect(numberInput.type).toBe("number")
 		expect(checkbox.type).toBe("checkbox")
 
@@ -49,12 +49,13 @@ describe("WorkflowParamForm", () => {
 		})
 	})
 
-	it("seeds fields from defaults and submits Enter on a text field", () => {
+	it("seeds fields from defaults and submits Ctrl+Enter on a textarea field", () => {
 		const params: ParamField[] = [{ name: "feature", type: "string", default: "hello" }]
 		const onSubmit = renderForm(params)
-		const input = screen.getByLabelText(/^feature/) as HTMLInputElement
+		const input = screen.getByLabelText(/^feature/) as HTMLTextAreaElement
 		expect(input.value).toBe("hello")
-		fireEvent.keyDown(input, { key: "Enter" })
+		// Plain Enter inserts a newline in the textarea; submit is Ctrl/Cmd+Enter.
+		fireEvent.keyDown(input, { key: "Enter", ctrlKey: true })
 		expect(onSubmit).toHaveBeenCalledWith(JSON.stringify({ feature: "hello" }))
 	})
 
