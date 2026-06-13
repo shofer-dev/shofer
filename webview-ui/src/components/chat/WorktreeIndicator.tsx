@@ -57,14 +57,17 @@ export const WorktreeIndicator = () => {
 	// Switching/creating worktrees is only allowed before that point.
 	const hasActiveTask = (shoferMessages?.length ?? 0) > 0
 
-	// Workflows are the exception: a running WorkflowTask makes no filesystem
-	// changes itself (only the agents it spawns do, and they read the workflow's
-	// cwd at spawn), so its worktree stays editable. Selecting/creating a worktree
-	// re-points the workflow and every agent it spawns afterward.
+	// Workflows are a limited exception: a WorkflowTask makes no filesystem
+	// changes itself, so its worktree stays editable WHILE it is still collecting
+	// flow params / the initial questions — before the slang loop starts spawning
+	// agents. Once started (flowState.started), subtasks exist and their cwd is
+	// locked, so the control becomes read-only like an ordinary task.
 	const isWorkflowTask = currentTaskItem?.isWorkflow === true
+	const workflowStarted = (currentTaskItem?.flowState as { started?: boolean } | undefined)?.started === true
+	const isEditableWorkflow = isWorkflowTask && !workflowStarted
 
-	// The worktree control is read-only only for ordinary running tasks.
-	const locked = hasActiveTask && !isWorkflowTask
+	// Read-only for ordinary running tasks, and for workflows once they've started.
+	const locked = hasActiveTask && !isEditableWorkflow
 
 	// The "current" worktree from the list reflects the workspace's git
 	// checkout (always master in the embedded model). Once a task is active,
@@ -194,10 +197,10 @@ export const WorktreeIndicator = () => {
 				// Worktree is locked once an ordinary task is running; no-op.
 				return
 			}
-			if (hasActiveTask && isWorkflowTask) {
-				// Running workflow: re-point it (and its future agents) at this
-				// worktree live. Send a concrete path even for the current worktree
-				// (its path is the repo root).
+			if (hasActiveTask && isEditableWorkflow) {
+				// Not-yet-started workflow: re-point it (and the agents it will
+				// spawn) at this worktree. Send a concrete path even for the current
+				// worktree (its path is the repo root).
 				vscode.postMessage({ type: "setWorkflowWorktree", worktreeDir: wt.path })
 				return
 			}
@@ -209,7 +212,7 @@ export const WorktreeIndicator = () => {
 				setPendingWorktreeDir(wt.path)
 			}
 		},
-		[locked, hasActiveTask, isWorkflowTask, setPendingWorktreeDir],
+		[locked, hasActiveTask, isEditableWorkflow, setPendingWorktreeDir],
 	)
 
 	const handleCreate = useCallback(() => {
@@ -222,15 +225,15 @@ export const WorktreeIndicator = () => {
 		(createdPath?: string) => {
 			refresh()
 			if (createdPath) {
-				if (hasActiveTask && isWorkflowTask) {
-					// Running workflow: re-point it at the freshly-created worktree live.
+				if (hasActiveTask && isEditableWorkflow) {
+					// Not-yet-started workflow: re-point it at the new worktree.
 					vscode.postMessage({ type: "setWorkflowWorktree", worktreeDir: createdPath })
 				} else {
 					setPendingWorktreeDir(createdPath)
 				}
 			}
 		},
-		[refresh, hasActiveTask, isWorkflowTask, setPendingWorktreeDir],
+		[refresh, hasActiveTask, isEditableWorkflow, setPendingWorktreeDir],
 	)
 
 	return (

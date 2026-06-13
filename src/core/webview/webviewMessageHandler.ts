@@ -4544,16 +4544,17 @@ export const webviewMessageHandler = async (
 		}
 
 		case "setWorkflowWorktree": {
-			// Re-point a running WorkflowTask at a worktree the user selected/created
-			// on the workflow surface. Only applies to WorkflowTasks: the workflow
-			// root does no filesystem work itself, and each agent reads the workflow's
-			// cwd at spawn, so agents spawned after this change run in the new
-			// worktree. Already-running agents keep their own cwd.
+			// Re-point a WorkflowTask at a worktree the user selected/created on the
+			// workflow surface — but ONLY before the slang loop has started spawning
+			// agents (i.e. during flow-param collection / the initial questions).
+			// Once `flowState.started` is set, subtasks exist and their cwd is locked;
+			// reassigning then would desync the workflow from its already-spawned
+			// agents, so we reject and re-broadcast state to re-lock the UI.
 			const dir = message.worktreeDir
 			const current = provider.getCurrentTask()
 			if (dir && current) {
 				const { WorkflowTask } = await import("../workflow/index")
-				if (current instanceof WorkflowTask) {
+				if (current instanceof WorkflowTask && !current.flowState.started) {
 					current.reassignCwd(dir)
 					// Persist so the chip and a later rehydrate reflect the new worktree.
 					try {
@@ -4564,6 +4565,11 @@ export const webviewMessageHandler = async (
 					}
 					await provider.postInitState()
 					provider.log(`[setWorkflowWorktree] WorkflowTask ${current.taskId} re-pointed to ${dir}`)
+				} else if (current instanceof WorkflowTask) {
+					provider.log(
+						`[setWorkflowWorktree] ignored — workflow ${current.taskId} already started (agents exist); worktree locked`,
+					)
+					await provider.postInitState()
 				}
 			}
 			break

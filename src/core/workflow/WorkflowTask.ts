@@ -513,6 +513,10 @@ export class WorkflowTask extends Task {
 
 	private async slangLoopInner(): Promise<void> {
 		this.slangLoopEntered = true
+		// Lock the worktree from here on: the loop is about to spawn agents
+		// (subtasks), whose cwd must not move. Persisted via serializeFlowState so
+		// the webview's WorktreeIndicator switches to read-only.
+		this.flowState.started = true
 		const provider = this.providerRef.deref()
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
 

@@ -17,6 +17,13 @@ export interface FlowState {
 	round: number
 	tokensUsed: number
 	status: FlowStatus
+	/**
+	 * True once the slang loop has entered (after flow-param collection / the
+	 * initial questions) and begun spawning agents. From this point the
+	 * workflow's worktree is locked: subtasks now exist and their cwd must not
+	 * move. Editable only while this is falsy.
+	 */
+	started?: boolean
 	/** In-flight mailbox (cleared each round). For full history, see `mailboxHistory`. */
 	mailbox: MailboxEntry[]
 	/** Accumulated history of all mailbox entries ever produced. Persisted
@@ -81,6 +88,7 @@ export function serializeFlowState(state: FlowState): Record<string, unknown> {
 		round: state.round,
 		tokensUsed: state.tokensUsed,
 		status: state.status,
+		started: state.started ?? false,
 		mailbox: state.mailbox,
 		mailboxHistory: state.mailboxHistory,
 		sourcePath: state.sourcePath,
@@ -122,6 +130,7 @@ export function deserializeFlowState(data: Record<string, unknown>): FlowState {
 		round: (data.round as number) || 0,
 		tokensUsed: (data.tokensUsed as number) || 0,
 		status: (data.status as FlowStatus) || "running",
+		started: (data.started as boolean) ?? false,
 		mailbox: (data.mailbox as MailboxEntry[]) || [],
 		mailboxHistory: (data.mailboxHistory as MailboxEntry[]) || [],
 		sourcePath: data.sourcePath as string | undefined,
