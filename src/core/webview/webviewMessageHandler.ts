@@ -4558,6 +4558,39 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "resumeWorkflow": {
+			// Resume a stopped workflow. Stopping aborts the whole tree and leaves
+			// the flow at status "aborted" (a non-terminal status) with each agent's
+			// taskId / program counter persisted. Resuming flips the persisted status
+			// back to "running" and rehydrates the task: _restoreWorkflowTask then
+			// re-instantiates a clean (non-aborted) WorkflowTask and, since "running"
+			// is non-terminal, calls start() → the slang loop resumes from the saved
+			// program counters and re-attaches/continues each agent that still exists
+			// (resumeAgentTask rehydrates a missing one from history, or marks it
+			// errored if it's gone). The aborted instance is NOT reused — _cancelTask
+			// leaves it in place but disposed, so a fresh rehydrate is required.
+			const current = provider.getCurrentTask()
+			const taskId = current?.taskId
+			if (taskId) {
+				try {
+					const { historyItem } = await provider.getTaskWithId(taskId)
+					const fs = historyItem.flowState as (Record<string, unknown> & { status?: string }) | undefined
+					if (historyItem.isWorkflow && fs && fs.status === "aborted") {
+						const resumed = { ...historyItem, flowState: { ...fs, status: "running" } }
+						await provider.updateTaskHistory(resumed)
+						await provider.createTaskWithHistoryItem(resumed)
+					} else {
+						provider.log(
+							`[resumeWorkflow] ignored — task ${taskId} is not a stopped workflow (isWorkflow=${historyItem.isWorkflow}, status=${fs?.status})`,
+						)
+					}
+				} catch (error) {
+					provider.log(`Error resuming workflow: ${error}`)
+				}
+			}
+			break
+		}
+
 		case "setWorkflowWorktree": {
 			// Re-point a WorkflowTask at a worktree the user selected/created on the
 			// workflow surface — but ONLY before the slang loop has started spawning

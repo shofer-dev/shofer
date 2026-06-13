@@ -838,6 +838,9 @@ export interface WebviewMessage {
 		// Workflow messages
 		| "listWorkflows"
 		| "createWorkflow"
+		// Resume a stopped (aborted) WorkflowTask: re-enter the slang loop and
+		// continue every agent that still exists.
+		| "resumeWorkflow"
 		// Re-point a running WorkflowTask (and its future agents) at a worktree
 		// the user selects/creates on the workflow surface.
 		| "setWorkflowWorktree"

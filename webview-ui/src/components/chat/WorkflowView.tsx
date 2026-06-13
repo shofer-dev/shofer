@@ -759,11 +759,26 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	 *   - completion_result / resume_completed_task: task is done
 	 *   - resume_task: task is paused; resume/terminate are the actions
 	 */
+	// True once a workflow has been stopped (whole tree aborted) and can be
+	// resumed. Drives the Resume button and keeps Stop hidden.
+	const workflowStopped =
+		!!currentTaskItem?.isWorkflow &&
+		(currentTaskItem.flowState as { status?: string } | undefined)?.status === "aborted"
+
 	const canStop = useMemo(() => {
 		if (isStreaming) return true
 		if (task === undefined) return false
 		if (shoferAsk === "completion_result" || shoferAsk === "resume_task" || shoferAsk === "resume_completed_task") {
 			return false
+		}
+		// A running workflow orchestrates its agents without itself streaming, so
+		// surface Stop whenever the flow is active — the user must be able to halt
+		// the whole tree at any point during the run.
+		if (
+			currentTaskItem?.isWorkflow &&
+			(currentTaskItem.flowState as { status?: string } | undefined)?.status === "running"
+		) {
+			return true
 		}
 		// Task loop is actively executing (e.g. running an auto-approved tool
 		// such as an MCP server call, or processing a tool result between API
@@ -775,7 +790,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		// considered stoppable: the user may want to abort the task instead
 		// of answering the prompt.
 		return shoferAsk !== undefined
-	}, [isStreaming, task, shoferAsk, currentTaskRuntimeState])
+	}, [isStreaming, task, shoferAsk, currentTaskRuntimeState, currentTaskItem])
 
 	const markFollowUpAsAnswered = useCallback(() => {
 		const lastFollowUpMessage = messagesRef.current.findLast((msg: ShoferMessage) => msg.ask === "followup")
@@ -1078,6 +1093,12 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		vscode.postMessage({ type: "cancelTask" })
 		setDidClickCancel(true)
 	}, [setDidClickCancel])
+
+	// Resume a previously-stopped workflow: re-enters the slang loop and
+	// continues every agent that still exists (re-attached or rehydrated).
+	const handleResumeWorkflow = useCallback(() => {
+		vscode.postMessage({ type: "resumeWorkflow" })
+	}, [])
 
 	// Handle enqueue button click from textarea
 	const handleEnqueueCurrentMessage = useCallback(() => {
@@ -2268,6 +2289,17 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								onClick={handleClearContextFiles}
 								title="Clear all">
 								<span className="codicon codicon-clear-all text-xs" />
+							</button>
+						</div>
+					)}
+					{workflowStopped && (
+						<div className="px-3 pb-2">
+							<button
+								type="button"
+								onClick={handleResumeWorkflow}
+								className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground">
+								<span className="codicon codicon-debug-continue" />
+								Resume workflow
 							</button>
 						</div>
 					)}
