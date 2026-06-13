@@ -101,6 +101,7 @@ const WelcomeViewProvider = () => {
 						apiConfiguration={apiConfiguration || {}}
 						uriScheme={uriScheme}
 						setApiConfigurationField={setApiConfigurationFieldForApiOptions}
+						fromWelcomeView
 						errorMessage={errorMessage}
 						setErrorMessage={setErrorMessage}
 					/>
