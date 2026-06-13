@@ -100,11 +100,6 @@
 				"icon": "$(add)"
 			},
 			{
-				"command": "shofer.newWorkflowButtonClicked",
-				"title": "%command.newWorkflow.title%",
-				"icon": "$(rocket)"
-			},
-			{
 				"command": "shofer.tasksButtonClicked",
 				"title": "%command.tasks.title%",
 				"icon": "$(list-tree)"
@@ -266,7 +261,7 @@
 		"menus": {
 			"view/title": [
 				{
-					"submenu": "shofer.newSubmenu",
+					"command": "shofer.plusButtonClicked",
 					"group": "navigation@1",
 					"when": "view == shofer.SidebarProvider"
 				},
@@ -357,19 +352,9 @@
 					"group": "1_actions@3"
 				}
 			],
-			"shofer.newSubmenu": [
-				{
-					"command": "shofer.plusButtonClicked",
-					"group": "1_create@1"
-				},
-				{
-					"command": "shofer.newWorkflowButtonClicked",
-					"group": "1_create@2"
-				}
-			],
 			"editor/title": [
 				{
-					"submenu": "shofer.newSubmenu",
+					"command": "shofer.plusButtonClicked",
 					"group": "navigation@1",
 					"when": "activeWebviewPanelId == shofer.TabPanelProvider"
 				},
@@ -435,11 +420,6 @@
 			{
 				"id": "shofer.terminalMenu",
 				"label": "%views.terminalMenu.label%"
-			},
-			{
-				"id": "shofer.newSubmenu",
-				"label": "%views.newSubmenu.label%",
-				"icon": "$(add)"
 			}
 		],
 		"configuration": {

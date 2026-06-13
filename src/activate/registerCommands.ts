@@ -86,36 +86,40 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		TelemetryService.instance.captureTitleButtonClicked("plus")
 
-		// "New Task" entry of the native title-bar dropdown. Opens the
-		// in-webview launcher directly at the mode-picker stage. The current
-		// task is left untouched on the stack — it is only popped to the
-		// background once the user actually picks a mode (launchTask). This
-		// keeps the active task running while the user browses, and lets them
-		// cancel out without side effects.
-		await visibleProvider.postMessageToWebview({
-			type: "action",
-			action: "launcherButtonClicked",
-			values: { launcherStage: "task" },
+		// QuickPick popup replacing the native VS Code submenu, so we can
+		// render per-item codicons (which the native submenu does not support
+		// inside view/title). Two items:
+		// - New Task → opens LauncherView at the mode-picker stage
+		// - New Workflow → opens LauncherView at the workflow-picker stage
+		const quickPick = vscode.window.createQuickPick()
+		quickPick.items = [
+			{
+				label: "New Task",
+				description: "Start a new task in a mode of your choice",
+				iconPath: new vscode.ThemeIcon("add"),
+			},
+			{
+				label: "New Workflow",
+				description: "Launch a multi-agent workflow",
+				iconPath: new vscode.ThemeIcon("rocket"),
+			},
+		]
+		quickPick.placeholder = "Choose what to create…"
+
+		quickPick.onDidChangeSelection(async (selection) => {
+			if (selection.length === 0) {
+				return
+			}
+			const stage = selection[0].label === "New Task" ? "task" : "workflow"
+			await visibleProvider.postMessageToWebview({
+				type: "action",
+				action: "launcherButtonClicked",
+				values: { launcherStage: stage },
+			})
+			quickPick.hide()
 		})
-	},
-	newWorkflowButtonClicked: async () => {
-		const visibleProvider = getVisibleProviderOrLog(outputChannel)
-
-		if (!visibleProvider) {
-			return
-		}
-
-		TelemetryService.instance.captureTitleButtonClicked("plus")
-
-		// "New Workflow" entry of the native title-bar dropdown. Opens the
-		// launcher directly at the workflow-picker stage; the current task is
-		// only popped to the background once a workflow is actually launched
-		// (createWorkflow).
-		await visibleProvider.postMessageToWebview({
-			type: "action",
-			action: "launcherButtonClicked",
-			values: { launcherStage: "workflow" },
-		})
+		quickPick.onDidHide(() => quickPick.dispose())
+		quickPick.show()
 	},
 	popoutButtonClicked: () => {
 		TelemetryService.instance.captureTitleButtonClicked("popout")
