@@ -26,19 +26,37 @@ export function mergeConsecutiveApiMessages(messages: ApiMessage[], options?: { 
 	}
 
 	const mergeRoles = new Set<Role>(options?.roles ?? ["user"]) // default: user only
+
+	// Allow merging regular messages into a summary (API-only shaping),
+	// but never merge a summary into something else.
+	const canMergePair = (prev: ApiMessage, msg: ApiMessage): boolean =>
+		prev.role === msg.role &&
+		mergeRoles.has(msg.role) &&
+		!msg.isSummary &&
+		!prev.isTruncationMarker &&
+		!msg.isTruncationMarker
+
+	// Fast path: if no adjacent same-role pair is mergeable, the merge is a
+	// no-op. Return the input unchanged instead of allocating and rebuilding
+	// the whole array — the common case on the per-request hot path. A scan of
+	// adjacent input pairs is a sound predictor because merges only ever combine
+	// adjacent elements, so no mergeable input pair ⇒ no merge happens. [perf H27]
+	let hasMergeable = false
+	for (let i = 1; i < messages.length; i++) {
+		if (canMergePair(messages[i - 1], messages[i])) {
+			hasMergeable = true
+			break
+		}
+	}
+	if (!hasMergeable) {
+		return messages
+	}
+
 	const out: ApiMessage[] = []
 
 	for (const msg of messages) {
 		const prev = out[out.length - 1]
-		const canMerge =
-			prev &&
-			prev.role === msg.role &&
-			mergeRoles.has(msg.role) &&
-			// Allow merging regular messages into a summary (API-only shaping),
-			// but never merge a summary into something else.
-			!msg.isSummary &&
-			!prev.isTruncationMarker &&
-			!msg.isTruncationMarker
+		const canMerge = prev && canMergePair(prev, msg)
 
 		if (!canMerge) {
 			out.push(msg)

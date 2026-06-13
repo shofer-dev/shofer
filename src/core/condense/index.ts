@@ -518,13 +518,20 @@ ${commandBlocks}
  * so the first message since the last summary is guaranteed to be a user message.
  */
 export function getMessagesSinceLastSummary(messages: ApiMessage[]): ApiMessage[] {
-	const lastSummaryIndexReverse = [...messages].reverse().findIndex((message) => message.isSummary)
+	// Scan backwards for the last summary instead of cloning + reversing the
+	// whole array (`[...messages].reverse()`) on every request. [perf H27]
+	let lastSummaryIndex = -1
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i].isSummary) {
+			lastSummaryIndex = i
+			break
+		}
+	}
 
-	if (lastSummaryIndexReverse === -1) {
+	if (lastSummaryIndex === -1) {
 		return messages
 	}
 
-	const lastSummaryIndex = messages.length - lastSummaryIndexReverse - 1
 	return messages.slice(lastSummaryIndex)
 }
 
