@@ -159,6 +159,46 @@ describe("SendMessageToTaskTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not reachable"))
 	})
 
+	// ─── Cross-root rejection ───────────────────────────────────────
+
+	it("rejects target with different rootTaskId (live instance)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			isBackgroundTask: true,
+			rootTaskId: "root-2",
+		})
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("does not share your root task"))
+	})
+
+	it("rejects target with different rootTaskId (no live instance, persisted)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-2", taskState: { lifecycle: "idle" } },
+		})
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("does not share your root task"))
+	})
+
+	it("rejects target with empty rootTaskId in persisted history", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+		provider.taskManager.getManagedTask.mockReturnValue(null)
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: undefined, taskState: { lifecycle: "idle" } },
+		})
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hi" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("does not share your root task"))
+	})
+
 	// ─── Busy checks ────────────────────────────────────────────────
 
 	it("sync: rejects running recipient", async () => {
@@ -176,6 +216,16 @@ describe("SendMessageToTaskTool", () => {
 		const provider = task.providerRef.deref()
 		provider.taskManager.getManagedTaskInstance.mockReturnValue(buildTargetInstance({ taskStatus: "running" }))
 		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "waiting_input" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("busy"))
+	})
+
+	it("sync: rejects waiting recipient", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(buildTargetInstance({ taskStatus: "running" }))
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "waiting" } })
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("busy"))
@@ -244,6 +294,21 @@ describe("SendMessageToTaskTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Message sent"))
 	})
 
+	it("async: idle recipient with abort=true — Form B enqueue AND wakes", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		// idle-at-ask but abort=true → loop is dead → must be woken
+		const target = buildTargetInstance({ taskStatus: "idle", abort: true })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(target)
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hello", wait: false }, task, cbs)
+
+		expect(target.messageQueueService.addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER MESSAGE"), [])
+		expect(target.cancelAndProcessQueuedMessages).toHaveBeenCalledTimes(1)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Message sent"))
+	})
+
 	// ─── Sync mode: Form B delivery + resolver ──────────────────────
 
 	it("sync: idle recipient — enqueues PEER PROMPT and blocks on resolver, no wake", async () => {
@@ -303,6 +368,59 @@ describe("SendMessageToTaskTool", () => {
 		expect(provider.createTaskWithHistoryItem).toHaveBeenCalled()
 		expect(target.messageQueueService.addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
 		expect(cbs.pushToolResult).toHaveBeenCalledWith("rehydrated result")
+	})
+
+	// ─── Sync: resolver conflict ────────────────────────────────────
+
+	it("sync: rejects when recipient already has a pending sync resolver", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(buildTargetInstance({ taskStatus: "idle" }))
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		provider.hasPendingSyncResolver.mockReturnValue(true)
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "urgent", wait: true }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("already serving a sync request"))
+	})
+
+	// ─── Sync: abortSignal cancellation ─────────────────────────────
+
+	it("sync: aborts when the caller's abortSignal fires", async () => {
+		const task = buildTask({
+			abortSignal: {
+				aborted: false,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+			},
+		})
+		const provider = task.providerRef.deref()
+		const target = buildTargetInstance({ taskStatus: "idle", abort: false })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(target)
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		// Never-resolving resolver — blocked forever until abort.
+		let capturedAdd: ((handler: () => void) => void) | undefined
+		task.abortSignal.addEventListener.mockImplementation((_event: string, handler: () => void) => {
+			capturedAdd = handler
+		})
+		provider.registerPendingSyncResolver.mockReturnValue(new Promise<string>(() => {}))
+
+		const cbs = buildCallbacks()
+		const executePromise = tool.execute(
+			{ task_id: "peer-1", message: "urgent", wait: true, timeout_sec: 999 },
+			task,
+			cbs,
+		)
+
+		// Fire the abort signal after a tick
+		await new Promise((r) => setTimeout(r, 10))
+		expect(capturedAdd).toBeDefined()
+		capturedAdd!()
+
+		await executePromise
+
+		expect(target.messageQueueService.removeMessage).toHaveBeenCalledWith("queued-msg-1")
+		expect(provider.clearPendingSyncResolver).toHaveBeenCalledWith("peer-1")
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("No response"))
 	})
 
 	it("sync: on timeout, retracts the queued prompt and clears the resolver", async () => {

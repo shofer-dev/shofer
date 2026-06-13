@@ -117,6 +117,37 @@ describe("ListBackgroundTasksTool", () => {
 		expect(result.tasks).toHaveLength(1)
 	})
 
+	// ─── Default scope (backward compat) ────────────────────────────
+
+	it("default scope is 'children' when scope is omitted", async () => {
+		const task = buildTask()
+		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "running", createdAt: 100 }]])
+		;(task.providerRef.deref as any) = () =>
+			buildProvider([{ id: "child-1", name: "Child One", state: { lifecycle: "running" }, createdAt: 100 }])
+
+		const cbs = buildCallbacks()
+		await tool.execute({}, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		expect(result.tasks).toHaveLength(1)
+		expect(result.tasks[0].task_id).toBe("child-1")
+	})
+
+	it("scope null defaults to 'children'", async () => {
+		const task = buildTask()
+		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "running", createdAt: 100 }]])
+		;(task.providerRef.deref as any) = () =>
+			buildProvider([{ id: "child-1", name: "Child One", state: { lifecycle: "running" }, createdAt: 100 }])
+
+		const cbs = buildCallbacks()
+		await tool.execute({ scope: null }, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		expect(result.tasks).toHaveLength(1)
+	})
+
 	// ─── Peers scope — ManagedTask only ─────────────────────────────
 
 	it("lists peers with same rootTaskId, excluding self", async () => {

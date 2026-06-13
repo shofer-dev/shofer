@@ -55,9 +55,7 @@ describe("CheckTaskStatusTool", () => {
 	it("returns status for a direct background child (completed)", async () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
-		task.backgroundChildren = new Map([
-			["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }],
-		])
+		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }]])
 		provider.taskManager.getManagedTaskInstance.mockReturnValue({
 			getTaskMode: vi.fn().mockResolvedValue("code"),
 		})
@@ -182,5 +180,93 @@ describe("CheckTaskStatusTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1" }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not found"))
+	})
+
+	// ─── Peer access — pending parent question ────────────────────────
+
+	it("peer surfaces pending parent question from live instance", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" }, mode: "debug" },
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			getTaskMode: vi.fn().mockResolvedValue("debug"),
+			getPendingParentQuestion: vi.fn().mockReturnValue({
+				question: "Should I refactor this module?",
+				suggestions: [{ answer: "Yes, refactor" }, { answer: "No, leave it" }],
+			}),
+		})
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Pending parent question"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Should I refactor this module?"))
+	})
+
+	// ─── Peer access — pending parent question with no suggestions ────
+
+	it("peer surfaces pending parent question with 'none' for empty suggestions", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" }, mode: "code" },
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			getTaskMode: vi.fn().mockResolvedValue("code"),
+			getPendingParentQuestion: vi.fn().mockReturnValue({
+				question: "Proceed?",
+				suggestions: [],
+			}),
+		})
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Suggestions: none"))
+	})
+
+	// ─── Peer access — mode resolution ────────────────────────────────
+
+	it("peer resolves mode from live instance", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" }, mode: "architect" },
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			getTaskMode: vi.fn().mockResolvedValue("architect"),
+		})
+		provider.getState.mockResolvedValue({
+			customModes: [{ slug: "architect", name: "Architect" }],
+		})
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Mode: Architect"))
+	})
+
+	// ─── Peer access — mode falls back to persisted history ───────────
+
+	it("peer resolves mode from persisted history when no live instance", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: {
+				rootTaskId: "root-1",
+				taskState: { lifecycle: "completed" },
+				mode: "architect",
+			},
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "completed" })
+		// No live instance
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+		provider.getState.mockResolvedValue({
+			customModes: [{ slug: "architect", name: "Architect" }],
+		})
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Mode: Architect"))
 	})
 })

@@ -61,9 +61,7 @@ describe("WaitForTaskTool", () => {
 
 	it("accepts a direct background child", async () => {
 		const task = buildTask()
-		task.backgroundChildren = new Map([
-			["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }],
-		])
+		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }]])
 		const cbs = buildCallbacks()
 		await tool.execute({ task_ids: ["child-1"] }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task: child-1"))
@@ -155,9 +153,7 @@ describe("WaitForTaskTool", () => {
 	it("accepts a mix of direct children and peers", async () => {
 		const task = buildTask()
 		const provider = task.providerRef.deref()
-		task.backgroundChildren = new Map([
-			["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }],
-		])
+		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "completed", createdAt: 100 }]])
 		provider.getTaskWithId.mockResolvedValue({
 			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "completed" } },
 		})
@@ -214,5 +210,75 @@ describe("WaitForTaskTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_ids: ["peer-1"] }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not found"))
+	})
+	// ─── needs-parent-input from peer ────────────────────────────────
+
+	it("returns immediately when peer needs parent input via managedTask:needs-parent-input", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" } },
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
+
+		// Capture the needs-parent-input handler
+		let capturedInputHandler: ((id: string) => void) | undefined
+		provider.taskManager.on.mockImplementation((event: string, handler: any) => {
+			if (event === "managedTask:needs-parent-input") {
+				capturedInputHandler = handler
+			}
+		})
+		// Mock the live instance for getPendingParentQuestion
+		provider.taskManager.getManagedTaskInstance.mockReturnValue({
+			rootTaskId: "root-1",
+			getPendingParentQuestion: vi.fn().mockReturnValue({
+				question: "Should I continue?",
+				suggestions: [{ answer: "Yes" }],
+			}),
+		})
+
+		const cbs = buildCallbacks()
+		const executePromise = tool.execute({ task_ids: ["peer-1"] }, task, cbs)
+
+		await new Promise((r) => setTimeout(r, 10))
+		expect(capturedInputHandler).toBeDefined()
+		capturedInputHandler!("peer-1")
+
+		await executePromise
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("waiting_for_parent"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Should I continue?"))
+	})
+
+	// ─── wait_for_task from completed peer (event-driven) ────────────
+
+	it("waits for peer error via managedTask:error event", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "running" } },
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "running" })
+
+		let capturedErrorHandler: ((id: string) => void) | undefined
+		provider.taskManager.on.mockImplementation((event: string, handler: any) => {
+			if (event === "managedTask:error") {
+				capturedErrorHandler = handler
+			}
+		})
+
+		const cbs = buildCallbacks()
+		const executePromise = tool.execute({ task_ids: ["peer-1"] }, task, cbs)
+
+		await new Promise((r) => setTimeout(r, 10))
+		expect(capturedErrorHandler).toBeDefined()
+		capturedErrorHandler!("peer-1")
+
+		await executePromise
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: error"))
+		expect(provider.taskManager.off).toHaveBeenCalled()
 	})
 })
