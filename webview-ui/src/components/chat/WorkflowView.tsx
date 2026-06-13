@@ -30,7 +30,7 @@ import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
-import TaskHeader from "./TaskHeader"
+import WorkflowHeader from "./WorkflowHeader"
 import TaskTreeView from "./TaskTreeView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { QueuedMessages } from "./QueuedMessages"
@@ -223,6 +223,8 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 				totalCost: number
 				ownCost: number
 				childrenCost: number
+				tokensIn: number
+				tokensOut: number
 			}
 		>
 	>(new Map())
@@ -2002,32 +2004,29 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 				<>
 					{/* WorkflowTask header: simplified — no TodoList, ContextWindow, cost
 					    breakdown, cost-limit editing, or condense. */}
-					<TaskHeader
+					<WorkflowHeader
 						task={task}
 						tokensIn={apiMetrics.totalTokensIn}
 						tokensOut={apiMetrics.totalTokensOut}
-						cacheWrites={apiMetrics.totalCacheWrites}
-						cacheReads={apiMetrics.totalCacheReads}
 						totalCost={apiMetrics.totalCost}
 						aggregatedCost={
 							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
 								? aggregatedCostsMap.get(currentTaskItem.id)!.totalCost
 								: undefined
 						}
-						hasSubtasks={
-							!!(
-								currentTaskItem?.id &&
-								aggregatedCostsMap.has(currentTaskItem.id) &&
-								aggregatedCostsMap.get(currentTaskItem.id)!.childrenCost > 0
-							)
+						aggregatedTokensIn={
+							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
+								? aggregatedCostsMap.get(currentTaskItem.id)!.tokensIn
+								: undefined
+						}
+						aggregatedTokensOut={
+							currentTaskItem?.id && aggregatedCostsMap.has(currentTaskItem.id)
+								? aggregatedCostsMap.get(currentTaskItem.id)!.tokensOut
+								: undefined
 						}
 						costLimit={currentTaskItem?.costLimit}
 						onUpdateCostLimit={undefined}
-						parentTaskId={currentTaskItem?.parentTaskId}
-						costBreakdown={undefined}
-						contextTokens={0}
 						buttonsDisabled={sendingDisabled}
-						handleCondenseContext={() => {}}
 						todos={undefined}
 						activeTimeMs={
 							(currentTaskItem

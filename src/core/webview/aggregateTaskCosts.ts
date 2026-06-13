@@ -5,6 +5,11 @@ export interface AggregatedCosts {
 	ownCost: number // This task's own API costs
 	childrenCost: number // Sum of all direct children costs (recursive)
 	totalCost: number // ownCost + childrenCost
+	// Token totals across the whole subtree (own + all descendants). The
+	// WorkflowTask root makes no LLM calls of its own, so its header relies on
+	// these to show the tree's real token usage.
+	tokensIn: number
+	tokensOut: number
 	childBreakdown?: {
 		// Optional detailed breakdown
 		[childId: string]: AggregatedCosts
@@ -27,7 +32,7 @@ export async function aggregateTaskCostsRecursive(
 	// Prevent infinite loops
 	if (visited.has(taskId)) {
 		webviewLog.warn(`[aggregateTaskCostsRecursive] Circular reference detected: ${taskId}`)
-		return { ownCost: 0, childrenCost: 0, totalCost: 0 }
+		return { ownCost: 0, childrenCost: 0, totalCost: 0, tokensIn: 0, tokensOut: 0 }
 	}
 	visited.add(taskId)
 
@@ -35,14 +40,17 @@ export async function aggregateTaskCostsRecursive(
 	const history = await getTaskHistory(taskId)
 	if (!history) {
 		webviewLog.warn(`[aggregateTaskCostsRecursive] Task ${taskId} not found`)
-		return { ownCost: 0, childrenCost: 0, totalCost: 0 }
+		return { ownCost: 0, childrenCost: 0, totalCost: 0, tokensIn: 0, tokensOut: 0 }
 	}
 
 	const ownCost = history.totalCost || 0
 	let childrenCost = 0
+	// Token totals start with this task's own usage, then accumulate descendants.
+	let tokensIn = history.tokensIn || 0
+	let tokensOut = history.tokensOut || 0
 	const childBreakdown: { [childId: string]: AggregatedCosts } = {}
 
-	// Recursively aggregate child costs
+	// Recursively aggregate child costs + tokens
 	if (history.childIds && history.childIds.length > 0) {
 		for (const childId of history.childIds) {
 			const childAggregated = await aggregateTaskCostsRecursive(
@@ -51,6 +59,8 @@ export async function aggregateTaskCostsRecursive(
 				new Set(visited), // Create new Set to allow sibling traversal
 			)
 			childrenCost += childAggregated.totalCost
+			tokensIn += childAggregated.tokensIn
+			tokensOut += childAggregated.tokensOut
 			childBreakdown[childId] = childAggregated
 		}
 	}
@@ -59,6 +69,8 @@ export async function aggregateTaskCostsRecursive(
 		ownCost,
 		childrenCost,
 		totalCost: ownCost + childrenCost,
+		tokensIn,
+		tokensOut,
 		childBreakdown,
 	}
 

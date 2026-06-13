@@ -311,6 +311,9 @@ export interface ExtensionMessage {
 		totalCost: number
 		ownCost: number
 		childrenCost: number
+		// Token totals across the whole subtree (own + all descendants).
+		tokensIn: number
+		tokensOut: number
 	}
 	taskInteractions?: TaskInteractionPayload[] // For taskInteractions response (Sequence view)
 	// Workflow response properties

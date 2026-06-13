@@ -155,6 +155,26 @@ messages.forEach((message) => {
 - **Cancelled/aborted requests** — partial cost is preserved via `updateApiReqMsg(cancelReason, ...)`
 - **Background-subtask requests** — aggregated into the parent task's total (shown with `*` indicator for subtask-inclusive totals)
 
+### Workflow Header — Whole-Tree Cost & Tokens
+
+A `WorkflowTask` is a deterministic orchestrator that makes **no LLM calls of its
+own**, so its own cost/tokens are ~0 and per-task metrics like **Context Length**
+and **Size** don't apply. The workflow surface therefore uses a dedicated
+[`WorkflowHeader`](../webview-ui/src/components/chat/WorkflowHeader.tsx) (a fork of
+[`TaskHeader`](../webview-ui/src/components/chat/TaskHeader.tsx)) that:
+
+- **drops** Context Length, the context-window progress bar, Cache, and Size, and
+- shows **API Cost** and **Tokens** aggregated across the **entire task tree**
+  (the workflow + every agent it spawned, recursively).
+
+The aggregates come from [`aggregateTaskCostsRecursive`](../src/core/webview/aggregateTaskCosts.ts),
+which walks `HistoryItem.childIds` and now sums `tokensIn`/`tokensOut` alongside
+`totalCost`. They are requested via `getTaskWithAggregatedCosts` and delivered on
+the `taskWithAggregatedCosts` message (`aggregatedCosts: { totalCost, ownCost,
+childrenCost, tokensIn, tokensOut }`). Cost was already aggregated; **token
+aggregation was added** so the workflow header's Tokens row reflects real
+tree-wide usage instead of the orchestrator's empty own-count.
+
 ### What Is NOT Counted (Known Gap)
 
 **Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveShoferMessages()`:
