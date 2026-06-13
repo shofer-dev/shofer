@@ -1,5 +1,11 @@
 # Shofer Performance Optimizations
 
+> Updated 2026-06-13: Re-verified all landed items (H0–H24, H15–H22, IPC
+> refinement) against HEAD — **all present and intact** (see
+> [Re-verification (2026-06-13)](#re-verification-2026-06-13)). Added four newly
+> identified opportunities **H25–H28** (see
+> [Newly Identified Opportunities (2026-06-13)](#newly-identified-opportunities-2026-06-13)).
+>
 > Updated 2026-06-09: Incremental messaging (IPC protocol refinement) landed.
 
 > Analysis performed 2026-05-20. Source code paths verified against HEAD.
@@ -71,6 +77,36 @@
   and its spec exist.
 - The H8 static-state cache was removed (see comment at
   [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts#L217)).
+
+## Re-verification (2026-06-13)
+
+> Full sweep of every landed item against HEAD. **All implemented optimizations
+> are present and unaffected.** Anchors below verified by direct source read.
+
+| Item                                                                 | Verified at                                                                                                                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **H5.a** `UV_THREADPOOL_SIZE = "16"`                                 | `extension.ts:11` (`if (!process.env.UV_THREADPOOL_SIZE) { … = "16" }`, before any fs import)                                                                                    |
+| **H0** debounced save                                                | `Task.ts` `SAVE_DEBOUNCE_INTERVAL_MS = 250`, `_debouncedSaveShoferMessages` (`maxWait` = 250×4), `_flushSaveShoferMessages`                                                      |
+| **H11** incremental token-bearing count                              | `Task.ts` `_tokenBearingMessageCount` field, incremented in `addToShoferMessages` / `updateShoferMessage`, recount in `overwriteShoferMessages`; `_cachedTokenUsage`             |
+| **H12** threshold compaction                                         | `Task.ts` `COMPACTION_APPEND_THRESHOLD = 100`, `_appendedSinceCompaction`; forced at `_flushSaveShoferMessages`                                                                  |
+| **H13** append handle + memoized mkdir                               | `jsonlLog.ts` `ensuredDirs: Set<string>` + `ensureDirOnce()`, `appendHandles: Map`, `disposeAppendHandle()`                                                                      |
+| **H14** BlobStore content cache                                      | `BlobStore.ts` `_readCache: Map<string,string>`, checked in `resolveRefs()` before disk                                                                                          |
+| **H23** `skipApiHistory`                                             | `ShoferProvider.ts` `getTaskWithId(id, { skipApiHistory })`; `showTaskWithId` passes `true`                                                                                      |
+| **H24** tail read + paging                                           | `ShoferProvider.ts` `COLD_LOAD_TAIL_WINDOW = 200`, `loadOlderShoferMessages`, `shoferMessagesPrepended`; `jsonlLog.ts` `readJsonLinesTail`; `preloadShoferMessages(maxMessages)` |
+| **H1+H3** parallel preload, no re-read                               | `Task.ts` `Promise.all([…getSavedShoferMessagesTail…, getSavedApiConversationHistory()])`, fire-and-forget `overwriteShoferMessages`                                             |
+| **IPC** `postInitState` / `postConfigUpdate` / `postTaskStateUpdate` | `ShoferProvider.ts:3252/3271/3289`; old `postStateToWebview*` = **zero refs** in `src/`                                                                                          |
+| **streaming deltas** focus-gated                                     | `Task.ts` `addToShoferMessages` / `updateShoferMessage` dual gate `getFocusedTaskId() === taskId \|\| getCurrentTask()?.taskId === taskId`                                       |
+| **H8 removed**                                                       | `ShoferProvider.ts:224` removal comment; `mergeAllowedCommands`/`mergeDeniedCommands` recomputed fresh in `getStateToPostToWebview()`                                            |
+| **H15** cached system prompt                                         | `Task.ts` `_cachedSystemPromptBase` / `_cachedSystemPromptKey`; busted at turn boundary + context management                                                                     |
+| **H16** cached tools array                                           | `Task.ts` `_getOrBuildTools()` → `_cachedToolsResult` / `_cachedToolsKey`; both call sites routed through it                                                                     |
+| **H17** MCP-connect gate folded into cache-miss                      | `Task.ts` `pWaitFor(() => !mcpHub.isConnecting, { timeout: 10_000 })` inside the cache-miss branch of `getSystemPrompt()`                                                        |
+| **H10** incremental consolidation                                    | `incrementalMessageProcessing.ts` `computeReach` / `findSafeSplitIndex` / `OPEN_REACH = Infinity`; spec present; `ChatView.tsx` `processorRef`                                   |
+| **H18** memoized context value                                       | `ExtensionStateContext.tsx` `contextValue = useMemo(() => ({…}), [21 deps])`                                                                                                     |
+| **H19/H20** memoized ChatRow parses                                  | `ChatRow.tsx` `parsedRagSearch` / `parsedGitSearch` keyed on `message.text`; `previousTodos = useMemo(…, [shoferMessages, message.ts])`                                          |
+| **H21** `memo(MermaidBlock)`                                         | `MermaidBlock.tsx:90` `memo(function MermaidBlock(…))`                                                                                                                           |
+| **H22** hoisted Virtuoso identities                                  | `ChatView.tsx:67` `VIRTUOSO_VIEWPORT_INCREASE`; `visibleMessages = useMemo(…)`                                                                                                   |
+
+Still open from the prior plan: **H7** (paginate `_index.json` at 1,000+ tasks).
 
 ## Task-Switch Latency: Hot / Cold / Warm Paths
 
@@ -985,15 +1021,157 @@ inside a `useMemo` rather than rebuilt inline each render.
 
 ---
 
+## Newly Identified Opportunities (2026-06-13)
+
+> Surfaced during the 2026-06-13 re-verification sweep. These are **distinct**
+> from H0–H24 / H15–H22 (verified above) and from the known-open H7. Two of them
+> (H25, H26) attack the **~1 s warm-floor** identified in
+> [Task-Switch Latency](#task-switch-latency-hot--cold--warm-paths) — the part of
+> the cold/warm cost the landed hot-path work did **not** touch. None is started.
+
+| #       | Item                                             | Path          | Description                                                                                                                                     | Risk       | Status  |
+| ------- | ------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- |
+| **H25** | Cache sorted+filtered `taskHistory` in the store | Host (state)  | `TaskHistoryStore.getAll()` re-sorts the whole map and `getStateToPostToWebview()` re-filters it on **every** state push                        | 🟢 Low     | ❌ Open |
+| **H26** | Lazy / delta `taskHistory` IPC channel           | Host↔Webview | The full `taskHistory` array is serialized + structured-cloned across IPC on every `postInitState`, even when it didn't change                  | 🟡 Medium  | ❌ Open |
+| **H27** | Fuse the per-request history-prep passes         | Host (build)  | Five sequential O(n) allocating walks (`getEffectiveApiHistory`→`getMessagesSinceLastSummary`→`merge`→`stripImages`→`clean`) run per round-trip | 🟡 Low–Med | ❌ Open |
+| **H28** | O(n) child-map for `TaskSelector.buildFlatTree`  | Webview       | O(n²) nested `filter` to find each node's children when building the task tree                                                                  | 🟢 Low     | ❌ Open |
+
+### 🟢 H25: Cache the Sorted+Filtered `taskHistory` in `TaskHistoryStore`
+
+**Targets:**
+[`TaskHistoryStore.getAll()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L142),
+[`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3590)
+
+`getAll()` rebuilds and re-sorts the entire history on **every** call:
+
+```typescript
+getAll(): HistoryItem[] {
+	return Array.from(this.cache.values()).sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
+}
+```
+
+and the only caller on the state-push path immediately re-filters it:
+
+```typescript
+taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
+```
+
+`getStateToPostToWebview()` runs inside `postInitState()` — i.e. on **every task
+switch** (cold and warm) and on settings changes. So every switch pays an
+`Array.from` + O(n log n) sort + O(n) filter over the **entire** task store to
+deliver a list whose contents are unchanged since the last switch. This is part
+of the ~1 s warm floor and it grows with total task count, not conversation
+length.
+
+**Fix:** Memoize a sorted, validity-filtered `HistoryItem[]` inside
+`TaskHistoryStore`, invalidated only inside the existing write/mutation paths
+(`upsert`/`delete`/`deleteMany`, which already hold the write lock). `getAll()`
+(and a new `getValidSortedAll()` for the state path) return the cached array.
+Reads — the common case during a switch — become O(1).
+
+**Risk:** 🟢 Low. Invalidation is confined to the already-serialized mutation
+paths; the returned array must stay treated as read-only (it already is at the
+call site).
+
+### 🟡 H26: Lazy / Delta `taskHistory` IPC Channel on Init
+
+**Target:**
+[`postInitState()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3252) →
+[`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3590)
+
+Even after H25 removes the _recompute_ cost, `postInitState` still
+**serializes + structured-clones the full `taskHistory` array** across the IPC
+boundary on every switch. Incremental messaging (2026-06-09) split the _message_
+stream into deltas but left the init snapshot carrying the entire task list —
+the analogue of H4 for `taskHistory` was never applied to the init path. For a
+user with a large history this is the sibling cost to the full-`shoferMessages`
+clone already noted as the warm floor in
+[State Broadcasting §3](#3-state-broadcasting--streaming-path-superseded-task-switch-init-still-full-array).
+
+**Fix:** Treat `taskHistory` like the other deltas. `postInitState` sends the
+list **once** (or a windowed top-N for the visible selector), and subsequent
+mutations flow through the existing `taskHistoryItemUpdated` delta channel rather
+than being re-sent inside each init snapshot. The webview already has a reducer
+for HistoryItem mutations, so this is mostly removing `taskHistory` from the init
+payload and seeding it through the delta path. A top-N window (the
+`TaskSelector` only shows a scrollable list anyway) caps the one-time cost too.
+
+**Risk:** 🟡 Medium. Touches the webview state reducer; the exhaustive
+`ExtensionMessage` switch will surface every consumer (per the Exhaustive Switch
+Rule). Sequence carefully so a switch that lands mid-mutation can't drop an
+update — mirror the `ts`/`taskId` guards used by the message deltas.
+
+### 🟡 H27: Fuse the Per-Request History-Prep Passes
+
+**Target:**
+[`Task.attemptApiRequest()`](extensions/shofer/src/core/task/Task.ts#L6579)
+build block:
+
+```typescript
+const effectiveHistory = getEffectiveApiHistory(this.apiConversationHistory) // O(n) filter
+const messagesSinceLastSummary = getMessagesSinceLastSummary(effectiveHistory) // O(n)
+const mergedForApi = mergeConsecutiveApiMessages(messagesSinceLastSummary, { roles: ["user"] }) // O(n)
+const messagesWithoutImages = maybeRemoveImageBlocks(mergedForApi, this.api) // O(n)
+const cleanConversationHistory = this.buildCleanConversationHistory(messagesWithoutImages) // O(n) + per-msg rebuild
+```
+
+This runs once **per LLM round-trip**, and a single user turn issues many
+round-trips (every tool use → another request). It is five sequential O(n)
+walks, each allocating a fresh array of the full effective history, plus the
+per-message content-block rebuild in `buildCleanConversationHistory`. Across a
+turn of `r` round-trips on `n` messages that is O(n·r) allocate-and-copy.
+
+**Fix (the safe kind):** Fuse the independent filter/transform passes into one or
+two walks (e.g. fold `getEffectiveApiHistory` + `getMessagesSinceLastSummary` +
+`mergeConsecutiveApiMessages` + image-strip into a single pass that emits the
+cleaned array directly), and give `mergeConsecutiveApiMessages` an O(1) no-op
+fast path (a single scan that, finding no adjacent same-role pair, returns the
+input array unchanged instead of rebuilding it).
+
+**Do NOT** try to cache this derived array across round-trips by prefix-cloning —
+that is exactly the **H14 index-delta reversion** trap (see
+[Reversion notes (2026-06-10)](#reversion-notes-2026-06-10)): the cleaned view is
+post-truncation/merge/strip/re-index, so any index-keyed prefix cache
+desynchronises and can send un-resolved blob refs to the LLM. The append between
+round-trips also defeats a whole-array length-keyed cache. Pass fusion is the
+win that has no such failure mode.
+
+**Risk:** 🟡 Low–Med. Pure restructuring of existing transforms; cover with the
+existing API-history fixtures to assert byte-identical output to the current
+five-pass pipeline (including the reasoning-block and image-strip edge cases).
+
+### 🟢 H28: O(n) Child-Map for `TaskSelector.buildFlatTree`
+
+**Target:**
+[`buildFlatTree()`](extensions/shofer/webview-ui/src/components/chat/TaskSelector.tsx#L43)
+
+Each node re-scans the whole history to find its children:
+
+```typescript
+const children = taskHistory.filter((i) => i.parentTaskId === item.id).sort(sortDesc)
+```
+
+Inside the recursive `visit`, this is O(n) per node → **O(n²)** to build the
+tree, run inside the `useMemo(() => buildFlatTree(taskHistory), [taskHistory])`
+that backs the task selector. The existing
+[What NOT to Optimize](#what-not-to-optimize) entry rightly calls this negligible
+**below ~500 tasks** — this item does not change that verdict, it just notes the
+fix is nearly free and worth taking opportunistically: pre-build a
+`Map<parentId, HistoryItem[]>` in one O(n) pass, sort each bucket once, and have
+`visit` read `childrenByParent.get(item.id) ?? []`. Same output shape, O(n log n)
+total.
+
+**Risk:** 🟢 Low. Pure algorithmic swap; identical tree output.
+
 ## What NOT to Optimize
 
-| Area                                        | Reason                                              |
-| ------------------------------------------- | --------------------------------------------------- |
-| `TaskSelector.buildFlatTree()` O(n²)        | Webview-side, negligible for <500 tasks             |
-| `TaskManager.restoreManagedTasks()`         | Simple O(n) loop, no I/O                            |
-| Memory from `HistoryItem` objects           | ~1 KB each — 1,000 tasks ≈ 1 MB, negligible         |
-| `extension.ts` activation order             | Already non-blocking                                |
-| `TaskHistoryStore.reconcile()` startup scan | Only runs on cold cache; mitigated by `_index.json` |
+| Area                                        | Reason                                                                  |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `TaskSelector.buildFlatTree()` O(n²)        | Webview-side, negligible for <500 tasks (cheap O(n) fix tracked as H28) |
+| `TaskManager.restoreManagedTasks()`         | Simple O(n) loop, no I/O                                                |
+| Memory from `HistoryItem` objects           | ~1 KB each — 1,000 tasks ≈ 1 MB, negligible                             |
+| `extension.ts` activation order             | Already non-blocking                                                    |
+| `TaskHistoryStore.reconcile()` startup scan | Only runs on cold cache; mitigated by `_index.json`                     |
 
 ---
 
