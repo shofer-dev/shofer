@@ -154,7 +154,16 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 					const cached = this.cacheManager.getEntry(filePath)
 
-					if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+					// Compare mtimes at integer-millisecond resolution. The scanner
+					// reads Node's fractional `stats.mtimeMs` (e.g. ...553.164) while
+					// the file watcher writes VS Code's integer `fileStat.mtime`
+					// (...553); without flooring, every file the watcher last touched
+					// would spuriously fail this fast-path and get re-read + re-hashed.
+					if (
+						cached &&
+						Math.floor(cached.mtimeMs) === Math.floor(stats.mtimeMs) &&
+						cached.size === stats.size
+					) {
 						// File unchanged — no read, no hash, no parse
 						processedFiles.add(filePath)
 						skippedCount++
@@ -718,7 +727,16 @@ export class DirectoryScanner implements IDirectoryScanner {
 					}
 
 					const cached = this.cacheManager.getEntry(filePath)
-					if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+					// Compare mtimes at integer-millisecond resolution. The scanner
+					// reads Node's fractional `stats.mtimeMs` (e.g. ...553.164) while
+					// the file watcher writes VS Code's integer `fileStat.mtime`
+					// (...553); without flooring, every file the watcher last touched
+					// would spuriously fail this fast-path and get re-read + re-hashed.
+					if (
+						cached &&
+						Math.floor(cached.mtimeMs) === Math.floor(stats.mtimeMs) &&
+						cached.size === stats.size
+					) {
 						skippedCount++
 						return
 					}

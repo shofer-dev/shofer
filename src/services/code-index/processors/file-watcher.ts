@@ -436,6 +436,18 @@ export class FileWatcher implements IFileWatcher {
 		// This ensures the full-file hash + segment hashes are persisted
 		// so the next edit starts from the correct baseline.
 		if (pointsForBatchUpsert.length === 0 && successfullyProcessedForUpsert.length > 0) {
+			// But NOT when an earlier phase failed (e.g. the stale-point
+			// `deletePointsByIds` in Phase 3a threw). Persisting the new
+			// segmentHashes here would drop the stale hashes from the cache
+			// while their points are still live in Qdrant — orphaning them
+			// permanently, since they could never be diffed as stale again.
+			// Mark the files as errored so the next save retries the cleanup.
+			if (overallBatchError) {
+				for (const { path } of successfullyProcessedForUpsert) {
+					batchResults.push({ path, status: "error", error: overallBatchError })
+				}
+				return overallBatchError
+			}
 			for (const { path, newHash, newSegmentHashes, mtimeMs, size } of successfullyProcessedForUpsert) {
 				if (newHash && mtimeMs !== undefined && size !== undefined) {
 					this.cacheManager.updateEntry(path, {

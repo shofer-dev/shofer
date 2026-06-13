@@ -24,7 +24,22 @@ export class SerializedEmbedder implements IEmbedder {
 	) {}
 
 	async createEmbeddings(texts: string[], model?: string, signal?: AbortSignal): Promise<EmbeddingResponse> {
-		return this.lane(() => this.inner.createEmbeddings(texts, model, signal))
+		const response = await this.lane(() => this.inner.createEmbeddings(texts, model, signal))
+		// Guard against silent text↔vector misalignment. The scanner and file
+		// watcher pair blocks to vectors POSITIONALLY (embeddings[i] ↔ block[i]),
+		// so a provider that drops an over-long item, sub-batches lossily, or
+		// returns a short/reordered batch would store every subsequent block
+		// under the WRONG embedding — a corruption that silently persists in
+		// Qdrant and poisons search. Fail the batch loudly instead; the
+		// scanner/watcher retry+error paths surface it rather than upserting
+		// misaligned vectors.
+		if (response.embeddings.length !== texts.length) {
+			throw new Error(
+				`Embedding count mismatch: requested ${texts.length} texts but received ` +
+					`${response.embeddings.length} embeddings. Refusing to upsert misaligned vectors.`,
+			)
+		}
+		return response
 	}
 
 	async validateConfiguration(): Promise<{ valid: boolean; error?: string }> {
