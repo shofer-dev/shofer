@@ -661,7 +661,7 @@ export class WorkflowTask extends Task {
 					`[WorkflowTask#${this.taskId}] #TRACE Deadlock at round ${this.flowState.round}. Agents: [${agentDump}] convergeExpr=${JSON.stringify(getConvergeExpr(this.flowDecl))} allCommitted=${this.allAgentsCommitted()}`,
 				)
 				await this.sayProgress(
-					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed. Aborting all children.`,
+					`⛔ Deadlock at round ${this.flowState.round}: no agent can make progress and none have committed. Aborting all children.\n\nAgent states: ${agentDump}`,
 				)
 				await super.abortBackgroundChildren()
 				await this.persistCheckpoint()
@@ -989,6 +989,9 @@ export class WorkflowTask extends Task {
 			}
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to spawn agent '${agentName}':`, error)
+			await this.sayProgress(
+				`❌ Failed to spawn agent \`${agentName}\`: ${error instanceof Error ? error.message : String(error)} — marking it errored.`,
+			)
 			agentState.status = "error"
 		}
 	}
@@ -1025,6 +1028,9 @@ export class WorkflowTask extends Task {
 			)
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to resume agent '${agentName}':`, error)
+			await this.sayProgress(
+				`❌ Failed to resume agent \`${agentName}\`: ${error instanceof Error ? error.message : String(error)} — marking it errored.`,
+			)
 			agentState.status = "error"
 		}
 	}
@@ -1250,10 +1256,21 @@ export class WorkflowTask extends Task {
 						workflowLog.error(
 							`[WorkflowTask#${this.taskId}] Agent '${name}' exceeded max retries (${MAX_RETRIES}) for output validation:\n${validationError}`,
 						)
+						// Surface the terminal validation failure to the chat — not
+						// just the logs — so the user can see WHY the agent errored
+						// (and, downstream, why the flow may deadlock).
+						await this.sayProgress(
+							`❌ Agent \`${name}\` failed output-contract validation after ${MAX_RETRIES} retries and was marked **errored**:\n\n${validationError}`,
+						)
 						state.status = "error"
 					} else {
 						workflowLog.info(
 							`[WorkflowTask#${this.taskId}] Agent '${name}' output validation failed (retry ${state.retryCount}/${MAX_RETRIES}): ${validationError}`,
+						)
+						// Surface each retry to the chat too, so a struggling agent
+						// is visible as it happens rather than silently in the logs.
+						await this.sayProgress(
+							`⚠️ Agent \`${name}\` output didn't match its schema (retry ${state.retryCount}/${MAX_RETRIES}); re-prompting:\n\n${validationError}`,
 						)
 						state.status = "idle"
 						// Re-prompt the agent with the validation error — do NOT advance opIndex
@@ -1296,6 +1313,9 @@ export class WorkflowTask extends Task {
 				)
 			} catch (error) {
 				workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to read result for '${name}':`, error)
+				await this.sayProgress(
+					`❌ Failed to read agent \`${name}\`'s result: ${error instanceof Error ? error.message : String(error)} — marking it errored.`,
+				)
 				state.status = "error"
 			}
 		}
