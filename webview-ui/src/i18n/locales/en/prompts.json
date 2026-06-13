@@ -14,7 +14,8 @@
 	},
 	"apiConfiguration": {
 		"title": "API Configuration",
-		"select": "Select which API configuration to use for this mode"
+		"select": "Select which API configuration to use for this mode",
+		"usesDefault": "No mode-specific configuration — uses the default ({{config}}) from Settings → Providers."
 	},
 	"tools": {
 		"title": "Available Tools",

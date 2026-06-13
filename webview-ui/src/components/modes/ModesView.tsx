@@ -100,8 +100,15 @@ type ModesViewProps = {
 const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, ref) => {
 	const { t } = useAppTranslation()
 
-	const { customModePrompts, listApiConfigMeta, modeApiConfigs, mode, customInstructions, customModes } =
-		useExtensionState()
+	const {
+		customModePrompts,
+		listApiConfigMeta,
+		modeApiConfigs,
+		currentApiConfigName,
+		mode,
+		customInstructions,
+		customModes,
+	} = useExtensionState()
 
 	// Staged per-mode API-config associations (mode slug → config id), edited via
 	// the "API Configuration" dropdown. Save-gated: committed on Save via
@@ -1128,6 +1135,17 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 								</SelectContent>
 							</Select>
 						</div>
+						{/* When this mode has no per-mode association, it falls back to the
+						    global default configured in Settings → Providers. */}
+						{!(pendingModeApiConfig[visualMode] ?? modeApiConfigs?.[visualMode]) && (
+							<div className="text-xs text-vscode-descriptionForeground italic">
+								{t("prompts:apiConfiguration.usesDefault", {
+									defaultValue:
+										"No mode-specific configuration — uses the default ({{config}}) from Settings → Providers.",
+									config: currentApiConfigName || "default",
+								})}
+							</div>
+						)}
 					</div>
 				</div>
 
