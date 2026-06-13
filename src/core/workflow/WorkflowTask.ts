@@ -859,7 +859,7 @@ export class WorkflowTask extends Task {
 				`[WorkflowTask#${this.taskId}] #TRACE dispatchStakes '${name}' isNew=${isNew} taskId=${state.taskId || "none"} promptLen=${prompt.length}`,
 			)
 			if (isNew) await this.spawnAgentTask(name, prompt, instr.op.output)
-			else await this.resumeAgentTask(name, prompt)
+			else await this.resumeAgentTask(name, prompt, instr.op.output)
 			state.status = "running"
 		}
 	}
@@ -996,7 +996,7 @@ export class WorkflowTask extends Task {
 		}
 	}
 
-	private async resumeAgentTask(agentName: string, prompt: string): Promise<void> {
+	private async resumeAgentTask(agentName: string, prompt: string, outputSchema?: OutputSchema): Promise<void> {
 		const agentState = this.flowState.agents.get(agentName)
 		if (!agentState?.taskId) {
 			workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' FAIL: no taskId`)
@@ -1021,6 +1021,16 @@ export class WorkflowTask extends Task {
 				const { historyItem } = await provider.getTaskWithId(agentState.taskId)
 				await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
 				agentTask = provider.taskManager.getManagedTaskInstance(agentState.taskId)
+			}
+			// Apply THIS stake's output contract as the per-task strict completion
+			// schema (or clear it when the stake has none). spawnAgentTask only sets
+			// the schema for an agent's FIRST stake, so without this an agent whose
+			// contract-bearing stake is a LATER stake (e.g. a verifier that first
+			// acknowledges readiness, then evaluates with an `output:` contract)
+			// would never get strict enforcement — the model returns prose and
+			// fails post-hoc validation, retries out, and the flow deadlocks.
+			if (agentTask) {
+				agentTask.completionSchema = outputSchema ? contractToJsonSchema(outputSchema) : undefined
 			}
 			agentTask?.messageQueueService.addMessage(prompt)
 			workflowLog.info(
@@ -1275,7 +1285,8 @@ export class WorkflowTask extends Task {
 						state.status = "idle"
 						// Re-prompt the agent with the validation error — do NOT advance opIndex
 						const retryPrompt = `\n\nYour previous response was invalid:\n${validationError}\n\nPlease retry the operation by placing ONLY a valid JSON object in your attempt_completion result (no other text, no markdown fences).`
-						await this.resumeAgentTask(name, retryPrompt)
+						// Keep THIS stake's contract applied on the retry (don't clear it).
+						await this.resumeAgentTask(name, retryPrompt, outputSchema)
 					}
 					continue
 				}
