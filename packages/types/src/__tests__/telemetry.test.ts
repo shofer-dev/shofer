@@ -12,7 +12,43 @@ import {
 	ConsecutiveMistakeError,
 	isConsecutiveMistakeError,
 	extractConsecutiveMistakeErrorProperties,
+	TelemetryEventName,
+	shoferTelemetryEventSchema,
 } from "../telemetry.js"
+
+/**
+ * Collect every event-name string accepted by the discriminated union, whether
+ * it appears as a `z.literal(...)` discriminator on a specific branch or inside
+ * the shared `z.enum([...])` discriminator on the generic branch.
+ */
+function collectUnionEventNames(): Set<string> {
+	const names = new Set<string>()
+	// zod 3.x discriminatedUnion exposes its branches via `.options`.
+	const options = (shoferTelemetryEventSchema as unknown as { options: unknown[] }).options
+	for (const opt of options) {
+		const typeSchema = (opt as { shape: { type: { value?: string; options?: readonly string[] } } }).shape.type
+		if (typeof typeSchema?.value !== "undefined") {
+			names.add(typeSchema.value) // ZodLiteral
+		} else if (Array.isArray(typeSchema?.options)) {
+			for (const v of typeSchema.options) names.add(v) // ZodEnum
+		}
+	}
+	return names
+}
+
+describe("shoferTelemetryEventSchema ↔ TelemetryEventName parity", () => {
+	it("covers every TelemetryEventName (no enum/union drift)", () => {
+		const covered = collectUnionEventNames()
+		const missing = Object.values(TelemetryEventName).filter((e) => !covered.has(e))
+		expect(missing).toEqual([])
+	})
+
+	it("does not reference any event name that is not in the enum", () => {
+		const validNames = new Set<string>(Object.values(TelemetryEventName))
+		const extra = [...collectUnionEventNames()].filter((n) => !validNames.has(n))
+		expect(extra).toEqual([])
+	})
+})
 
 describe("telemetry error utilities", () => {
 	describe("getErrorStatusCode", () => {

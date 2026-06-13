@@ -44,8 +44,6 @@ export enum TelemetryEventName {
 
 	TITLE_BUTTON_CLICKED = "Title Button Clicked",
 
-	AUTHENTICATION_INITIATED = "Authentication Initiated",
-
 	MARKETPLACE_ITEM_INSTALLED = "Marketplace Item Installed",
 	MARKETPLACE_ITEM_REMOVED = "Marketplace Item Removed",
 	MARKETPLACE_TAB_VIEWED = "Marketplace Tab Viewed",
@@ -55,16 +53,6 @@ export enum TelemetryEventName {
 	SHARE_ORGANIZATION_CLICKED = "Share Organization Clicked",
 	SHARE_PUBLIC_CLICKED = "Share Public Clicked",
 	SHARE_CONNECT_TO_CLOUD_CLICKED = "Share Connect To Cloud Clicked",
-
-	ACCOUNT_CONNECT_CLICKED = "Account Connect Clicked",
-	ACCOUNT_CONNECT_SUCCESS = "Account Connect Success",
-	ACCOUNT_LOGOUT_CLICKED = "Account Logout Clicked",
-	ACCOUNT_LOGOUT_SUCCESS = "Account Logout Success",
-
-	FEATURED_PROVIDER_CLICKED = "Featured Provider Clicked",
-
-	UPSELL_DISMISSED = "Upsell Dismissed",
-	UPSELL_CLICKED = "Upsell Clicked",
 
 	SCHEMA_VALIDATION_ERROR = "Schema Validation Error",
 	DIFF_APPLICATION_ERROR = "Diff Application Error",
@@ -196,7 +184,6 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.CODE_ACTION_USED,
 			TelemetryEventName.PROMPT_ENHANCED,
 			TelemetryEventName.TITLE_BUTTON_CLICKED,
-			TelemetryEventName.AUTHENTICATION_INITIATED,
 			TelemetryEventName.MARKETPLACE_ITEM_INSTALLED,
 			TelemetryEventName.MARKETPLACE_ITEM_REMOVED,
 			TelemetryEventName.MARKETPLACE_TAB_VIEWED,
@@ -205,18 +192,14 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.SHARE_ORGANIZATION_CLICKED,
 			TelemetryEventName.SHARE_PUBLIC_CLICKED,
 			TelemetryEventName.SHARE_CONNECT_TO_CLOUD_CLICKED,
-			TelemetryEventName.ACCOUNT_CONNECT_CLICKED,
-			TelemetryEventName.ACCOUNT_CONNECT_SUCCESS,
-			TelemetryEventName.ACCOUNT_LOGOUT_CLICKED,
-			TelemetryEventName.ACCOUNT_LOGOUT_SUCCESS,
-			TelemetryEventName.FEATURED_PROVIDER_CLICKED,
-			TelemetryEventName.UPSELL_DISMISSED,
-			TelemetryEventName.UPSELL_CLICKED,
 			TelemetryEventName.SCHEMA_VALIDATION_ERROR,
 			TelemetryEventName.DIFF_APPLICATION_ERROR,
 			TelemetryEventName.SHELL_INTEGRATION_ERROR,
 			TelemetryEventName.CONSECUTIVE_MISTAKE_ERROR,
 			TelemetryEventName.CODE_INDEX_ERROR,
+			TelemetryEventName.ASSISTANT_AGENT_ERROR,
+			TelemetryEventName.BUDGET_EXCEEDED,
+			TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP,
 			TelemetryEventName.MODEL_CACHE_EMPTY_RESPONSE,
 			TelemetryEventName.CONTEXT_CONDENSED,
 			TelemetryEventName.SLIDING_WINDOW_TRUNCATION,

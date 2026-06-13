@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-      <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
@@ -268,9 +268,6 @@ enum TelemetryEventName {
 	// UI
 	TITLE_BUTTON_CLICKED = "Title Button Clicked",
 
-	// Auth
-	AUTHENTICATION_INITIATED = "Authentication Initiated",
-
 	// Marketplace
 	MARKETPLACE_ITEM_INSTALLED = "Marketplace Item Installed",
 	MARKETPLACE_ITEM_REMOVED = "Marketplace Item Removed",
@@ -283,18 +280,8 @@ enum TelemetryEventName {
 	SHARE_PUBLIC_CLICKED = "Share Public Clicked",
 	SHARE_CONNECT_TO_CLOUD_CLICKED = "Share Connect To Cloud Clicked",
 
-	// Account
-	ACCOUNT_CONNECT_CLICKED = "Account Connect Clicked",
-	ACCOUNT_CONNECT_SUCCESS = "Account Connect Success",
-	ACCOUNT_LOGOUT_CLICKED = "Account Logout Clicked",
-	ACCOUNT_LOGOUT_SUCCESS = "Account Logout Success",
-
-	// Provider
-	FEATURED_PROVIDER_CLICKED = "Featured Provider Clicked",
-
-	// Upsell
-	UPSELL_DISMISSED = "Upsell Dismissed",
-	UPSELL_CLICKED = "Upsell Clicked",
+	// (Removed: AUTHENTICATION_INITIATED, ACCOUNT_*, FEATURED_PROVIDER_CLICKED,
+	//  UPSELL_DISMISSED, UPSELL_CLICKED — dead entries with no emitter or UI.)
 
 	// Errors
 	SCHEMA_VALIDATION_ERROR = "Schema Validation Error",
@@ -440,18 +427,14 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 
 ### UI Events Tracked
 
-| UI Component          | Event                                   | Source                                                                                                   |
-| --------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Mode Selector         | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx:56)                                 |
-| Marketplace Tab       | `MARKETPLACE_TAB_VIEWED`                | [`App.tsx`](webview-ui/src/App.tsx:224)                                                                  |
-| Marketplace Install   | `MARKETPLACE_INSTALL_BUTTON_CLICKED`    | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx:82) |
-| (webview)             | `ACCOUNT_CONNECT_CLICKED`               | — (source file not yet present)                                                                          |
-| Cloud Connect Success | `ACCOUNT_CONNECT_SUCCESS`               | [`useCloudUpsell.ts`](webview-ui/src/hooks/useCloudUpsell.ts:28)                                         |
-| Upsell Dismissed      | `UPSELL_DISMISSED`                      | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx:83)                     |
-| Upsell Clicked        | `UPSELL_CLICKED`                        | [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx:146)                    |
-| Error Boundary        | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx:41)                                    |
-| UI Settings           | `ui_settings_collapse_thinking_changed` | [`UISettings.tsx`](webview-ui/src/components/settings/UISettings.tsx:36)                                 |
-| UI Settings           | `ui_settings_enter_behavior_changed`    | [`UISettings.tsx`](webview-ui/src/components/settings/UISettings.tsx:46)                                 |
+| UI Component        | Event                                   | Source                                                                                                   |
+| ------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Mode Selector       | `MODE_SELECTOR_OPENED`                  | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx:56)                                 |
+| Marketplace Tab     | `MARKETPLACE_TAB_VIEWED`                | [`App.tsx`](webview-ui/src/App.tsx:224)                                                                  |
+| Marketplace Install | `MARKETPLACE_INSTALL_BUTTON_CLICKED`    | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx:82) |
+| Error Boundary      | `error_boundary_caught_error`           | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx:41)                                    |
+| UI Settings         | `ui_settings_collapse_thinking_changed` | [`UISettings.tsx`](webview-ui/src/components/settings/UISettings.tsx:36)                                 |
+| UI Settings         | `ui_settings_enter_behavior_changed`    | [`UISettings.tsx`](webview-ui/src/components/settings/UISettings.tsx:46)                                 |
 
 ---
 
@@ -523,17 +506,13 @@ Caller (e.g., Task.ts, Provider code)
 
 ### UI & Interaction Events
 
-| Event                                   | Where Emitted           | Properties |
-| --------------------------------------- | ----------------------- | ---------- |
-| `TAB_SHOWN`                             | Settings tab change     | `tab`      |
-| `MODE_SELECTOR_OPENED`                  | Mode dropdown open      | —          |
-| `TITLE_BUTTON_CLICKED`                  | Title bar buttons       | `button`   |
-| `FEATURED_PROVIDER_CLICKED`             | Provider welcome screen | —          |
-| `AUTHENTICATION_INITIATED`              | Auth flow start         | —          |
-| `UPSELL_DISMISSED`                      | Upsell banner dismiss   | `upsellId` |
-| `UPSELL_CLICKED`                        | Upsell banner click     | `upsellId` |
-| `ui_settings_collapse_thinking_changed` | Webview UI setting      | `enabled`  |
-| `ui_settings_enter_behavior_changed`    | Webview UI setting      | `behavior` |
+| Event                                   | Where Emitted       | Properties |
+| --------------------------------------- | ------------------- | ---------- |
+| `TAB_SHOWN`                             | Settings tab change | `tab`      |
+| `MODE_SELECTOR_OPENED`                  | Mode dropdown open  | —          |
+| `TITLE_BUTTON_CLICKED`                  | Title bar buttons   | `button`   |
+| `ui_settings_collapse_thinking_changed` | Webview UI setting  | `enabled`  |
+| `ui_settings_enter_behavior_changed`    | Webview UI setting  | `behavior` |
 
 ### Cloud & Marketplace Events
 
@@ -547,10 +526,6 @@ Caller (e.g., Task.ts, Provider code)
 | `SHARE_ORGANIZATION_CLICKED`         | Share → org               | —                                                                                       |
 | `SHARE_PUBLIC_CLICKED`               | Share → public            | —                                                                                       |
 | `SHARE_CONNECT_TO_CLOUD_CLICKED`     | Share → connect prompt    | —                                                                                       |
-| `ACCOUNT_CONNECT_CLICKED`            | Cloud sign-in button      | —                                                                                       |
-| `ACCOUNT_CONNECT_SUCCESS`            | Auth success              | —                                                                                       |
-| `ACCOUNT_LOGOUT_CLICKED`             | Sign-out button           | —                                                                                       |
-| `ACCOUNT_LOGOUT_SUCCESS`             | Sign-out success          | —                                                                                       |
 
 ### Error Events
 
@@ -750,8 +725,6 @@ Provider implementations capture errors via `TelemetryService.instance.captureEx
 | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [`App.tsx`](webview-ui/src/App.tsx)                                                                   | Initializes `telemetryClient` on state hydration |
 | [`ModeSelector.tsx`](webview-ui/src/components/chat/ModeSelector.tsx)                                 | `MODE_SELECTOR_OPENED`                           |
-| [`useCloudUpsell.ts`](webview-ui/src/hooks/useCloudUpsell.ts)                                         | `ACCOUNT_CONNECT_SUCCESS`                        |
-| [`DismissibleUpsell.tsx`](webview-ui/src/components/common/DismissibleUpsell.tsx)                     | Upsell interaction events                        |
 | [`MarketplaceItemCard.tsx`](webview-ui/src/components/marketplace/components/MarketplaceItemCard.tsx) | Marketplace install events                       |
 | [`UISettings.tsx`](webview-ui/src/components/settings/UISettings.tsx)                                 | UI preference changes                            |
 | [`ErrorBoundary.tsx`](webview-ui/src/components/ErrorBoundary.tsx)                                    | React error boundary catches                     |
@@ -822,7 +795,7 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **`webview-ui/src/components/cloud/CloudView.tsx` does not exist.** The `cloud/` components directory under the webview is empty.
 
-- **Eight enum events are defined but never emitted (dead entries).** A codebase-wide grep for emission sites (both `captureEvent(TelemetryEventName.X)` and the `capture*()` convenience methods) finds **no emitter anywhere** for: `ACCOUNT_CONNECT_CLICKED`, `ACCOUNT_CONNECT_SUCCESS`, `ACCOUNT_LOGOUT_CLICKED`, `ACCOUNT_LOGOUT_SUCCESS`, `AUTHENTICATION_INITIATED`, `FEATURED_PROVIDER_CLICKED`, `UPSELL_DISMISSED`, and `UPSELL_CLICKED`. Note the tables above (Webview UI Events / Cloud & Marketplace Events) cite source files for `ACCOUNT_CONNECT_SUCCESS`, `UPSELL_DISMISSED`, and `UPSELL_CLICKED` (e.g. `useCloudUpsell.ts:28`, `DismissibleUpsell.tsx`) — **those citations are aspirational; the events do not actually fire from those files.** Either wire up emission or remove the dead enum entries (and correct/annotate those table rows).
+- **Eight dead enum events were removed (resolved).** `ACCOUNT_CONNECT_CLICKED`, `ACCOUNT_CONNECT_SUCCESS`, `ACCOUNT_LOGOUT_CLICKED`, `ACCOUNT_LOGOUT_SUCCESS`, `AUTHENTICATION_INITIATED`, `FEATURED_PROVIDER_CLICKED`, `UPSELL_DISMISSED`, and `UPSELL_CLICKED` had no emitter anywhere and no backing UI (the `cloud/`, `useCloudUpsell.ts`, and `DismissibleUpsell.tsx` sources the old tables cited do not exist). They have been deleted from both the `TelemetryEventName` enum and the `shoferTelemetryEventSchema` union. If cloud account / upsell UI is added later, re-introduce the events alongside their emitters.
 
 ### Missing from Documentation
 
@@ -836,7 +809,7 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **No `captureException` for non-PostHog clients.** `TelemetryService` delegates `captureException` to all registered clients, but only `PostHogTelemetryClient` implements meaningful exception capture. If a second client is registered, it must also implement `captureException`.
 
-- **The `shoferTelemetryEventSchema` union does NOT enforce enum parity (correctness gap).** A previous version of this doc claimed the `shoferTelemetryEventSchema` discriminated union ([`telemetry.ts:178`](packages/types/src/telemetry.ts:178)) "exhaustively lists members" so that adding an enum value without updating the schema "will cause type errors at compile time." **This is false.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is no compile-time safety net. In fact three emitted events — `ASSISTANT_AGENT_ERROR` (enum line 74), `BUDGET_EXCEEDED` (line 78), and `CODE_INDEX_SEGMENT_DEDUP` (line 79) — are **absent from the union** and emit unvalidated today. If schema parity is desired it must be enforced explicitly (e.g. validate in `captureEvent`, or a test asserting every `TelemetryEventName` appears in the union).
+- **The `shoferTelemetryEventSchema` union does not gate `captureEvent` at runtime, but enum↔union parity is now test-enforced.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is still no per-call compile-time safety net (a previous version of this doc wrongly claimed there was). However, the three events that were formerly absent from the union — `ASSISTANT_AGENT_ERROR`, `BUDGET_EXCEEDED`, and `CODE_INDEX_SEGMENT_DEDUP` — have been added, and a parity test in [`telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) now asserts that **every `TelemetryEventName` appears in the union and the union references no unknown names**, so future drift fails CI.
 
 ### Coverage Gaps (features without telemetry)
 
