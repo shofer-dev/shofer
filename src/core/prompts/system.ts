@@ -23,6 +23,7 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 	getSkillsSection,
+	getAssistantAgentSection,
 } from "./sections"
 
 // Helper function to get prompt component, filtering out empty objects
@@ -79,32 +80,43 @@ async function generatePrompt(
 		getSkillsSection(skillsManager, mode as string),
 	])
 
+	// Resolve the AssistantAgentManager lazily to avoid circular-import issues
+	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ AssistantAgentManager).
+	let assistantAgentSection = ""
+	try {
+		const { AssistantAgentManager: aam } = await import("../../services/assistant-agent/manager")
+		const assistantAgentManager = aam.getInstance(context, cwd)
+		assistantAgentSection = getAssistantAgentSection(cwd, assistantAgentManager)
+	} catch {
+		// Manager not yet wired or import failed; omit the section silently.
+	}
+
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
 
 	const basePrompt = `${roleDefinition}
 
-${markdownFormattingSection()}
+	${markdownFormattingSection()}
 
-${getSharedToolUseSection()}${toolsCatalog}
+	${getSharedToolUseSection()}${toolsCatalog}
 
-	${getToolUseGuidelinesSection()}
+		${getToolUseGuidelinesSection()}
 
-${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
+	${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 
-${modesSection}
-${skillsSection ? `\n${skillsSection}` : ""}
-${getRulesSection(cwd, settings)}
+	${modesSection}
+	${skillsSection ? `\n${skillsSection}` : ""}
+	${getRulesSection(cwd, settings)}
 
-${getSystemInfoSection(cwd)}
+	${getSystemInfoSection(cwd)}
 
-${getObjectiveSection()}
+	${getObjectiveSection()}${assistantAgentSection ? `\n\n${assistantAgentSection}` : ""}
 
-${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-	language: language ?? formatLanguage(vscode.env.language),
-	shoferIgnoreInstructions,
-	settings,
-})}`
+	${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+		language: language ?? formatLanguage(vscode.env.language),
+		shoferIgnoreInstructions,
+		settings,
+	})}`
 
 	return basePrompt
 }

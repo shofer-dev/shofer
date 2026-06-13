@@ -613,13 +613,13 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 ### Tool System
 
-| Point             | File                                                    | Details                                                                        |
-| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Tool registration | `src/core/task/build-tools.ts`                          | Gets `AssistantAgentManager` for current workspace, passes to tool filter      |
-| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_assistant_agent` if agent is disabled/unconfigured/not-ready      |
-| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `AssistantAgentTool`                                                 |
-| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askAssistantAgent` is auto-approved by default                                |
-| System prompt     | `src/core/prompts/system.ts`                            | (Deferred) — assistant agent status + model info not yet in task system prompt |
+| Point             | File                                                    | Details                                                                                                 |
+| ----------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Tool registration | `src/core/task/build-tools.ts`                          | Gets `AssistantAgentManager` for current workspace, passes to tool filter                               |
+| Tool filtering    | `src/core/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_assistant_agent` if agent is disabled/unconfigured/not-ready                               |
+| Tool dispatch     | `src/core/assistant-message/presentAssistantMessage.ts` | Routes to `AssistantAgentTool`                                                                          |
+| Auto-approval     | `src/core/auto-approval/tools.ts`                       | `askAssistantAgent` is auto-approved by default                                                         |
+| System prompt     | `src/core/prompts/sections/assistant-agent.ts`          | `getAssistantAgentSection()` — injects availability, model info, context fill % into task system prompt |
 
 ### Configuration Schema
 
@@ -1020,9 +1020,11 @@ for conversation storage, the question queue, the context window, and pricing.
 
 ### Deferred Items
 
-| Item                                                          | Design Reference         | Reason                                                                                    |
-| ------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
-| `system.ts` — assistant agent status in system prompt context | Integration Points table | Inclusion of assistant agent availability + model info in the task agent's system prompt. |
+_No deferred items remain. All originally deferred work has been completed._
+
+| Item                                                          | Design Reference         | Status                                                                                                                  |
+| ------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `system.ts` — assistant agent status in system prompt context | Integration Points table | ✅ Resolved (2026-06-13) — see [`assistant-agent.ts`](extensions/shofer/src/core/prompts/sections/assistant-agent.ts:1) |
 
 ### Build Verification
 
