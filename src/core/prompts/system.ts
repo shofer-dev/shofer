@@ -96,27 +96,27 @@ async function generatePrompt(
 
 	const basePrompt = `${roleDefinition}
 
-	${markdownFormattingSection()}
+${markdownFormattingSection()}
 
-	${getSharedToolUseSection()}${toolsCatalog}
+${getSharedToolUseSection()}${toolsCatalog}
 
-		${getToolUseGuidelinesSection()}
+	${getToolUseGuidelinesSection()}
 
-	${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
+${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 
-	${modesSection}
-	${skillsSection ? `\n${skillsSection}` : ""}
-	${getRulesSection(cwd, settings)}
+${modesSection}
+${skillsSection ? `\n${skillsSection}` : ""}
+${getRulesSection(cwd, settings)}
 
-	${getSystemInfoSection(cwd)}
+${getSystemInfoSection(cwd)}
 
-	${getObjectiveSection()}${assistantAgentSection ? `\n\n${assistantAgentSection}` : ""}
+${getObjectiveSection()}${assistantAgentSection ? `\n\n${assistantAgentSection}` : ""}
 
-	${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-		language: language ?? formatLanguage(vscode.env.language),
-		shoferIgnoreInstructions,
-		settings,
-	})}`
+${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
+	language: language ?? formatLanguage(vscode.env.language),
+	shoferIgnoreInstructions,
+	settings,
+})}`
 
 	return basePrompt
 }

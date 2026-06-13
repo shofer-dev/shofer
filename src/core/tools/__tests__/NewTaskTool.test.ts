@@ -58,6 +58,9 @@ describe("NewTaskTool — peer_task_ids", () => {
 			didToolFailInCurrentTurn: false,
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("error message"),
 			getTaskMode: vi.fn().mockResolvedValue("code"),
+			// Task-viz spawn/return arrows — awaited in the blocking path before the
+			// completion resolver is registered.
+			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 			providerRef: { deref: () => providerObj },
 			costLimit: null,
 			abortSignal: undefined,

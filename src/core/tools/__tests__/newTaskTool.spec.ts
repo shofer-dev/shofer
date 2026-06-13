@@ -99,6 +99,9 @@ const mockShofer = {
 	checkpointSave: mockCheckpointSave,
 	getTaskMode: vi.fn().mockResolvedValue(undefined),
 	backgroundChildren: new Map<string, any>(),
+	// Task-viz records the parent→child spawn (and child→parent return) arrows;
+	// the blocking path awaits this before registering the completion resolver.
+	emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 	providerRef: {
 		deref: vi.fn(() => ({
 			getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),
@@ -837,6 +840,7 @@ describe("newTaskTool delegation flow", () => {
 			checkpointSave: vi.fn(),
 			getTaskMode: vi.fn().mockResolvedValue(undefined),
 			backgroundChildren: new Map<string, any>(),
+			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 			providerRef: {
 				deref: vi.fn(() => ({
 					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),

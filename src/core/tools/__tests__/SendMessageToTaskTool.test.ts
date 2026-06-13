@@ -40,6 +40,9 @@ describe("SendMessageToTaskTool", () => {
 			isBackgroundTask: true,
 			knownPeers: new Set(["peer-1"]),
 			providerRef: { deref: () => providerObj },
+			// Task-viz records sync inter-task calls; the tool awaits this before
+			// enqueuing the peer prompt, so the mock must resolve.
+			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 			...overrides,
 		} as any
 	}
