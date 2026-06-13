@@ -3,7 +3,23 @@
 		"greeting": "Welcome to Shofer!",
 		"introduction": "With a range of built-in and extensible Modes, Shofer lets you plan, architect, code, debug and boost your productivity like never before.",
 		"getStarted": "Get Started",
-		"walkthrough": "Take the guided walkthrough"
+		"walkthrough": "Take the guided walkthrough",
+		"stepsHeading": "Three steps to get going",
+		"steps": {
+			"connect": {
+				"title": "Connect a provider",
+				"description": "Add your API key so Shofer can reach your model."
+			},
+			"prompt": {
+				"title": "Write your first prompt",
+				"description": "Describe a task in plain language — Shofer plans, edits, and runs it for you."
+			},
+			"learn": {
+				"title": "Learn the ropes",
+				"description": "Take the guided walkthrough to get the most out of Shofer's modes, tools, and workflows.",
+				"cta": "Open the walkthrough"
+			}
+		}
 	},
 	"providerSignup": {
 		"useAnotherProvider": "3rd-party Provider",

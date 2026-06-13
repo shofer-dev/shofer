@@ -63,6 +63,8 @@ vi.mock("lucide-react", () => ({
 	BadgeInfo: () => <span data-testid="badge-info-icon">ℹ</span>,
 	Brain: () => <span data-testid="brain-icon">🧠</span>,
 	GraduationCap: () => <span data-testid="graduation-cap-icon">🎓</span>,
+	KeyRound: () => <span data-testid="key-round-icon">🔑</span>,
+	MessageSquarePlus: () => <span data-testid="message-square-plus-icon">💬</span>,
 	TriangleAlert: () => <span data-testid="triangle-alert-icon">⚠</span>,
 }))
 
