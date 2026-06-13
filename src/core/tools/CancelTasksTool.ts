@@ -1,4 +1,5 @@
 import type { BackgroundTaskStatus } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
@@ -104,6 +105,9 @@ export class CancelTasksTool extends BaseTool<"cancel_tasks"> {
 				}
 			}
 			handle.status = "cancelled"
+			if (TelemetryService.hasInstance()) {
+				TelemetryService.instance.captureTaskCancelled(r.abortTarget.id)
+			}
 		}
 
 		const canceledCount = plan.filter((r) => r.status === "cancelled" && r.was_running).length

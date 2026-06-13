@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+      <!-- /TOC -->
 
 ---
 
@@ -128,6 +128,9 @@ The service provides typed convenience methods for every event type. Each method
 | [`capturePeerMessageSent`](packages/telemetry/src/TelemetryService.ts:346)          | `TASK_PEER_MESSAGE_SENT`     | `taskId`, peer-message metadata                                                   |
 | [`capturePeerMessageReceived`](packages/telemetry/src/TelemetryService.ts:350)      | `TASK_PEER_MESSAGE_RECEIVED` | `taskId`, peer-message metadata                                                   |
 | [`capturePeerDiscovery`](packages/telemetry/src/TelemetryService.ts:354)            | `TASK_PEER_DISCOVERY`        | `taskId`, discovery metadata                                                      |
+| [`captureSubtaskSpawned`](packages/telemetry/src/TelemetryService.ts)               | `SUBTASK_SPAWNED`            | `taskId` (parent), `mode`, `isBackground`                                         |
+| [`captureTaskCancelled`](packages/telemetry/src/TelemetryService.ts)                | `TASK_CANCELLED`             | `taskId`                                                                          |
+| [`captureToolRejected`](packages/telemetry/src/TelemetryService.ts)                 | `TOOL_REJECTED`              | `taskId`, `tool`                                                                  |
 | [`isTelemetryEnabled`](packages/telemetry/src/TelemetryService.ts:323)              | —                            | Returns `true` if any client has telemetry enabled                                |
 
 ### `PostHogTelemetryClient`
@@ -316,6 +319,11 @@ enum TelemetryEventName {
 	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
 	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
 	TASK_PEER_DISCOVERY = "Task Peer Discovery",
+
+	// Task outcomes
+	SUBTASK_SPAWNED = "Subtask Spawned",
+	TASK_CANCELLED = "Task Cancelled",
+	TOOL_REJECTED = "Tool Rejected",
 }
 ```
 
@@ -577,6 +585,21 @@ async peer delivery, and peer discovery via `list_background_tasks`).
 | `TASK_PEER_MESSAGE_RECEIVED` | `Task.ts` (async peer-message delivery)       | `taskId`, message metadata   |
 | `TASK_PEER_DISCOVERY`        | `ListBackgroundTasksTool.ts` (peer discovery) | `taskId`, discovery metadata |
 
+### Task Outcome Events
+
+Product-quality signals capturing how tasks branch and how users respond to tool prompts.
+
+| Event             | Where Emitted                                                  | Properties                                      |
+| ----------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| `SUBTASK_SPAWNED` | `NewTaskTool.ts` (after approval, before child creation)       | `taskId` (parent), `mode`, `isBackground`       |
+| `TASK_CANCELLED`  | `CancelTasksTool.ts` (per successfully-aborted task)           | `taskId` (the cancelled task)                   |
+| `TOOL_REJECTED`   | `presentAssistantMessage.ts` (both `askApproval` denial paths) | `taskId`, `tool` (`use_mcp_tool` for MCP tools) |
+
+> Coverage note: `TOOL_REJECTED` fires from the two central `askApproval`
+> factories, which cover every tool that routes approval through them. A few
+> tools (e.g. `ExecuteCommandTool`, `ReadFileTool`) set `didRejectTool = true`
+> directly for granular per-item denials and do not yet emit `TOOL_REJECTED`.
+
 ---
 
 ## Privacy & Data Filtering
@@ -817,19 +840,17 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 ### Coverage Gaps (features without telemetry)
 
-These flagship features currently emit **no** telemetry, leaving notable
+These features currently emit **no** telemetry, leaving notable
 product/operational blind spots. Listed for awareness; wiring them is tracked
-separately.
+separately. (Subtask spawning, task cancellation, and tool rejection — formerly
+listed here — are now implemented; see [Task Outcome Events](#task-outcome-events).)
 
-| Feature                         | Source (no emitter)                   | Proposed signal                                                        |
-| ------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| Subtask / orchestrator spawning | `core/tools/NewTaskTool.ts`           | `SUBTASK_SPAWNED { parentTaskId, mode, isBackground }`                 |
-| Task cancellation / abort       | `core/tools/CancelTasksTool.ts`       | `TASK_CANCELLED { taskId, reason }`                                    |
-| User tool rejection             | per-tool `!didApprove` in `Task.ts`   | `TOOL_REJECTED { tool }`                                               |
-| RAG / `codebase_search` usage   | `core/tools/RagSearchTool.ts`         | `RAG_SEARCH_PERFORMED { resultCount, latencyMs }`                      |
-| Skill load                      | `core/tools/SkillsTool.ts`            | `SKILL_LOADED { skillName }`                                           |
-| Image generation                | `core/tools/GenerateImageTool.ts`     | `IMAGE_GENERATED { model, success }`                                   |
-| assistantAgent success/usage    | `services/assistant-agent/manager.ts` | `ASSISTANT_AGENT_INVOKED { success, turnCount }` (error already emits) |
+| Feature                       | Source (no emitter)                   | Proposed signal                                                        |
+| ----------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| RAG / `codebase_search` usage | `core/tools/RagSearchTool.ts`         | `RAG_SEARCH_PERFORMED { resultCount, latencyMs }`                      |
+| Skill load                    | `core/tools/SkillsTool.ts`            | `SKILL_LOADED { skillName }`                                           |
+| Image generation              | `core/tools/GenerateImageTool.ts`     | `IMAGE_GENERATED { model, success }`                                   |
+| assistantAgent success/usage  | `services/assistant-agent/manager.ts` | `ASSISTANT_AGENT_INVOKED { success, turnCount }` (error already emits) |
 
 Additionally, **only 9 of ~36 provider implementations call `captureException`**
 (the AI Providers table above lists them). The remaining providers — including

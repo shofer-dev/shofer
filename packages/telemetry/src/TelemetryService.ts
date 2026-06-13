@@ -355,6 +355,21 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.TASK_PEER_DISCOVERY, { taskId })
 	}
 
+	/** A subtask (`new_task`) was spawned. `taskId` is the parent task. */
+	public captureSubtaskSpawned(taskId: string, mode: string, isBackground: boolean): void {
+		this.captureEvent(TelemetryEventName.SUBTASK_SPAWNED, { taskId, mode, isBackground })
+	}
+
+	/** A task was cancelled (e.g. via `cancel_tasks` or user abort). */
+	public captureTaskCancelled(taskId: string): void {
+		this.captureEvent(TelemetryEventName.TASK_CANCELLED, { taskId })
+	}
+
+	/** The user rejected a tool's approval prompt. */
+	public captureToolRejected(taskId: string, tool: string): void {
+		this.captureEvent(TelemetryEventName.TOOL_REJECTED, { taskId, tool })
+	}
+
 	public captureCodeIndexSegmentDedup(properties: {
 		fileCount: number
 		totalBlocks: number

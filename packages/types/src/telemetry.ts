@@ -88,6 +88,11 @@ export enum TelemetryEventName {
 	TASK_PEER_MESSAGE_SENT = "Task Peer Message Sent",
 	TASK_PEER_MESSAGE_RECEIVED = "Task Peer Message Received",
 	TASK_PEER_DISCOVERY = "Task Peer Discovery",
+
+	// Task outcomes
+	SUBTASK_SPAWNED = "Subtask Spawned",
+	TASK_CANCELLED = "Task Cancelled",
+	TOOL_REJECTED = "Tool Rejected",
 }
 
 /**
@@ -254,6 +259,30 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			cacheReadTokens: z.number().optional(),
 			cacheWriteTokens: z.number().optional(),
 			cost: z.number().optional(),
+		}),
+	}),
+	z.object({
+		type: z.literal(TelemetryEventName.SUBTASK_SPAWNED),
+		properties: z.object({
+			...telemetryPropertiesSchema.shape,
+			taskId: z.string(),
+			mode: z.string(),
+			isBackground: z.boolean(),
+		}),
+	}),
+	z.object({
+		type: z.literal(TelemetryEventName.TASK_CANCELLED),
+		properties: z.object({
+			...telemetryPropertiesSchema.shape,
+			taskId: z.string(),
+		}),
+	}),
+	z.object({
+		type: z.literal(TelemetryEventName.TOOL_REJECTED),
+		properties: z.object({
+			...telemetryPropertiesSchema.shape,
+			taskId: z.string(),
+			tool: z.string(),
 		}),
 	}),
 ])

@@ -291,6 +291,9 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult(formatResponse.toolDenied())
 					}
 					shofer.didRejectTool = true
+					if (TelemetryService.hasInstance()) {
+						TelemetryService.instance.captureToolRejected(shofer.taskId, "use_mcp_tool")
+					}
 					return false
 				}
 
@@ -806,6 +809,9 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult(formatResponse.toolDenied())
 					}
 					shofer.didRejectTool = true
+					if (TelemetryService.hasInstance()) {
+						TelemetryService.instance.captureToolRejected(shofer.taskId, block.name)
+					}
 					return false
 				}
 

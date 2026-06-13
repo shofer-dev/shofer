@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import { TodoItem } from "@shofer/types"
 import type { HistoryItem } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
@@ -192,6 +193,11 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 			if (!didApprove) {
 				return
+			}
+
+			// Telemetry: a subtask is about to be spawned. taskId is the parent.
+			if (TelemetryService.hasInstance()) {
+				TelemetryService.instance.captureSubtaskSpawned(task.taskId, effectiveMode, is_background)
 			}
 
 			if (is_background) {
