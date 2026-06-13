@@ -1,7 +1,7 @@
 // npx vitest run src/__tests__/App.spec.tsx
 
 import React from "react"
-import { render, screen, act, cleanup } from "@/utils/test-utils"
+import { render, screen, act, cleanup, waitFor } from "@/utils/test-utils"
 
 import AppWithProviders from "../App"
 
@@ -218,6 +218,27 @@ describe("App", () => {
 
 		const chatView = screen.getByTestId("chat-view")
 		expect(chatView.getAttribute("data-hidden")).toBe("true")
+	})
+
+	it("toggles the settings view closed when settingsButtonClicked is received again", async () => {
+		render(<AppWithProviders />)
+
+		// First press: chat → settings.
+		act(() => {
+			triggerMessage("settingsButtonClicked")
+		})
+		expect(await screen.findByTestId("settings-view")).toBeInTheDocument()
+
+		// Second press (no section): settings → chat.
+		act(() => {
+			triggerMessage("settingsButtonClicked")
+		})
+
+		await waitFor(() => {
+			expect(screen.queryByTestId("settings-view")).not.toBeInTheDocument()
+		})
+		const chatView = screen.getByTestId("chat-view")
+		expect(chatView.getAttribute("data-hidden")).toBe("false")
 	})
 
 	it("switches to history view when receiving historyButtonClicked action", async () => {
