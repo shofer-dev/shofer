@@ -40,6 +40,7 @@ import McpResourceRow from "../mcp/McpResourceRow"
 import { Mention } from "./Mention"
 import { CheckpointSaved } from "./checkpoints/CheckpointSaved"
 import { FollowUpSuggest } from "./FollowUpSuggest"
+import { WorkflowParamForm } from "./WorkflowParamForm"
 import { BatchFilePermission } from "./BatchFilePermission"
 import { BatchDiffApproval } from "./BatchDiffApproval"
 import { ProgressIndicator } from "./ProgressIndicator"
@@ -183,6 +184,8 @@ interface ChatRowProps {
 	onToggleExpand: (ts: number) => void
 	onHeightChange: (isTaller: boolean) => void
 	onSuggestionClick?: (suggestion: SuggestionItem, event?: React.MouseEvent) => void
+	/** Submits a workflow flow-parameter form (JSON-serialized answers). */
+	onParamFormSubmit?: (json: string) => void
 	onBatchFileResponse?: (response: { [key: string]: boolean }) => void
 	onFollowUpUnmount?: () => void
 	isFollowUpAnswered?: boolean
@@ -253,6 +256,7 @@ export const ChatRowContent = ({
 	isStreaming,
 	onToggleExpand,
 	onSuggestionClick,
+	onParamFormSubmit,
 	onFollowUpUnmount,
 	onBatchFileResponse,
 	isFollowUpAnswered,
@@ -2302,14 +2306,22 @@ export const ChatRowContent = ({
 								<Markdown
 									markdown={message.partial === true ? message?.text : followUpData?.question}
 								/>
-								<FollowUpSuggest
-									suggestions={followUpData?.suggest}
-									onSuggestionClick={onSuggestionClick}
-									ts={message?.ts}
-									onCancelAutoApproval={onFollowUpUnmount}
-									isAnswered={isFollowUpAnswered}
-									isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
-								/>
+								{followUpData?.paramForm && followUpData.paramForm.length > 0 ? (
+									<WorkflowParamForm
+										params={followUpData.paramForm}
+										onSubmit={onParamFormSubmit}
+										isAnswered={isFollowUpAnswered}
+									/>
+								) : (
+									<FollowUpSuggest
+										suggestions={followUpData?.suggest}
+										onSuggestionClick={onSuggestionClick}
+										ts={message?.ts}
+										onCancelAutoApproval={onFollowUpUnmount}
+										isAnswered={isFollowUpAnswered}
+										isFollowUpAutoApprovalPaused={isFollowUpAutoApprovalPaused}
+									/>
+								)}
 							</div>
 						</>
 					)

@@ -299,6 +299,22 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		return !!(inputValue && inputValue.trim().length > 0 && shoferAsk === "followup")
 	}, [inputValue, shoferAsk])
 
+	// True when the current pending followup is a typed parameter form. In that
+	// case the in-chat form (rendered in the message row) collects the answers,
+	// so the free-text textbox is hidden. Other followup asks (escalate @Human,
+	// relayed agent questions) are NOT forms and still reveal the textbox.
+	const isParamFormPending = useMemo(() => {
+		if (shoferAsk !== "followup") return false
+		const lastFollowup = modifiedMessages.findLast((m: ShoferMessage) => m.type === "ask" && m.ask === "followup")
+		if (!lastFollowup?.text || lastFollowup.isAnswered) return false
+		try {
+			const d = JSON.parse(lastFollowup.text) as { paramForm?: unknown[] }
+			return Array.isArray(d?.paramForm) && d.paramForm.length > 0
+		} catch {
+			return false
+		}
+	}, [shoferAsk, modifiedMessages])
+
 	// Cancel auto-approval timeout when user starts typing
 	useEffect(() => {
 		// Only send cancel if there's actual input (user is typing)
@@ -1719,6 +1735,19 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, shoferAsk, markFollowUpAsAnswered],
 	)
 
+	// Submit a workflow flow-parameter form: the JSON-serialized answers are
+	// sent through the same messageResponse path a free-text answer uses.
+	const handleParamFormSubmit = useCallback(
+		(json: string) => {
+			userRespondedRef.current = true
+			if (shoferAsk === "followup") {
+				markFollowUpAsAnswered()
+			}
+			handleSendMessage(json, [])
+		},
+		[handleSendMessage, shoferAsk, markFollowUpAsAnswered],
+	)
+
 	const handleBatchFileResponse = useCallback((response: { [key: string]: boolean }) => {
 		// Handle batch file response, e.g., for file uploads
 		vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: JSON.stringify(response) })
@@ -1746,6 +1775,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 					onHeightChange={handleRowHeightChange}
 					isStreaming={isStreaming}
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
+					onParamFormSubmit={handleParamFormSubmit}
 					onBatchFileResponse={handleBatchFileResponse}
 					onFollowUpUnmount={handleFollowUpUnmount}
 					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
@@ -1778,6 +1808,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			handleRowHeightChange,
 			isStreaming,
 			handleSuggestionClickInRow,
+			handleParamFormSubmit,
 			handleBatchFileResponse,
 			handleFollowUpUnmount,
 			currentFollowUpTs,
@@ -2253,7 +2284,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 						onStop={handleStopTask}
 						onEnqueueMessage={handleEnqueueCurrentMessage}
 						isWorkflow={true}
-						workflowAwaitingInput={!!shoferAsk && !sendingDisabled}
+						workflowAwaitingInput={!!shoferAsk && !sendingDisabled && !isParamFormPending}
 						onContextFilesDropped={(files: DroppedContextFile[]) =>
 							setDroppedContextFiles((prev) => {
 								const seen = new Set(prev.map((f) => f.path))

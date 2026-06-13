@@ -394,77 +394,94 @@ export class WorkflowTask extends Task {
 	}
 
 	/**
-	 * Post a followup ask so the user can enter parameter values. The
-	 * webview (WorkflowView) renders a textbox. When the user responds,
-	 * {@link handleWebviewAskResponse} parses the values and starts the
-	 * slang loop.
-	 */
-	/**
-	 * Ask one question per missing parameter, sequentially. Each answer
-	 * is type-coerced and stored directly. An empty answer falls back to
-	 * the type's default. The slang loop starts once all params are
-	 * collected (or skipped with defaults).
+	 * Collect the flow's input parameters with a SINGLE structured followup.
+	 * The payload carries every missing parameter's name, type and default
+	 * (see {@link FollowUpData.paramForm}); the webview (WorkflowView) renders
+	 * a typed form and submits all answers at once as a JSON object via the
+	 * normal `messageResponse` path. Each value is type-coerced; blanks fall
+	 * back to the type's default. The slang loop starts once the answer is
+	 * applied.
+	 *
+	 * Robustness/fallback: if the answer is not a JSON object (older client or
+	 * a plain-text reply), a single-param flow uses the raw text; multi-param
+	 * flows fall back to type defaults.
 	 */
 	private requestFlowParams(): void {
 		const declParams = this.flowDecl.params!
 		const missing = declParams.filter((p) => !(p.name in (this.flowState.params || {})))
 
-		const askNext = (index: number): Promise<void> => {
-			if (index >= missing.length) {
-				for (const p of missing) {
-					if (!(p.name in (this.flowState.params || {}))) {
-						this.flowState.params[p.name] = defaultParamValue(p.paramType)
-					}
+		const paramForm = missing.map((p) => {
+			const type = p.paramType === "number" || p.paramType === "boolean" ? p.paramType : "string"
+			return {
+				name: p.name,
+				type,
+				default: defaultParamValue(p.paramType) as string | number | boolean,
+				...(p.description ? { description: p.description } : {}),
+			}
+		})
+
+		const question =
+			missing.length === 1
+				? `This workflow needs one input before it can start:`
+				: `This workflow needs ${missing.length} inputs before it can start:`
+
+		workflowLog.info(
+			`[WorkflowTask#${this.taskId}] Collecting ${missing.length} flow param(s) via form: ${missing.map((p) => p.name).join(", ")}`,
+		)
+
+		const applyAnswer = (text: string | undefined): void => {
+			const raw = text?.trim() ?? ""
+			let values: Record<string, unknown> = {}
+			try {
+				const parsed = raw ? JSON.parse(raw) : {}
+				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+					values = parsed as Record<string, unknown>
 				}
-				// Persist params immediately so that if the workflow is
-				// stopped/cancelled after collection but before
-				// slangLoop starts, the rehydrated instance sees the
-				// populated params and skips re-asking.
-				void this.persistCheckpoint()
-				workflowLog.info(`[WorkflowTask#${this.taskId}] Flow params collected, starting slang loop`)
-				void this.slangLoop()
-				return Promise.resolve()
+			} catch {
+				// Not JSON — a single-param flow can take the raw text directly.
+				if (missing.length === 1 && raw) {
+					values = { [missing[0].name]: raw }
+				}
 			}
 
-			const p = missing[index]
-			const dv = defaultParamValue(p.paramType)
-			const hasDefault = dv !== "" && dv !== 0 && dv !== false
-			const question = hasDefault
-				? `What value for \`${p.name}\`? (${p.paramType}, default: ${JSON.stringify(dv)})`
-				: `What value for \`${p.name}\`? (${p.paramType})`
-
-			return this.ask("followup", JSON.stringify({ question })).then(({ text }) => {
-				const raw = text?.trim() ?? ""
-				if (raw) {
-					this.flowState.params[p.name] = coerceParam(raw, p.paramType)
-				} else if (hasDefault) {
-					this.flowState.params[p.name] = dv
+			for (const p of missing) {
+				const v = values[p.name]
+				if (v !== undefined && v !== null && v !== "") {
+					// The form may submit values as strings — coerce to the declared type.
+					this.flowState.params[p.name] = typeof v === "string" ? coerceParam(v, p.paramType) : v
+				} else {
+					this.flowState.params[p.name] = defaultParamValue(p.paramType)
 				}
 				workflowLog.info(
 					`[WorkflowTask#${this.taskId}] Flow param ${p.name}=${JSON.stringify(this.flowState.params[p.name])} (type=${p.paramType})`,
 				)
-				return askNext(index + 1)
-			})
+			}
+
+			// Persist params immediately so that if the workflow is
+			// stopped/cancelled after collection but before slangLoop starts,
+			// the rehydrated instance sees the populated params and skips re-asking.
+			void this.persistCheckpoint()
+			workflowLog.info(`[WorkflowTask#${this.taskId}] Flow params collected, starting slang loop`)
+			void this.slangLoop()
 		}
 
-		workflowLog.info(
-			`[WorkflowTask#${this.taskId}] Collecting ${missing.length} flow param(s): ${missing.map((p) => p.name).join(", ")}`,
-		)
-		void askNext(0).catch((error) => {
-			if (this.abort || (this.flowState.status as string) === "aborted") {
-				workflowLog.info(`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`)
-				// Persist the aborted status to history BEFORE cancelTask
-				// re-reads it and rehydrates. Without this, the rehydrated
-				// instance sees flowState.status === "running" and
-				// re-enters requestFlowParams().
-				this.flowState.status = "aborted"
-				void this.persistCheckpoint()
-				return
-			}
-			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
-			this.flowState.status = "error"
-			void this.emitTaskCompleted("poor")
-		})
+		this.ask("followup", JSON.stringify({ question, paramForm }))
+			.then(({ text }) => applyAnswer(text))
+			.catch((error) => {
+				if (this.abort || (this.flowState.status as string) === "aborted") {
+					workflowLog.info(`[WorkflowTask#${this.taskId}] Flow param collection aborted — task is stopping`)
+					// Persist the aborted status to history BEFORE cancelTask
+					// re-reads it and rehydrates. Without this, the rehydrated
+					// instance sees flowState.status === "running" and
+					// re-enters requestFlowParams().
+					this.flowState.status = "aborted"
+					void this.persistCheckpoint()
+					return
+				}
+				workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to collect flow params:`, error)
+				this.flowState.status = "error"
+				void this.emitTaskCompleted("poor")
+			})
 	}
 
 	/**
