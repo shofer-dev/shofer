@@ -83,7 +83,7 @@ import { LoggingSettings } from "./LoggingSettings"
 import PromptsSettings from "./PromptsSettings"
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
-import { ToolsSettings } from "./ToolsSettings"
+import { ToolsSettings, type ToolsSettingsRef } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
@@ -176,6 +176,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// the per-mode text buffers it holds internally (see ModesView.commitBuffers
 	// for why those buffers are not folded into SettingsView's cachedState).
 	const modesViewRef = useRef<ModesViewRef>(null)
+	const toolsSettingsRef = useRef<ToolsSettingsRef>(null)
 	const ragIndexerRef = useRef<RagIndexerSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
@@ -522,6 +523,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// AGENTS.md "Settings View Pattern" and only persisted on Save.
 			modesViewRef.current?.commitBuffers()
 
+			// Apply staged MCP per-tool enable/disable changes (Tools tab).
+			toolsSettingsRef.current?.commitToolBuffers()
+
 			// Flush code-index secret fields (API keys) that are managed
 			// inside CodeIndexConfigForm via its own atomic-save path.
 			ragIndexerRef.current?.saveCodeIndexSecrets()
@@ -555,6 +559,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				setPendingDefaultConfigName(currentApiConfigName || "")
 				// Also drop any per-mode text buffers held inside ModesView.
 				modesViewRef.current?.discardBuffers()
+				toolsSettingsRef.current?.discardToolBuffers()
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)
 			}
 			// If confirm is false (Cancel), do nothing, dialog closes automatically
@@ -946,6 +951,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{/* Tools Section */}
 						{renderTab === "tools" && (
 							<ToolsSettings
+								ref={toolsSettingsRef}
+								onToolsDirty={() => setChangeDetected(true)}
 								disabledTools={disabledTools}
 								setCachedStateField={setCachedStateField}
 								mcpServers={extensionState.mcpServers}
