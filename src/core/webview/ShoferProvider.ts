@@ -62,7 +62,7 @@ import { EMBEDDING_MODEL_PROFILES } from "../../shared/embeddingModels"
 import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
-import { downloadTask, getTaskFileName } from "../../integrations/misc/export-markdown"
+import { downloadTask, downloadWorkflowEvents, getTaskFileName } from "../../integrations/misc/export-markdown"
 import { buildJsonTrace, downloadJsonTask, getJsonExportFileName } from "../../integrations/misc/export-json"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { getTheme } from "../../integrations/theme/getTheme"
@@ -3101,7 +3101,34 @@ export class ShoferProvider
 			useWorkspace: false,
 			fallbackDir: path.join(os.homedir(), "Downloads"),
 		})
-		const saveUri = await downloadTask(historyItem.ts, apiConversationHistory, defaultUri)
+
+		let saveUri: vscode.Uri | undefined
+		if (historyItem.isWorkflow) {
+			// A workflow makes no direct LLM calls, so `apiConversationHistory` is
+			// empty — its transcript is the "Events" tab: the say/ask
+			// state-transition messages (peer-to-peer `peer_message` excluded, to
+			// match the JSON export's `events` field).
+			let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
+			try {
+				const { readTaskMessages } = await import("../task-persistence/taskMessages")
+				const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
+				uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
+			} catch (err) {
+				webviewLog.warn(
+					`[exportTaskWithId] Could not read ui_messages.jsonl for workflow ${id}: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+			const events = uiMessages
+				.filter((m) => !(m.type === "say" && m.say === "peer_message"))
+				.map((m) => ({ ts: m.ts, type: m.type, say: m.say, ask: m.ask, text: m.text }))
+			const flowName =
+				((historyItem.flowState as Record<string, unknown> | undefined)?.flowName as string) ||
+				historyItem.task ||
+				""
+			saveUri = await downloadWorkflowEvents(flowName, events, defaultUri)
+		} else {
+			saveUri = await downloadTask(historyItem.ts, apiConversationHistory, defaultUri)
+		}
 
 		if (saveUri) {
 			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)

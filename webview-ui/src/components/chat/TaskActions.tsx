@@ -26,7 +26,7 @@ export const TaskActions = ({ item, buttonsDisabled }: TaskActionsProps) => {
 		<div className="flex flex-row items-center -ml-0.5 mt-1 gap-1">
 			<LucideIconButton
 				icon={DownloadIcon}
-				title={t("chat:task.export")}
+				title={t(item?.isWorkflow ? "chat:task.exportWorkflow" : "chat:task.export")}
 				onClick={() => vscode.postMessage({ type: "exportCurrentTask" })}
 			/>
 			<LucideIconButton

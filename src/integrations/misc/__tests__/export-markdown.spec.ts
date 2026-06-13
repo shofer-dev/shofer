@@ -1,7 +1,31 @@
 import { describe, it, expect } from "vitest"
-import { formatContentBlockToMarkdown, ExtendedContentBlock } from "../export-markdown"
+import { formatContentBlockToMarkdown, formatWorkflowEventsToMarkdown, ExtendedContentBlock } from "../export-markdown"
 
 describe("export-markdown", () => {
+	describe("formatWorkflowEventsToMarkdown", () => {
+		it("renders the workflow's Events-tab say/ask messages as a markdown transcript", () => {
+			const md = formatWorkflowEventsToMarkdown("implement-feature", [
+				{ ts: 1, type: "say", say: "text", text: "⚙️ Initializing workflow" },
+				{ ts: 2, type: "ask", ask: "followup", text: "which option?" },
+				{ ts: 3, type: "say", say: "text", text: "✅ Workflow completed" },
+			])
+
+			expect(md).toContain("# Workflow: implement-feature")
+			expect(md).toContain("_3 events_")
+			expect(md).toContain("⚙️ Initializing workflow")
+			expect(md).toContain("ask: followup")
+			expect(md).toContain("✅ Workflow completed")
+			// Entries are separated by a horizontal rule.
+			expect(md.split("\n---\n").length).toBe(3)
+		})
+
+		it("falls back to a placeholder name and singular count", () => {
+			const md = formatWorkflowEventsToMarkdown("", [{ ts: 1, type: "say", say: "text", text: "only one" }])
+			expect(md).toContain("# Workflow: (unnamed)")
+			expect(md).toContain("_1 event_")
+		})
+	})
+
 	describe("formatContentBlockToMarkdown", () => {
 		it("should format text blocks", () => {
 			const block = { type: "text", text: "Hello, world!" } as ExtendedContentBlock
