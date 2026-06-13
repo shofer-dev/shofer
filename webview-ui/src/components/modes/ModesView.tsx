@@ -100,8 +100,15 @@ type ModesViewProps = {
 const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, ref) => {
 	const { t } = useAppTranslation()
 
-	const { customModePrompts, listApiConfigMeta, currentApiConfigName, mode, customInstructions, customModes } =
-		useExtensionState()
+	const {
+		customModePrompts,
+		listApiConfigMeta,
+		currentApiConfigName,
+		setCurrentApiConfigName,
+		mode,
+		customInstructions,
+		customModes,
+	} = useExtensionState()
 
 	// Use a local state to track the visually active mode
 	// This prevents flickering when switching modes rapidly by:
@@ -1092,6 +1099,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							<Select
 								value={currentApiConfigName}
 								onValueChange={(value) => {
+									// Optimistically update the local value so the controlled
+									// Select moves immediately. The host's follow-up stateInit
+									// is otherwise discarded for this field when no task is
+									// focused (mergeExtensionState preserves the tier-1 local
+									// draft of currentApiConfigName), which left the dropdown
+									// stuck on its previous value.
+									setCurrentApiConfigName(value)
 									vscode.postMessage({
 										type: "loadApiConfiguration",
 										text: value,
