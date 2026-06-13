@@ -126,10 +126,43 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		messagesRef.current = messages
 	}, [messages])
 
+	// When a long task is cold-loaded, only the last COLD_LOAD_TAIL_WINDOW
+	// messages are resident (`hasMoreShoferMessages`), so `messages[0]` is NOT
+	// the originating prompt — it slides as the chat grows. Synthesize a header
+	// row from the persisted `HistoryItem.task` (the canonical first prompt) so
+	// TaskHeader sticks to the first prompt and the window's real first message
+	// isn't swallowed as the header by the consolidation `slice(1)`. Kept
+	// reference-stable so the incremental processor's prefix cache survives
+	// streaming appends. Note: `HistoryItem.task` is text-only, so a first prompt
+	// that carried images shows text-only here until "Load older messages" pulls
+	// the real root message in (at which point `hasMoreShoferMessages` is false
+	// and we fall back to it).
+	// Depend on the primitive fields (not the `currentTaskItem` object) so the
+	// synthesized header keeps a stable identity across the frequent
+	// `currentTaskItem` updates during streaming — otherwise a new object each
+	// render would bust the incremental processor's prefix cache.
+	const headerTaskTs = currentTaskItem?.ts
+	const headerTaskText = currentTaskItem?.task
+	const syntheticTaskHeader = useMemo<ShoferMessage | undefined>(() => {
+		if (!hasMoreShoferMessages || headerTaskTs === undefined) {
+			return undefined
+		}
+		return { ts: headerTaskTs, type: "say", say: "text", text: headerTaskText ?? "" }
+	}, [hasMoreShoferMessages, headerTaskTs, headerTaskText])
+
+	// Messages used for the header + consolidation: prepend the synthesized
+	// header when the real first message isn't resident, restoring the
+	// "messages[0] is the task root" invariant that TaskHeader and
+	// `incrementalMessageProcessing` (which strips index 0) both rely on.
+	const displayMessages = useMemo(
+		() => (syntheticTaskHeader ? [syntheticTaskHeader, ...messages] : messages),
+		[syntheticTaskHeader, messages],
+	)
+
 	// Leaving this less safe version here since if the first message is not a
 	// task, then the extension is in a bad state and needs to be debugged (see
 	// Shofer.abort).
-	const task = useMemo(() => messages.at(0), [messages])
+	const task = useMemo(() => displayMessages.at(0), [displayMessages])
 
 	const latestTodos = useMemo(() => {
 		// First check if we have initial todos from the state (for new subtasks)
@@ -172,8 +205,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const prevHydratableTaskTsRef = useRef<number | undefined>(taskTs)
 
 	const processedMessages = useMemo(() => {
-		return processorRef.current.process(messages)
-	}, [messages])
+		return processorRef.current.process(displayMessages)
+	}, [displayMessages])
 
 	const modifiedMessages = processedMessages.modifiedMessages
 	const apiMetrics = processedMessages.apiMetrics

@@ -230,6 +230,18 @@ between simdjson and a tail-read.
   window). The webview handles this gracefully — orphaned outputs render
   without a parent block — and the full turn is restored once the user
   clicks "Load older messages".
+- **TaskHeader first-prompt drift (fixed 2026-06-13).** The webview treats
+  `shoferMessages[0]` as the task's originating prompt — `ChatView`'s
+  `task = messages.at(0)` feeds TaskHeader, and `incrementalMessageProcessing`
+  strips index 0 as the header. On a genuinely long task the tail window's
+  first message is _not_ the root, so the header drifted to the −200th message
+  and that message was wrongly stripped from the chat rows. Fix: when
+  `hasMoreShoferMessages` is set, `ChatView` synthesizes a header row from the
+  persisted `currentTaskItem.task` (canonical first prompt) and prepends it to
+  a `displayMessages` array used for the header + consolidation, restoring the
+  `messages[0] === root` invariant. `HistoryItem.task` is text-only, so a first
+  prompt with images shows text-only until "Load older messages" pulls the real
+  root in (`hasMoreShoferMessages` clears and the real message is used).
 - **Residual hardening (advisory, not blocking)**: (a)
   `shoferMessagesPrepended` carries no `taskId`, so a task switch during
   the awaited send could apply the page to the wrong array — the window is
