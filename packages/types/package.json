@@ -21,7 +21,7 @@
 		"build:watch": "tsup --watch --outDir npm/dist --onSuccess 'echo ✅ Types rebuilt to npm/dist'",
 		"npm:publish": "node scripts/publish-npm.cjs",
 		"clean": "rimraf dist .turbo",
-		"generate:schema": "tsx scripts/generate-roomodes-schema.ts"
+		"generate:schema": "tsx scripts/generate-shofermodes-schema.ts"
 	},
 	"dependencies": {
 		"ai-sdk-provider-poe": "2.0.18",

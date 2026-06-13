@@ -117,8 +117,7 @@
 						}
 					}
 				},
-				"required": ["slug", "name", "roleDefinition"],
-				"anyOf": [{ "required": ["groups"] }, { "required": ["tools_allowed"] }],
+				"required": ["slug", "name", "roleDefinition", "groups"],
 				"additionalProperties": false
 			}
 		}
