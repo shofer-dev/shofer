@@ -12,11 +12,23 @@ import { cn } from "@src/lib/utils"
 import ApiOptions from "../settings/ApiOptions"
 import { Tab, TabContent } from "../common/Tab"
 
+import { DiscordIcon, RedditIcon } from "../common/BrandIcons"
 import ShoferHero from "./ShoferHero"
 import { Trans } from "react-i18next"
-import { ArrowLeft, ArrowRight, GraduationCap, KeyRound, MessageSquarePlus } from "lucide-react"
+import {
+	ArrowLeft,
+	ArrowRight,
+	Github,
+	Globe,
+	GraduationCap,
+	Heart,
+	KeyRound,
+	MessageSquarePlus,
+	Store,
+	X,
+} from "lucide-react"
 
-const WelcomeViewProvider = () => {
+const WelcomeViewProvider = ({ onClose }: { onClose?: () => void }) => {
 	const { apiConfiguration, currentApiConfigName, setApiConfiguration, uriScheme } = useExtensionState()
 	const { t } = useAppTranslation()
 	const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined)
@@ -43,7 +55,18 @@ const WelcomeViewProvider = () => {
 		}
 
 		setErrorMessage(undefined)
-		vscode.postMessage({ type: "upsertApiConfiguration", text: currentApiConfigName, apiConfiguration })
+		// On first run there is no profile yet, so currentApiConfigName is empty
+		// and the host's upsert handler (gated on a non-empty name) would no-op.
+		// Default to the "default" profile so the selection is saved and activated.
+		vscode.postMessage({
+			type: "upsertApiConfiguration",
+			text: currentApiConfigName || "default",
+			apiConfiguration,
+		})
+		// Return to the landing screen (the steps) rather than leaving the form —
+		// the welcome panel now persists until the user closes it, so they can
+		// follow steps 2 and 3.
+		setShowConfigureProvider(false)
 	}, [apiConfiguration, currentApiConfigName])
 
 	const handleBackToLanding = useCallback(() => {
@@ -53,36 +76,46 @@ const WelcomeViewProvider = () => {
 
 	// Landing screen
 	if (!showConfigureProvider) {
+		// Shared link style so all three step CTAs look identical.
+		const ctaClass =
+			"mt-1 inline-flex w-fit cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-sm font-medium text-vscode-textLink-foreground hover:underline"
 		const steps = [
 			{
 				icon: KeyRound,
 				title: t("welcome:landing.steps.connect.title"),
 				description: t("welcome:landing.steps.connect.description"),
 				action: (
-					<Button
-						onClick={handleNavigateToConfigureProvider}
-						variant="primary"
-						className="mt-1 w-fit gap-1.5">
+					<button onClick={handleNavigateToConfigureProvider} className={ctaClass}>
 						{t("welcome:landing.getStarted")}
-						<ArrowRight className="size-4" />
-					</Button>
+						<ArrowRight className="size-3.5" />
+					</button>
 				),
-			},
-			{
-				icon: MessageSquarePlus,
-				title: t("welcome:landing.steps.prompt.title"),
-				description: t("welcome:landing.steps.prompt.description"),
-				action: null,
 			},
 			{
 				icon: GraduationCap,
 				title: t("welcome:landing.steps.learn.title"),
 				description: t("welcome:landing.steps.learn.description"),
 				action: (
-					<button
-						onClick={() => vscode.postMessage({ type: "walkthroughOpen" })}
-						className="mt-1 inline-flex w-fit cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-sm font-medium text-vscode-textLink-foreground hover:underline">
+					<button onClick={() => vscode.postMessage({ type: "walkthroughOpen" })} className={ctaClass}>
 						{t("welcome:landing.steps.learn.cta")}
+						<ArrowRight className="size-3.5" />
+					</button>
+				),
+			},
+			{
+				icon: MessageSquarePlus,
+				title: t("welcome:landing.steps.prompt.title"),
+				description: t("welcome:landing.steps.prompt.description"),
+				action: (
+					<button
+						onClick={() =>
+							window.postMessage(
+								{ type: "action", action: "launcherButtonClicked", values: { launcherStage: "task" } },
+								"*",
+							)
+						}
+						className={ctaClass}>
+						{t("welcome:landing.steps.prompt.cta")}
 						<ArrowRight className="size-3.5" />
 					</button>
 				),
@@ -92,6 +125,14 @@ const WelcomeViewProvider = () => {
 		return (
 			<Tab>
 				<TabContent className="relative flex flex-col gap-5 p-6 justify-center">
+					{onClose && (
+						<button
+							onClick={onClose}
+							aria-label={t("welcome:close")}
+							className="absolute right-3 top-3 inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-vscode-descriptionForeground hover:bg-[rgba(255,255,255,0.07)] hover:text-vscode-foreground">
+							<X className="size-4" />
+						</button>
+					)}
 					<ShoferHero />
 					<div className="flex flex-col gap-1">
 						<h2 className="mt-0 mb-0 text-xl">{t("welcome:landing.greeting")}</h2>
@@ -135,6 +176,44 @@ const WelcomeViewProvider = () => {
 							className="cursor-pointer border-none bg-transparent p-0 text-sm text-vscode-descriptionForeground hover:text-vscode-foreground hover:underline">
 							{t("welcome:importSettings")}
 						</button>
+					</div>
+
+					{/* External links: website, GitHub star, Marketplace rating, sponsor. */}
+					<div className="absolute bottom-5 right-5 flex items-center gap-2">
+						<span className="text-xs text-vscode-descriptionForeground">
+							{t("welcome:links.encourage")}
+						</span>
+						<div className="flex items-center gap-0.5">
+							{[
+							{ icon: Globe, url: "https://shofer.dev/", label: t("welcome:links.website") },
+							{
+								icon: Github,
+								url: "https://github.com/shofer-dev/shofer",
+								label: t("welcome:links.starGithub"),
+							},
+							{
+								icon: Store,
+								url: "https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer",
+								label: t("welcome:links.starMarketplace"),
+							},
+							{ icon: DiscordIcon, url: "https://discord.gg/shofer", label: t("welcome:links.discord") },
+							{ icon: RedditIcon, url: "https://www.reddit.com/r/Shofer_dev/", label: t("welcome:links.reddit") },
+							{
+								icon: Heart,
+								url: "https://github.com/sponsors/alsterg",
+								label: t("welcome:links.sponsor"),
+							},
+						].map(({ icon: Icon, url, label }) => (
+							<button
+								key={url}
+								title={label}
+								aria-label={label}
+								onClick={() => vscode.postMessage({ type: "openExternal", url })}
+								className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-vscode-descriptionForeground hover:bg-[rgba(255,255,255,0.07)] hover:text-vscode-foreground">
+								<Icon className="size-4" />
+							</button>
+						))}
+						</div>
 					</div>
 				</TabContent>
 			</Tab>

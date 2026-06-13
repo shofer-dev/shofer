@@ -1,8 +1,8 @@
 {
 	"landing": {
 		"greeting": "Welcome to Shofer!",
-		"introduction": "With a range of built-in and extensible Modes, Shofer lets you plan, architect, code, debug and boost your productivity like never before.",
-		"getStarted": "Get Started",
+		"introduction": "With built-in and extensible Modes, Shofer lets you plan, architect, code and debug — run multi-agent workflows, track everything with beautiful analytics, and keep each task isolated. Boost your productivity like never before.",
+		"getStarted": "Bring your own key",
 		"walkthrough": "Take the guided walkthrough",
 		"stepsHeading": "Three steps to get going",
 		"steps": {
@@ -12,7 +12,8 @@
 			},
 			"prompt": {
 				"title": "Write your first prompt",
-				"description": "Describe a task in plain language — Shofer plans, edits, and runs it for you."
+				"description": "Describe a task in plain language — Shofer plans, edits, and runs it for you.",
+				"cta": "Start your first task"
 			},
 			"learn": {
 				"title": "Learn the ropes",
@@ -22,10 +23,21 @@
 		}
 	},
 	"providerSignup": {
-		"useAnotherProvider": "3rd-party Provider",
+		"useAnotherProvider": "LLM Provider",
 		"useAnotherProviderDescription": "Enter an API key and get going.",
 		"goBack": "Back",
 		"finish": "Finish"
 	},
-	"importSettings": "Import Settings"
+	"importSettings": "Import Settings",
+	"close": "Close",
+	"links": {
+		"encourage": "Enjoying Shofer? Support us",
+		"website": "Visit shofer.dev",
+		"starGithub": "Star us on GitHub",
+		"starMarketplace": "Rate us on the VS Code Marketplace",
+		"discord": "Join our Discord",
+		"reddit": "Visit our subreddit",
+		"x": "Follow us on X",
+		"sponsor": "Sponsor the project"
+	}
 }

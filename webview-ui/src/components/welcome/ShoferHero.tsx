@@ -1,5 +1,7 @@
 import { useState } from "react"
 
+import { vscode } from "@src/utils/vscode"
+
 /**
  * ShoferHero — welcome-screen hero with a road-theme animation.
  *
@@ -18,7 +20,11 @@ const ShoferHero = () => {
 
 	return (
 		<div
-			className="mb-4 relative forced-color-adjust-none group flex flex-col items-center w-30 pt-4 overflow-clip"
+			role="link"
+			aria-label="Visit shofer.dev"
+			title="Visit shofer.dev"
+			onClick={() => vscode.postMessage({ type: "openExternal", url: "https://shofer.dev/" })}
+			className="mb-4 relative forced-color-adjust-none group flex flex-col items-center w-30 pt-4 overflow-clip cursor-pointer"
 			onMouseEnter={() => setIsHovered(true)}
 			onMouseLeave={() => setIsHovered(false)}>
 			{/* Logo — rotates like a wheel rolling on the road */}

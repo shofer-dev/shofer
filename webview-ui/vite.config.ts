@@ -20,6 +20,24 @@ function getGitSha() {
 	return gitSha
 }
 
+// Extract the most recent entry from CHANGELOG.md so the Announcement dialog can
+// show real release notes captured at build time (no runtime file access in the
+// webview). The latest entry is the first `## <version>` section; we slice up to
+// the next `## ` heading and strip the trailing `---` separator.
+function getLatestChangelog() {
+	try {
+		const md = fs.readFileSync(path.join(__dirname, "..", "src", "CHANGELOG.md"), "utf8")
+		const start = md.indexOf("\n## ")
+		if (start === -1) return ""
+		const rest = md.slice(start + 1)
+		const next = rest.indexOf("\n## ", 3)
+		const entry = next === -1 ? rest : rest.slice(0, next)
+		return entry.replace(/\n+-{3,}\s*$/, "").trim()
+	} catch (_error) {
+		return ""
+	}
+}
+
 const wasmPlugin = (): Plugin => ({
 	name: "wasm",
 	async load(id) {
@@ -64,6 +82,7 @@ export default defineConfig(({ mode }) => {
 		"process.env.PKG_NAME": JSON.stringify(pkg.name),
 		"process.env.PKG_VERSION": JSON.stringify(pkg.version),
 		"process.env.PKG_OUTPUT_CHANNEL": JSON.stringify("Shofer"),
+		"process.env.PKG_CHANGELOG": JSON.stringify(getLatestChangelog()),
 		...(gitSha ? { "process.env.PKG_SHA": JSON.stringify(gitSha) } : {}),
 	}
 

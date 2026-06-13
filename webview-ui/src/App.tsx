@@ -104,6 +104,23 @@ const App = () => {
 
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [tab, setTab] = useState<Tab>("chat")
+	// Mirror `tab` into a ref so the rarely-recreated message handler can read
+	// the live tab without a stale closure (used by the Settings gear toggle).
+	const tabRef = useRef(tab)
+	tabRef.current = tab
+
+	// The welcome/onboarding panel appears on first run (no provider configured).
+	// Keep it visible once shown — even after the user configures a provider via
+	// its inline form — until they explicitly close it (X), so they can still
+	// follow the remaining steps. Returning users (provider already set) never
+	// see it because `showWelcome` is false from the start.
+	const [welcomeClosed, setWelcomeClosed] = useState(false)
+	const [welcomeSticky, setWelcomeSticky] = useState(false)
+	useEffect(() => {
+		if (showWelcome) {
+			setWelcomeSticky(true)
+		}
+	}, [showWelcome])
 
 	const [deleteMessageDialogState, setDeleteMessageDialogState] = useState<DeleteMessageDialogState>({
 		isOpen: false,
@@ -165,6 +182,13 @@ const App = () => {
 			const message: ExtensionMessage = e.data
 
 			if (message.type === "action" && message.action) {
+				// The welcome/onboarding panel stays up while the user explores the
+				// title-bar buttons (their pop-ups/drawers overlay it). Only actually
+				// creating a task/workflow — i.e. opening the launcher — replaces it.
+				if (message.action === "launcherButtonClicked") {
+					setWelcomeClosed(true)
+				}
+
 				// The Tasks title-bar button toggles the parallel-tasks side
 				// drawer rendered inside TaskHeader / TaskSelector. We re-emit
 				// it as a window event so the (deeply nested) drawer can listen
@@ -191,6 +215,20 @@ const App = () => {
 						}
 						return true
 					})
+					return
+				}
+
+				// The Settings gear toggles: pressing it again while already on the
+				// Settings tab closes it back to chat (matching the "+" and Tasks
+				// title-bar buttons, which also toggle). Section-targeted opens — from
+				// warnings/popovers that pass `values.section` (e.g.
+				// CommandExecutionError → terminal) — always open and never toggle-close.
+				if (
+					message.action === "settingsButtonClicked" &&
+					!message.values?.section &&
+					tabRef.current === "settings"
+				) {
+					switchTab("chat")
 					return
 				}
 
@@ -302,28 +340,22 @@ const App = () => {
 
 	// Do not conditionally load ChatView, it's expensive and there's state we
 	// don't want to lose (user input, disableInput, askResponse promise, etc.)
-	return showWelcome ? (
-		<WelcomeView />
-	) : (
+	const renderWelcome = (showWelcome || welcomeSticky) && !welcomeClosed
+	return (
 		<>
+			{renderWelcome ? (
+				<WelcomeView
+					onClose={() => {
+						setWelcomeClosed(true)
+						setTab("chat")
+					}}
+				/>
+			) : (
+				<>
 			{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
 			{tab === "launcher" && (
 				<LauncherView modes={launcherModes} initialStage={launcherStage} onClose={() => switchTab("chat")} />
 			)}
-			<LauncherMenu
-				open={newMenuOpen}
-				onOpenChange={(open) => {
-					if (!open) {
-						newMenuClosedAtRef.current = Date.now()
-					}
-					setNewMenuOpen(open)
-				}}
-				onPick={(stage) => {
-					setNewMenuOpen(false)
-					setLauncherStage(stage)
-					switchTab("launcher")
-				}}
-			/>
 			{tab === "settings" && (
 				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 			)}
@@ -342,17 +374,6 @@ const App = () => {
 				isHidden={tab !== "chat" || !currentTaskItem?.isWorkflow}
 				showAnnouncement={showAnnouncement}
 				hideAnnouncement={() => setShowAnnouncement(false)}
-			/>
-			{/* TaskSelector drawer — rendered at App level so it is always
-			 * mounted regardless of which tab is active. ChatView gets
-			 * display:none when history/settings is shown, which
-			 * would hide a fixed-position drawer nested inside it. */}
-			<TaskSelector
-				taskHistory={taskHistory || []}
-				parallelTasks={parallelTasks || []}
-				currentTaskId={currentTaskItem?.id}
-				modes={allModes}
-				worktrees={worktrees}
 			/>
 			{deleteMessageDialogState.hasCheckpoint ? (
 				<MemoizedCheckpointRestoreDialog
@@ -420,6 +441,33 @@ const App = () => {
 			 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
 			 * which is why workflow-mode dropdowns rendered behind/under the view. */}
 			<div id="shofer-portal" />
+		</>
+			)}
+			{/* Overlays mounted regardless of the welcome panel, so the title-bar
+			 * "+" chooser and Tasks drawer pop up over it without dismissing it.
+			 * Only picking New Task/Workflow (which opens the launcher) replaces it. */}
+			<LauncherMenu
+				open={newMenuOpen}
+				onOpenChange={(open) => {
+					if (!open) {
+						newMenuClosedAtRef.current = Date.now()
+					}
+					setNewMenuOpen(open)
+				}}
+				onPick={(stage) => {
+					setNewMenuOpen(false)
+					setWelcomeClosed(true)
+					setLauncherStage(stage)
+					switchTab("launcher")
+				}}
+			/>
+			<TaskSelector
+				taskHistory={taskHistory || []}
+				parallelTasks={parallelTasks || []}
+				currentTaskId={currentTaskItem?.id}
+				modes={allModes}
+				worktrees={worktrees}
+			/>
 		</>
 	)
 }

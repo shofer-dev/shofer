@@ -66,6 +66,11 @@ vi.mock("lucide-react", () => ({
 	KeyRound: () => <span data-testid="key-round-icon">🔑</span>,
 	MessageSquarePlus: () => <span data-testid="message-square-plus-icon">💬</span>,
 	TriangleAlert: () => <span data-testid="triangle-alert-icon">⚠</span>,
+	Globe: () => <span data-testid="globe-icon">🌐</span>,
+	Github: () => <span data-testid="github-icon">🐙</span>,
+	Store: () => <span data-testid="store-icon">🛒</span>,
+	Heart: () => <span data-testid="heart-icon">❤</span>,
+	X: () => <span data-testid="x-icon">✕</span>,
 }))
 
 // Mock vscode utility
@@ -130,14 +135,14 @@ describe("WelcomeViewProvider", () => {
 			// Should show introduction
 			expect(screen.getByTestId("trans-welcome:landing.introduction")).toBeInTheDocument()
 
-			// Should show "Get Started" button
-			expect(screen.getByTestId("button-primary")).toBeInTheDocument()
+			// Should show the "Bring your own key" CTA (step 1)
+			expect(screen.getByRole("button", { name: /welcome:landing\.getStarted/ })).toBeInTheDocument()
 		})
 
 		it("navigates to provider configuration when 'Get Started' is clicked", () => {
 			renderWelcomeViewProvider()
 
-			const getStartedButton = screen.getByTestId("button-primary")
+			const getStartedButton = screen.getByRole("button", { name: /welcome:landing\.getStarted/ })
 			fireEvent.click(getStartedButton)
 
 			// Should now show provider configuration screen
@@ -149,7 +154,7 @@ describe("WelcomeViewProvider", () => {
 
 	describe("Configure Provider Screen", () => {
 		const navigateToConfigureProvider = () => {
-			const getStartedButton = screen.getByTestId("button-primary")
+			const getStartedButton = screen.getByRole("button", { name: /welcome:landing\.getStarted/ })
 			fireEvent.click(getStartedButton)
 		}
 

@@ -1,12 +1,9 @@
-import { memo, type ReactNode, useState } from "react"
-import { Trans } from "react-i18next"
-import { SiDiscord, SiReddit, SiX } from "react-icons/si"
-import { VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { memo, useState } from "react"
 
 import { Package } from "@shofer/shared/package"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { vscode } from "@src/utils/vscode"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@src/components/ui"
+import MarkdownBlock from "@src/components/common/MarkdownBlock"
 
 interface AnnouncementProps {
 	hideAnnouncement: () => void
@@ -25,6 +22,9 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 	const { t } = useAppTranslation()
 	const [open, setOpen] = useState(true)
 
+	// Latest CHANGELOG.md entry, captured at build time (see vite.config.ts).
+	const changelog = Package.changelog?.trim()
+
 	return (
 		<Dialog
 			open={open}
@@ -39,67 +39,16 @@ const Announcement = ({ hideAnnouncement }: AnnouncementProps) => {
 				<DialogHeader>
 					<DialogTitle>{t("chat:announcement.title", { version: Package.version })}</DialogTitle>
 				</DialogHeader>
-				<div>
-					{/* Regular Release Highlights */}
-					<div className="mb-4">
-						<p className="mb-3">{t("chat:announcement.release.heading")}</p>
-						<ul className="list-disc list-inside text-sm space-y-1.5">
-							<li>{t("chat:announcement.release.gpt54")}</li>
-							<li>{t("chat:announcement.release.slashSkills")}</li>
-						</ul>
-					</div>
-
-					<div className="mt-4 text-sm text-center text-vscode-descriptionForeground">
-						<div className="flex items-center justify-center gap-4">
-							<SocialLink
-								icon={<SiX className="w-4 h-4" aria-hidden />}
-								label="X"
-								href="https://x.com/shofer"
-							/>
-							<SocialLink
-								icon={<SiDiscord className="w-4 h-4" aria-hidden />}
-								label="Discord"
-								href="https://discord.gg/rCQcvT7Fnt"
-							/>
-							<SocialLink
-								icon={<SiReddit className="w-4 h-4" aria-hidden />}
-								label="Reddit"
-								href="https://www.reddit.com/r/Shofer/"
-							/>
-						</div>
-					</div>
-
-					<div className="mt-3 text-sm text-center text-vscode-descriptionForeground">
-						<Trans i18nKey="chat:announcement.support" components={{ githubLink: <GitHubLink /> }} />
-					</div>
+				<div className="max-h-[60vh] overflow-y-auto pr-1 text-sm">
+					{changelog ? (
+						<MarkdownBlock markdown={changelog} />
+					) : (
+						<p className="text-vscode-descriptionForeground">{t("chat:announcement.noChangelog")}</p>
+					)}
 				</div>
 			</DialogContent>
 		</Dialog>
 	)
 }
-
-const SocialLink = ({ icon, label, href }: { icon: ReactNode; label: string; href: string }) => (
-	<VSCodeLink
-		href={href}
-		className="inline-flex items-center gap-1"
-		onClick={(e) => {
-			e.preventDefault()
-			vscode.postMessage({ type: "openExternal", url: href })
-		}}>
-		{icon}
-		<span className="sr-only">{label}</span>
-	</VSCodeLink>
-)
-
-const GitHubLink = ({ children }: { children?: ReactNode }) => (
-	<VSCodeLink
-		href="https://github.com/shofer-dev/shofer"
-		onClick={(e) => {
-			e.preventDefault()
-			vscode.postMessage({ type: "openExternal", url: "https://github.com/shofer-dev/shofer" })
-		}}>
-		{children}
-	</VSCodeLink>
-)
 
 export default memo(Announcement)

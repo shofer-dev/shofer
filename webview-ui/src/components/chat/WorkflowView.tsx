@@ -2325,6 +2325,22 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							</button>
 						</div>
 					)}
+					{/* While the workflow runs with the free-text input hidden, the morphing
+					    Stop button inside ChatTextArea isn't rendered (that input block is
+					    hidden for workflows). Surface a dedicated Stop here so the whole tree
+					    can always be halted during a run; when the workflow is awaiting a
+					    free-text answer, ChatTextArea shows its own Stop instead. */}
+					{!workflowStopped && workflowRunning && !isFreeTextFollowupPending && (
+						<div className="px-3 pb-2">
+							<button
+								type="button"
+								onClick={handleStopTask}
+								className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm bg-vscode-button-background text-vscode-button-foreground hover:bg-vscode-button-hoverBackground">
+								<span className="codicon codicon-debug-stop" />
+								Stop workflow
+							</button>
+						</div>
+					)}
 					<ChatTextArea
 						ref={textAreaRef}
 						inputValue={inputValue}

@@ -12,4 +12,7 @@ export const Package = {
 	version: process.env.PKG_VERSION || version,
 	outputChannel: process.env.PKG_OUTPUT_CHANNEL || "Shofer",
 	sha: process.env.PKG_SHA,
+	// Latest CHANGELOG.md entry, injected by the webview build (see vite.config.ts).
+	// Undefined in the extension-host build, which doesn't use it.
+	changelog: process.env.PKG_CHANGELOG,
 } as const
