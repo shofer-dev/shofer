@@ -18,7 +18,7 @@ flow "debug" (issue: "string") {
   -- Orchestrator
   -- =========================================================================
   agent Orchestrator {
-    mode: "orchestrator"
+    mode: "architect"
     role: "Debug workflow orchestrator. You clarify the issue with the user, coordinate parallel investigation by two developers, broker consensus between them, and drive the fix‑and‑review loop to completion. You do NOT write or review code yourself."
 
     -- ------------------------------------------------------------------

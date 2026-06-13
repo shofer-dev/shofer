@@ -17,7 +17,7 @@ flow "implement-feature" (feature: "string") {
   }
 
   agent Architect {
-    mode: "orchestrator"
+    mode: "architect"
     role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents."
 
     stake create_design(

@@ -79,7 +79,7 @@ flow "implement-feature" (feature: "string") {
   -- =========================================================================
   -- Agent: Architect (top-level orchestrator)
   --
-  -- This agent runs as a Shofer Task. Mode: "orchestrator"
+  -- This agent runs as a Shofer Task. Mode: "architect"
   -- Role: decomposes feature requests, coordinates exploration,
   -- gate-keeps on user approval, drives the implementation loop.
   -- NB: The Architect agent IS part of the workflow, not the Workflow Task
@@ -87,7 +87,7 @@ flow "implement-feature" (feature: "string") {
   -- this one.
   -- =========================================================================
   agent Architect {
-    mode: "orchestrator"
+    mode: "architect"
     model: "claude-sonnet"
     role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents."
 
@@ -655,22 +655,18 @@ The mapping is:
 
 For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofer/shofermodes` entry needed.
 
-> **⚠️ Current reality — `mode: "orchestrator"` falls back to `code`.** The two
-> built-in workflows (`debug.slang`, `implement-feature.slang`) declare their
-> top-level agent with `mode: "orchestrator"`, but **there is no `orchestrator`
-> mode** in `DEFAULT_MODES` or `.shofer/shofermodes`. `spawnAgentTask` passes the
-> slug to `createTask({ initialMode })`, and `getModeBySlug("orchestrator")`
-> returns `undefined`, so the agent silently runs in the **`code`** fallback mode —
-> with the `code` `roleDefinition` and **all** of code's tool groups (read, write,
-> execute, …), not a delegation-only persona. Combined with `tools:`/`role:` being
-> "parsed, not yet consumed" (see below), the orchestrator's intended restriction
-> ("you do NOT write or review code yourself") is **not enforced** today; it relies
-> entirely on the agent's prompt instructions. Two ways to make it real: (a) add an
-> `orchestrator` built-in mode (groups `subtasks`, `questions`, `mcp` — no
-> write/execute) — note this would become a 7th built-in mode and must be added to
-> every mode table across the docs; or (b) wire the per-agent `tools:` restriction
-> (Planned) so the workflow narrows `code`'s groups at spawn. Until one ships, treat
-> the orchestrator as an over-privileged `code` agent.
+> **Top-level agent runs in `architect` mode.** The two built-in workflows
+> (`debug.slang`, `implement-feature.slang`) spawn their top-level orchestrating
+> agent with `mode: "architect"` — a real built-in mode whose groups
+> (`read`, `write` **`.md`-only**, `mcp`, `subtasks`, `questions`) fit an
+> orchestrator well: it can read, ask the user (`questions`), delegate via
+> `new_task` (`subtasks`), and — crucially — **cannot edit code** (`write` is
+> restricted to `.md`), matching the role's "you do NOT write code yourself". This
+> replaced an earlier `mode: "orchestrator"` that referenced a non-existent mode and
+> silently fell back to `code` (full write/execute access). If a dedicated, even
+> tighter orchestrator persona is ever wanted (e.g. no `.md` write at all), add an
+> `orchestrator` built-in mode or wire the per-agent `tools:` restriction (Planned)
+> to narrow the mode's groups at spawn.
 
 ---
 
@@ -1073,7 +1069,7 @@ The Shofer Task Selector shows the workflow's task hierarchy:
 
 ```
 implement-feature (workflow)                [running]
-├── 🏗️ Architect (orchestrator mode)        [running]
+├── 🏗️ Architect (architect mode)        [running]
 ├── 🔍 Codebase (search mode)               [completed]
 ├── 🌐 Internet (browser mode)               [completed]
 ├── 💻 Developer (code mode)                [running]
@@ -1171,7 +1167,7 @@ Some agents are useful to **multiple** siblings. For example, the Codebase (code
 
 ```
 implement-feature (WorkflowTask)
-├── 🏗️ Architect (orchestrator mode)    ← can peer-message Codebase & Internet
+├── 🏗️ Architect (architect mode)    ← can peer-message Codebase & Internet
 ├── 🔍 Codebase (search mode)          ← shared: codebase context
 ├── 🌐 Internet (browser mode)          ← shared: external/web info
 ├── 💻 Developer (code mode)           ← can peer-message Codebase & Internet
