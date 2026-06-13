@@ -197,7 +197,7 @@ interface ChatRowContentProps extends Omit<ChatRowProps, "onHeightChange"> {}
 
 const ChatRow = memo(
 	(props: ChatRowProps) => {
-		const { isLast, onHeightChange, message } = props
+		const { onHeightChange, message } = props
 		// Store the previous height to compare with the current height
 		// This allows us to detect changes without causing re-renders
 		const prevHeightRef = useRef(0)
@@ -220,13 +220,21 @@ const ChatRow = memo(
 			// NOTE: it's important we don't distinguish between partial or complete here since our scroll effects in chatview need to handle height change during partial -> complete
 			const isInitialRender = prevHeightRef.current === 0 // prevents scrolling when new element is added since we already scroll for that
 			// height starts off at Infinity
-			if (isLast && isHeightValid && height !== prevHeightRef.current) {
+			//
+			// Cause D: report height changes for EVERY row, not just the last one.
+			// A tool result expanding or an image loading in a non-last row grows
+			// the list above the viewport; while the user is anchored at the bottom
+			// that growth must pull the viewport down too. The scroll decision lives
+			// in the hook (handleRowHeightChange), which only scrolls when at-bottom
+			// or streaming and is a no-op while the user is browsing history — so
+			// reporting from every row is safe.
+			if (isHeightValid && height !== prevHeightRef.current) {
 				if (!isInitialRender) {
 					onHeightChange(height > prevHeightRef.current)
 				}
 				prevHeightRef.current = height
 			}
-		}, [height, isLast, onHeightChange, message])
+		}, [height, onHeightChange, message])
 
 		// we cannot return null as virtuoso does not support it, so we use a separate visibleMessages array to filter out messages that should not be rendered
 		return chatrow
