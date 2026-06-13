@@ -1,7 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import DynamicTextArea from "react-textarea-autosize"
-import { VolumeX, Image, WandSparkles, SendHorizontal, X, ListEnd, Square, Rocket } from "lucide-react"
+import { VolumeX, Image, WandSparkles, SendHorizontal, X, ListEnd, Square } from "lucide-react"
 
 import type { ExtensionMessage } from "@shofer/types"
 
@@ -93,8 +93,6 @@ interface ChatTextAreaProps {
 	 * name and the auto-approval dropdown exposes every group.
 	 */
 	isWorkflow?: boolean
-	/** The workflow (flow) name to display read-only when `isWorkflow`. */
-	workflowName?: string
 	/**
 	 * When `isWorkflow`, the free-text input is hidden by default and only
 	 * revealed while the workflow is awaiting a typed answer (i.e. there is
@@ -128,7 +126,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			onEnqueueMessage,
 			onContextFilesDropped,
 			isWorkflow = false,
-			workflowName,
 			workflowAwaitingInput = false,
 		},
 		ref,
@@ -1544,18 +1541,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 
 				<div className="flex items-center gap-2">
 					<div className="flex items-center gap-2 min-w-0 overflow-clip flex-1">
-						{isWorkflow ? (
-							<StandardTooltip content={t("chat:workflowReadonly")}>
-								<div
-									data-testid="workflow-name-indicator"
-									className="flex items-center gap-1.5 px-2 h-[28px] rounded-md text-vscode-foreground opacity-90 min-w-0">
-									<Rocket className="w-3.5 h-3.5 flex-shrink-0" />
-									<span className="text-ellipsis overflow-hidden whitespace-nowrap">
-										{workflowName || t("chat:workflow")}
-									</span>
-								</div>
-							</StandardTooltip>
-						) : (
+						{/* Workflows have no mode (the flow name is shown in the TaskHeader
+						    title), so the ModeSelector slot is omitted entirely for them. */}
+						{!isWorkflow && (
 							<ModeSelector
 								value={mode}
 								title={t("chat:selectMode")}

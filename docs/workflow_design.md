@@ -1319,10 +1319,10 @@ All under [`src/core/workflow/`](../src/core/workflow/):
 
 ### i18n
 
-| File                                                                  | Purpose                                                                       |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [`launcher.json`](../../webview-ui/src/i18n/locales/en/launcher.json) | "Choose a workflow" / "Discovering workflows…" / "No workflows found" strings |
-| [`chat.json`](../../webview-ui/src/i18n/locales/en/chat.json)         | `workflow`, `workflowReadonly`, `workflowStarting` strings                    |
+| File                                                                  | Purpose                                                                                                                                                                                |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`launcher.json`](../../webview-ui/src/i18n/locales/en/launcher.json) | "Choose a workflow" / "Discovering workflows…" / "No workflows found" strings                                                                                                          |
+| [`chat.json`](../../webview-ui/src/i18n/locales/en/chat.json)         | `workflowStarting` string (the `workflow` / `workflowReadonly` strings are now orphaned — the workflow input bar no longer shows a name chip; the name is in the **TaskHeader** title) |
 
 ### Example Workflows
 

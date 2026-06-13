@@ -2253,7 +2253,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 						onStop={handleStopTask}
 						onEnqueueMessage={handleEnqueueCurrentMessage}
 						isWorkflow={true}
-						workflowName={currentTaskItem?.mode}
 						workflowAwaitingInput={!!shoferAsk && !sendingDisabled}
 						onContextFilesDropped={(files: DroppedContextFile[]) =>
 							setDroppedContextFiles((prev) => {
