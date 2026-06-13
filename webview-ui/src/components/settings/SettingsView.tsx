@@ -242,6 +242,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		includeCurrentCost,
 		maxGitStatusFiles,
 		defaultCostLimit,
+		archivedTaskRetentionDays,
 		assistantAgentEnabled,
 		assistantAgentApiConfigId,
 		assistantAgentMaxContextTokens,
@@ -470,6 +471,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					includeCurrentCost: includeCurrentCost ?? true,
 					maxGitStatusFiles: maxGitStatusFiles ?? 0,
 					defaultCostLimit: defaultCostLimit ?? null,
+					archivedTaskRetentionDays: archivedTaskRetentionDays ?? null,
 					profileThresholds,
 					imageGenerationProvider,
 					openRouterImageApiKey,
@@ -1067,13 +1069,15 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
-						{/* Experimental Section */}
+						{/* Advanced Section (internally still keyed "experimental") */}
 						{renderTab === "experimental" && (
 							<ExperimentalSettings
 								setExperimentEnabled={setExperimentEnabled}
 								experiments={experiments}
 								apiConfiguration={apiConfiguration}
 								setApiConfigurationField={setApiConfigurationField}
+								archivedTaskRetentionDays={archivedTaskRetentionDays}
+								setCachedStateField={setCachedStateField}
 								imageGenerationProvider={imageGenerationProvider}
 								openRouterImageApiKey={openRouterImageApiKey as string | undefined}
 								openRouterImageGenerationSelectedModel={

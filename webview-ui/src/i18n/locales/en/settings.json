@@ -41,7 +41,7 @@
 		"slashCommands": "Slash Commands",
 		"prompts": "Prompts",
 		"ui": "UI",
-		"experimental": "Experimental",
+		"experimental": "Advanced",
 		"language": "Language",
 		"codebaseIndex": "RAG Indexer",
 		"logging": "Logging",
@@ -949,6 +949,11 @@
 		"todoList": {
 			"label": "Enable todo list tool",
 			"description": "When enabled, Shofer can create and manage todo lists to track task progress. This helps organize complex tasks into manageable steps."
+		},
+		"archivedTaskRetention": {
+			"label": "Archived task retention (days)",
+			"placeholder": "7",
+			"description": "How many days an archived task is kept before it is permanently deleted. Leave empty for the default of 7 days, or set 0 to keep archived tasks forever. Deletion is irreversible."
 		}
 	},
 	"experimental": {

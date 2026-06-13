@@ -460,6 +460,7 @@ export type ExtensionState = Pick<
 	| "requestDelaySeconds"
 	| "disabledTools"
 	| "defaultCostLimit"
+	| "archivedTaskRetentionDays"
 	| "assistantAgentEnabled"
 	| "assistantAgentApiConfigId"
 	| "assistantAgentMaxContextTokens"

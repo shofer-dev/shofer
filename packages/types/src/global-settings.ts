@@ -234,6 +234,15 @@ export const globalSettingsSchema = z.object({
 	defaultCostLimit: costLimitSchema.nullish(),
 
 	/**
+	 * Number of days an archived task is retained before the periodic cleanup
+	 * permanently deletes it (see ShoferProvider.scheduleArchivedCleanup).
+	 * - unset / null  → default of 7 days (preserves legacy behaviour)
+	 * - 0             → never auto-delete (keep archived tasks forever)
+	 * - N > 0         → retain for N days after the task was archived
+	 */
+	archivedTaskRetentionDays: z.number().int().min(0).nullish(),
+
+	/**
 	 * Enable integration with the Shofer LLM Model Provider extension
 	 * (shofer.llm.getModelPricing, shofer.llm.getRequestCost, etc.).
 	 * When disabled (default), the vscode-lm provider uses only the

@@ -1,4 +1,5 @@
 import { HTMLAttributes } from "react"
+import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type { Experiments, ImageGenerationProvider } from "@shofer/types"
 
@@ -7,7 +8,7 @@ import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/shared/experiments
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { cn } from "@src/lib/utils"
 
-import { SetExperimentEnabled } from "./types"
+import { SetExperimentEnabled, SetCachedStateField } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
@@ -20,6 +21,8 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	setExperimentEnabled: SetExperimentEnabled
 	apiConfiguration?: any
 	setApiConfigurationField?: any
+	archivedTaskRetentionDays?: number | null
+	setCachedStateField: SetCachedStateField<"archivedTaskRetentionDays">
 	imageGenerationProvider?: ImageGenerationProvider
 	openRouterImageApiKey?: string
 	openRouterImageGenerationSelectedModel?: string
@@ -33,6 +36,8 @@ export const ExperimentalSettings = ({
 	setExperimentEnabled,
 	apiConfiguration,
 	setApiConfigurationField,
+	archivedTaskRetentionDays,
+	setCachedStateField,
 	imageGenerationProvider,
 	openRouterImageApiKey,
 	openRouterImageGenerationSelectedModel,
@@ -49,6 +54,36 @@ export const ExperimentalSettings = ({
 			<SectionHeader>{t("settings:sections.experimental")}</SectionHeader>
 
 			<Section>
+				<SearchableSetting
+					settingId="advanced-archived-task-retention"
+					section="experimental"
+					label={t("settings:advanced.archivedTaskRetention.label")}>
+					<VSCodeTextField
+						value={archivedTaskRetentionDays == null ? "" : String(archivedTaskRetentionDays)}
+						className="w-full"
+						onInput={(e: any) => {
+							const raw = (e.target.value as string).trim()
+							if (raw === "") {
+								// Empty → unset → backend falls back to the 7-day default.
+								setCachedStateField("archivedTaskRetentionDays", null as unknown as number)
+								return
+							}
+							const parsed = Number(raw)
+							if (Number.isInteger(parsed) && parsed >= 0) {
+								setCachedStateField("archivedTaskRetentionDays", parsed)
+							}
+						}}
+						placeholder={t("settings:advanced.archivedTaskRetention.placeholder")}
+						data-testid="archived-task-retention-input">
+						<label className="block font-medium mb-1">
+							{t("settings:advanced.archivedTaskRetention.label")}
+						</label>
+					</VSCodeTextField>
+					<div className="text-vscode-descriptionForeground text-sm mt-1">
+						{t("settings:advanced.archivedTaskRetention.description")}
+					</div>
+				</SearchableSetting>
+
 				{Object.entries(experimentConfigsMap)
 					.filter(([key]) => key in EXPERIMENT_IDS)
 					.map((config) => {

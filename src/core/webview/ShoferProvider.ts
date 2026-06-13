@@ -561,24 +561,38 @@ export class ShoferProvider
 	/** Interval ID for the periodic archived-task cleanup timer. */
 	private archivedCleanupTimer: ReturnType<typeof setInterval> | null = null
 
+	/** Default archived-task retention when the user hasn't configured one. */
+	private static readonly DEFAULT_ARCHIVE_RETENTION_DAYS = 7
+
 	/**
-	 * Auto-delete archived tasks that have been archived for longer than 7 days.
-	 * Runs at extension start and then once every 24 hours.
+	 * Auto-delete archived tasks older than the configured retention window
+	 * (`archivedTaskRetentionDays`, Settings → Advanced; default 7 days, `0`
+	 * disables deletion). Runs at extension start and then once every 24 hours.
+	 * The retention value is read fresh on every run so a settings change takes
+	 * effect on the next tick without a restart.
 	 */
 	private scheduleArchivedCleanup(): void {
 		const DAY_MS = 24 * 60 * 60 * 1000
-		const ARCHIVE_MAX_AGE_MS = 7 * DAY_MS
 
 		const doCleanup = async () => {
 			try {
+				const configured = this.contextProxy.getValue("archivedTaskRetentionDays")
+				const retentionDays = configured ?? ShoferProvider.DEFAULT_ARCHIVE_RETENTION_DAYS
+				// 0 (or any non-positive value) means "keep archived tasks forever".
+				if (!(retentionDays > 0)) {
+					return
+				}
+				const maxAgeMs = retentionDays * DAY_MS
 				const now = Date.now()
 				const allTasks = this.taskHistoryStore.getAll()
 				const expiredIds = allTasks
-					.filter((item) => item.archived && item.archivedAt && now - item.archivedAt >= ARCHIVE_MAX_AGE_MS)
+					.filter((item) => item.archived && item.archivedAt && now - item.archivedAt >= maxAgeMs)
 					.map((item) => item.id)
 
 				if (expiredIds.length > 0) {
-					this.debug(`Auto-deleting ${expiredIds.length} expired archived tasks`)
+					this.debug(
+						`Auto-deleting ${expiredIds.length} expired archived tasks (retention ${retentionDays}d)`,
+					)
 					await this.taskHistoryStore.deleteMany(expiredIds)
 				}
 			} catch (error) {
@@ -3524,6 +3538,7 @@ export class ShoferProvider
 			includeCurrentCost,
 			maxGitStatusFiles,
 			defaultCostLimit,
+			archivedTaskRetentionDays,
 			taskSyncEnabled,
 			imageGenerationProvider,
 			openRouterImageApiKey,
@@ -3720,6 +3735,7 @@ export class ShoferProvider
 			includeCurrentCost: includeCurrentCost ?? true,
 			maxGitStatusFiles: maxGitStatusFiles ?? 0,
 			defaultCostLimit,
+			archivedTaskRetentionDays,
 			taskSyncEnabled,
 			imageGenerationProvider,
 			openRouterImageApiKey,
@@ -3968,6 +3984,7 @@ export class ShoferProvider
 			includeCurrentCost: stateValues.includeCurrentCost ?? true,
 			maxGitStatusFiles: stateValues.maxGitStatusFiles ?? 0,
 			defaultCostLimit: stateValues.defaultCostLimit,
+			archivedTaskRetentionDays: stateValues.archivedTaskRetentionDays,
 			taskSyncEnabled,
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
