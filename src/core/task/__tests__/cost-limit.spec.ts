@@ -12,9 +12,10 @@
  * End-to-end pause/abort/kill behaviour is covered by manual QA.
  */
 import { describe, it, expect, vi } from "vitest"
-import type { HistoryItem } from "@shofer/types"
+import type { HistoryItem, ModelInfo } from "@shofer/types"
 
 import { aggregateTaskCostsRecursive } from "../../webview/aggregateTaskCosts"
+import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../../shared/cost"
 
 /**
  * Minimal duck-type for the parentTask walk used by Task.resolveCostLimit.
@@ -97,5 +98,64 @@ describe("aggregateTaskCostsRecursive", () => {
 		const result = await aggregateTaskCostsRecursive("root", getHistory)
 
 		expect(result.totalCost).toBeCloseTo(1.75, 6)
+	})
+})
+
+/**
+ * In-flight gate fallback contract.
+ *
+ * `Task.estimateRequestCostUsd` feeds `checkInFlightCostLimit` a local-pricing
+ * estimate whenever the backend doesn't stamp `totalCost` on its usage chunk
+ * (openai.ts, bedrock.ts, deepseek.ts, raw OpenAI-compatible endpoints). The
+ * method is a thin protocol-aware wrapper over `calculateApiCost{Anthropic,
+ * OpenAI}` — these tests lock the two properties the gate relies on:
+ *
+ *   1. A PRICED model yields a positive estimate, so the tight in-stream cap
+ *      can fire mid-stream for backends that don't self-report cost.
+ *   2. An UNPRICED model yields exactly 0, so the gate stays a no-op — by
+ *      design we only ever cap real, priced spend (never block on a model we
+ *      can't price).
+ */
+describe("in-flight gate local-pricing fallback (estimateRequestCostUsd math)", () => {
+	const priced: ModelInfo = {
+		maxTokens: 8192,
+		contextWindow: 200_000,
+		supportsPromptCache: true,
+		inputPrice: 3.0, // USD / 1M
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+	} as ModelInfo
+
+	const unpriced: ModelInfo = {
+		maxTokens: 8192,
+		contextWindow: 128_000,
+		supportsPromptCache: false,
+	} as ModelInfo
+
+	it("yields a positive estimate for a priced model (OpenAI protocol) so the gate can fire", () => {
+		const { totalCost } = calculateApiCostOpenAI(priced, 10_000, 2_000, 0, 0)
+		// 10k input @ $3/1M + 2k output @ $15/1M = 0.03 + 0.03
+		expect(totalCost).toBeCloseTo(0.06, 6)
+		expect(totalCost).toBeGreaterThan(0)
+	})
+
+	it("yields a positive estimate for a priced model (Anthropic protocol)", () => {
+		const { totalCost } = calculateApiCostAnthropic(priced, 10_000, 2_000, 0, 0)
+		expect(totalCost).toBeCloseTo(0.06, 6)
+		expect(totalCost).toBeGreaterThan(0)
+	})
+
+	it("yields exactly 0 for an unpriced model so the gate stays a no-op", () => {
+		expect(calculateApiCostOpenAI(unpriced, 10_000, 2_000, 0, 0).totalCost).toBe(0)
+		expect(calculateApiCostAnthropic(unpriced, 10_000, 2_000, 0, 0).totalCost).toBe(0)
+	})
+
+	it("accumulates cache-read/write tokens into the estimate", () => {
+		const { totalCost } = calculateApiCostOpenAI(priced, 10_000, 2_000, 1_000, 5_000)
+		// non-cached input 10k-1k-5k=4k @ $3/1M, 1k cache-write @ $3.75/1M,
+		// 5k cache-read @ $0.3/1M, 2k output @ $15/1M
+		const expected = (4_000 * 3.0 + 1_000 * 3.75 + 5_000 * 0.3 + 2_000 * 15.0) / 1_000_000
+		expect(totalCost).toBeCloseTo(expected, 9)
 	})
 })

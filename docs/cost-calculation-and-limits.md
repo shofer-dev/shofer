@@ -1,6 +1,14 @@
 # Cost Calculation & Per-Root-Task Cost Limit
 
-Status (cost limit): **shipped in 3.53.0**, hardened through 3.54.10.
+Status (cost limit): **shipped in 3.53.0**, hardened through 3.54.11.
+
+Backend coverage: enforcement is **backend-agnostic** — see the
+[Backend Coverage Matrix](#backend-coverage-matrix) for how cost is
+sourced (provider-stamped vs local-pricing fallback) for each of
+llm-router, shofer-router/llm-provider, OpenRouter, and direct upstream
+providers, and [Known Gaps by backend](#known-gaps-by-backend) for the
+residual cases where cost is unknowable and the cap therefore can't
+trip.
 
 A user-configurable USD spend cap, scoped to the root task, with
 subtask costs aggregated into the root via the existing
@@ -313,6 +321,127 @@ not wrapped and auto-discovery runs unchanged.
 
 ---
 
+## Backend Coverage Matrix
+
+The cost-limit machinery in `Task.ts` is **backend-agnostic by
+construction**: it never special-cases a provider. Enforcement depends
+on exactly two values being correct for whichever backend serves the
+traffic:
+
+- **`usage` chunk `totalCost`** — feeds the tight in-stream gate
+  (`checkInFlightCostLimit`). Either the backend stamps it, or
+  `estimateRequestCostUsd` computes it locally from token counts ×
+  `getModel().info` pricing.
+- **persisted `cost`** (`totalCost ?? calculateApiCost*`) — feeds the
+  post-stream aggregate (`checkCostLimit`) and the TaskHeader total via
+  `consolidateTokenUsage`.
+
+If a backend supplies a usable cost on **either** axis, limits enforce.
+The only way enforcement can silently fail is when a request's cost is
+genuinely `0`/unknown on **both** axes — i.e. the backend stamps no
+cost AND `getModel().info` has no pricing. The matrix below maps each
+backend the user can route through to its cost source.
+
+| Backend (as the user sees it)                       | Shofer provider / path                   | Stamps `usage.totalCost`?                                                             | Local-pricing fallback works?                                   | In-stream gate                      | Post-stream gate       |
+| --------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------- | ---------------------- |
+| **Direct upstream — Anthropic**                     | `anthropic.ts`                           | ✅ `calculateApiCostAnthropic` on final chunk                                         | ✅ (self-computed)                                              | ✅                                  | ✅                     |
+| **Direct upstream — OpenAI (native)**               | `openai-native.ts`                       | ✅ `calculateApiCostOpenAI` (tier-aware)                                              | ✅                                                              | ✅                                  | ✅                     |
+| **Direct upstream — Gemini**                        | `gemini.ts`                              | ✅ unless model lacks pricing                                                         | ✅ priced models                                                | ✅ priced models                    | ✅ priced models       |
+| **Direct upstream — OpenAI-compatible**             | `openai.ts`                              | ❌ never stamps                                                                       | ✅ **only if** custom model info has prices (sane defaults = 0) | ✅ via fallback (was ❌ pre-fix)    | ✅ if priced           |
+| **Direct upstream — Bedrock**                       | `bedrock.ts`                             | ❌ never stamps                                                                       | ⚠️ priced models only; custom-ARN / guessed models = 0          | ✅ via fallback for priced (was ❌) | ✅ if priced           |
+| **Direct upstream — DeepSeek**                      | `deepseek.ts`                            | ❌ never stamps                                                                       | ✅ `deepSeekModels` has real prices                             | ✅ via fallback (was ❌)            | ✅                     |
+| **OpenRouter (direct)**                             | `openrouter.ts`                          | ✅ provider-reported `cost` + `upstream_inference_cost`                               | ⚠️ weak (varies)                                                | ✅ when OR returns cost             | ✅                     |
+| **llm-router (local) — `shofer/*` & routed models** | `shofer.ts` (extends OpenRouter handler) | ✅ iff llm-router stamps `usage.cost`                                                 | ⚠️ composite info often has `inputPrice: 0`                     | ✅ when stamped                     | ✅ when stamped        |
+| **shofer-router / llm-provider (VS Code LM)**       | `vscode-lm.ts`                           | ✅ iff `enableLlmProviderIntegration` **and** `shofer.router.getRequestCost` resolves | ⚠️ pricing also via side-channel; `0` when integration off      | ✅ when integration on              | ✅ when integration on |
+
+Legend: ✅ enforced, ⚠️ conditional (depends on pricing data),
+❌ cannot enforce. "(was ❌)" marks the in-stream gaps closed by the
+`estimateRequestCostUsd` fallback (this change).
+
+### Known Gaps by backend
+
+These are the residual cases where cost can be `0`/unknown on both
+axes, so the cap cannot trip. None are silent regressions of the
+fallback — they are inherent "we can't price it" situations, listed so
+operators debugging "my limit never fired" know where to look.
+
+**Shofer-extension side (enforcement chokepoint):**
+
+1. **Unpriced models** — any provider whose `getModel().info` has no
+   `inputPrice`/`outputPrice` AND stamps no `totalCost` reports `0`.
+   Affects: raw `openai.ts` against an OpenAI-compatible endpoint with
+   no custom model info (sane defaults carry `0` prices); custom-ARN or
+   `guessModelInfoFromId` Bedrock models; `vscode-lm` when
+   `enableLlmProviderIntegration` is off (default) — both the cost
+   side-channel and the pricing side-channel return `undefined`, so
+   `info.inputPrice/outputPrice` default to `0`. **Mitigation:** set a
+   `customPricing` override (Path 3) so the fallback has real prices.
+
+2. **Composite `shofer/*` models** — their `ModelInfo` frequently
+   carries `inputPrice: 0` (the real price is per-attempt and only
+   known after the router selects an upstream). When llm-router stamps
+   `usage.cost` (the normal case) this is fine; if stamping is missing
+   the local fallback is `0`. Depends on llm-router behavior below.
+
+**llm-router side (cost accuracy when traffic transits the router):**
+verified in [`internal/services/provider.go`](../../../llm-router/internal/services/provider.go)
+and [`internal/services/cost_stamper.go`](../../../llm-router/internal/services/cost_stamper.go).
+
+3. **Non-streaming requests are not cost-stamped.**
+   `handleNonStreamingRequest`
+   ([`chat.go`](../../../llm-router/internal/handlers/chat.go)) never
+   calls `stampUsageCost`/`stampCostInChatBody` (only the composite
+   layer and the streaming loop stamp). A non-streaming direct request
+   returns `usage` with no `cost`. Shofer's local fallback covers the
+   cap **if** the model is priced; the displayed cost relies on the
+   fallback too. **Recommended fix:** stamp cost in the non-streaming
+   handler, mirroring the streaming path.
+
+4. **OpenRouter-via-llm-router is uncosted.** `GetProviderForModel`
+   defaults any unknown model id to OpenRouter, and the model registry
+   has **zero** OpenRouter entries, so `GetModelByID` returns nil and
+   `stampUsageCost` leaves the chunk uncosted. The router also does not
+   set `usage: { include: true }` on the outbound OpenRouter request,
+   so OpenRouter's own cost is never requested or passed through.
+   **Recommended fix:** request OpenRouter usage-accounting and pass
+   through its `cost`, or recompute from a registry entry.
+
+5. **Discount divergence (needs an owner decision, NOT yet changed).**
+   The streaming stamper `stampUsageCost` (provider.go) does **not**
+   apply the registry's `Discount` field; the composite stamper
+   `computeCostUSD` (cost_stamper.go) multiplies by `(1 - Discount)`
+   unconditionally. The registry comments label these as "50% **batch**
+   discount", which implies the discount should apply only to
+   batch-API traffic — making the composite path's unconditional
+   `(1 - Discount)` the likely bug (under-billing real-time traffic by
+   ~2×), not the streaming path's omission. Because the correct
+   semantics depend on whether composite/real-time traffic ever uses
+   the batch API, this is flagged for the router owner rather than
+   "fixed" here. Either way the two paths must agree.
+
+**shofer-router vs llm-provider (the VS Code LM side-channel):**
+
+6. **The live cost path recomputes; it does not read the router's
+   stamped `usage.cost`.** `vscode-lm.ts` calls the **`shofer.router.*`**
+   commands (registered by the **shofer-router** extension), gated
+   behind the setting named `enableLlmProviderIntegration` (the
+   documented "naming wart" — see
+   [Operational Dependencies](#operational-dependencies)).
+   shofer-router's ledger fills from a **local** `computeCost(model,
+tokens…)` against its own registry, **not** from the upstream
+   `usage.cost`. (The separate `llm-provider` extension's ledger _does_
+   read `usage.cost`, but `vscode-lm.ts` does not call its
+   `shofer.llm.*` commands, so that path is dead for this consumer.)
+   Consequence: if shofer-router's registry is missing a served model,
+   `computeCost` returns `0` and the ledger stays `0` forever even when
+   llm-router stamped a correct cost — `getRequestCost` then yields a
+   `0` delta and the cap can't trip via this backend. **Recommended
+   fix:** have shofer-router prefer the upstream-stamped `usage.cost`
+   when present, falling back to local recompute only when absent
+   (i.e. converge its behavior with llm-provider's).
+
+---
+
 ## Part 2: Per-Root-Task Cost Limit
 
 ### Why
@@ -410,7 +539,19 @@ fired on every `usage` chunk during the main streaming loop:
    — the spend across the root's history, BEFORE this request's
    own usage is added. Resets the per-request enforcement latch.
 2. On every `usage` chunk, compute
-   `spent = _priorAggregateUsd + chunk.totalCost`.
+   `spent = _priorAggregateUsd + currentRequestCostUsd`, where
+   `currentRequestCostUsd = chunk.totalCost ?? estimateRequestCostUsd(…)`.
+   When the backend stamps a per-request `totalCost` (anthropic,
+   openai-native, gemini, openrouter, llm-router/shofer-router via
+   vscode-lm) the chunk value is used. When it does NOT (openai.ts,
+   bedrock.ts, deepseek.ts, raw OpenAI-compatible endpoints), the gate
+   falls back to a **local-pricing estimate** computed from the
+   accumulated token counters via the same protocol-aware
+   `calculateApiCost{Anthropic,OpenAI}` math `updateApiReqMsg` uses for
+   the persisted `cost` field. This is what makes the tight cap enforce
+   _regardless of which backend serves the traffic_ — see
+   [`estimateRequestCostUsd`](../src/core/task/Task.ts) and the
+   [Backend Coverage Matrix](#backend-coverage-matrix).
 3. Bypass if `_costLimitBypassed`,
    `_costLimitEnforcementFiredForRequest`, or no snapshot.
 4. If `spent >= limit.maxUsd`, latch the per-request flag and call
@@ -421,6 +562,17 @@ This is what makes the cap _tight_ — a single expensive completion
 can't silently blow past a small limit (e.g. $0.05) before the
 post-stream check fires, because the abort/pause is triggered as
 soon as the running spend crosses the cap.
+
+> **Before the fallback (≤ 3.54.10):** `checkInFlightCostLimit`
+> no-opped whenever `chunk.totalCost` was `undefined`. The in-stream
+> gate therefore only ever fired for backends that self-report cost;
+> for openai.ts / bedrock.ts / deepseek.ts the tight cap was dead and
+> enforcement degraded to the post-stream boundary, where a single
+> expensive completion could already have blown past a small limit.
+> The local-pricing fallback closes that gap. The estimate is `0` only
+> when the model carries no pricing info at all (then nothing fires —
+> by design we only cap real, priced spend; see
+> [Known Gaps](#known-gaps-by-backend)).
 
 **2. Post-stream gate** (`checkCostLimit(requestIndex)`), fired
 from `drainStreamInBackgroundToFindAllUsage` after the request
@@ -540,6 +692,9 @@ spentUsd, action, modelId})` emits the
       `resolveCostLimit()`, `invalidateCostLimitCache()`,
       `snapshotPriorAggregateForCostLimit()` (per-request snapshot),
       `checkInFlightCostLimit()` (per-`usage`-chunk in-stream gate),
+      `estimateRequestCostUsd()` (local-pricing fallback so the
+      in-stream gate enforces for backends that don't stamp
+      `totalCost` — see [Backend Coverage Matrix](#backend-coverage-matrix)),
       `checkCostLimit()` (post-stream gate from
       `drainStreamInBackgroundToFindAllUsage`),
       shared `enforceCostLimit()`, `askUserForBudgetDecision()`
@@ -607,6 +762,27 @@ limit=0.01`. Pairs with `llm-router` 0.8.9 (forces
   emit the final usage chunk that carries the stamped `usage.cost`)
   and `llm-provider` 0.6.1 (per-conversation cost ledger and
   `shofer.llm.getRequestCost` command).
+- **3.54.11** — **In-stream gate now enforces regardless of backend.**
+  `checkInFlightCostLimit` previously no-opped whenever the backend
+  didn't stamp `chunk.totalCost`, so the tight cap was dead for
+  `openai.ts` / `bedrock.ts` / `deepseek.ts` (and any OpenAI-compatible
+  endpoint) — enforcement degraded to the post-stream boundary, where a
+  single expensive completion could already have blown past a small
+  limit. Added `estimateRequestCostUsd()`: when the chunk carries no
+  `totalCost`, the gate falls back to a local-pricing estimate from the
+  accumulated token counters (same protocol-aware
+  `calculateApiCost{Anthropic,OpenAI}` math `updateApiReqMsg` uses for
+  the persisted cost), so the in-stream and post-stream gates agree on
+  what an un-stamped request costs. The estimate is `0` only for models
+  with no pricing info (then nothing fires — by design we only cap real,
+  priced spend). New unit tests lock the fallback contract
+  (positive estimate for priced models, `0` for unpriced) in
+  [`cost-limit.spec.ts`](../src/core/task/__tests__/cost-limit.spec.ts).
+  See the [Backend Coverage Matrix](#backend-coverage-matrix) and
+  [Known Gaps by backend](#known-gaps-by-backend) for the full
+  per-backend picture, including the residual llm-router-side gaps
+  (non-streaming not stamped, OpenRouter uncosted, discount divergence)
+  that remain open.
 
 ### What was deferred
 
@@ -729,5 +905,8 @@ other than a manual grep-and-compare pass.
 Shipped as Shofer **3.53.0** (minor bump): new user-visible
 setting, new `ask` type, new persisted field on `HistoryItem`. No
 backward-compat shims — missing `costLimit` is treated as "no limit".
-Hardened across **3.54.1** – **3.54.10** (see "Bug fixes since
-3.53.0" above).
+Hardened across **3.54.1** – **3.54.11** (see "Bug fixes since
+3.53.0" above). **3.54.11** made the in-stream gate backend-agnostic
+via the `estimateRequestCostUsd` local-pricing fallback — a behavior
+change for backends that don't stamp `totalCost` (the tight cap now
+fires for them too), with no schema or persistence change.

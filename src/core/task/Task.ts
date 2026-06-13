@@ -3991,6 +3991,46 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	/**
+	 * Local-pricing estimate of the CURRENT request's running cost from the
+	 * accumulated token counters. Used as the in-flight gate's fallback when
+	 * the backend does not stamp a `totalCost` on its usage chunk.
+	 *
+	 * This is what makes the tight cost cap enforce "regardless of backend":
+	 * providers that self-report cost (anthropic, openai-native, gemini,
+	 * openrouter, and llm-router/shofer-router via vscode-lm) feed the gate
+	 * `chunk.totalCost` directly; providers that DON'T stamp per-request cost
+	 * (openai.ts, bedrock.ts, deepseek.ts, and any OpenAI-compatible endpoint)
+	 * would otherwise leave the in-stream gate a no-op — the cap could then
+	 * only fire at the post-stream boundary, letting a single expensive
+	 * completion blow past a tight limit before enforcement kicked in.
+	 *
+	 * Mirrors the protocol-aware math `updateApiReqMsg` already uses for the
+	 * persisted `cost` field, so the in-stream gate and the post-stream
+	 * aggregate agree on what an un-stamped request costs. Returns 0 when the
+	 * model carries no pricing (nothing we can enforce on — by design we only
+	 * cap real, priced spend).
+	 */
+	private estimateRequestCostUsd(
+		modelInfo: ModelInfo,
+		inputTokens: number,
+		outputTokens: number,
+		cacheWriteTokens: number,
+		cacheReadTokens: number,
+	): number {
+		const modelId = getModelId(this.apiConfiguration)
+		const apiProvider = this.apiConfiguration.apiProvider
+		const apiProtocol = getApiProtocol(
+			apiProvider && !isRetiredProvider(apiProvider) ? apiProvider : undefined,
+			modelId,
+		)
+		const costResult =
+			apiProtocol === "anthropic"
+				? calculateApiCostAnthropic(modelInfo, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
+				: calculateApiCostOpenAI(modelInfo, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens)
+		return costResult.totalCost
+	}
+
+	/**
 	 * Shared enforcement step: emit telemetry + branch on
 	 * `limit.action`. Used by both the post-stream `checkCostLimit` and
 	 * the in-stream `checkInFlightCostLimit` so behaviour stays
@@ -4762,7 +4802,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								// cap. The pause-mode branch awaits the
 								// user's decision here too — fine because
 								// no further tokens stream until we resume.
-								await this.checkInFlightCostLimit(totalCost)
+								//
+								// Fall back to a local-pricing estimate when the
+								// backend doesn't stamp `totalCost` (openai.ts,
+								// bedrock.ts, deepseek.ts, raw OpenAI-compatible
+								// endpoints). Without this the gate would no-op
+								// for those backends and the cap could only fire
+								// at the post-stream boundary — too late for a
+								// single expensive completion on a tight limit.
+								await this.checkInFlightCostLimit(
+									totalCost ??
+										this.estimateRequestCostUsd(
+											streamModelInfo,
+											inputTokens,
+											outputTokens,
+											cacheWriteTokens,
+											cacheReadTokens,
+										),
+								)
 								break
 							case "grounding":
 								// Handle grounding sources separately from regular content
