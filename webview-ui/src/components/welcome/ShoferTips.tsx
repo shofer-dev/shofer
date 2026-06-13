@@ -9,13 +9,18 @@ const docsLinks = [
 	{ icon: <BookOpen className="size-4 shrink-0 mt-0.5" />, path: "README.md", key: "chat:docs.readme" },
 	{
 		icon: <ArrowLeftRight className="size-4 shrink-0 mt-0.5" />,
-		path: "ROOCODE_MIGRATION.md",
-		key: "chat:docs.roocode",
+		path: "docs/migration/shofer_for_claude_users.md",
+		key: "chat:docs.claude",
 	},
 	{
 		icon: <ExternalLink className="size-4 shrink-0 mt-0.5" />,
-		path: "COPILOT_MIGRATION.md",
+		path: "docs/migration/shofer_for_copilot_users.md",
 		key: "chat:docs.copilot",
+	},
+	{
+		icon: <ArrowLeftRight className="size-4 shrink-0 mt-0.5" />,
+		path: "docs/migration/shofer_for_opencode_users.md",
+		key: "chat:docs.opencode",
 	},
 ]
 

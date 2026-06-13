@@ -151,7 +151,9 @@
 	},
 	"docs": {
 		"readme": "README — official docs",
-		"copilot": "Coming from Copilot?"
+		"copilot": "Coming from Copilot?",
+		"claude": "Coming from Claude Code?",
+		"opencode": "Coming from OpenCode?"
 	},
 	"onboarding": "What would you like to do?",
 	"selectMode": "Select mode for interaction",
