@@ -10,6 +10,7 @@ Async peer messages (`wait=false`) use a **dedicated FIFO queue** ([`peerNotific
 
 - Async notifications are **not** treated as user turns (they don't trigger `cancelAndProcessQueuedMessages`)
 - Notifications are injected **once** into the system prompt at the start of the next agent loop iteration
+- The same drain also emits a **`peer_message` chat row** so the user sees the inbound message the moment the agent reads it (it is no longer prompt-only — see [UI rendering](#ui-rendering))
 - If the recipient is idle (loop not running), notifications accumulate in the queue but are never drained — there's no implicit wake-up
 
 ---
@@ -112,8 +113,13 @@ This is a notification — no response is required. If the message is not urgent
 you may finish your current work first and respond later.
 ```
 
-3. Emits telemetry (`capturePeerMessageReceived`, form: `"system-prompt"`) (lines 5607–5613)
-4. Clears the queue: `this.peerNotificationQueue = []` (line 5627)
+3. Emits a **`peer_message` chat `say`** per notification (see [UI rendering](#ui-rendering))
+4. Emits telemetry (`capturePeerMessageReceived`, form: `"system-prompt"`)
+5. Clears the queue: `this.peerNotificationQueue = []`
+
+#### UI rendering
+
+The drain emits, for each notification, `task.say("peer_message", JSON.stringify({ senderTaskId, senderTitle, message, timestamp }))`. `peer_message` is a `ShoferSay` variant ([`message.ts`](../packages/types/src/message.ts)) rendered by a dedicated case in [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx): a left-accented box titled "Peer message from \<sender\>" with the message body as Markdown and a **View sender task** button (`showTaskWithId`). Because the drain runs only on the real agent request (`injectPeerNotifications=true`), the row appears in the recipient's chat at the exact moment the agent reads the message — not when it was enqueued. The row is persisted like any other `say`, so it survives reload.
 
 ### 5. Sync path (unchanged)
 
@@ -165,14 +171,14 @@ A notification pushed mid-loop (while the recipient is processing a tool) gets p
 
 ## Separation from MessageQueueService
 
-| Concern               | `peerNotificationQueue`                              | `MessageQueueService`                                                       |
-| --------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Purpose**           | Async peer notifications                             | User messages, sync prompts                                                 |
-| **Delivery**          | System-prompt injection (once per loop)              | User-turn injection (interrupts loop)                                       |
-| **Triggers wake-up?** | No                                                   | Yes (`stateChanged` → `TaskUserMessage` → `cancelAndProcessQueuedMessages`) |
-| **Persisted?**        | No (in-memory only)                                  | Yes (via `QueuedMessage` in history)                                        |
-| **UI visible?**       | No (injected in prompt only)                         | Yes (shown in `QueuedMessages` panel)                                       |
-| **Cleared on**        | Drained once per agent request (`attemptApiRequest`) | Drained on `dequeueMessage()` / `Send Now`                                  |
+| Concern               | `peerNotificationQueue`                                    | `MessageQueueService`                                                       |
+| --------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Purpose**           | Async peer notifications                                   | User messages, sync prompts                                                 |
+| **Delivery**          | System-prompt injection (once per loop)                    | User-turn injection (interrupts loop)                                       |
+| **Triggers wake-up?** | No                                                         | Yes (`stateChanged` → `TaskUserMessage` → `cancelAndProcessQueuedMessages`) |
+| **Persisted?**        | No (in-memory only)                                        | Yes (via `QueuedMessage` in history)                                        |
+| **UI visible?**       | Yes — `peer_message` ChatRow (on drain) + prompt injection | Yes (shown in `QueuedMessages` panel)                                       |
+| **Cleared on**        | Drained once per agent request (`attemptApiRequest`)       | Drained on `dequeueMessage()` / `Send Now`                                  |
 
 ---
 

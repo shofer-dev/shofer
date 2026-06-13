@@ -334,6 +334,10 @@
 		"peerTaskIds": "Peer task IDs",
 		"background": "Background task"
 	},
+	"peerMessage": {
+		"from": "Peer message from {{sender}}",
+		"goToSender": "View sender task"
+	},
 	"backgroundTasks": {
 		"waitForTask": "Shofer is waiting for background task",
 		"waitForTaskWithTimeout": "Shofer is waiting for background task (timeout {{timeout}}s)",

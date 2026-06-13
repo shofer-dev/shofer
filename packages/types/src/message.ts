@@ -203,6 +203,7 @@ export const shoferSays = [
 	"mcp_server_request_started",
 	"mcp_server_response",
 	"subtask_result",
+	"peer_message",
 	"checkpoint_saved",
 	"shoferignore_error",
 	"diff_error",

@@ -6030,6 +6030,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 			systemPrompt = systemPrompt + peerBlocks.join("")
 
+			// Surface each notification in the chat UI at the moment the agent
+			// reads it (this drain runs on the real agent request). A
+			// `peer_message` say renders as its own ChatRow so the user can see
+			// inbound async peer messages instead of them being invisible
+			// system-prompt-only injections.
+			for (const pn of this.peerNotificationQueue) {
+				await this.say(
+					"peer_message",
+					JSON.stringify({
+						senderTaskId: pn.senderTaskId,
+						senderTitle: pn.senderTitle,
+						message: pn.message,
+						timestamp: pn.timestamp,
+					}),
+				)
+			}
+
 			// Telemetry: peer message received (system-prompt injection).
 			try {
 				const { TelemetryService } = await import("@shofer/telemetry")

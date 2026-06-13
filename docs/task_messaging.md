@@ -363,6 +363,7 @@ Key properties:
 
 - **Zero additional round-trips.** The message is present when the LLM reads context.
 - **LLM-controlled prioritization.** The recipient sees the notification on its next thinking turn and may respond now, finish current work first, or ignore it.
+- **Visible in the recipient's chat.** The drain also emits a `peer_message` `say` per notification, rendered as a dedicated ChatRow ("Peer message from \<sender\>" + body + "View sender task"), so the user sees inbound async messages the moment the agent reads them. See [`notifications.md` §UI rendering](notifications.md#ui-rendering).
 - **Delivered once.** After injection, the message is cleared. If the API call fails, the message is re-queued for the retry.
 
 ### Form B: Annotated user-turn (sync, or any non-busy recipient)

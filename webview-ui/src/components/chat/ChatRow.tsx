@@ -71,6 +71,7 @@ import {
 	Split,
 	ArrowRight,
 	Check,
+	Send,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PathTooltip } from "../ui/PathTooltip"
@@ -1443,6 +1444,41 @@ export const ChatRowContent = ({
 							)}
 						</div>
 					)
+				case "peer_message": {
+					// Inbound async peer notification (send_message_to_task with
+					// wait=false), surfaced the moment the agent reads it.
+					const peer = safeJsonParse<{
+						senderTaskId: string
+						senderTitle: string
+						message: string
+					}>(message.text)
+					if (!peer) {
+						return null
+					}
+					return (
+						<div className="border-l-2 border-[var(--vscode-charts-blue,#3b82f6)] ml-2 pl-4 pt-2 pb-1 -mt-5">
+							<div style={headerStyle}>
+								<Send className="size-3 text-[var(--vscode-charts-blue,#3b82f6)]" />
+								<span style={{ fontWeight: "bold" }}>
+									{t("chat:peerMessage.from", {
+										sender: peer.senderTitle || peer.senderTaskId,
+									})}
+								</span>
+							</div>
+							<MarkdownBlock markdown={peer.message} />
+							{peer.senderTaskId && (
+								<button
+									className="cursor-pointer flex gap-1 items-center mt-2 text-vscode-descriptionForeground hover:text-vscode-descriptionForeground hover:underline font-normal"
+									onClick={() =>
+										vscode.postMessage({ type: "showTaskWithId", text: peer.senderTaskId })
+									}>
+									{t("chat:peerMessage.goToSender")}
+									<ArrowRight className="size-3" />
+								</button>
+							)}
+						</div>
+					)
+				}
 				case "reasoning":
 					return (
 						<ReasoningBlock
