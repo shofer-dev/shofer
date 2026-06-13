@@ -151,7 +151,14 @@ import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
 import { taskLog } from "../../utils/logging/subsystems"
 import { runWithLogTaskContext } from "../../utils/logging"
 import { time } from "../../utils/perf"
-import { recordLlmDuration, incLlmCalls, incLlmErrors, classifyLlmError } from "../../metrics/registry"
+import {
+	recordLlmDuration,
+	incLlmCalls,
+	incLlmErrors,
+	incLlmCost,
+	incLlmTokens,
+	classifyLlmError,
+} from "../../metrics/registry"
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds
@@ -5211,6 +5218,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									cacheWriteTokens: tokens.cacheWrite,
 									cacheReadTokens: tokens.cacheRead,
 									cost: tokens.total ?? costResult.totalCost,
+								})
+
+								// Mirror the same per-request cost/token totals into Prometheus
+								// counters (operational, always-on). captureUsageData fires at
+								// most once per request, so these counters are not double-counted.
+								const _metricsProvider = apiProvider ?? "unknown"
+								const _metricsModelId = modelId ?? "unknown"
+								incLlmCost(_metricsProvider, _metricsModelId, tokens.total ?? costResult.totalCost)
+								incLlmTokens(_metricsProvider, _metricsModelId, {
+									input: costResult.totalInputTokens,
+									output: costResult.totalOutputTokens,
+									cacheRead: tokens.cacheRead,
+									cacheWrite: tokens.cacheWrite,
 								})
 
 								// Per-root-task cost cap. Awaited so any abort/pause takes effect

@@ -1,6 +1,6 @@
 # Prometheus / Observability for Shofer VS Code Extension
 
-> **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. **Genuinely still missing:** the GC observer (§7.11 — only a code comment exists; `nodejs_gc_duration_seconds` from `collectDefaultMetrics` covers it for free), LLM **cost/token** counters, the real embedder queue-depth value (currently stubbed to `0`), and the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
+> **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. LLM **cost/token** counters (`shofer_llm_cost_usd_total`, `shofer_llm_tokens_total`) were added alongside the duration/call metrics. **Genuinely still missing:** the GC observer (§7.11 — only a code comment exists; `nodejs_gc_duration_seconds` from `collectDefaultMetrics` covers it for free), the real embedder queue-depth value (currently stubbed to `0`), and the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
 >
 > **Gating:** the entire `/metrics` server only starts when the `PROMETHEUS_METRICS` experiment is enabled (`extension.ts` checks `EXPERIMENT_IDS.PROMETHEUS_METRICS` before `startMetricsServer`). When the experiment is off, no server binds and no metrics are exposed.
 >
@@ -227,19 +227,21 @@ and independent of user telemetry opt-in. They are scraped by Prometheus via the
 
 ### 4.1 Availability (calls, errors, error types)
 
-| Metric                           | Type      | Labels                             | Description                                                                            |
-| -------------------------------- | --------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| `shofer_llm_calls_total`         | Counter   | `provider`, `modelId`, `status`    | `status` = `success` \| `error` \| `timeout`                                           |
-| `shofer_llm_errors_total`        | Counter   | `provider`, `modelId`, `errorType` | `errorType` = `api_error` \| `rate_limit` \| `timeout` \| `auth_error` \| `unknown`    |
-| `shofer_tool_calls_total`        | Counter   | `tool`, `status`                   | `status` = `success` \| `error`                                                        |
-| `shofer_tool_errors_total`       | Counter   | `tool`, `errorType`                | Per-tool error classification                                                          |
-| `shofer_mcp_calls_total`         | Counter   | `server`, `tool`, `status`         | `status` = `success` \| `error` \| `timeout` \| `cancelled`                            |
-| `shofer_mcp_errors_total`        | Counter   | `server`, `tool`, `errorType`      | `errorType` = `timeout` \| `cancelled` \| `server_error` \| `unknown`                  |
-| `shofer_tasks_created_total`     | Counter   | `mode`                             | Tasks created per mode                                                                 |
-| `shofer_tasks_completed_total`   | Counter   | `mode`, `rating`                   | Tasks completed, per completion rating                                                 |
-| `shofer_tasks_errored_total`     | Counter   | `mode`, `errorType`                | `errorType` = `consecutive_mistake` \| `budget_exceeded` \| `shell_error` \| `unknown` |
-| `shofer_code_index_errors_total` | Counter   | `subsystem`                        | `subsystem` = `scanner` \| `parser` \| `embedder` \| `cache` \| `orchestrator`         |
-| ~~`shofer_telemetry_enabled`~~   | ~~Gauge~~ | —                                  | Removed (§7.5 — conflates independent pipelines)                                       |
+| Metric                           | Type      | Labels                             | Description                                                                                                       |
+| -------------------------------- | --------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `shofer_llm_calls_total`         | Counter   | `provider`, `modelId`, `status`    | `status` = `success` \| `error` \| `timeout`                                                                      |
+| `shofer_llm_errors_total`        | Counter   | `provider`, `modelId`, `errorType` | `errorType` = `api_error` \| `rate_limit` \| `timeout` \| `auth_error` \| `unknown`                               |
+| `shofer_llm_cost_usd_total`      | Counter   | `provider`, `modelId`              | Cumulative USD cost (provider-reported or locally computed; mirrors the per-request cost in `Task.ts`)            |
+| `shofer_llm_tokens_total`        | Counter   | `provider`, `modelId`, `direction` | `direction` = `input` \| `output` \| `cache_read` \| `cache_write` (mirrors the `LLM_COMPLETION` token breakdown) |
+| `shofer_tool_calls_total`        | Counter   | `tool`, `status`                   | `status` = `success` \| `error`                                                                                   |
+| `shofer_tool_errors_total`       | Counter   | `tool`, `errorType`                | Per-tool error classification                                                                                     |
+| `shofer_mcp_calls_total`         | Counter   | `server`, `tool`, `status`         | `status` = `success` \| `error` \| `timeout` \| `cancelled`                                                       |
+| `shofer_mcp_errors_total`        | Counter   | `server`, `tool`, `errorType`      | `errorType` = `timeout` \| `cancelled` \| `server_error` \| `unknown`                                             |
+| `shofer_tasks_created_total`     | Counter   | `mode`                             | Tasks created per mode                                                                                            |
+| `shofer_tasks_completed_total`   | Counter   | `mode`, `rating`                   | Tasks completed, per completion rating                                                                            |
+| `shofer_tasks_errored_total`     | Counter   | `mode`, `errorType`                | `errorType` = `consecutive_mistake` \| `budget_exceeded` \| `shell_error` \| `unknown`                            |
+| `shofer_code_index_errors_total` | Counter   | `subsystem`                        | `subsystem` = `scanner` \| `parser` \| `embedder` \| `cache` \| `orchestrator`                                    |
+| ~~`shofer_telemetry_enabled`~~   | ~~Gauge~~ | —                                  | Removed (§7.5 — conflates independent pipelines)                                                                  |
 
 **Implementation notes**:
 
@@ -348,9 +350,9 @@ endpoint.
 - ❌ **`perf_hooks` GC observer — NOT implemented** (§7.11). Only a doc comment
   exists. `collectDefaultMetrics()` already exposes `nodejs_gc_duration_seconds`,
   so a bespoke `shofer_gc_*` family may be redundant.
-- ❌ **LLM cost/token counters — not yet added** (`shofer_llm_cost_usd_total`,
-  `shofer_llm_tokens_total`); the data already flows past the same `Task.ts`
-  call site where duration is recorded.
+- ✅ LLM cost/token counters (`shofer_llm_cost_usd_total`,
+  `shofer_llm_tokens_total`), recorded next to `captureLlmCompletion` in
+  `Task.ts` (fires at most once per request).
 
 ### Phase 4 — Webview metrics (host side ✅, sender ❌)
 

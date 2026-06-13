@@ -277,6 +277,8 @@ export function mcpErrorTypeToStatus(t: McpErrorType): CallStatus {
 const LLM_DURATION = "shofer_llm_duration_ms"
 const LLM_CALLS = "shofer_llm_calls_total"
 const LLM_ERRORS = "shofer_llm_errors_total"
+const LLM_COST = "shofer_llm_cost_usd_total"
+const LLM_TOKENS = "shofer_llm_tokens_total"
 
 export function recordLlmDuration(provider: string, modelId: string, ms: number): void {
 	registry.observeHistogram(LLM_DURATION, "LLM API call duration (ms).", ms, SLOW_BUCKETS_MS, { provider, modelId })
@@ -288,6 +290,40 @@ export function incLlmCalls(provider: string, modelId: string, status: CallStatu
 
 export function incLlmErrors(provider: string, modelId: string, errorType: LlmErrorType): void {
 	registry.incCounter(LLM_ERRORS, "Total LLM API errors by errorType.", { provider, modelId, errorType })
+}
+
+/** Add a request's USD cost to the cumulative LLM cost counter. No-op for non-positive/unknown cost. */
+export function incLlmCost(provider: string, modelId: string, usd: number): void {
+	if (!(usd > 0) || !Number.isFinite(usd)) return
+	registry.incCounter(LLM_COST, "Cumulative LLM cost in USD by provider and model.", { provider, modelId }, usd)
+}
+
+/**
+ * Add a request's token counts to the cumulative LLM token counter, split by
+ * `direction`. The four directions mirror the `LLM_COMPLETION` telemetry
+ * breakdown (input / output / cache_read / cache_write) so Prometheus and
+ * PostHog agree; note `input` follows each protocol's own convention (OpenAI
+ * counts include cached prompt tokens, Anthropic counts do not).
+ */
+export function incLlmTokens(
+	provider: string,
+	modelId: string,
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number },
+): void {
+	const add = (direction: string, n: number) => {
+		if (n > 0 && Number.isFinite(n)) {
+			registry.incCounter(
+				LLM_TOKENS,
+				"Cumulative LLM tokens by provider, model, and direction.",
+				{ provider, modelId, direction },
+				n,
+			)
+		}
+	}
+	add("input", tokens.input)
+	add("output", tokens.output)
+	add("cache_read", tokens.cacheRead)
+	add("cache_write", tokens.cacheWrite)
 }
 
 // --- Tools ---
