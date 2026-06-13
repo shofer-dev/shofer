@@ -95,27 +95,19 @@ type ModesViewProps = {
 	 * not need a "dirty → clean" callback.
 	 */
 	onModesDirty?: () => void
-	/**
-	 * The Settings view's staged "default API configuration" value and setter.
-	 * The Modes "API Configuration" dropdown edits the same pending buffer as the
-	 * Providers "Default Configuration" dropdown, so the choice is save-gated
-	 * (and committed on Save by `SettingsView.handleSubmit`) rather than applied
-	 * immediately. Optional so ModesView can still render standalone in tests.
-	 */
-	pendingDefaultConfigName?: string
-	setPendingDefaultConfigName?: (value: string) => void
 }
 
-const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pendingDefaultConfigName, setPendingDefaultConfigName }, ref) => {
+const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, ref) => {
 	const { t } = useAppTranslation()
 
-	const {
-		customModePrompts,
-		listApiConfigMeta,
-		mode,
-		customInstructions,
-		customModes,
-	} = useExtensionState()
+	const { customModePrompts, listApiConfigMeta, modeApiConfigs, mode, customInstructions, customModes } =
+		useExtensionState()
+
+	// Staged per-mode API-config associations (mode slug → config id), edited via
+	// the "API Configuration" dropdown. Save-gated: committed on Save via
+	// `commitBuffers` (→ `setModeApiConfig`), dropped on Discard. This is the
+	// PER-MODE association — the global default lives in Settings → Providers.
+	const [pendingModeApiConfig, setPendingModeApiConfig] = useState<Record<string, string>>({})
 
 	// Use a local state to track the visually active mode
 	// This prevents flickering when switching modes rapidly by:
@@ -231,12 +223,16 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pend
 	}, [customModePrompts])
 	const modeOverridesRef = useRef(modeOverrides)
 	const globalCIOverrideRef = useRef(globalCIOverride)
+	const pendingModeApiConfigRef = useRef(pendingModeApiConfig)
 	useEffect(() => {
 		modeOverridesRef.current = modeOverrides
 	}, [modeOverrides])
 	useEffect(() => {
 		globalCIOverrideRef.current = globalCIOverride
 	}, [globalCIOverride])
+	useEffect(() => {
+		pendingModeApiConfigRef.current = pendingModeApiConfig
+	}, [pendingModeApiConfig])
 
 	useImperativeHandle(
 		ref,
@@ -293,12 +289,18 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pend
 				if (gci !== undefined) {
 					vscode.postMessage({ type: "customInstructions", text: gci })
 				}
+				// Per-mode API-config associations (PER MODE; not the global default).
+				for (const [slug, configId] of Object.entries(pendingModeApiConfigRef.current)) {
+					vscode.postMessage({ type: "setModeApiConfig", mode: slug, text: configId })
+				}
 				setModeOverrides({})
 				setGlobalCIOverride(undefined)
+				setPendingModeApiConfig({})
 			},
 			discardBuffers: () => {
 				setModeOverrides({})
 				setGlobalCIOverride(undefined)
+				setPendingModeApiConfig({})
 			},
 		}),
 		[],
@@ -1104,16 +1106,14 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pend
 						</div>
 						<div className="mb-2">
 							<Select
-								value={pendingDefaultConfigName ?? ""}
+								// PER-MODE association for the mode being edited (`visualMode`),
+								// keyed by config id. The global default is set separately in
+								// Settings → Providers. Save-gated: staged in
+								// `pendingModeApiConfig` and applied on Save via `commitBuffers`
+								// (→ `setModeApiConfig`).
+								value={pendingModeApiConfig[visualMode] ?? modeApiConfigs?.[visualMode] ?? ""}
 								onValueChange={(value) => {
-									// Save-gated: stage into the SettingsView "default API
-									// configuration" buffer (the same one the Providers
-									// "Default Configuration" dropdown edits) and mark the form
-									// dirty. The change is applied on Save by
-									// SettingsView.handleSubmit, not immediately — this keeps the
-									// dropdown consistent with every other Settings control and
-									// makes the Save button light up.
-									setPendingDefaultConfigName?.(value)
+									setPendingModeApiConfig((prev) => ({ ...prev, [visualMode]: value }))
 									onModesDirty?.()
 								}}>
 								<SelectTrigger className="w-full">
@@ -1121,7 +1121,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pend
 								</SelectTrigger>
 								<SelectContent>
 									{(listApiConfigMeta || []).map((config) => (
-										<SelectItem key={config.id} value={config.name}>
+										<SelectItem key={config.id} value={config.id}>
 											{config.name}
 										</SelectItem>
 									))}

@@ -1051,12 +1051,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Modes Section */}
 						{renderTab === "modes" && (
-							<ModesView
-								ref={modesViewRef}
-								onModesDirty={() => setChangeDetected(true)}
-								pendingDefaultConfigName={pendingDefaultConfigName}
-								setPendingDefaultConfigName={setPendingDefaultConfigName}
-							/>
+							<ModesView ref={modesViewRef} onModesDirty={() => setChangeDetected(true)} />
 						)}
 
 						{/* MCP Section */}
