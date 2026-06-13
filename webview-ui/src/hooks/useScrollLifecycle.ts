@@ -283,6 +283,15 @@ export function useScrollLifecycle({
 			userDisengagedTimeoutRef.current = window.setTimeout(() => {
 				userDisengagedRef.current = false
 				userDisengagedTimeoutRef.current = null
+				// If the user scrolled back to the bottom *during* the immune
+				// window, atBottomStateChangeCallback's re-anchor was blocked by
+				// the `!userDisengagedRef` guard and nothing re-evaluates on its
+				// own — leaving us stuck in USER_BROWSING_HISTORY while sitting at
+				// the bottom with the scroll-to-bottom button still showing.
+				// Re-check now that the window has closed.
+				if (scrollPhaseRef.current === "USER_BROWSING_HISTORY" && isAtBottomRef.current) {
+					enterAnchoredFollowing("immune-window-expired-at-bottom")
+				}
 			}, 500)
 			// Clear the user-intent-scroll-up flag after a brief safety
 			// window. By this point atBottomStateChangeCallback has had
@@ -295,7 +304,7 @@ export function useScrollLifecycle({
 				userIntentScrollUpTimeoutRef.current = null
 			}, 200)
 		},
-		[transitionScrollPhase, taskTs],
+		[transitionScrollPhase, taskTs, enterAnchoredFollowing],
 	)
 
 	const clearHydrationWindow = useCallback(() => {
