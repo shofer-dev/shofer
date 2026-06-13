@@ -29,10 +29,6 @@ flow "implement-feature" (feature: "string") {
 
     await response <- @Human
 
-    when response contains "ACK" {
-      set approved = true
-    }
-
     stake implement(
       design: feature,
       instructions: "Implement the design document at plans/feature-design.md. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
@@ -75,6 +71,11 @@ flow "implement-feature" (feature: "string") {
     ) -> @Reviewer
 
     await final_verdict <- @Reviewer
+
+    -- Release the Reviewer's loop (count-matched signal) so it commits cleanly.
+    stake review_complete(
+      instructions: "REVIEW_COMPLETE — the final review is recorded; no further reviews needed."
+    ) -> @Reviewer
 
     when final_verdict.approved {
       commit
@@ -124,10 +125,14 @@ flow "implement-feature" (feature: "string") {
     repeat until review_done {
       await review_request <- @Architect
 
-      stake review_verdict(
-        approved: "Whether the implementation satisfies the design",
-        issues: "Specific, actionable feedback when not approved"
-      ) -> @Architect
+      when review_request contains "REVIEW_COMPLETE" {
+        set review_done = true
+      } otherwise {
+        stake review_verdict(
+          approved: "Whether the implementation satisfies the design",
+          issues: "Specific, actionable feedback when not approved"
+        ) -> @Architect
+      }
     }
 
     commit
