@@ -767,6 +767,13 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		!!currentTaskItem?.isWorkflow &&
 		(currentTaskItem.flowState as { status?: string } | undefined)?.status === "aborted"
 
+	// True while the workflow is actively orchestrating (not converged, stopped,
+	// deadlocked, escalated/waiting, or errored). Drives the header shimmer, like
+	// TaskHeader's running highlight.
+	const workflowRunning =
+		!!currentTaskItem?.isWorkflow &&
+		(currentTaskItem.flowState as { status?: string } | undefined)?.status === "running"
+
 	const canStop = useMemo(() => {
 		if (isStreaming) return true
 		if (task === undefined) return false
@@ -2006,6 +2013,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 					    breakdown, cost-limit editing, or condense. */}
 					<WorkflowHeader
 						task={task}
+						isRunning={workflowRunning}
 						tokensIn={apiMetrics.totalTokensIn}
 						tokensOut={apiMetrics.totalTokensOut}
 						totalCost={apiMetrics.totalCost}
