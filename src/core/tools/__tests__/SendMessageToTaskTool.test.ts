@@ -398,7 +398,7 @@ describe("SendMessageToTaskTool", () => {
 		provider.taskManager.getManagedTaskInstance.mockReturnValue(target)
 		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
 		// Never-resolving resolver — blocked forever until abort.
-		let capturedAdd: ((handler: () => void) => void) | undefined
+		let capturedAdd: (() => void) | undefined
 		task.abortSignal.addEventListener.mockImplementation((_event: string, handler: () => void) => {
 			capturedAdd = handler
 		})
