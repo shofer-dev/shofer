@@ -134,6 +134,35 @@ describe("TaskHistoryStore", () => {
 		})
 	})
 
+	describe("getMutationVersion()", () => {
+		it("bumps on mutations and stays stable across reads", async () => {
+			await store.initialize()
+
+			const v0 = store.getMutationVersion()
+			// Reads must not change the version.
+			store.getAll()
+			store.getAll()
+			expect(store.getMutationVersion()).toBe(v0)
+
+			// Each add changes the set, so the version advances.
+			await store.upsert(makeHistoryItem({ id: "mv-1" }))
+			const v1 = store.getMutationVersion()
+			expect(v1).toBeGreaterThan(v0)
+
+			await store.upsert(makeHistoryItem({ id: "mv-2" }))
+			const v2 = store.getMutationVersion()
+			expect(v2).toBeGreaterThan(v1)
+
+			// Reads remain stable after mutations too.
+			store.getAll()
+			expect(store.getMutationVersion()).toBe(v2)
+
+			// Deletion advances the version as well.
+			await store.delete("mv-1")
+			expect(store.getMutationVersion()).toBeGreaterThan(v2)
+		})
+	})
+
 	describe("upsert()", () => {
 		it("writes per-task file and updates cache", async () => {
 			await store.initialize()

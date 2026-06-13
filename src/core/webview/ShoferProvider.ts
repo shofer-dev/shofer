@@ -224,6 +224,16 @@ export class ShoferProvider
 	// Phase 3: H8 static-state cache removed — allowed/denied commands are
 	// recomputed fresh in getStateToPostToWebview(). The cache was only worth it
 	// when postInitState was called >1/sec; with incremental messaging it won't be.
+	/**
+	 * The `TaskHistoryStore` mutation version carried by the last init snapshot
+	 * that included the full `taskHistory` array. When the store is unchanged
+	 * since then, `postInitState` omits the array — the webview already has an
+	 * identical copy (kept current by the `taskHistoryItemUpdated` /
+	 * `taskHistoryUpdated` delta channels). `-1` forces a re-seed; it is reset on
+	 * every `webviewDidLaunch` because the renderer's React state starts empty
+	 * after a (re)load. [perf H26]
+	 */
+	private _lastSentTaskHistoryVersion = -1
 	// ── Heartbeat / health-check fields ──────────────────────────────────────
 	/** Heartbeat timer ID. Cleared on webview reset and on final dispose. */
 	private _heartbeatTimer: NodeJS.Timeout | null = null
@@ -931,6 +941,9 @@ export class ShoferProvider
 	 * is it safe to start the heartbeat loop.
 	 */
 	public _onWebviewLaunched(): void {
+		// A freshly (re)loaded renderer starts with an empty taskHistory, so the
+		// next init snapshot must carry the full array again. [perf H26]
+		this._lastSentTaskHistoryVersion = -1
 		this._startHeartbeat()
 	}
 
@@ -3255,7 +3268,26 @@ export class ShoferProvider
 			focusedTaskId: this.taskManager.getFocusedTaskId(),
 		})
 		return time("postInitState", async () => {
+			// Capture the store version BEFORE building the snapshot. Read after the
+			// await and a mutation landing during getStateToPostToWebview() could be
+			// silently omitted next time; read before and the worst case is a
+			// harmless redundant re-send. [perf H26]
+			const version = this.taskHistoryStore.getMutationVersion()
 			const state = await this.getStateToPostToWebview()
+			// H26: omit the full taskHistory array when the store hasn't changed
+			// since the last init that carried it. mergeExtensionState in the webview
+			// preserves the existing array when the field is absent (JSON strips
+			// undefined), so the webview keeps its identical copy — dropping a
+			// full-array serialize + structuredClone from every unchanged init (e.g.
+			// settings / profile / MCP-lifecycle pushes, and task switches with no
+			// intervening history mutation). Any mutation (add/update/delete,
+			// archived-task cleanup, cross-instance reconcile) bumps the version, so
+			// the next init re-sends the array — no reliance on delta-channel coverage.
+			if (this._lastSentTaskHistoryVersion === version) {
+				delete (state as { taskHistory?: HistoryItem[] }).taskHistory
+			} else {
+				this._lastSentTaskHistoryVersion = version
+			}
 			this.postMessageToWebview({ type: "stateInit", state })
 		})
 	}

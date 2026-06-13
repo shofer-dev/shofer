@@ -54,6 +54,13 @@ export class TaskHistoryStore {
 	 * once per `getStateToPostToWebview()` state push (every task switch). [perf H25]
 	 */
 	private _sortedCache: HistoryItem[] | null = null
+	/**
+	 * Monotonic counter bumped on every cache mutation (add/update/delete/clear,
+	 * including reconciliation against disk). Lets callers cheaply detect whether
+	 * the history changed since they last observed it without diffing the array —
+	 * used to skip re-sending the full taskHistory in unchanged init snapshots. [perf H26]
+	 */
+	private _mutationVersion = 0
 	private writeLock: Promise<void> = Promise.resolve()
 	private indexWriteTimer: ReturnType<typeof setTimeout> | null = null
 	private fsWatcher: fsSync.FSWatcher | null = null
@@ -166,6 +173,14 @@ export class TaskHistoryStore {
 	 */
 	getByWorkspace(workspace: string): HistoryItem[] {
 		return this.getAll().filter((item) => item.workspace === workspace)
+	}
+
+	/**
+	 * Current mutation version — see {@link _mutationVersion}. Changes whenever
+	 * the set of history items changes. [perf H26]
+	 */
+	getMutationVersion(): number {
+		return this._mutationVersion
 	}
 
 	// ────────────────────────────── Mutations ──────────────────────────────
@@ -312,23 +327,26 @@ export class TaskHistoryStore {
 
 	/**
 	 * All `this.cache` mutations funnel through these three helpers so the
-	 * memoized {@link _sortedCache} is invalidated in exactly one place per
-	 * operation — guarding against a future mutation site forgetting to bust
-	 * the snapshot. [perf H25]
+	 * memoized {@link _sortedCache} is invalidated, and {@link _mutationVersion}
+	 * is bumped, in exactly one place per operation — guarding against a future
+	 * mutation site forgetting either. [perf H25, H26]
 	 */
 	private setCacheEntry(item: HistoryItem): void {
 		this.cache.set(item.id, item)
 		this._sortedCache = null
+		this._mutationVersion++
 	}
 
 	private deleteCacheEntry(taskId: string): void {
 		this.cache.delete(taskId)
 		this._sortedCache = null
+		this._mutationVersion++
 	}
 
 	private clearCache(): void {
 		this.cache.clear()
 		this._sortedCache = null
+		this._mutationVersion++
 	}
 
 	// ────────────────────────────── Cache invalidation ──────────────────────────────
