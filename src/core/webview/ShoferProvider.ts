@@ -3484,6 +3484,7 @@ export class ShoferProvider
 			mode,
 			currentApiConfigName,
 			listApiConfigMeta,
+			modeApiConfigs,
 			pinnedApiConfigs,
 			customModePrompts,
 			customSupportPrompts,
@@ -3642,6 +3643,9 @@ export class ShoferProvider
 			mcpEnabled: mcpEnabled ?? true,
 			currentApiConfigName: currentTask?.taskApiConfigName || currentApiConfigName || "default",
 			listApiConfigMeta: listApiConfigMeta ?? [],
+			// Per-mode API-config associations, so the chat dropdown can reflect
+			// modeApiConfigs[mode] when a new task is started on a given mode.
+			modeApiConfigs: modeApiConfigs ?? {},
 			pinnedApiConfigs: pinnedApiConfigs ?? {},
 			mode: (currentTask as any)?._taskMode || mode || defaultModeSlug,
 			customModePrompts: customModePrompts ?? {},

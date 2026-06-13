@@ -634,6 +634,7 @@ export interface WebviewMessage {
 		| "setDefaultApiConfiguration"
 		| "loadApiConfigurationForEdit"
 		| "loadApiConfigurationById"
+		| "setTaskApiConfiguration"
 		| "renameApiConfiguration"
 		| "getListApiConfiguration"
 		| "customInstructions"
