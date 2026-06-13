@@ -299,19 +299,27 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		return !!(inputValue && inputValue.trim().length > 0 && shoferAsk === "followup")
 	}, [inputValue, shoferAsk])
 
-	// True when the current pending followup is a typed parameter form. In that
-	// case the in-chat form (rendered in the message row) collects the answers,
-	// so the free-text textbox is hidden. Other followup asks (escalate @Human,
-	// relayed agent questions) are NOT forms and still reveal the textbox.
-	const isParamFormPending = useMemo(() => {
+	// True only when the workflow is blocked on a FREE-TEXT followup (escalate
+	// @Human or a relayed agent question) that still needs an answer — the one
+	// case where the free-text textbox should appear. A pending *param form* is
+	// rendered in the message row instead (textbox stays hidden), and an
+	// already-answered followup keeps it hidden too.
+	//
+	// Gating on `isAnswered` (not just `shoferAsk`) is what prevents the textbox
+	// from flashing after the param form is submitted: `shoferAsk` lingers as
+	// "followup" for a frame while the answered ask is cleared, so keying off
+	// `shoferAsk` alone briefly revealed the textbox.
+	const isFreeTextFollowupPending = useMemo(() => {
 		if (shoferAsk !== "followup") return false
 		const lastFollowup = modifiedMessages.findLast((m: ShoferMessage) => m.type === "ask" && m.ask === "followup")
 		if (!lastFollowup?.text || lastFollowup.isAnswered) return false
 		try {
 			const d = JSON.parse(lastFollowup.text) as { paramForm?: unknown[] }
-			return Array.isArray(d?.paramForm) && d.paramForm.length > 0
+			// A param form is NOT free-text → keep the textbox hidden.
+			return !(Array.isArray(d?.paramForm) && d.paramForm.length > 0)
 		} catch {
-			return false
+			// Plain-text question (not JSON) → free-text followup.
+			return true
 		}
 	}, [shoferAsk, modifiedMessages])
 
@@ -2288,7 +2296,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 						onStop={handleStopTask}
 						onEnqueueMessage={handleEnqueueCurrentMessage}
 						isWorkflow={true}
-						workflowAwaitingInput={!!shoferAsk && !sendingDisabled && !isParamFormPending}
+						workflowAwaitingInput={isFreeTextFollowupPending && !sendingDisabled}
 						onContextFilesDropped={(files: DroppedContextFile[]) =>
 							setDroppedContextFiles((prev) => {
 								const seen = new Set(prev.map((f) => f.path))
