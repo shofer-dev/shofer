@@ -1125,6 +1125,7 @@ export interface ShoferSayTool {
 		| "listBackgroundTasks"
 		| "cancelTasks"
 		| "answerSubtaskQuestion"
+		| "sendMessageToTask"
 		| "getErrors"
 		| "getChangedFiles"
 		| "getProjectSetupInfo"
@@ -1215,6 +1216,8 @@ export interface ShoferSayTool {
 	task_ids?: string[]
 	task_title?: string
 	task_titles?: string[]
+	/** For `sendMessageToTask`: the message body sent to the peer task. */
+	message?: string
 	wait?: "all" | "any"
 	timeout?: number
 	results?: Array<{

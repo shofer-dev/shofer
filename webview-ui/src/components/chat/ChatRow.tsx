@@ -28,6 +28,7 @@ import UpdateTodoListToolBlock from "./UpdateTodoListToolBlock"
 import { TodoChangeDisplay } from "./TodoChangeDisplay"
 import CodeAccordion from "../common/CodeAccordion"
 import MarkdownBlock from "../common/MarkdownBlock"
+import CollapsibleMarkdown from "./CollapsibleMarkdown"
 import { ReasoningBlock } from "./ReasoningBlock"
 import Thumbnails from "../common/Thumbnails"
 import ImageBlock from "../common/ImageBlock"
@@ -1115,7 +1116,7 @@ export const ChatRowContent = ({
 							</span>
 						</div>
 						<div className="border-l border-muted-foreground/80 ml-2 pl-4 pb-1">
-							<MarkdownBlock markdown={tool.content} />
+							<CollapsibleMarkdown markdown={tool.content} />
 							{tool.todos && typeof tool.todos === "string" && (
 								<div className="text-xs text-vscode-descriptionForeground mt-1">
 									<span className="font-medium">{t("chat:subtasks.todos")}:</span>{" "}
@@ -1465,7 +1466,7 @@ export const ChatRowContent = ({
 									})}
 								</span>
 							</div>
-							<MarkdownBlock markdown={peer.message} />
+							<CollapsibleMarkdown markdown={peer.message} />
 							{peer.senderTaskId && (
 								<button
 									className="cursor-pointer flex gap-1 items-center mt-2 text-vscode-descriptionForeground hover:text-vscode-descriptionForeground hover:underline font-normal"
@@ -2091,6 +2092,38 @@ export const ChatRowContent = ({
 										isExpanded={showToolInput}
 										onToggle={handleToggleToolInput}
 									/>
+								</>
+							)
+						}
+						case "sendMessageToTask": {
+							// Outbound peer message (send_message_to_task). The payload's `wait`
+							// is a boolean here (sync vs async), distinct from the wait_for_task
+							// "all"/"any" typing on ShoferSayTool, so read it via a local cast.
+							const isSync = (sayTool as { wait?: boolean }).wait === true
+							const targetTaskId = sayTool.task_id
+							return (
+								<>
+									<div style={headerStyle}>
+										<Send className="size-3 text-[var(--vscode-charts-blue,#3b82f6)]" />
+										<span style={{ fontWeight: "bold" }}>
+											{isSync ? t("chat:peerMessage.sentSync") : t("chat:peerMessage.sentAsync")}
+										</span>
+									</div>
+									{sayTool.message && (
+										<div className="pl-6">
+											<CollapsibleMarkdown markdown={sayTool.message} />
+										</div>
+									)}
+									{targetTaskId && (
+										<button
+											className="cursor-pointer flex gap-1 items-center mt-2 pl-6 text-vscode-descriptionForeground hover:text-vscode-descriptionForeground hover:underline font-normal"
+											onClick={() =>
+												vscode.postMessage({ type: "showTaskWithId", text: targetTaskId })
+											}>
+											{t("chat:peerMessage.goToTarget")}
+											<ArrowRight className="size-3" />
+										</button>
+									)}
 								</>
 							)
 						}

@@ -33,7 +33,7 @@ interface CatMeta {
 	prio: number
 }
 
-// Shared phase palette (kept in sync with TaskTraceView).
+// Shared phase palette (also used by the Sequence view).
 const CATEGORIES: CatMeta[] = [
 	{ key: "llm", label: "Waiting for model", color: "var(--vscode-charts-blue, #3b82f6)", prio: 1 },
 	{ key: "thinking", label: "Thinking", color: "var(--vscode-charts-purple, #a855f7)", prio: 1 },

@@ -336,7 +336,14 @@
 	},
 	"peerMessage": {
 		"from": "Peer message from {{sender}}",
-		"goToSender": "View sender task"
+		"goToSender": "View sender task",
+		"sentAsync": "Sent message to peer task",
+		"sentSync": "Asked peer task (waiting for reply)",
+		"goToTarget": "View target task"
+	},
+	"collapsibleMessage": {
+		"showMore": "Show more",
+		"showLess": "Show less"
 	},
 	"backgroundTasks": {
 		"waitForTask": "Shofer is waiting for background task",
@@ -542,6 +549,5 @@
 	"tabChat": "Chat",
 	"tabTree": "Tree",
 	"tabSequence": "Sequence",
-	"tabTrace": "Trace",
 	"tabStats": "Stats"
 }

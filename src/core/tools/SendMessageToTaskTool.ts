@@ -360,6 +360,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 		const partialMessage = JSON.stringify({
 			tool: "sendMessageToTask",
 			task_id: block.params.task_id ?? "",
+			message: block.params.message ?? "",
 			wait: block.params.wait ?? false,
 		})
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})
