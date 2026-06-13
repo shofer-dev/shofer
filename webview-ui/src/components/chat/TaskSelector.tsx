@@ -458,29 +458,19 @@ function renderTaskRow({
 				</span>
 			)}
 
-			{/* Leading status icon — workflow badge for WorkflowTasks, state icon otherwise. */}
-			{item.isWorkflow ? (
-				<StandardTooltip content={`Workflow: ${item.mode || item.number}`}>
-					<span
-						className={cn(
-							"codicon codicon-organization flex-shrink-0 text-base leading-none",
-							stateConfig.iconColor,
-						)}
-						aria-label="Workflow"
-					/>
-				</StandardTooltip>
-			) : (
-				<StandardTooltip content={stateConfig.label}>
-					<span
-						className={cn(
-							"codicon flex-shrink-0 text-base leading-none",
-							stateConfig.icon,
-							stateConfig.iconColor,
-						)}
-						aria-label={stateConfig.label}
-					/>
-				</StandardTooltip>
-			)}
+			{/* Leading status icon — the same lifecycle/state icon for tasks and
+			    workflows, so a workflow shows its run state (running, done, error…)
+			    exactly like a task rather than a distinct badge. */}
+			<StandardTooltip content={stateConfig.label}>
+				<span
+					className={cn(
+						"codicon flex-shrink-0 text-base leading-none",
+						stateConfig.icon,
+						stateConfig.iconColor,
+					)}
+					aria-label={stateConfig.label}
+				/>
+			</StandardTooltip>
 
 			{/* Title + subtitle column */}
 			{isEditing ? (
