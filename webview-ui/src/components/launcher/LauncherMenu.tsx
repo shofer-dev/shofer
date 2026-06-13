@@ -25,7 +25,7 @@ const ITEMS: { stage: Stage; icon: ReactNode; title: string; subtitle: string }[
 		stage: "workflow",
 		icon: <Rocket className="size-5" />,
 		title: "New Workflow",
-		subtitle: "A task that enforces a formal multi-agent pattern",
+		subtitle: "A Workflow enforces a formal collaboration pattern among agents",
 	},
 ]
 
