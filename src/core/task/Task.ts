@@ -802,6 +802,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	static readonly COMPACTION_APPEND_THRESHOLD = 100
 	private _appendedSinceCompaction = 0
 
+	// H29 — Throttle per-chunk partial-message appends. A streamed message is
+	// re-appended to the JSONL log on every chunk via `updateShoferMessage`
+	// purely for crash durability; each line is superseded almost immediately
+	// (dedupe keeps the latest), so appending every one is wasted write +
+	// compaction churn. Partial updates are appended at most once per interval;
+	// finalized messages always append so the canonical value is durable.
+	private static readonly PARTIAL_APPEND_THROTTLE_MS = 250
+	private _lastPartialAppendTs = 0
+
 	// H2.bis — Incremental token-usage caching.
 	// tokenMetadata() re-walks the entire message array on every save to
 	// recompute token usage.  Most saves happen during streaming where only
@@ -2081,16 +2090,33 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// with the same `ts`. `readTaskMessages` collapses duplicates so the
 		// last appended copy wins while position is preserved. The next
 		// compaction (turn-boundary flush) rewrites to canonical form.
-		try {
-			await appendTaskMessage({
-				message,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
-			// H12: re-appending a mutated message counts as an append.
-			this._appendedSinceCompaction++
-		} catch (error) {
-			taskLog.error("Failed to append updated Shofer message:", error)
+		//
+		// H29: a `partial` message is mid-stream — it is re-appended on every
+		// chunk and immediately superseded, so throttle those appends to at most
+		// one per PARTIAL_APPEND_THROTTLE_MS. The in-memory value is already
+		// canonical and the live webview gets every chunk via `messageUpdated`
+		// above; the throttled-out lines would only ever be read after a crash
+		// mid-stream (an incomplete, non-resumable response). A finalized message
+		// (`partial` false/undefined) always appends so the turn's canonical
+		// value is durable even before the next compaction.
+		const isPartial = message.partial === true
+		const now = Date.now()
+		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
+		if (shouldAppend) {
+			try {
+				await appendTaskMessage({
+					message,
+					taskId: this.taskId,
+					globalStoragePath: this.globalStoragePath,
+				})
+				// H12: re-appending a mutated message counts as an append.
+				this._appendedSinceCompaction++
+				if (isPartial) {
+					this._lastPartialAppendTs = now
+				}
+			} catch (error) {
+				taskLog.error("Failed to append updated Shofer message:", error)
+			}
 		}
 		// H11: a partial→final api_req_started transition flips text from empty
 		// to non-empty — this is a new token-bearing message. Check the prior

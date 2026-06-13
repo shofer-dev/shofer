@@ -1060,12 +1060,34 @@ inside a `useMemo` rather than rebuilt inline each render.
 > streaming updates, so the win was suppressing the _redundant_ full-array
 > re-send in unchanged init snapshots without depending on delta coverage.
 
-| #       | Item                                             | Path          | Description                                                                                                                                     | Risk       | Status  |
-| ------- | ------------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- |
-| **H25** | Cache sorted+filtered `taskHistory` in the store | Host (state)  | `TaskHistoryStore.getAll()` re-sorts the whole map and `getStateToPostToWebview()` re-filters it on **every** state push                        | 🟢 Low     | ✅ Done |
-| **H26** | Lazy / delta `taskHistory` IPC channel           | Host↔Webview | The full `taskHistory` array is serialized + structured-cloned across IPC on every `postInitState`, even when it didn't change                  | 🟡 Medium  | ✅ Done |
-| **H27** | Fuse the per-request history-prep passes         | Host (build)  | Five sequential O(n) allocating walks (`getEffectiveApiHistory`→`getMessagesSinceLastSummary`→`merge`→`stripImages`→`clean`) run per round-trip | 🟡 Low–Med | ✅ Done |
-| **H28** | O(n) child-map for `TaskSelector.buildFlatTree`  | Webview       | O(n²) nested `filter` to find each node's children when building the task tree                                                                  | 🟢 Low     | ✅ Done |
+| #       | Item                                             | Path           | Description                                                                                                                                                   | Risk       | Status  |
+| ------- | ------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------- |
+| **H25** | Cache sorted+filtered `taskHistory` in the store | Host (state)   | `TaskHistoryStore.getAll()` re-sorts the whole map and `getStateToPostToWebview()` re-filters it on **every** state push                                      | 🟢 Low     | ✅ Done |
+| **H26** | Lazy / delta `taskHistory` IPC channel           | Host↔Webview  | The full `taskHistory` array is serialized + structured-cloned across IPC on every `postInitState`, even when it didn't change                                | 🟡 Medium  | ✅ Done |
+| **H27** | Fuse the per-request history-prep passes         | Host (build)   | Five sequential O(n) allocating walks (`getEffectiveApiHistory`→`getMessagesSinceLastSummary`→`merge`→`stripImages`→`clean`) run per round-trip               | 🟡 Low–Med | ✅ Done |
+| **H28** | O(n) child-map for `TaskSelector.buildFlatTree`  | Webview        | O(n²) nested `filter` to find each node's children when building the task tree                                                                                | 🟢 Low     | ✅ Done |
+| **H29** | Throttle per-chunk partial-message appends       | Host (persist) | `updateShoferMessage` appends a JSONL line on **every** streamed chunk (per-chunk write + H12 compaction churn) though each partial is superseded immediately | 🟡 Low–Med | ✅ Done |
+
+### 🟡 H29: Throttle Per-Chunk Partial-Message Appends
+
+> **✅ Done (2026-06-13).** During streaming, `updateShoferMessage` re-appended
+> the mutated message to `ui_messages.jsonl` on every chunk purely for crash
+> durability — each line superseded by the next within milliseconds (dedupe keeps
+> the latest), and each one bumping `_appendedSinceCompaction` toward the H12
+> threshold, so a long streamed message triggered several full-file O(n)
+> compaction rewrites. The append for a `partial` message is now throttled to at
+> most once per `PARTIAL_APPEND_THROTTLE_MS` (250 ms); a finalized message
+> (`partial` false/undefined) **always** appends so the turn's canonical value is
+> durable. The live webview is unaffected — `messageUpdated` still fires per chunk.
+> Durability cost: a hard crash mid-stream loses ≤250 ms of the in-progress
+> (non-resumable) response; graceful `abortTask` / turn-boundary flushes still
+> compact the full in-memory value. Locked by a throttle test in
+> [`Task.throttle.test.ts`](extensions/shofer/src/core/task/__tests__/Task.throttle.test.ts).
+>
+> Considered and rejected: **final-only** (append nothing until finalization) —
+> bigger write reduction but loses all mid-stream durability and live on-disk
+> progress for background/multi-window readers; the throttle keeps coarse
+> durability for negligible extra cost.
 
 ### 🟢 H25: Cache the Sorted+Filtered `taskHistory` in `TaskHistoryStore`
 

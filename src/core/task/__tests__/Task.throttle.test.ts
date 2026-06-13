@@ -3,6 +3,7 @@ import { ShoferEventName, ProviderSettings, TokenUsage, ToolUsage } from "@shofe
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { hasToolUsageChanged, hasTokenUsageChanged } from "../../../shared/getApiMetrics"
+import { appendTaskMessage } from "../../task-persistence"
 // Prevent the transitive import graph from loading extension.ts,
 // which pulls in WorkflowTask (which extends Task — circular).
 vi.mock("../../../extension", () => ({}))
@@ -651,5 +652,60 @@ describe("hasTokenUsageChanged", () => {
 			totalCacheReads: 5,
 		}
 		expect(hasTokenUsageChanged(current, snapshot)).toBe(false)
+	})
+})
+
+describe("Task H29 partial-append throttling", () => {
+	let mockProvider: any
+	let task: Task
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.useFakeTimers()
+		mockProvider = {
+			context: { globalStorageUri: { fsPath: "/test/path" } },
+			getState: vi.fn().mockResolvedValue({ mode: "code" }),
+			log: vi.fn(),
+			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
+			taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
+		}
+		task = new Task({
+			provider: mockProvider as ShoferProvider,
+			apiConfiguration: { apiProvider: "anthropic", apiKey: "test-key" } as ProviderSettings,
+			startTask: false,
+		})
+	})
+
+	afterEach(() => {
+		vi.useRealTimers()
+		if (task && !task.abort) {
+			task.dispose()
+		}
+	})
+
+	test("throttles consecutive partial appends within the window but always appends the final", async () => {
+		const append = vi.mocked(appendTaskMessage)
+		const ts = Date.now()
+
+		// Creation of the streamed message appends once.
+		await (task as any).addToShoferMessages({ ts, type: "say", say: "text", text: "", partial: true })
+		expect(append).toHaveBeenCalledTimes(1)
+		append.mockClear()
+
+		// Three partial chunks within the 250 ms window → only the first appends.
+		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "a", partial: true })
+		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "ab", partial: true })
+		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abc", partial: true })
+		expect(append).toHaveBeenCalledTimes(1)
+
+		// Past the throttle window → the next partial appends again.
+		vi.advanceTimersByTime(300)
+		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abcd", partial: true })
+		expect(append).toHaveBeenCalledTimes(2)
+
+		// Finalization always appends, regardless of how recently a partial did.
+		await (task as any).updateShoferMessage({ ts, type: "say", say: "text", text: "abcd done", partial: false })
+		expect(append).toHaveBeenCalledTimes(3)
 	})
 })
