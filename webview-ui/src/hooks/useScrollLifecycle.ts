@@ -521,9 +521,10 @@ export function useScrollLifecycle({
 			//      a one-frame flash before the re-scroll.
 			const streamingSafetyNet =
 				currentPhase === "ANCHORED_FOLLOWING" && isStreaming && !userIntentScrollUpRef.current
-			const shouldShow = currentPhase === "USER_BROWSING_HISTORY"
-				? true
-				: !isAtBottom && !isHydratingRef.current && !streamingSafetyNet
+			const shouldShow =
+				currentPhase === "USER_BROWSING_HISTORY"
+					? true
+					: !isAtBottom && !isHydratingRef.current && !streamingSafetyNet
 			setShowScrollToBottom(shouldShow)
 
 			// --- Phase-transition and auto-scroll logic ---
@@ -569,13 +570,15 @@ export function useScrollLifecycle({
 				return
 			}
 
-			// Not-at-bottom while ANCHORED_FOLLOWING (non-streaming):
-			// this is a genuine user scroll-up intent not caught by
-			// the other detectors. Transition to browse mode.
-			if (currentPhase === "ANCHORED_FOLLOWING" && !isAtBottom && !isStreaming) {
-				// set the user-intent flag so handleRowHeightChange won't
-				// force-pin while we're in the middle of disengaging.
-				userIntentScrollUpRef.current = true
+			// Not-at-bottom while ANCHORED_FOLLOWING (non-streaming).
+			// Cause C: a bare not-at-bottom is NOT a reliable "user scrolled up"
+			// signal — it also fires when a row collapses, a late image loads, or
+			// the FileChangesPanel appears/resizes. Disengaging on those spuriously
+			// ejected the user from follow-mode and flashed the scroll-to-bottom
+			// button. Genuine scroll-up gestures (wheel / keyboard / pointer-drag)
+			// already set `userIntentScrollUpRef` and disengage via their own
+			// handlers, so require that corroborating flag here before disengaging.
+			if (currentPhase === "ANCHORED_FOLLOWING" && !isAtBottom && !isStreaming && userIntentScrollUpRef.current) {
 				enterUserBrowsingHistory("pointer-scroll-up")
 				return
 			}
