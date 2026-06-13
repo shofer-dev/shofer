@@ -46,6 +46,14 @@ export class TaskHistoryStore {
 	private readonly globalStoragePath: string
 	private readonly onWrite?: (items: HistoryItem[]) => Promise<void>
 	private cache: Map<string, HistoryItem> = new Map()
+	/**
+	 * Memoized sorted snapshot of `cache.values()` (newest first). Rebuilt
+	 * lazily in {@link getAll} and invalidated by every cache mutation via the
+	 * `setCacheEntry`/`deleteCacheEntry`/`clearCache` helpers. Removes the
+	 * O(n log n) re-sort that previously ran on every `getAll()` call — notably
+	 * once per `getStateToPostToWebview()` state push (every task switch). [perf H25]
+	 */
+	private _sortedCache: HistoryItem[] | null = null
 	private writeLock: Promise<void> = Promise.resolve()
 	private indexWriteTimer: ReturnType<typeof setTimeout> | null = null
 	private fsWatcher: fsSync.FSWatcher | null = null
@@ -138,9 +146,19 @@ export class TaskHistoryStore {
 
 	/**
 	 * Get all history items, sorted by timestamp descending (newest first).
+	 *
+	 * The sort is memoized in {@link _sortedCache} and invalidated on mutation,
+	 * so repeated reads between mutations skip the re-sort. A defensive copy is
+	 * returned because some callers (e.g. the public API surface in
+	 * `extension/api.ts`) may mutate the result. [perf H25]
 	 */
 	getAll(): HistoryItem[] {
-		return Array.from(this.cache.values()).sort((a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts))
+		if (this._sortedCache === null) {
+			this._sortedCache = Array.from(this.cache.values()).sort(
+				(a, b) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts),
+			)
+		}
+		return this._sortedCache.slice()
 	}
 
 	/**
@@ -169,7 +187,7 @@ export class TaskHistoryStore {
 			await this.writeTaskFile(merged)
 
 			// Update in-memory cache
-			this.cache.set(merged.id, merged)
+			this.setCacheEntry(merged)
 
 			// Schedule debounced index write
 			this.scheduleIndexWrite()
@@ -190,7 +208,7 @@ export class TaskHistoryStore {
 	 */
 	async delete(taskId: string): Promise<void> {
 		return this.withLock(async () => {
-			this.cache.delete(taskId)
+			this.deleteCacheEntry(taskId)
 
 			// Remove per-task file (best-effort)
 			try {
@@ -215,7 +233,7 @@ export class TaskHistoryStore {
 	async deleteMany(taskIds: string[]): Promise<void> {
 		return this.withLock(async () => {
 			for (const taskId of taskIds) {
-				this.cache.delete(taskId)
+				this.deleteCacheEntry(taskId)
 
 				try {
 					const filePath = await this.getTaskFilePath(taskId)
@@ -267,7 +285,7 @@ export class TaskHistoryStore {
 					try {
 						const item = await this.readTaskFile(taskId)
 						if (item) {
-							this.cache.set(taskId, item)
+							this.setCacheEntry(item)
 							changed = true
 						}
 					} catch {
@@ -279,7 +297,7 @@ export class TaskHistoryStore {
 			// Tasks in cache but not on disk: remove from cache
 			for (const taskId of cacheIds) {
 				if (!onDiskIds.has(taskId)) {
-					this.cache.delete(taskId)
+					this.deleteCacheEntry(taskId)
 					changed = true
 				}
 			}
@@ -288,6 +306,29 @@ export class TaskHistoryStore {
 				this.scheduleIndexWrite()
 			}
 		})
+	}
+
+	// ────────────────────────────── Private: cache mutation helpers ──────────────────────────────
+
+	/**
+	 * All `this.cache` mutations funnel through these three helpers so the
+	 * memoized {@link _sortedCache} is invalidated in exactly one place per
+	 * operation — guarding against a future mutation site forgetting to bust
+	 * the snapshot. [perf H25]
+	 */
+	private setCacheEntry(item: HistoryItem): void {
+		this.cache.set(item.id, item)
+		this._sortedCache = null
+	}
+
+	private deleteCacheEntry(taskId: string): void {
+		this.cache.delete(taskId)
+		this._sortedCache = null
+	}
+
+	private clearCache(): void {
+		this.cache.clear()
+		this._sortedCache = null
 	}
 
 	// ────────────────────────────── Cache invalidation ──────────────────────────────
@@ -299,12 +340,12 @@ export class TaskHistoryStore {
 		try {
 			const item = await this.readTaskFile(taskId)
 			if (item) {
-				this.cache.set(taskId, item)
+				this.setCacheEntry(item)
 			} else {
-				this.cache.delete(taskId)
+				this.deleteCacheEntry(taskId)
 			}
 		} catch {
-			this.cache.delete(taskId)
+			this.deleteCacheEntry(taskId)
 		}
 	}
 
@@ -312,7 +353,7 @@ export class TaskHistoryStore {
 	 * Clear all in-memory cache and reload from index.
 	 */
 	invalidateAll(): void {
-		this.cache.clear()
+		this.clearCache()
 	}
 
 	// ────────────────────────────── Migration ──────────────────────────────
@@ -352,7 +393,7 @@ export class TaskHistoryStore {
 			} catch {
 				// File doesn't exist, write it
 				await safeWriteJson(filePath, item)
-				this.cache.set(item.id, item)
+				this.setCacheEntry(item)
 			}
 		}
 
@@ -382,7 +423,7 @@ export class TaskHistoryStore {
 			if (index.version === 1 && Array.isArray(index.entries)) {
 				for (const entry of index.entries) {
 					if (entry.id) {
-						this.cache.set(entry.id, entry)
+						this.setCacheEntry(entry)
 					}
 				}
 			}
