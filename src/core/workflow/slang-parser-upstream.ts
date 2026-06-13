@@ -42,6 +42,8 @@ import type {
 	OutputSchema,
 	OutputField,
 } from "./slang-ast"
+// These are functions used as values (not types), so they need a value import.
+import { exprAsString, exprAsNumber, exprAsBoolean, exprAsStringList } from "./slang-ast"
 
 export class ParseError extends SlangError {
 	public token: Token
@@ -199,6 +201,13 @@ class Parser {
 					const target = params.find((p) => p.name === item.name)
 					if (target) {
 						target.description = item.description
+						// Presentation metadata (drives the param-form widget).
+						if (item.widget !== undefined) target.widget = item.widget
+						if (item.options !== undefined) target.options = item.options
+						if (item.min !== undefined) target.min = item.min
+						if (item.max !== undefined) target.max = item.max
+						if (item.step !== undefined) target.step = item.step
+						if (item.default !== undefined) target.default = item.default
 					}
 				}
 			}
@@ -667,19 +676,66 @@ class Parser {
 		const start = this.expect(TokenType.Param)
 		const name = this.expect(TokenType.Ident).value
 		let description: string | undefined
+		let widget: "dropdown" | "radio" | "checkbox" | undefined
+		let options: string[] | undefined
+		let min: number | undefined
+		let max: number | undefined
+		let step: number | undefined
+		let defaultVal: string | number | boolean | string[] | undefined
+		// `widget`, `options`, `min`, `max`, `step`, `default` are plain identifiers
+		// (not reserved keywords), so match them by ident text. Their values are
+		// parsed as expressions and reduced to literals via the exprAs* helpers.
+		const isIdent = (kw: string) => this.check(TokenType.Ident) && this.peek().value === kw
 		this.expect(TokenType.LBrace)
 		while (!this.check(TokenType.RBrace) && !this.check(TokenType.EOF)) {
 			if (this.check(TokenType.Description)) {
 				this.advance()
 				this.expect(TokenType.Colon)
 				description = this.expect(TokenType.String).value
+			} else if (isIdent("widget")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				const w = this.expect(TokenType.String).value
+				if (w === "dropdown" || w === "radio" || w === "checkbox") widget = w
+			} else if (isIdent("options")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				options = exprAsStringList(this.parseExpr())
+			} else if (isIdent("min")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				min = exprAsNumber(this.parseExpr())
+			} else if (isIdent("max")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				max = exprAsNumber(this.parseExpr())
+			} else if (isIdent("step")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				step = exprAsNumber(this.parseExpr())
+			} else if (isIdent("default")) {
+				this.advance()
+				this.expect(TokenType.Colon)
+				const e = this.parseExpr()
+				defaultVal = exprAsStringList(e) ?? exprAsString(e) ?? exprAsNumber(e) ?? exprAsBoolean(e)
 			} else {
 				// Skip unknown meta fields inside param block
 				this.advance()
 			}
 		}
 		this.expect(TokenType.RBrace)
-		return { type: "ParamMetaDecl", name, description, span: this.spanFrom(start) }
+		return {
+			type: "ParamMetaDecl",
+			name,
+			description,
+			widget,
+			options,
+			min,
+			max,
+			step,
+			default: defaultVal,
+			span: this.spanFrom(start),
+		}
 	}
 
 	// ─── Expressions ───

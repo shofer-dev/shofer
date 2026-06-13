@@ -475,6 +475,52 @@ flow "ui-test" (input: "string") {
 		}
 	})
 
+	it("parses param presentation metadata (options/widget/min/max/step/default) and merges onto FlowParam", () => {
+		const src = `
+flow "widgets" (format: "string", sections: "string", verbosity: "number") {
+		param format {
+		  description: "Output format."
+		  options: ["pdf", "html", "markdown"]
+		  default: "markdown"
+		}
+		param sections {
+		  options: ["summary", "details", "appendix"]
+		  widget: "checkbox"
+		}
+		param verbosity {
+		  min: 0
+		  max: 5
+		  step: 1
+		  default: 2
+		}
+
+		agent A {
+		  mode: "code"
+		  commit
+		}
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const params = ast.flows[0]!.params!
+		const byName = Object.fromEntries(params.map((p) => [p.name, p]))
+
+		// Dropdown (options present, no widget → default dropdown)
+		expect(byName.format!.options).toEqual(["pdf", "html", "markdown"])
+		expect(byName.format!.widget).toBeUndefined()
+		expect(byName.format!.default).toBe("markdown")
+
+		// Multi-select checkbox
+		expect(byName.sections!.options).toEqual(["summary", "details", "appendix"])
+		expect(byName.sections!.widget).toBe("checkbox")
+
+		// Slider (number range)
+		expect(byName.verbosity!.min).toBe(0)
+		expect(byName.verbosity!.max).toBe(5)
+		expect(byName.verbosity!.step).toBe(1)
+		expect(byName.verbosity!.default).toBe(2)
+	})
+
 	it("parses empty flow (no agents)", () => {
 		const src = `
 flow "empty" () {

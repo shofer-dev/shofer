@@ -51,6 +51,24 @@ export interface FlowParam {
 	paramType: string
 	/** Optional markdown description of this input variable. Multiline; rendered in the UI. */
 	description?: string
+	/**
+	 * Presentation metadata, merged from the param's `param <name> { ... }` block.
+	 * These drive the input widget rendered in the workflow param form:
+	 *   - `options` present            → dropdown (single-select) by default
+	 *   - `options` + widget "radio"   → radio group (single-select)
+	 *   - `options` + widget "checkbox"→ checkbox group (multi-select; value is an array)
+	 *   - number with `min` and `max`  → slider (`step` optional)
+	 *   - plain string (no options)    → multiline, resizable textarea
+	 */
+	widget?: "dropdown" | "radio" | "checkbox"
+	/** Fixed set of allowed values for dropdown/radio/checkbox widgets. */
+	options?: string[]
+	/** Slider bounds / step for a `number` param (min+max → slider). */
+	min?: number
+	max?: number
+	step?: number
+	/** Default value used when the field is left blank. Array for multi-select. */
+	default?: string | number | boolean | string[]
 }
 
 export type FlowBodyItem = ImportStmt | AgentDecl | ConvergeStmt | BudgetStmt | DeliverStmt | ExpectStmt | ParamMetaDecl
@@ -60,6 +78,13 @@ export interface ParamMetaDecl extends BaseNode {
 	type: "ParamMetaDecl"
 	name: string
 	description?: string
+	/** Presentation metadata (merged onto the matching FlowParam). See FlowParam. */
+	widget?: "dropdown" | "radio" | "checkbox"
+	options?: string[]
+	min?: number
+	max?: number
+	step?: number
+	default?: string | number | boolean | string[]
 }
 
 // ─── Import ───
@@ -314,4 +339,20 @@ export function exprAsBoolean(expr: Expr): boolean | undefined {
 export function exprAsIdent(expr: Expr): string | undefined {
 	if (expr.type === "Ident") return expr.name
 	return undefined
+}
+
+/**
+ * Extract a list of string literals from a `["a", "b", ...]` list expression.
+ * All-or-nothing: returns undefined if the node isn't a list of pure string
+ * literals (so a malformed `options` is ignored rather than half-parsed).
+ */
+export function exprAsStringList(expr: Expr): string[] | undefined {
+	if (expr.type !== "ListLit") return undefined
+	const out: string[] = []
+	for (const el of expr.elements) {
+		const s = exprAsString(el)
+		if (s === undefined) return undefined
+		out.push(s)
+	}
+	return out
 }

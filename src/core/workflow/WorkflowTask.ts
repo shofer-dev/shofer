@@ -416,8 +416,17 @@ export class WorkflowTask extends Task {
 			return {
 				name: p.name,
 				type,
-				default: defaultParamValue(p.paramType) as string | number | boolean,
+				// Author-provided default wins; otherwise the type's neutral default.
+				default: (p.default ?? defaultParamValue(p.paramType)) as string | number | boolean | string[],
 				...(p.description ? { description: p.description } : {}),
+				// Presentation metadata → the form's widget (dropdown / radio /
+				// checkbox-group / slider). When absent the form falls back to a
+				// multiline textarea (string), number input, or single checkbox (boolean).
+				...(p.widget ? { widget: p.widget } : {}),
+				...(p.options ? { options: p.options } : {}),
+				...(p.min !== undefined ? { min: p.min } : {}),
+				...(p.max !== undefined ? { max: p.max } : {}),
+				...(p.step !== undefined ? { step: p.step } : {}),
 			}
 		})
 

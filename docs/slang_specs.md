@@ -149,27 +149,65 @@ flow "feature-test" (topic: "string", threshold: "number", verbose: "boolean") {
 
 ### Param Metadata
 
-Each flow input parameter can have an optional metadata block inside the flow body, providing a UI description:
+Each flow input parameter can have an optional metadata block inside the flow body.
+Besides a description, the block controls **which input widget** the workflow's
+param-collection form renders for that parameter:
 
 ```slang
 param <name> {
-  description: "<markdown description>"
+  description: "<markdown description>"   -- shown beneath the label
+  options: ["a", "b", "c"]               -- fixed set of allowed values
+  widget: "dropdown" | "radio" | "checkbox"  -- how to present `options`
+  min: <number>                          -- slider lower bound (number params)
+  max: <number>                          -- slider upper bound (number params)
+  step: <number>                         -- slider step (default 1)
+  default: <literal>                     -- value used when left blank
 }
 ```
 
-| Field         | Description                                                      |
-| ------------- | ---------------------------------------------------------------- |
-| `description` | Optional markdown description of this input variable for the UI. |
+| Field         | Applies to            | Effect on the rendered widget                                                                                     |
+| ------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `description` | any                   | Markdown description shown beneath the field label.                                                               |
+| `options`     | string                | Fixed set of allowed values. Renders a **dropdown** (single-select) by default.                                   |
+| `widget`      | params with `options` | `"dropdown"` (default), `"radio"` (single-select bullets), or `"checkbox"` (**multi-select**; value is an array). |
+| `min` + `max` | number                | Renders a **slider** (range) instead of a number box. `step` tunes granularity (default `1`).                     |
+| `default`     | any                   | Pre-fills the control; used when the field is left blank. Use a list literal for a multi-select default.          |
+
+**Widget resolution** (when no `param` block overrides it):
+
+| Declared type | `param` metadata | Rendered as                                 | Submitted value |
+| ------------- | ---------------- | ------------------------------------------- | --------------- |
+| `"string"`    | _none_           | **multiline, resizable textarea**           | string          |
+| `"string"`    | `options`        | dropdown (or radio / checkbox via `widget`) | string / array  |
+| `"number"`    | _none_           | number input                                | number          |
+| `"number"`    | `min` + `max`    | **slider**                                  | number          |
+| `"boolean"`   | _none_           | single checkbox                             | boolean         |
+
+The `options` / `widget` / `min` / `max` / `step` annotations are advisory: they
+only affect presentation and are not enforced at the language level.
 
 ```slang
-flow "report" (format: "string", verbose: "boolean") {
+flow "report" (format: "string", sections: "string", verbosity: "number", notes: "string") {
   title: "Report Generator"
+
   param format {
-    description: "Output format: `pdf`, `html`, or `markdown`."
+    description: "Output format."
+    options: ["pdf", "html", "markdown"]   -- dropdown
+    default: "markdown"
   }
-  param verbose {
-    description: "When true, includes detailed debug output."
+  param sections {
+    description: "Sections to include."
+    options: ["summary", "details", "appendix"]
+    widget: "checkbox"                      -- multi-select; value is an array
   }
+  param verbosity {
+    description: "Detail level (0–5)."
+    min: 0
+    max: 5
+    step: 1                                 -- slider
+    default: 2
+  }
+  -- notes (plain string, no options) → multiline resizable textarea
 
   agent Generator {
     ...

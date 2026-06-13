@@ -33,12 +33,27 @@ export interface FollowUpData {
 export interface ParamField {
 	/** Parameter name (the JSON key the answer is submitted under). */
 	name: string
-	/** Input type — drives the rendered widget and answer coercion. */
+	/** Base data type — drives answer coercion. */
 	type: "string" | "number" | "boolean"
-	/** Optional default value, used when the field is left blank. */
-	default?: string | number | boolean
+	/** Optional default value, used when the field is left blank. Array for multi-select. */
+	default?: string | number | boolean | string[]
 	/** Optional markdown description shown beneath the field label. */
 	description?: string
+	/**
+	 * Presentation widget. When omitted the widget is inferred from the data:
+	 *   - `options` present → "dropdown" (single-select)
+	 *   - `number` with `min`+`max` → "slider"
+	 *   - plain `string` → multiline resizable textarea
+	 *   - `boolean` → single checkbox
+	 * `"checkbox"` here means a multi-select group over `options` (value is an array).
+	 */
+	widget?: "dropdown" | "radio" | "checkbox" | "slider"
+	/** Fixed set of allowed values for dropdown/radio/checkbox widgets. */
+	options?: string[]
+	/** Slider bounds / step for a `number` param. */
+	min?: number
+	max?: number
+	step?: number
 }
 
 /**
@@ -65,8 +80,13 @@ export const suggestionItemSchema = z.object({
 export const paramFieldSchema = z.object({
 	name: z.string(),
 	type: z.enum(["string", "number", "boolean"]),
-	default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+	default: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]).optional(),
 	description: z.string().optional(),
+	widget: z.enum(["dropdown", "radio", "checkbox", "slider"]).optional(),
+	options: z.array(z.string()).optional(),
+	min: z.number().optional(),
+	max: z.number().optional(),
+	step: z.number().optional(),
 })
 
 /**
