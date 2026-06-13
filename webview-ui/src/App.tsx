@@ -162,6 +162,11 @@ const App = () => {
 	// below the button) rather than a native QuickPick, so it can show per-item
 	// icons + a one-line description. Picking an item opens LauncherView.
 	const [newMenuOpen, setNewMenuOpen] = useState(false)
+	// Timestamp of the last dismissal, used to make the "+" button toggle
+	// robustly: if the menu was dismissed (e.g. by a focus-out triggered by the
+	// same "+" click) just before the host's toggle message arrives, we must not
+	// immediately reopen it.
+	const newMenuClosedAtRef = useRef(0)
 
 	const onMessage = useCallback(
 		(e: MessageEvent) => {
@@ -181,7 +186,19 @@ const App = () => {
 				// Workflow chooser (anchored under the button), staying on the
 				// current tab until the user picks.
 				if (message.action === "newMenuButtonClicked") {
-					setNewMenuOpen(true)
+					// Toggle: a second "+" click closes the chooser without a choice.
+					setNewMenuOpen((prev) => {
+						if (prev) {
+							return false
+						}
+						// If it was dismissed in the last 300ms, this same "+" click is
+						// what closed it (via focus-out) — leave it closed instead of
+						// reopening.
+						if (Date.now() - newMenuClosedAtRef.current < 300) {
+							return false
+						}
+						return true
+					})
 					return
 				}
 
@@ -312,7 +329,12 @@ const App = () => {
 			)}
 			<LauncherMenu
 				open={newMenuOpen}
-				onOpenChange={setNewMenuOpen}
+				onOpenChange={(open) => {
+					if (!open) {
+						newMenuClosedAtRef.current = Date.now()
+					}
+					setNewMenuOpen(open)
+				}}
 				onPick={(stage) => {
 					setNewMenuOpen(false)
 					setLauncherStage(stage)

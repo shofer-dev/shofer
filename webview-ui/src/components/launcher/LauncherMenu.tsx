@@ -19,13 +19,13 @@ const ITEMS: { stage: Stage; icon: ReactNode; title: string; subtitle: string }[
 		stage: "task",
 		icon: <MessageSquarePlus className="size-5" />,
 		title: "New Task",
-		subtitle: "Start a task in a mode of your choice",
+		subtitle: "Work in any mode — can go multi-agent ad hoc",
 	},
 	{
 		stage: "workflow",
 		icon: <Rocket className="size-5" />,
 		title: "New Workflow",
-		subtitle: "Launch a multi-agent workflow",
+		subtitle: "A task that enforces a formal multi-agent pattern",
 	},
 ]
 
