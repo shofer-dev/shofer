@@ -9,6 +9,12 @@ import type { ToolUse } from "../../shared/tools"
 
 const DEFAULT_TIMEOUT_SECONDS = 120
 
+/** Collapse whitespace and clip to `max` chars for a Sequence-view arrow label. */
+const vizTruncate = (value: string | undefined, max = 80): string => {
+	const s = (value ?? "").replace(/\s+/g, " ").trim()
+	return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
 interface SendMessageToTaskParams {
 	task_id: string
 	message: string
@@ -203,6 +209,19 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 					return
 				}
 
+				// Task Visualization — record the outgoing sync message (sender →
+				// recipient) at issue time. Blocking sync calls are recorded here (and
+				// the reply below) instead of via the post-dispatch recorder in
+				// presentAssistantMessage, which fires only after this call unblocks and
+				// was observed to drop the arrow for completed sync sends. Solid (sync).
+				await task.emitTaskInteraction({
+					fromTaskId: task.taskId,
+					toTaskId: task_id,
+					kind: "message",
+					label: vizTruncate(message),
+					async: false,
+				})
+
 				const promptText =
 					`PEER PROMPT from task ${task.taskId} ("${senderTitle}"):\n` +
 					`${message}\n\n` +
@@ -290,6 +309,16 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				}
 
 				pushToolResult(syncResult)
+
+				// Task Visualization — record the recipient's reply (recipient → sender)
+				// now that the blocking sync call has returned. Solid (sync) answer arrow.
+				await task.emitTaskInteraction({
+					fromTaskId: task_id,
+					toTaskId: task.taskId,
+					kind: "answer",
+					label: vizTruncate(syncResult),
+					async: false,
+				})
 
 				try {
 					TelemetryService.instance.capturePeerMessageSent(task.taskId, {

@@ -7705,12 +7705,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		payload: Omit<TaskInteractionPayload, "rootOffsetMs">,
 		startOffsetMs?: number,
 	): Promise<void> {
-		const rootOriginMs = (this.rootTask ?? this).timelineOriginMs
-		const atPerfMs = startOffsetMs != null ? startOffsetMs + this.timelineOriginMs : performance.now()
-		const fullPayload: TaskInteractionPayload = {
-			...payload,
-			rootOffsetMs: atPerfMs - rootOriginMs,
+		// Best-effort instrumentation: a Sequence-view event must never break the
+		// tool that emitted it. Callers in the inter-task tools (new_task /
+		// send_message_to_task) invoke this inside their own try/catch, where a
+		// throw here would otherwise be misreported as a tool failure.
+		try {
+			const rootOriginMs = (this.rootTask ?? this).timelineOriginMs
+			const atPerfMs = startOffsetMs != null ? startOffsetMs + this.timelineOriginMs : performance.now()
+			const fullPayload: TaskInteractionPayload = {
+				...payload,
+				rootOffsetMs: atPerfMs - rootOriginMs,
+			}
+			await this.say("task_interaction", JSON.stringify(fullPayload))
+		} catch {
+			// Swallow — viz recording is non-critical.
 		}
-		await this.say("task_interaction", JSON.stringify(fullPayload))
 	}
 }

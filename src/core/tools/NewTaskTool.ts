@@ -34,6 +34,12 @@ const DEFAULT_SOFT_RESULT_LENGTH = 2000
 /** Default soft timeout (seconds) when LLM does not provide one. */
 const DEFAULT_SOFT_TIMEOUT_SEC = 300
 
+/** Collapse whitespace and clip to `max` chars for a Sequence-view arrow label. */
+const vizTruncate = (value: string | undefined, max = 80): string => {
+	const s = (value ?? "").replace(/\s+/g, " ").trim()
+	return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
 export class NewTaskTool extends BaseTool<"new_task"> {
 	readonly name = "new_task" as const
 
@@ -375,6 +381,20 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				// Record the spawned child id on the parent (task-viz spawn arrow).
 				task.childTaskId = child.taskId
 
+				// Task Visualization — record the spawn arrow (parent → child) here,
+				// not via the post-dispatch recorder in presentAssistantMessage. This is
+				// a blocking foreground spawn: the post-dispatch hook only fires after
+				// the long `await childCompletionPromise` below, and was observed to drop
+				// the arrow for completed blocking calls. The matching return arrow is
+				// recorded once the child completes. Both render solid (sync).
+				await task.emitTaskInteraction({
+					fromTaskId: task.taskId,
+					toTaskId: child.taskId,
+					kind: "spawn",
+					label: vizTruncate(effectiveMode ?? unescapedMessage),
+					async: false,
+				})
+
 				// Register resolver after createTask so we have the child's taskId.
 				// The child runs asynchronously, so registration completes before any
 				// Peer sync collision check before registration: a task
@@ -393,6 +413,16 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 				// Suspend this tool handler until the child completes.
 				const completionResult = await childCompletionPromise
+
+				// Task Visualization — record the return arrow (child → parent) now that
+				// the blocking child has completed. Solid (sync) answer arrow.
+				await task.emitTaskInteraction({
+					fromTaskId: child.taskId,
+					toTaskId: task.taskId,
+					kind: "answer",
+					label: vizTruncate(completionResult),
+					async: false,
+				})
 
 				pushToolResult(`Subtask ${child.taskId} completed\n${completionResult}`)
 				return

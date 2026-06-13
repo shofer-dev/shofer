@@ -1651,10 +1651,24 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 
 	switch (block.name) {
 		case "new_task":
-			await emit("spawn", shofer.childTaskId ?? undefined, truncate(block.params.mode ?? block.params.message))
+			// Blocking foreground spawns record their spawn + return arrows from
+			// NewTaskTool (which survives the long child-completion await); only the
+			// non-blocking background spawn is recorded here.
+			if (isAsync) {
+				await emit(
+					"spawn",
+					shofer.childTaskId ?? undefined,
+					truncate(block.params.mode ?? block.params.message),
+				)
+			}
 			break
 		case "send_message_to_task":
-			await emit("message", block.params.task_id, truncate(block.params.message))
+			// Sync sends record their message + answer arrows from SendMessageToTaskTool
+			// (the post-dispatch hook fires only after the blocking call unblocks and was
+			// observed to drop the arrow); only async fire-and-forget sends are recorded here.
+			if (isAsync) {
+				await emit("message", block.params.task_id, truncate(block.params.message))
+			}
 			break
 		case "answer_subtask_question":
 			await emit("answer", block.params.task_id, truncate(block.params.answer))
