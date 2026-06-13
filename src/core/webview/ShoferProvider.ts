@@ -3119,7 +3119,7 @@ export class ShoferProvider
 		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
 
 		// Read ui_messages for per-request metadata via the JSONL reader.
-		let uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }> = []
+		let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
 		try {
 			const { readTaskMessages } = await import("../task-persistence/taskMessages")
 			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
@@ -3137,6 +3137,15 @@ export class ShoferProvider
 			historyItem.ts ? new Date(historyItem.ts).toISOString() : new Date().toISOString(),
 			apiConversationHistory,
 			uiMessages,
+			// A workflow makes no direct LLM calls, so its trace is the slang state
+			// machine + data (flowState) plus the UI event log (state transitions).
+			// slangSource + flowState.mailboxHistory are exactly what's needed to
+			// reproduce the sequence/swimlane/topology diagrams post-mortem.
+			{
+				isWorkflow: historyItem.isWorkflow ?? false,
+				flowState: historyItem.flowState,
+				slangSource: historyItem.slangSource,
+			},
 		)
 
 		const fileName = getJsonExportFileName(historyItem.ts)

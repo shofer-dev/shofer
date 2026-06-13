@@ -93,6 +93,40 @@ export interface JsonExportTrace {
 	totalCalls: number
 	/** Number of tool calls across all API calls. */
 	totalToolCalls: number
+	/**
+	 * Set for Workflow tasks. A workflow makes no direct LLM calls (so `calls` is
+	 * empty and the token/cost totals are 0); its execution is captured by the
+	 * state machine + the UI event log below.
+	 */
+	isWorkflow?: boolean
+	/**
+	 * Serialized slang FlowState for a workflow — the state machine AND the data
+	 * passing through it: flow name, params, per-agent state/bindings/output,
+	 * round, status, and the inter-agent mailbox + mailboxHistory.
+	 */
+	flowState?: Record<string, unknown>
+	/**
+	 * Chronological UI event log for a workflow: the say/ask state-transition and
+	 * status messages it emitted. Excludes `peer_message` — peer-to-peer agent
+	 * messages do not flow through the workflow state machine.
+	 */
+	events?: JsonExportWorkflowEvent[]
+	/**
+	 * The `.slang` flow definition source for a workflow. Together with
+	 * `flowState` (especially `mailboxHistory`, the ordered from→to message log)
+	 * this is exactly what `buildWorkflowVizHtml(slangSource, flowState, …)` needs
+	 * to reproduce the sequence / swimlane / topology diagrams post-mortem.
+	 */
+	slangSource?: string
+}
+
+/** A single UI event (state transition / status message) in a workflow export. */
+export interface JsonExportWorkflowEvent {
+	ts: number
+	type: string
+	say?: string
+	ask?: string
+	text?: string
 }
 
 /**
@@ -204,6 +238,9 @@ export function getJsonExportFileName(dateTs: number): string {
  * @param createdAt - ISO 8601 creation timestamp.
  * @param apiConversationHistory - The full API conversation (Anthropic format).
  * @param uiMessages - Parsed ui_messages.json array.
+ * @param options - Workflow extras: `isWorkflow` and the serialized `flowState`.
+ *   A workflow has no `apiConversationHistory`, so its trace is the state machine
+ *   (`flowState`) + the UI event log derived from `uiMessages`.
  */
 export function buildJsonTrace(
 	taskId: string,
@@ -211,7 +248,8 @@ export function buildJsonTrace(
 	mode: string | undefined,
 	createdAt: string,
 	apiConversationHistory: Anthropic.Messages.MessageParam[],
-	uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }>,
+	uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }>,
+	options?: { isWorkflow?: boolean; flowState?: Record<string, unknown>; slangSource?: string },
 ): JsonExportTrace {
 	const calls: JsonExportCall[] = []
 
@@ -382,6 +420,17 @@ export function buildJsonTrace(
 		totalToolCalls += call.toolCalls.length
 	}
 
+	// Workflow tasks make no direct LLM calls, so `calls` is empty. Capture their
+	// execution instead: the state machine + data passing (flowState) and a
+	// chronological UI event log (state transitions / status), excluding the
+	// peer-to-peer `peer_message` say type (those don't flow through the workflow).
+	const isWorkflow = options?.isWorkflow ?? false
+	const events: JsonExportWorkflowEvent[] | undefined = isWorkflow
+		? uiMessages
+				.filter((m) => !(m.type === "say" && m.say === "peer_message"))
+				.map((m) => ({ ts: m.ts, type: m.type, say: m.say, ask: m.ask, text: m.text }))
+		: undefined
+
 	return {
 		version: 1,
 		taskId,
@@ -398,6 +447,7 @@ export function buildJsonTrace(
 		totalCostUsd: totalCost,
 		totalCalls: calls.length,
 		totalToolCalls,
+		...(isWorkflow ? { isWorkflow: true, flowState: options?.flowState, slangSource: options?.slangSource, events } : {}),
 	}
 }
 

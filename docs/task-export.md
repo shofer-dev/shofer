@@ -185,6 +185,19 @@ interface JsonExportToolCall {
 }
 ```
 
+### Workflow Export
+
+A **WorkflowTask** runs the slang loop (`slangLoop()`) and makes **no direct LLM calls**, so its `apiConversationHistory` is empty and `calls` is `[]` (token/cost totals are `0`). The orchestration is captured instead, so the export is not empty:
+
+| Field         | Source                                  | Contents                                                                                                                                                       |
+| ------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isWorkflow`  | `HistoryItem.isWorkflow`                | `true` for workflow exports.                                                                                                                                   |
+| `flowState`   | `HistoryItem.flowState` (`serializeFlowState`) | The slang **state machine + the data passing through it**: `flowName`, `params`, per-agent `status`/`bindings`/`output`, `round`, `status`, and the inter-agent `mailbox` + **`mailboxHistory`**. |
+| `slangSource` | `HistoryItem.slangSource`               | The `.slang` flow definition.                                                                                                                                  |
+| `events`      | `ui_messages.jsonl`                     | Chronological UI state-transition / status log (`say` / `ask` with `ts` + `text`). **Excludes `peer_message`** — peer-to-peer agent messages don't flow through the workflow state machine.       |
+
+**Reproducing the diagrams:** `flowState.mailboxHistory` is the ordered `from → to` message log (each `MailboxEntry` has `from`, `to`, `value`, `timestamp`, and `funcName`/`tokensUsed`/`costUsd`/`durationMs`/`mode`). Together with `slangSource`, this is exactly the input to `buildWorkflowVizHtml(slangSource, flowState, …)`, so the **sequence / swimlane / topology diagrams can be reconstructed post-mortem** from the export alone. (The agents the workflow spawns are separate tasks with their own per-call exports; the workflow export covers only the orchestration.)
+
 ### Token Estimation
 
 When the LLM provider does not emit `usage` chunks in streaming mode (e.g., some OpenAI-compatible providers), token counts are estimated using a character/4 heuristic and the call is marked with `"_tokensEstimated": true`. When usage data is available from the provider, real values are used without this flag.
