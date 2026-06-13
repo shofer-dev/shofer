@@ -822,6 +822,73 @@ export const TaskSelector = memo(
 		/** Collapsed/expanded state for the "Archived" section. Collapsed by default. */
 		const [isArchivedExpanded, setIsArchivedExpanded] = useState(false)
 
+		/**
+		 * Which group's "delete all" recycle-bin is awaiting confirmation, keyed by
+		 * group id (date bucket / "pinned" / "archived"). Mass deletion is
+		 * destructive, so the bin first flips to an inline confirm/cancel pair
+		 * rather than deleting on the first click.
+		 */
+		const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<string | null>(null)
+
+		// Right-aligned controls for a group section header: a hover-revealed
+		// recycle-bin that bulk-deletes every task in the group (after inline
+		// confirmation), followed by the group count.
+		const renderGroupActions = useCallback(
+			(groupKey: string, nodes: TaskTreeNode[], count: number) => {
+				const confirming = confirmDeleteGroup === groupKey
+				return (
+					<div className="flex items-center gap-1">
+						{confirming ? (
+							<>
+								<StandardTooltip content={t("chat:taskSelector.deleteAllConfirm", "Delete all")}>
+									<button
+										onClick={(e) => {
+											e.stopPropagation()
+											nodes.forEach((n) =>
+												vscode.postMessage({
+													type: "deleteParallelTask",
+													taskId: n.item.id,
+												}),
+											)
+											setConfirmDeleteGroup(null)
+										}}
+										aria-label={t("chat:taskSelector.deleteAllConfirm", "Delete all")}
+										className="p-0.5 rounded text-[var(--vscode-errorForeground,#f14c4c)] hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)]">
+										<Check className="w-3.5 h-3.5" />
+									</button>
+								</StandardTooltip>
+								<StandardTooltip content={t("chat:taskSelector.deleteAllCancel", "Cancel")}>
+									<button
+										onClick={(e) => {
+											e.stopPropagation()
+											setConfirmDeleteGroup(null)
+										}}
+										aria-label={t("chat:taskSelector.deleteAllCancel", "Cancel")}
+										className="p-0.5 rounded hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)]">
+										<X className="w-3.5 h-3.5" />
+									</button>
+								</StandardTooltip>
+							</>
+						) : (
+							<StandardTooltip content={t("chat:taskSelector.deleteAll", "Delete all in group")}>
+								<button
+									onClick={(e) => {
+										e.stopPropagation()
+										setConfirmDeleteGroup(groupKey)
+									}}
+									aria-label={t("chat:taskSelector.deleteAll", "Delete all in group")}
+									className="p-0.5 rounded opacity-50 hover:opacity-100 transition-opacity hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] hover:text-[var(--vscode-errorForeground,#f14c4c)]">
+									<Trash2 className="w-3.5 h-3.5" />
+								</button>
+							</StandardTooltip>
+						)}
+						<span className="font-normal">{count}</span>
+					</div>
+				)
+			},
+			[confirmDeleteGroup, t],
+		)
+
 		// Listen for the global toggle event dispatched by the action handler when
 		// the user clicks the VS Code view-title-bar Tasks button.
 		useEffect(() => {
@@ -864,7 +931,7 @@ export const TaskSelector = memo(
 				{/* Drawer */}
 				<aside
 					role="complementary"
-					aria-label={t("chat:taskSelector.title", "Tasks")}
+					aria-label={t("chat:taskSelector.title", "Tasks & Workflows")}
 					className={cn(
 						"fixed top-0 right-0 bottom-0 z-50 flex flex-col w-[22rem] max-w-[85vw]",
 						"bg-[var(--vscode-sideBar-background,var(--vscode-editorWidget-background,#252526))]",
@@ -883,7 +950,7 @@ export const TaskSelector = memo(
 							"border-b border-[var(--vscode-sideBar-border,var(--vscode-editorWidget-border,#454545))]",
 						)}>
 						<div className="flex items-center gap-2">
-							<span>{t("chat:taskSelector.title", "Tasks")}</span>
+							<span>{t("chat:taskSelector.title", "Tasks & Workflows")}</span>
 							<span className="text-[var(--vscode-descriptionForeground)] font-normal normal-case">
 								{totalTaskCount}
 							</span>
@@ -925,7 +992,7 @@ export const TaskSelector = memo(
 														<Pin className="w-3 h-3" />
 														<span>{t("chat:taskSelector.groups.pinned", "Pinned")}</span>
 													</div>
-													<span className="font-normal">{visiblePinned.length}</span>
+													{renderGroupActions("pinned", pinnedTree, visiblePinned.length)}
 												</div>
 												{visiblePinned.map((node) =>
 													renderTaskRow({
@@ -969,7 +1036,7 @@ export const TaskSelector = memo(
 													"text-[var(--vscode-descriptionForeground)]",
 												)}>
 												<span>{t(label.key, label.fallback)}</span>
-												<span className="font-normal">{visibleNodes.length}</span>
+												{renderGroupActions(bucket, nodes, visibleNodes.length)}
 											</div>
 
 											{visibleNodes.map((node) =>
@@ -1005,20 +1072,24 @@ export const TaskSelector = memo(
 						{/* Archived tasks — collapsible section */}
 						{archivedCount > 0 && (
 							<div className="mb-1">
-								<button
-									onClick={() => setIsArchivedExpanded((v) => !v)}
+								<div
 									className={cn(
 										"flex items-center justify-between w-full px-3 py-1",
 										"text-[11px] font-semibold uppercase tracking-wide",
 										"text-[var(--vscode-descriptionForeground)]",
-										"hover:bg-[var(--vscode-list-hoverBackground,#2a2d2e)] transition-colors",
 									)}>
-									<div className="flex items-center gap-1.5">
-										<Archive className="w-3 h-3" />
+									<button
+										onClick={() => setIsArchivedExpanded((v) => !v)}
+										className={cn(
+											"flex items-center gap-1.5 flex-1 min-w-0 text-left p-0 bg-transparent border-0 cursor-pointer",
+											"uppercase tracking-wide text-[var(--vscode-descriptionForeground)]",
+											"hover:text-[var(--vscode-foreground)] transition-colors",
+										)}>
+										<Archive className="w-3 h-3 flex-shrink-0" />
 										<span>{t("chat:taskSelector.groups.archived", "Archived")}</span>
-									</div>
-									<span className="font-normal">{archivedCount}</span>
-								</button>
+									</button>
+									{renderGroupActions("archived", archivedTree, archivedCount)}
+								</div>
 								{isArchivedExpanded &&
 									archivedTree
 										.filter((n) => visibleArchivedNodeIds.has(n.item.id))
