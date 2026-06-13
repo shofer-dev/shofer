@@ -91,32 +91,45 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// inside view/title). Two items:
 		// - New Task → opens LauncherView at the mode-picker stage
 		// - New Workflow → opens LauncherView at the workflow-picker stage
-		const quickPick = vscode.window.createQuickPick()
+		// The launcher stage rides on the item itself rather than being
+		// re-derived from the (display, potentially-localized) label.
+		type LauncherPick = vscode.QuickPickItem & { stage: "task" | "workflow" }
+		const quickPick = vscode.window.createQuickPick<LauncherPick>()
 		quickPick.items = [
 			{
 				label: "New Task",
 				description: "Start a new task in a mode of your choice",
 				iconPath: new vscode.ThemeIcon("add"),
+				stage: "task",
 			},
 			{
 				label: "New Workflow",
 				description: "Launch a multi-agent workflow",
 				iconPath: new vscode.ThemeIcon("rocket"),
+				stage: "workflow",
 			},
 		]
 		quickPick.placeholder = "Choose what to create…"
 
-		quickPick.onDidChangeSelection(async (selection) => {
-			if (selection.length === 0) {
+		// onDidAccept fires exactly once on confirm (click or Enter), unlike
+		// onDidChangeSelection which can fire on transient selection changes.
+		quickPick.onDidAccept(async () => {
+			const picked = quickPick.selectedItems[0]
+			quickPick.hide()
+			if (!picked) {
 				return
 			}
-			const stage = selection[0].label === "New Task" ? "task" : "workflow"
-			await visibleProvider.postMessageToWebview({
-				type: "action",
-				action: "launcherButtonClicked",
-				values: { launcherStage: stage },
-			})
-			quickPick.hide()
+			try {
+				await visibleProvider.postMessageToWebview({
+					type: "action",
+					action: "launcherButtonClicked",
+					values: { launcherStage: picked.stage },
+				})
+			} catch (err) {
+				outputChannel.appendLine(
+					`[plusButtonClicked] Failed to open launcher: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
 		})
 		quickPick.onDidHide(() => quickPick.dispose())
 		quickPick.show()
