@@ -1735,17 +1735,21 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, shoferAsk, markFollowUpAsAnswered],
 	)
 
-	// Submit a workflow flow-parameter form: the JSON-serialized answers are
-	// sent through the same messageResponse path a free-text answer uses.
+	// Submit a workflow flow-parameter form. Sent as an `objectResponse` (like
+	// the batch-file response), NOT a `messageResponse`: this resolves the
+	// WorkflowTask's pending followup ask with the JSON answer WITHOUT echoing a
+	// raw user_feedback message into the chat. The host then writes the final
+	// values back onto the question message (answeredValues) so the form renders
+	// read-only with the entered values, including after a reload.
 	const handleParamFormSubmit = useCallback(
 		(json: string) => {
 			userRespondedRef.current = true
 			if (shoferAsk === "followup") {
 				markFollowUpAsAnswered()
 			}
-			handleSendMessage(json, [])
+			vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: json })
 		},
-		[handleSendMessage, shoferAsk, markFollowUpAsAnswered],
+		[shoferAsk, markFollowUpAsAnswered],
 	)
 
 	const handleBatchFileResponse = useCallback((response: { [key: string]: boolean }) => {

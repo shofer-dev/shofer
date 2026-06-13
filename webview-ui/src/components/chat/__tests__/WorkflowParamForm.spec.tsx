@@ -72,4 +72,23 @@ describe("WorkflowParamForm", () => {
 		expect((screen.getByLabelText(/^feature/) as HTMLInputElement).disabled).toBe(true)
 		expect(screen.queryByRole("button", { name: "chat:sendMessage" })).toBeNull()
 	})
+
+	it("seeds the read-only display from answeredValues (reload replay)", () => {
+		const params: ParamField[] = [
+			{ name: "feature", type: "string", default: "" },
+			{ name: "enabled", type: "boolean", default: false },
+		]
+		render(
+			<TooltipProvider>
+				<WorkflowParamForm
+					params={params}
+					isAnswered={true}
+					answeredValues={{ feature: "dark mode", enabled: true }}
+				/>
+			</TooltipProvider>,
+		)
+		expect((screen.getByLabelText(/^feature/) as HTMLInputElement).value).toBe("dark mode")
+		expect((screen.getByLabelText(/^enabled/) as HTMLInputElement).checked).toBe(true)
+		expect(screen.queryByRole("button", { name: "chat:sendMessage" })).toBeNull()
+	})
 })

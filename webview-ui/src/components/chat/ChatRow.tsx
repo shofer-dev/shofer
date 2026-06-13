@@ -2311,6 +2311,7 @@ export const ChatRowContent = ({
 										params={followUpData.paramForm}
 										onSubmit={onParamFormSubmit}
 										isAnswered={isFollowUpAnswered}
+										answeredValues={followUpData.answeredValues}
 									/>
 								) : (
 									<FollowUpSuggest

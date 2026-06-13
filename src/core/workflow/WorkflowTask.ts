@@ -23,6 +23,7 @@ import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "../../utils/logging/subsystems"
 import { runWithLogTaskContext } from "../../utils/logging"
+import { findLastIndex } from "../../shared/array"
 import { waitForTasksEventDriven } from "./wait-for-task-helper"
 
 import {
@@ -455,6 +456,42 @@ export class WorkflowTask extends Task {
 				workflowLog.info(
 					`[WorkflowTask#${this.taskId}] Flow param ${p.name}=${JSON.stringify(this.flowState.params[p.name])} (type=${p.paramType})`,
 				)
+			}
+
+			// Write the final values back onto the question message and mark it
+			// answered. The answer was submitted via objectResponse (no chat echo),
+			// so without this the persisted form would re-render editable with
+			// default values after a reload. Embedding answeredValues lets the
+			// webview replay the form read-only with what the user entered.
+			try {
+				const idx = findLastIndex(
+					this.shoferMessages,
+					(m) => m.type === "ask" && m.ask === "followup" && !m.isAnswered,
+				)
+				if (idx !== -1) {
+					const msg = this.shoferMessages[idx]
+					const answeredValues: Record<string, string | number | boolean> = {}
+					for (const p of missing) {
+						const fv = this.flowState.params[p.name]
+						if (typeof fv === "string" || typeof fv === "number" || typeof fv === "boolean") {
+							answeredValues[p.name] = fv
+						}
+					}
+					try {
+						const payload = JSON.parse(msg.text || "{}")
+						payload.answeredValues = answeredValues
+						msg.text = JSON.stringify(payload)
+					} catch {
+						// Leave the message text untouched if it is not parseable JSON.
+					}
+					msg.isAnswered = true
+					// Persist the in-place edit (isAnswered + embedded answeredValues)
+					// so it survives reload. The live form already shows the entered
+					// values via the webview's client-side markFollowUpAsAnswered.
+					void this.overwriteShoferMessages(this.shoferMessages)
+				}
+			} catch (e) {
+				workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to record answered param form:`, e)
 			}
 
 			// Persist params immediately so that if the workflow is

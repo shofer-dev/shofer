@@ -18,6 +18,11 @@ interface WorkflowParamFormProps {
 	onSubmit?: (json: string) => void
 	/** When true the form is read-only (the question has already been answered). */
 	isAnswered?: boolean
+	/**
+	 * Final submitted values, present once answered. Used to seed the read-only
+	 * display after a reload (when the component re-mounts with no local edits).
+	 */
+	answeredValues?: Record<string, string | number | boolean>
 }
 
 type FieldValue = string | boolean
@@ -30,13 +35,17 @@ type FieldValue = string | boolean
  * message row, so it persists in history; after submission it renders
  * read-only.
  */
-export function WorkflowParamForm({ params, onSubmit, isAnswered = false }: WorkflowParamFormProps) {
+export function WorkflowParamForm({ params, onSubmit, isAnswered = false, answeredValues }: WorkflowParamFormProps) {
 	const { t } = useAppTranslation()
 
 	const [values, setValues] = useState<Record<string, FieldValue>>(() => {
 		const seed: Record<string, FieldValue> = {}
 		for (const p of params) {
-			if (p.type === "boolean") {
+			// Prefer the submitted value (read-only replay after reload), then the default.
+			const answered = answeredValues?.[p.name]
+			if (answered !== undefined) {
+				seed[p.name] = p.type === "boolean" ? !!answered : String(answered)
+			} else if (p.type === "boolean") {
 				seed[p.name] = typeof p.default === "boolean" ? p.default : false
 			} else {
 				seed[p.name] = p.default !== undefined && p.default !== "" ? String(p.default) : ""
