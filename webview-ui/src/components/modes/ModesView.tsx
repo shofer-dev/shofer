@@ -95,16 +95,23 @@ type ModesViewProps = {
 	 * not need a "dirty → clean" callback.
 	 */
 	onModesDirty?: () => void
+	/**
+	 * The Settings view's staged "default API configuration" value and setter.
+	 * The Modes "API Configuration" dropdown edits the same pending buffer as the
+	 * Providers "Default Configuration" dropdown, so the choice is save-gated
+	 * (and committed on Save by `SettingsView.handleSubmit`) rather than applied
+	 * immediately. Optional so ModesView can still render standalone in tests.
+	 */
+	pendingDefaultConfigName?: string
+	setPendingDefaultConfigName?: (value: string) => void
 }
 
-const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, ref) => {
+const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty, pendingDefaultConfigName, setPendingDefaultConfigName }, ref) => {
 	const { t } = useAppTranslation()
 
 	const {
 		customModePrompts,
 		listApiConfigMeta,
-		currentApiConfigName,
-		setCurrentApiConfigName,
 		mode,
 		customInstructions,
 		customModes,
@@ -1097,19 +1104,17 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 						</div>
 						<div className="mb-2">
 							<Select
-								value={currentApiConfigName}
+								value={pendingDefaultConfigName ?? ""}
 								onValueChange={(value) => {
-									// Optimistically update the local value so the controlled
-									// Select moves immediately. The host's follow-up stateInit
-									// is otherwise discarded for this field when no task is
-									// focused (mergeExtensionState preserves the tier-1 local
-									// draft of currentApiConfigName), which left the dropdown
-									// stuck on its previous value.
-									setCurrentApiConfigName(value)
-									vscode.postMessage({
-										type: "loadApiConfiguration",
-										text: value,
-									})
+									// Save-gated: stage into the SettingsView "default API
+									// configuration" buffer (the same one the Providers
+									// "Default Configuration" dropdown edits) and mark the form
+									// dirty. The change is applied on Save by
+									// SettingsView.handleSubmit, not immediately — this keeps the
+									// dropdown consistent with every other Settings control and
+									// makes the Save button light up.
+									setPendingDefaultConfigName?.(value)
+									onModesDirty?.()
 								}}>
 								<SelectTrigger className="w-full">
 									<SelectValue placeholder={t("settings:common.select")} />
