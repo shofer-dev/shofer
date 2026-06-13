@@ -45,14 +45,38 @@ function buildFlatTree(taskHistory: HistoryItem[]): TaskTreeNode[] {
 
 	const sortDesc = (a: HistoryItem, b: HistoryItem) => (b.createdAt ?? b.ts) - (a.createdAt ?? a.ts)
 
-	const roots = taskHistory.filter((i) => !i.parentTaskId || !byId.has(i.parentTaskId)).sort(sortDesc)
+	// Bucket children by parent id in a single O(n) pass. The previous code
+	// re-scanned the whole array (`filter`) for every node's children, making
+	// tree construction O(n²). Roots are items with no parent, or whose parent
+	// isn't present in the list. [perf H28]
+	const childrenByParent = new Map<string, HistoryItem[]>()
+	const roots: HistoryItem[] = []
+	for (const item of taskHistory) {
+		if (item.parentTaskId && byId.has(item.parentTaskId)) {
+			const siblings = childrenByParent.get(item.parentTaskId)
+			if (siblings) {
+				siblings.push(item)
+			} else {
+				childrenByParent.set(item.parentTaskId, [item])
+			}
+		} else {
+			roots.push(item)
+		}
+	}
+
+	// Sort each sibling group once (roots + every child bucket), preserving the
+	// previous newest-first ordering.
+	roots.sort(sortDesc)
+	for (const siblings of childrenByParent.values()) {
+		siblings.sort(sortDesc)
+	}
 
 	const result: TaskTreeNode[] = []
 
 	function visit(item: HistoryItem, depth: number, isLastSibling: boolean, ancestorIsLast: boolean[]) {
 		result.push({ item, depth, isLastSibling, ancestorIsLast })
 
-		const children = taskHistory.filter((i) => i.parentTaskId === item.id).sort(sortDesc)
+		const children = childrenByParent.get(item.id) ?? []
 
 		children.forEach((child, ci) => {
 			visit(child, depth + 1, ci === children.length - 1, [...ancestorIsLast, isLastSibling])
