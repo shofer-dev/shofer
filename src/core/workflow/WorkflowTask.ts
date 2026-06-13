@@ -485,9 +485,15 @@ export class WorkflowTask extends Task {
 						// Leave the message text untouched if it is not parseable JSON.
 					}
 					msg.isAnswered = true
-					// Persist the in-place edit (isAnswered + embedded answeredValues)
-					// so it survives reload. The live form already shows the entered
-					// values via the webview's client-side markFollowUpAsAnswered.
+					// Push the edited message to the webview so its in-memory (app-root
+					// context) copy carries the embedded answeredValues. Without this
+					// the form re-mounts EMPTY after a Chat-tab switch: persistence
+					// alone only updates disk, not the live webview state.
+					const provider = this.providerRef.deref()
+					if (provider) {
+						void provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: msg })
+					}
+					// Also persist the in-place edit so it survives a full reload.
 					void this.overwriteShoferMessages(this.shoferMessages)
 				}
 			} catch (e) {
