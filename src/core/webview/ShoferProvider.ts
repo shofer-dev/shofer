@@ -104,7 +104,7 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
-import { ipcLog, webviewLog } from "../../utils/logging/subsystems"
+import { ipcLog, webviewLog, scrollLog } from "../../utils/logging/subsystems"
 import { addTaskLogListener } from "../../utils/logging"
 import { time } from "../../utils/perf"
 
@@ -2050,12 +2050,20 @@ export class ShoferProvider
 				const queuedTaskId = this.changedFilesPushQueuedTaskId
 				this.changedFilesPushQueuedTaskId = undefined
 
-				const task = this.getCurrentTask()
+				// Resolve the Task instance for the target taskId. Prefer the
+				// foreground task (getCurrentTask) for the common case; fall back
+				// to TaskManager when the foreground task has changed. The
+				// TaskManager path handles eventual consistency for +N/-N counts
+				// on tasks the user navigated away from before the debounce fired.
+				const foregroundTask = this.getCurrentTask()
+				const isForeground = foregroundTask && (!nextTaskId || foregroundTask.taskId === nextTaskId)
+				const task: Task | undefined = isForeground
+					? foregroundTask
+					: nextTaskId
+						? this.taskManager.getManagedTaskInstance(nextTaskId)
+						: undefined
+
 				if (!task) return
-				// If the caller specified a taskId for which the update was queued,
-				// drop it when the current foreground task has changed (we don't want
-				// to surface a stale background-task panel).
-				if (nextTaskId && task.taskId !== nextTaskId) return
 
 				try {
 					const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
@@ -2063,11 +2071,16 @@ export class ShoferProvider
 					this.debug(
 						`[ShoferProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,
 					)
-					await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+					// Only push changedFiles/update for the foreground task;
+					// serializing a background-task panel would be stale.
+					if (isForeground) {
+						await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+					}
 
 					// Update the task history with live file-change stats so the
 					// TaskSelector can show +N/-N in real time without waiting for
-					// task completion.
+					// task completion. This always runs — even for background tasks —
+					// so counts are eventually consistent.
 					let totalInsertions = 0
 					let totalDeletions = 0
 					for (const entry of payload.entries) {
@@ -3050,6 +3063,9 @@ export class ShoferProvider
 	async loadOlderShoferMessages(): Promise<void> {
 		const task = this.getCurrentTask()
 		if (!task || !task.hasMoreShoferMessages) {
+			scrollLog.info(
+				`[scroll:h24] loadOlderShoferMessages ignored: task=${task?.taskId ?? "<none>"} hasMore=${task?.hasMoreShoferMessages ?? false}`,
+			)
 			return
 		}
 		const taskId = task.taskId
@@ -3079,6 +3095,12 @@ export class ShoferProvider
 			...newTail,
 		]
 		task.hasMoreShoferMessages = false
+
+		scrollLog.info(
+			`[scroll:h24] loadOlderShoferMessages task=${taskId} loadedTail=${loadedCount} ` +
+				`onDisk=${allMessages.length} prepending=${olderMessages.length} newTail=${newTail.length} ` +
+				`-> hasMore=false`,
+		)
 
 		// Batch the older page in one IPC round-trip — the webview
 		// does one setState with [...olderMessages, ...prev].
@@ -3621,6 +3643,16 @@ export class ShoferProvider
 		const mergedDeniedCommands = this.mergeDeniedCommands(deniedCommands)
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
+
+		// [scroll:h24] Diagnostic: a full state push carries hasMoreShoferMessages
+		// derived from the *current* task. If currentTask is momentarily wrong or
+		// undefined here, the flag flips false → "Load older messages" sentinel
+		// vanishes and TaskHeader falls back to messages[0] (often an
+		// api_req_started wireRequest blob). Trace which task this push reflects.
+		scrollLog.info(
+			`[scroll:h24] getStateToPostToWebview hasMore=${currentTask?.hasMoreShoferMessages ?? false} ` +
+				`currentTaskId=${currentTask?.taskId ?? "<none>"} shoferMsgCount=${currentTask?.shoferMessages.length ?? 0}`,
+		)
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",

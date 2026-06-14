@@ -167,6 +167,14 @@ vi.mock("../../../utils/tts", () => ({
 	setTtsSpeed: vi.fn(),
 }))
 
+vi.mock("../../file-changes/ChangedFilesService", () => ({
+	getChangedFiles: vi.fn().mockResolvedValue({ taskId: "", entries: [], backend: "none" }),
+	restoreFile: vi.fn().mockResolvedValue(undefined),
+	restoreAll: vi.fn().mockResolvedValue(undefined),
+	acceptFile: vi.fn().mockResolvedValue(undefined),
+	acceptAll: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn().mockReturnValue({
 		getModel: vi.fn().mockReturnValue({
@@ -773,6 +781,126 @@ describe("ShoferProvider Task History Synchronization", () => {
 			expect(item).toBeDefined()
 			// The second write (tokensIn: 222) should be the last one since writes are serialized
 			expect(item!.tokensIn).toBe(222)
+		})
+	})
+
+	describe("pushChangedFilesUpdate", () => {
+		it("persists file-change stats (insertions/deletions) even when foreground task changed during debounce", async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+			provider.isViewLaunched = true
+
+			// Seed a HistoryItem for the background task
+			await provider.updateTaskHistory(createHistoryItem({ id: "bg-task", task: "Background" }), {
+				broadcast: false,
+			})
+
+			// Mock the foreground task (different from the target)
+			const fgTask = {
+				taskId: "fg-task",
+				fileContextTracker: {},
+			}
+			vi.spyOn(provider, "getCurrentTask").mockReturnValue(fgTask as any)
+
+			// Mock the background task instance
+			const bgTask = {
+				taskId: "bg-task",
+				fileContextTracker: {},
+			}
+			vi.spyOn(provider.taskManager, "getManagedTaskInstance").mockImplementation((id: string) =>
+				id === "bg-task" ? (bgTask as any) : undefined,
+			)
+
+			// Mock getChangedFiles to return entries with insertions/deletions
+			const { getChangedFiles } = await import("../../file-changes/ChangedFilesService")
+			vi.mocked(getChangedFiles).mockResolvedValue({
+				taskId: "bg-task",
+				entries: [
+					{
+						path: "src/foo.ts",
+						insertions: 15,
+						deletions: 3,
+						binary: false,
+						state: "modified",
+						source: "working",
+						hasOriginalContent: true,
+						hasFinalContent: true,
+					},
+				],
+				backend: "working",
+			})
+
+			// Call pushChangedFilesUpdate for the background task (simulates
+			// debounce firing after the user switched tasks)
+			await provider.pushChangedFilesUpdate("bg-task")
+
+			// Verify the HistoryItem was updated with the correct counts
+			const updatedItem = provider.taskHistoryStore.get("bg-task")
+			expect(updatedItem).toBeDefined()
+			expect(updatedItem!.insertions).toBe(15)
+			expect(updatedItem!.deletions).toBe(3)
+
+			// Verify IPC push was NOT sent (background task, not foreground)
+			const changedFilesMessages = mockPostMessage.mock.calls.filter(
+				(call: any) => call[0]?.type === "changedFiles/update",
+			)
+			expect(changedFilesMessages).toHaveLength(0)
+
+			// Restore only the spied mocks, not module-level mocks.
+			vi.mocked(provider.getCurrentTask).mockRestore()
+			vi.mocked(provider.taskManager.getManagedTaskInstance).mockRestore()
+		})
+
+		it("pushes changedFiles/update IPC for the foreground task", async () => {
+			await provider.resolveWebviewView(mockWebviewView)
+			provider.isViewLaunched = true
+
+			// Mock the foreground task
+			const fgTask = {
+				taskId: "fg-task",
+				fileContextTracker: {},
+			}
+			vi.spyOn(provider, "getCurrentTask").mockReturnValue(fgTask as any)
+
+			// Seed a HistoryItem for the foreground task
+			await provider.updateTaskHistory(createHistoryItem({ id: "fg-task", task: "Foreground" }), {
+				broadcast: false,
+			})
+
+			// Mock getChangedFiles to return entries with insertions/deletions
+			const { getChangedFiles } = await import("../../file-changes/ChangedFilesService")
+			vi.mocked(getChangedFiles).mockResolvedValue({
+				taskId: "fg-task",
+				entries: [
+					{
+						path: "src/bar.ts",
+						insertions: 42,
+						deletions: 0,
+						binary: false,
+						state: "added",
+						source: "working",
+						hasOriginalContent: true,
+						hasFinalContent: true,
+					},
+				],
+				backend: "working",
+			})
+
+			// Call pushChangedFilesUpdate for the foreground task
+			await provider.pushChangedFilesUpdate("fg-task")
+
+			// Verify the HistoryItem was updated
+			const updatedItem = provider.taskHistoryStore.get("fg-task")
+			expect(updatedItem).toBeDefined()
+			expect(updatedItem!.insertions).toBe(42)
+			expect(updatedItem!.deletions).toBe(0)
+
+			// Verify IPC push WAS sent (foreground task)
+			const changedFilesMessages = mockPostMessage.mock.calls.filter(
+				(call: any) => call[0]?.type === "changedFiles/update",
+			)
+			expect(changedFilesMessages).toHaveLength(1)
+
+			vi.mocked(provider.getCurrentTask).mockRestore()
 		})
 	})
 })
