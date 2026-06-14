@@ -41,7 +41,6 @@ import type { ApiHandlerCreateMessageMetadata, SingleCompletionHandler } from ".
 import { handleOpenAIError } from "./utils/openai-error-handler"
 import { generateImageWithProvider, ImageGenerationResult } from "./utils/image-generation"
 import { applyRouterToolPreferences } from "./utils/router-tool-preferences"
-import { apiLog } from "../../utils/logging/subsystems"
 
 // Add custom interface for OpenRouter params.
 type OpenRouterChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParams & {
