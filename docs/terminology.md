@@ -946,6 +946,8 @@ When communicating about the UI, use these names:
 - The **mode dropdown** in the input bar → **ModeSelector** (not "mode picker" or "mode switcher")
 - The **API config dropdown** in the input bar → **ApiConfigSelector** (not "provider dropdown")
 - The **auto-approve settings** in the input bar → **AutoApproveDropdown**
+- The **code index status badge** in the input bar → **IndexingStatusBadge** (not "RAG badge" or "indexing indicator")
+- The **assistant agent status badge** in the input bar → **AssistantAgentStatusBadge** (not "assistant badge" or "agent indicator")
 - The **file changes panel** → **FileChangesPanel** (not "changed files list" or "diff panel")
 - The **queued messages section** → **QueuedMessages** (not "message queue")
 - The **context window bar** in the header → **ContextWindowProgress** (not "context usage bar")
