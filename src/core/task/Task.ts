@@ -148,7 +148,7 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog, scrollLog } from "../../utils/logging/subsystems"
 import { runWithLogTaskContext } from "../../utils/logging"
 import { time } from "../../utils/perf"
 import {
@@ -3371,6 +3371,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let [modifiedShoferMessages, hasMoreUi] = rawShofer
 		this.hasMoreShoferMessages = hasMoreUi
 
+		// [scroll:h24] Diagnostic: this is the ONLY site that sets the flag true.
+		// If preload re-runs for an already-resident task it can re-arm hasMore
+		// after a "Load older messages" click cleared it — re-introducing the
+		// sentinel + header-blob flicker. Trace every (re)hydrate.
+		scrollLog.info(
+			`[scroll:h24] preload task=${this.taskId} tailMode=${tailMode} maxMessages=${maxMessages ?? "<none>"} ` +
+				`window=${modifiedShoferMessages.length} -> hasMore=${hasMoreUi}`,
+		)
+
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
 			modifiedShoferMessages,
@@ -4288,9 +4297,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// code paths (resumeTaskFromHistory, stored-history load, condensation).
 			this._cleanupOrphanedToolUses()
 			const didEndLoop = await this.recursivelyMakeShoferRequests(nextUserContent, includeFileDetails)
-			console.error(
-				`[DEBUG initiateTaskLoop] recursivelyMakeShoferRequests returned didEndLoop=${didEndLoop} taskId=${this.taskId}`,
-			)
+			taskLog.debug(`initiateTaskLoop: recursivelyMakeShoferRequests returned didEndLoop=${didEndLoop}`)
 			includeFileDetails = false // We only need file details the first time.
 			this.diagLog(
 				`[DIAG initiateTaskLoop] Loop iteration END taskId=${this.taskId}.${this.instanceId}, didEndLoop=${didEndLoop}`,

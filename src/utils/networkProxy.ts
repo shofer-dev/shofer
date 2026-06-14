@@ -12,6 +12,7 @@
 
 import * as vscode from "vscode"
 import { Package } from "../shared/package"
+import { utilLog } from "./logging/subsystems"
 
 /**
  * Proxy configuration state
@@ -348,7 +349,10 @@ export function isDebugMode(): boolean {
 }
 
 /**
- * Log a message to the output channel if available.
+ * Log a message through the shared transport so it appears in the Output
+ * Channel and is filterable via Settings → Logging.  During early activation
+ * the transport may not yet have an output channel attached, but the ring
+ * buffer survives until bootstrapLogging() wires it up.
  */
 function log(message: string): void {
 	if (!loggingEnabled) {
@@ -356,10 +360,5 @@ function log(message: string): void {
 	}
 
 	const logMessage = `[NetworkProxy] ${message}`
-	if (outputChannel) {
-		outputChannel.appendLine(logMessage)
-	}
-	if (consoleLoggingEnabled) {
-		console.log(logMessage)
-	}
+	utilLog.info(logMessage)
 }

@@ -9,6 +9,7 @@ import {
 } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
+import { apiLog } from "../../utils/logging/subsystems"
 
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"
@@ -120,15 +121,7 @@ export class DeepSeekHandler extends OpenAiHandler {
 			// markdown bullet lists pass through unchanged.
 			if ("reasoning_content" in delta && delta.reasoning_content) {
 				const text = (delta.reasoning_content as string) || ""
-				const cleaned = cleanReasoningChunk(
-					text,
-					(msg) => {
-						void import("../../extension").then(({ getOutputChannel }) =>
-							getOutputChannel()?.appendLine(msg),
-						)
-					},
-					!hasYieldedReasoning,
-				)
+				const cleaned = cleanReasoningChunk(text, (msg) => apiLog.warn(msg), !hasYieldedReasoning)
 				if (cleaned) {
 					hasYieldedReasoning = true
 					yield { type: "reasoning", text: cleaned }

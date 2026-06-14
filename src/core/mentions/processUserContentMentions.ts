@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { parseMentions, ParseMentionsResult, MentionContentBlock } from "./index"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 import type { SkillLookup } from "../../services/skills/skillInvocation"
+import { taskLog } from "../../utils/logging/subsystems"
 
 // Internal aliases for the Anthropic content block subtypes used during processing.
 type TextPart = Anthropic.Messages.TextBlockParam
@@ -76,7 +77,7 @@ export async function processUserContentMentions({
 
 				if (block.type === "text") {
 					if (shouldProcessMentions(block.text)) {
-						console.error("[DEBUG processUserContentMentions] about to parseMentions...")
+						taskLog.debug("[DEBUG processUserContentMentions] about to parseMentions...")
 						const result = await parseMentions(
 							block.text,
 							cwd,

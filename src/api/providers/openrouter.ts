@@ -16,6 +16,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
 
 import type { ApiHandlerOptions } from "../../shared/api"
+import { apiLog } from "../../utils/logging/subsystems"
 
 import {
 	convertToOpenAiMessages,
@@ -481,11 +482,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 						if (reasoningText) {
 							reasoningText = cleanReasoningChunk(
 								reasoningText,
-								(msg) => {
-									void import("../../extension").then(({ getOutputChannel }) =>
-										getOutputChannel()?.appendLine(msg),
-									)
-								},
+								(msg) => apiLog.warn(msg),
 								!hasYieldedReasoning,
 							)
 						}
@@ -503,15 +500,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 				// Also strip trivial model-generated preamble tokens (e.g. "• response", "response").
 				if ("reasoning" in delta && delta.reasoning && typeof delta.reasoning === "string") {
 					const cleaned = !hasYieldedReasoningFromDetails
-						? cleanReasoningChunk(
-								delta.reasoning,
-								(msg) => {
-									void import("../../extension").then(({ getOutputChannel }) =>
-										getOutputChannel()?.appendLine(msg),
-									)
-								},
-								!hasYieldedReasoning,
-							)
+						? cleanReasoningChunk(delta.reasoning, (msg) => apiLog.warn(msg), !hasYieldedReasoning)
 						: undefined
 					if (cleaned) {
 						hasYieldedReasoning = true
