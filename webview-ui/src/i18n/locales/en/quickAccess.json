@@ -6,7 +6,6 @@
 		"globalCommands": "Global Commands",
 		"builtInCommands": "Built-in Commands",
 		"noCommands": "No commands available",
-		"refresh": "Re-read .shofer/commands directories",
 		"settings": "Manage commands in Settings",
 		"openFile": "Open file"
 	},
@@ -15,7 +14,6 @@
 		"title": "Skills",
 		"allModes": "All Modes",
 		"loaded": "Loaded",
-		"refresh": "Re-read .shofer/skills directories",
 		"noSkills": "No skills available",
 		"settings": "Manage skills in Settings",
 		"openFile": "Open SKILL.md"

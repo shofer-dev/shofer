@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from "react"
-import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink, RefreshCw } from "lucide-react"
+import { useState, useCallback, useMemo } from "react"
+import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink } from "lucide-react"
 
 import type { Command } from "@shofer/types"
 
@@ -33,12 +33,11 @@ export const CommandsButton = () => {
 	const [open, setOpen] = useState(false)
 	const portalContainer = useShoferPortal("shofer-portal")
 
-	// Request commands from the extension on mount (follows WorktreeStatusIndicator pattern)
-	useEffect(() => {
-		vscode.postMessage({ type: "requestCommands" })
-	}, [])
 	const handleOpenChange = useCallback((isOpen: boolean) => {
 		setOpen(isOpen)
+		if (isOpen) {
+			vscode.postMessage({ type: "requestCommands" })
+		}
 	}, [])
 
 	// Group commands by source
@@ -75,11 +74,6 @@ export const CommandsButton = () => {
 	const handleOpenFile = useCallback((e: React.MouseEvent, filePath: string) => {
 		e.stopPropagation()
 		vscode.postMessage({ type: "openFile", text: filePath })
-	}, [])
-
-	// Trigger a re-read of .shofer/commands directories
-	const handleRefresh = useCallback(() => {
-		vscode.postMessage({ type: "requestCommands" })
 	}, [])
 
 	// Open settings when gear icon is clicked
@@ -125,17 +119,6 @@ export const CommandsButton = () => {
 							{t("quickAccess:commands.title")}
 						</h4>
 						<div className="flex items-center gap-1">
-							<button
-								aria-label={t("quickAccess:commands.refresh")}
-								onClick={handleRefresh}
-								className={cn(
-									"inline-flex items-center justify-center size-5 rounded-sm",
-									"text-vscode-descriptionForeground hover:text-vscode-foreground",
-									"hover:bg-[rgba(255,255,255,0.05)] transition-colors",
-									"cursor-pointer",
-								)}>
-								<RefreshCw className="w-3 h-3" />
-							</button>
 							<button
 								aria-label={t("quickAccess:commands.settings")}
 								onClick={handleOpenSettings}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, RefreshCw } from "lucide-react"
+import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check } from "lucide-react"
 
 import type { SkillMetadata } from "@shofer/types"
 
@@ -120,11 +120,6 @@ export const SkillsButton = () => {
 		vscode.postMessage({ type: "openFile", text: path })
 	}, [])
 
-	// Trigger a re-read of .shofer/skills directories
-	const handleRefresh = useCallback(() => {
-		vscode.postMessage({ type: "requestSkills" })
-	}, [])
-
 	// Open settings when gear icon is clicked
 	const handleOpenSettings = useCallback(() => {
 		vscode.postMessage({
@@ -168,17 +163,6 @@ export const SkillsButton = () => {
 							{t("quickAccess:skills.title")}
 						</h4>
 						<div className="flex items-center gap-1">
-							<button
-								aria-label={t("quickAccess:skills.refresh")}
-								onClick={handleRefresh}
-								className={cn(
-									"inline-flex items-center justify-center size-5 rounded-sm",
-									"text-vscode-descriptionForeground hover:text-vscode-foreground",
-									"hover:bg-[rgba(255,255,255,0.05)] transition-colors",
-									"cursor-pointer",
-								)}>
-								<RefreshCw className="w-3 h-3" />
-							</button>
 							<button
 								aria-label={t("quickAccess:skills.settings")}
 								onClick={handleOpenSettings}
