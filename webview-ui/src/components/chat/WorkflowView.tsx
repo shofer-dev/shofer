@@ -2142,7 +2142,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								itemContent={itemContent}
 								followOutput={followOutputCallback}
 								atBottomStateChange={atBottomStateChangeCallback}
-								atBottomThreshold={1}
+								atBottomThreshold={16}
 							/>
 							<SessionSearch
 								messages={messages}
