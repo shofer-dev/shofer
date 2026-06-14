@@ -793,3 +793,80 @@ describe("CodeIndexManager - handleSettingsChange regression", () => {
 		})
 	})
 })
+
+describe("CodeIndexManager - manager-level auto-recovery scheduling", () => {
+	let mockContext: any
+	let manager: CodeIndexManager
+	const testExtensionPath = path.join(path.sep, "test", "extension")
+
+	beforeEach(() => {
+		vi.useFakeTimers()
+		CodeIndexManager.disposeAll()
+		const workspaceStateStore: Record<string, any> = {}
+		const globalStateStore: Record<string, any> = {}
+		mockContext = {
+			subscriptions: [],
+			workspaceState: {
+				get: vi.fn((key: string, defaultValue?: any) => workspaceStateStore[key] ?? defaultValue),
+				update: vi.fn(async (key: string, value: any) => {
+					workspaceStateStore[key] = value
+				}),
+			} as any,
+			globalState: {
+				get: vi.fn((key: string, defaultValue?: any) => globalStateStore[key] ?? defaultValue),
+				update: vi.fn(async (key: string, value: any) => {
+					globalStateStore[key] = value
+				}),
+			} as any,
+			extensionUri: {} as any,
+			extensionPath: testExtensionPath,
+			asAbsolutePath: vi.fn(),
+			storageUri: {} as any,
+			globalStorageUri: {} as any,
+			logUri: {} as any,
+			secrets: {} as any,
+			environmentVariableCollection: {} as any,
+			extension: {} as any,
+			languageModelAccessInformation: {} as any,
+		}
+		manager = CodeIndexManager.getInstance(mockContext)!
+		// Keep state in "Error" so a fired timer would attempt a retry.
+		;(manager as any)._stateManager = { state: "Error", setSystemState: vi.fn(), dispose: vi.fn() }
+	})
+
+	afterEach(() => {
+		;(manager as any)._cancelReinitialize()
+		vi.useRealTimers()
+		CodeIndexManager.disposeAll()
+	})
+
+	// Regression: _scheduleReinitialize() must NOT call _cancelReinitialize()
+	// (which resets the attempt counter and the pending ContextProxy). Doing so
+	// pinned the backoff at the initial delay and nulled the proxy before the
+	// timer fired, making the retry call initialize(undefined!).
+	it("preserves the pending ContextProxy and advances the backoff across schedules", () => {
+		const proxy = { sentinel: "ctx-proxy" } as any
+		;(manager as any)._pendingContextProxy = proxy
+		;(manager as any)._scheduleReinitialize()
+		expect((manager as any)._reinitializeAttempt).toBe(1)
+		expect((manager as any)._pendingContextProxy).toBe(proxy)
+		;(manager as any)._scheduleReinitialize()
+		// Attempt advances (progressive backoff) instead of resetting to 0/1...
+		expect((manager as any)._reinitializeAttempt).toBe(2)
+		// ...and the proxy survives so the eventual retry has a valid argument.
+		expect((manager as any)._pendingContextProxy).toBe(proxy)
+	})
+
+	it("re-arms a single timer per schedule (no leaked timers)", () => {
+		const clearSpy = vi.spyOn(global, "clearTimeout")
+		;(manager as any)._pendingContextProxy = {} as any
+		;(manager as any)._scheduleReinitialize()
+		const firstTimer = (manager as any)._reinitializeTimer
+		expect(firstTimer).not.toBeNull()
+		;(manager as any)._scheduleReinitialize()
+		// The previous timer is cleared before a new one is armed.
+		expect(clearSpy).toHaveBeenCalledWith(firstTimer)
+		expect((manager as any)._reinitializeTimer).not.toBeNull()
+		expect((manager as any)._reinitializeTimer).not.toBe(firstTimer)
+	})
+})

@@ -382,7 +382,16 @@ export class CodeIndexManager {
 			`[CodeIndexManager] Scheduling reinitialize attempt ${this._reinitializeAttempt} ` +
 				`in ${Math.round(delay / 1000)}s...`,
 		)
-		this._cancelReinitialize() // clear any stale timer
+		// Clear only a stale TIMER here — do NOT call _cancelReinitialize(),
+		// which also resets _reinitializeAttempt and _pendingContextProxy.
+		// Resetting those would (a) pin the backoff at the initial delay forever
+		// (attempt is reset to 0 on every schedule) and (b) null the pending
+		// ContextProxy before the timer fires, making the retry call
+		// initialize(undefined!).
+		if (this._reinitializeTimer) {
+			clearTimeout(this._reinitializeTimer)
+			this._reinitializeTimer = null
+		}
 		this._reinitializeTimer = setTimeout(() => {
 			this._reinitializeTimer = null
 			if (this._stateManager.state !== "Error") return // cancelled or already recovered
