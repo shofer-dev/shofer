@@ -178,7 +178,7 @@ const TaskSequenceView: React.FC<TaskSequenceViewProps> = ({ rootTaskId, taskHis
 		noPanSelector: ".seq-arrow",
 	})
 
-	if (!rootTaskId || (!loading && interactions.length === 0)) {
+	if (!rootTaskId || loading || interactions.length === 0) {
 		return (
 			<div className="flex items-center justify-center h-full p-6">
 				<p className="text-sm text-[var(--vscode-descriptionForeground)]">
