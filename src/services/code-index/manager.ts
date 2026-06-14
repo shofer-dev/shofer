@@ -20,6 +20,17 @@ import { codeIndexLog } from "../../utils/logging/subsystems"
 import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
 import { getEmbedderLaneDepth } from "./embedders/embedder-lane"
 
+/**
+ * Auto-recovery constants — when initialisation fails due to infrastructure
+ * being temporarily down (Ollama / Qdrant not available), the manager will
+ * retry {@link initialize} with ever-increasing backoff instead of staying in
+ * Error state forever. Mirrors the orchestrator-level auto-recovery in
+ * {@link CodeIndexOrchestrator} but covers the case where the orchestrator
+ * itself was never created (i.e. `_recreateServices()` threw).
+ */
+const MANAGER_REINIT_INITIAL_DELAY_MS = 30_000
+const MANAGER_REINIT_MAX_DELAY_MS = 300_000 // 5 minutes
+
 export class CodeIndexManager {
 	// --- Singleton Implementation ---
 	private static instances = new Map<string, CodeIndexManager>() // Map workspace path to instance
@@ -38,6 +49,14 @@ export class CodeIndexManager {
 
 	// Flag to prevent race conditions during error recovery
 	private _isRecoveringFromError = false
+
+	// ── Manager-level auto-recovery (covers _recreateServices failures) ──
+	/** Timer that retries {@link initialize} after a transient infrastructure outage. */
+	private _reinitializeTimer: NodeJS.Timeout | null = null
+	/** 1-based attempt counter; resets to 0 when initialization succeeds. */
+	private _reinitializeAttempt = 0
+	/** ContextProxy stored for re-initialization retries. */
+	private _pendingContextProxy: ContextProxy | undefined = undefined
 
 	public static getInstance(context: vscode.ExtensionContext, workspacePath?: string): CodeIndexManager | undefined {
 		// Resolve the workspace folder to get both fsPath and the real URI
@@ -181,6 +200,7 @@ export class CodeIndexManager {
 			if (this._orchestrator) {
 				this._orchestrator.stopWatcher()
 			}
+			this._cancelReinitialize()
 			return { requiresRestart }
 		}
 
@@ -188,12 +208,14 @@ export class CodeIndexManager {
 		const workspacePath = this.workspacePath
 		if (!workspacePath) {
 			this._stateManager.setSystemState("Standby", "No workspace folder open")
+			this._cancelReinitialize()
 			return { requiresRestart }
 		}
 
 		// 4. Check workspace-level enablement (before creating expensive services)
 		if (!this.isWorkspaceEnabled) {
 			this._stateManager.setSystemState("Standby", "Indexing not enabled for this workspace")
+			this._cancelReinitialize()
 			return { requiresRestart }
 		}
 
@@ -223,8 +245,22 @@ export class CodeIndexManager {
 		const needsServiceRecreation = !this._serviceFactory || requiresRestart
 
 		if (needsServiceRecreation) {
-			await this._recreateServices()
+			try {
+				await this._recreateServices()
+			} catch (error) {
+				// _recreateServices sets state to Error before throwing (see
+				// validateEmbedder failure path). Schedule a manager-level
+				// reinitialize retry so the badge recovers when the
+				// infrastructure (Ollama/Qdrant) comes back up.
+				codeIndexLog.error("Initialize failed during service recreation:", error)
+				this._pendingContextProxy = contextProxy
+				this._scheduleReinitialize()
+				throw error
+			}
 		}
+
+		// Made it through service creation — cancel any pending recovery.
+		this._cancelReinitialize()
 
 		// 7. Handle Indexing Start/Restart
 		const shouldStartOrRestartIndexing =
@@ -325,11 +361,59 @@ export class CodeIndexManager {
 		}
 	}
 
+	// ── Manager-Level Auto-Recovery ────────────────────────────────────
+
+	/**
+	 * Schedule an automatic retry of {@link initialize} when initialization
+	 * fails during service creation (e.g. Ollama/Qdrant unavailable). Uses
+	 * progressive backoff so the badge recovers without user interaction.
+	 *
+	 * Mirrors {@link CodeIndexOrchestrator._scheduleAutoRecovery} but covers
+	 * the case where the orchestrator was never created because
+	 * {@link _recreateServices} threw.
+	 */
+	private _scheduleReinitialize(): void {
+		const delay = Math.min(
+			MANAGER_REINIT_MAX_DELAY_MS,
+			MANAGER_REINIT_INITIAL_DELAY_MS * Math.pow(2, this._reinitializeAttempt),
+		)
+		this._reinitializeAttempt++
+		codeIndexLog.info(
+			`[CodeIndexManager] Scheduling reinitialize attempt ${this._reinitializeAttempt} ` +
+				`in ${Math.round(delay / 1000)}s...`,
+		)
+		this._cancelReinitialize() // clear any stale timer
+		this._reinitializeTimer = setTimeout(() => {
+			this._reinitializeTimer = null
+			if (this._stateManager.state !== "Error") return // cancelled or already recovered
+			void this.initialize(this._pendingContextProxy!).catch((error) => {
+				codeIndexLog.error("[CodeIndexManager] Reinitialize attempt failed:", error)
+				// _scheduleReinitialize is called inside the initialize catch
+				// block itself (when _recreateServices fails), so we don't need
+				// to re-schedule here — it's already scheduled.
+			})
+		}, delay)
+	}
+
+	/**
+	 * Cancel any pending reinitialize timer and reset the attempt counter.
+	 * Safe to call even when no timer is active.
+	 */
+	private _cancelReinitialize(): void {
+		if (this._reinitializeTimer) {
+			clearTimeout(this._reinitializeTimer)
+			this._reinitializeTimer = null
+		}
+		this._reinitializeAttempt = 0
+		this._pendingContextProxy = undefined
+	}
+
 	/**
 	 * Cleans up the manager instance and removes it from the singleton map.
 	 */
 	public dispose(): void {
 		this.stopIndexing()
+		this._cancelReinitialize()
 		// Optional dispose: tolerate cacheManager mocks (and the small
 		// initialization window before _wireCacheDiagnostics has assigned a
 		// real CacheManager) that don't implement dispose().
