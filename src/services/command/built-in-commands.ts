@@ -509,6 +509,11 @@ to Shofer rules.
 
 	   After merging, DO NOT delete the original .github/copilot-instructions.md —
 	   Copilot still uses it. Report it as "merged (original retained)".
+
+	   **Note:** Copilot Memory (the cloud-synced 28-day repository memory graph that
+	   captures coding styles, shared abstractions, and cross-file dependencies) is a
+	   Copilot runtime feature with no file-based equivalent. It does not produce
+	   migratable artifacts and cannot be transferred to Shofer.
 	 </global_instructions>
 
 	 <targeted_instructions>
@@ -557,6 +562,13 @@ to Shofer rules.
 	      \`\`\`
 
 	   After migration, DO NOT delete the original agent files.
+
+	   **Note:** Copilot Cloud Agents (Agent Sessions — autonomous agents running in
+	   isolated GitHub Actions environments for up to 59 minutes) are a Copilot
+	   cloud runtime feature. Shofer provides equivalent background-task orchestration
+	   via its Orchestrator mode and the \`new_task\` tool with \`is_background=true\`.
+	   Cloud Agent session definitions are NOT represented as .agent.md files and
+	   cannot be migrated.
 	 </agent_definitions>
 
 	 <skills>
@@ -672,6 +684,10 @@ modes, and relocating MCP configuration.
 	   3. Include a header: \`<!-- migrated from <original-path> -->\`
 
 	   After merging, DO NOT delete original CLAUDE.md files — Claude Code still uses them.
+
+	   **Note:** Claude Code's Auto Memory feature (autonomous tracking of build behaviors,
+	   successful commands, and debugging insights across sessions) is a Claude runtime
+	   capability with no file-based equivalent. It does not produce migratable artifacts.
 	 </core_instructions>
 
 	 <rules>
@@ -719,6 +735,11 @@ modes, and relocating MCP configuration.
 	        source: project
 	      \`\`\`
 	   6. DO NOT delete original subagent files.
+
+	   **Note:** Claude Code's \`/batch\` engine (automatic decomposition of large tasks
+	   into isolated Git worktree units) is a Claude runtime feature. Shofer provides
+	   equivalent worktree orchestration via its Orchestrator mode and the \`worktree\`
+	   native tool — these are not migrated from subagent definitions.
 	 </subagents>
 
 	 <skills>
@@ -796,13 +817,16 @@ modes, and relocating MCP configuration.
 	   Claude's project and local settings — no direct Shofer equivalent:
 	   | Claude                              | Action                                                    |
 	   |-------------------------------------|-----------------------------------------------------------|
-	   | \`.claude/settings.json\`           | Report for manual review (hooks, permissions, model prefs) |
+	   | \`.claude/settings.json\`           | Report for manual review (hooks, permissions, model prefs, Auto Mode) |
 	   | \`.claude/settings.local.json\`     | Report for manual review (personal overrides)              |
 
-	   These contain team-wide tool permissions, lifecycle hooks, and model
-	   preferences. Shofer does not have a direct equivalent — the user should
-	   manually transfer relevant settings to Shofer's VS Code settings (see
-	   configuration.md) or the Shofer Settings UI.
+	   These contain team-wide tool permissions, lifecycle hooks, model
+	   preferences, and the \`autoMode\` risk-classifier configuration. Shofer does
+	   not have a direct equivalent — the user should manually transfer relevant
+	   settings to Shofer's VS Code settings (see configuration.md) or the Shofer
+	   Settings UI. The Auto Mode classifier (bypassing ~83% of manual permission
+	   prompts) has no Shofer counterpart; review Shofer's auto-approval settings
+	   in the Settings UI as an alternative.
 	 </settings_report>
 
 	 <worktree_include>
@@ -862,6 +886,200 @@ Migration complete:
 	 ✓ .claude/skills/generate-test/ → moved to .shofer/skills/generate-test/
 	 ✓ .mcp.json → renamed to .shofer/mcp.json
 	 ℹ worktreeinclude — already supported, no action needed
+\`\`\``,
+	},
+
+	"migrate-from-opencode": {
+		name: "migrate-from-opencode",
+		description: "Migrate OpenCode configuration files to Shofer equivalents",
+		content: `<task>
+Migrate OpenCode configuration files in this project to their Shofer
+equivalents. This involves merging instruction files, converting agent
+definitions to custom modes, moving skills, and converting the opencode.json
+permissions model.
+</task>
+
+<initialization>
+	 <todo_list_creation>
+	   If the update_todo_list tool is available, create a todo list with these steps:
+
+	   1. Scan for all OpenCode config (AGENTS.md, .opencode/agent/, .opencode/skill/, opencode.json/.jsonc)
+	   2. Merge AGENTS.md into Shofer's AGENTS.md
+	   3. Convert .opencode/agent/*.md to .shofermodes custom mode entries
+	   4. Move .opencode/skill/ directories to .shofer/skills/
+	   5. Report opencode.json permissions for manual review
+	   6. Verify migration completeness
+	 </todo_list_creation>
+</initialization>
+
+<migration_mapping>
+	 <core_instructions>
+	   OpenCode's primary instruction file:
+	   | OpenCode            | Shofer Action                                                               |
+	   |---------------------|-----------------------------------------------------------------------------|
+	   | \`AGENTS.md\`       | Merge content into Shofer's \`AGENTS.md\` under "## OpenCode Instructions (migrated)" |
+
+	   HOW:
+	   1. Read AGENTS.md
+	   2. Check if Shofer's AGENTS.md exists — if not, create it with the OpenCode content
+	   3. If AGENTS.md exists, search for "OpenCode Instructions" — if found, skip
+	   4. If not found, APPEND under a "## OpenCode Instructions (migrated)" heading
+
+	   After merging, DO NOT delete the original AGENTS.md — OpenCode still uses it.
+	   Report it as "merged (original retained)".
+
+	   **Note:** OpenCode automatically falls back to reading \`CLAUDE.md\` if
+	   \`AGENTS.md\` does not exist. If both exist and \`migrate-from-claude\` has
+	   already been run, the AGENTS.md content may overlap — deduplicate by
+	   skipping content already present from the Claude migration.
+	 </core_instructions>
+
+	 <agent_definitions>
+	   OpenCode's custom agent personas:
+	   | OpenCode                                  | Shofer Action                                                       |
+	   |-------------------------------------------|---------------------------------------------------------------------|
+	   | \`.opencode/agent/*.md\`                  | Convert to \`.shofermodes\` custom mode entries                     |
+	   | \`~/.config/opencode/agent/*.md\`         | Report for manual review (global agents outside project scope)      |
+
+	   HOW for each project agent file (.opencode/agent/*.md):
+	   1. Read the file — extract agent name from the filename or heading
+	   2. The body becomes the mode's roleDefinition
+	   3. OpenCode agents don't declare tools explicitly — default to ["read", "write", "execute", "mcp"]
+	   4. The mode slug = agent name lowercased with hyphens
+	   5. Append to .shofermodes (create if needed):
+	      \`\`\`yaml
+	      - slug: <slug>
+	        name: "<agent name>"
+	        roleDefinition: "<agent instructions>"
+	        groups: ["read", "write", "execute", "mcp"]
+	        source: project
+	      \`\`\`
+	   6. DO NOT delete original agent files.
+
+	   Global agents (\`~/.config/opencode/agent/*.md\`) are outside the project
+	   scope — report them for manual review. The user may want to recreate them
+	   as Shofer global custom modes.
+	 </agent_definitions>
+
+	 <skills>
+	   OpenCode Agent Skills (same standard format as Shofer):
+	   | OpenCode                                   | Shofer Action                                         |
+	   |--------------------------------------------|-------------------------------------------------------|
+	   | \`.opencode/skill/<name>/SKILL.md\`        | Move entire directory to \`.shofer/skills/<name>/\`   |
+
+	   OpenCode also reads Claude-compatible \`.claude/skills/\` directories —
+	   if \`migrate-from-claude\` has already been run, those skills have already
+	   been moved. Only process skills under \`.opencode/skill/\` that don't
+	   already exist in \`.shofer/skills/\`.
+
+	   HOW — identical to Claude/Copilot migration:
+	   1. List .opencode/skill/ to discover all skill subdirectories
+	   2. For each, check if .shofer/skills/<name>/ already exists
+	   3. If not: create target dir and use \`file mv\` for each file
+	   4. If exists: skip with warning
+	   5. Remove empty .opencode/skill/<name>/ after move
+	   6. Remove .opencode/skill/ if empty
+
+	   This is a MOVE — not a copy.
+	 </skills>
+
+	 <tool_configuration>
+	   OpenCode's provider, model, and permission configuration:
+	   | OpenCode                     | Shofer Action                                              |
+	   |------------------------------|------------------------------------------------------------|
+	   | \`opencode.json\`            | Report for manual review                                   |
+	   | \`opencode.jsonc\`           | Report for manual review                                   |
+
+	   opencode.json / opencode.jsonc contains:
+	   - \`provider\` — LLM provider and model configuration (Anthropic, OpenAI,
+	     OpenRouter, local models via LM Studio/Atomic Chat)
+	   - \`permission\` — tool-level allow/deny/ask policies
+
+	   These do NOT have a direct Shofer file-based equivalent. Report the file
+	   for manual review and advise the user:
+	   - Provider/model config → transfer to Shofer's API Configuration in Settings UI
+	   - Tool permissions → review Shofer's auto-approval settings in Settings UI
+
+	   Do NOT modify or delete opencode.json / opencode.jsonc.
+	 </tool_configuration>
+
+	 <mcp_integration>
+	   OpenCode natively supports MCP servers (local JSON-RPC over STDIO or REST),
+	   governed by the \`permission\` block in opencode.json. OpenCode does NOT
+	   use a separate \`.mcp.json\` file — MCP servers are configured externally
+	   (global/user-level MCP settings) and governed via opencode.json permissions.
+
+	   | Feature                     | Migration Action                                                   |
+	   |-----------------------------|-------------------------------------------------------------------|
+	   | MCP server configuration    | No file to migrate — MCP servers are configured globally          |
+	   | LSP integration             | Shofer natively supports LSP diagnostics — no migration needed    |
+	   | \`lsp\` tool permission     | Review in Shofer's auto-approval settings                         |
+
+	   **Note:** OpenCode's live LSP code diagnostics (intercepting real-time
+	   compiler feedback and type errors) is matched by Shofer's native
+	   diagnostics integration. No migration action is needed.
+	 </mcp_integration>
+
+	 <content_exclusion>
+	   OpenCode relies on \`.gitignore\` for content exclusion (privacy-first,
+	   local-execution architecture). Shofer also honors \`.gitignore\` for file
+	   search and read operations, and additionally supports \`.shofer/shoferignore\`
+	   for Shofer-specific exclusions.
+
+	   | OpenCode        | Shofer Action                                              |
+	   |-----------------|------------------------------------------------------------|
+	   | \`.gitignore\`  | Already shared — no migration needed                       |
+
+	   If the project has sensitive files tracked only in \`.gitignore\`, they are
+	   already protected. No additional migration action is needed.
+	 </content_exclusion>
+</migration_mapping>
+
+<execution_rules>
+	 1. **Use the \`file\` tool** with \`subcommand="mv"\` for moves/renames
+	    (skill directories). Use \`write_to_file\` for creating new files.
+	    Use \`apply_diff\` or \`insert_edit\` for appending.
+
+	 2. **Create parent directories first** with \`create_directory\`
+	    before writing or moving (.shofer/skills/).
+
+	 3. **Never overwrite existing files.** Check with \`list_files\`
+	    before writing. Append or skip if target exists.
+
+	 4. **Read before converting.** Use \`read_file\` on OpenCode config files
+	    to extract content for agent→mode conversion.
+
+	 5. **Report every action.** For each file: merged, moved, converted,
+	    skipped (with reason), or reported for manual review.
+
+	 6. **Do NOT delete OpenCode source files** (except skills which are
+	    moved). OpenCode may still be in use.
+
+	 7. **Check for cross-tool overlap.** If \`migrate-from-claude\` or
+	    \`migrate-from-copilot\` has already been run, avoid duplicating
+	    content in AGENTS.md or .shofermodes. Check for existing entries
+	    before appending.
+</execution_rules>
+
+<quality_criteria>
+	 - Every OpenCode config file/directory is discovered and accounted for
+	 - AGENTS.md merge avoids duplication with prior Claude/Copilot migrations
+	 - Agent→mode conversions produce valid .shofermodes YAML
+	 - Skills are moved (not copied)
+	 - opencode.json is clearly reported for manual follow-up
+	 - Source files are preserved (except skills)
+	 - The final summary lists every file with its outcome
+</quality_criteria>
+
+After migration, print a summary like:
+
+\`\`\`
+Migration complete:
+	 ✓ AGENTS.md → merged into Shofer's AGENTS.md (original retained)
+	 ✓ .opencode/agent/frontend-architect.md → .shofermodes (custom mode added)
+	 ✓ .opencode/skill/docker-deploy/ → moved to .shofer/skills/docker-deploy/
+	 ℹ opencode.json — provider, model, and permission config for manual review
+	 ℹ ~/.config/opencode/agent/ — 2 global agents for manual review
 \`\`\``,
 	},
 	"merge-worktree": {
