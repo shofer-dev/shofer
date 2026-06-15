@@ -998,9 +998,18 @@ function compileSwimlaneSVG(flow, agentNames) {
 		_opCounter = 0
 
 	// Render a single operation; mutates _cy and returns SVG fragment
-	function renderOp(op, spineX, depth, agentName, opIdx) {
+	function renderOp(op, spineX, depth, agentName) {
 		var str = ""
 		var opacity = depth > 0 ? "0.7" : "1"
+
+		// opIdx is the flat compiled instruction index of THIS op's primary
+		// instruction — its leaf instruction, or the when/repeat header branch. It
+		// mirrors compileAgentProgram() so it lines up with the agent's runtime
+		// AgentState.opIndex (the program counter) that drives the ▶ marker. Consume
+		// the slot now so nested when/repeat bodies (rendered below) get the correct
+		// subsequent indices; the trailing jump(s) for blocks are consumed inline.
+		var opIdx = _opCounter
+		_opCounter++
 
 		// Runtime: is this the currently executing operation?
 		var isExecuting = false
@@ -1267,6 +1276,10 @@ function compileSwimlaneSVG(flow, agentNames) {
 					(_cy - bodyStartY) +
 					'" rx="6" />'
 			}
+			// Mirror compileAgentProgram: a `when` with an `otherwise` emits a `jump`
+			// instruction after the body (before the else body). Consume that slot so
+			// the else body's op indices stay aligned with the runtime opIndex.
+			if (op.elseBlock) _opCounter++
 			if (op.elseBlock && op.elseBlock.body && op.elseBlock.body.length > 0) {
 				_cy += Math.floor(SPACING_Y / 2)
 				var oPts =
@@ -1301,7 +1314,7 @@ function compileSwimlaneSVG(flow, agentNames) {
 					'">OTHERWISE</text>'
 				_cy += SPACING_Y
 				var elseStartY = _cy - SPACING_Y
-				str += renderOpList(op.elseBlock.body, spineX, depth + 1)
+				str += renderOpList(op.elseBlock.body, spineX, depth + 1, agentName)
 				// Bounding box around the OTHERWISE body
 				if (_cy > elseStartY) {
 					str +=
@@ -1370,6 +1383,10 @@ function compileSwimlaneSVG(flow, agentNames) {
 					(_cy - repeatStartY) +
 					'" rx="6" />'
 			}
+			// Mirror compileAgentProgram: `repeat until` emits a `jump` back to the
+			// loop header after the body. Consume that slot so ops after the loop stay
+			// aligned with the runtime opIndex.
+			_opCounter++
 		} else if (op.type === "CommitOp") {
 			if (isExecuting) execAttr = ' data-optype="commit"'
 			str +=
@@ -1458,8 +1475,9 @@ function compileSwimlaneSVG(flow, agentNames) {
 		if (!ops) return ""
 		var str = ""
 		for (var j = 0; j < ops.length; j++) {
-			_opCounter++
-			str += renderOp(ops[j], spineX, depth, agentName, _opCounter)
+			// renderOp owns the instruction counter (it mirrors the compiler,
+			// including the extra branch/jump slots for when/repeat).
+			str += renderOp(ops[j], spineX, depth, agentName)
 		}
 		return str
 	}
