@@ -179,8 +179,6 @@ const DEFAULT_BUDGET_ROUNDS = 0
 const DEFAULT_BUDGET_TIME = 0
 /** Maximum consecutive output-validation failures before marking the agent as error. */
 const MAX_RETRIES = 3
-/** Max wall-clock time to wait for a round's spawned agent tasks to complete. */
-const AGENT_RESULT_TIMEOUT_MS = 120_000
 /** Poll interval while waiting for agent tasks to reach a terminal lifecycle. */
 const POLL_INTERVAL_MS = 500
 
@@ -1249,13 +1247,14 @@ export class WorkflowTask extends Task {
 		}
 
 		const startTime = Date.now()
-		// Bound the per-stake wait by the remaining flow time budget so
-		// the flow's `time(N)` ceiling is authoritative — a hung agent
-		// fails fast instead of blocking for AGENT_RESULT_TIMEOUT_MS.
-		const timeoutMs =
-			this.loopDeadline > 0
-				? Math.max(0, Math.min(AGENT_RESULT_TIMEOUT_MS, this.loopDeadline - Date.now()))
-				: AGENT_RESULT_TIMEOUT_MS
+		// A running agent is making progress — it may legitimately take a long
+		// time, so we WAIT rather than cutting it off with an implicit per-stake
+		// cap. The only time bound is the flow's own `time(N)` budget
+		// (loopDeadline): with a budget we wait at most the remaining time (so the
+		// flow's explicit ceiling stays authoritative); with no budget we wait
+		// indefinitely. Either way the user can still Stop (abortSignal), and a
+		// future per-stake timeout in the slang would plug in here.
+		const timeoutMs = this.loopDeadline > 0 ? Math.max(0, this.loopDeadline - Date.now()) : undefined
 		await waitForTasksEventDriven(provider, {
 			handles,
 			conditionMet: () => [...handles.keys()].every((id) => isTerminal(id)),
@@ -1341,15 +1340,19 @@ export class WorkflowTask extends Task {
 			if (!instr || instr.kind !== "stake") continue
 
 			try {
-				// Freshness guard: the agent must have reached a terminal lifecycle
-				// since this stake was dispatched. If waitForStakes timed out (the
-				// agent hung, or — absent a working loop restart — never ran), its
-				// taskId still carries the PREVIOUS stake's completion. Validating
-				// that stale result silently checks the wrong output and, on a
-				// contract-bearing stake, retry-loops the flow into a deadlock (the
-				// exact failure that motivated this guard). Treat a non-terminal
-				// agent as a failed stake — fail loudly and re-dispatch (do NOT
-				// advance opIndex) rather than re-reading stale output.
+				// Freshness guard: only consume an agent's result once it has actually
+				// reached a terminal lifecycle for THIS stake — otherwise its taskId
+				// still carries the PREVIOUS stake's completion and validating that
+				// stale result would check the wrong output.
+				//
+				// A running agent is *trying* and may legitimately take a long time, so
+				// waitForStakes waits without an implicit per-stake cap. Reaching here
+				// non-terminal therefore means the wait ended for a FLOW-LEVEL reason —
+				// the `time(N)` budget was hit or the user stopped the flow — NOT that
+				// the agent failed. Never retry, fail, or read a stale completion for a
+				// still-running agent: skip it and let the budget/abort handling (below
+				// and in slangLoop) terminate the flow. Leaving status/opIndex untouched
+				// lets the run resume the agent cleanly if it is restarted later.
 				if (state.taskId) {
 					const handle = this.backgroundChildren.get(state.taskId)
 					const lifecycle = provider.taskManager.getTaskState(state.taskId)?.lifecycle
@@ -1360,28 +1363,9 @@ export class WorkflowTask extends Task {
 						lifecycle === "completed" ||
 						lifecycle === "error"
 					if (!reachedTerminal) {
-						state.retryCount++
-						if (state.retryCount > MAX_RETRIES) {
-							workflowLog.error(
-								`[WorkflowTask#${this.taskId}] Agent '${name}' produced no result for stake '${instr.op.call.name}' after ${MAX_RETRIES} retries (timed out each round; lifecycle=${lifecycle ?? "unknown"})`,
-							)
-							await this.sayProgress(
-								`❌ Agent \`${name}\` never produced a result for \`${instr.op.call.name}\` (timed out after ${MAX_RETRIES} retries) and was marked **errored**.`,
-							)
-							state.status = "error"
-							state.sendingTo = undefined
-						} else {
-							workflowLog.info(
-								`[WorkflowTask#${this.taskId}] #TRACE Agent '${name}' stake '${instr.op.call.name}' did not complete within the wait window (retry ${state.retryCount}/${MAX_RETRIES}, lifecycle=${lifecycle ?? "unknown"}); will re-dispatch next round`,
-							)
-							await this.sayProgress(
-								`⚠️ Agent \`${name}\` didn't respond for \`${instr.op.call.name}\` within the wait window (retry ${state.retryCount}/${MAX_RETRIES}); re-dispatching.`,
-							)
-							// Leave opIndex on this stake and mark idle so the next round
-							// re-dispatches it through the normal advance → stake → dispatch
-							// path (a single, clean re-run via resumeAgentTask).
-							state.status = "idle"
-						}
+						workflowLog.info(
+							`[WorkflowTask#${this.taskId}] #TRACE Agent '${name}' stake '${instr.op.call.name}' still in flight (lifecycle=${lifecycle ?? "unknown"}) — wait ended on a flow-level limit/abort, not a per-stake timeout; leaving it running`,
+						)
 						continue
 					}
 				}

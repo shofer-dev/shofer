@@ -637,6 +637,16 @@ loop. Per round:
    the agent's token usage to the running total.
 6. **Re-check converge** and **persist a checkpoint** to the `HistoryItem`.
 
+> **No implicit per-stake timeout.** A running agent is assumed to be making
+> progress, even if it takes a long time, so the interpreter **waits** for it
+> rather than cutting it off after some fixed interval. The only bound on a
+> stake's wait is the flow's own `time(N)` budget: with a `time(N)` set, the wait
+> is capped at the remaining flow time (so that ceiling stays authoritative);
+> with no `time(N)`, the interpreter waits **indefinitely** for the agent to
+> finish. The user can always Stop the flow (→ `aborted`) regardless. A genuinely
+> stuck agent is therefore bounded by `time(N)` (or a manual Stop), not by a
+> hidden default.
+
 Budgets (`rounds`, `tokens`, and wall-clock `time`) are enforced at the top of
 each round (the round-loop condition checks all three) and again per-agent after
 stake collection. A value of `0` means unlimited. An agent maps

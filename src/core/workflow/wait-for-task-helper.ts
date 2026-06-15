@@ -18,8 +18,12 @@ export interface EventWaitOptions {
 	handles: Map<string, TaskHandle>
 	/** Returns true when the wait condition is satisfied. */
 	conditionMet: () => boolean
-	/** Maximum milliseconds to wait before giving up. */
-	timeoutMs: number
+	/**
+	 * Maximum milliseconds to wait before giving up. `undefined` means wait
+	 * indefinitely — resolve only when `conditionMet()` becomes true or the
+	 * abort signal fires. A finite value (including 0) caps the wait.
+	 */
+	timeoutMs?: number
 	/**
 	 * Optional callback fired when a child routes a question to the parent
 	 * (managedTask:needs-parent-input). If provided and returns true, the
@@ -35,7 +39,8 @@ export interface EventWaitOptions {
  * Event-driven wait: listens on {@link TaskManager} events for
  * `managedTask:completed`, `managedTask:error`, and
  * `managedTask:needs-parent-input`, resolving when `conditionMet()`
- * returns true or `timeoutMs` elapses.
+ * returns true, the abort signal fires, or (if set) `timeoutMs` elapses.
+ * When `timeoutMs` is omitted the wait is unbounded.
  *
  * The provided {@link EventWaitOptions.handles} map is mutated in-place
  * — callers read the settled statuses from it after this resolves.
@@ -116,10 +121,15 @@ export async function waitForTasksEventDriven(provider: ShoferProvider, options:
 			abortSignal.addEventListener("abort", abortHandler, { once: true })
 		}
 
-		const timeoutTimer = setTimeout(() => {
-			cleanup()
-			resolve()
-		}, timeoutMs)
+		// `timeoutMs === undefined` ⇒ no time cap: wait until the condition is met
+		// or the abort signal fires. A finite value caps the wait.
+		const timeoutTimer =
+			timeoutMs === undefined
+				? undefined
+				: setTimeout(() => {
+						cleanup()
+						resolve()
+					}, timeoutMs)
 
 		taskManager.on("managedTask:completed", onComplete)
 		taskManager.on("managedTask:error", onError)
