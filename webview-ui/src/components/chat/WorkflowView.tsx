@@ -97,6 +97,22 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		workflowVizMeta,
 	} = useExtensionState()
 
+	// The viz fields arrive through *global* ExtensionState keys that any live
+	// WorkflowTask writes to. Scope them to the task this view is showing so a
+	// background workflow (e.g. one parked on `escalate @Human`) can't bleed its
+	// diagrams into us — most visibly its mailbox-sourced Sequence timeline, which
+	// is built entirely from the runState's mailboxHistory. html and meta are
+	// pushed together and share an owner id; runState carries its own.
+	const displayedTaskId = currentTaskItem?.id
+	const vizForThisTask =
+		!!displayedTaskId && (workflowVizMeta as { taskId?: string } | undefined)?.taskId === displayedTaskId
+	const vizMeta = vizForThisTask ? workflowVizMeta : undefined
+	const vizHtml = vizForThisTask ? workflowVizHtml : undefined
+	const vizRunState =
+		vizForThisTask && (workflowVizRunState as { taskId?: string } | undefined)?.taskId === displayedTaskId
+			? workflowVizRunState
+			: undefined
+
 	// Show a WarningRow when the user sends a message with a retired provider.
 	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs"
 	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs">(
@@ -2055,7 +2071,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								? parallelTasks?.find((p) => p.id === currentTaskItem.id)?.activeTimeMs
 								: undefined) ?? currentTaskItem?.activeTimeMs
 						}
-						workflowVizMeta={workflowVizMeta}
+						workflowVizMeta={vizMeta}
 						lastEventText={lastEventText}
 					/>
 				</>
@@ -2075,7 +2091,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			{task && (
 				<>
 					{/* Tab bar for workflow views */}
-					{workflowVizHtml && (
+					{vizHtml && (
 						<div
 							className="flex gap-1 px-[15px] py-1.5"
 							style={{
@@ -2109,14 +2125,14 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							))}
 						</div>
 					)}
-					{workflowVizHtml && workflowTab !== "chat" && workflowTab !== "tree" && workflowTab !== "logs" && (
+					{vizHtml && workflowTab !== "chat" && workflowTab !== "tree" && workflowTab !== "logs" && (
 						<SlangViz
-							html={workflowVizHtml}
-							runState={workflowVizRunState}
+							html={vizHtml}
+							runState={vizRunState}
 							view={workflowTab as "topology" | "sequence" | "swimlane"}
 						/>
 					)}
-					{workflowVizHtml && workflowTab === "tree" && (
+					{vizHtml && workflowTab === "tree" && (
 						<div className="flex relative grow">
 							<TaskTreeView
 								taskHistory={taskHistory}
@@ -2124,12 +2140,12 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							/>
 						</div>
 					)}
-					{workflowVizHtml && workflowTab === "logs" && (
+					{vizHtml && workflowTab === "logs" && (
 						<div className="flex relative grow overflow-hidden">
 							<TaskLogsView taskId={currentTaskItem?.id} />
 						</div>
 					)}
-					{(!workflowVizHtml || workflowTab === "chat") && (
+					{(!vizHtml || workflowTab === "chat") && (
 						<div className="flex relative grow" ref={scrollContainerRef}>
 							<Virtuoso
 								ref={virtuosoRef}

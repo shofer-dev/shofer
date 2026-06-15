@@ -1480,7 +1480,10 @@ export class WorkflowTask extends Task {
 	 */
 	private notifySlangEditor(): void {
 		const sourcePath = this.flowState.sourcePath
-		const runState = serializeFlowState(this.flowState)
+		// Stamp the runState with this task's id. The WorkflowView consumes the
+		// viz fields through *global* ExtensionState keys that any live workflow
+		// writes to; the tag lets it scope a runState to the task it is showing.
+		const runState = { ...serializeFlowState(this.flowState), taskId: this.taskId }
 
 		// Push to the Slang custom editor (if open).
 		if (sourcePath) {
@@ -1501,9 +1504,17 @@ export class WorkflowTask extends Task {
 			if (!this._vizHtmlPushed) {
 				// Flow header metadata rendered natively in TaskHeader.
 				const meta = buildWorkflowVizMeta(this.slangSource)
-				if (meta) provider.postConfigUpdate("workflowVizMeta", meta)
+				if (meta) {
+					meta.taskId = this.taskId
+					provider.postConfigUpdate("workflowVizMeta", meta)
+				}
 
-				const html = buildWorkflowVizHtml(this.slangSource, this.flowState, runState)
+				// Structure-only HTML (no live runState baked in) so it is
+				// byte-identical to the re-seed produced by getWorkflowVizSnapshot()
+				// — the two must agree or switching between them reloads the iframe.
+				// The live runState rides the workflowVizRunState field below and is
+				// forwarded into the iframe via postMessage, so badges still appear.
+				const html = buildWorkflowVizHtml(this.slangSource, this.flowState, {})
 				if (html) {
 					provider.postConfigUpdate("workflowVizHtml", html)
 					this._vizHtmlPushed = true
@@ -1511,6 +1522,31 @@ export class WorkflowTask extends Task {
 			}
 			provider.postConfigUpdate("workflowVizRunState", runState)
 		}
+	}
+
+	/**
+	 * Snapshot of this workflow's visualization (header metadata + diagram HTML +
+	 * runtime state), all stamped with this task's id. Used by
+	 * `getStateToPostToWebview()` to re-seed the viz on task switch so the
+	 * focused workflow's diagrams are restored even if a background workflow was
+	 * the last to push through the global viz keys. Returns `undefined` if the
+	 * slang source can't be rendered.
+	 */
+	public getWorkflowVizSnapshot():
+		| { html: string; meta: WorkflowVizMeta | undefined; runState: Record<string, unknown> }
+		| undefined {
+		const runState = { ...serializeFlowState(this.flowState), taskId: this.taskId }
+		// Bake a structure-only payload (no live runState) into the HTML so this
+		// snapshot is byte-stable for a given task across full state pushes. This
+		// re-seed runs on every getStateToPostToWebview(); if the HTML embedded the
+		// live runState it would change every push and force SlangViz to reload the
+		// iframe (losing zoom/pan). The live runState is still returned below and
+		// forwarded via postMessage on load, so runtime badges appear immediately.
+		const html = buildWorkflowVizHtml(this.slangSource, this.flowState, {})
+		if (!html) return undefined
+		const meta = buildWorkflowVizMeta(this.slangSource)
+		if (meta) meta.taskId = this.taskId
+		return { html, meta, runState }
 	}
 
 	/** Whether the static viz HTML has been pushed to the webview yet. */

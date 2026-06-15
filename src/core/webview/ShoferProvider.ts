@@ -3644,6 +3644,22 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
+		// Re-seed the workflow visualization from the *focused* task. The viz
+		// fields below are normally pushed as deltas by WorkflowTask via
+		// postConfigUpdate, but those are global keys any live workflow writes to.
+		// Reseeding from the current task on every full state push (which fires on
+		// task switch) guarantees that switching to a workflow restores its own
+		// diagrams rather than whichever workflow last pushed. Duck-typed so we
+		// don't depend on a runtime WorkflowTask import here.
+		const _wfVizSnap = (() => {
+			const t = currentTask as unknown as {
+				getWorkflowVizSnapshot?: () =>
+					| { html: string; meta?: unknown; runState?: Record<string, unknown> }
+					| undefined
+			}
+			return typeof t?.getWorkflowVizSnapshot === "function" ? t.getWorkflowVizSnapshot() : undefined
+		})()
+
 		// [scroll:h24] Diagnostic: a full state push carries hasMoreShoferMessages
 		// derived from the *current* task. If currentTask is momentarily wrong or
 		// undefined here, the flag flips false → "Load older messages" sentinel
@@ -3853,9 +3869,11 @@ export class ShoferProvider
 				}
 			})(),
 			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
-			workflowVizHtml: undefined, // pushed once via postConfigUpdate from WorkflowTask.notifySlangEditor() — diagram only
-			workflowVizRunState: undefined, // pushed per round/step from WorkflowTask.notifySlangEditor()
-			workflowVizMeta: undefined, // pushed once — flow header rendered natively in TaskHeader
+			// Seeded from the focused workflow task (if any); thereafter refreshed
+			// as deltas via postConfigUpdate from WorkflowTask.notifySlangEditor().
+			workflowVizHtml: _wfVizSnap?.html,
+			workflowVizRunState: _wfVizSnap?.runState,
+			workflowVizMeta: _wfVizSnap?.meta as ExtensionState["workflowVizMeta"],
 		}
 	}
 

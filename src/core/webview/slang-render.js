@@ -817,7 +817,7 @@ function compileSequenceSVG(flow, agentNames) {
 			'" text-anchor="middle" font-weight="700" fill="' +
 			color +
 			'">' +
-			esc(columns[i]) +
+			esc(columns[i].replace(/^@/, "")) +
 			"</text>"
 	}
 
@@ -1730,8 +1730,8 @@ function buildLegend(view) {
 			items.push(_legendItem(_legendDot(COLORS.flow), "@Human"))
 		}
 	} else if (view === "sequence") {
-		items.push(_legendItem(_legendDot(COLORS.agent), "agent lifeline"))
-		items.push(_legendItem(_legendDot(COLORS.flow), "@Human"))
+		// Lifeline swatches (agent / Human) are self-evident from the column
+		// headers, so the legend only documents the arrow kinds.
 		items.push(_legendItem(_legendSwatch(COLORS.stake), "stake →"))
 		items.push(_legendItem(_legendSwatch(COLORS.await), "await ←"))
 	} else {

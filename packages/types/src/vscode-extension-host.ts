@@ -62,6 +62,14 @@ export interface LauncherWorkflow {
  * iframe only needs to hold the diagram + zoom controls.
  */
 export interface WorkflowVizMeta {
+	/**
+	 * Id of the WorkflowTask this metadata (and its companion `workflowVizHtml`)
+	 * belongs to. These viz fields are pushed through *global* ExtensionState keys
+	 * that any live workflow writes to, so the webview uses this to scope them to
+	 * the task it is actually displaying — preventing a background workflow's
+	 * diagram from bleeding into another task's view.
+	 */
+	taskId?: string
 	/** Icon key (e.g. "rocket", "gear"). TaskHeader maps to a lucide icon. */
 	icon?: string
 	/** Display title (flow.title || flow.name). */
