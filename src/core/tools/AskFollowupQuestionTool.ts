@@ -38,12 +38,15 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			}
 
 			const hasForm = Array.isArray(form) && form.length > 0
-			const hasSuggestions = Array.isArray(follow_up) && follow_up.length > 0
+			// An array `follow_up` — even empty — is a valid answer channel: an empty
+			// array asks the question with no canned buttons (free-text answer). Only
+			// a missing/non-array follow_up with no form is invalid.
+			const hasFollowUp = Array.isArray(follow_up)
 
-			// A valid call must offer the user a way to answer: either suggested
-			// answers or a typed form. Report against `follow_up` (the canonical
-			// answer channel) when neither is present.
-			if (!hasForm && !hasSuggestions) {
+			// A valid call must offer the user a way to answer: a follow_up list
+			// (possibly empty) or a typed form. Report against `follow_up` (the
+			// canonical answer channel) when neither is present.
+			if (!hasForm && !hasFollowUp) {
 				await recordMissingParamError("follow_up")
 				return
 			}

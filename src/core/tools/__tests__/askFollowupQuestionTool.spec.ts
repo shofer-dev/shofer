@@ -355,6 +355,30 @@ describe("askFollowupQuestionTool", () => {
 			expect(nativeArgs?.follow_up).toBeDefined()
 		})
 
+		it("carries the form parameter through to nativeArgs (regression: form was dropped)", () => {
+			NativeToolCallParser.startStreamingToolCall("call_form", "ask_followup_question")
+
+			// Model emits follow_up:null + a form (strict-mode shape).
+			const completeJson =
+				'{"question":"Configure:","follow_up":null,"form":[{"name":"runtime","type":"string","widget":"radio","options":["node","go"]}]}'
+			NativeToolCallParser.processStreamingChunk("call_form", completeJson)
+
+			const result = NativeToolCallParser.finalizeStreamingToolCall("call_form")
+
+			expect(result).not.toBeNull()
+			if (result?.type === "tool_use") {
+				const nativeArgs = result.nativeArgs as {
+					question: string
+					follow_up?: unknown
+					form?: Array<{ name: string }>
+				}
+				expect(nativeArgs.question).toBe("Configure:")
+				expect(nativeArgs.form).toEqual([
+					{ name: "runtime", type: "string", widget: "radio", options: ["node", "go"] },
+				])
+			}
+		})
+
 		it("should finalize with complete nativeArgs", () => {
 			NativeToolCallParser.startStreamingToolCall("call_456", "ask_followup_question")
 

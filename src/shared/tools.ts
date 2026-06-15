@@ -68,6 +68,7 @@ export const toolParamNames = [
 	"message",
 	"cwd",
 	"follow_up",
+	"form",
 	"task",
 	"size",
 	"query",
@@ -384,7 +385,7 @@ export interface AccessMcpResourceToolUse extends ToolUse<"access_mcp_resource">
 
 export interface AskFollowupQuestionToolUse extends ToolUse<"ask_followup_question"> {
 	name: "ask_followup_question"
-	params: Partial<Pick<Record<ToolParamName, string>, "question" | "follow_up">>
+	params: Partial<Pick<Record<ToolParamName, string>, "question" | "follow_up" | "form">>
 }
 
 export interface AttemptCompletionToolUse extends ToolUse<"attempt_completion"> {

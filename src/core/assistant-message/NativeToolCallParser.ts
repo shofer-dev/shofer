@@ -583,10 +583,15 @@ export class NativeToolCallParser {
 				break
 
 			case "ask_followup_question":
-				if (partialArgs.question !== undefined || partialArgs.follow_up !== undefined) {
+				if (
+					partialArgs.question !== undefined ||
+					partialArgs.follow_up !== undefined ||
+					partialArgs.form !== undefined
+				) {
 					nativeArgs = {
 						question: partialArgs.question,
 						follow_up: Array.isArray(partialArgs.follow_up) ? partialArgs.follow_up : undefined,
+						form: Array.isArray(partialArgs.form) ? partialArgs.form : undefined,
 					}
 				}
 				break
@@ -1310,10 +1315,16 @@ export class NativeToolCallParser {
 					break
 
 				case "ask_followup_question":
-					if (args.question !== undefined && args.follow_up !== undefined) {
+					// follow_up and form are each optional (provide either); a form
+					// presents typed input widgets. Build nativeArgs when the question
+					// plus at least one answer channel is present. Passing form through
+					// is required — omitting it drops the widgets and the handler reports
+					// a missing follow_up.
+					if (args.question !== undefined && (args.follow_up !== undefined || args.form !== undefined)) {
 						nativeArgs = {
 							question: args.question,
 							follow_up: args.follow_up,
+							form: args.form,
 						} as NativeArgsFor<TName>
 					}
 					break
