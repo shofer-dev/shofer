@@ -434,11 +434,41 @@ Agents in a workflow are regular Shofer Tasks with full tool access in their
 assigned mode. The Workflow Task coordinates them at the parent level — you can
 inspect each agent's chat, messages, and tool calls from the Task Selector tree.
 
+### Visualizing a Workflow
+
+A running (or finished) workflow opens in **WorkflowView**, a tabbed panel that
+visualizes the whole agent tree live:
+
+- **Events** — the message feed for the focused task.
+- **Tree** — the task hierarchy rooted at the workflow.
+- **Topology** — a directed graph of the current round: which agents are running
+  and who they're sending to / waiting on.
+- **Sequence** — the real message-passing timeline (from mailbox history),
+  including `escalate @Human` arrows, with current-round sends highlighted.
+- **State** — per-agent swimlanes marking each agent's currently executing op.
+- **Stats** — active-time donut (waiting-for-model, thinking, streaming, tool,
+  MCP, waiting-for-task, sleeping, overhead) plus a per-tool breakdown,
+  aggregated across the whole tree, alongside token/cost/time cards.
+- **Logs** — every log line emitted while the tree ran, with free-text and
+  per-severity filtering.
+
+Opening a `.slang` file directly renders the same diagrams in an editor tab
+(Topology / Sequence / Swimlane) with zoom, pan, and drag.
+
+### Command Sandboxing
+
+When a worktree is active, shell commands run inside an OS-level write-only
+sandbox (Landlock / `bwrap`) that confines writes to the active worktree, and
+`rename_symbol` edits are scoped to it — so a workflow's many agents can't write
+outside their isolated checkout.
+
 Learn more:
 
 - [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/docs/built-in-workflows.md) — the full pipeline from `.slang` → discovery → execution
 - [Slang Language Spec](https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md) — grammar, operations, control flow, output contracts
 - [Workflow Design](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_design.md) — architecture and design decisions
+- [Workflow Visualization](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md) — the three diagram views and runtime overlays
+- [Worktree Shell Sandboxing](https://github.com/shofer-dev/shofer/blob/master/docs/worktree-shell-sandboxing.md) — the Landlock/bwrap confinement model
 
 ---
 
