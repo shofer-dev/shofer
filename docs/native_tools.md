@@ -393,23 +393,154 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 
 ## Task & Workflow Management
 
-| Tool                      | Origin | Group | Always Available | Status | Description                                                 |
-| ------------------------- | :----: | ----- | :--------------: | :----: | ----------------------------------------------------------- |
-| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question                                     |
-| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                      |
-| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield / wait for a message  |
-| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                |
-| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                       |
-| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task              |
-| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any) |
-| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks           |
-| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task          |
-| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                   |
-| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root      |
-| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                        |
-| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                    |
-| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                          |
-| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                  |
+| Tool                      | Origin | Group | Always Available | Status | Description                                                   |
+| ------------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------------------- |
+| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form) |
+| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                        |
+| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield / wait for a message    |
+| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                  |
+| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                         |
+| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                |
+| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)   |
+| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks             |
+| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task            |
+| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                     |
+| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root        |
+| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                          |
+| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                      |
+| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                            |
+| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                    |
+
+### `ask_followup_question`
+
+Ask the user a question to gather information needed to proceed. Provides **two
+answer-collection mechanisms** — supply EITHER (or both):
+
+- **`follow_up`** — a short list of one-click suggested answers. Best for simple
+  pick-one-of-a-few choices. Each suggestion may carry a `mode` to switch modes
+  when chosen. Rendered as clickable buttons (`FollowUpSuggest`).
+- **`form`** — a typed input form rendering rich widgets. Best for structured,
+  validated, or multiple values collected at once. Answers are returned to the
+  model as a single JSON object keyed by each field's `name`. Rendered by
+  `WorkflowParamForm` — the same component used for workflow flow-parameter
+  collection.
+
+| Param       | Type          | Required | Description                                                                   |
+| ----------- | ------------- | :------: | ----------------------------------------------------------------------------- |
+| `question`  | string        |    ✅    | Clear, specific question capturing the missing information                    |
+| `follow_up` | array \| null |    ⚠️    | 2–4 suggested answers (`{ text, mode }`). `null` when using a form. See note. |
+| `form`      | array \| null |    ⚠️    | Typed input fields (see below). `null` when using suggestions. See note.      |
+
+> ⚠️ Both `follow_up` and `form` are listed in the schema's `required` array (so
+> the model must emit both keys for strict mode), but each is **nullable**. The
+> handler requires that **at least one** is a non-empty array; a call with both
+> `null`/empty fails with a missing-`follow_up` error.
+
+**`form` field shape** (mirrors [`ParamField`](../packages/types/src/followup.ts)):
+
+| Field         | Type                                                | Description                                            |
+| ------------- | --------------------------------------------------- | ------------------------------------------------------ |
+| `name`        | string                                              | JSON key the answer is returned under                  |
+| `type`        | `"string"\|"number"\|"boolean"`                     | Base data type (drives answer coercion)                |
+| `description` | string \| null                                      | Optional markdown shown beneath the field label        |
+| `widget`      | `"dropdown"\|"radio"\|"checkbox"\|"slider"` \| null | Presentation override; `null` infers from type/options |
+| `options`     | string[] \| null                                    | Allowed values for dropdown/radio/checkbox             |
+| `min`/`max`   | number \| null                                      | Slider/number bounds                                   |
+| `step`        | number \| null                                      | Slider step increment                                  |
+| `default`     | string\|number\|boolean \| null                     | Value used when the field is left blank                |
+
+**Widget selection** (per field, in `WorkflowParamForm.widgetFor`):
+
+| Field config                                          | Widget rendered                          |
+| ----------------------------------------------------- | ---------------------------------------- |
+| `type: "boolean"`                                     | single checkbox toggle                   |
+| `options` present + `widget: "dropdown"` (or omitted) | single-select dropdown                   |
+| `options` present + `widget: "radio"`                 | radio buttons                            |
+| `options` present + `widget: "checkbox"`              | multi-select checkboxes (answer = array) |
+| `type: "number"` + `widget: "slider"` or `min`+`max`  | slider                                   |
+| `type: "number"` otherwise                            | number input                             |
+| `type: "string"`, no options                          | multiline free-text box                  |
+
+**Answer flow (form mode):** the webview submits all values at once as an
+`objectResponse` (not a chat-echoed `messageResponse`); `task.ask("followup", …)`
+resolves with the JSON answer string, which is returned to the model as the tool
+result. The handler also calls `task.markFollowupFormAnswered(values)` to embed
+`answeredValues` onto the question message so the form re-renders **read-only**
+after a reload.
+
+**Background child tasks:** forms require an interactive user, so a background
+child's question is routed to its **parent** (which answers in free text via
+`answer_subtask_question`) — the form widgets are not shown. Form-mode calls from
+a background child fall through to the same parent-routing path with the bare
+question text.
+
+Example (suggested answers with a mode switch):
+
+```json
+{
+	"question": "Would you like me to implement this feature?",
+	"follow_up": [
+		{ "text": "Yes, implement it now", "mode": "code" },
+		{ "text": "No, just plan it out", "mode": "architect" }
+	],
+	"form": null
+}
+```
+
+Example (structured form with mixed widgets):
+
+```json
+{
+	"question": "Configure the new service:",
+	"follow_up": null,
+	"form": [
+		{
+			"name": "runtime",
+			"type": "string",
+			"widget": "radio",
+			"options": ["node", "python", "go"],
+			"default": "node",
+			"description": null,
+			"min": null,
+			"max": null,
+			"step": null
+		},
+		{
+			"name": "regions",
+			"type": "string",
+			"widget": "checkbox",
+			"options": ["us-east", "eu", "asia"],
+			"default": null,
+			"description": "Deploy to which regions",
+			"min": null,
+			"max": null,
+			"step": null
+		},
+		{
+			"name": "replicas",
+			"type": "number",
+			"widget": "slider",
+			"min": 1,
+			"max": 10,
+			"step": 1,
+			"default": 3,
+			"description": null,
+			"options": null
+		},
+		{
+			"name": "enable_logs",
+			"type": "boolean",
+			"default": true,
+			"description": null,
+			"widget": null,
+			"options": null,
+			"min": null,
+			"max": null,
+			"step": null
+		}
+	]
+}
+```
 
 ### `switch_mode`
 
