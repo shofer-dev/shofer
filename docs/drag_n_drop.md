@@ -334,6 +334,69 @@ URIs to the extension host, the host reads the files (respecting
 `ShoferIgnoreController`, see Known-issues note), and posts the text back to fill
 the field. `"path"`/`"paths"` need no host read and are the simpler first cut.
 
+## Targeting: which field receives the `@` reference
+
+This is the central UX question for the form (it does not arise in chat, which has
+a single input). **The chat model cannot answer it.** Today a drop anywhere on
+WorkflowView is funnelled by `handleWebviewDrop`
+([WorkflowView.tsx](../webview-ui/src/components/chat/WorkflowView.tsx)) into one
+`droppedContextFiles` list, then prepended to the message on Send — a **single
+sink** with no notion of "which field." A multi-field form has N possible
+destinations, so targeting must be **explicit**.
+
+**Rule: the field you drop _onto_ is the field that receives it.** Each droppable
+field owns its `onDrop`, and the DOM delivers the event to the control under the
+cursor, so the recipient is unambiguous — no focus-tracking, no guessing.
+
+```
+ ┌─ WorkflowParamForm (dragging a file from Explorer) ──────────┐
+ │  spec      [ ░░░░░░░░░ ]  ← droppable: glows on dragenter      │
+ │  exclude   [ ░░░░░░░░░ ]  ← droppable: glows                   │
+ │  replicas  (  5  )         ← not droppable: dimmed/no glow     │
+ │  notify    [x]             ← not droppable: dimmed             │
+ └──────────────────────────────────────────────────────────────┘
+        drop on `spec` → only `spec` gets @/path
+```
+
+Supporting behaviour:
+
+- **Highlight valid targets on drag.** On `dragenter` over the form, dim the form
+  and **glow only the fields whose `accepts` is set**, so the user sees the legal
+  destinations before releasing. The field under the cursor gets a stronger ring.
+- **Each field stops propagation.** The per-field `onDrop` must call
+  `stopPropagation()` so the WorkflowView **root** handler does NOT _also_ add the
+  file to the chat-context sink. While a param form is pending, a drop belongs to a
+  field, not to `droppedContextFiles`. (On Desktop the root handler is already inert
+  — the overlay only reaches form controls — but web/code-server would double-handle
+  without this.)
+- **Drop on form chrome (not a field):**
+    - exactly one droppable field exists → route there (unambiguous);
+    - more than one → **no-op + inline hint** ("drop onto a field"), rather than
+      silently picking one or leaking into the chat sink;
+    - never fall back to the chat `droppedContextFiles` tag list while a form is open
+      — that's the confusing status quo this design replaces.
+
+## Value: `@`-mention vs bare path
+
+"What string lands in the field" is a second, separable decision from targeting,
+and it's why the question is phrased as "the `@` reference":
+
+- **`@/path` mention** — for a param whose value is fed into an **agent prompt**,
+  inserting `@/relative/path` lets Shofer's existing mention resolver **inline the
+  file's content** for that agent (same as `@mentions` in chat). This is usually
+  what you want for "here's the file to work on."
+- **Bare `relative/path`** — for a param used as a **literal path argument** (the
+  agent opens it itself, or it's passed to a tool), insert the plain
+  workspace-relative path with no `@`.
+
+Make it a property of the declared intent, e.g. `accepts: "mention"` → `@/path`,
+`accepts: "path"` → bare path (`accepts: "paths"` → append multiple, space-joined
+mentions or a `string[]`). A sensible default for a free-text `string` field is the
+**`@/path` mention**, since flow-param values overwhelmingly end up in agent
+prompts and the resolver already knows how to expand them. The mention vs bare-path
+choice reuses the same workspace-relative resolution `parseDroppedUris` already
+does — only the `@` prefix differs.
+
 ## Delivery mechanisms
 
 1. **Per-field webview drop (primary).** Add `onDragOver`/`onDrop` to the
