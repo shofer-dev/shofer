@@ -29,6 +29,10 @@ const LEVEL_COLOR: Record<string, string> = {
 /** Hard cap on rendered lines to keep the DOM light (mirrors the host ring cap). */
 const MAX_RENDERED_LINES = 2000
 
+/** Severity levels, ordered low → high; drives the filter chips. */
+const LEVELS = ["debug", "info", "warn", "error", "fatal"] as const
+type LogLevel = (typeof LEVELS)[number]
+
 function formatTime(ts: number): string {
 	// HH:MM:SS.mmm in local time.
 	const d = new Date(ts)
@@ -44,9 +48,37 @@ interface TaskLogsViewProps {
 const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 	const [logs, setLogs] = useState<TaskLogLine[]>([])
 	const [follow, setFollow] = useState(true)
+	// Free-text filter (matched against message + ctx) and the set of enabled
+	// severities. Both default to "show everything".
+	const [query, setQuery] = useState("")
+	const [enabledLevels, setEnabledLevels] = useState<Record<LogLevel, boolean>>({
+		debug: true,
+		info: true,
+		warn: true,
+		error: true,
+		fatal: true,
+	})
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const followRef = useRef(follow)
 	followRef.current = follow
+
+	const toggleLevel = useCallback((level: LogLevel) => {
+		setEnabledLevels((prev) => ({ ...prev, [level]: !prev[level] }))
+	}, [])
+
+	// Apply severity + free-text filters (case-insensitive substring over the
+	// message and the ctx tag). Declared before the effects that depend on it.
+	const filtered = useMemo(() => {
+		const q = query.trim().toLowerCase()
+		return logs.filter((line) => {
+			if (!enabledLevels[line.level as LogLevel]) return false
+			if (!q) return true
+			return (line.message ?? "").toLowerCase().includes(q) || (line.ctx ?? "").toLowerCase().includes(q)
+		})
+	}, [logs, query, enabledLevels])
+
+	const empty = logs.length === 0
+	const filterActive = query.trim() !== "" || LEVELS.some((l) => !enabledLevels[l])
 
 	// Request a fresh snapshot whenever the selected task changes (and on mount).
 	// On unmount (Logs tab closed / task switch) clear the host-side watch so it
@@ -72,12 +104,12 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 		}
 	})
 
-	// Auto-scroll to the newest line while following.
+	// Auto-scroll to the newest line while following (also re-pins on filter change).
 	useEffect(() => {
 		if (followRef.current && scrollRef.current) {
 			scrollRef.current.scrollTop = scrollRef.current.scrollHeight
 		}
-	}, [logs])
+	}, [filtered])
 
 	// Pause "follow" when the user scrolls up; resume when scrolled to bottom.
 	const onScroll = useCallback(() => {
@@ -87,11 +119,9 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 		setFollow(atBottom)
 	}, [])
 
-	const empty = logs.length === 0
-
 	const rows = useMemo(
 		() =>
-			logs.map((line, i) => (
+			filtered.map((line, i) => (
 				<div
 					key={i}
 					style={{
@@ -121,7 +151,7 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 					</span>
 				</div>
 			)),
-		[logs],
+		[filtered],
 	)
 
 	return (
@@ -137,7 +167,11 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 					color: "var(--vscode-descriptionForeground, #888)",
 				}}>
 				<span>
-					{empty ? "No logs for this task yet" : `${logs.length} line${logs.length === 1 ? "" : "s"}`}
+					{empty
+						? "No logs for this task yet"
+						: filterActive
+							? `${filtered.length} of ${logs.length} line${logs.length === 1 ? "" : "s"}`
+							: `${logs.length} line${logs.length === 1 ? "" : "s"}`}
 				</span>
 				<button
 					onClick={() => {
@@ -157,6 +191,71 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 					{follow ? "Following" : "Follow"}
 				</button>
 			</div>
+			{/* Filter bar: free-text + per-severity toggles. */}
+			<div
+				style={{
+					display: "flex",
+					alignItems: "center",
+					gap: 8,
+					padding: "4px 8px",
+					borderBottom: "1px solid var(--vscode-panel-border, #333)",
+				}}>
+				<input
+					type="text"
+					value={query}
+					onChange={(e) => setQuery(e.target.value)}
+					placeholder="Filter logs…"
+					style={{
+						flex: 1,
+						minWidth: 0,
+						background: "var(--vscode-input-background, #3c3c3c)",
+						color: "var(--vscode-input-foreground, #ccc)",
+						border: "1px solid var(--vscode-input-border, #555)",
+						borderRadius: 3,
+						padding: "2px 6px",
+						fontSize: 11,
+					}}
+				/>
+				{query && (
+					<button
+						onClick={() => setQuery("")}
+						title="Clear text filter"
+						style={{
+							background: "transparent",
+							color: "var(--vscode-descriptionForeground, #888)",
+							border: "none",
+							cursor: "pointer",
+							fontSize: 12,
+							padding: "0 2px",
+						}}>
+						✕
+					</button>
+				)}
+				<div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+					{LEVELS.map((level) => {
+						const on = enabledLevels[level]
+						return (
+							<button
+								key={level}
+								onClick={() => toggleLevel(level)}
+								title={on ? `Hide ${level} lines` : `Show ${level} lines`}
+								style={{
+									background: on ? "var(--vscode-button-background, #0e639c)" : "transparent",
+									color: on ? LEVEL_COLOR[level] : "var(--vscode-descriptionForeground, #888)",
+									border: "1px solid var(--vscode-panel-border, #333)",
+									borderRadius: 3,
+									padding: "1px 6px",
+									cursor: "pointer",
+									fontSize: 10,
+									textTransform: "uppercase",
+									opacity: on ? 1 : 0.6,
+								}}>
+								{level}
+							</button>
+						)
+					})}
+				</div>
+			</div>
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}
@@ -172,6 +271,10 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 				{empty ? (
 					<div style={{ color: "var(--vscode-descriptionForeground, #888)", padding: 8 }}>
 						Logs emitted while this task runs will appear here.
+					</div>
+				) : filtered.length === 0 ? (
+					<div style={{ color: "var(--vscode-descriptionForeground, #888)", padding: 8 }}>
+						No log lines match the current filter.
 					</div>
 				) : (
 					rows
