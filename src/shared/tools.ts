@@ -251,7 +251,7 @@ export type NativeToolArgs = {
 	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; isRegex?: boolean | null; global?: boolean | null }
-	git_search: { query: string; maxResults?: number | null }
+	git_search: { query: string; maxResults?: number | null; since?: string | null; until?: string | null }
 	call_mcp_tool_async: {
 		server_name: string
 		tool_name: string

@@ -1356,7 +1356,7 @@ export class NativeToolCallParser {
 							maxResults: this.coerceOptionalNumber(args.maxResults),
 							since: args.since,
 							until: args.until,
-						} as unknown as NativeArgsFor<TName>
+						} as NativeArgsFor<TName>
 					}
 					break
 
