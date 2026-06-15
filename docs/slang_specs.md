@@ -348,10 +348,44 @@ await guidance <- @Human
 ```
 
 - Pauses the flow and asks the **user** (via the WorkflowTask's `ask`).
-- `reason:` (optional) is the prompt text shown to the user.
+- `reason:` (optional) is the prompt text (the question) shown to the user.
 - `if <cond>` (optional) gates the escalation.
 - The user's reply is delivered as a message **from `@Human`**, consumed by a
   following `await ... <- @Human`. The agent itself is unaware it was escalated.
+
+By default the user answers with free text. Two optional clauses turn the
+escalation into a richer prompt — they map to the same `ask_followup_question`
+machinery the launcher's flow-param form uses:
+
+**`choices:` — multiple-choice (no typing).** A fixed answer set rendered as
+clickable buttons; the chosen text is delivered exactly like a free-text reply.
+
+```slang
+escalate @Human reason: "Workflow complete. Approve the result?" choices: ["ACK", "Reject"]
+await verdict <- @Human          -- verdict is the chosen string, e.g. "ACK"
+```
+
+**`form:` — a typed input form (full widget set).** Each field is
+`name: "type" [{ … }]` using the same widget metadata as flow params
+(`widget` `"dropdown"`/`"radio"`/`"checkbox"`, `options`, `min`/`max`/`step`,
+`default`, `description`). A `number` field with `min`+`max` renders a slider; a
+plain `string` a textarea; a `boolean` a checkbox.
+
+```slang
+escalate @Human reason: "Tune the deploy:" form: {
+  region:   "string" { widget: "dropdown", options: ["us", "eu"], default: "us" }
+  replicas: "number" { min: 1, max: 10 }      -- slider (inferred from min+max)
+  notify:   "boolean"
+}
+await answers <- @Human
+```
+
+The form's answers are delivered as a **single object**, each field coerced to
+its declared type, so they are usable in slang via DotAccess — e.g.
+`answers.region` (string), `answers.replicas` (number, so `if answers.replicas > 5`),
+`answers.notify` (boolean). Passing the whole `answers` object into an agent
+prompt JSON-stringifies it. `form` takes precedence over `choices` when both are
+given. Fields may be separated by newlines or commas.
 
 ### `log`
 
@@ -700,7 +734,10 @@ stake          = 'stake' func_call [ '->' recipient { ',' recipient } ]
 await          = 'await' ident '<-' source { ',' source }
                  { ',' ident ':' expr } ;          (* options: parsed, unused *)
 commit         = 'commit' [ expr ] [ 'if' expr ] ;
-escalate       = 'escalate' agentref [ 'reason' ':' string ] [ 'if' expr ] ;
+escalate       = 'escalate' agentref [ 'reason' ':' string ]
+                 [ 'choices' ':' '[' [ string { ',' string } ] ']' ]
+                 [ 'form' ':' '{' { form_field } '}' ] [ 'if' expr ] ;
+form_field     = ident ':' string [ '{' { param_meta } '}' ] [ ',' ] ;  (* param_meta: widget/options/min/max/step/default/description *)
 log            = 'log' [ expr ] [ 'if' expr ] ;
 error          = 'error' [ expr ] [ 'if' expr ] ;
 when           = 'when' expr '{' { operation } '}' [ 'otherwise' '{' { operation } '}' ] ;
