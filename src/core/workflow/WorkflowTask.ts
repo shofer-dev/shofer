@@ -1149,31 +1149,38 @@ export class WorkflowTask extends Task {
 			}
 			agentTask?.messageQueueService.addMessage(prompt)
 
-			// CRITICAL: clear the task's stale terminal markers.
-			//
-			// When this agent finished its PREVIOUS stake it called
-			// attempt_completion, which drove its Task to a terminal "completed"
-			// lifecycle (it now sits in the `completion_result` ask). Queuing the
-			// next prompt above revives it, but that revival is asynchronous —
-			// the queued message isn't drained until the ask's next poll tick.
-			//
-			// Meanwhile waitForStakes decides whether to wait by inspecting the
-			// background-child handle and the TaskManager lifecycle. If we leave
-			// them reading "completed", waitForStakes' preseed sees a terminal
-			// task, treats the stake as already done, and returns in ~0ms WITHOUT
-			// the agent ever running. collectStakeResults then reads the STALE
-			// prior completion (e.g. a readiness ack instead of the evaluate
-			// verdict), which fails the output contract, retries out, and
-			// dead-locks the flow.
-			//
-			// Resetting both markers to "running" synchronously — before
-			// waitForStakes runs — makes the wait block on the genuine next
-			// TaskCompleted event, so we collect the FRESH result.
+			// Reset the stale terminal markers BEFORE waitForStakes runs. Otherwise
+			// its preseed sees the PREVIOUS stake's "completed" lifecycle, treats this
+			// stake as already done, and returns in ~0ms — and collectStakeResults
+			// then reads the stale prior completion.
 			const handle = this.backgroundChildren.get(agentState.taskId)
 			if (handle) handle.status = "running"
 			provider.taskManager.setState(agentState.taskId, { lifecycle: "running" })
+
+			// CRITICAL: actually re-drive the agent's task loop.
+			//
+			// When this agent finished its PREVIOUS stake it called
+			// attempt_completion — the agent's self-declared terminal state, which
+			// sets `abort = true` and lets the task loop EXIT (it does NOT leave the
+			// task parked in a `completion_result` ask polling the queue). With no
+			// live loop, the prompt we just queued is never drained, the agent never
+			// runs this stake, waitForStakes times out, and collectStakeResults reads
+			// the STALE prior completion — which (on an `output:` contract stake)
+			// retry-loops into a deadlock. This is exactly the failure mode that left
+			// a verifier's readiness ack standing in for its never-produced verdict.
+			//
+			// `cancelAndProcessQueuedMessages()` restarts the loop with the queued
+			// prompt — the same path the webview "Send Now" flow and
+			// SendMessageToTaskTool use to wake a completed/stopped peer. A still-live
+			// instance (e.g. one just rehydrated into its `resume_completed_task` ask,
+			// where `abort === false`) drains the queue via its active ask() loop, so
+			// only a stopped loop needs restarting.
+			const loopStopped = agentTask?.abort ?? false
+			if (loopStopped && agentTask) {
+				void agentTask.cancelAndProcessQueuedMessages()
+			}
 			workflowLog.info(
-				`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' prompt queued (${prompt.length} chars), terminal markers cleared`,
+				`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' prompt queued (${prompt.length} chars), loop ${loopStopped ? "restarted via cancelAndProcessQueuedMessages" : "live — will drain on next ask"}`,
 			)
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to resume agent '${agentName}':`, error)
@@ -1330,6 +1337,51 @@ export class WorkflowTask extends Task {
 			if (!instr || instr.kind !== "stake") continue
 
 			try {
+				// Freshness guard: the agent must have reached a terminal lifecycle
+				// since this stake was dispatched. If waitForStakes timed out (the
+				// agent hung, or — absent a working loop restart — never ran), its
+				// taskId still carries the PREVIOUS stake's completion. Validating
+				// that stale result silently checks the wrong output and, on a
+				// contract-bearing stake, retry-loops the flow into a deadlock (the
+				// exact failure that motivated this guard). Treat a non-terminal
+				// agent as a failed stake — fail loudly and re-dispatch (do NOT
+				// advance opIndex) rather than re-reading stale output.
+				if (state.taskId) {
+					const handle = this.backgroundChildren.get(state.taskId)
+					const lifecycle = provider.taskManager.getTaskState(state.taskId)?.lifecycle
+					const reachedTerminal =
+						handle?.status === "completed" ||
+						handle?.status === "error" ||
+						handle?.status === "cancelled" ||
+						lifecycle === "completed" ||
+						lifecycle === "error"
+					if (!reachedTerminal) {
+						state.retryCount++
+						if (state.retryCount > MAX_RETRIES) {
+							workflowLog.error(
+								`[WorkflowTask#${this.taskId}] Agent '${name}' produced no result for stake '${instr.op.call.name}' after ${MAX_RETRIES} retries (timed out each round; lifecycle=${lifecycle ?? "unknown"})`,
+							)
+							await this.sayProgress(
+								`❌ Agent \`${name}\` never produced a result for \`${instr.op.call.name}\` (timed out after ${MAX_RETRIES} retries) and was marked **errored**.`,
+							)
+							state.status = "error"
+							state.sendingTo = undefined
+						} else {
+							workflowLog.info(
+								`[WorkflowTask#${this.taskId}] #TRACE Agent '${name}' stake '${instr.op.call.name}' did not complete within the wait window (retry ${state.retryCount}/${MAX_RETRIES}, lifecycle=${lifecycle ?? "unknown"}); will re-dispatch next round`,
+							)
+							await this.sayProgress(
+								`⚠️ Agent \`${name}\` didn't respond for \`${instr.op.call.name}\` within the wait window (retry ${state.retryCount}/${MAX_RETRIES}); re-dispatching.`,
+							)
+							// Leave opIndex on this stake and mark idle so the next round
+							// re-dispatches it through the normal advance → stake → dispatch
+							// path (a single, clean re-run via resumeAgentTask).
+							state.status = "idle"
+						}
+						continue
+					}
+				}
+
 				const { historyItem } = await provider.getTaskWithId(state.taskId)
 				const agentTokens = (historyItem.tokensIn || 0) + (historyItem.tokensOut || 0)
 				this.flowState.tokensUsed += agentTokens
