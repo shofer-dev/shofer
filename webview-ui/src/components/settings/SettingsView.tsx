@@ -161,11 +161,15 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// so the user can change the default without an immediate side-effect.
 	const [pendingDefaultConfigName, setPendingDefaultConfigName] = useState<string>(currentApiConfigName || "")
 
-	// Tracks whether a Save that includes a pendingDefaultConfigName change is
-	// in flight.  While true the re-sync useEffect below skips reverting the
-	// buffer to the stale currentApiConfigName, suppressing the new→old→new
-	// flicker between setChangeDetected(false) and the host round-trip.
-	const savingDefault = useRef(false)
+	// True once the user has picked a Default Configuration in the dropdown this
+	// session. While true, the re-sync effect below leaves the buffer pinned to the
+	// user's choice (Save persists it; Discard resets it and clears this flag) and
+	// never auto-reverts it to the host's currentApiConfigName. This decouples the
+	// default selection from the global `isChangeDetected` flag (which the
+	// apiConfiguration fingerprint effect resets on every host push) and makes the
+	// dropdown immune to the stale currentApiConfigName the post-Save full-state
+	// push can carry — both of which previously reverted the user's chosen default.
+	const defaultSelectionPending = useRef(false)
 
 	const _prevApiConfigName = useRef(currentApiConfigName)
 	const confirmDialogHandler = useRef<() => void>()
@@ -506,10 +510,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			})
 
 			// Persist the pending default config name (if changed) so the Save
-			// button applies the Default Configuration dropdown selection.
-			// This is the ONLY writer of currentApiConfigName from the Settings view.
+			// button applies the Default Configuration dropdown selection. This is
+			// the ONLY writer of currentApiConfigName from the Settings view, and
+			// persistence happens HERE (on Save) — selecting in the dropdown only
+			// buffers. defaultSelectionPending stays set so the re-sync effect keeps
+			// the dropdown pinned to the user's choice across the host round-trip.
 			if (pendingDefaultConfigName && pendingDefaultConfigName !== currentApiConfigName) {
-				savingDefault.current = true
 				vscode.postMessage({ type: "setDefaultApiConfiguration", text: pendingDefaultConfigName })
 			}
 			vscode.postMessage({ type: "telemetrySetting", text: telemetrySetting })
@@ -553,6 +559,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				setChangeDetected(false) // Reset change flag
 				// Reset the buffered default config name so a previously-
 				// discarded dropdown selection doesn't leak into a later Save.
+				defaultSelectionPending.current = false
 				setPendingDefaultConfigName(currentApiConfigName || "")
 				// Also drop any per-mode text buffers held inside ModesView.
 				modesViewRef.current?.discardBuffers()
@@ -564,21 +571,26 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		[extensionState, currentApiConfigName], // Sync with live default name
 	)
 
-	// Re-sync the default-config buffer when the host pushes a new value
-	// (e.g. another window changed it, or the host confirmed our Save).
-	// Only sync when the form is NOT dirty so we don't clobber a pending
-	// user selection.  When a Save that changed the default is in flight
-	// (savingDefault ref) we skip the sync — the stale currentApiConfigName
-	// would flicker the dropdown before the host round-trip confirms it.
+	// Keep the Default Configuration dropdown buffer in step with the host's live
+	// default — but ONLY until the user has touched the dropdown this session.
+	//
+	// Once the user picks a default (defaultSelectionPending), the buffer IS their
+	// choice and is never auto-reverted: Save persists it, Discard resets it. This
+	// is deliberately:
+	//   - independent of `isChangeDetected` — the apiConfiguration fingerprint
+	//     effect resets that flag on every host push (e.g. switching the Edit
+	//     Configuration), which must not disturb the chosen default; and
+	//   - robust to the post-Save push race — `upsertProviderProfile` ends with a
+	//     full-state push that carries the PRE-Save `currentApiConfigName`, which
+	//     can land after `setDefaultApiConfiguration`'s delta. Pinning to the user's
+	//     choice means that stale echo can't revert the dropdown.
+	// Before any selection (initial load / external changes) we still sync.
 	useEffect(() => {
-		if (savingDefault.current) {
-			savingDefault.current = false
-			return
-		}
-		if (!isChangeDetected && currentApiConfigName && currentApiConfigName !== pendingDefaultConfigName) {
+		if (defaultSelectionPending.current) return
+		if (currentApiConfigName && currentApiConfigName !== pendingDefaultConfigName) {
 			setPendingDefaultConfigName(currentApiConfigName)
 		}
-	}, [currentApiConfigName, isChangeDetected, pendingDefaultConfigName])
+	}, [currentApiConfigName, pendingDefaultConfigName])
 
 	// Handle tab changes with unsaved changes check
 	const handleTabChange = useCallback(
@@ -881,10 +893,14 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 										}}
 										onSelectConfigAsDefault={(configName: string) => {
 											// Buffer the selection locally — do NOT persist
-											// immediately.  The new default is applied when the
-											// user clicks the global Save button.
+											// immediately.  The new default is applied only when
+											// the user clicks the global Save button.
 											setPendingDefaultConfigName(configName)
 											setChangeDetected(true)
+											// Mark the buffer as a deliberate, unsaved selection so
+											// the re-sync effect won't revert it on the next host
+											// apiConfiguration push (e.g. an Edit Configuration switch).
+											defaultSelectionPending.current = true
 										}}
 										onDeleteConfig={(configName: string) => {
 											setEditingConfigName(currentApiConfigName || "default")

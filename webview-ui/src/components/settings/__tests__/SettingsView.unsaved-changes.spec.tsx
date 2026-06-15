@@ -188,9 +188,22 @@ vi.mock("../common/Tab", () => ({
 }))
 
 // Mock child components that are complex
-// Mock ApiConfigManager to not interact with props
+// Mock ApiConfigManager — surface the props the decoupling logic drives so the
+// default/edit-config behavior can be exercised. `currentApiConfigName` is the
+// prop name for the Default Configuration dropdown buffer (pendingDefaultConfigName).
 vi.mock("../ApiConfigManager", () => ({
-	default: vi.fn(() => <div data-testid="api-config-manager">ApiConfigManager</div>),
+	default: ({ currentApiConfigName, editingConfigName, onSelectConfigAsDefault, onSelectConfigForEdit }: any) => (
+		<div data-testid="api-config-manager">
+			<span data-testid="default-config-value">{currentApiConfigName}</span>
+			<span data-testid="edit-config-value">{editingConfigName}</span>
+			<button data-testid="pick-default-other" onClick={() => onSelectConfigAsDefault?.("other")}>
+				pick default other
+			</button>
+			<button data-testid="pick-edit-other" onClick={() => onSelectConfigForEdit?.("other")}>
+				pick edit other
+			</button>
+		</div>
+	),
 }))
 
 vi.mock("../ApiOptions", () => ({
@@ -600,5 +613,81 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 
 		// No dialog should appear
 		expect(screen.queryByText("settings:unsavedChangesDialog.title")).not.toBeInTheDocument()
+	})
+
+	describe("Default Configuration decoupling", () => {
+		const twoConfigState = {
+			...defaultExtensionState,
+			currentApiConfigName: "default",
+			listApiConfigMeta: [{ name: "default" }, { name: "other" }],
+		}
+
+		const view = () => (
+			<QueryClientProvider client={queryClient}>
+				<SettingsView onDone={vi.fn()} />
+			</QueryClientProvider>
+		)
+
+		// Simulate a host state push by swapping what useExtensionState returns and
+		// re-rendering the SAME component instance.
+		const hostPush = (rerender: (ui: React.ReactElement) => void, state: any) => {
+			;(useExtensionState as any).mockReturnValue(state)
+			rerender(view())
+		}
+
+		it("once selected, the Default survives a stale host push (post-Save revert regression)", async () => {
+			;(useExtensionState as any).mockReturnValue(twoConfigState)
+			const { rerender } = render(view())
+			await waitFor(() => expect(screen.getByTestId("api-options")).toBeInTheDocument())
+
+			// Pick a new default — buffered, shown in the dropdown.
+			fireEvent.click(screen.getByTestId("pick-default-other"))
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+
+			// Host confirms the new default.
+			hostPush(rerender, { ...twoConfigState, currentApiConfigName: "other" })
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+
+			// The post-Save upsert round-trip emits a full-state push that still
+			// carries the OLD default AND a changed apiConfiguration (which resets the
+			// global dirty flag). Pre-fix this reverted the dropdown to "default".
+			hostPush(rerender, {
+				...twoConfigState,
+				currentApiConfigName: "default",
+				apiConfiguration: { apiProvider: "openai", apiModelId: "changed" },
+			})
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+		})
+
+		it("switching the Edit Configuration does not revert a chosen Default", async () => {
+			;(useExtensionState as any).mockReturnValue(twoConfigState)
+			const { rerender } = render(view())
+			await waitFor(() => expect(screen.getByTestId("api-options")).toBeInTheDocument())
+
+			// User picks a new default (unsaved).
+			fireEvent.click(screen.getByTestId("pick-default-other"))
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+
+			// Switching the Edit Configuration makes the host push the edited profile's
+			// settings — apiConfiguration changes, but the global default is unchanged.
+			// Pre-fix, that push (via the reset dirty flag) reverted the chosen default.
+			hostPush(rerender, {
+				...twoConfigState,
+				apiConfiguration: { apiProvider: "anthropic", apiModelId: "claude" },
+			})
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+		})
+
+		it("before any selection, the Default still tracks the host's live value", async () => {
+			;(useExtensionState as any).mockReturnValue(twoConfigState)
+			const { rerender } = render(view())
+			await waitFor(() => expect(screen.getByTestId("api-options")).toBeInTheDocument())
+			expect(screen.getByTestId("default-config-value").textContent).toBe("default")
+
+			// External change to the default (e.g. another window) syncs when the user
+			// hasn't touched the dropdown.
+			hostPush(rerender, { ...twoConfigState, currentApiConfigName: "other" })
+			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
+		})
 	})
 })
