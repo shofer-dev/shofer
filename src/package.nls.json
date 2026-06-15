@@ -72,5 +72,7 @@
 	"walkthrough.openDocumentation.title": "Open Shofer Documentation",
 	"walkthrough.joinDiscord.title": "Join Shofer Discord",
 	"walkthrough.openCopilotGuide.title": "Open Copilot Migration Guide",
-	"walkthrough.openRoocodeGuide.title": "Open Roo-Code Migration Guide"
+	"walkthrough.openRoocodeGuide.title": "Open Roo-Code Migration Guide",
+	"walkthrough.openClaudeCodeGuide.title": "Open Claude Code Migration Guide",
+	"walkthrough.openOpencodeGuide.title": "Open OpenCode Migration Guide"
 }

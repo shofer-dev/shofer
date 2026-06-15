@@ -72,6 +72,8 @@ export const commandIds = [
 	"walkthrough.joinDiscord",
 	"walkthrough.openCopilotGuide",
 	"walkthrough.openRoocodeGuide",
+	"walkthrough.openClaudeCodeGuide",
+	"walkthrough.openOpencodeGuide",
 
 	// Diagnostics
 	"heapSnapshot",

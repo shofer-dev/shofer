@@ -382,6 +382,20 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			),
 		)
 	},
+	"walkthrough.openClaudeCodeGuide": async () => {
+		await vscode.env.openExternal(
+			vscode.Uri.parse(
+				"https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md",
+			),
+		)
+	},
+	"walkthrough.openOpencodeGuide": async () => {
+		await vscode.env.openExternal(
+			vscode.Uri.parse(
+				"https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md",
+			),
+		)
+	},
 })
 
 export const openShoferInNewTab = async ({ context, outputChannel }: Omit<RegisterCommandOptions, "provider">) => {

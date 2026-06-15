@@ -256,6 +256,16 @@
 				"command": "shofer.walkthrough.openRoocodeGuide",
 				"title": "%walkthrough.openRoocodeGuide.title%",
 				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.openClaudeCodeGuide",
+				"title": "%walkthrough.openClaudeCodeGuide.title%",
+				"category": "%configuration.title%"
+			},
+			{
+				"command": "shofer.walkthrough.openOpencodeGuide",
+				"title": "%walkthrough.openOpencodeGuide.title%",
+				"category": "%configuration.title%"
 			}
 		],
 		"menus": {
@@ -664,6 +674,28 @@
 						},
 						"completionEvents": [
 							"onCommand:shofer.walkthrough.openCopilotGuide"
+						]
+					},
+					{
+						"id": "claudeCodeUsers",
+						"title": "Migrating from Claude Code",
+						"description": "Coming from Claude Code? Keep the agentic power, but bring any model (incl. local/offline), a visual cockpit, deterministic Slang Workflows, code+git RAG, native worktrees, and hard cost caps.\n\n[Read the Claude Code Migration Guide](command:shofer.walkthrough.openClaudeCodeGuide)",
+						"media": {
+							"markdown": "media/walkthrough/claude-code-users.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openClaudeCodeGuide"
+						]
+					},
+					{
+						"id": "opencodeUsers",
+						"title": "Migrating from OpenCode",
+						"description": "Coming from OpenCode? Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, code+git RAG, native worktrees, and a deterministic Workflow engine. Your AGENTS.md rules carry over.\n\n[Read the OpenCode Migration Guide](command:shofer.walkthrough.openOpencodeGuide)",
+						"media": {
+							"markdown": "media/walkthrough/opencode-users.md"
+						},
+						"completionEvents": [
+							"onCommand:shofer.walkthrough.openOpencodeGuide"
 						]
 					},
 					{
