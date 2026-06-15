@@ -1556,20 +1556,64 @@ export class WorkflowTask extends Task {
 		// Emit the followup as the JSON FollowUpData shape the webview expects —
 		// ChatRow parses followup text with safeJsonParse<FollowUpData> and renders
 		// `question`, so a raw string would show the "Shofer has a question" header
-		// with an empty body in the Events tab. When the escalate op declares
-		// `choices`, surface them as suggestion buttons (a multiple-choice sign-off
-		// with no typing); otherwise it's a free-text followup (WorkflowView shows
-		// the answer textbox because there's no `paramForm`/`suggest`).
+		// with an empty body in the Events tab. Three flavours, by what the op declares:
+		//   - `form`    → a typed input form (full ask_followup_question widgets);
+		//                 answers are delivered as one coerced object (DotAccess-able).
+		//   - `choices` → suggestion buttons (multiple-choice sign-off, no typing).
+		//   - neither   → free-text followup (WorkflowView shows the answer textbox).
 		const choices = instr.op.choices
-		const followUp =
-			choices && choices.length > 0
-				? { question: reason, suggest: choices.map((answer) => ({ answer })) }
-				: { question: reason }
-		const { text } = await this.ask("followup", JSON.stringify(followUp))
-		const response = text ?? ""
-		workflowLog.info(
-			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered (${response.length} chars)`,
-		)
+		const form = instr.op.form
+		let response: unknown
+		if (form && form.length > 0) {
+			// Build the paramForm the webview renders (same shape flow-param
+			// collection uses), ask, then coerce each answer to its declared type so
+			// the bound object is usable via DotAccess (e.g. `answers.replicas > 5`).
+			const paramForm = form.map((f) => {
+				const type = f.paramType === "number" || f.paramType === "boolean" ? f.paramType : "string"
+				return {
+					name: f.name,
+					type,
+					...(f.default !== undefined ? { default: f.default } : {}),
+					...(f.description ? { description: f.description } : {}),
+					...(f.widget ? { widget: f.widget } : {}),
+					...(f.options ? { options: f.options } : {}),
+					...(f.min !== undefined ? { min: f.min } : {}),
+					...(f.max !== undefined ? { max: f.max } : {}),
+					...(f.step !== undefined ? { step: f.step } : {}),
+				}
+			})
+			const { text } = await this.ask("followup", JSON.stringify({ question: reason, paramForm }))
+			let submitted: Record<string, unknown> = {}
+			try {
+				const parsed = JSON.parse(text ?? "{}")
+				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) submitted = parsed
+			} catch {
+				// Non-JSON answer (older client / plain reply) — fall through to defaults.
+			}
+			const answers: Record<string, unknown> = {}
+			for (const f of form) {
+				const v = submitted[f.name]
+				// The form submits strings for some widgets — coerce to the declared
+				// type so numbers/booleans are real values, not strings.
+				answers[f.name] = typeof v === "string" ? coerceParam(v, f.paramType) : v
+			}
+			// Replay the form read-only after a reload (no chat echo on objectResponse).
+			await this.markFollowupFormAnswered(answers as Record<string, string | number | boolean | string[]>)
+			response = answers
+			workflowLog.info(
+				`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered via form: ${JSON.stringify(answers)}`,
+			)
+		} else {
+			const followUp =
+				choices && choices.length > 0
+					? { question: reason, suggest: choices.map((answer) => ({ answer })) }
+					: { question: reason }
+			const { text } = await this.ask("followup", JSON.stringify(followUp))
+			response = text ?? ""
+			workflowLog.info(
+				`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered (${(text ?? "").length} chars)`,
+			)
+		}
 		this.flowState.mailbox.push({
 			from: instr.op.target || "Human",
 			to: agentName,

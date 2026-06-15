@@ -217,6 +217,44 @@ flow "escalate-choices" () {
 		}
 	})
 
+	it("parses escalate with a typed form block (mid-flow widgets)", () => {
+		const src = `
+flow "escalate-form" () {
+  agent A {
+    mode: "code"
+    role: "Test"
+
+    escalate @Human reason: "Tune the deploy:" form: {
+      region: "string" { widget: "dropdown", options: ["us", "eu"], default: "us" }
+      replicas: "number" { min: 1, max: 10 }
+      notify: "boolean"
+    }
+    commit
+  }
+}`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("EscalateOp")
+		if (ops[0]!.type === "EscalateOp") {
+			const form = ops[0]!.form!
+			expect(form).toHaveLength(3)
+			// region: dropdown with options + default
+			expect(form[0]).toMatchObject({
+				name: "region",
+				paramType: "string",
+				widget: "dropdown",
+				options: ["us", "eu"],
+				default: "us",
+			})
+			// replicas: number with min/max → slider inferred by the webview (no explicit widget)
+			expect(form[1]).toMatchObject({ name: "replicas", paramType: "number", min: 1, max: 10 })
+			expect(form[1]!.widget).toBeUndefined()
+			// notify: plain boolean (no meta block)
+			expect(form[2]).toMatchObject({ name: "notify", paramType: "boolean" })
+		}
+	})
+
 	it("returns errors for invalid syntax", () => {
 		const { errors } = parseSlang("this is not valid slang {")
 		expect(errors.length).toBeGreaterThan(0)

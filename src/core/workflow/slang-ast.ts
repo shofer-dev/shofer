@@ -201,6 +201,17 @@ export interface EscalateOp extends BaseNode {
 	 * exactly as a free-text answer would be.
 	 */
 	choices?: string[]
+	/**
+	 * Optional typed input form, e.g.
+	 *   `escalate @Human reason: "…" form: { region: "string" { widget: "dropdown", options: [...] } … }`.
+	 * Reuses the flow-param widget grammar ({@link FlowParam}) to render the full
+	 * `ask_followup_question` form (dropdown / radio / checkbox / slider / number /
+	 * text / boolean) mid-flow. The user's answers are delivered to the agent as a
+	 * single object whose fields are coerced to each field's declared `paramType`,
+	 * so the bound value is usable via DotAccess (e.g. `answers.region`). Mutually
+	 * exclusive with `choices`; `form` takes precedence when both are present.
+	 */
+	form?: FlowParam[]
 	condition?: Expr
 }
 

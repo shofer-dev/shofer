@@ -514,9 +514,40 @@ class Parser {
 			choices = exprAsStringList(this.parseExpr())
 		}
 
+		// Optional `form: { name: "type" { widget … } … }` — soft keyword that
+		// renders the full ask_followup_question typed form mid-flow. The answers
+		// are delivered to the agent as one object (see WorkflowTask.handleEscalation).
+		let form: FlowParam[] | undefined
+		if (this.check(TokenType.Ident) && this.peek().value === "form") {
+			this.advance()
+			this.expect(TokenType.Colon)
+			form = this.parseEscalateForm()
+		}
+
 		const condition = this.parseOptionalCondition()
 
-		return { type: "EscalateOp", target, reason, choices, condition, span: this.spanFrom(start) }
+		return { type: "EscalateOp", target, reason, choices, form, condition, span: this.spanFrom(start) }
+	}
+
+	/**
+	 * Parse an escalate `form: { <name>: "type" [{ widget … }] … }` block into
+	 * {@link FlowParam}s — the same typed-field shape flow params use, so the
+	 * webview renders the identical widgets. Fields are sequential (an optional
+	 * comma between them is tolerated); the `{ … }` presentation block is optional.
+	 */
+	private parseEscalateForm(): FlowParam[] {
+		const fields: FlowParam[] = []
+		this.expect(TokenType.LBrace)
+		while (!this.check(TokenType.RBrace) && !this.check(TokenType.EOF)) {
+			const name = this.expect(TokenType.Ident).value
+			this.expect(TokenType.Colon)
+			const paramType = this.expect(TokenType.String).value
+			const meta = this.check(TokenType.LBrace) ? this.parseParamMetaFields() : {}
+			fields.push({ name, paramType, ...meta })
+			if (this.check(TokenType.Comma)) this.advance()
+		}
+		this.expect(TokenType.RBrace)
+		return fields
 	}
 
 	private parseLogOp(): LogOp {
@@ -719,9 +750,22 @@ class Parser {
 		return { type: "ExpectStmt", expr, span: this.spanFrom(start) }
 	}
 
-	private parseParamMetaDecl(): ParamMetaDecl {
-		const start = this.expect(TokenType.Param)
-		const name = this.expect(TokenType.Ident).value
+	/**
+	 * Parse a `{ widget: …, options: […], min: …, max: …, step: …, default: …,
+	 * description: "…" }` presentation-metadata block. Shared by `param <name> {…}`
+	 * flow-param decls and by `escalate … form: { <name>: "type" {…} }` fields, so
+	 * both render the identical input widgets. `widget`/`options`/`min`/`max`/
+	 * `step`/`default` are soft keywords (plain idents), matched by text.
+	 */
+	private parseParamMetaFields(): {
+		description?: string
+		widget?: "dropdown" | "radio" | "checkbox"
+		options?: string[]
+		min?: number
+		max?: number
+		step?: number
+		default?: string | number | boolean | string[]
+	} {
 		let description: string | undefined
 		let widget: "dropdown" | "radio" | "checkbox" | undefined
 		let options: string[] | undefined
@@ -729,9 +773,6 @@ class Parser {
 		let max: number | undefined
 		let step: number | undefined
 		let defaultVal: string | number | boolean | string[] | undefined
-		// `widget`, `options`, `min`, `max`, `step`, `default` are plain identifiers
-		// (not reserved keywords), so match them by ident text. Their values are
-		// parsed as expressions and reduced to literals via the exprAs* helpers.
 		const isIdent = (kw: string) => this.check(TokenType.Ident) && this.peek().value === kw
 		this.expect(TokenType.LBrace)
 		while (!this.check(TokenType.RBrace) && !this.check(TokenType.EOF)) {
@@ -766,23 +807,19 @@ class Parser {
 				const e = this.parseExpr()
 				defaultVal = exprAsStringList(e) ?? exprAsString(e) ?? exprAsNumber(e) ?? exprAsBoolean(e)
 			} else {
-				// Skip unknown meta fields inside param block
+				// Skip unknown meta fields inside the block
 				this.advance()
 			}
 		}
 		this.expect(TokenType.RBrace)
-		return {
-			type: "ParamMetaDecl",
-			name,
-			description,
-			widget,
-			options,
-			min,
-			max,
-			step,
-			default: defaultVal,
-			span: this.spanFrom(start),
-		}
+		return { description, widget, options, min, max, step, default: defaultVal }
+	}
+
+	private parseParamMetaDecl(): ParamMetaDecl {
+		const start = this.expect(TokenType.Param)
+		const name = this.expect(TokenType.Ident).value
+		const meta = this.parseParamMetaFields()
+		return { type: "ParamMetaDecl", name, ...meta, span: this.spanFrom(start) }
 	}
 
 	// ─── Expressions ───
