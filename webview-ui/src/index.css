@@ -209,49 +209,6 @@
 	.history-item-highlight {
 		@apply underline;
 	}
-
-	/* Logo-roll animation — the Shofer "S" logo rotates like a wheel
-	   rolling along the road. Matches forward-motion parallax of the
-	   lane markers beneath it for a cohesive driving scene. */
-	@keyframes logo-roll {
-		0% {
-			transform: rotate(0deg);
-		}
-		100% {
-			transform: rotate(360deg);
-		}
-	}
-
-	.animate-logo-roll {
-		animation: logo-roll 1.6s linear infinite;
-	}
-
-	/* Road-cruise animation (DEPRECATED — replaced by logo-roll).
-	   Kept for backward-compatibility; no components reference this class. */
-	@keyframes road-cruise {
-		0% {
-			transform: translate(0, 0);
-		}
-		20% {
-			transform: translate(3px, -4px);
-		}
-		40% {
-			transform: translate(1px, -2px);
-		}
-		60% {
-			transform: translate(-2px, -4px);
-		}
-		80% {
-			transform: translate(-1px, -1px);
-		}
-		100% {
-			transform: translate(0, 0);
-		}
-	}
-
-	.animate-road-cruise {
-		animation: road-cruise 2.5s ease-in-out infinite;
-	}
 }
 
 /* Form Element Focus States */
@@ -566,49 +523,6 @@ input[cmdk-input]:focus {
 }
 .diff-content-context {
 	background-color: color-mix(in srgb, var(--vscode-editorGroup-border) 100%, transparent);
-}
-
-/* Road lane-marker animations — parallax scrolling for the Shofer hero road.
-   Fast markers (foreground) move quicker than slow markers (background)
-   to create a depth illusion of forward motion. */
-
-@keyframes lane-marker-fast {
-	0% {
-		transform: translateX(0);
-	}
-	100% {
-		transform: translateX(-48px);
-	}
-}
-
-.animate-lane-marker-fast {
-	animation: lane-marker-fast 0.8s linear infinite;
-}
-
-@keyframes lane-marker-slow {
-	0% {
-		transform: translateX(0);
-	}
-	100% {
-		transform: translateX(-20px);
-	}
-}
-
-.animate-lane-marker-slow {
-	animation: lane-marker-slow 2.2s linear infinite;
-}
-
-@keyframes sun {
-	0% {
-		transform: translateX(200px);
-	}
-	100% {
-		transform: translateX(-200px);
-	}
-}
-
-.animate-sun {
-	animation: sun 30s linear infinite;
 }
 
 /* Settings search highlight animation */

@@ -2170,49 +2170,52 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								className="absolute top-2 right-3 z-10"
 							/>
 							<div className="flex flex-col gap-4 w-full">
-								<ShoferHero />
-								{/* Support the project — sponsor, star, visit site. */}
-								<div className="flex flex-col gap-1">
-									<div className="flex items-center gap-1.5 text-xs text-vscode-descriptionForeground">
-										<Heart className="size-3.5 shrink-0 fill-current text-vscode-charts-red" />
-										<span>{t("chat:supportLinks.message")}</span>
-									</div>
-									<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-										{[
-											{
-												icon: Star,
-												url: "https://github.com/shofer-dev/shofer",
-												label: t("chat:supportLinks.star"),
-											},
-											{
-												icon: Store,
-												url: "https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer",
-												label: t("chat:supportLinks.marketplace"),
-											},
-											{
-												icon: DiscordIcon,
-												url: "https://discord.gg/shofer",
-												label: t("chat:supportLinks.discord"),
-											},
-											{
-												icon: RedditIcon,
-												url: "https://www.reddit.com/r/Shofer_dev/",
-												label: t("chat:supportLinks.reddit"),
-											},
-											{
-												icon: Heart,
-												url: "https://github.com/sponsors/alsterg",
-												label: t("chat:supportLinks.sponsor"),
-											},
-										].map(({ icon: Icon, url, label }) => (
-											<button
-												key={url}
-												onClick={() => vscode.postMessage({ type: "openExternal", url })}
-												className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs font-medium text-vscode-textLink-foreground hover:underline">
-												<Icon className="size-3.5" />
-												{label}
-											</button>
-										))}
+								{/* Logo on the left, support links to the right of it. */}
+								<div className="flex items-center gap-4">
+									<ShoferHero />
+									{/* Support the project — sponsor, star, visit site. */}
+									<div className="flex flex-col gap-1">
+										<div className="flex items-center gap-1.5 text-xs text-vscode-descriptionForeground">
+											<Heart className="size-3.5 shrink-0 fill-current text-vscode-charts-red" />
+											<span>{t("chat:supportLinks.message")}</span>
+										</div>
+										<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+											{[
+												{
+													icon: Star,
+													url: "https://github.com/shofer-dev/shofer",
+													label: t("chat:supportLinks.star"),
+												},
+												{
+													icon: Store,
+													url: "https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer",
+													label: t("chat:supportLinks.marketplace"),
+												},
+												{
+													icon: DiscordIcon,
+													url: "https://discord.gg/shofer",
+													label: t("chat:supportLinks.discord"),
+												},
+												{
+													icon: RedditIcon,
+													url: "https://www.reddit.com/r/Shofer_dev/",
+													label: t("chat:supportLinks.reddit"),
+												},
+												{
+													icon: Heart,
+													url: "https://github.com/sponsors/alsterg",
+													label: t("chat:supportLinks.sponsor"),
+												},
+											].map(({ icon: Icon, url, label }) => (
+												<button
+													key={url}
+													onClick={() => vscode.postMessage({ type: "openExternal", url })}
+													className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs font-medium text-vscode-textLink-foreground hover:underline">
+													<Icon className="size-3.5" />
+													{label}
+												</button>
+											))}
+										</div>
 									</div>
 								</div>
 								{/* Show ShoferTips when authenticated or when user is new */}
