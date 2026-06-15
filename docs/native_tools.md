@@ -568,6 +568,7 @@ Create a new task instance in the chosen mode. Supports two execution models:
 | `softResultLength` | number \| null   |    –     | Soft suggestion for max characters of the subtask's completion result (default: 2000). Hard safety cap: 100000 characters.                                                                                                                                                                                                                                                                                                                                                   |
 | `softTimeoutSec`   | number \| null   |    –     | Soft guidance in seconds for how long the parent expects to wait (default: 300). Informational only — not enforced.                                                                                                                                                                                                                                                                                                                                                          |
 | `peer_task_ids`    | string[] \| null |    –     | Least-privilege peer scope: the spawned child's baseline `knownPeers` is parent-only. If provided, these task IDs are added (must share `rootTaskId`). **Grants are symmetric** — each listed peer also gets the new child added to _its_ `knownPeers`, so the channel is two-way. If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against `rootTaskId` at spawn time — unknown IDs are rejected. |
+| `title`            | string \| null   |    –     | Optional display title for the child task (max 60 chars; trimmed and truncated; whitespace-only is treated as absent). When set, it becomes the child's `name` from the first save **and locks it** — the [`set_task_title`](#set_task_title) tool is then **omitted from the child's tool list entirely** (and refused if somehow called). The lock (`HistoryItem.nameLocked`) survives restarts. Omit to let the child name itself.                                        |
 
 The spawned child's `Task` instance always has `knownPeers: Set<string>` set. Its baseline contains the parent's `taskId` plus any task the child later spawns (dynamic-add). Peer tools (`check_task_status`, `wait_for_task`, `send_message_to_task`, `list_background_tasks` with `scope="peers"`) enforce this set unconditionally — `undefined` means **no peer access whatsoever**.
 
@@ -668,6 +669,8 @@ Sets a short, descriptive title for the current task/conversation. Use this earl
 | `title` | string |    ✅    | Short descriptive title (max 60 chars) |
 
 No approval prompt needed — this is a non-destructive meta-operation.
+
+**Parent-locked titles:** if this task was spawned with [`new_task`](#new_task)'s `title` parameter, its title is locked (`HistoryItem.nameLocked`). In that case `set_task_title` is **not offered to the task at all** — it is omitted from the tool list (`getNativeTools({ titleLocked: true })`). As a defense-in-depth backstop, the tool also refuses with an error if it is somehow invoked. The lock is re-applied on rehydration, so it survives restarts.
 
 ### `give_feedback`
 

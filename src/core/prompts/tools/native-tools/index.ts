@@ -112,6 +112,13 @@ export interface NativeToolsOptions {
 	 * decoding enforce it at decode time.
 	 */
 	completionSchema?: Record<string, unknown>
+	/**
+	 * When true, omit `set_task_title` from the returned tools. Used when a
+	 * task's title was locked by its spawning parent (via `new_task`'s `title`),
+	 * so the agent is never offered a tool it would only be refused (see
+	 * `SetTaskTitleTool`).
+	 */
+	titleLocked?: boolean
 }
 
 /**
@@ -121,7 +128,7 @@ export interface NativeToolsOptions {
  * @returns Array of native tool definitions
  */
 export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.ChatCompletionTool[] {
-	const { supportsImages = false, completionSchema } = options
+	const { supportsImages = false, completionSchema, titleLocked = false } = options
 
 	const readFileOptions: ReadFileToolOptions = {
 		supportsImages,
@@ -183,7 +190,14 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		viewImage,
 		writeToFile,
 	]
-	return tools
+	// A parent-locked title means the agent cannot rename itself, so don't even
+	// surface the tool (it would only be refused by SetTaskTitleTool at runtime).
+	return titleLocked ? tools.filter((t) => getToolFunctionName(t) !== "set_task_title") : tools
+}
+
+/** Function name of a native tool definition (all native tools are functions). */
+function getToolFunctionName(tool: OpenAI.Chat.ChatCompletionTool): string {
+	return (tool as OpenAI.Chat.ChatCompletionFunctionTool).function.name
 }
 
 // Backward compatibility: export default tools with line ranges enabled

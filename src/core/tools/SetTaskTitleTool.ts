@@ -32,6 +32,19 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 				return
 			}
 
+			// A title assigned by the spawning parent (via new_task's `title` param)
+			// is locked — the task cannot rename itself over it. Reject without
+			// touching the persisted name. Not a usage mistake worth penalizing, so
+			// the consecutive-mistake counter is left untouched.
+			if (task.nameLocked) {
+				task.recordToolError("set_task_title")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(
+					"Error: This task's title was set by its parent and cannot be changed with set_task_title.",
+				)
+				return
+			}
+
 			task.consecutiveMistakeCount = 0
 
 			// Clean and truncate the title (max 60 chars)

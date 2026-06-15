@@ -384,6 +384,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	softTimeoutSec?: number
 
 	/**
+	 * When true, this task's display title was assigned by its spawning parent
+	 * (via {@link NewTaskTool}'s `title` parameter / {@link CreateTaskOptions.initialTitle})
+	 * and is locked: the {@link SetTaskTitleTool} refuses to overwrite it. Seeded
+	 * at construction from `initialTitle` for fresh tasks, or rehydrated from
+	 * {@link HistoryItem.nameLocked} on restore so the lock survives restarts.
+	 */
+	nameLocked = false
+
+	/**
+	 * The locked title value, persisted as `HistoryItem.name` on every metadata
+	 * write while {@link nameLocked} is true. Undefined when the title is not
+	 * parent-locked (the task's `name` is then owned by `set_task_title` / the
+	 * auto-generated default).
+	 */
+	private lockedTitle?: string
+
+	/**
 	 * Per-task JSON Schema override for the `attempt_completion` tool's
 	 * `result` parameter. When set, the generic `result: string` schema is
 	 * replaced with a structured object schema so providers with constrained
@@ -872,6 +889,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		softTimeoutSec,
 		completionSchema,
 		initialKnownPeers,
+		initialTitle,
 	}: TaskOptions) {
 		super()
 
@@ -980,6 +998,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.initialState = initialState
 		// Prefer explicit constructor flag; otherwise inherit from history item on rehydration.
 		this.isBackground = isBackground ?? historyItem?.isBackground ?? false
+
+		// Parent-locked title: a fresh task seeds its name + lock from `initialTitle`
+		// (set by NewTaskTool's `title` param); a rehydrated task re-applies the lock
+		// from its persisted history so `set_task_title` stays blocked across restarts.
+		// `_refreshTaskMetadata` re-persists `name`/`nameLocked` on every write while
+		// locked. Trimmed/clamped to 60 chars to match set_task_title's bound.
+		if (historyItem) {
+			if (historyItem.nameLocked) {
+				this.nameLocked = true
+				this.lockedTitle = historyItem.name
+			}
+		} else if (initialTitle) {
+			const cleanTitle = initialTitle.trim().substring(0, 60)
+			if (cleanTitle) {
+				this.nameLocked = true
+				this.lockedTitle = cleanTitle
+			}
+		}
 
 		// Store the task's mode and API config name when it's created.
 		// For history items, use the stored values; for new tasks, we'll set them
@@ -2267,13 +2303,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const peerExtension =
 				this.knownPeers && this.knownPeers.size > 0 ? { peerIds: Array.from(this.knownPeers) } : {}
 
+			// Parent-locked title: re-assert `name` + `nameLocked` on every write so
+			// the spawn-time title is present from the first save and the lock survives
+			// restarts. `taskMetadata` never writes `name`, so this is the sole writer
+			// of a locked title; when unlocked, omitted entirely, leaving the name owned
+			// by `set_task_title` / the upsert-preserved default.
+			const titleExtension =
+				this.nameLocked && this.lockedTitle ? { name: this.lockedTitle, nameLocked: true } : {}
+
 			// Subclasses (e.g. WorkflowTask) may contribute extra persisted
 			// fields. Merging here guarantees the extension is present on EVERY
 			// history write, so the webview sees it from the very first
 			// postInitState rather than only after the first checkpoint.
 			await this.providerRef
 				.deref()
-				?.updateTaskHistory({ ...historyItem, ...peerExtension, ...this.getHistoryExtension() })
+				?.updateTaskHistory({
+					...historyItem,
+					...peerExtension,
+					...titleExtension,
+					...this.getHistoryExtension(),
+				})
 
 			return true
 		} catch (error) {
@@ -2934,6 +2983,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
+				titleLocked: this.nameLocked,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6267,6 +6317,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			modelInfo,
 			includeAllToolsWithRestrictions: false,
 			completionSchema: this.completionSchema,
+			titleLocked: this.nameLocked,
 		})
 		this._cachedToolsResult = {
 			tools: toolsResult.tools,
@@ -6321,6 +6372,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				modelInfo,
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
+				titleLocked: this.nameLocked,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6724,6 +6776,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				modelInfo: this.api.getModel().info,
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
 				completionSchema: this.completionSchema,
+				titleLocked: this.nameLocked,
 			})
 			this._cachedToolsResult = {
 				tools: toolsResult.tools,

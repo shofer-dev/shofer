@@ -1026,6 +1026,10 @@ export class WorkflowTask extends Task {
 				openInStack: false,
 				keepCurrentTask: true,
 				completionSchema,
+				// Title the agent task with its declared name from the .slang file and
+				// lock it: the agent cannot rename itself via set_task_title, so the
+				// task list stays aligned with the workflow's agent declarations.
+				initialTitle: agentName,
 				// Inherit the workflow's worktree: every agent in the tree operates
 				// inside the same directory the WorkflowTask runs in (the worktree the
 				// user selected at launch, or the workspace root when none was picked).

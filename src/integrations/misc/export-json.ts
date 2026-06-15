@@ -72,6 +72,13 @@ export interface JsonExportTrace {
 	version: 1
 	/** Task identifier. */
 	taskId: string
+	/**
+	 * Display title of the task (`HistoryItem.name`) — the short, curated name
+	 * shown in the task list, as opposed to `task` (the full first-message
+	 * description). Set via `set_task_title`, or locked by a parent that spawned
+	 * this task with `new_task`'s `title`. Omitted when the task has no title.
+	 */
+	title?: string
 	/** Human-readable task description. */
 	task: string
 	/** Mode slug (e.g. "code", "architect"). */
@@ -246,7 +253,8 @@ export function getJsonExportFileName(dateTs: number): string {
  * @param createdAt - ISO 8601 creation timestamp.
  * @param apiConversationHistory - The full API conversation (Anthropic format).
  * @param uiMessages - Parsed ui_messages.json array.
- * @param options - Workflow extras: `isWorkflow` and the serialized `flowState`.
+ * @param options - Extras: the display `title` (`HistoryItem.name`); plus the
+ *   workflow fields `isWorkflow` and the serialized `flowState`/`slangSource`.
  *   A workflow has no `apiConversationHistory`, so its trace is the state machine
  *   (`flowState`) + the UI event log derived from `uiMessages`.
  */
@@ -257,7 +265,7 @@ export function buildJsonTrace(
 	createdAt: string,
 	apiConversationHistory: Anthropic.Messages.MessageParam[],
 	uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }>,
-	options?: { isWorkflow?: boolean; flowState?: Record<string, unknown>; slangSource?: string },
+	options?: { title?: string; isWorkflow?: boolean; flowState?: Record<string, unknown>; slangSource?: string },
 ): JsonExportTrace {
 	const calls: JsonExportCall[] = []
 
@@ -442,6 +450,7 @@ export function buildJsonTrace(
 	return {
 		version: 1,
 		taskId,
+		...(options?.title ? { title: options.title } : {}),
 		task: taskText,
 		mode,
 		createdAt,

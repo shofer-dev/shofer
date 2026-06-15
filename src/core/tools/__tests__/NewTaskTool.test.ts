@@ -316,4 +316,67 @@ describe("NewTaskTool — peer_task_ids", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Cost limit reached"))
 		expect(provider.createTask).not.toHaveBeenCalled()
 	})
+
+	// ─── title → initialTitle (parent-locked title) ──────────────────
+
+	it("passes a trimmed/clamped title to createTask as initialTitle (background)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const cbs = buildCallbacks()
+
+		await tool.execute(
+			{ mode: "code", message: "analyze", is_background: true, title: "  Audit the auth flow  " },
+			task,
+			cbs,
+		)
+
+		const options = provider.createTask.mock.calls[0][3]
+		expect(options.initialTitle).toBe("Audit the auth flow")
+	})
+
+	it("clamps an over-long title to 60 characters", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const cbs = buildCallbacks()
+		const longTitle = "x".repeat(100)
+
+		await tool.execute({ mode: "code", message: "analyze", is_background: true, title: longTitle }, task, cbs)
+
+		const options = provider.createTask.mock.calls[0][3]
+		expect(options.initialTitle).toBe("x".repeat(60))
+	})
+
+	it("treats a whitespace-only title as absent (no initialTitle)", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "analyze", is_background: true, title: "   " }, task, cbs)
+
+		const options = provider.createTask.mock.calls[0][3]
+		expect(options.initialTitle).toBeUndefined()
+	})
+
+	it("threads the title through the foreground (blocking) path too", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.createTask.mockResolvedValue({ taskId: "child-fg" })
+		let capturedResolve: ((r: string) => void) | undefined
+		provider.registerBlockingChildResolver.mockImplementation((_childId: string, resolve: (r: string) => void) => {
+			capturedResolve = resolve
+		})
+		const cbs = buildCallbacks()
+
+		const executePromise = tool.execute(
+			{ mode: "code", message: "fix bug", is_background: false, title: "Fix the bug" },
+			task,
+			cbs,
+		)
+		await new Promise((r) => setTimeout(r, 10))
+		capturedResolve!("done")
+		await executePromise
+
+		const options = provider.createTask.mock.calls[0][3]
+		expect(options.initialTitle).toBe("Fix the bug")
+	})
 })

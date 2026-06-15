@@ -199,6 +199,7 @@ export type NativeToolArgs = {
 		softResultLength?: number
 		softTimeoutSec?: number
 		peer_task_ids?: string[] | null
+		title?: string
 	}
 	check_task_status: { task_id: string; include_activity?: boolean | null }
 	wait_for_task: { task_ids: string[]; wait?: "all" | "any"; timeout?: number }

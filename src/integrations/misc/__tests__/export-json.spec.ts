@@ -56,6 +56,19 @@ describe("buildJsonTrace — workflow export", () => {
 		expect(trace.events).toBeUndefined()
 		expect(trace.calls.length).toBe(1)
 	})
+
+	it("includes the display title when provided, and omits it otherwise", () => {
+		const withTitle = buildJsonTrace("t-1", "fix the bug in auth", "code", "2026-06-13T00:00:00.000Z", [], [], {
+			title: "Fix auth bug",
+		})
+		expect(withTitle.title).toBe("Fix auth bug")
+		// `task` (full description) remains distinct from the curated `title`.
+		expect(withTitle.task).toBe("fix the bug in auth")
+
+		const noTitle = buildJsonTrace("t-2", "untitled work", "code", "2026-06-13T00:00:00.000Z", [], [])
+		expect(noTitle.title).toBeUndefined()
+		expect("title" in noTitle).toBe(false)
+	})
 })
 
 describe("buildJsonTraceTree — recursive sub-task export", () => {

@@ -24,6 +24,7 @@ interface NewTaskParams {
 	softResultLength?: number
 	softTimeoutSec?: number
 	peer_task_ids?: string[] | null
+	title?: string
 }
 
 /** Hard safety cap for subtask completion result length, in characters. */
@@ -46,6 +47,11 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 	async execute(params: NewTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { mode, message, todos, softResultLength, softTimeoutSec } = params
+		// Optional caller-provided title. When supplied, it becomes the child's
+		// display name AND locks it — the child cannot override it via
+		// set_task_title. Trim/clamp to 60 chars to match SetTaskTitleTool's bound;
+		// a whitespace-only value is treated as absent (no title, no lock).
+		const effectiveTitle = params.title?.trim().substring(0, 60) || undefined
 		// Normalize is_background across the various representations LLMs emit
 		// ("true"/"false", 0/1, native boolean, etc.). Absent/unrecognized → false.
 		const is_background = parseToolBoolean(params.is_background) ?? false
@@ -187,6 +193,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				...(params.peer_task_ids && params.peer_task_ids.length > 0
 					? { peer_task_ids: params.peer_task_ids }
 					: {}),
+				...(effectiveTitle ? { title: effectiveTitle } : {}),
 			})
 
 			const didApprove = await askApproval("tool", toolMessage)
@@ -258,6 +265,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						// Seed the child's peer grants at construction so its FIRST persisted
 						// HistoryItem.peerIds already carries them — no post-creation race.
 						initialKnownPeers: Array.from(childPeers),
+						// Caller-locked title (if provided): seeds HistoryItem.name +
+						// nameLocked from the first save; the child cannot override it.
+						initialTitle: effectiveTitle,
 					},
 					undefined, // configuration
 					undefined,
@@ -379,6 +389,9 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 						// Pass result length and estimated timeout to the child task.
 						softResultLength: clampedResultLength,
 						softTimeoutSec: effectiveSoftTimeoutSec,
+						// Caller-locked title (if provided): seeds HistoryItem.name +
+						// nameLocked from the first save; the child cannot override it.
+						initialTitle: effectiveTitle,
 					},
 					undefined, // configuration
 					undefined,
@@ -451,6 +464,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 		const softTimeoutSec: number | undefined =
 			block.params.softTimeoutSec !== undefined ? Number(block.params.softTimeoutSec) : undefined
 		const peer_task_ids: string | undefined = block.params.peer_task_ids
+		const title: string | undefined = block.params.title
 
 		const partialMessage = JSON.stringify({
 			tool: "newTask",
@@ -462,6 +476,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			softResultLength: softResultLength,
 			softTimeoutSec: softTimeoutSec,
 			peer_task_ids: peer_task_ids,
+			title: title,
 		})
 
 		await task.ask("tool", partialMessage, block.partial).catch(() => {})

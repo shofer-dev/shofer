@@ -110,6 +110,13 @@ export const historyItemSchema = z.object({
 	completionResultSummary: z.string().optional(), // Summary from completed child
 	// Parallel task fields
 	name: z.string().optional(), // User-defined task name
+	/**
+	 * When true, the task's `name` was set by the spawning parent via
+	 * `new_task`'s `title` parameter and is locked: the task itself cannot
+	 * override it with the `set_task_title` tool. Survives restarts so the lock
+	 * is re-applied on rehydration.
+	 */
+	nameLocked: z.boolean().optional(),
 	lastActiveTs: z.number().optional(), // Track when last switched to
 	/**
 	 * Current execution state — both lifecycle and (when completed) rating.

@@ -41,6 +41,13 @@ interface BuildToolsOptions {
 	 * object schema.
 	 */
 	completionSchema?: Record<string, unknown>
+	/**
+	 * When true, this task's title was locked by its spawning parent (via
+	 * `new_task`'s `title`), so the `set_task_title` tool is omitted from the
+	 * tool list entirely — the agent can't even attempt a rename. Threaded from
+	 * {@link Task.nameLocked}.
+	 */
+	titleLocked?: boolean
 }
 
 interface BuildToolsResult {
@@ -279,7 +286,11 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	const supportsImages = modelInfo?.supportsImages ?? false
 
-	const nativeTools = getNativeTools({ supportsImages, completionSchema: options.completionSchema })
+	const nativeTools = getNativeTools({
+		supportsImages,
+		completionSchema: options.completionSchema,
+		titleLocked: options.titleLocked,
+	})
 
 	const filteredNativeTools = filterNativeToolsForMode(
 		nativeTools,

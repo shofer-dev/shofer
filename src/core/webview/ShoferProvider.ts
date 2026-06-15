@@ -3254,6 +3254,7 @@ export class ShoferProvider
 			// slangSource + flowState.mailboxHistory are exactly what's needed to
 			// reproduce the sequence/swimlane/topology diagrams post-mortem.
 			{
+				title: historyItem.name,
 				isWorkflow: historyItem.isWorkflow ?? false,
 				flowState: historyItem.flowState,
 				slangSource: historyItem.slangSource,

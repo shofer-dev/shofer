@@ -127,6 +127,15 @@ export interface CreateTaskOptions {
 	 */
 	initialMode?: string
 	/**
+	 * Caller-provided display title for this task. When set, it becomes the
+	 * task's `name` from the very first save AND locks it: the task cannot
+	 * override the title with the `set_task_title` tool. Used by `new_task`'s
+	 * `title` parameter so a parent can name the child it spawns. Ignored when a
+	 * `historyItem` is provided (restore path), which rehydrates the name and its
+	 * lock from `HistoryItem.name`/`HistoryItem.nameLocked` instead.
+	 */
+	initialTitle?: string
+	/**
 	 * Override the initial API configuration profile (by name) for this task only.
 	 * The profile's full settings are loaded and used to build the task's API
 	 * handler without mutating the global active profile. Useful for seeding a

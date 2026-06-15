@@ -22,6 +22,8 @@ const SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION = `Soft guidance (in seconds) for h
 
 const PEER_TASK_IDS_PARAMETER_DESCRIPTION = `Least-privilege peer scope: the spawned child's baseline knownPeers is parent-only. If provided, these task IDs are added (must share rootTaskId). If omitted/null, the child can only communicate with its parent and its own children — sibling access is denied. Validated against rootTaskId at spawn time — unknown IDs are rejected.`
 
+const TITLE_PARAMETER_DESCRIPTION = `Optional short, descriptive display title for the child task (max 60 characters; longer is truncated). When set, this becomes the child's title AND locks it — the child cannot rename itself via set_task_title. Omit to let the child name itself.`
+
 export default {
 	type: "function",
 	function: {
@@ -65,6 +67,10 @@ export default {
 					type: ["array", "null"],
 					items: { type: "string" },
 					description: PEER_TASK_IDS_PARAMETER_DESCRIPTION,
+				},
+				title: {
+					type: "string",
+					description: TITLE_PARAMETER_DESCRIPTION,
 				},
 			},
 			required: ["mode", "message", "todos", "is_background"],

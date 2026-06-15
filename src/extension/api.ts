@@ -787,6 +787,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			historyItem.ts ? new Date(historyItem.ts).toISOString() : new Date().toISOString(),
 			apiConversationHistory,
 			uiMessages,
+			{ title: historyItem.name },
 		)
 
 		return trace as unknown as Record<string, unknown>
