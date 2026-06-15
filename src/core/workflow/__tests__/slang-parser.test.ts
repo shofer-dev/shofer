@@ -683,6 +683,65 @@ flow "msg-and-guard" (verbose: "boolean") {
 	})
 })
 
+describe("parseSlang — stake timeout / retries", () => {
+	it("parses timeout(N) and retries(N) after output, in either order", () => {
+		const src = `
+flow "to" () {
+  agent A {
+    stake one() -> @out output: { x: "string" } timeout(120) retries(2)
+    stake two() -> @out retries(5) timeout(30)
+    stake three() -> @out
+    commit
+  }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		const one = ops[0]!
+		expect(one.type === "StakeOp" && one.timeout).toBe(120)
+		expect(one.type === "StakeOp" && one.retries).toBe(2)
+		const two = ops[1]!
+		expect(two.type === "StakeOp" && two.timeout).toBe(30)
+		expect(two.type === "StakeOp" && two.retries).toBe(5)
+		// No clauses ⇒ undefined (interpreter falls back to no-cap / default retries).
+		const three = ops[2]!
+		expect(three.type === "StakeOp" && three.timeout).toBeUndefined()
+		expect(three.type === "StakeOp" && three.retries).toBeUndefined()
+	})
+
+	it("accepts retries(0) and a bare timeout without recipients/output", () => {
+		const src = `
+flow "to2" () {
+  agent A {
+    stake work() timeout(5) retries(0)
+    commit
+  }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const op = agentsOf(ast.flows[0]!)[0]!.operations[0]!
+		expect(op.type === "StakeOp" && op.timeout).toBe(5)
+		expect(op.type === "StakeOp" && op.retries).toBe(0)
+	})
+
+	it("does not treat timeout/retries as reserved identifiers elsewhere", () => {
+		// `timeout` is only special as a stake clause; as a binding name it is a
+		// plain identifier.
+		const src = `
+flow "to3" () {
+  agent A {
+    let timeout = 1
+    commit
+  }
+}
+`
+		const { errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+	})
+})
+
 describe("validateSlangAST", () => {
 	it("warns about missing commit in an agent with operations", () => {
 		const src = `

@@ -298,10 +298,11 @@ The agent body is a sequence of operations. The three core primitives:
 ```slang
 stake plan(goal: topic, depth: 3, urgent: true, labels: ["a", "b"]) -> @Worker if any_ok
   output: { plan: "string", confidence: "number" }
+  timeout(120) retries(2)
 ```
 
 Ordering of the optional clauses is fixed: **call → recipients (`->`) →
-condition (`if`) → `output:`**.
+condition (`if`) → `output:` → `timeout(N)` / `retries(N)`**.
 
 - **Arguments** may be named (`goal: topic`) or positional (`topic`), mixed, and
   may be any expression (string/number/bool/ident/list/agent-ref/dot-access).
@@ -309,6 +310,18 @@ condition (`if`) → `output:`**.
 - **Condition** `if <expr>` gates whether the stake runs.
 - **`output:`** declares the expected JSON shape of the result — see
   [Structured Output Contracts](#structured-output-contracts).
+- **`timeout(N)`** (optional) — per-stake wall-clock cap in **seconds**. If the
+  agent doesn't produce a result within `N` seconds of being dispatched, the
+  attempt is abandoned and counts as a failed try. **Absent ⇒ no per-stake cap:**
+  a running agent is assumed to be making progress and is waited for, bounded
+  only by the flow's `time(N)` budget (see [Runtime Semantics](#runtime-semantics)).
+  `timeout` / `retries` are contextual identifiers (not reserved keywords); both
+  take a parenthesized number and may appear in either order.
+- **`retries(N)`** (optional) — max **re-attempts** for this stake after a failed
+  try (an output-contract validation failure **or** a `timeout(N)` expiry). The
+  agent is re-dispatched up to `N` times; on the `N+1`-th failure it is marked
+  `error`. **Absent ⇒ the default `MAX_RETRIES` (3).** `retries(0)` fails on the
+  first failed try.
 
 > There is **no** `let x = stake ...` form. A stake is an _operation_, not an
 > expression, so it cannot appear on the right-hand side of `let`/`set`. To use a
@@ -639,13 +652,20 @@ loop. Per round:
 
 > **No implicit per-stake timeout.** A running agent is assumed to be making
 > progress, even if it takes a long time, so the interpreter **waits** for it
-> rather than cutting it off after some fixed interval. The only bound on a
-> stake's wait is the flow's own `time(N)` budget: with a `time(N)` set, the wait
-> is capped at the remaining flow time (so that ceiling stays authoritative);
-> with no `time(N)`, the interpreter waits **indefinitely** for the agent to
-> finish. The user can always Stop the flow (→ `aborted`) regardless. A genuinely
-> stuck agent is therefore bounded by `time(N)` (or a manual Stop), not by a
-> hidden default.
+> rather than cutting it off after some fixed interval. The bounds on a stake's
+> wait are, in order of precedence:
+>
+> 1. an explicit per-stake **`timeout(N)`** clause (seconds) — see [`stake`](#stake).
+>    On expiry the attempt fails and is re-dispatched up to its **`retries(N)`**,
+>    then the agent is marked `error`;
+> 2. the flow's **`time(N)`** budget — the wait is capped at the remaining flow
+>    time (so that ceiling stays authoritative), terminating the flow with
+>    `budget_exceeded`;
+> 3. otherwise the interpreter waits **indefinitely** for the agent to finish.
+>
+> The user can always Stop the flow (→ `aborted`) regardless. A genuinely stuck
+> agent is therefore bounded by `timeout(N)`, `time(N)`, or a manual Stop — never
+> by a hidden default.
 
 Budgets (`rounds`, `tokens`, and wall-clock `time`) are enforced at the top of
 each round (the round-loop condition checks all three) and again per-agent after
@@ -740,7 +760,8 @@ agent_meta     = 'role'  ':' string
 
 operation      = stake | await | commit | escalate | log | error | when | let | set | repeat ;
 stake          = 'stake' func_call [ '->' recipient { ',' recipient } ]
-                 [ 'if' expr ] [ 'output' ':' output_schema ] ;
+                 [ 'if' expr ] [ 'output' ':' output_schema ]
+                 { ( 'timeout' | 'retries' ) '(' expr ')' } ;   (* Shofer extension; idents, either order *)
 await          = 'await' ident '<-' source { ',' source }
                  { ',' ident ':' expr } ;          (* options: parsed, unused *)
 commit         = 'commit' [ expr ] [ 'if' expr ] ;

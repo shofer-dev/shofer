@@ -136,6 +136,19 @@ export interface StakeOp extends BaseNode {
 	condition?: Expr
 	output?: OutputSchema
 	binding?: string
+	/**
+	 * Optional per-stake wall-clock timeout in **seconds** (`timeout(N)`). When the
+	 * agent does not produce a result within N seconds of dispatch, the attempt is
+	 * abandoned and counts as a failed try (subject to `retries`). Absent ⇒ no
+	 * per-stake cap — the wait is bounded only by the flow's `time(N)` budget.
+	 */
+	timeout?: number
+	/**
+	 * Optional max re-attempts for this stake (`retries(N)`) on a failed try —
+	 * output-contract validation failure or a `timeout(N)` expiry. Absent ⇒ the
+	 * default (`MAX_RETRIES`). `retries(0)` ⇒ fail on the first failed try.
+	 */
+	retries?: number
 }
 
 export interface OutputSchema {

@@ -226,6 +226,13 @@ export class WorkflowTask extends Task {
 	 */
 	private readonly programs = new Map<string, Instr[]>()
 
+	/**
+	 * Wall-clock dispatch time (epoch ms) per agent for the round's in-flight
+	 * stake, keyed by agent name. Used to enforce a per-stake `timeout(N)`.
+	 * Transient — set at dispatch each round, never serialized.
+	 */
+	private readonly stakeDispatchedAt = new Map<string, number>()
+
 	constructor(options: WorkflowTaskOptions) {
 		const flowName = options.flowDecl.name
 		super({ ...options, startTask: false, initialMode: flowName })
@@ -968,6 +975,10 @@ export class WorkflowTask extends Task {
 			if (isNew) await this.spawnAgentTask(name, prompt, instr.op.output)
 			else await this.resumeAgentTask(name, prompt, instr.op.output)
 			state.status = "running"
+			// Stamp dispatch time so a per-stake `timeout(N)` can be enforced from
+			// here (waitForStakes bounds the wait; collectStakeResults detects the
+			// expiry). Transient — re-set on every dispatch, never serialized.
+			this.stakeDispatchedAt.set(name, Date.now())
 			// Record this round's outbound recipients so the live topology can
 			// draw the agent's active stake edges (and the sequence its pending
 			// send). Comma-joined like `waitingFor`. Cleared once the result is
@@ -1247,25 +1258,56 @@ export class WorkflowTask extends Task {
 		}
 
 		const startTime = Date.now()
-		// A running agent is making progress — it may legitimately take a long
-		// time, so we WAIT rather than cutting it off with an implicit per-stake
-		// cap. The only time bound is the flow's own `time(N)` budget
-		// (loopDeadline): with a budget we wait at most the remaining time (so the
-		// flow's explicit ceiling stays authoritative); with no budget we wait
-		// indefinitely. Either way the user can still Stop (abortSignal), and a
-		// future per-stake timeout in the slang would plug in here.
-		const timeoutMs = this.loopDeadline > 0 ? Math.max(0, this.loopDeadline - Date.now()) : undefined
-		await waitForTasksEventDriven(provider, {
-			handles,
-			conditionMet: () => [...handles.keys()].every((id) => isTerminal(id)),
-			timeoutMs,
-			abortSignal: this.abortSignal,
-			onNeedsParentInput: async (childTaskId: string) => {
-				// WI4: Relay the child's question to the user, then deliver
-				// the answer via answer_subtask_question.
-				return this.relayChildQuestion(childTaskId)
-			},
-		})
+
+		// Per-agent deadline (epoch ms) for an explicit `timeout(N)` stake clause:
+		// dispatch time + N seconds. `Infinity` when the stake has no timeout — a
+		// running agent is making progress and may legitimately take a long time, so
+		// it is NOT cut off by any implicit cap. The flow's own `time(N)` budget
+		// (loopDeadline) applies on top of all agents.
+		const agentDeadline = new Map<string, number>() // taskId → epoch ms
+		for (const name of names) {
+			const st = this.flowState.agents.get(name)
+			if (!st?.taskId) continue
+			const program = this.programs.get(name)
+			const instr = program?.[st.opIndex]
+			const timeoutSec = instr && instr.kind === "stake" ? instr.op.timeout : undefined
+			const dispatchedAt = this.stakeDispatchedAt.get(name) ?? startTime
+			agentDeadline.set(st.taskId, timeoutSec && timeoutSec > 0 ? dispatchedAt + timeoutSec * 1000 : Infinity)
+		}
+
+		// Settled = every staked agent is either terminal, past its own per-stake
+		// timeout, or the whole-flow time budget has elapsed.
+		const flowExpired = () => this.loopDeadline > 0 && Date.now() >= this.loopDeadline
+		const allSettled = () =>
+			flowExpired() ||
+			[...handles.keys()].every((id) => isTerminal(id) || Date.now() >= (agentDeadline.get(id) ?? Infinity))
+
+		// Wait in slices: each slice runs until all terminal (helper conditionMet) or
+		// the earliest pending deadline fires; then we re-evaluate. The loop ends
+		// once everything is settled, or the user aborts.
+		while (!allSettled() && !this.abort) {
+			let earliest = Infinity
+			for (const id of handles.keys()) {
+				if (isTerminal(id)) continue
+				const dl = agentDeadline.get(id) ?? Infinity
+				if (Date.now() >= dl) continue // already expired — counted as settled above
+				if (dl < earliest) earliest = dl
+			}
+			const flowDl = this.loopDeadline > 0 ? this.loopDeadline : Infinity
+			const effective = Math.min(earliest, flowDl)
+			const timeoutMs = effective === Infinity ? undefined : Math.max(0, effective - Date.now())
+			await waitForTasksEventDriven(provider, {
+				handles,
+				conditionMet: () => [...handles.keys()].every((id) => isTerminal(id)),
+				timeoutMs,
+				abortSignal: this.abortSignal,
+				onNeedsParentInput: async (childTaskId: string) => {
+					// WI4: Relay the child's question to the user, then deliver
+					// the answer via answer_subtask_question.
+					return this.relayChildQuestion(childTaskId)
+				},
+			})
+		}
 
 		const elapsed = Date.now() - startTime
 		const statuses = [...handles.entries()].map(([id, h]) => `${id.slice(-6)}=${h.status}`)
@@ -1339,20 +1381,14 @@ export class WorkflowTask extends Task {
 			const instr = program[state.opIndex]
 			if (!instr || instr.kind !== "stake") continue
 
+			// Per-stake retry budget: an explicit `retries(N)` overrides the default.
+			const maxRetries = instr.op.retries ?? MAX_RETRIES
+
 			try {
 				// Freshness guard: only consume an agent's result once it has actually
 				// reached a terminal lifecycle for THIS stake — otherwise its taskId
 				// still carries the PREVIOUS stake's completion and validating that
 				// stale result would check the wrong output.
-				//
-				// A running agent is *trying* and may legitimately take a long time, so
-				// waitForStakes waits without an implicit per-stake cap. Reaching here
-				// non-terminal therefore means the wait ended for a FLOW-LEVEL reason —
-				// the `time(N)` budget was hit or the user stopped the flow — NOT that
-				// the agent failed. Never retry, fail, or read a stale completion for a
-				// still-running agent: skip it and let the budget/abort handling (below
-				// and in slangLoop) terminate the flow. Leaving status/opIndex untouched
-				// lets the run resume the agent cleanly if it is restarted later.
 				if (state.taskId) {
 					const handle = this.backgroundChildren.get(state.taskId)
 					const lifecycle = provider.taskManager.getTaskState(state.taskId)?.lifecycle
@@ -1363,6 +1399,42 @@ export class WorkflowTask extends Task {
 						lifecycle === "completed" ||
 						lifecycle === "error"
 					if (!reachedTerminal) {
+						// The agent didn't finish. Distinguish the two reasons:
+						const dispatchedAt = this.stakeDispatchedAt.get(name)
+						const timedOut =
+							!!instr.op.timeout &&
+							instr.op.timeout > 0 &&
+							dispatchedAt !== undefined &&
+							Date.now() >= dispatchedAt + instr.op.timeout * 1000
+
+						if (timedOut) {
+							// An EXPLICIT per-stake `timeout(N)` expired — a genuine failed
+							// try. Re-dispatch up to `retries`, then error.
+							state.retryCount++
+							state.sendingTo = undefined
+							if (state.retryCount > maxRetries) {
+								workflowLog.error(
+									`[WorkflowTask#${this.taskId}] Agent '${name}' stake '${instr.op.call.name}' timed out (timeout(${instr.op.timeout})s) — exhausted ${maxRetries} retries`,
+								)
+								await this.sayProgress(
+									`❌ Agent \`${name}\` timed out on \`${instr.op.call.name}\` (\`timeout(${instr.op.timeout})\`s) after ${maxRetries} ${maxRetries === 1 ? "retry" : "retries"} and was marked **errored**.`,
+								)
+								state.status = "error"
+							} else {
+								await this.sayProgress(
+									`⏱️ Agent \`${name}\` exceeded its \`timeout(${instr.op.timeout})\`s on \`${instr.op.call.name}\` (retry ${state.retryCount}/${maxRetries}); re-dispatching.`,
+								)
+								// Leave opIndex on this stake and mark idle so the next round
+								// re-dispatches it through the normal advance → stake path.
+								state.status = "idle"
+							}
+							continue
+						}
+
+						// No explicit per-stake timeout — the wait ended for a FLOW-LEVEL
+						// reason (the `time(N)` budget was hit or the user stopped). A
+						// running agent is *trying*; never retry, fail, or read its stale
+						// completion. Skip it and let the budget/abort handling terminate.
 						workflowLog.info(
 							`[WorkflowTask#${this.taskId}] #TRACE Agent '${name}' stake '${instr.op.call.name}' still in flight (lifecycle=${lifecycle ?? "unknown"}) — wait ended on a flow-level limit/abort, not a per-stake timeout; leaving it running`,
 						)
@@ -1441,26 +1513,26 @@ export class WorkflowTask extends Task {
 				// Step 3: Re-prompt on validation failure
 				if (validationError) {
 					state.retryCount++
-					if (state.retryCount > MAX_RETRIES) {
+					if (state.retryCount > maxRetries) {
 						workflowLog.error(
-							`[WorkflowTask#${this.taskId}] Agent '${name}' exceeded max retries (${MAX_RETRIES}) for output validation:\n${validationError}`,
+							`[WorkflowTask#${this.taskId}] Agent '${name}' exceeded max retries (${maxRetries}) for output validation:\n${validationError}`,
 						)
 						// Surface the terminal validation failure to the chat — not
 						// just the logs — so the user can see WHY the agent errored
 						// (and, downstream, why the flow may deadlock).
 						await this.sayProgress(
-							`❌ Agent \`${name}\` failed output-contract validation after ${MAX_RETRIES} retries and was marked **errored**:\n\n${validationError}`,
+							`❌ Agent \`${name}\` failed output-contract validation after ${maxRetries} ${maxRetries === 1 ? "retry" : "retries"} and was marked **errored**:\n\n${validationError}`,
 						)
 						state.status = "error"
 						state.sendingTo = undefined
 					} else {
 						workflowLog.info(
-							`[WorkflowTask#${this.taskId}] Agent '${name}' output validation failed (retry ${state.retryCount}/${MAX_RETRIES}): ${validationError}`,
+							`[WorkflowTask#${this.taskId}] Agent '${name}' output validation failed (retry ${state.retryCount}/${maxRetries}): ${validationError}`,
 						)
 						// Surface each retry to the chat too, so a struggling agent
 						// is visible as it happens rather than silently in the logs.
 						await this.sayProgress(
-							`⚠️ Agent \`${name}\` output didn't match its schema (retry ${state.retryCount}/${MAX_RETRIES}); re-prompting:\n\n${validationError}`,
+							`⚠️ Agent \`${name}\` output didn't match its schema (retry ${state.retryCount}/${maxRetries}); re-prompting:\n\n${validationError}`,
 						)
 						state.status = "idle"
 						// Re-prompt the agent with the validation error — do NOT advance opIndex

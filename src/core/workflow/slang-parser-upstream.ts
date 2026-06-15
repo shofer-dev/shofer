@@ -425,10 +425,38 @@ class Parser {
 			output = this.parseOutputSchema()
 		}
 
+		// Optional per-stake `timeout(N)` / `retries(N)` clauses (Shofer extension).
+		// Parsed as bare idents (not reserved keywords) followed by a parenthesized
+		// number, in either order. `timeout` is seconds; `retries` is a count.
+		let timeout: number | undefined
+		let retries: number | undefined
+		const isStakeOpt = (kw: string) =>
+			this.check(TokenType.Ident) &&
+			this.peek().value === kw &&
+			this.tokens[this.pos + 1]?.type === TokenType.LParen
+		while (isStakeOpt("timeout") || isStakeOpt("retries")) {
+			const kw = this.advance().value // "timeout" | "retries"
+			this.expect(TokenType.LParen)
+			const value = exprAsNumber(this.parseExpr())
+			this.expect(TokenType.RParen)
+			if (kw === "timeout") timeout = value
+			else retries = value
+		}
+
 		let binding: string | undefined
 		this.parseStakeBinding()
 
-		return { type: "StakeOp", call, recipients, condition, output, binding, span: this.spanFrom(start) }
+		return {
+			type: "StakeOp",
+			call,
+			recipients,
+			condition,
+			output,
+			binding,
+			timeout,
+			retries,
+			span: this.spanFrom(start),
+		}
 	}
 
 	// parseStakeBinding is a no-op hook — binding is set by LetOp/SetOp
