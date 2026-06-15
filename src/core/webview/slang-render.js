@@ -538,24 +538,11 @@ function renderEdge(e, layout, layers) {
 	var color = e.kind === "stake" ? COLORS.stake : e.kind === "await" ? COLORS.await : COLORS.peer
 	var marker = e.kind === "stake" ? "url(#ah-stake)" : e.kind === "await" ? "url(#ah-await)" : "url(#ah-peer)"
 	var dashAttr = e.kind === "peer" ? ' stroke-dasharray="8 4"' : ""
-	// Runtime highlight: thicken + pulse edges that are active (agent is
-	// sendingTo or waitingFor that target).
-	var rtClass = ""
-	if (e.kind !== "peer" && _runState) {
-		var fromAgent = getAgentRunState(e.from)
-		var toAgent = getAgentRunState(e.to)
-		var sending = fromAgent && splitRefs(fromAgent.sendingTo).indexOf(e.to) !== -1
-		var awaiting = toAgent && splitRefs(toAgent.waitingFor).indexOf(e.from) !== -1
-		if (sending || awaiting) {
-			rtClass = " edge-runtime-active"
-			dashAttr = e.kind === "stake" ? ' stroke-dasharray="6 2"' : dashAttr
-		}
-	}
+	// The embedded topology already shows ONLY the current execution state, so its
+	// edges need no extra runtime highlight/pulse — they are drawn as plain arrows.
 	var key = esc(e.from) + "__" + esc(e.to) + "__" + e.kind + "__" + e.idx
 	var s =
-		'<g class="edge-group' +
-		rtClass +
-		'" data-edge="' +
+		'<g class="edge-group" data-edge="' +
 		key +
 		'" data-from="' +
 		esc(e.from) +
@@ -651,46 +638,64 @@ function emptyStateSVG(title, subtitle) {
  * edges) or blocked (drawn with the await edges they're parked on). Returns
  * null when nothing is active (before the run starts, or once converged).
  */
-function currentRoundSubset(agentNames) {
-	if (!_runState || !_runState.agents) return null
-	var nodes = {},
-		edges = [],
-		seen = {},
-		active = false
+// Last non-empty set of current-state topology edges. Used to FREEZE the final
+// frame when the workflow finishes (all agents committed → no live edges) so the
+// topology keeps showing the very last execution state instead of going blank.
+// Module-scoped so it survives in-place re-renders; on a fresh reload it is
+// rebuilt from mailboxHistory (see topologyCurrentEdges).
+var _lastTopologyEdges = []
+
+/**
+ * Edges describing the CURRENT execution state for the embedded topology:
+ * running agents' outbound stake edges + blocked agents' pending await edges.
+ * Plain edges (no runtime highlight) — the topology shows where execution IS.
+ *
+ * When the workflow has finished (terminal status) there are no live edges, so
+ * we freeze the last live frame (cached, or — on a cold reload — reconstructed
+ * from the final mailboxHistory delivery) to keep the final state on screen.
+ */
+function topologyCurrentEdges(agentNames) {
+	var edges = [],
+		seen = {}
 	function addEdge(from, to, kind) {
-		var key = from + ">" + to
+		if (!agentNames[from] || !agentNames[to]) return
+		var key = from + ">" + to + ">" + kind
 		if (seen[key]) return
 		seen[key] = true
 		edges.push({ from: from, to: to, label: "", kind: kind })
 	}
-	// Pass 1: running agents and their outbound stake edges.
-	for (var i = 0; i < _runState.agents.length; i++) {
-		if (_runState.agents[i][1].status !== "running") continue
-		active = true
-		var rn = _runState.agents[i][0]
-		nodes[rn] = true
-		var targets = splitRefs(_runState.agents[i][1].sendingTo)
-		for (var t = 0; t < targets.length; t++) {
-			if (!agentNames[targets[t]]) continue
-			nodes[targets[t]] = true
-			addEdge(rn, targets[t], "stake")
+	if (_runState && _runState.agents) {
+		for (var i = 0; i < _runState.agents.length; i++) {
+			var st = _runState.agents[i][1]
+			var name = _runState.agents[i][0]
+			if (st.status === "running") {
+				var targets = splitRefs(st.sendingTo)
+				for (var t = 0; t < targets.length; t++) addEdge(name, targets[t], "stake")
+			} else if (st.status === "blocked") {
+				var sources = splitRefs(st.waitingFor)
+				for (var s = 0; s < sources.length; s++) addEdge(sources[s], name, "await")
+			}
 		}
 	}
-	// Pass 2: blocked agents and the await edges they're waiting on.
-	for (var b = 0; b < _runState.agents.length; b++) {
-		if (_runState.agents[b][1].status !== "blocked") continue
-		active = true
-		var bn = _runState.agents[b][0]
-		nodes[bn] = true
-		var sources = splitRefs(_runState.agents[b][1].waitingFor)
-		for (var s = 0; s < sources.length; s++) {
-			if (!agentNames[sources[s]]) continue
-			nodes[sources[s]] = true
-			addEdge(sources[s], bn, "await")
+	if (edges.length > 0) {
+		_lastTopologyEdges = edges
+		return edges
+	}
+	// No live edges. If the flow has run at all, keep the final frame on screen.
+	var started = _runState && _runState.round
+	var finished = _runState && _runState.status && _runState.status !== "running"
+	if (!started && !finished) return [] // not started yet → just the agent nodes
+	if (_lastTopologyEdges.length > 0) return _lastTopologyEdges
+	// Cold reload of a finished flow: reconstruct the last interaction from the
+	// final mailboxHistory delivery so the final state still shows an edge.
+	if (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length) {
+		var last = _runState.mailboxHistory[_runState.mailboxHistory.length - 1]
+		var to = last.to === "out" || last.to === "@out" ? null : last.to
+		if (to && agentNames[last.from] && agentNames[to]) {
+			return [{ from: last.from, to: to, label: "", kind: "stake" }]
 		}
 	}
-	if (!active) return null
-	return { nodes: nodes, edges: edges }
+	return []
 }
 
 function compileTopologySVG(flow, agentNames, agentMeta) {
@@ -698,16 +703,11 @@ function compileTopologySVG(flow, agentNames, agentMeta) {
 	// Standalone editor: render the full static structure of the file.
 	var rawEdges, nodeNames
 	if (_embedded) {
-		var subset = currentRoundSubset(agentNames)
-		if (!subset) {
-			var notStarted = !_runState || !_runState.round
-			return emptyStateSVG(
-				notStarted ? "Workflow not started" : "No agents active right now",
-				"This round's working and waiting agents appear here.",
-			)
-		}
-		rawEdges = subset.edges
-		nodeNames = subset.nodes
+		// Agents are ALWAYS visible (every node, every step); the edges show only
+		// the CURRENT execution state — who is staking / awaiting right now — as
+		// plain arrows. On finish the last live frame is kept (topologyCurrentEdges).
+		rawEdges = topologyCurrentEdges(agentNames)
+		nodeNames = agentNames
 	} else {
 		rawEdges = buildGraphEdges(flow).concat(buildPeerEdges(flow))
 		nodeNames = agentNames
