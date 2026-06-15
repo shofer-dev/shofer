@@ -52,9 +52,19 @@ WS_ROOT="$(cd "${EXT_DIR}/../.." && pwd)"             # repo root
 
 ROUTER_URL="${ROUTER_URL:-http://localhost:30081/v1}"
 DS_MODEL="${DS_MODEL:-deepseek/deepseek-v4-pro}"
-TIMEOUT="${TIMEOUT:-120}"
-TIMEOUT_INT="${TIMEOUT_INT:-180}"
-TIMEOUT_WF="${TIMEOUT_WF:-600}"
+# Per-scenario timeouts. The `ds` preset drives a real, slow reasoning model
+# (deepseek-v4-pro emits verbose reasoning before answering), so multi-turn
+# integration cases and workflows need a much larger ceiling than the hermetic,
+# instantaneous mock provider. Explicit env overrides still win.
+if [[ "${PRESET}" == "ds" ]]; then
+	TIMEOUT="${TIMEOUT:-300}"
+	TIMEOUT_INT="${TIMEOUT_INT:-600}"
+	TIMEOUT_WF="${TIMEOUT_WF:-900}"
+else
+	TIMEOUT="${TIMEOUT:-120}"
+	TIMEOUT_INT="${TIMEOUT_INT:-180}"
+	TIMEOUT_WF="${TIMEOUT_WF:-600}"
+fi
 INT_PARALLEL="${INT_PARALLEL:-4}"
 WF_PARALLEL="${WF_PARALLEL:-4}"
 SKIP_CLI="${SKIP_CLI:-0}"
