@@ -35,13 +35,13 @@ flow "debug" (issue: "string") {
     stake triage(
       issue: issue,
       user_description: user_description,
-      task: "Investigate the issue thoroughly. Examine the codebase, logs, and any relevant context. Identify the root cause — what is actually broken and why. Do NOT fix anything yet. Provide a detailed analysis."
+      task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer1
 
     stake triage(
       issue: issue,
       user_description: user_description,
-      task: "Investigate the issue thoroughly. Examine the codebase, logs, and any relevant context. Identify the root cause — what is actually broken and why. Do NOT fix anything yet. Provide a detailed analysis."
+      task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer2
 
     await dev1 <- @Developer1
@@ -151,7 +151,7 @@ flow "debug" (issue: "string") {
   -- =========================================================================
   agent Developer1 {
     mode: "code"
-    role: "Senior developer specializing in debugging. You investigate issues, form hypotheses about root causes, collaborate with a peer to reach consensus, and implement precise fixes."
+    role: "Senior developer specializing in debugging. CRITICAL RULE: you have TWO distinct stages. During TRIAGE and CONSENSUS you are STRICTLY READ-ONLY — investigate and form hypotheses, but do NOT modify, create, or delete any file and do NOT run mutating commands. You may ONLY make changes when the orchestrator explicitly assigns you a FIX task (or fix-revision feedback). Implement precise, minimal fixes only in that fix stage."
 
     -- Phase A — Initial triage
     await triage_task <- @Orchestrator
@@ -196,8 +196,8 @@ flow "debug" (issue: "string") {
   -- Developer2 — investigates, reaches consensus, then reviews the fix
   -- =========================================================================
   agent Developer2 {
-    mode: "code"
-    role: "Senior developer specializing in debugging and code review. You investigate issues, form hypotheses about root causes, collaborate with a peer to reach consensus, and rigorously review fixes for correctness and minimality."
+    mode: "reviewer"
+    role: "Senior developer specializing in debugging and code review. You are READ-ONLY for the entire workflow: you investigate, form hypotheses, reach consensus with your peer, and rigorously review the other developer's fix for correctness and minimality — but you NEVER modify files yourself. Your `reviewer` mode has no write tools by design."
 
     -- Phase A — Initial triage
     await triage_task <- @Orchestrator

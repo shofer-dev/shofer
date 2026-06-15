@@ -21,7 +21,8 @@ flow "implement-feature" (feature: "string") {
     role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents."
 
     stake create_design(
-      feature: feature
+      feature: feature,
+      instructions: "Create the design document and write it to EXACTLY this path: plans/feature-design.md (create the plans/ directory if it does not exist). Use that exact filename — later steps and the user are told the design lives there, so do NOT name it after the feature or place it elsewhere."
     )
 
     escalate @Human reason:
@@ -129,9 +130,10 @@ flow "implement-feature" (feature: "string") {
         set review_done = true
       } otherwise {
         stake review_verdict(
-          approved: "Whether the implementation satisfies the design",
-          issues: "Specific, actionable feedback when not approved"
+          implementation_summary: review_request,
+          task: "Evaluate the implementation against the design at plans/feature-design.md. Decide whether it satisfies the design; if not, give specific, actionable feedback."
         ) -> @Architect
+          output: { approved: "boolean", issues: "string" }
       }
     }
 
