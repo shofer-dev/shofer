@@ -18,7 +18,9 @@ import {
 	committedCount,
 	consumeMail,
 	evalExpr,
+	formatEmittedValue,
 	type AdvanceResult,
+	type EmittedMessage,
 	type Instr,
 	routeOutput,
 	toBool,
@@ -135,6 +137,14 @@ function letInstr(name: string, value: Expr): Instr {
 
 function setInstr(name: string, value: Expr): Instr {
 	return { kind: "set", op: { type: "SetOp", name, value, span: dummySpan() } }
+}
+
+function logInstr(value?: Expr, condition?: Expr): Instr {
+	return { kind: "log", op: { type: "LogOp", value, condition, span: dummySpan() } }
+}
+
+function errorInstr(value?: Expr, condition?: Expr): Instr {
+	return { kind: "error", op: { type: "ErrorOp", value, condition, span: dummySpan() } }
 }
 
 function jumpInstr(target: number): Instr {
@@ -734,5 +744,111 @@ describe("advanceAgent", () => {
 		expect(state.bindings.get("a")).toBe(2)
 		expect(state.bindings.get("b")).toBe(3)
 		expect(result.type).toBe("committed")
+	})
+})
+
+// ══════════════════════════════════════════════════════════════════════
+// advanceAgent — log / error / commit emitted messages
+// ══════════════════════════════════════════════════════════════════════
+
+describe("formatEmittedValue", () => {
+	it("returns strings verbatim", () => expect(formatEmittedValue("hi")).toBe("hi"))
+	it("JSON-encodes objects", () => expect(formatEmittedValue({ a: 1 })).toBe('{"a":1}'))
+	it("stringifies numbers/booleans", () => {
+		expect(formatEmittedValue(42)).toBe("42")
+		expect(formatEmittedValue(true)).toBe("true")
+	})
+	it("maps null/undefined to empty string", () => {
+		expect(formatEmittedValue(null)).toBe("")
+		expect(formatEmittedValue(undefined)).toBe("")
+	})
+})
+
+describe("advanceAgent — emitted messages", () => {
+	it("log: pushes a message, advances, and continues to the next op", () => {
+		const state = freshAgent("A")
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgent(
+			[logInstr(strExpr("hello")), commitInstr()],
+			state,
+			[],
+			freshFlowState(),
+			undefined,
+			emitted,
+		)
+		expect(result.type).toBe("committed")
+		expect(emitted).toEqual([{ kind: "log", message: "hello" }])
+	})
+
+	it("log: skipped when its `if` guard is false", () => {
+		const state = freshAgent("A")
+		state.bindings.set("verbose", false)
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgent(
+			[logInstr(strExpr("noisy"), identExpr("verbose")), commitInstr()],
+			state,
+			[],
+			freshFlowState(),
+			undefined,
+			emitted,
+		)
+		expect(result.type).toBe("committed")
+		expect(emitted).toHaveLength(0)
+	})
+
+	it("error: emits a message and returns { type: 'error' }, marking the agent error", () => {
+		const state = freshAgent("A")
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgent(
+			[errorInstr(strExpr("boom")), commitInstr()],
+			state,
+			[],
+			freshFlowState(),
+			undefined,
+			emitted,
+		)
+		expect(result.type).toBe("error")
+		expect(state.status).toBe("error")
+		expect(state.opIndex).toBe(1) // advanced past the error op
+		expect(emitted).toEqual([{ kind: "error", message: "boom" }])
+	})
+
+	it("error: skipped when its `if` guard is false → falls through", () => {
+		const state = freshAgent("A")
+		state.bindings.set("fail", false)
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgent(
+			[errorInstr(strExpr("boom"), identExpr("fail")), commitInstr()],
+			state,
+			[],
+			freshFlowState(),
+			undefined,
+			emitted,
+		)
+		expect(result.type).toBe("committed")
+		expect(emitted).toHaveLength(0)
+	})
+
+	it("commit with value: emits a commit message and stores output", () => {
+		const state = freshAgent("A")
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgent(
+			[{ kind: "commit", op: { type: "CommitOp", value: strExpr("all done"), span: dummySpan() } }],
+			state,
+			[],
+			freshFlowState(),
+			undefined,
+			emitted,
+		)
+		expect(result.type).toBe("committed")
+		expect(state.output).toBe("all done")
+		expect(emitted).toEqual([{ kind: "commit", message: "all done" }])
+	})
+
+	it("commit without value: emits nothing", () => {
+		const state = freshAgent("A")
+		const emitted: EmittedMessage[] = []
+		advanceAgent([commitInstr()], state, [], freshFlowState(), undefined, emitted)
+		expect(emitted).toHaveLength(0)
 	})
 })

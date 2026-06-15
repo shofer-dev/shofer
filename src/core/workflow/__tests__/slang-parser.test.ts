@@ -564,6 +564,66 @@ flow "all-committed" () {
 	})
 })
 
+describe("parseSlang — log / error operations", () => {
+	it("parses `log` and `error` with message expressions", () => {
+		const src = `
+flow "logging" () {
+  agent Worker {
+    log "starting work"
+    stake do_work() -> @out
+    error "something went wrong"
+    commit
+  }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops.map((o) => o.type)).toEqual(["LogOp", "StakeOp", "ErrorOp", "CommitOp"])
+		const logOp = ops[0]!
+		expect(logOp.type === "LogOp" && logOp.value?.type === "StringLit" && logOp.value.value).toBe("starting work")
+		const errOp = ops[2]!
+		expect(errOp.type === "ErrorOp" && errOp.value?.type === "StringLit" && errOp.value.value).toBe(
+			"something went wrong",
+		)
+	})
+
+	it("parses bare `log` / `error` (no message) and `if` guards", () => {
+		const src = `
+flow "guarded" (ok: "boolean") {
+  agent Worker {
+    log
+    error if ok
+    commit
+  }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("LogOp")
+		expect(ops[0]!.type === "LogOp" && ops[0]!.value).toBeUndefined()
+		const errOp = ops[1]!
+		expect(errOp.type === "ErrorOp" && errOp.condition?.type).toBe("Ident")
+	})
+
+	it("parses `log <value> if <cond>` (message before guard)", () => {
+		const src = `
+flow "msg-and-guard" (verbose: "boolean") {
+  agent Worker {
+    log "verbose detail" if verbose
+    commit
+  }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const logOp = agentsOf(ast.flows[0]!)[0]!.operations[0]!
+		expect(logOp.type === "LogOp" && logOp.value?.type === "StringLit" && logOp.value.value).toBe("verbose detail")
+		expect(logOp.type === "LogOp" && logOp.condition?.type).toBe("Ident")
+	})
+})
+
 describe("validateSlangAST", () => {
 	it("warns about missing commit in an agent with operations", () => {
 		const src = `

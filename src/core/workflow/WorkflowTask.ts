@@ -45,6 +45,7 @@ import {
 	routeOutput as routeOutputPure,
 	toBool as toBoolPure,
 	type AdvanceResult,
+	type EmittedMessage,
 	type Instr,
 	MAX_CONTROL_FLOW_STEPS,
 } from "./slang-interpreter"
@@ -620,7 +621,11 @@ export class WorkflowTask extends Task {
 					)
 					continue
 				}
-				const result = this.advanceAgent(state)
+				const { result, emitted } = this.advanceAgent(state)
+				// Surface any log/error/commit messages the agent produced while
+				// advancing to the chat view, in program order, before acting on the
+				// blocking result below.
+				for (const m of emitted) await this.emitAgentMessage(name, m)
 				workflowLog.info(
 					`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${name}' result=${result.type} status=${state.status} opIndex=${state.opIndex}`,
 				)
@@ -637,6 +642,18 @@ export class WorkflowTask extends Task {
 					case "committed":
 						// status already set inside advanceAgent
 						break
+					case "error":
+						// An `error` op prematurely terminates the whole flow. The
+						// agent's message was already surfaced above; tear down the
+						// rest of the tree and finish.
+						this.flowState.status = "error"
+						workflowLog.error(
+							`[WorkflowTask#${this.taskId}] #TRACE Agent '${name}' raised error at round ${this.flowState.round} — terminating flow`,
+						)
+						await super.abortBackgroundChildren()
+						await this.persistCheckpoint()
+						await this.emitTaskCompleted("poor")
+						return
 					case "end":
 						// Program exhausted with no explicit commit — treat as done
 						// (advanceAgent may have set "error" via its step-limit guard).
@@ -803,18 +820,50 @@ export class WorkflowTask extends Task {
 	 * reaches a blocking instruction (stake / escalate / unsatisfied await),
 	 * commits, or runs off the end of its program.
 	 */
-	private advanceAgent(state: AgentState): AdvanceResult {
+	private advanceAgent(state: AgentState): { result: AdvanceResult; emitted: EmittedMessage[] } {
 		const program = this.programs.get(state.name)
 		if (!program) {
 			workflowLog.info(
 				`[WorkflowTask#${this.taskId}] #TRACE advanceAgent '${state.name}': no compiled program → end`,
 			)
-			return { type: "end" }
+			return { result: { type: "end" }, emitted: [] }
 		}
-		return advanceAgentPure(program, state, this.flowState.mailbox, this.flowState, {
-			info: (msg) => workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE ${msg}`),
-			error: (msg) => workflowLog.error(`[WorkflowTask#${this.taskId}] ${msg}`),
-		})
+		const emitted: EmittedMessage[] = []
+		const result = advanceAgentPure(
+			program,
+			state,
+			this.flowState.mailbox,
+			this.flowState,
+			{
+				info: (msg) => workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE ${msg}`),
+				error: (msg) => workflowLog.error(`[WorkflowTask#${this.taskId}] ${msg}`),
+			},
+			emitted,
+		)
+		return { result, emitted }
+	}
+
+	/**
+	 * Surface a `log` / `error` / `commit` message an agent produced to the
+	 * WorkflowTask chat view. `error` and `commit` carry distinct prefixes so the
+	 * user can tell a premature abort from a normal completion at a glance.
+	 */
+	private async emitAgentMessage(agentName: string, m: EmittedMessage): Promise<void> {
+		switch (m.kind) {
+			case "log":
+				await this.sayProgress(m.message ? `📝 **${agentName}**: ${m.message}` : `📝 **${agentName}** logged.`)
+				break
+			case "commit":
+				await this.sayProgress(`✅ **${agentName}** committed: ${m.message}`)
+				break
+			case "error":
+				await this.sayProgress(
+					m.message
+						? `🛑 **${agentName}** raised an error: ${m.message}`
+						: `🛑 **${agentName}** raised an error.`,
+				)
+				break
+		}
 	}
 
 	/** Remove and return the first mailbox entry addressed to `recipient` from one of `sources`. */

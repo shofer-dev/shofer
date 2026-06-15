@@ -97,7 +97,7 @@ These cannot be used as identifiers (agent names, bindings, function names,
 variables). Using one as a `stake func(...)` name is a common parse error.
 
 ```
-flow  agent  stake  await  commit  escalate  import  as
+flow  agent  stake  await  commit  escalate  log  error  import  as
 when  if  else  otherwise  converge  budget
 role  model  tools  retry  output
 tokens  rounds  time  count  reason
@@ -334,7 +334,11 @@ commit "worker-complete"                -- carry a value (becomes @Agent.output)
 commit if committed_count >= 1          -- guarded
 ```
 
-A committed agent is terminal and stops participating in rounds.
+A committed agent is terminal and stops participating in rounds. When `commit`
+carries a value, that value is **surfaced to the WorkflowTask view** as a
+`✅ <Agent> committed: <value>` line (the same channel `log` and `error` use), so
+the human sees what each agent concluded with. The value is rendered verbatim if
+it is a string, otherwise JSON-encoded.
 
 ### `escalate`
 
@@ -348,6 +352,39 @@ await guidance <- @Human
 - `if <cond>` (optional) gates the escalation.
 - The user's reply is delivered as a message **from `@Human`**, consumed by a
   following `await ... <- @Human`. The agent itself is unaware it was escalated.
+
+### `log`
+
+```slang
+log "starting the analysis pass"        -- emit a status line to the view
+log details if verbose                  -- guarded
+log                                      -- bare (no message)
+```
+
+- Emits a message to the **WorkflowTask view** (the chat stream) as a
+  `📝 <Agent>: <message>` line. Useful for narrating an agent's intent or
+  progress to the human watching the flow.
+- **Non-blocking and non-terminal:** the agent continues straight to its next
+  operation in the same advance — `log` never spawns the agent Task or waits.
+- The optional message is any expression; rendered verbatim if a string,
+  otherwise JSON-encoded. `if <cond>` (optional) gates the emit.
+
+### `error`
+
+```slang
+error "design rejected — cannot proceed"   -- terminate the flow with a message
+error reason if blocked                     -- guarded
+```
+
+- Emits a `🛑 <Agent> raised an error: <message>` line to the WorkflowTask view
+  and **prematurely terminates the entire flow** with status `error` — no further
+  rounds run, and the remaining agent subtree is aborted.
+- This is the explicit failure escape hatch: an agent that detects an
+  unrecoverable condition can stop the whole workflow rather than deadlocking or
+  burning the round budget.
+- The optional message is any expression (verbatim if a string, else
+  JSON-encoded). `if <cond>` (optional) gates the termination — a guarded
+  `error` whose condition is false is skipped and the agent continues.
 
 ---
 
@@ -551,8 +588,12 @@ agent's operation tree once into a flat instruction list and drives a round-base
 loop. Per round:
 
 1. **Advance** every non-running, non-terminal agent through its non-blocking
-   instructions (`let`/`set`/jumps/branches/satisfied awaits) until it blocks on a
-   `stake`, an unsatisfied `await`, an `escalate`, or it `commit`s / ends.
+   instructions (`let`/`set`/`log`/jumps/branches/satisfied awaits) until it blocks on a
+   `stake`, an unsatisfied `await`, an `escalate`, it `commit`s, raises an
+   `error`, or ends. `log` messages and a value-carrying `commit` are surfaced to
+   the WorkflowTask view during this step. An agent that hits `error` immediately
+   terminates the whole flow with status `error` (the remaining agent subtree is
+   aborted), bypassing the converge/deadlock checks below.
 2. **Check converge** — on truthy condition, the flow completes successfully.
 3. If no agent can make progress and none staked/escalated → **deadlock**.
 4. **Handle escalations** synchronously (ask the user, deliver the reply as mail
@@ -653,13 +694,15 @@ agent_meta     = 'role'  ':' string
                | 'peers' ':' '[' [ agentref { ',' agentref } ] ']'  (* Shofer extension *)
                | 'retry' ':' number ;
 
-operation      = stake | await | commit | escalate | when | let | set | repeat ;
+operation      = stake | await | commit | escalate | log | error | when | let | set | repeat ;
 stake          = 'stake' func_call [ '->' recipient { ',' recipient } ]
                  [ 'if' expr ] [ 'output' ':' output_schema ] ;
 await          = 'await' ident '<-' source { ',' source }
                  { ',' ident ':' expr } ;          (* options: parsed, unused *)
 commit         = 'commit' [ expr ] [ 'if' expr ] ;
 escalate       = 'escalate' agentref [ 'reason' ':' string ] [ 'if' expr ] ;
+log            = 'log' [ expr ] [ 'if' expr ] ;
+error          = 'error' [ expr ] [ 'if' expr ] ;
 when           = 'when' expr '{' { operation } '}' [ 'otherwise' '{' { operation } '}' ] ;
 repeat         = 'repeat' 'until' expr '{' { operation } '}' ;
 let            = 'let' ident '=' expr ;

@@ -21,6 +21,8 @@ import type {
 	AwaitOp,
 	CommitOp,
 	EscalateOp,
+	LogOp,
+	ErrorOp,
 	WhenBlock,
 	ElseBlock,
 	LetOp,
@@ -376,6 +378,10 @@ class Parser {
 				return this.parseCommitOp()
 			case TokenType.Escalate:
 				return this.parseEscalateOp()
+			case TokenType.Log:
+				return this.parseLogOp()
+			case TokenType.Error:
+				return this.parseErrorOp()
 			case TokenType.When:
 				return this.parseWhenBlock()
 			case TokenType.Let:
@@ -501,6 +507,37 @@ class Parser {
 		const condition = this.parseOptionalCondition()
 
 		return { type: "EscalateOp", target, reason, condition, span: this.spanFrom(start) }
+	}
+
+	private parseLogOp(): LogOp {
+		const start = this.expect(TokenType.Log)
+		const value = this.parseOptionalMessage()
+		const condition = this.parseOptionalCondition()
+		return { type: "LogOp", value, condition, span: this.spanFrom(start) }
+	}
+
+	private parseErrorOp(): ErrorOp {
+		const start = this.expect(TokenType.Error)
+		const value = this.parseOptionalMessage()
+		const condition = this.parseOptionalCondition()
+		return { type: "ErrorOp", value, condition, span: this.spanFrom(start) }
+	}
+
+	/**
+	 * Parse the optional message expression carried by `commit` / `log` / `error`.
+	 * The message (if any) precedes an optional `if` guard, so it stops at `if`,
+	 * the next operation, the closing brace, or EOF — mirroring {@link parseCommitOp}.
+	 */
+	private parseOptionalMessage(): Expr | undefined {
+		if (
+			!this.check(TokenType.If) &&
+			!this.isOperationStart() &&
+			!this.check(TokenType.RBrace) &&
+			!this.check(TokenType.EOF)
+		) {
+			return this.parseExpr()
+		}
+		return undefined
 	}
 
 	private parseWhenBlock(): WhenBlock {
@@ -867,6 +904,8 @@ class Parser {
 			t === TokenType.Await ||
 			t === TokenType.Commit ||
 			t === TokenType.Escalate ||
+			t === TokenType.Log ||
+			t === TokenType.Error ||
 			t === TokenType.When ||
 			t === TokenType.Let ||
 			t === TokenType.Set ||
@@ -917,6 +956,8 @@ function isKeywordToken(type: TokenType): boolean {
 		type === TokenType.Import ||
 		type === TokenType.As ||
 		type === TokenType.Escalate ||
+		type === TokenType.Log ||
+		type === TokenType.Error ||
 		type === TokenType.Repeat ||
 		type === TokenType.Until ||
 		type === TokenType.Title ||

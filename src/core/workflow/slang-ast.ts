@@ -117,7 +117,17 @@ export interface AgentMeta {
 
 // ─── Operations ───
 
-export type Operation = StakeOp | AwaitOp | CommitOp | EscalateOp | WhenBlock | LetOp | SetOp | RepeatBlock
+export type Operation =
+	| StakeOp
+	| AwaitOp
+	| CommitOp
+	| EscalateOp
+	| LogOp
+	| ErrorOp
+	| WhenBlock
+	| LetOp
+	| SetOp
+	| RepeatBlock
 
 export interface StakeOp extends BaseNode {
 	type: "StakeOp"
@@ -183,6 +193,27 @@ export interface EscalateOp extends BaseNode {
 	type: "EscalateOp"
 	target: string // agent ref without @
 	reason?: string
+	condition?: Expr
+}
+
+/**
+ * `log [value] [if cond]` — emit a message to the WorkflowTask view (the chat
+ * stream) without affecting flow control. Non-blocking and non-terminal: the
+ * agent continues to its next operation in the same advance.
+ */
+export interface LogOp extends BaseNode {
+	type: "LogOp"
+	value?: Expr
+	condition?: Expr
+}
+
+/**
+ * `error [value] [if cond]` — emit a message to the WorkflowTask view and
+ * prematurely terminate the whole flow with status "error". Terminal.
+ */
+export interface ErrorOp extends BaseNode {
+	type: "ErrorOp"
+	value?: Expr
 	condition?: Expr
 }
 

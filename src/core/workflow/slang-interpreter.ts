@@ -18,6 +18,8 @@ import type {
 	AwaitOp,
 	EscalateOp,
 	CommitOp,
+	LogOp,
+	ErrorOp,
 	LetOp,
 	SetOp,
 	FlowDecl,
@@ -40,6 +42,8 @@ export type Instr =
 	| { kind: "await"; op: AwaitOp }
 	| { kind: "escalate"; op: EscalateOp }
 	| { kind: "commit"; op: CommitOp }
+	| { kind: "log"; op: LogOp }
+	| { kind: "error"; op: ErrorOp }
 	| { kind: "let"; op: LetOp }
 	| { kind: "set"; op: SetOp }
 	| { kind: "jump"; target: number }
@@ -51,7 +55,30 @@ export type AdvanceResult =
 	| { type: "escalate"; op: EscalateOp }
 	| { type: "await" }
 	| { type: "committed" }
+	| { type: "error"; op: ErrorOp }
 	| { type: "end" }
+
+/**
+ * A user-visible message an agent produced while advancing, surfaced to the
+ * WorkflowTask chat view. Emitted by `log` / `error` ops and by a `commit`
+ * carrying a value. The caller owns the buffer (mutated in place), mirroring
+ * the mailbox convention — the pure VM stays free of view side-effects.
+ */
+export interface EmittedMessage {
+	kind: "log" | "error" | "commit"
+	message: string
+}
+
+/** Render an evaluated message value for display: strings verbatim, else JSON. */
+export function formatEmittedValue(value: unknown): string {
+	if (value === undefined || value === null) return ""
+	if (typeof value === "string") return value
+	try {
+		return JSON.stringify(value)
+	} catch {
+		return String(value)
+	}
+}
 
 /** Guard against compiler/eval bugs producing an infinite control-flow loop. */
 export const MAX_CONTROL_FLOW_STEPS = 10_000
@@ -94,6 +121,12 @@ export function compileAgentProgram(agent: AgentDecl): Instr[] {
 				break
 			case "CommitOp":
 				instrs.push({ kind: "commit", op })
+				break
+			case "LogOp":
+				instrs.push({ kind: "log", op })
+				break
+			case "ErrorOp":
+				instrs.push({ kind: "error", op })
 				break
 			case "LetOp":
 				instrs.push({ kind: "let", op })
@@ -163,6 +196,8 @@ export function advanceAgent(
 	mailbox: MailboxEntry[],
 	flowState: FlowState,
 	log: InterpreterLog = noopLog,
+	/** Optional caller-owned sink for `log`/`error`/`commit` view messages. */
+	emitted?: EmittedMessage[],
 ): AdvanceResult {
 	log.info(
 		`advanceAgent '${state.name}' enter — opIndex=${state.opIndex}/${program.length} program=[${program.map((i) => i.kind).join(",")}]`,
@@ -201,9 +236,40 @@ export function advanceAgent(
 					break
 				}
 				state.status = "committed"
-				if (instr.op.value) state.output = evalExpr(instr.op.value, state, flowState)
+				if (instr.op.value) {
+					const committedValue = evalExpr(instr.op.value, state, flowState)
+					state.output = committedValue
+					// Surface the commit message to the WorkflowTask view, like log/error.
+					emitted?.push({ kind: "commit", message: formatEmittedValue(committedValue) })
+				}
 				log.info(`advanceAgent '${state.name}' → committed (hasValue=${!!instr.op.value})`)
 				return { type: "committed" }
+			case "log": {
+				if (instr.op.condition && !toBool(evalExpr(instr.op.condition, state, flowState))) {
+					state.opIndex++
+					break
+				}
+				const message = instr.op.value ? formatEmittedValue(evalExpr(instr.op.value, state, flowState)) : ""
+				emitted?.push({ kind: "log", message })
+				log.info(`advanceAgent '${state.name}' log: ${message}`)
+				state.opIndex++
+				break
+			}
+			case "error": {
+				if (instr.op.condition && !toBool(evalExpr(instr.op.condition, state, flowState))) {
+					log.info(`advanceAgent '${state.name}' error condition NOT met → skip`)
+					state.opIndex++
+					break
+				}
+				const message = instr.op.value ? formatEmittedValue(evalExpr(instr.op.value, state, flowState)) : ""
+				emitted?.push({ kind: "error", message })
+				// Advance past the op so a resume can't re-trigger it, then signal the
+				// orchestrator to terminate the whole flow.
+				state.opIndex++
+				state.status = "error"
+				log.error(`advanceAgent '${state.name}' → error: ${message}`)
+				return { type: "error", op: instr.op }
+			}
 			case "stake":
 				log.info(
 					`advanceAgent '${state.name}' → stake call=${instr.op.call.name} recipients=[${instr.op.recipients.map((r) => r.ref).join(",")}] hasOutput=${!!instr.op.output}`,
