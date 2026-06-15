@@ -376,26 +376,31 @@ Supporting behaviour:
     - never fall back to the chat `droppedContextFiles` tag list while a form is open
       — that's the confusing status quo this design replaces.
 
-## Value: `@`-mention vs bare path
+## Value: the field gets the `@`-prefixed path (desired behaviour)
 
-"What string lands in the field" is a second, separable decision from targeting,
-and it's why the question is phrased as "the `@` reference":
+**Desired state:** dropping a file onto a droppable text field inserts the file's
+workspace-relative path **prefixed with `@`** — i.e. the field value becomes
+`@/relative/path`. This is the `@` "reference": it reuses Shofer's existing mention
+resolver so the path the user dropped is expanded to the file's content when the
+flow-param value reaches the agent's prompt (exactly like an `@mention` typed in
+chat). The user drags a file onto, say, the `spec` field and `spec` is set to
+`@/src/app.ts`.
 
-- **`@/path` mention** — for a param whose value is fed into an **agent prompt**,
-  inserting `@/relative/path` lets Shofer's existing mention resolver **inline the
-  file's content** for that agent (same as `@mentions` in chat). This is usually
-  what you want for "here's the file to work on."
-- **Bare `relative/path`** — for a param used as a **literal path argument** (the
-  agent opens it itself, or it's passed to a tool), insert the plain
-  workspace-relative path with no `@`.
+Mechanically this is the same workspace-relative resolution `parseDroppedUris`
+already produces, with an `@` prepended:
 
-Make it a property of the declared intent, e.g. `accepts: "mention"` → `@/path`,
-`accepts: "path"` → bare path (`accepts: "paths"` → append multiple, space-joined
-mentions or a `string[]`). A sensible default for a free-text `string` field is the
-**`@/path` mention**, since flow-param values overwhelmingly end up in agent
-prompts and the resolver already knows how to expand them. The mention vs bare-path
-choice reuses the same workspace-relative resolution `parseDroppedUris` already
-does — only the `@` prefix differs.
+- single-value text field → set the value to `@/path` (or, if the field already
+  holds text, insert the `@/path` token at the cursor / append it);
+- multi-value field → append each as a space-joined `@/path` token (or a
+  `string[]` of them).
+
+A bare (un-prefixed) path could be a future opt-out for params used as a literal
+path argument rather than prompt context, but it is **not** the desired default —
+the `@`-prefixed mention is. Keep this declared per field (the `accepts` trait), so
+only the **particular text fields** that opt in are droppable.
+
+> **Implementation status:** left as-is for now — this section documents the
+> desired behaviour only; no code is wired yet.
 
 ## Delivery mechanisms
 
