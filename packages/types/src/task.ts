@@ -142,6 +142,13 @@ export interface CreateTaskOptions {
 	 * new task from a pre-task dropdown selection.
 	 */
 	initialApiConfigName?: string
+	/**
+	 * Persona/role text injected into this task's system prompt, on top of the
+	 * mode's roleDefinition. Used by workflow agents to make the `.slang`
+	 * `agent { role: "…" }` actually shape behavior (the slang `role` is otherwise
+	 * parsed-but-not-consumed). Applied for this task only — never mutates the mode.
+	 */
+	agentRole?: string
 	/** Initial execution state for the task's history item. */
 	initialState?: TaskState
 	/**

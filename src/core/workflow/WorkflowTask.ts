@@ -1031,6 +1031,10 @@ export class WorkflowTask extends Task {
 			const task = await provider.createTask(prompt, undefined, this, {
 				isBackground: true,
 				initialMode: mode,
+				// Inject the agent's declared `.slang` role into its system prompt
+				// (the slang `role:` is otherwise parsed-but-not-consumed). Layered
+				// on top of the mode's roleDefinition for this agent task only.
+				agentRole: agentDecl.meta?.role,
 				initialState: { lifecycle: "idle" },
 				openInStack: false,
 				keepCurrentTask: true,

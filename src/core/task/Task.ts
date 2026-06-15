@@ -412,6 +412,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	completionSchema?: Record<string, unknown>
 
 	/**
+	 * Optional persona/role injected into this task's system prompt (workflow
+	 * agents pass their `.slang` `role:` here). Layered on top of the mode's
+	 * roleDefinition for this task only; see {@link CreateTaskOptions.agentRole}.
+	 */
+	agentRole?: string
+
+	/**
 	 * The mode associated with this task. Persisted across sessions
 	 * to maintain user context when reopening tasks from history.
 	 *
@@ -890,6 +897,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		completionSchema,
 		initialKnownPeers,
 		initialTitle,
+		agentRole,
 	}: TaskOptions) {
 		super()
 
@@ -986,6 +994,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.parentTask = parentTask
 		this.rootTask = rootTask
 		this.taskNumber = taskNumber
+		this.agentRole = agentRole
 		this.softResultLength = softResultLength
 		this.softTimeoutSec = softTimeoutSec
 		this.completionSchema = completionSchema
@@ -2315,14 +2324,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// fields. Merging here guarantees the extension is present on EVERY
 			// history write, so the webview sees it from the very first
 			// postInitState rather than only after the first checkpoint.
-			await this.providerRef
-				.deref()
-				?.updateTaskHistory({
-					...historyItem,
-					...peerExtension,
-					...titleExtension,
-					...this.getHistoryExtension(),
-				})
+			await this.providerRef.deref()?.updateTaskHistory({
+				...historyItem,
+				...peerExtension,
+				...titleExtension,
+				...this.getHistoryExtension(),
+			})
 
 			return true
 		} catch (error) {
@@ -6046,6 +6053,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const modelInfo = this.api.getModel().info
 		const taskMode = this._taskMode || (mode ?? defaultModeSlug)
 
+		// Workflow agents carry a per-task `agentRole` (their `.slang` `role:`).
+		// Layer it on top of the user's custom instructions so it actually shapes
+		// the agent's behavior — the slang `role` is otherwise not consumed. Scoped
+		// to this task only; the mode's roleDefinition is untouched.
+		const effectiveCustomInstructions = this.agentRole?.trim()
+			? `# Agent Role\n\n${this.agentRole.trim()}${customInstructions ? `\n\n${customInstructions}` : ""}`
+			: customInstructions
+
 		// H15: Build a cache key covering every stable input to the system
 		// prompt.  Peer notifications + subtask constraints are appended
 		// below; they don't participate in the cache key because they are
@@ -6059,7 +6074,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const cacheKey = [
 			taskMode,
 			this.cwd,
-			customInstructions ?? "",
+			effectiveCustomInstructions ?? "",
 			JSON.stringify(experiments ?? {}),
 			language ?? "",
 			enableSubfolderRules ?? false,
@@ -6109,7 +6124,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskMode,
 				customModePrompts,
 				customModes,
-				customInstructions,
+				effectiveCustomInstructions,
 				experiments,
 				language,
 				shoferIgnoreInstructions,
