@@ -459,6 +459,8 @@ export function buildJsonTrace(
 			? { isWorkflow: true, flowState: options?.flowState, slangSource: options?.slangSource, events }
 			: {}),
 	}
+}
+
 /**
  * Build a task's trace plus the full descendant tree of its spawned sub-tasks.
  *
@@ -503,8 +505,6 @@ export async function buildJsonTraceTree(
 	}
 
 	return walk(rootId)
-}
-
 }
 
 /**
