@@ -12,8 +12,8 @@ export const copilotComparisons: CopilotComparison[] = [
 	},
 	{
 		aspect: "Model Ecosystem",
-		copilot: "Curated cloud-managed multi-model picker",
-		shofer: "Bring-Your-Own-Model — Ollama, LM Studio, Anthropic, OpenAI, OpenRouter, and more",
+		copilot: "Curated, vendor-managed picker — OpenAI + Anthropic clusters (Google Gemini removed in 2026)",
+		shofer: "Bring-Your-Own-Model — Ollama, LM Studio, Anthropic, OpenAI, OpenRouter, niche/open-weight endpoints, and more",
 	},
 	{
 		aspect: "Network Autonomy",
@@ -22,8 +22,9 @@ export const copilotComparisons: CopilotComparison[] = [
 	},
 	{
 		aspect: "Agent Orchestration",
-		copilot: "Monolithic single-agent — no dynamic sub-agent management",
-		shofer: "Agent-to-Agent orchestration — spawn, monitor, and converse with child agents",
+		copilot:
+			"Parallel Cloud Agents (isolated GitHub Actions envs) + third-party agents — orchestrated via remote envs/hooks, not a developer-authored graph",
+		shofer: "Declarative Slang execution graph — deterministic message routing, control flow, and budgets, plus spawn/monitor/converse with child agents",
 	},
 	{
 		aspect: "Async MCP",
@@ -32,13 +33,13 @@ export const copilotComparisons: CopilotComparison[] = [
 	},
 	{
 		aspect: "Cost Control",
-		copilot: "No per-session cost tracking or limits",
-		shofer: "Per-task USD cost caps with automatic agent halting",
+		copilot: "Monthly credit allotment; no per-task hard USD cap that halts an agent mid-loop",
+		shofer: "Per-task / per-session hard USD caps with automatic agent halting",
 	},
 	{
-		aspect: "Subscription",
-		copilot: "$10–$39/month SaaS subscription",
-		shofer: "Free Open Source (Apache 2.0) — pay only for your own API tokens",
+		aspect: "Pricing",
+		copilot: "Usage-based credit-drawdown billing (Free / Pro / Pro+ / Max) with metered overages",
+		shofer: "Free Open Source (Apache 2.0) — pay only for your own API tokens, or $0 fully local",
 	},
 ]
 

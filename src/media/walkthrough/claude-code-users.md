@@ -4,9 +4,9 @@ Coming from Anthropic's Claude Code? Shofer gives you the same agentic power in 
 
 ## Key Differences from Claude Code
 
-- **Bring any model** — Anthropic, OpenAI, OpenRouter, xAI, Bedrock, or local via Ollama/LM Studio (Claude Code is Anthropic-only)
+- **Bring any model** — Anthropic, OpenAI, OpenRouter, xAI, Bedrock, or local via Ollama/LM Studio (Claude Code runs Anthropic models only)
 - **Runs offline** — fully air-gapped with local models
-- **Graphical cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs instead of a terminal transcript
+- **VS Code-native cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, with the agent graph visualized in-editor
 - **Deterministic Workflows** — declarative Slang multi-agent orchestration, not ad-hoc runtime delegation
 - **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords
 - **Assistant Agent** — a persistent, cross-session context window that other tasks reuse to cut token spend

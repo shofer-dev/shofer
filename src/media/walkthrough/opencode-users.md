@@ -4,10 +4,10 @@ Coming from OpenCode? You already share Shofer's philosophy — open-source, mod
 
 ## Key Differences from OpenCode
 
-- **Graphical cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, instead of a TUI transcript
-- **Deterministic Workflows** — declarative Slang multi-agent orchestration with output-contract validation
-- **Parallel tasks & background subtasks** — many concurrent conversations and full workflow trees
-- **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords
+- **VS Code-native cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, with the agent graph visualized in-editor
+- **Deterministic Workflows** — declarative Slang where the _control flow itself_ is the spec (message routing, `converge`, budgets), with output-contract validation
+- **Whole-tree task orchestration** — many concurrent conversations and full workflow trees, with cross-tree cost/stats
+- **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords (OpenCode's edge is its real-time LSP/compiler feedback)
 - **Assistant Agent** — a persistent, cross-session context window other tasks reuse to cut token spend
 - **Native worktrees + OS-level sandboxing** — parallel branches in one window; shell commands confined via Landlock/bwrap
 - **Hard cost caps** — per-task and per-session USD budgets that halt runaway loops

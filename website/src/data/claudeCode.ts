@@ -12,8 +12,8 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 	},
 	{
 		aspect: "Model Ecosystem",
-		claudeCode: "Anthropic Claude models only (Opus / Sonnet / Haiku)",
-		shofer: "Bring-Your-Own-Model — Anthropic, OpenAI, OpenRouter, xAI, Bedrock, or local via Ollama/LM Studio",
+		claudeCode: "Anthropic Claude lineup (Mythos, Fable, Opus, Sonnet, Haiku)",
+		shofer: "Bring-Your-Own-Model — Anthropic (same Claude models), OpenAI, OpenRouter, xAI, Bedrock, or local via Ollama/LM Studio",
 	},
 	{
 		aspect: "Offline / Air-Gapped",
@@ -32,8 +32,8 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 	},
 	{
 		aspect: "Semantic RAG (code + git)",
-		claudeCode: "Reads files and runs git on demand; no persistent index",
-		shofer: "Indexes code and the entire git log; git_search answers why/when by concept",
+		claudeCode: "Dynamic agentic search + Auto Memory; no persistent semantic embedding index",
+		shofer: "Precomputed semantic index over code and the entire git log; git_search answers why/when by concept",
 	},
 	{
 		aspect: "Cost Control",

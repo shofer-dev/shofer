@@ -7,8 +7,9 @@ export interface OpenCodeComparison {
 export const openCodeComparisons: OpenCodeComparison[] = [
 	{
 		aspect: "Primary Surface",
-		openCode: "Terminal UI (TUI), editor-agnostic, with a client-server core",
-		shofer: "Native VS Code GUI cockpit — task tree, live diagrams, cost panels — plus a headless CLI",
+		openCode:
+			"Multi-surface & editor-agnostic — TUI, Desktop app, and IDE extensions (VS Code, Cursor, JetBrains, Zed, Neovim, Emacs) over the open ACP standard",
+		shofer: "Deeply VS Code-native GUI cockpit — task tree, live diagrams, cost panels — plus a headless CLI",
 	},
 	{
 		aspect: "Philosophy",
@@ -22,13 +23,14 @@ export const openCodeComparisons: OpenCodeComparison[] = [
 	},
 	{
 		aspect: "Multi-Agent Orchestration",
-		openCode: "Configurable agents driven imperatively at runtime",
-		shofer: "Declarative, deterministic Slang Workflows — repeatable, inspectable, and visualized",
+		openCode:
+			"Declarative custom agents in Markdown (.opencode/agents/) with per-agent permission locking; routing imperative at runtime",
+		shofer: "Declarative, deterministic Slang Workflows — the control flow itself is declarative, repeatable, inspectable, and visualized",
 	},
 	{
-		aspect: "Semantic RAG (code + git)",
-		openCode: "LSP-aware; reads files and runs git on demand",
-		shofer: "Indexes code and the entire git log; git_search answers why/when by concept",
+		aspect: "Code Understanding",
+		openCode: "Deep real-time LSP integration — feeds live compiler diagnostics & type errors back to the model",
+		shofer: "Precomputed semantic index over code and the entire git log; git_search answers why/when by concept",
 	},
 	{
 		aspect: "Worktrees & Sandboxing",
