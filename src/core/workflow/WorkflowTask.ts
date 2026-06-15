@@ -1554,9 +1554,22 @@ export class WorkflowTask extends Task {
 
 		this.flowState.status = "escalated"
 		const reason = instr.op.reason || `Agent '${agentName}' needs your input.`
+		const humanRef = instr.op.target || "Human"
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}', awaiting human input: ${reason}`,
 		)
+		// Record the escalation request in mailboxHistory so the Sequence diagram
+		// draws an arrow from the agent to @Human (that view is built entirely from
+		// mailboxHistory). Push + notify before blocking on the human so the arrow
+		// shows while we wait, not only after the reply.
+		this.flowState.mailboxHistory.push({
+			from: agentName,
+			to: humanRef,
+			value: reason,
+			timestamp: Date.now(),
+			funcName: "escalate",
+		})
+		this.notifySlangEditor()
 		// Emit the followup as the JSON FollowUpData shape the webview expects —
 		// ChatRow parses followup text with safeJsonParse<FollowUpData> and renders
 		// `question`, so a raw string would show the "Shofer has a question" header
@@ -1618,11 +1631,22 @@ export class WorkflowTask extends Task {
 				`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered (${(text ?? "").length} chars)`,
 			)
 		}
+		const replyTs = Date.now()
+		// Deliver the reply to the transient mailbox (for the agent's await/consume)
+		// AND record it in mailboxHistory so the Sequence diagram draws the return
+		// arrow from @Human back to the agent.
 		this.flowState.mailbox.push({
-			from: instr.op.target || "Human",
+			from: humanRef,
 			to: agentName,
 			value: response,
-			timestamp: Date.now(),
+			timestamp: replyTs,
+			funcName: "escalate",
+		})
+		this.flowState.mailboxHistory.push({
+			from: humanRef,
+			to: agentName,
+			value: response,
+			timestamp: replyTs,
 			funcName: "escalate",
 		})
 		state.opIndex++
