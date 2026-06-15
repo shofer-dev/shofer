@@ -196,6 +196,27 @@ describe("parseSlang", () => {
 		}
 	})
 
+	it("parses escalate with choices (multiple-choice sign-off)", () => {
+		const src = `
+flow "escalate-choices" () {
+  agent A {
+    mode: "code"
+    role: "Test"
+
+    escalate @Human reason: "Approve the result?" choices: ["ACK", "Reject"]
+    commit
+  }
+}`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const ops = agentsOf(ast.flows[0]!)[0]!.operations
+		expect(ops[0]!.type).toBe("EscalateOp")
+		if (ops[0]!.type === "EscalateOp") {
+			expect(ops[0]!.reason).toBe("Approve the result?")
+			expect(ops[0]!.choices).toEqual(["ACK", "Reject"])
+		}
+	})
+
 	it("returns errors for invalid syntax", () => {
 		const { errors } = parseSlang("this is not valid slang {")
 		expect(errors.length).toBeGreaterThan(0)

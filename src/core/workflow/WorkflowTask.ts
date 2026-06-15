@@ -1553,7 +1553,19 @@ export class WorkflowTask extends Task {
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}', awaiting human input: ${reason}`,
 		)
-		const { text } = await this.ask("followup", reason)
+		// Emit the followup as the JSON FollowUpData shape the webview expects —
+		// ChatRow parses followup text with safeJsonParse<FollowUpData> and renders
+		// `question`, so a raw string would show the "Shofer has a question" header
+		// with an empty body in the Events tab. When the escalate op declares
+		// `choices`, surface them as suggestion buttons (a multiple-choice sign-off
+		// with no typing); otherwise it's a free-text followup (WorkflowView shows
+		// the answer textbox because there's no `paramForm`/`suggest`).
+		const choices = instr.op.choices
+		const followUp =
+			choices && choices.length > 0
+				? { question: reason, suggest: choices.map((answer) => ({ answer })) }
+				: { question: reason }
+		const { text } = await this.ask("followup", JSON.stringify(followUp))
 		const response = text ?? ""
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}' answered (${response.length} chars)`,

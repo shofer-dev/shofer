@@ -504,9 +504,19 @@ class Parser {
 			reason = this.expect(TokenType.String).value
 		}
 
+		// Optional `choices: ["A", "B"]` — a soft keyword (plain ident, like the
+		// flow-param `options` field) that turns the escalation into a
+		// multiple-choice prompt instead of a free-text question.
+		let choices: string[] | undefined
+		if (this.check(TokenType.Ident) && this.peek().value === "choices") {
+			this.advance()
+			this.expect(TokenType.Colon)
+			choices = exprAsStringList(this.parseExpr())
+		}
+
 		const condition = this.parseOptionalCondition()
 
-		return { type: "EscalateOp", target, reason, condition, span: this.spanFrom(start) }
+		return { type: "EscalateOp", target, reason, choices, condition, span: this.spanFrom(start) }
 	}
 
 	private parseLogOp(): LogOp {

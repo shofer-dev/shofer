@@ -193,6 +193,14 @@ export interface EscalateOp extends BaseNode {
 	type: "EscalateOp"
 	target: string // agent ref without @
 	reason?: string
+	/**
+	 * Optional fixed answer set, e.g. `choices: ["ACK", "Reject"]`. When present
+	 * the escalation is presented to the user as a multiple-choice prompt
+	 * (clickable suggestion buttons) instead of a free-text question, so a simple
+	 * sign-off needs no typing. The chosen text is delivered back to the agent
+	 * exactly as a free-text answer would be.
+	 */
+	choices?: string[]
 	condition?: Expr
 }
 
