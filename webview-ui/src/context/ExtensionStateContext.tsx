@@ -382,6 +382,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					// updater (which may be batched/deferred) reads a stable value.
 					const alreadyHydrated = hasHydratedRef.current
 					hasHydratedRef.current = true
+					// [scroll:h24] A full state push overwrites hasMoreShoferMessages.
+					// If one arrives carrying `false` after a tail-loaded task set it
+					// `true` (or vice-versa), the sentinel + header flicker.
+					vscode.postMessage({
+						type: "webviewLog",
+						text: `[scroll:h24] webview stateInit hasMore=${newState.hasMoreShoferMessages} currentTaskId=${newState.currentTaskId ?? "<none>"}`,
+					})
 					if (newState.apiConfiguration !== undefined) {
 						const prevProvider = state.apiConfiguration?.apiProvider
 						const nextProvider = newState.apiConfiguration?.apiProvider
@@ -419,6 +426,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				}
 				case "taskStateUpdate": {
 					const ts = message.taskStateUpdates ?? {}
+					// [scroll:h24] Targeted delta; log only when it touches the flag.
+					if ("hasMoreShoferMessages" in ts) {
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[scroll:h24] webview taskStateUpdate hasMore=${ts.hasMoreShoferMessages}`,
+						})
+					}
 					setState((prevState) => ({ ...prevState, ...ts }))
 					break
 				}
@@ -520,6 +534,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						// in the in-memory tail (window overlap).
 						const existingTs = new Set(prevState.shoferMessages.map((m) => m.ts))
 						const fresh = olderMessages.filter((m) => !existingTs.has(m.ts))
+						// [scroll:h24] Prepending shifts every row down — Virtuoso must
+						// preserve scroll position here. Log the size of the prepend so a
+						// scroll jump can be correlated with the batch that caused it.
+						vscode.postMessage({
+							type: "webviewLog",
+							text: `[scroll:h24] webview shoferMessagesPrepended batch=${olderMessages.length} fresh=${fresh.length} prevTail=${prevState.shoferMessages.length}`,
+						})
 						if (fresh.length === 0) return prevState
 						return {
 							...prevState,

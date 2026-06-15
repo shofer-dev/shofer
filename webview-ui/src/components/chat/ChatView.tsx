@@ -163,6 +163,27 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[syntheticTaskHeader, messages],
 	)
 
+	// [scroll:h24] Diagnostic: log whenever the flag flips, capturing what row 0
+	// resolves to. When hasMore is true we show the synthetic header (real first
+	// prompt); when false we fall back to displayMessages[0], which on a mid-turn
+	// window start is an `api_req_started` whose text is the wireRequest blob —
+	// exactly the bad TaskHeader render. Pairs the sentinel flicker with the
+	// header content so we can confirm they are the same toggle.
+	useEffect(() => {
+		const row0 = displayMessages.at(0)
+		const row0Desc = syntheticTaskHeader
+			? "synthetic(first-prompt)"
+			: `${row0?.type ?? "?"}/${row0?.say ?? row0?.ask ?? "?"}`
+		vscode.postMessage({
+			type: "webviewLog",
+			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} row0=${row0Desc} msgCount=${messages.length}`,
+		})
+		// Intentionally keyed on the toggle (flag + header identity), not on every
+		// streamed append, to avoid per-chunk spam. displayMessages/messages are
+		// read from the same render's closure.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [hasMoreShoferMessages, syntheticTaskHeader])
+
 	// Leaving this less safe version here since if the first message is not a
 	// task, then the extension is in a bad state and needs to be debugged (see
 	// Shofer.abort).
