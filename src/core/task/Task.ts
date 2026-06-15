@@ -2137,6 +2137,34 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.emit(ShoferEventName.Message, { action: "updated", message })
 	}
 
+	/**
+	 * Embed the final submitted values of an answered followup form back onto the
+	 * pending followup question message and mark it answered. Form answers arrive
+	 * via an out-of-band `objectResponse` (no chat echo), so without this the
+	 * persisted form would re-render editable with default values after a reload.
+	 * Writing `answeredValues` lets the webview replay the form read-only with what
+	 * the user entered. Shared by `ask_followup_question` (form mode) and
+	 * {@link WorkflowTask} flow-parameter collection.
+	 */
+	public async markFollowupFormAnswered(
+		answeredValues: Record<string, string | number | boolean | string[]>,
+	): Promise<void> {
+		const idx = findLastIndex(this.shoferMessages, (m) => m.type === "ask" && m.ask === "followup" && !m.isAnswered)
+		if (idx === -1) {
+			return
+		}
+		const msg = this.shoferMessages[idx]
+		try {
+			const payload = JSON.parse(msg.text || "{}")
+			payload.answeredValues = answeredValues
+			msg.text = JSON.stringify(payload)
+		} catch {
+			// Leave the message text untouched if it is not parseable JSON.
+		}
+		msg.isAnswered = true
+		await this.updateShoferMessage(msg)
+	}
+
 	private async saveShoferMessages(): Promise<boolean> {
 		return time("saveShoferMessages", () => this._saveShoferMessagesImpl())
 	}

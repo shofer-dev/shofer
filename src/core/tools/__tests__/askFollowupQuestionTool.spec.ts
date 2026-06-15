@@ -14,6 +14,7 @@ describe("askFollowupQuestionTool", () => {
 			ask: vi.fn().mockResolvedValue({ text: "Test response" }),
 			say: vi.fn().mockResolvedValue(undefined),
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("Missing parameter error"),
+			markFollowupFormAnswered: vi.fn().mockResolvedValue(undefined),
 			consecutiveMistakeCount: 0,
 			recordToolError: vi.fn(),
 		}
@@ -109,6 +110,93 @@ describe("askFollowupQuestionTool", () => {
 			),
 			false,
 		)
+	})
+
+	describe("form mode (typed input widgets)", () => {
+		it("renders a paramForm followup and returns the JSON answers as the tool result", async () => {
+			mockShofer.ask.mockResolvedValue({ text: '{"runtime":"go","replicas":3}' })
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Configure the service:" },
+				nativeArgs: {
+					question: "Configure the service:",
+					follow_up: null,
+					form: [
+						{ name: "runtime", type: "string", widget: "radio", options: ["node", "go"] },
+						{ name: "replicas", type: "number", widget: "slider", min: 1, max: 10, step: 1 },
+					],
+				},
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// The followup ask carries paramForm (not suggest) so the webview renders the form.
+			const askArg = mockShofer.ask.mock.calls[0][1] as string
+			expect(askArg).toContain('"paramForm"')
+			expect(askArg).toContain('"name":"runtime"')
+			expect(askArg).not.toContain('"suggest"')
+
+			// Submitted values are written back onto the question message for read-only replay.
+			expect(mockShofer.markFollowupFormAnswered).toHaveBeenCalledWith({ runtime: "go", replicas: 3 })
+
+			// The model receives the raw JSON answers.
+			expect(toolResult).toContain('{"runtime":"go","replicas":3}')
+		})
+
+		it("accepts a form with no follow_up suggestions", async () => {
+			mockShofer.ask.mockResolvedValue({ text: '{"name":"svc"}' })
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Name it:" },
+				nativeArgs: {
+					question: "Name it:",
+					follow_up: null,
+					form: [{ name: "name", type: "string" }],
+				},
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(mockShofer.sayAndCreateMissingParamError).not.toHaveBeenCalled()
+			expect(mockShofer.ask).toHaveBeenCalled()
+		})
+
+		it("errors when neither follow_up nor form is provided", async () => {
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Anything?" },
+				nativeArgs: {
+					question: "Anything?",
+					follow_up: null,
+					form: null,
+				} as any,
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
+			expect(mockShofer.ask).not.toHaveBeenCalled()
+		})
 	})
 
 	describe("parameter validation", () => {

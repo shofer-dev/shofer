@@ -26,7 +26,7 @@ export interface FollowUpData {
 	 * the entered values after a reload (the question message persists, but the
 	 * answer is submitted out-of-band via objectResponse with no chat echo).
 	 */
-	answeredValues?: Record<string, string | number | boolean>
+	answeredValues?: Record<string, string | number | boolean | string[]>
 }
 
 /** A single typed input field in a {@link FollowUpData.paramForm}. */
@@ -96,7 +96,9 @@ export const followUpDataSchema = z.object({
 	question: z.string().optional(),
 	suggest: z.array(suggestionItemSchema).optional(),
 	paramForm: z.array(paramFieldSchema).optional(),
-	answeredValues: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+	answeredValues: z
+		.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]))
+		.optional(),
 })
 
 export type FollowUpDataType = z.infer<typeof followUpDataSchema>

@@ -1,3 +1,5 @@
+import type { ParamField } from "@shofer/types"
+
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
@@ -11,14 +13,15 @@ interface Suggestion {
 
 interface AskFollowupQuestionParams {
 	question: string
-	follow_up: Suggestion[]
+	follow_up?: Suggestion[] | null
+	form?: ParamField[] | null
 }
 
 export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 	readonly name = "ask_followup_question" as const
 
 	async execute(params: AskFollowupQuestionParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
-		const { question, follow_up } = params
+		const { question, follow_up, form } = params
 		const { handleError, pushToolResult } = callbacks
 
 		const recordMissingParamError = async (paramName: string): Promise<void> => {
@@ -34,18 +37,60 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 				return
 			}
 
-			if (!follow_up || !Array.isArray(follow_up)) {
+			const hasForm = Array.isArray(form) && form.length > 0
+			const hasSuggestions = Array.isArray(follow_up) && follow_up.length > 0
+
+			// A valid call must offer the user a way to answer: either suggested
+			// answers or a typed form. Report against `follow_up` (the canonical
+			// answer channel) when neither is present.
+			if (!hasForm && !hasSuggestions) {
 				await recordMissingParamError("follow_up")
 				return
 			}
 
-			// Transform follow_up suggestions to the format expected by task.ask
-			const follow_up_json = {
-				question,
-				suggest: follow_up.map((s) => ({ answer: s.text, mode: s.mode })),
+			task.consecutiveMistakeCount = 0
+
+			// Background child tasks route their question to the parent agent (which
+			// answers with free text via answer_subtask_question), so the typed form
+			// UI never reaches an interactive user. For those, fall through to the
+			// parent-routing path below and present the question as plain text.
+			const isBackgroundChild = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
+
+			// Form mode: render a typed input form (dropdown/radio/checkbox/slider/
+			// number/text/boolean). The webview submits all answers at once as a
+			// JSON object via the out-of-band objectResponse path; task.ask resolves
+			// with that JSON string. We embed the answers back onto the question
+			// message so it replays read-only after a reload, then hand the JSON to
+			// the model as the tool result.
+			if (hasForm && !isBackgroundChild) {
+				const form_json = { question, paramForm: form }
+				const { text, images } = await task.ask("followup", JSON.stringify(form_json), false)
+
+				const answersText = text ?? ""
+				try {
+					const parsed = answersText ? JSON.parse(answersText) : {}
+					if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+						await task.markFollowupFormAnswered(
+							parsed as Record<string, string | number | boolean | string[]>,
+						)
+					}
+				} catch {
+					// Non-JSON answer (older client / plain-text reply): skip the
+					// read-only replay write-back but still surface the raw answer.
+				}
+
+				pushToolResult(formatResponse.toolResult(`<user_input>\n${answersText}\n</user_input>`, images))
+				return
 			}
 
-			task.consecutiveMistakeCount = 0
+			// Transform follow_up suggestions to the format expected by task.ask.
+			// follow_up may be null/empty when a background child used form mode —
+			// the parent receives the bare question and answers in free text.
+			const suggestions = (follow_up ?? []).map((s) => ({ answer: s.text, mode: s.mode }))
+			const follow_up_json = {
+				question,
+				suggest: suggestions,
+			}
 
 			// When this is a background child task, route the question to the
 			// parent instead of blocking on user input. The parent discovers
@@ -80,7 +125,7 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 				// wait_for_task currently blocked on this child.
 				const answerPromise = task.setPendingParentQuestion({
 					question,
-					suggestions: follow_up.map((s) => ({ answer: s.text, mode: s.mode })),
+					suggestions,
 				})
 				provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
 

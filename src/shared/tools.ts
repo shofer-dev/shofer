@@ -206,7 +206,8 @@ export type NativeToolArgs = {
 	answer_subtask_question: { task_id: string; answer: string }
 	ask_followup_question: {
 		question: string
-		follow_up: Array<{ text: string; mode?: string }>
+		follow_up?: Array<{ text: string; mode?: string }> | null
+		form?: Array<import("@shofer/types").ParamField> | null
 	}
 	rag_search: { query: string; path?: string; maxResults?: number | null }
 	generate_image: GenerateImageParams

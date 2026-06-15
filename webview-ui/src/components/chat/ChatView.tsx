@@ -1861,6 +1861,22 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[handleSendMessage, setInputValue, switchToMode, alwaysAllowModeSwitch, shoferAsk, markFollowUpAsAnswered],
 	)
 
+	// Submit a typed input form (ask_followup_question form mode, or workflow
+	// flow-params). Sent as an `objectResponse`, NOT a `messageResponse`: this
+	// resolves the pending followup ask with the JSON answer WITHOUT echoing a raw
+	// user_feedback message into the chat. The host writes the values back onto the
+	// question message (answeredValues) so the form renders read-only afterwards.
+	const handleParamFormSubmit = useCallback(
+		(json: string) => {
+			userRespondedRef.current = true
+			if (shoferAsk === "followup") {
+				markFollowUpAsAnswered()
+			}
+			vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: json })
+		},
+		[shoferAsk, markFollowUpAsAnswered],
+	)
+
 	const handleBatchFileResponse = useCallback((response: { [key: string]: boolean }) => {
 		// Handle batch file response, e.g., for file uploads
 		vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: JSON.stringify(response) })
@@ -1888,6 +1904,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					onHeightChange={handleRowHeightChange}
 					isStreaming={isStreaming}
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
+					onParamFormSubmit={handleParamFormSubmit}
 					onBatchFileResponse={handleBatchFileResponse}
 					onFollowUpUnmount={handleFollowUpUnmount}
 					isFollowUpAnswered={messageOrGroup.isAnswered === true || messageOrGroup.ts === currentFollowUpTs}
