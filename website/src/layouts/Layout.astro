@@ -24,9 +24,11 @@ const pageTitle = title === siteConfig.name ? `${siteConfig.name} — ${siteConf
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={siteConfig.url} />
+    <meta property="og:image" content={`${siteConfig.url}${siteConfig.ogImage}`} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${siteConfig.url}${siteConfig.ogImage}`} />
     <link rel="icon" type="image/png" href="/icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
