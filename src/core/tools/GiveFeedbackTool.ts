@@ -9,7 +9,7 @@
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
-import { getOutputChannel } from "../../extension"
+import { getOutputChannel } from "../../utils/outputChannel"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

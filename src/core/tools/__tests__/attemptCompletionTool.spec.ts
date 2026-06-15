@@ -30,7 +30,7 @@ const { mockOutputChannel } = vi.hoisted(() => {
 		},
 	}
 })
-vi.mock("../../../extension", () => ({
+vi.mock("../../../utils/outputChannel", () => ({
 	getOutputChannel: vi.fn(() => mockOutputChannel),
 }))
 

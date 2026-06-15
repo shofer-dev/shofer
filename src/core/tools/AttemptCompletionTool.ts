@@ -9,7 +9,7 @@ import { Package } from "../../shared/package"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"
-import { getOutputChannel } from "../../extension"
+import { getOutputChannel } from "../../utils/outputChannel"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

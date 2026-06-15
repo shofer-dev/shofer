@@ -36,6 +36,7 @@ import { customToolRegistry } from "@shofer/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
+import { setOutputChannel } from "./utils/outputChannel"
 import { bootstrapLogging, setLogLevel, setLogCategories } from "./utils/logging"
 import { webviewLog } from "./utils/logging/subsystems"
 import { initializeNetworkProxy } from "./utils/networkProxy"
@@ -89,19 +90,20 @@ import { initializeI18n } from "./i18n"
 let outputChannel: vscode.OutputChannel
 let extensionContext: vscode.ExtensionContext
 
-/**
- * Get the extension's output channel for logging.
- * Returns undefined if called before extension activation.
- */
-export function getOutputChannel(): vscode.OutputChannel | undefined {
-	return outputChannel
-}
+// Re-export from the leaf module so existing `import { getOutputChannel } from
+// ".../extension"` call sites keep working, while the canonical source lives in
+// a dependency-free module (avoids the WorkflowTask import cycle). New callers
+// should import from "./utils/outputChannel" directly.
+export { getOutputChannel } from "./utils/outputChannel"
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
 export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
+	// Publish to the dependency-free holder so tools/leaf modules can read it
+	// without importing this entrypoint (avoids the WorkflowTask import cycle).
+	setOutputChannel(outputChannel)
 
 	// Bootstrap the shared logging transport — must happen before any module
 	// uses `getLogger()` so the Output Channel is wired.
