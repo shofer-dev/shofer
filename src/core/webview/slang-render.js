@@ -1570,9 +1570,27 @@ function zoomOut() {
 
 function zoomFit() {
 	if (!_svgEl) return
-	var w = parseFloat(_svgEl.getAttribute("width")) || 500
-	var h = parseFloat(_svgEl.getAttribute("height")) || 300
-	_zoomViewBox = { x: 0, y: 0, w: w, h: h }
+	// Fit to the ACTUAL rendered content, not the declared width/height. The
+	// per-diagram width/height attributes are derived from node positions only, so
+	// content that extends past them — edge curves, arrowheads, text labels, the
+	// sequence timeline's trailing events, swimlane lanes — would be cropped if we
+	// fit to the attributes (the "shows a subset" bug). getBBox() returns the tight
+	// union of all rendered geometry in user units, which is exactly what fit wants.
+	var box = null
+	try {
+		box = _svgEl.getBBox()
+	} catch (e) {
+		box = null
+	}
+	if (box && box.width > 0 && box.height > 0) {
+		var pad = Math.max(8, Math.max(box.width, box.height) * 0.02)
+		_zoomViewBox = { x: box.x - pad, y: box.y - pad, w: box.width + pad * 2, h: box.height + pad * 2 }
+	} else {
+		// Fallback when getBBox is unavailable/empty (e.g. an empty-state placeholder).
+		var w = parseFloat(_svgEl.getAttribute("width")) || 500
+		var h = parseFloat(_svgEl.getAttribute("height")) || 300
+		_zoomViewBox = { x: 0, y: 0, w: w, h: h }
+	}
 	applyZoom()
 }
 
