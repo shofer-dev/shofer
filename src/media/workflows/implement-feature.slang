@@ -44,23 +44,31 @@ flow "implement-feature" (feature: "string") {
     repeat until implementation_done {
       await developer_signal <- @Developer
 
-      when developer_signal contains "DONE" {
+      when developer_signal.done {
         set implementation_done = true
       } otherwise {
         stake review_this_round(
           design: feature,
-          implementation_summary: developer_signal
+          implementation_summary: developer_signal.summary,
+          instructions: "Forward this round's work to the Reviewer for evaluation. This is a review request, NOT the terminal stop signal — set complete=false and put the work to review in `details`."
         ) -> @Reviewer
+          output: { complete: "boolean", details: "string" }
 
         await review_result <- @Reviewer
 
         when review_result.approved {
-          stake reviewer_accepted(review: review_result) -> @Developer
+          stake reviewer_accepted(
+            review: review_result,
+            instructions: "The Reviewer ACCEPTED this round. Tell the Developer their latest slice passed — set accepted=true."
+          ) -> @Developer
+            output: { accepted: "boolean", details: "string" }
         } otherwise {
           stake fix_issues(
             issues: review_result.issues,
-            review: review_result
+            review: review_result,
+            instructions: "The Reviewer found issues. Relay them for the Developer to fix — set accepted=false and put the issues in `details`."
           ) -> @Developer
+            output: { accepted: "boolean", details: "string" }
         }
       }
     }
@@ -68,15 +76,17 @@ flow "implement-feature" (feature: "string") {
     -- Final review gate before committing
     stake final_review(
       design: feature,
-      instructions: "Perform a final comprehensive review of the complete implementation against the design at plans/feature-design.md. Confirm everything is correct before the commit."
+      instructions: "Request a FINAL comprehensive review of the complete implementation against the design at plans/feature-design.md. This is still a review request, NOT the stop signal — set complete=false."
     ) -> @Reviewer
+      output: { complete: "boolean", details: "string" }
 
     await final_verdict <- @Reviewer
 
     -- Release the Reviewer's loop (count-matched signal) so it commits cleanly.
     stake review_complete(
-      instructions: "REVIEW_COMPLETE — the final review is recorded; no further reviews needed."
+      instructions: "Terminal signal: the final review is recorded and no further reviews are needed. Set complete=true so the Reviewer stops looping and commits."
     ) -> @Reviewer
+      output: { complete: "boolean", details: "string" }
 
     when final_verdict.approved {
       commit
@@ -97,21 +107,21 @@ flow "implement-feature" (feature: "string") {
     let work_complete = false
     repeat until work_complete {
       stake progress_update(
-        status: "READY_FOR_REVIEW",
-        summary: "Implemented the next slice of the design; requesting review."
+        instructions: "Implement the next slice of the design, then request a review. You are NOT finished — set done=false and summarise this slice in `summary`."
       ) -> @Architect
+        output: { done: "boolean", summary: "string" }
 
       await directive <- @Architect
 
-      when directive contains "ACCEPTED" {
+      when directive.accepted {
         set work_complete = true
       }
     }
 
     stake done_signal(
-      status: "DONE",
-      summary: "All design items implemented and accepted by the Reviewer."
+      instructions: "All design items are implemented and the Reviewer has accepted them. This is the terminal completion signal — set done=true."
     ) -> @Architect
+      output: { done: "boolean", summary: "string" }
 
     commit
   }
@@ -126,12 +136,12 @@ flow "implement-feature" (feature: "string") {
     repeat until review_done {
       await review_request <- @Architect
 
-      when review_request contains "REVIEW_COMPLETE" {
+      when review_request.complete {
         set review_done = true
       } otherwise {
         stake review_verdict(
-          implementation_summary: review_request,
-          task: "Evaluate the implementation against the design at plans/feature-design.md. Decide whether it satisfies the design; if not, give specific, actionable feedback."
+          implementation_summary: review_request.details,
+          task: "Evaluate the implementation against the design at plans/feature-design.md. Decide whether it satisfies the design; if not, give specific, actionable feedback. Set approved=true/false."
         ) -> @Architect
           output: { approved: "boolean", issues: "string" }
       }

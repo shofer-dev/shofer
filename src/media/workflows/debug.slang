@@ -62,15 +62,17 @@ flow "debug" (issue: "string") {
         my_root_cause: dev1_verdict,
         peer_analysis: dev2_analysis,
         peer_root_cause: dev2_verdict,
-        task: "Review the peer developer's analysis and root-cause verdict alongside your own. Consider their evidence and reasoning. Produce your renewed analysis and indicate whether you now agree with their root cause."
+        task: "Relay the peer developer's analysis and root-cause verdict to Developer1 for reconsideration. This is a consensus round, NOT the terminal stop signal — set proceed=false and put the peer's analysis/verdict in `details`."
       ) -> @Developer1
+        output: { proceed: "boolean", details: "string" }
 
       stake share(
         my_root_cause: dev2_verdict,
         peer_analysis: dev1_analysis,
         peer_root_cause: dev1_verdict,
-        task: "Review the peer developer's analysis and root-cause verdict alongside your own. Consider their evidence and reasoning. Produce your renewed analysis and indicate whether you now agree with their root cause."
+        task: "Relay the peer developer's analysis and root-cause verdict to Developer2 for reconsideration. This is a consensus round, NOT the terminal stop signal — set proceed=false and put the peer's analysis/verdict in `details`."
       ) -> @Developer2
+        output: { proceed: "boolean", details: "string" }
 
       await renewed1 <- @Developer1
       await renewed2 <- @Developer2
@@ -88,9 +90,11 @@ flow "debug" (issue: "string") {
       }
     }
 
-    -- End both consensus loops in lockstep with the terminal signal word.
-    stake proceed(task: "PROCEED_TO_FIX. Consensus reached on the root cause; stop reconsidering.") -> @Developer1
-    stake proceed(task: "PROCEED_TO_FIX. Consensus reached on the root cause; stop reconsidering.") -> @Developer2
+    -- End both consensus loops in lockstep with the terminal structured signal.
+    stake proceed(task: "Consensus reached on the root cause; stop reconsidering. This IS the terminal signal — set proceed=true.") -> @Developer1
+      output: { proceed: "boolean", details: "string" }
+    stake proceed(task: "Consensus reached on the root cause; stop reconsidering. This IS the terminal signal — set proceed=true.") -> @Developer2
+      output: { proceed: "boolean", details: "string" }
 
     -- Phase 4 — User sign-off on the agreed root cause
     escalate @Human reason:
@@ -115,8 +119,9 @@ flow "debug" (issue: "string") {
       stake ask_review(
         root_cause: dev1_verdict,
         implementation: fix_output,
-        task: "Review the fix against the agreed-upon root cause. Verify the changes are correct, minimal, and don't introduce new issues. Approve or provide specific, actionable feedback."
+        task: "Ask Developer2 to review the latest fix against the agreed-upon root cause. This is a review request, NOT the terminal stop signal — set complete=false and put the fix to review in `details`."
       ) -> @Developer2
+        output: { complete: "boolean", details: "string" }
 
       await review_outcome <- @Developer2
 
@@ -125,16 +130,19 @@ flow "debug" (issue: "string") {
       } otherwise {
         stake send_feedback(
           feedback: review_outcome.feedback,
-          task: "Address the reviewer's feedback. Update the implementation based on their specific suggestions. Keep changes minimal."
+          task: "Relay the reviewer's feedback to Developer1 to address. The fix is NOT yet approved — set approved=false and put the feedback in `details`."
         ) -> @Developer1
+          output: { approved: "boolean", details: "string" }
 
         await fix_output <- @Developer1
       }
     }
 
-    -- End both fix/review loops in lockstep with their terminal signal words.
-    stake fix_approved(task: "FIX_APPROVED. The reviewer accepted your fix; you are done.") -> @Developer1
-    stake review_done(task: "REVIEW_COMPLETE. The fix is approved; no further reviews needed.") -> @Developer2
+    -- End both fix/review loops in lockstep with their terminal structured signals.
+    stake fix_approved(task: "The reviewer accepted your fix; you are done. This IS the terminal signal — set approved=true.") -> @Developer1
+      output: { approved: "boolean", details: "string" }
+    stake review_done(task: "The fix is approved; no further reviews needed. This IS the terminal signal — set complete=true.") -> @Developer2
+      output: { complete: "boolean", details: "string" }
 
     -- Phase 7 — Done
     stake report(
@@ -163,10 +171,10 @@ flow "debug" (issue: "string") {
     repeat until consensus_done {
       await peer_round <- @Orchestrator
 
-      when peer_round contains "PROCEED_TO_FIX" {
+      when peer_round.proceed {
         set consensus_done = true
       } otherwise {
-        stake reconsider(task: peer_round) -> @Orchestrator
+        stake reconsider(task: peer_round.details) -> @Orchestrator
           output: { analysis: "string", root_cause: "string", agrees_with_peer: "boolean" }
       }
     }
@@ -181,10 +189,10 @@ flow "debug" (issue: "string") {
     repeat until fix_done {
       await fix_directive <- @Orchestrator
 
-      when fix_directive contains "FIX_APPROVED" {
+      when fix_directive.approved {
         set fix_done = true
       } otherwise {
-        stake revise(task: fix_directive) -> @Orchestrator
+        stake revise(task: fix_directive.details) -> @Orchestrator
           output: { changes_summary: "string", files_changed: "string" }
       }
     }
@@ -209,10 +217,10 @@ flow "debug" (issue: "string") {
     repeat until consensus_done {
       await peer_round <- @Orchestrator
 
-      when peer_round contains "PROCEED_TO_FIX" {
+      when peer_round.proceed {
         set consensus_done = true
       } otherwise {
-        stake reconsider(task: peer_round) -> @Orchestrator
+        stake reconsider(task: peer_round.details) -> @Orchestrator
           output: { analysis: "string", root_cause: "string", agrees_with_peer: "boolean" }
       }
     }
@@ -222,10 +230,10 @@ flow "debug" (issue: "string") {
     repeat until review_done {
       await review_task <- @Orchestrator
 
-      when review_task contains "REVIEW_COMPLETE" {
+      when review_task.complete {
         set review_done = true
       } otherwise {
-        stake review(task: review_task) -> @Orchestrator
+        stake review(task: review_task.details) -> @Orchestrator
           output: { approved: "boolean", feedback: "string" }
       }
     }
