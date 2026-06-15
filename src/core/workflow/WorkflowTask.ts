@@ -307,6 +307,15 @@ export class WorkflowTask extends Task {
 			}
 		}
 
+		// Push the aborted FlowState to the viz so the swimlane's
+		// currently-executing-op marker stops blinking the moment the user stops
+		// the flow (the blink is gated on a "running" status).
+		try {
+			this.notifySlangEditor()
+		} catch {
+			// Best-effort — the provider reference may already be cleared.
+		}
+
 		try {
 			await this.persistCheckpoint()
 		} catch {
@@ -1666,6 +1675,12 @@ export class WorkflowTask extends Task {
 		const provider = this.providerRef.deref()
 		if (!provider) return
 		try {
+			// Push the terminal FlowState to the viz so the swimlane reflects the
+			// final status immediately — in particular this stops the
+			// currently-executing-op marker from blinking once the flow is no longer
+			// running (converged / deadlock / budget_exceeded / error).
+			this.notifySlangEditor()
+
 			// Persist the terminal flow checkpoint first so any consumer that
 			// reads the HistoryItem in response to the event below sees the
 			// converged/budget_exceeded/deadlock flowState.

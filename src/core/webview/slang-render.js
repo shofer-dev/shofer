@@ -974,8 +974,14 @@ function compileSwimlaneSVG(flow, agentNames) {
 		var execClass = ""
 		var execAttr = ""
 		if (isExecuting) {
+			// The arrow blinks only while the flow is still running; once it reaches
+			// a terminal status (converged / deadlock / budget_exceeded / error /
+			// aborted) the marker holds steady so a stalled flow reads as stopped.
+			var arrowBlink = _runState && _runState.status === "running" ? " flow-exec-arrow--blink" : ""
 			str +=
-				'<text class="flow-exec-arrow" x="' +
+				'<text class="flow-exec-arrow' +
+				arrowBlink +
+				'" x="' +
 				(spineX - BLOCK_W / 2 - 7) +
 				'" y="' +
 				(_cy + BLOCK_H / 2 + 5) +

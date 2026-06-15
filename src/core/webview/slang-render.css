@@ -264,6 +264,23 @@ body {
 	}
 }
 
+/* Swimlane: the currently-executing-op marker (▶) blinks only while the flow
+   is running. The blink class is omitted once the flow reaches a terminal
+   status, so a deadlocked / stopped / converged flow shows a steady marker. */
+.flow-exec-arrow--blink {
+	animation: slang-exec-arrow-blink 1s ease-in-out infinite;
+}
+
+@keyframes slang-exec-arrow-blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.15;
+	}
+}
+
 /* Swimlane: currently executing operation block highlight */
 .flow-box.flow-executing {
 	fill: var(--z-stake);
