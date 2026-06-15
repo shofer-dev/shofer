@@ -593,6 +593,38 @@ export const webviewMessageHandler = async (
 			})
 			break
 		}
+		case "requestWorkflowStats": {
+			// "Stats" tab: aggregate active-time across a task tree. The webview
+			// passes the subtree task ids (it already has the tree from history);
+			// we read each task's `api_req_finished` payloads and return them so the
+			// webview can break each down on its own timeline and sum.
+			const ids = Array.isArray(message.workflowStatsTaskIds) ? message.workflowStatsTaskIds : []
+			const rootId = typeof message.taskId === "string" ? message.taskId : undefined
+			const { readTaskMessages } = await import("../task-persistence/taskMessages")
+			const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
+			const requests: Record<string, string[]> = {}
+			await Promise.all(
+				ids.map(async (id) => {
+					try {
+						const msgs = await readTaskMessages({ taskId: id, globalStoragePath })
+						const payloads = msgs
+							.filter((m) => m.type === "say" && m.say === "api_req_finished" && !!m.text)
+							.map((m) => m.text as string)
+						if (payloads.length > 0) requests[id] = payloads
+					} catch (err) {
+						webviewLog.warn(
+							`[requestWorkflowStats] could not read messages for ${id}: ${err instanceof Error ? err.message : String(err)}`,
+						)
+					}
+				}),
+			)
+			await provider.postMessageToWebview({
+				type: "workflowStats",
+				workflowStatsRootId: rootId,
+				workflowStatsRequests: requests,
+			})
+			break
+		}
 		case "getBlobContent": {
 			// §4.3: webview-side resolution of a `<shofer-blob/>` reference.
 			// The renderer requests by sha256; we route to the currently

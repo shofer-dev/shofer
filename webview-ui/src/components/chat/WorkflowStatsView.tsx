@@ -1,16 +1,35 @@
-import React, { useMemo } from "react"
-import type { HistoryItem } from "@shofer/types"
+import React, { useEffect, useMemo, useState } from "react"
+import { useEvent } from "react-use"
+import type { HistoryItem, ExtensionMessage, ApiRequestFinishedPayload } from "@shofer/types"
 import { getTaskDisplayName } from "./TaskSelector"
+import { vscode } from "@src/utils/vscode"
+import {
+	type Breakdown,
+	breakdownFromPayloads,
+	mergeBreakdowns,
+	buildSlices,
+	arcPath,
+	formatMs,
+	CAT_BY_KEY,
+	MCP_PREFIX,
+	VB,
+	CENTER,
+	R_OUTER,
+	R_INNER,
+} from "./taskStats"
 
 /**
  * "Stats" tab for a workflow. Accumulates the metrics of the *entire task tree*
  * rooted at the workflow — the root task plus every descendant agent task
- * (recursively) — into a single summary, plus a per-task breakdown.
+ * (recursively) — into a single summary, a per-task breakdown, and (like the
+ * single-task TaskView Stats tab) an active-time donut + per-tool breakdown
+ * aggregated across the whole tree.
  *
- * Pure presentational: it reads the same flat `taskHistory` the Tree tab uses
- * and walks the `parentTaskId` chain client-side; no new host messages. (This is
- * distinct from `TaskStatsView`, which is a single-task active-time donut shown
- * in the regular chat view.)
+ * Token/cost/time totals come from `taskHistory` (already in the webview). The
+ * donut needs each task's `api_req_finished` timing payloads, which aren't in
+ * the webview for non-focused tasks, so they're fetched once via
+ * `requestWorkflowStats` and aggregated client-side. (Distinct from
+ * `TaskStatsView`, the single-task donut.)
  */
 
 interface WorkflowStatsViewProps {
@@ -84,8 +103,8 @@ function collectSubtree(taskHistory: HistoryItem[], rootId: string): HistoryItem
 }
 
 const WorkflowStatsView: React.FC<WorkflowStatsViewProps> = ({ taskHistory, rootTaskId }) => {
-	const { totals, perTask } = useMemo(() => {
-		if (!rootTaskId) return { totals: EMPTY, perTask: [] as HistoryItem[] }
+	const { totals, perTask, subtreeIds } = useMemo(() => {
+		if (!rootTaskId) return { totals: EMPTY, perTask: [] as HistoryItem[], subtreeIds: [] as string[] }
 		const subtree = collectSubtree(taskHistory, rootTaskId)
 		const t: Totals = { ...EMPTY, tasks: subtree.length }
 		for (const item of subtree) {
@@ -102,10 +121,46 @@ const WorkflowStatsView: React.FC<WorkflowStatsViewProps> = ({ taskHistory, root
 			if (c !== 0) return c
 			return (b.tokensIn + b.tokensOut || 0) - (a.tokensIn + a.tokensOut || 0)
 		})
-		return { totals: t, perTask: ranked }
+		return { totals: t, perTask: ranked, subtreeIds: subtree.map((s) => s.id) }
 	}, [taskHistory, rootTaskId])
 
+	// Active-time breakdown across the tree. The per-task `api_req_finished`
+	// timing payloads aren't in the webview, so fetch them once and aggregate.
+	const subtreeKey = subtreeIds.join(",")
+	const [breakdown, setBreakdown] = useState<Breakdown | null>(null)
+	useEffect(() => {
+		setBreakdown(null)
+		if (rootTaskId && subtreeIds.length > 0) {
+			vscode.postMessage({ type: "requestWorkflowStats", taskId: rootTaskId, workflowStatsTaskIds: subtreeIds })
+		}
+		// subtreeKey captures the id set; subtreeIds is derived from it.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [rootTaskId, subtreeKey])
+
+	useEvent("message", (event: MessageEvent) => {
+		const message: ExtensionMessage = event.data
+		if (message.type !== "workflowStats" || message.workflowStatsRootId !== rootTaskId) return
+		const requests = message.workflowStatsRequests ?? {}
+		const perTaskBreakdowns = Object.values(requests).map((texts) => {
+			const payloads: ApiRequestFinishedPayload[] = []
+			for (const text of texts) {
+				try {
+					payloads.push(JSON.parse(text))
+				} catch {
+					/* skip malformed */
+				}
+			}
+			return breakdownFromPayloads(payloads)
+		})
+		setBreakdown(mergeBreakdowns(perTaskBreakdowns))
+	})
+
 	const hasCache = totals.cacheReads > 0 || totals.cacheWrites > 0
+	const donut = useMemo(
+		() => (breakdown ? buildSlices(breakdown, totals.activeTimeMs) : null),
+		[breakdown, totals.activeTimeMs],
+	)
+	const maxToolMs = breakdown && breakdown.toolTotals.length > 0 ? breakdown.toolTotals[0].ms : 0
 
 	if (!rootTaskId || totals.tasks === 0) {
 		return (
@@ -173,6 +228,156 @@ const WorkflowStatsView: React.FC<WorkflowStatsViewProps> = ({ taskHistory, root
 						</div>
 					))}
 				</div>
+
+				{/* Active-time breakdown donut (aggregated across the tree) */}
+				<div
+					style={{
+						marginTop: 16,
+						color: "var(--vscode-descriptionForeground, #888)",
+						fontSize: 11,
+						textTransform: "uppercase",
+						letterSpacing: 0.4,
+					}}>
+					Active-time breakdown
+					{breakdown ? ` · ${breakdown.requestCount} request${breakdown.requestCount === 1 ? "" : "s"}` : ""}
+				</div>
+				{!donut || donut.slices.length === 0 ? (
+					<div style={{ color: "var(--vscode-descriptionForeground, #888)", padding: "8px 0" }}>
+						{breakdown === null ? "Loading timing data…" : "No timing data recorded yet for this tree."}
+					</div>
+				) : (
+					<div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start", marginTop: 6 }}>
+						<svg viewBox={`0 0 ${VB} ${VB}`} style={{ width: 180, height: 180, flexShrink: 0 }}>
+							{donut.slices.map((slice) => (
+								<path
+									key={slice.cat.key}
+									d={arcPath(slice.a0, slice.a1, R_OUTER, R_INNER)}
+									fill={slice.cat.color}
+									stroke="var(--vscode-editor-background)"
+									strokeWidth={1.5}
+								/>
+							))}
+							<text
+								x={CENTER}
+								y={CENTER - 4}
+								textAnchor="middle"
+								fill="var(--vscode-foreground)"
+								fontSize={20}
+								fontWeight={600}>
+								{formatMs(donut.total)}
+							</text>
+							<text
+								x={CENTER}
+								y={CENTER + 16}
+								textAnchor="middle"
+								fill="var(--vscode-descriptionForeground)"
+								fontSize={11}>
+								active
+							</text>
+						</svg>
+						<div style={{ flex: 1, minWidth: 180 }}>
+							{donut.slices.map((slice) => (
+								<div
+									key={slice.cat.key}
+									style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0" }}>
+									<span
+										style={{
+											width: 10,
+											height: 10,
+											borderRadius: 2,
+											flexShrink: 0,
+											background: slice.cat.color,
+										}}
+									/>
+									<span style={{ flex: 1, color: "var(--vscode-foreground, #ccc)" }}>
+										{slice.cat.label}
+									</span>
+									<span style={{ color: "var(--vscode-descriptionForeground, #888)" }}>
+										{formatMs(slice.ms)}
+									</span>
+									<span
+										style={{
+											width: 48,
+											textAlign: "right",
+											color: "var(--vscode-descriptionForeground, #888)",
+										}}>
+										{(slice.fraction * 100).toFixed(1)}%
+									</span>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+
+				{/* Per-tool sub-breakdown (aggregated) */}
+				{breakdown && breakdown.toolTotals.length > 0 && (
+					<>
+						<div
+							style={{
+								marginTop: 14,
+								color: "var(--vscode-descriptionForeground, #888)",
+								fontSize: 11,
+								textTransform: "uppercase",
+								letterSpacing: 0.4,
+							}}>
+							Tool &amp; MCP calls by tool
+						</div>
+						<div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+							{breakdown.toolTotals.map((tool) => (
+								<div key={tool.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+									<span
+										style={{
+											width: 150,
+											overflow: "hidden",
+											textOverflow: "ellipsis",
+											whiteSpace: "nowrap",
+											fontFamily: "var(--vscode-editor-font-family, monospace)",
+											color: "var(--vscode-foreground, #ccc)",
+										}}
+										title={tool.name}>
+										{tool.name}
+									</span>
+									<span
+										style={{
+											flex: 1,
+											height: 8,
+											borderRadius: 2,
+											overflow: "hidden",
+											background: "var(--vscode-input-background, #3c3c3c)",
+										}}>
+										<span
+											style={{
+												display: "block",
+												height: "100%",
+												width: `${maxToolMs > 0 ? (tool.ms / maxToolMs) * 100 : 0}%`,
+												background: tool.name.startsWith(MCP_PREFIX)
+													? CAT_BY_KEY.mcp.color
+													: CAT_BY_KEY.tool.color,
+											}}
+										/>
+									</span>
+									<span
+										style={{
+											width: 70,
+											textAlign: "right",
+											color: "var(--vscode-descriptionForeground, #888)",
+										}}
+										title={`${tool.count} run${tool.count === 1 ? "" : "s"}, ${tool.errors} failed`}>
+										{tool.count}× {Math.round(((tool.count - tool.errors) / tool.count) * 100)}%
+									</span>
+									<span
+										style={{
+											width: 56,
+											textAlign: "right",
+											color: "var(--vscode-descriptionForeground, #888)",
+										}}>
+										{formatMs(tool.ms)}
+									</span>
+								</div>
+							))}
+						</div>
+					</>
+				)}
 
 				{/* Per-task breakdown */}
 				<div

@@ -129,6 +129,8 @@ export interface ExtensionMessage {
 		// Per-task/workflow logs for the "Logs" tab: snapshot response + live append.
 		| "taskLogs"
 		| "taskLogAppended"
+		// Aggregated active-time stats for the workflow "Stats" tab.
+		| "workflowStats"
 		| "blobContent"
 		| "mcpServers"
 		| "enhancedPrompt"
@@ -265,6 +267,14 @@ export interface ExtensionMessage {
 	taskLogLines?: TaskLogLine[]
 	/** taskLogs / taskLogAppended: the task/workflow id these logs belong to. */
 	taskLogTaskId?: string
+	/** workflowStats: the root task id this aggregation is for (correlation). */
+	workflowStatsRootId?: string
+	/**
+	 * workflowStats: per-task `api_req_finished` payloads (the message `.text`
+	 * JSON strings), keyed by task id. The webview breaks each task down on its
+	 * own timeline, then sums — see `taskStats.ts`.
+	 */
+	workflowStatsRequests?: Record<string, string[]>
 	/** §4.3 blob fetch response: sha256 ↔ content (or undefined if missing). */
 	blob?: { sha256: string; bytes: number; content?: string; error?: string }
 	routerModels?: RouterModels
@@ -861,10 +871,14 @@ export interface WebviewMessage {
 		| "webviewLog"
 		// Logs tab: request the current snapshot of a task/workflow's logs (uses `taskId`)
 		| "requestTaskLogs"
+		// Stats tab: request aggregated active-time data for a set of tasks (a tree)
+		| "requestWorkflowStats"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
 	text?: string
 	taskId?: string
+	/** requestWorkflowStats: the subtree task ids to aggregate stats over. */
+	workflowStatsTaskIds?: string[]
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */
 	sha256?: string
 	editedMessageContent?: string
