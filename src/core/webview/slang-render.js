@@ -1014,10 +1014,17 @@ function compileSwimlaneSVG(flow, agentNames) {
 		var execClass = ""
 		var execAttr = ""
 		if (isExecuting) {
-			// The arrow blinks only while the flow is still running; once it reaches
-			// a terminal status (converged / deadlock / budget_exceeded / error /
-			// aborted) the marker holds steady so a stalled flow reads as stopped.
-			var arrowBlink = _runState && _runState.status === "running" ? " flow-exec-arrow--blink" : ""
+			// The arrow blinks only while BOTH the flow is running AND this specific
+			// agent is actively executing (status "running"). Once an agent reaches a
+			// settled state — committed, errored, or blocked/awaiting — its marker
+			// holds steady at its current op (e.g. a committed agent's ▶ stays put on
+			// its commit, non-blinking). It also stops blinking flow-wide once the
+			// flow itself reaches a terminal status (converged / deadlock /
+			// budget_exceeded / error / aborted).
+			var arrowBlink =
+				_runState && _runState.status === "running" && ars2 && ars2.status === "running"
+					? " flow-exec-arrow--blink"
+					: ""
 			str +=
 				'<text class="flow-exec-arrow' +
 				arrowBlink +
