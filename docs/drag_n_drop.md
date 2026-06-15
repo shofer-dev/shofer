@@ -265,3 +265,141 @@ fixing the Desktop experience:
   path, not merely a doc omission.)
 
 - **No light/dark theme screenshot** of the drop zone in the sidebar.
+
+---
+
+# Proposed: Drag & drop into workflow input forms (design — NOT yet implemented)
+
+> Status: **design only**. Nothing below is built. This section captures how
+> drag & drop could populate the **typed input form** that collects a workflow's
+> inputs, and what plumbing it would require. Implement separately.
+
+## The opportunity
+
+When a workflow declares typed parameters, Shofer collects them up front with a
+single structured followup that the webview renders as a form — `WorkflowParamForm`
+([webview-ui/src/components/chat/WorkflowParamForm.tsx](../webview-ui/src/components/chat/WorkflowParamForm.tsx)),
+driven by `FollowUpData.paramForm`
+([packages/types/src/followup.ts](../packages/types/src/followup.ts)). The same
+component now also renders **mid-flow** `escalate … form:` prompts (see
+[`slang_specs.md` § escalate](slang_specs.md)), so anything designed here benefits
+**both** initial flow-param collection and mid-flow escalate forms.
+
+Many of these fields naturally want a **file or folder** as their value — a path
+to analyse, a directory to scaffold into, a config file to read. Today the user
+must type or paste the path. Letting them **drag a file from the VSCode Explorer
+straight onto the field** would make input collection far faster, and it reuses
+machinery that already exists for chat context files.
+
+## Why the form is a good drop target (and the Desktop constraint it dodges)
+
+The hard part of Desktop drag & drop (see "Why a native TreeView?" above) is that
+the cross-origin webview overlay **swallows root-level drag events** and Electron
+**sanitises `dataTransfer.getData()`**. But the existing code already establishes a
+crucial exception: **the overlay DOES deliver drag events to native form-control
+descendants** — that is exactly why the `ChatTextArea` container handler is "the
+only webview-side drop path that fires reliably on VSCode Desktop."
+
+`WorkflowParamForm`'s fields (`widgetFor` → `textarea` / `number` / `dropdown` /
+`radio` / `multiselect` / `slider` / `checkbox`) are rendered as real
+`<textarea>` / `<input>` / `<select>` controls. So **per-field `onDrop` handlers on
+the text-like controls should fire on Desktop for VSCode-internal drags**, with no
+native TreeView needed — the same reliability class as `ChatTextArea`.
+
+The unavoidable limitation is unchanged: **OS-file-manager drags still yield no
+usable path** in the webview (Electron strips `File.path`); only **VSCode-internal**
+drags carry `text/uri-list`. So the affordance must be documented as "drag from the
+Explorer / an editor tab," with the Explorer right-click command as the OS-file
+fallback.
+
+## Which fields accept a drop, and what a drop inserts
+
+Not every string field wants a path, so drop intent should be **declared**, not
+inferred. Proposed model — one new optional trait on `ParamField` / `FlowParam`:
+
+| Declared intent      | Droppable widget(s)         | A dropped file/folder inserts…                                         |
+| -------------------- | --------------------------- | ---------------------------------------------------------------------- |
+| `accepts: "path"`    | textarea / single-line text | the workspace-relative path (e.g. `src/app.ts`), replacing the value   |
+| `accepts: "paths"`   | a multi-value list field    | appends each dropped path; value becomes a `string[]`                  |
+| `accepts: "content"` | textarea                    | the file's **text content**, inlined (host reads the file — see below) |
+| (unset)              | —                           | field is not a drop target (drop falls through / no-op)                |
+
+For a **multi-select / list** param, dropping several files should append all of
+them (mirroring `parseDroppedUris`' dedupe). For a **boolean / slider / dropdown**
+field, a drop is meaningless and should be ignored.
+
+`"content"` is the odd one out: the webview only receives `text/uri-list`, never
+file bytes, so inlining content requires a **host round-trip** — drop posts the
+URIs to the extension host, the host reads the files (respecting
+`ShoferIgnoreController`, see Known-issues note), and posts the text back to fill
+the field. `"path"`/`"paths"` need no host read and are the simpler first cut.
+
+## Delivery mechanisms
+
+1. **Per-field webview drop (primary).** Add `onDragOver`/`onDrop` to the
+   text-like controls in `WorkflowParamForm`. On drop: `extractUriPayload` →
+   `parseDroppedUris(payload, cwd, existing)` (the shared parsers in
+   [`droppedContextFiles.ts`](../webview-ui/src/utils/droppedContextFiles.ts)) →
+   set/append the field value. Show a drop affordance (border highlight) on
+   `dragover`, gated to fields whose `accepts` is set. This is the only path that
+   can target a **specific** field, because the drop event carries the target
+   element.
+
+2. **Native TreeView (not suitable here).** `ContextDropZoneProvider`'s
+   `handleDrop` runs in the extension host and has **no idea which form field** a
+   drop was meant for — it only knows "add to chat context." Routing it to a field
+   would require fragile focus-tracking. The per-field webview path is strictly
+   better for forms; the native zone stays chat-only.
+
+## Prerequisites & gotchas (must fix first)
+
+- **`cwd` must reach the form.** Producing `src/app.ts` instead of an absolute
+  path needs `cwd` threaded into `WorkflowParamForm` (via `ChatRow`). This is the
+  **same wiring gap as Known-issues #3** — `ChatTextArea` and the WorkflowView root
+  handler both fall back to an unset `window.CWD`, so paths come out absolute.
+  Fixing the cwd plumbing is a shared prerequisite, not form-specific.
+- **`.shofer/shoferignore` filtering.** Dropped paths should be filtered through
+  `ShoferIgnoreController` (the chat path doesn't today — see "Documentation
+  gaps"). A workflow input form is a good place to do it right from the start.
+- **Type coercion stays downstream.** The form already coerces values to each
+  field's declared type on submit (and `WorkflowTask.requestFlowParams` /
+  `handleEscalation` coerce again via `coerceParam`). A dropped path is a string,
+  so `string`/`paths` fields are unaffected; don't let a drop bypass coercion.
+- **`answeredValues` replay.** Dropped values participate in the normal
+  submit/`objectResponse` path, so the read-only replay-after-reload
+  (`markFollowupFormAnswered`) needs no change.
+
+## Slang-author surface (sketch)
+
+Drop intent would be declared with the existing param-meta grammar (the same block
+`escalate … form:` and flow `param <name> { … }` already parse via
+`parseParamMetaFields`), e.g. a new soft-keyword:
+
+```slang
+flow "audit" (target: "string") {
+  param target { accepts: "path", description: "File or folder to audit" }
+}
+-- or mid-flow:
+escalate @Human reason: "Pick inputs:" form: {
+  spec:    "string" { accepts: "path" }
+  exclude: "string" { accepts: "paths" }   -- multi: drop several, value is string[]
+}
+```
+
+This keeps drop a **declared, validated** capability rather than magic on every
+text box, and threads through the already-shared `FlowParam` shape.
+
+## Non-goals / open questions
+
+- **OS-file drops** into the form remain unsupported (Electron). Document, don't
+  fight it.
+- **Images / binary** into a workflow field: out of scope; workflow params are
+  scalar text/number/boolean.
+- **Folder semantics**: should a dropped folder expand to its files, or stay a
+  single directory path? Lean toward a single path for `path`, let the agent
+  expand it.
+- **Where does `accepts` live** — only on `ParamField` (webview render) and
+  `FlowParam` (slang), or also surfaced to `ask_followup_question`'s `form`
+  schema so the LLM can request a droppable field? (Probably yes, for symmetry.)
+- **Discoverability**: the field needs a visible "drop a file here" hint, since
+  drag-onto-textbox isn't obvious.
