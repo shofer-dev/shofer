@@ -1824,6 +1824,18 @@ export class WorkflowTask extends Task {
 			if (taskManager) {
 				taskManager.setState(this.taskId, { lifecycle: "completed", rating })
 			}
+
+			// Authoritative final viz push. Per-round updates ride a lightweight
+			// `postConfigUpdate("workflowVizRunState", …)` delta, and `setState`
+			// above only emits `parallelTasksUpdated` — neither re-seeds the diagrams
+			// from a full snapshot. Without a closing full push, the terminal round's
+			// state changes (e.g. an agent advancing to `committed` after a final
+			// escalation) can be left unrendered if the single delta races an
+			// in-flight `postInitState` carrying a pre-terminal snapshot, freezing the
+			// topology/sequence/swimlane at a non-final state. postInitState() is the
+			// documented "completion reset" push and re-seeds the viz from the now-
+			// terminal flowState, so it is the definitive last word.
+			await provider.postInitState()
 		} catch (error) {
 			workflowLog.error(`[WorkflowTask#${this.taskId}] Failed to emit completion:`, error)
 		}
