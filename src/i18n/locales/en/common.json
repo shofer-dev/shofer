@@ -161,7 +161,10 @@
 		"image_copied_to_clipboard": "Image data URI copied to clipboard",
 		"image_saved": "Image saved to {{path}}",
 		"mode_exported": "Mode '{{mode}}' exported successfully",
-		"mode_imported": "Mode imported successfully"
+		"mode_imported": "Mode imported successfully",
+		"exporting_task_json_title": "Exporting task to JSON…",
+		"exporting_task_json_progress": "{{count}} task(s) exported",
+		"export_task_json_cancelled": "Task export cancelled"
 	},
 	"answers": {
 		"yes": "Yes",

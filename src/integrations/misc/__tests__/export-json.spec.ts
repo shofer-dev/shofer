@@ -95,7 +95,7 @@ describe("buildJsonTraceTree — recursive sub-task export", () => {
 	it("skips an unreadable sub-task via onSkip and still exports the rest", async () => {
 		const loader = makeLoader({ wf: ["good", "missing"], good: [] })
 		const onSkip = vi.fn()
-		const tree = await buildJsonTraceTree("wf", loader, onSkip)
+		const tree = await buildJsonTraceTree("wf", loader, { onSkip })
 
 		expect(tree.subtasks?.map((t) => t.taskId)).toEqual(["good"])
 		expect(onSkip).toHaveBeenCalledTimes(1)
@@ -107,5 +107,32 @@ describe("buildJsonTraceTree — recursive sub-task export", () => {
 		const loader = makeLoader({ solo: [] })
 		const tree = await buildJsonTraceTree("solo", loader)
 		expect(tree.subtasks).toBeUndefined()
+	})
+
+	it("reports progress with a running count for each exported node", async () => {
+		const loader = makeLoader({ wf: ["a", "b"], a: ["a1"], b: [], a1: [] })
+		const onProgress = vi.fn()
+		await buildJsonTraceTree("wf", loader, { onProgress })
+
+		// One report per node (wf, a, a1, b) with a monotonically increasing count.
+		expect(onProgress).toHaveBeenCalledTimes(4)
+		expect(onProgress.mock.calls.map((c) => c[1])).toEqual([1, 2, 3, 4])
+	})
+
+	it("stops descending when isCancelled flips, returning the partial tree", async () => {
+		const loader = makeLoader({ wf: ["a", "b"], a: [], b: [] })
+		// Cancel right after the root is loaded so no children are visited.
+		let loaded = 0
+		const tree = await buildJsonTraceTree("wf", loader, {
+			onProgress: () => {
+				loaded++
+			},
+			isCancelled: () => loaded >= 1,
+		})
+
+		expect(tree.taskId).toBe("wf")
+		expect(tree.subtasks).toBeUndefined()
+		// Only the root was loaded; children were never read.
+		expect(loader).toHaveBeenCalledTimes(1)
 	})
 })

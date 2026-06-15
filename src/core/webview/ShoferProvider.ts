@@ -3174,17 +3174,39 @@ export class ShoferProvider
 		const { historyItem } = await this.getTaskWithId(id)
 
 		// Build the trace for this task plus the full descendant tree of any
-		// sub-tasks it spawned (for a workflow, its per-agent tasks). The pure
-		// walker handles recursion / cycle-guarding; we just supply the per-task
-		// loader and log any unreadable child that gets skipped.
-		const trace = await buildJsonTraceTree(
-			id,
-			(taskId) => this.loadJsonTraceNode(taskId),
-			(childId, error) =>
-				webviewLog.warn(
-					`[exportTaskWithIdJson] Skipping unreadable sub-task ${childId}: ${error instanceof Error ? error.message : String(error)}`,
-				),
+		// sub-tasks it spawned (for a workflow, its per-agent tasks). Large trees
+		// mean many sequential reads, so run the walk inside a cancellable progress
+		// notification and report a running count; the pure walker handles
+		// recursion / cycle-guarding and skips any unreadable child.
+		let cancelled = false
+		const trace = await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: t("common:info.exporting_task_json_title"),
+				cancellable: true,
+			},
+			async (progress, token) => {
+				token.onCancellationRequested(() => {
+					cancelled = true
+				})
+				return buildJsonTraceTree(id, (taskId) => this.loadJsonTraceNode(taskId), {
+					onSkip: (childId, error) =>
+						webviewLog.warn(
+							`[exportTaskWithIdJson] Skipping unreadable sub-task ${childId}: ${error instanceof Error ? error.message : String(error)}`,
+						),
+					onProgress: (_taskId, count) =>
+						progress.report({ message: t("common:info.exporting_task_json_progress", { count }) }),
+					isCancelled: () => token.isCancellationRequested,
+				})
+			},
 		)
+
+		// The user cancelled mid-walk: `trace` is a partial tree — abandon it
+		// rather than prompting to save an incomplete export.
+		if (cancelled) {
+			vscode.window.showInformationMessage(t("common:info.export_task_json_cancelled"))
+			return
+		}
 
 		const fileName = getJsonExportFileName(historyItem.ts)
 		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {

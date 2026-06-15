@@ -475,19 +475,42 @@ export function buildJsonTrace(
  * corrupt history) is skipped via `onSkip` rather than aborting the whole export.
  *
  * The I/O lives entirely in the injected `loadTask`, keeping this walker pure and
- * unit-testable.
+ * unit-testable. Because a large tree means many sequential `loadTask` reads,
+ * `onProgress` fires after each node (with a running count) so callers can drive a
+ * progress UI, and `isCancelled` is polled before each read so the walk can be
+ * abandoned promptly — on cancellation it returns the partial tree built so far
+ * (the caller is expected to discard it).
  */
+export interface BuildJsonTraceTreeOptions {
+	/** Called when a child can't be loaded (deleted / corrupt); the walk continues. */
+	onSkip?: (id: string, error: unknown) => void
+	/** Called after each node is loaded, with the cumulative number of nodes exported. */
+	onProgress?: (id: string, exportedCount: number) => void
+	/** Polled before each node load; returning true abandons the walk (partial tree). */
+	isCancelled?: () => boolean
+}
+
 export async function buildJsonTraceTree(
 	rootId: string,
 	loadTask: (id: string) => Promise<{ trace: JsonExportTrace; childIds: string[] }>,
-	onSkip?: (id: string, error: unknown) => void,
+	options: BuildJsonTraceTreeOptions = {},
 ): Promise<JsonExportTrace> {
+	const { onSkip, onProgress, isCancelled } = options
 	const visited = new Set<string>([rootId])
+	let exportedCount = 0
 
 	const walk = async (id: string): Promise<JsonExportTrace> => {
 		const { trace, childIds } = await loadTask(id)
+		exportedCount++
+		onProgress?.(id, exportedCount)
+
 		const subtasks: JsonExportTrace[] = []
 		for (const childId of childIds) {
+			// Stop descending as soon as the caller cancels; the partial tree is
+			// returned and discarded upstream.
+			if (isCancelled?.()) {
+				break
+			}
 			if (visited.has(childId)) {
 				continue
 			}
