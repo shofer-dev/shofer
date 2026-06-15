@@ -970,6 +970,12 @@ export class WorkflowTask extends Task {
 			if (isNew) await this.spawnAgentTask(name, prompt, instr.op.output)
 			else await this.resumeAgentTask(name, prompt, instr.op.output)
 			state.status = "running"
+			// Record this round's outbound recipients so the live topology can
+			// draw the agent's active stake edges (and the sequence its pending
+			// send). Comma-joined like `waitingFor`. Cleared once the result is
+			// routed (collectStakeResults) or the agent errors.
+			const recipients = instr.op.recipients.map((r) => r.ref).filter(Boolean)
+			state.sendingTo = recipients.length > 0 ? recipients.join(",") : undefined
 		}
 	}
 
@@ -1406,6 +1412,7 @@ export class WorkflowTask extends Task {
 							`❌ Agent \`${name}\` failed output-contract validation after ${MAX_RETRIES} retries and was marked **errored**:\n\n${validationError}`,
 						)
 						state.status = "error"
+						state.sendingTo = undefined
 					} else {
 						workflowLog.info(
 							`[WorkflowTask#${this.taskId}] Agent '${name}' output validation failed (retry ${state.retryCount}/${MAX_RETRIES}): ${validationError}`,
@@ -1431,6 +1438,7 @@ export class WorkflowTask extends Task {
 				// flow can never converge — eventually burning the round budget or
 				// (if its child task errors) tripping the deadlock guard.
 				state.retryCount = 0
+				state.sendingTo = undefined // result routed; no longer in flight
 				state.output = result
 				if (instr.op.binding) state.bindings.set(instr.op.binding, result)
 				// Enrich the mailbox history entries with per-agent metadata
@@ -1461,6 +1469,7 @@ export class WorkflowTask extends Task {
 					`❌ Failed to read agent \`${name}\`'s result: ${error instanceof Error ? error.message : String(error)} — marking it errored.`,
 				)
 				state.status = "error"
+				state.sendingTo = undefined
 			}
 		}
 	}

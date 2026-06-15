@@ -63,7 +63,13 @@ import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { downloadTask, downloadWorkflowEvents, getTaskFileName } from "../../integrations/misc/export-markdown"
-import { buildJsonTrace, downloadJsonTask, getJsonExportFileName } from "../../integrations/misc/export-json"
+import {
+	buildJsonTrace,
+	buildJsonTraceTree,
+	downloadJsonTask,
+	getJsonExportFileName,
+	type JsonExportTrace,
+} from "../../integrations/misc/export-json"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
@@ -3165,6 +3171,41 @@ export class ShoferProvider
 	 * provides.
 	 */
 	async exportTaskWithIdJson(id: string) {
+		const { historyItem } = await this.getTaskWithId(id)
+
+		// Build the trace for this task plus the full descendant tree of any
+		// sub-tasks it spawned (for a workflow, its per-agent tasks). The pure
+		// walker handles recursion / cycle-guarding; we just supply the per-task
+		// loader and log any unreadable child that gets skipped.
+		const trace = await buildJsonTraceTree(
+			id,
+			(taskId) => this.loadJsonTraceNode(taskId),
+			(childId, error) =>
+				webviewLog.warn(
+					`[exportTaskWithIdJson] Skipping unreadable sub-task ${childId}: ${error instanceof Error ? error.message : String(error)}`,
+				),
+		)
+
+		const fileName = getJsonExportFileName(historyItem.ts)
+		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
+			useWorkspace: false,
+			fallbackDir: path.join(os.homedir(), "Downloads"),
+		})
+		const saveUri = await downloadJsonTask(historyItem.ts, trace, defaultUri)
+
+		if (saveUri) {
+			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)
+		}
+	}
+
+	/**
+	 * Load one task's JSON trace and its direct `childIds` for the export walker
+	 * ({@link buildJsonTraceTree}). Reads the persisted api-conversation + ui
+	 * messages and assembles the single-task trace (LLM calls, or — for a workflow
+	 * — flowState + event log + slang source). Recursion/cycle-guarding is the
+	 * walker's job; this just returns the node plus its children.
+	 */
+	private async loadJsonTraceNode(id: string): Promise<{ trace: JsonExportTrace; childIds: string[] }> {
 		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
 
 		// Read ui_messages for per-request metadata via the JSONL reader.
@@ -3175,7 +3216,7 @@ export class ShoferProvider
 			uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
 		} catch (err) {
 			webviewLog.warn(
-				`[exportTaskWithIdJson] Could not read ui_messages.jsonl for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
+				`[loadJsonTraceNode] Could not read ui_messages.jsonl for task ${id}: ${err instanceof Error ? err.message : String(err)}`,
 			)
 		}
 
@@ -3197,16 +3238,7 @@ export class ShoferProvider
 			},
 		)
 
-		const fileName = getJsonExportFileName(historyItem.ts)
-		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
-			useWorkspace: false,
-			fallbackDir: path.join(os.homedir(), "Downloads"),
-		})
-		const saveUri = await downloadJsonTask(historyItem.ts, trace, defaultUri)
-
-		if (saveUri) {
-			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)
-		}
+		return { trace, childIds: historyItem.childIds ?? [] }
 	}
 
 	/* Condenses a task's message history to use fewer tokens. */

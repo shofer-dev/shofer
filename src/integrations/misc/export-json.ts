@@ -118,6 +118,14 @@ export interface JsonExportTrace {
 	 * to reproduce the sequence / swimlane / topology diagrams post-mortem.
 	 */
 	slangSource?: string
+	/**
+	 * Nested traces for this task's spawned sub-tasks, in `childIds` order. For a
+	 * workflow these are its per-agent tasks (each a full trace with its own LLM
+	 * calls); each child may in turn carry its own `subtasks`, so the field is the
+	 * complete descendant tree. Present (and non-empty) only when the task spawned
+	 * children.
+	 */
+	subtasks?: JsonExportTrace[]
 }
 
 /** A single UI event (state transition / status message) in a workflow export. */
@@ -447,8 +455,56 @@ export function buildJsonTrace(
 		totalCostUsd: totalCost,
 		totalCalls: calls.length,
 		totalToolCalls,
-		...(isWorkflow ? { isWorkflow: true, flowState: options?.flowState, slangSource: options?.slangSource, events } : {}),
+		...(isWorkflow
+			? { isWorkflow: true, flowState: options?.flowState, slangSource: options?.slangSource, events }
+			: {}),
 	}
+/**
+ * Build a task's trace plus the full descendant tree of its spawned sub-tasks.
+ *
+ * `loadTask(id)` returns the single-task trace and that task's direct `childIds`
+ * (the persisted parent→child links — for a workflow, its per-agent tasks). Each
+ * child is loaded and walked the same way, so the result carries the complete
+ * descendant tree under nested `subtasks` (in `childIds` order).
+ *
+ * `visited` is seeded with the root and grows as the walk proceeds, so a
+ * malformed/looping `childIds` chain can neither recurse forever nor duplicate a
+ * task across the export. A child whose `loadTask` throws (already deleted /
+ * corrupt history) is skipped via `onSkip` rather than aborting the whole export.
+ *
+ * The I/O lives entirely in the injected `loadTask`, keeping this walker pure and
+ * unit-testable.
+ */
+export async function buildJsonTraceTree(
+	rootId: string,
+	loadTask: (id: string) => Promise<{ trace: JsonExportTrace; childIds: string[] }>,
+	onSkip?: (id: string, error: unknown) => void,
+): Promise<JsonExportTrace> {
+	const visited = new Set<string>([rootId])
+
+	const walk = async (id: string): Promise<JsonExportTrace> => {
+		const { trace, childIds } = await loadTask(id)
+		const subtasks: JsonExportTrace[] = []
+		for (const childId of childIds) {
+			if (visited.has(childId)) {
+				continue
+			}
+			visited.add(childId)
+			try {
+				subtasks.push(await walk(childId))
+			} catch (error) {
+				onSkip?.(childId, error)
+			}
+		}
+		if (subtasks.length > 0) {
+			trace.subtasks = subtasks
+		}
+		return trace
+	}
+
+	return walk(rootId)
+}
+
 }
 
 /**

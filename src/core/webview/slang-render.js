@@ -544,7 +544,9 @@ function renderEdge(e, layout, layers) {
 	if (e.kind !== "peer" && _runState) {
 		var fromAgent = getAgentRunState(e.from)
 		var toAgent = getAgentRunState(e.to)
-		if ((fromAgent && fromAgent.sendingTo === e.to) || (toAgent && toAgent.waitingFor === e.from)) {
+		var sending = fromAgent && splitRefs(fromAgent.sendingTo).indexOf(e.to) !== -1
+		var awaiting = toAgent && splitRefs(toAgent.waitingFor).indexOf(e.from) !== -1
+		if (sending || awaiting) {
 			rtClass = " edge-runtime-active"
 			dashAttr = e.kind === "stake" ? ' stroke-dasharray="6 2"' : dashAttr
 		}
@@ -618,9 +620,99 @@ function renderEdge(e, layout, layers) {
 }
 
 // ── view compiler 1: network topology graphics ──
+/** A centered placeholder SVG (used for "not started" / empty diagram states). */
+function emptyStateSVG(title, subtitle) {
+	var w = 600,
+		h = 280
+	var s = '<svg id="slang-svg" width="' + w + '" height="' + h + '" xmlns="http://www.w3.org/2000/svg">' + defs()
+	s +=
+		'<text x="' +
+		w / 2 +
+		'" y="' +
+		(h / 2 - 6) +
+		'" text-anchor="middle" font-weight="700" font-size="15" fill="var(--z-fg)">' +
+		esc(title) +
+		"</text>"
+	if (subtitle)
+		s +=
+			'<text x="' +
+			w / 2 +
+			'" y="' +
+			(h / 2 + 18) +
+			'" text-anchor="middle" font-size="12" fill="var(--z-meta)">' +
+			esc(subtitle) +
+			"</text>"
+	return s + "</svg>"
+}
+
+/**
+ * The agents + edges active in the *current round*, derived purely from
+ * runtime state: agents that are running (drawn with their outbound stake
+ * edges) or blocked (drawn with the await edges they're parked on). Returns
+ * null when nothing is active (before the run starts, or once converged).
+ */
+function currentRoundSubset(agentNames) {
+	if (!_runState || !_runState.agents) return null
+	var nodes = {},
+		edges = [],
+		seen = {},
+		active = false
+	function addEdge(from, to, kind) {
+		var key = from + ">" + to
+		if (seen[key]) return
+		seen[key] = true
+		edges.push({ from: from, to: to, label: "", kind: kind })
+	}
+	// Pass 1: running agents and their outbound stake edges.
+	for (var i = 0; i < _runState.agents.length; i++) {
+		if (_runState.agents[i][1].status !== "running") continue
+		active = true
+		var rn = _runState.agents[i][0]
+		nodes[rn] = true
+		var targets = splitRefs(_runState.agents[i][1].sendingTo)
+		for (var t = 0; t < targets.length; t++) {
+			if (!agentNames[targets[t]]) continue
+			nodes[targets[t]] = true
+			addEdge(rn, targets[t], "stake")
+		}
+	}
+	// Pass 2: blocked agents and the await edges they're waiting on.
+	for (var b = 0; b < _runState.agents.length; b++) {
+		if (_runState.agents[b][1].status !== "blocked") continue
+		active = true
+		var bn = _runState.agents[b][0]
+		nodes[bn] = true
+		var sources = splitRefs(_runState.agents[b][1].waitingFor)
+		for (var s = 0; s < sources.length; s++) {
+			if (!agentNames[sources[s]]) continue
+			nodes[sources[s]] = true
+			addEdge(sources[s], bn, "await")
+		}
+	}
+	if (!active) return null
+	return { nodes: nodes, edges: edges }
+}
+
 function compileTopologySVG(flow, agentNames, agentMeta) {
-	var rawEdges = buildGraphEdges(flow).concat(buildPeerEdges(flow))
-	var dagreResult = applyDagreLayout(agentNames, rawEdges)
+	// Embedded (WorkflowView): render only the current round's participants.
+	// Standalone editor: render the full static structure of the file.
+	var rawEdges, nodeNames
+	if (_embedded) {
+		var subset = currentRoundSubset(agentNames)
+		if (!subset) {
+			var notStarted = !_runState || !_runState.round
+			return emptyStateSVG(
+				notStarted ? "Workflow not started" : "No agents active right now",
+				"This round's working and waiting agents appear here.",
+			)
+		}
+		rawEdges = subset.edges
+		nodeNames = subset.nodes
+	} else {
+		rawEdges = buildGraphEdges(flow).concat(buildPeerEdges(flow))
+		nodeNames = agentNames
+	}
+	var dagreResult = applyDagreLayout(nodeNames, rawEdges)
 	_layout = dagreResult.layout
 	_layers = dagreResult.layers
 	_edges = dagreResult.edges
@@ -664,6 +756,104 @@ function compileTopologySVG(flow, agentNames, agentMeta) {
 	return svg + "</g></svg>"
 }
 
+/** Expand a recipient ref into concrete column targets: `out` → @Human, `all`
+ *  → every other agent, otherwise the agent itself. */
+function expandRecipient(ref, agentNames, self) {
+	if (ref === "out") return ["@Human"]
+	if (ref === "all") {
+		var r = []
+		for (var n in agentNames) if (n !== self) r.push(n)
+		return r
+	}
+	return [ref]
+}
+
+/**
+ * Build the static "Dependencies" timeline: the guaranteed happens-before
+ * edges declared in the source, ordered by dependency rank. This is a partial
+ * order — same-rank events have no defined order — and conditional/looping
+ * edges are annotated `(if …)` / `(repeat)`. Used in the standalone editor
+ * where a real execution chronology is unknowable before the run.
+ */
+function buildDependencyTimeline(flow, agentNames) {
+	var deps = []
+	function annotate(base, ctx) {
+		var parts = []
+		if (ctx.cond) parts.push("if " + ctx.cond)
+		if (ctx.loop) parts.push("repeat")
+		return parts.length ? base + " (" + parts.join(", ") + ")" : base
+	}
+	function walk(from, ops, ctx) {
+		if (!ops) return
+		for (var i = 0; i < ops.length; i++) {
+			var op = ops[i]
+			if (op.type === "StakeOp" && op.recipients) {
+				var c = op.condition
+					? { cond: (ctx.cond ? ctx.cond + " & " : "") + exprStr(op.condition), loop: ctx.loop }
+					: ctx
+				for (var j = 0; j < op.recipients.length; j++) {
+					var ref = op.recipients[j].ref || op.recipients[j]
+					var tos = expandRecipient(ref, agentNames, from)
+					for (var ti = 0; ti < tos.length; ti++) {
+						deps.push({
+							from: from,
+							to: tos[ti],
+							label: annotate(op.call ? op.call.name : "stake", c),
+							type: "stake",
+						})
+					}
+				}
+			} else if (op.type === "EscalateOp") {
+				deps.push({ from: from, to: "@Human", label: annotate(op.reason || "escalate", ctx), type: "stake" })
+			} else if (op.type === "WhenBlock") {
+				var wc = exprStr(op.condition)
+				walk(from, op.body, { cond: ctx.cond ? ctx.cond + " & " + wc : wc, loop: ctx.loop })
+				if (op.elseBlock)
+					walk(from, op.elseBlock.body, {
+						cond: (ctx.cond ? ctx.cond + " & " : "") + "!" + wc,
+						loop: ctx.loop,
+					})
+			} else if (op.type === "RepeatBlock") {
+				walk(from, op.body, { cond: ctx.cond, loop: true })
+			}
+		}
+	}
+	for (var a = 0; a < (flow.body || []).length; a++) {
+		var agent = flow.body[a]
+		if (agent.type !== "AgentDecl") continue
+		walk(agent.name, agent.operations, { cond: null, loop: false })
+	}
+
+	// Rank agents by longest dependency chain (cycle-safe relaxation: loops
+	// produce back-edges that simply stop growing once the bound is hit).
+	var rank = {}
+	var names = Object.keys(agentNames)
+	for (var n = 0; n < names.length; n++) rank[names[n]] = 0
+	for (var pass = 0; pass < names.length; pass++) {
+		var changed = false
+		for (var d = 0; d < deps.length; d++) {
+			var f = deps[d].from,
+				t = deps[d].to
+			if (rank[f] === undefined || rank[t] === undefined) continue // @Human isn't ranked
+			if (rank[t] < rank[f] + 1) {
+				rank[t] = rank[f] + 1
+				changed = true
+			}
+		}
+		if (!changed) break
+	}
+	// Order by the rank at which each edge fires (its producer's rank); ties
+	// keep source order. This yields a valid topological ordering.
+	for (var e2 = 0; e2 < deps.length; e2++) {
+		deps[e2].order = rank[deps[e2].from] !== undefined ? rank[deps[e2].from] : 0
+		deps[e2].seq = e2
+	}
+	deps.sort(function (x, y) {
+		return x.order - y.order || x.seq - y.seq
+	})
+	return deps
+}
+
 // ── view compiler 2: sequence diagram chronology ──
 function compileSequenceSVG(flow, agentNames) {
 	var agentKeys = Object.keys(agentNames)
@@ -673,43 +863,47 @@ function compileSequenceSVG(flow, agentNames) {
 		STEP_H = 50,
 		TOP_PAD = 60
 
-	// Build timeline events from the runtime mailbox when _runState is
-	// available (showing actual message-passing history). Fall back to
-	// static AST extraction when viewing a file statically.
+	// Choose the timeline source:
+	//   - Embedded (live/finished workflow), or any run that has produced
+	//     mailbox history → the REAL message record (what has happened) plus
+	//     pending sends (what is happening in the current round). Empty before
+	//     the first message.
+	//   - Standalone static file → a dependency partial-order from the AST:
+	//     guaranteed happens-before edges, ranked; order within a rank is
+	//     unspecified. A true chronology cannot be known before execution.
 	var timelineEvents = []
+	var dependencyMode = false
+	var useRuntime = _embedded || (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0)
 
-	if (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0) {
-		// Runtime: use historical mailbox entries (sorted by timestamp).
-		for (var mi = 0; mi < _runState.mailboxHistory.length; mi++) {
-			var entry = _runState.mailboxHistory[mi]
-			timelineEvents.push({
-				from: entry.from,
-				to: entry.to === "@out" ? "@Human" : entry.to,
-				label: entry.funcName || "",
-				type: "stake",
-				seq: mi,
-				ts: entry.timestamp || 0,
-			})
+	if (useRuntime) {
+		if (_runState && _runState.mailboxHistory) {
+			for (var mi = 0; mi < _runState.mailboxHistory.length; mi++) {
+				var entry = _runState.mailboxHistory[mi]
+				timelineEvents.push({
+					from: entry.from,
+					to: entry.to === "out" || entry.to === "@out" ? "@Human" : entry.to,
+					label: entry.funcName || "",
+					type: "stake",
+					seq: mi,
+					ts: entry.timestamp || 0,
+					tokensUsed: entry.tokensUsed,
+					costUsd: entry.costUsd,
+					durationMs: entry.durationMs,
+				})
+			}
 		}
-
-		// Append pending sends from agents that have sendingTo set but
-		// the message hasn't hit the mailbox yet.
-		if (_runState.agents) {
+		// Pending sends: agents with sendingTo set whose result hasn't been
+		// routed yet — the arrows for what's happening in the current round.
+		if (_runState && _runState.agents) {
 			for (var ai = 0; ai < _runState.agents.length; ai++) {
 				var ag = _runState.agents[ai]
-				if (ag[1].sendingTo && ag[1].sendingTo !== "@out") {
-					// Avoid duplicates with mailbox entries
-					var alreadyInMailbox = false
-					for (var mj = timelineEvents.length - 1; mj >= 0; mj--) {
-						if (timelineEvents[mj].from === ag[0]) {
-							alreadyInMailbox = true
-							break
-						}
-					}
-					if (!alreadyInMailbox) {
+				var refs = splitRefs(ag[1].sendingTo)
+				for (var ri = 0; ri < refs.length; ri++) {
+					var exTo = expandRecipient(refs[ri], agentNames, ag[0])
+					for (var xi = 0; xi < exTo.length; xi++) {
 						timelineEvents.push({
 							from: ag[0],
-							to: ag[1].sendingTo,
+							to: exTo[xi],
 							label: "sending…",
 							type: "stake",
 							seq: timelineEvents.length,
@@ -720,69 +914,9 @@ function compileSequenceSVG(flow, agentNames) {
 			}
 		}
 	} else {
-		// Static fallback: extract interactions from the flow AST.
-		var rawEdges = buildGraphEdges(flow)
-		var dagreResult = applyDagreLayout(agentNames, rawEdges)
-		var layers = dagreResult.layers
-
-		for (var ai2 = 0; ai2 < (flow.body || []).length; ai2++) {
-			var agent = flow.body[ai2]
-			if (agent.type !== "AgentDecl") continue
-			var from = agent.name
-
-			;(function extractTimeline(ops, layerFrom, depth) {
-				if (!ops) return
-				depth = depth || 0
-				var maxDepth = 1
-				for (var i = 0; i < ops.length; i++) {
-					var op = ops[i]
-					if (op.type === "StakeOp" && op.recipients) {
-						for (var j = 0; j < op.recipients.length; j++) {
-							var to = op.recipients[j].ref || op.recipients[j]
-							if (agentNames[to])
-								timelineEvents.push({
-									from: from,
-									to: to,
-									label: op.call ? op.call.name : "",
-									type: "stake",
-									layer: layerFrom,
-									seq: timelineEvents.length,
-								})
-						}
-					}
-					if (op.type === "AwaitOp" && op.sources) {
-						for (var k = 0; k < op.sources.length; k++) {
-							var src = op.sources[k].ref || op.sources[k]
-							if (agentNames[src])
-								timelineEvents.push({
-									from: src,
-									to: from,
-									label: op.binding || "",
-									type: "await",
-									layer: layers[src] || 0,
-									seq: timelineEvents.length,
-								})
-						}
-					}
-					if (op.type === "EscalateOp") {
-						timelineEvents.push({
-							from: from,
-							to: "@Human",
-							label: op.reason || "approval",
-							type: "stake",
-							layer: layerFrom,
-						})
-					}
-					if (depth < maxDepth) {
-						if (op.type === "WhenBlock") {
-							extractTimeline(op.body, layerFrom, depth + 1)
-							if (op.elseBlock) extractTimeline(op.elseBlock.body, layerFrom, depth + 1)
-						}
-						if (op.type === "RepeatBlock") extractTimeline(op.body, layerFrom, depth + 1)
-					}
-				}
-			})(agent.operations, layers[from] || 0)
-		}
+		// Static: dependency partial-order extracted from the flow AST.
+		dependencyMode = true
+		timelineEvents = buildDependencyTimeline(flow, agentNames)
 	}
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
@@ -898,12 +1032,17 @@ function compileSequenceSVG(flow, agentNames) {
 		s += "</g>"
 	}
 	if (timelineEvents.length === 0) {
+		var emptyMsg = dependencyMode
+			? "No interactions declared in this flow."
+			: "Workflow not started — messages appear here as agents exchange results."
 		s +=
 			'<text x="' +
 			svgW / 2 +
 			'" y="' +
 			(TOP_PAD + 60) +
-			'" text-anchor="middle" fill="var(--z-meta)">No active message transmissions parsed inside this block.</text>'
+			'" text-anchor="middle" fill="var(--z-meta)">' +
+			esc(emptyMsg) +
+			"</text>"
 	}
 	return s + "</svg>"
 }
@@ -1663,6 +1802,21 @@ function updateConnectedEdges(agent) {
 /** Runtime state from the WorkflowTask executor — null when viewing a static file. */
 var _runState = null
 
+/**
+ * True when rendering inside the WorkflowView iframe (a live/finished workflow),
+ * false in the standalone .slang editor. Set from `payload.context` on every
+ * handleRender. Embedded views render only what has happened / is happening now
+ * (current-round topology, mailbox-history sequence); the standalone editor
+ * keeps rendering the full static structure of the source file.
+ */
+var _embedded = false
+
+/** Split a comma-joined runtime field (waitingFor / sendingTo) into a name list. */
+function splitRefs(s) {
+	if (!s) return []
+	return s.split(",").filter(Boolean)
+}
+
 /** Look up serialized AgentState from runState.agents (array of [name, state] pairs). */
 function getAgentRunState(agentName) {
 	if (!_runState || !_runState.agents) return null
@@ -1737,9 +1891,16 @@ function buildLegend(view) {
 		}
 	} else if (view === "sequence") {
 		// Lifeline swatches (agent / Human) are self-evident from the column
-		// headers, so the legend only documents the arrow kinds.
-		items.push(_legendItem(_legendSwatch(COLORS.stake), "stake →"))
-		items.push(_legendItem(_legendSwatch(COLORS.await), "await ←"))
+		// headers, so the legend only documents what the rows mean.
+		var seqRuntime = _embedded || (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0)
+		if (seqRuntime) {
+			items.push(_legendItem(_legendSwatch(COLORS.stake), "message (top → bottom = time)"))
+			items.push(_legendItem("", "dashed = in flight this round"))
+		} else {
+			// Static dependency partial-order.
+			items.push(_legendItem(_legendSwatch(COLORS.stake), "happens-before (dependency order)"))
+			items.push(_legendItem("", "same-rank order unspecified; (if …)/(repeat) = conditional"))
+		}
 	} else {
 		// swimlane ("Agent Logic Flow" / State)
 		items.push(_legendItem(_legendSwatch(COLORS.agent), "agent lane"))
@@ -1771,6 +1932,7 @@ function handleRender(payload) {
 	// context absent (undefined): standalone .slang editor — render the
 	//   full header, tab bar, runtime banner, and graph hints.
 	var isEmbedded = payload.context === "workflowView"
+	_embedded = isEmbedded
 	var h = ""
 
 	if (!isEmbedded) {
@@ -1843,7 +2005,7 @@ function handleRender(payload) {
 			'" data-view="topology">Topology Network</button>' +
 			'<button class="tab-btn' +
 			(_currentView === "sequence" ? " active" : "") +
-			'" data-view="sequence">Sequence Timeline</button>' +
+			'" data-view="sequence">Dependencies</button>' +
 			'<button class="tab-btn' +
 			(_currentView === "swimlane" ? " active" : "") +
 			'" data-view="swimlane">Agent Logic Flow</button>' +

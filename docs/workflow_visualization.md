@@ -117,6 +117,8 @@ The user switches between views via tab buttons. The active view is tracked in `
 
 The **default view** — a directed graph showing agent relationships and data routing.
 
+> **Scope differs by surface.** In the **standalone `.slang` editor** the topology renders the _full_ static graph (every agent + every declared `stake`/`await`/`peer` edge) — the map of what the flow _could_ do. In the **WorkflowView** (`context: "workflowView"`) it renders only the **current round's participants**: agents that are `running` (with their outbound stake edges, from the live `sendingTo`) or `blocked` (with the await edges they're parked on, from `waitingFor`), plus the agents on the other end of those edges. Before the run starts (or once converged) nothing is active, so it shows a "Workflow not started" / "No agents active right now" placeholder rather than the whole plan. See [`currentRoundSubset()`](../src/core/webview/slang-render.js).
+
 | Feature            | Implementation                                                                                              |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
 | **Nodes**          | Agent cards (name + mode badge + role) rendered as SVG `<g>` groups                                         |
@@ -133,6 +135,11 @@ The **default view** — a directed graph showing agent relationships and data r
 ### 2. Sequence Timeline
 
 A vertical timeline showing message-passing chronology across agent lifelines.
+
+> **A real chronology only exists at runtime.** Execution order is decided by the round scheduler, `await` dependencies, conditionals (`if`/`when`), and loops (`repeat`) — it cannot be known from the source alone. So the two surfaces show different things:
+>
+> - **WorkflowView** (`context: "workflowView"`, or any run with mailbox history): the **actual** message record, built from `mailboxHistory` in append (chronological) order, plus **pending sends** (agents whose `sendingTo` is set but whose result hasn't been routed yet) for the current round. Empty before the first message.
+> - **Standalone `.slang` editor** (static, no runtime): a **dependency partial-order** ("Dependencies" tab), not a fake timeline. Edges are the guaranteed _happens-before_ relations from the AST, topologically ranked (same-rank order is unspecified); conditional/looping edges are annotated `(if …)` / `(repeat)`. See [`buildDependencyTimeline()`](../src/core/webview/slang-render.js).
 
 | Feature           | Implementation                                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,14 +175,18 @@ When a workflow is executing (or has completed), the `runState` field in the pay
 
 ### Topology
 
+- **Current-round subset (WorkflowView)**: `compileTopologySVG()` renders only the agents/edges active this round (see [Three View Modes](#1-topology-network)); the standalone editor still renders the full static graph.
 - **Node badges**: Each agent node shows `status (opIndex)` — e.g. "running (3)" — colored by status (green=running, purple=blocked, gray=committed, blue=idle, red=error).
-- **Active edges**: The `renderEdge()` function checks whether the source agent's `sendingTo` matches the target OR the target agent's `waitingFor` matches the source. If so, the edge gets the `edge-runtime-active` CSS class which applies a pulsing `slang-edge-pulse` animation (stroke-width oscillates 3.2→5.5 over 1.5s).
+- **Active edges**: `renderEdge()` checks whether the source agent's `sendingTo` list contains the target OR the target agent's `waitingFor` list contains the source. If so, the edge gets the `edge-runtime-active` CSS class which applies a pulsing `slang-edge-pulse` animation (stroke-width oscillates 3.2→5.5 over 1.5s). Both fields are comma-joined name lists (`splitRefs()`).
 
 ### Sequence
 
-- **Mailbox-sourced timeline**: When `_runState.mailboxHistory` is available and non-empty, `compileSequenceSVG()` builds events from actual mailbox entries (sorted by timestamp) instead of the static flow AST. This shows the **real message-passing history**.
-- **Pending sends**: Agents with `sendingTo` set whose message hasn't reached the mailbox get dashed italic entries (`.sequence-pending` class).
-- **Static fallback**: When no runtime state is available (viewing a static `.slang` file), the timeline is extracted from the flow AST as before.
+- **Mailbox-sourced timeline**: In the WorkflowView (or any run with history), `compileSequenceSVG()` builds events from `mailboxHistory` in append (chronological) order — the **real message-passing history** — and copies each entry's `tokensUsed`/`costUsd`/`durationMs` onto the event for arrow tooltips.
+- **Pending sends**: Agents with `sendingTo` set whose result hasn't been routed yet get dashed pending arrows (`.sequence-pending`) for the current round.
+- **No static plan in WorkflowView**: the static AST extraction is **not** used here — before the first message the view is empty, not a render of the whole plan.
+- **Dependency partial-order (standalone)**: the static editor renders `buildDependencyTimeline()` instead of a fabricated chronology (see [Three View Modes](#2-sequence-timeline)).
+
+> **Runtime field population.** `waitingFor` is set by the interpreter ([`slang-interpreter.ts`](../src/core/workflow/slang-interpreter.ts)) when an agent blocks on an `await`; `sendingTo` is set by [`WorkflowTask.dispatchStakes()`](../src/core/workflow/WorkflowTask.ts) to the staking agent's recipient list and cleared once the result is routed (or the agent errors). Both are serialized on `AgentState` and drive the runtime edge/pending overlays above.
 
 ### Swimlane
 
