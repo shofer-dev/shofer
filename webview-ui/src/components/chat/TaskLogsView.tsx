@@ -231,26 +231,41 @@ const TaskLogsView: React.FC<TaskLogsViewProps> = ({ taskId }) => {
 						✕
 					</button>
 				)}
-				<div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+				<div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
 					{LEVELS.map((level) => {
 						const on = enabledLevels[level]
+						const color = LEVEL_COLOR[level]
 						return (
 							<button
 								key={level}
 								onClick={() => toggleLevel(level)}
 								title={on ? `Hide ${level} lines` : `Show ${level} lines`}
 								style={{
-									background: on ? "var(--vscode-button-background, #0e639c)" : "transparent",
-									color: on ? LEVEL_COLOR[level] : "var(--vscode-descriptionForeground, #888)",
-									border: "1px solid var(--vscode-panel-border, #333)",
-									borderRadius: 3,
-									padding: "1px 6px",
+									display: "inline-flex",
+									alignItems: "center",
+									gap: 5,
+									background: on ? `color-mix(in srgb, ${color} 20%, transparent)` : "transparent",
+									color: on ? color : "var(--vscode-descriptionForeground, #888)",
+									border: `1px solid ${on ? `color-mix(in srgb, ${color} 65%, transparent)` : "var(--vscode-panel-border, #555)"}`,
+									borderRadius: 4,
+									padding: "3px 9px",
 									cursor: "pointer",
-									fontSize: 10,
+									fontSize: 11,
+									fontWeight: 700,
 									textTransform: "uppercase",
-									opacity: on ? 1 : 0.6,
+									letterSpacing: 0.3,
+									opacity: on ? 1 : 0.7,
 								}}>
-								{level}
+								<span
+									style={{
+										width: 8,
+										height: 8,
+										borderRadius: "50%",
+										flexShrink: 0,
+										background: on ? color : "var(--vscode-descriptionForeground, #888)",
+									}}
+								/>
+								<span style={{ textDecoration: on ? "none" : "line-through" }}>{level}</span>
 							</button>
 						)
 					})}
