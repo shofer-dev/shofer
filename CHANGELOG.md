@@ -1,6 +1,82 @@
 # Shofer Changelog
 
-## 1.0.19 — 2026-05-31 (Current)
+## 1.8.24 — 2026-06-15 (Current)
+
+> Consolidates the 1.1.x–1.8.x line. The headline is the new **Workflow** system — deterministic, Slang-based multi-agent orchestration — together with its three-view visualization, a CLI/headless public API, OS-level command sandboxing, and a large performance and stability pass.
+
+### Features
+
+#### Workflows & Slang orchestration
+
+- **Workflow abstraction**: A new first-class _Workflow_ — a deterministic, non-LLM executor that reads a `.slang` spec and dispatches agents as background [`Task`](src/core/task/Task.ts)s. Implemented as [`WorkflowTask`](src/core/workflow/WorkflowTask.ts) (a compiled-instruction VM with a pure-function interpreter in [`slang-interpreter.ts`](src/core/workflow/slang-interpreter.ts)), a dedicated WorkflowView UI, and an in-panel launcher.
+- **Slang language**: Agents with `stake` / `await` / `commit` / `escalate`, `when` / `repeat` control flow, `converge when:`, and `budget` limits — `tokens`, `rounds`, and wall-clock `time` — defaulting to unlimited (`0`) with per-agent mid-round enforcement. See [`docs/slang_specs.md`](docs/slang_specs.md).
+- **Output contracts**: `stake … output: { … }` validated against a per-task `attempt_completion` schema, with automatic re-prompt-on-mismatch (up to 3 retries) and strict-schema application on resume, not just spawn. See [`docs/output_contract_enforcement.md`](docs/output_contract_enforcement.md).
+- **Inter-task peer messaging**: `send_message_to_task` between agents under a least-privilege, default-deny peer scope; agents declare `peers: [@Ref]`; grants are symmetric (bidirectional) and persisted so peer communication survives restarts. See [`docs/task_messaging.md`](docs/task_messaging.md).
+- **Per-stake reliability**: `timeout(N)` and `retries(N)` per stake, with the wait bounded by the remaining flow time budget; running agents are awaited (no implicit per-stake timeout) and timed-out stakes fail loudly.
+- **Lifecycle**: Workflows restore on resume/reload; **Stop** halts the whole tree and **Resume** continues the stopped agents; the entire tree runs inside the selected worktree.
+- **Mid-flow human input**: `escalate` renders a typed input form (the full `ask_followup_question` widget set) or multiple-choice sign-off, with self-explanatory round-dispatch progress lines.
+- **Built-in workflows** surfaced in the task drawer and shipped with the extension. See [`docs/built-in-workflows.md`](docs/built-in-workflows.md).
+
+#### Workflow & task visualization
+
+- **Three-view diagrams**: Topology network, Sequence timeline, and Swimlane (Agent Logic Flow), laid out with **dagre** and rendered by [`slang-render.js`](src/core/webview/slang-render.js). Runtime-aware overlays show live agent status, the executing op, active edges, and (Sequence) the real `mailboxHistory` chronology including escalation arrows. Adds color legends, zoom/pan (anchored at cursor), node drag, edge highlights, and timing/cost tooltips. See [`docs/workflow_visualization.md`](docs/workflow_visualization.md).
+- **`.slang` custom editor tab**: Opening a `.slang` file renders the visualization in an editor tab with live refresh that preserves view/zoom/drag; runtime state streams in while a workflow runs.
+- **WorkflowView tabs**: Events, Tree (task hierarchy), Topology, Sequence, State, **Stats**, and **Logs**. The Stats tab shows an active-time donut + per-tool/MCP breakdown aggregated across the whole tree; the Logs tab adds free-text and per-severity filtering. A dedicated **WorkflowHeader** shows whole-tree cost & tokens, a live last-event line, and a shimmer while the flow runs.
+- **Single-task Trace & Stats**: Time-breakdown donut (waiting-for-model, thinking, streaming, tool, MCP, waiting-for-task, sleeping, overhead) whose total matches the header's Active Time, plus per-tool run-count/success ratios. See [`docs/task_visualization.md`](docs/task_visualization.md).
+
+#### CLI, headless & public API
+
+- **Public ShoferAPI**: A full programmatic surface (task management, send/cancel/approve/reject, export, logging, config, and workflow methods) exposed through `ExtensionHost`, with `ExtensionClient` importable as a reusable library via `@shofer/cli/client`. See [`docs/public_api.md`](docs/public_api.md) and [`docs/headless.md`](docs/headless.md).
+- **Headless runs**: Non-interactive task auto-resume with a `--retry` budget; a hermetic mock provider for functional testing ([`docs/mocks.md`](docs/mocks.md)); a conformance test harness ([`docs/test_harness.md`](docs/test_harness.md)).
+- **llm-router provider**: `ShoferHandler` with `--base-url` and auto `conversation_id` derived from the task id; LLM cost + token Prometheus counters.
+- **Multi-threaded worker architecture**: Phase 0/1 bootstrap and IPC forwarding hooks. See [`docs/multi_threaded.md`](docs/multi_threaded.md).
+
+#### Sandboxing & worktrees
+
+- **OS-level command sandboxing**: A Landlock/`bwrap` write-only sandbox wrapper (a Go binary built at build time, with ELF arch tests and a fail-closed binary guard) confines shell commands; worktree shell sandboxing and `rename_symbol` isolation enforce the active worktree boundary. See [`docs/worktree-shell-sandboxing.md`](docs/worktree-shell-sandboxing.md) and [`docs/command-execution.md`](docs/command-execution.md).
+- **Worktrees**: "New worktree" default with auto-create on first send, shallow submodule init, `.worktreeinclude` copy checkboxes, and built-in merge commands; the Qdrant collection and cache are shared across worktrees; creation shows step-by-step progress. Special files moved under `.shofer/` (`.shoferignore`, `.shofermodes`, `.worktreeinclude`).
+
+#### Modes & tools
+
+- **Built-in modes reworked**: Replaced Ask and Orchestrator with **Code Search**, **Web Search**, and **Reviewer**; promoted `list_background_tasks` and `send_message_to_task` to always-available; added a `subtasks` group to Architect and Reviewer.
+- **Per-task mode & API config**: A no-slot, three-tier model lets each task carry its own mode and API configuration; `switch_mode` accepts a `task_id` for child-mode control; default-fallback is indicated when a mode has no API-config association.
+- **Search/tooling**: Explicit `isRegex` parameter for literal-vs-regex control, `sed`, and `ripgrep`/`git_search` improvements; `wait` alias for `attempt_completion` with a mandatory rating covering work-so-far.
+- **Experimental**: A flag to disable all mistake-limit checks ([`docs/mistake_limit.md`](docs/mistake_limit.md)).
+
+#### App & UI
+
+- **New Shofer logo** across all surfaces; a WelcomeView walkthrough and a 3-step getting-started timeline; landing-page `og:image` social card.
+- **Launcher**: An in-panel two-stage New Task / New Workflow chooser (with a native title-bar dropdown / QuickPick); sidebar renamed **Tasks & Workflows** with per-group mass delete; a **Shofer Changelog** tab; free-text model input replacing the dropdown.
+- **Incremental webview messaging**: Replaced `postStateToWebview` with `postInitState` / `postConfigUpdate` / `postTaskStateUpdate` deltas; added a task-in-progress shimmer and live last-event line.
+
+### Performance
+
+- **Render & state throughput (H15–H29)**: Throttled per-chunk partial-message appends during streaming; skip re-sending unchanged `taskHistory` in init snapshots; early-out redundant per-request history-prep passes; O(n) child-map for task-tree construction; memoized sorted `taskHistory` and webview render paths; cached system prompt and deduped the per-request tool array; faster cold task switching via tail reads + `skipApiHistory`.
+- **Persistence**: Cross-call sha256 content cache in `BlobStore`; reused append file handles with memoized `mkdir`; threshold-triggered JSONL compaction; incrementally maintained token-bearing message count; per-segment dedup in the indexer scanner.
+
+### Bug Fixes
+
+- **Workflow runtime**: Fixed `waitForStakes` deadlocks; clear stale terminal markers and re-run agents on stake resume; register workflow agent tasks with `TaskManager` (TaskSelector switch-back, mid-round budget checks); persist `aborted` status and stop cleanly during flow-param collection; surface agent violations/errors in chat, not just logs; `escalate` questions now render in the Events tab.
+- **Visualization**: Live refresh preserves view/zoom/drag; dagre layers computed from x-positions; deduplicated edges and fixed edge-label dragging and drag routing; fit-to-view fits the whole diagram; chronological, creation-ordered lifelines; escalation arrows and async/failed/cancel interactions rendered distinctly; viz scoped to the focused task; built-in `.slang` files copied to `dist/`.
+- **Chat & scroll**: Eliminated duplicate "Shofer said" messages via identity-based streaming finalization; fixed scroll-anchor loss on task switch and restored scroll position on task re-entry; removed smooth-scroll snap-back; prevented stale `currentTaskItem` surviving state pushes.
+- **Tools & parsing**: Closed `fileRegex` bypass gaps via a `getMutatedPaths` contract; surfaced silent tool-call failures in the UI and mistake counter; removed `strict:true` from tools with advisory parameters; added missing tool-call cases (`sed`, `read_command_output`).
+- **CLI bundling**: Broke esbuild's CJS async-generator delegation chain (wrapped the OpenAI SDK stream iterator) that hung `--print`; externalized `openai`/`undici` correctly; resolved TypeScript build errors.
+- **Indexing & settings**: Code-index error-state visibility and settings routing; isolated sticky provider profiles from global profile changes; eventual-consistency fixes for TaskSelector ±N counts.
+
+### Changed
+
+- Renamed the WorkflowView "Chat" tab to **Events** and the Stats header to **Runtime breakdown**; dropped the `[N]` task-number from Tree/Sequence labels.
+- Removed the **Share** button from TaskHeader and the static **Dependencies** diagram view; removed the legacy `SlangVisualizationPanel` side panel in favor of the custom editor tab.
+- Replaced the hand-rolled BFS graph layout with **dagre**; extracted the pure-function Slang interpreter from `WorkflowTask`.
+- Removed ASCII kangaroo art from the TUI header/onboarding; regenerated the `.shofermodes` schema.
+
+### Documentation
+
+- Added: [`built-in-workflows.md`](docs/built-in-workflows.md), [`checkpoints.md`](docs/checkpoints.md), [`command-execution.md`](docs/command-execution.md), [`headless.md`](docs/headless.md), [`logging.md`](docs/logging.md), [`mistake_limit.md`](docs/mistake_limit.md), [`mocks.md`](docs/mocks.md), [`multi_threaded.md`](docs/multi_threaded.md), [`notifications.md`](docs/notifications.md), [`output_contract_enforcement.md`](docs/output_contract_enforcement.md), [`public_api.md`](docs/public_api.md), [`task_visualization.md`](docs/task_visualization.md), [`test_harness.md`](docs/test_harness.md), [`tool-call-failures.md`](docs/tool-call-failures.md), [`worktree-shell-sandboxing.md`](docs/worktree-shell-sandboxing.md), and the Slang/workflow design set ([`slang_specs.md`](docs/slang_specs.md), [`workflow_design.md`](docs/workflow_design.md), [`workflow_visualization.md`](docs/workflow_visualization.md), [`task_messaging.md`](docs/task_messaging.md)).
+
+---
+
+## 1.0.19 — 2026-05-31
 
 ### Features
 
