@@ -1937,6 +1937,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleRowHeightChange,
 			isStreaming,
 			handleSuggestionClickInRow,
+			handleParamFormSubmit,
 			handleBatchFileResponse,
 			handleFollowUpUnmount,
 			currentFollowUpTs,
