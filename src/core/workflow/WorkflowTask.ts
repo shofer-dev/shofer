@@ -152,6 +152,13 @@ function tryParseJson(text: string): unknown {
 	}
 }
 
+/** Join names into a natural list: "A", "A and B", or "A, B and C". */
+function joinNames(names: string[], conj: string = "and"): string {
+	if (names.length <= 1) return names[0] ?? ""
+	if (names.length === 2) return `${names[0]} ${conj} ${names[1]}`
+	return `${names.slice(0, -1).join(", ")} ${conj} ${names[names.length - 1]}`
+}
+
 // ─── Types ──
 
 export interface WorkflowTaskOptions extends TaskOptions {
@@ -678,9 +685,7 @@ export class WorkflowTask extends Task {
 			}
 
 			// 5. Dispatch all staking agents in parallel, wait, collect results.
-			await this.sayProgress(
-				`🔄 Round ${this.flowState.round}: dispatching ${stakes.length} agent(s) — ${stakes.map((n) => `\`${n}\``).join(", ")}`,
-			)
+			await this.sayProgress(this.describeRoundDispatch(stakes))
 			await this.dispatchStakes(stakes)
 			// Reflect the freshly-dispatched "running" agents in the viz before
 			// we block waiting on them, so progress is visible mid-round.
@@ -742,6 +747,52 @@ export class WorkflowTask extends Task {
 			await this.persistCheckpoint()
 			await this.emitTaskCompleted("poor")
 		}
+	}
+
+	/**
+	 * Build a self-explanatory progress line for a round's dispatch step. Rather
+	 * than the terse "dispatching N agent(s)", it spells out, in plain language,
+	 * the state of the whole flow at this instant:
+	 *   - who is now doing work — the agents being dispatched/resumed (`stakes`),
+	 *   - who is parked waiting and for whose input (`blocked` agents + `waitingFor`),
+	 *   - who has already finished (`committed`) or failed (`error`).
+	 * Escalations are resolved earlier in the round, so no agent is awaiting the
+	 * human here. `stakes` is guaranteed non-empty at the call site.
+	 */
+	private describeRoundDispatch(stakes: string[]): string {
+		const staking = new Set(stakes)
+		const waiting: string[] = []
+		const done: string[] = []
+		const failed: string[] = []
+		for (const [name, state] of this.flowState.agents) {
+			if (staking.has(name)) continue
+			if (state.status === "committed") done.push(name)
+			else if (state.status === "error") failed.push(name)
+			else if (state.status === "blocked") {
+				const from = this.describeWaitSources(state.waitingFor)
+				waiting.push(from ? `${name} is waiting for input from ${from}` : `${name} is waiting`)
+			}
+		}
+
+		const parts: string[] = []
+		if (stakes.length > 0) parts.push(`Waiting for ${joinNames(stakes)} to finish`)
+		parts.push(...waiting)
+		if (done.length > 0) parts.push(`${joinNames(done)} ${done.length === 1 ? "has" : "have"} finished`)
+		if (failed.length > 0) parts.push(`${joinNames(failed)} ${failed.length === 1 ? "has" : "have"} failed`)
+
+		const body = parts.length > 0 ? `${parts.join(". ")}.` : `dispatching ${stakes.length} agent(s).`
+		return `🔄 Round ${this.flowState.round}: ${body}`
+	}
+
+	/** Render an await's source list for humans ("Builder", "you", "Builder or you"). */
+	private describeWaitSources(waitingFor: string | undefined): string {
+		if (!waitingFor) return ""
+		const sources = waitingFor
+			.split(",")
+			.map((s) => s.trim().replace(/^@/, ""))
+			.filter(Boolean)
+			.map((s) => (s === "Human" ? "you" : s === "any" || s === "*" ? "any agent" : s))
+		return joinNames(sources, "or")
 	}
 
 	// ── Interpreter ──
