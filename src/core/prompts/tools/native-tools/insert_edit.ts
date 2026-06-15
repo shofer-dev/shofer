@@ -27,7 +27,6 @@ export default {
 	function: {
 		name: "insert_edit",
 		description: INSERT_EDIT_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

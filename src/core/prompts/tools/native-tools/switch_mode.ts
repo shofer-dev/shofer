@@ -13,7 +13,6 @@ export default {
 	function: {
 		name: "switch_mode",
 		description: SWITCH_MODE_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

@@ -15,7 +15,6 @@ export default {
 	function: {
 		name: "view_image",
 		description: VIEW_IMAGE_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

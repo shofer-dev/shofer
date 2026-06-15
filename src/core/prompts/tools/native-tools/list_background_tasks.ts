@@ -9,7 +9,6 @@ export default {
 	function: {
 		name: "list_background_tasks",
 		description: LIST_BACKGROUND_TASKS_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

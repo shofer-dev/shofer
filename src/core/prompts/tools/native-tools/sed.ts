@@ -37,7 +37,6 @@ export default {
 	function: {
 		name: "sed",
 		description: SED_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

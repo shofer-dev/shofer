@@ -24,7 +24,6 @@ export default {
 	function: {
 		name: "rename_symbol",
 		description: RENAME_SYMBOL_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {

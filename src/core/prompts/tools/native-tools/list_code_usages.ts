@@ -21,7 +21,6 @@ export default {
 	function: {
 		name: "list_code_usages",
 		description: LIST_CODE_USAGES_DESCRIPTION,
-		strict: true,
 		parameters: {
 			type: "object",
 			properties: {
