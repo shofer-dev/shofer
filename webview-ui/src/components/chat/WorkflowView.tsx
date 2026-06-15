@@ -40,6 +40,7 @@ import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
 import SlangViz from "./SlangViz"
 import TaskLogsView from "./TaskLogsView"
+import WorkflowStatsView from "./WorkflowStatsView"
 
 export interface WorkflowViewProps {
 	isHidden: boolean
@@ -114,10 +115,10 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			: undefined
 
 	// Show a WarningRow when the user sends a message with a retired provider.
-	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs"
-	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "topology" | "sequence" | "swimlane" | "logs">(
-		"chat",
-	)
+	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane" | "stats" | "logs"
+	const [workflowTab, setWorkflowTab] = useState<
+		"chat" | "tree" | "topology" | "sequence" | "swimlane" | "stats" | "logs"
+	>("chat")
 
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
 
@@ -2097,41 +2098,48 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							style={{
 								borderBottom: "1px solid var(--vscode-widget-border, #3c3c3c)",
 							}}>
-							{(["chat", "tree", "topology", "sequence", "swimlane", "logs"] as const).map((tab) => (
-								<button
-									key={tab}
-									type="button"
-									className={`text-xs font-medium px-3 py-1 rounded transition-colors border-none cursor-pointer ${
-										workflowTab === tab ? "text-white" : "opacity-60 hover:opacity-100"
-									}`}
-									style={{
-										background:
-											workflowTab === tab
-												? "var(--vscode-button-background, #0e639c)"
-												: "transparent",
-									}}
-									onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
-									{
+							{(["chat", "tree", "topology", "sequence", "swimlane", "stats", "logs"] as const).map(
+								(tab) => (
+									<button
+										key={tab}
+										type="button"
+										className={`text-xs font-medium px-3 py-1 rounded transition-colors border-none cursor-pointer ${
+											workflowTab === tab ? "text-white" : "opacity-60 hover:opacity-100"
+										}`}
+										style={{
+											background:
+												workflowTab === tab
+													? "var(--vscode-button-background, #0e639c)"
+													: "transparent",
+										}}
+										onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
 										{
-											chat: "Events",
-											tree: "Tree",
-											topology: "Topology",
-											sequence: "Sequence",
-											swimlane: "State",
-											logs: "Logs",
-										}[tab]
-									}
-								</button>
-							))}
+											{
+												chat: "Events",
+												tree: "Tree",
+												topology: "Topology",
+												sequence: "Sequence",
+												swimlane: "State",
+												stats: "Stats",
+												logs: "Logs",
+											}[tab]
+										}
+									</button>
+								),
+							)}
 						</div>
 					)}
-					{vizHtml && workflowTab !== "chat" && workflowTab !== "tree" && workflowTab !== "logs" && (
-						<SlangViz
-							html={vizHtml}
-							runState={vizRunState}
-							view={workflowTab as "topology" | "sequence" | "swimlane"}
-						/>
-					)}
+					{vizHtml &&
+						workflowTab !== "chat" &&
+						workflowTab !== "tree" &&
+						workflowTab !== "stats" &&
+						workflowTab !== "logs" && (
+							<SlangViz
+								html={vizHtml}
+								runState={vizRunState}
+								view={workflowTab as "topology" | "sequence" | "swimlane"}
+							/>
+						)}
 					{vizHtml && workflowTab === "tree" && (
 						<div className="flex relative grow">
 							<TaskTreeView
@@ -2139,6 +2147,12 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
 							/>
 						</div>
+					)}
+					{vizHtml && workflowTab === "stats" && (
+						<WorkflowStatsView
+							taskHistory={taskHistory}
+							rootTaskId={currentTaskItem?.rootTaskId ?? currentTaskItem?.id}
+						/>
 					)}
 					{vizHtml && workflowTab === "logs" && (
 						<div className="flex relative grow overflow-hidden">
