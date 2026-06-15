@@ -1,6 +1,8 @@
 ---
 import { rooCodeComparisons, rooCodeMigration } from "../data/migrations";
 import { copilotComparisons, copilotMigration } from "../data/copilot";
+import { claudeCodeComparisons, claudeCodeMigration } from "../data/claudeCode";
+import { openCodeComparisons, openCodeMigration } from "../data/opencode";
 ---
 
 <section id="migration" class="py-24 sm:py-32">
@@ -11,7 +13,7 @@ import { copilotComparisons, copilotMigration } from "../data/copilot";
         Already using another AI coding tool?
       </h2>
       <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-        One-command migration from Roo-Code and GitHub Copilot. Your configuration, modes, and rules come with you.
+        One-command migration from Roo-Code, GitHub Copilot, and Claude Code — and a clean path from OpenCode. Your configuration, modes, and rules come with you.
       </p>
     </div>
 
@@ -87,6 +89,88 @@ import { copilotComparisons, copilotMigration } from "../data/copilot";
                   <td class="py-3 px-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">{row.aspect}</td>
                   <td class="py-3 px-4 text-gray-600 dark:text-gray-300">{row.shofer}</td>
                   <td class="py-3 px-4 text-gray-400 dark:text-gray-500">{row.copilot}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Claude Code -->
+    <div class="mt-16 lg:mt-20">
+      <div class="flex flex-col lg:flex-row gap-8 lg:gap-10 items-start">
+        <div class="lg:w-1/3">
+          <div class="lg:sticky lg:top-24">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-accent-amber flex items-center justify-center text-white mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">{claudeCodeMigration.title}</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-4">{claudeCodeMigration.description}</p>
+            <div class="inline-flex items-center gap-3">
+              <code class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-mono text-shofer-600 dark:text-shofer-400">{claudeCodeMigration.command}</code>
+              <a href={claudeCodeMigration.docsUrl} class="text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Full guide ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:w-2/3 w-full overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-gray-200 dark:border-gray-800">
+                <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Aspect</th>
+                <th class="text-left py-3 px-4 font-semibold text-shofer-600 dark:text-shofer-400">Shofer</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-400 dark:text-gray-500">Claude Code</th>
+              </tr>
+            </thead>
+            <tbody>
+              {claudeCodeComparisons.map((row) => (
+                <tr class="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                  <td class="py-3 px-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">{row.aspect}</td>
+                  <td class="py-3 px-4 text-gray-600 dark:text-gray-300">{row.shofer}</td>
+                  <td class="py-3 px-4 text-gray-400 dark:text-gray-500">{row.claudeCode}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- OpenCode -->
+    <div class="mt-16 lg:mt-20">
+      <div class="flex flex-col lg:flex-row gap-8 lg:gap-10 items-start">
+        <div class="lg:w-1/3">
+          <div class="lg:sticky lg:top-24">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-shofer-500 flex items-center justify-center text-white mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">{openCodeMigration.title}</h3>
+            <p class="text-gray-500 dark:text-gray-400 text-sm leading-relaxed mb-4">{openCodeMigration.description}</p>
+            <div class="inline-flex items-center gap-3">
+              {openCodeMigration.command && (
+                <code class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-mono text-shofer-600 dark:text-shofer-400">{openCodeMigration.command}</code>
+              )}
+              <a href={openCodeMigration.docsUrl} class="text-sm font-medium text-gray-400 dark:text-gray-500 hover:text-shofer-600 dark:hover:text-shofer-400 transition-colors">Full guide ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:w-2/3 w-full overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-gray-200 dark:border-gray-800">
+                <th class="text-left py-3 px-4 font-semibold text-gray-900 dark:text-white">Aspect</th>
+                <th class="text-left py-3 px-4 font-semibold text-shofer-600 dark:text-shofer-400">Shofer</th>
+                <th class="text-left py-3 px-4 font-semibold text-gray-400 dark:text-gray-500">OpenCode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {openCodeComparisons.map((row) => (
+                <tr class="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                  <td class="py-3 px-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">{row.aspect}</td>
+                  <td class="py-3 px-4 text-gray-600 dark:text-gray-300">{row.shofer}</td>
+                  <td class="py-3 px-4 text-gray-400 dark:text-gray-500">{row.openCode}</td>
                 </tr>
               ))}
             </tbody>

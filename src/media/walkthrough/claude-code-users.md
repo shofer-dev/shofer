@@ -12,7 +12,7 @@ Coming from Anthropic's Claude Code? Shofer gives you the same agentic power in 
 - **Assistant Agent** — a persistent, cross-session context window that other tasks reuse to cut token spend
 - **Native worktrees + OS-level sandboxing** — parallel branches in one window; shell commands confined via Landlock/bwrap
 - **Hard cost caps** — per-task and per-session USD budgets that halt runaway loops
-- **Open-source (MIT)** — inspect and modify every tool hook and prompt
+- **Open-source (Apache 2.0)** — inspect and modify every tool hook and prompt
 
 ## Quick Start for Claude Code Users
 

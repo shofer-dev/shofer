@@ -21,7 +21,9 @@
   <a href="https://marketplace.visualstudio.com/items?itemName=Shoferdev.shofer">Install</a> ·
   <a href="https://github.com/shofer-dev/shofer">GitHub</a> ·
   <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md">Roo-Code Migration</a> ·
-  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md">Copilot Migration</a>
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md">Copilot Migration</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md">Claude Code Migration</a> ·
+  <a href="https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md">OpenCode Migration</a>
 </p>
 
 <p align="center">
@@ -168,6 +170,10 @@ Key recommendations: start with auto-approval toggles **OFF** and enable increme
 **Coming from Roo-Code?** Shofer is a major architectural improvement with parallel tasks, async MCP calling, semantic code & git log indexing, native worktree support, and background subtasks. Run `/migrate-from-roocode` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_roocode_users.md)
 
 **Coming from GitHub Copilot?** Shofer gives you full model choice, local-first privacy, 50+ native tools, and parallel task execution. Run `/migrate-from-copilot` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_copilot_users.md)
+
+**Coming from Claude Code?** Keep the agentic power, but bring any model (including local/offline), a graphical cockpit, deterministic Slang Workflows, semantic code & git-log search, native worktrees, and hard cost caps. Run `/migrate-from-claude` to migrate your configuration. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_claude_code_users.md)
+
+**Coming from OpenCode?** Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, semantic code & git-log search, native worktrees, and a deterministic multi-agent Workflow engine. Your `AGENTS.md` rules carry over directly. [Read the migration guide →](https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md)
 
 ## Community
 
