@@ -768,92 +768,6 @@ function expandRecipient(ref, agentNames, self) {
 	return [ref]
 }
 
-/**
- * Build the static "Dependencies" timeline: the guaranteed happens-before
- * edges declared in the source, ordered by dependency rank. This is a partial
- * order — same-rank events have no defined order — and conditional/looping
- * edges are annotated `(if …)` / `(repeat)`. Used in the standalone editor
- * where a real execution chronology is unknowable before the run.
- */
-function buildDependencyTimeline(flow, agentNames) {
-	var deps = []
-	function annotate(base, ctx) {
-		var parts = []
-		if (ctx.cond) parts.push("if " + ctx.cond)
-		if (ctx.loop) parts.push("repeat")
-		return parts.length ? base + " (" + parts.join(", ") + ")" : base
-	}
-	function walk(from, ops, ctx) {
-		if (!ops) return
-		for (var i = 0; i < ops.length; i++) {
-			var op = ops[i]
-			if (op.type === "StakeOp" && op.recipients) {
-				var c = op.condition
-					? { cond: (ctx.cond ? ctx.cond + " & " : "") + exprStr(op.condition), loop: ctx.loop }
-					: ctx
-				for (var j = 0; j < op.recipients.length; j++) {
-					var ref = op.recipients[j].ref || op.recipients[j]
-					var tos = expandRecipient(ref, agentNames, from)
-					for (var ti = 0; ti < tos.length; ti++) {
-						deps.push({
-							from: from,
-							to: tos[ti],
-							label: annotate(op.call ? op.call.name : "stake", c),
-							type: "stake",
-						})
-					}
-				}
-			} else if (op.type === "EscalateOp") {
-				deps.push({ from: from, to: "@Human", label: annotate(op.reason || "escalate", ctx), type: "stake" })
-			} else if (op.type === "WhenBlock") {
-				var wc = exprStr(op.condition)
-				walk(from, op.body, { cond: ctx.cond ? ctx.cond + " & " + wc : wc, loop: ctx.loop })
-				if (op.elseBlock)
-					walk(from, op.elseBlock.body, {
-						cond: (ctx.cond ? ctx.cond + " & " : "") + "!" + wc,
-						loop: ctx.loop,
-					})
-			} else if (op.type === "RepeatBlock") {
-				walk(from, op.body, { cond: ctx.cond, loop: true })
-			}
-		}
-	}
-	for (var a = 0; a < (flow.body || []).length; a++) {
-		var agent = flow.body[a]
-		if (agent.type !== "AgentDecl") continue
-		walk(agent.name, agent.operations, { cond: null, loop: false })
-	}
-
-	// Rank agents by longest dependency chain (cycle-safe relaxation: loops
-	// produce back-edges that simply stop growing once the bound is hit).
-	var rank = {}
-	var names = Object.keys(agentNames)
-	for (var n = 0; n < names.length; n++) rank[names[n]] = 0
-	for (var pass = 0; pass < names.length; pass++) {
-		var changed = false
-		for (var d = 0; d < deps.length; d++) {
-			var f = deps[d].from,
-				t = deps[d].to
-			if (rank[f] === undefined || rank[t] === undefined) continue // @Human isn't ranked
-			if (rank[t] < rank[f] + 1) {
-				rank[t] = rank[f] + 1
-				changed = true
-			}
-		}
-		if (!changed) break
-	}
-	// Order by the rank at which each edge fires (its producer's rank); ties
-	// keep source order. This yields a valid topological ordering.
-	for (var e2 = 0; e2 < deps.length; e2++) {
-		deps[e2].order = rank[deps[e2].from] !== undefined ? rank[deps[e2].from] : 0
-		deps[e2].seq = e2
-	}
-	deps.sort(function (x, y) {
-		return x.order - y.order || x.seq - y.seq
-	})
-	return deps
-}
-
 // ── view compiler 2: sequence diagram chronology ──
 function compileSequenceSVG(flow, agentNames) {
 	var agentKeys = Object.keys(agentNames)
@@ -863,60 +777,49 @@ function compileSequenceSVG(flow, agentNames) {
 		STEP_H = 50,
 		TOP_PAD = 60
 
-	// Choose the timeline source:
-	//   - Embedded (live/finished workflow), or any run that has produced
-	//     mailbox history → the REAL message record (what has happened) plus
-	//     pending sends (what is happening in the current round). Empty before
-	//     the first message.
-	//   - Standalone static file → a dependency partial-order from the AST:
-	//     guaranteed happens-before edges, ranked; order within a rank is
-	//     unspecified. A true chronology cannot be known before execution.
+	// The sequence is the REAL message record — built from mailboxHistory (what
+	// has happened, in chronological order) plus pending sends (the arrows for
+	// what's happening in the current round). It only renders meaningfully at
+	// runtime; a static file shows the empty state (and has no Sequence tab —
+	// its static structure lives in Topology / Agent Logic Flow).
 	var timelineEvents = []
-	var dependencyMode = false
-	var useRuntime = _embedded || (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0)
 
-	if (useRuntime) {
-		if (_runState && _runState.mailboxHistory) {
-			for (var mi = 0; mi < _runState.mailboxHistory.length; mi++) {
-				var entry = _runState.mailboxHistory[mi]
-				timelineEvents.push({
-					from: entry.from,
-					to: entry.to === "out" || entry.to === "@out" ? "@Human" : entry.to,
-					label: entry.funcName || "",
-					type: "stake",
-					seq: mi,
-					ts: entry.timestamp || 0,
-					tokensUsed: entry.tokensUsed,
-					costUsd: entry.costUsd,
-					durationMs: entry.durationMs,
-				})
-			}
+	if (_runState && _runState.mailboxHistory) {
+		for (var mi = 0; mi < _runState.mailboxHistory.length; mi++) {
+			var entry = _runState.mailboxHistory[mi]
+			timelineEvents.push({
+				from: entry.from,
+				to: entry.to === "out" || entry.to === "@out" ? "@Human" : entry.to,
+				label: entry.funcName || "",
+				type: "stake",
+				seq: mi,
+				ts: entry.timestamp || 0,
+				tokensUsed: entry.tokensUsed,
+				costUsd: entry.costUsd,
+				durationMs: entry.durationMs,
+			})
 		}
-		// Pending sends: agents with sendingTo set whose result hasn't been
-		// routed yet — the arrows for what's happening in the current round.
-		if (_runState && _runState.agents) {
-			for (var ai = 0; ai < _runState.agents.length; ai++) {
-				var ag = _runState.agents[ai]
-				var refs = splitRefs(ag[1].sendingTo)
-				for (var ri = 0; ri < refs.length; ri++) {
-					var exTo = expandRecipient(refs[ri], agentNames, ag[0])
-					for (var xi = 0; xi < exTo.length; xi++) {
-						timelineEvents.push({
-							from: ag[0],
-							to: exTo[xi],
-							label: "sending…",
-							type: "stake",
-							seq: timelineEvents.length,
-							pending: true,
-						})
-					}
+	}
+	// Pending sends: agents with sendingTo set whose result hasn't been routed
+	// yet — the arrows for what's happening in the current round.
+	if (_runState && _runState.agents) {
+		for (var ai = 0; ai < _runState.agents.length; ai++) {
+			var ag = _runState.agents[ai]
+			var refs = splitRefs(ag[1].sendingTo)
+			for (var ri = 0; ri < refs.length; ri++) {
+				var exTo = expandRecipient(refs[ri], agentNames, ag[0])
+				for (var xi = 0; xi < exTo.length; xi++) {
+					timelineEvents.push({
+						from: ag[0],
+						to: exTo[xi],
+						label: "sending…",
+						type: "stake",
+						seq: timelineEvents.length,
+						pending: true,
+					})
 				}
 			}
 		}
-	} else {
-		// Static: dependency partial-order extracted from the flow AST.
-		dependencyMode = true
-		timelineEvents = buildDependencyTimeline(flow, agentNames)
 	}
 
 	var svgW = Math.max(600, columns.length * COL_W + MARGIN * 2)
@@ -1032,9 +935,7 @@ function compileSequenceSVG(flow, agentNames) {
 		s += "</g>"
 	}
 	if (timelineEvents.length === 0) {
-		var emptyMsg = dependencyMode
-			? "No interactions declared in this flow."
-			: "Workflow not started — messages appear here as agents exchange results."
+		var emptyMsg = "Workflow not started — messages appear here as agents exchange results."
 		s +=
 			'<text x="' +
 			svgW / 2 +
@@ -1891,16 +1792,10 @@ function buildLegend(view) {
 		}
 	} else if (view === "sequence") {
 		// Lifeline swatches (agent / Human) are self-evident from the column
-		// headers, so the legend only documents what the rows mean.
-		var seqRuntime = _embedded || (_runState && _runState.mailboxHistory && _runState.mailboxHistory.length > 0)
-		if (seqRuntime) {
-			items.push(_legendItem(_legendSwatch(COLORS.stake), "message (top → bottom = time)"))
-			items.push(_legendItem("", "dashed = in flight this round"))
-		} else {
-			// Static dependency partial-order.
-			items.push(_legendItem(_legendSwatch(COLORS.stake), "happens-before (dependency order)"))
-			items.push(_legendItem("", "same-rank order unspecified; (if …)/(repeat) = conditional"))
-		}
+		// headers, so the legend only documents what the rows mean. The sequence
+		// is always the real runtime message record (chronological).
+		items.push(_legendItem(_legendSwatch(COLORS.stake), "message (top → bottom = time)"))
+		items.push(_legendItem("", "dashed = in flight this round"))
 	} else {
 		// swimlane ("Agent Logic Flow" / State)
 		items.push(_legendItem(_legendSwatch(COLORS.agent), "agent lane"))
@@ -2003,9 +1898,6 @@ function handleRender(payload) {
 			'<button class="tab-btn' +
 			(_currentView === "topology" ? " active" : "") +
 			'" data-view="topology">Topology Network</button>' +
-			'<button class="tab-btn' +
-			(_currentView === "sequence" ? " active" : "") +
-			'" data-view="sequence">Dependencies</button>' +
 			'<button class="tab-btn' +
 			(_currentView === "swimlane" ? " active" : "") +
 			'" data-view="swimlane">Agent Logic Flow</button>' +
