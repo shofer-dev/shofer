@@ -621,6 +621,70 @@ flow "all-committed" () {
 		const { ast, errors } = parseSlang(src)
 		expect(errors).toHaveLength(0)
 	})
+
+	it("parses budget with flow-param identifier references", () => {
+		const src = `
+flow "param-budget" (max_tokens: "number", max_rounds: "number", time_limit: "number") {
+		agent A {
+		  mode: "code"
+		  commit
+		}
+		converge when: @A.committed
+		budget: tokens(max_tokens), rounds(max_rounds), time(time_limit)
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const flow = ast.flows[0]!
+		const stmt = flow.body.find((n): n is BudgetStmt => n.type === "BudgetStmt")
+		expect(stmt).toBeDefined()
+		expect(stmt!.items).toHaveLength(3)
+
+		// All three budget items should be Ident expressions, not NumberLit
+		const tokensItem = stmt!.items.find((i) => i.kind === "tokens")
+		expect(tokensItem!.value.type).toBe("Ident")
+		expect((tokensItem!.value as any).name).toBe("max_tokens")
+
+		const roundsItem = stmt!.items.find((i) => i.kind === "rounds")
+		expect(roundsItem!.value.type).toBe("Ident")
+		expect((roundsItem!.value as any).name).toBe("max_rounds")
+
+		const timeItem = stmt!.items.find((i) => i.kind === "time")
+		expect(timeItem!.value.type).toBe("Ident")
+		expect((timeItem!.value as any).name).toBe("time_limit")
+	})
+
+	it("parses budget with mixed literals and identifiers", () => {
+		const src = `
+flow "mixed-budget" (token_limit: "number") {
+		agent A {
+		  mode: "code"
+		  commit
+		}
+		converge when: @A.committed
+		budget: tokens(token_limit), rounds(10), time(300)
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const flow = ast.flows[0]!
+		const stmt = flow.body.find((n): n is BudgetStmt => n.type === "BudgetStmt")
+		expect(stmt).toBeDefined()
+		expect(stmt!.items).toHaveLength(3)
+
+		// tokens is an Ident, rounds and time are NumberLit
+		const tokensItem = stmt!.items.find((i) => i.kind === "tokens")
+		expect(tokensItem!.value.type).toBe("Ident")
+		expect((tokensItem!.value as any).name).toBe("token_limit")
+
+		const roundsItem = stmt!.items.find((i) => i.kind === "rounds")
+		expect(roundsItem!.value.type).toBe("NumberLit")
+		expect((roundsItem!.value as any).value).toBe(10)
+
+		const timeItem = stmt!.items.find((i) => i.kind === "time")
+		expect(timeItem!.value.type).toBe("NumberLit")
+		expect((timeItem!.value as any).value).toBe(300)
+	})
 })
 
 describe("parseSlang — log / error operations", () => {

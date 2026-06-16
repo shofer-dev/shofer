@@ -1032,7 +1032,7 @@ All 5 phase commits pass:
 
 - **ESLint**: `pnpm run lint` — zero warnings
 - **TypeScript**: `pnpm run check-types` — only pre-existing test file errors (unrelated `AttemptCompletionToolUse` rating type issue)
-- **VSCE Packaging**: `./deploy.sh dev build shofer` — produces `shofer-0.5.0.vsix` (31.74 MB)
+- **VSCE Packaging**: `./deploy2.sh dev build shofer` — produces `shofer-0.5.0.vsix` (31.74 MB)
 
 ---
 

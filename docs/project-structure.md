@@ -178,10 +178,10 @@ ShoferProvider                    ExtensionStateContext
 
 ```bash
 # Build extension
-deploy.sh dev build shofer-code
+deploy2.sh dev build shofer-code
 
 # Install in code-server
-deploy.sh dev install-extensions
+deploy2.sh dev install-extensions
 ```
 
 ---

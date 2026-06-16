@@ -337,8 +337,8 @@ Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts
 ## Build & Test
 
 ```bash
-./deploy.sh dev build shofer
-./deploy.sh dev install-extensions
+./deploy2.sh dev build shofer
+./deploy2.sh dev install-extensions
 ```
 
 ---

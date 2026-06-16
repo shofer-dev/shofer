@@ -176,9 +176,9 @@ This flows through:
 
 ### 5.2 Reject Button on `command_output` Ask (UI)
 
-**Source:** [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx:1218-1219)
+**Source:** [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx:1303-1305) and [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx:1278-1280)
 
-When the LLM is in a `command_output` ask (the "Continue / Reject" prompt for running commands), clicking **Reject** also posts `{ type: "terminalOperation", terminalOperation: "abort" }`, routing through the same path as §5.1.
+When the LLM is in a `command_output` ask (the "Kill Command" secondary button), clicking it posts `{ type: "terminalOperation", terminalOperation: "abort" }`, routing through the same path as §5.1.
 
 ### 5.3 Global Stop Button
 
@@ -203,11 +203,233 @@ Described in §4.1 — automatic kill after `commandExecutionTimeout` seconds.
 
 | Action                         | Kills process? | Mechanism                                                    |
 | ------------------------------ | :------------: | ------------------------------------------------------------ |
-| Per-command OctagonX button    |       ✅       | `terminalProcess.abort()` → SIGINT or SIGKILL + process tree |
-| Reject on `command_output` ask |       ✅       | Same path as OctagonX                                        |
+| Per-command OctagonX button    |       ⚠️       | `terminalProcess.abort()` → SIGINT or SIGKILL + process tree |
+| Reject on `command_output` ask |       ⚠️       | Same path as OctagonX                                        |
 | **Global Stop button**         |       ✅       | `task.terminalProcess?.abort()` inside `abortTask()`         |
 | User `commandExecutionTimeout` |       ✅       | Automatic SIGINT/SIGKILL after timeout                       |
 | Agent `timeout` parameter      |       ❌       | Backgrounds process — keeps running, LLM can monitor later   |
+
+> ⚠️ **Known gap (§5.6):** The OctagonX button and Reject button are ineffective for backgrounded commands because `task.terminalProcess` is cleared unconditionally in the `finally` block and `TerminalProcess.abort()` is guarded by `isListening` (which is `false` after backgrounding). See the fix design below.
+
+---
+
+### 5.6 Known Gap: Premature Termination of Backgrounded Commands
+
+The OctagonX stop button in [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx:170-186) is designed to let users kill a running command at any time. However, the button is **only functional** before the `execute_command` tool returns. Once the tool exits — whether the command completes, the agent timeout fires, or the user clicks "Proceed While Running" — the kill path breaks in two independent ways.
+
+#### Root Cause Analysis
+
+**Bug 1: `task.terminalProcess` is unconditionally cleared.**
+
+Source: [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts:494-498)
+
+```typescript
+} finally {
+    clearTimeout(agentTimeoutId)
+    clearTimeout(userTimeoutId)
+    clearTimeout(pendingCommandOutputEmitTimer)
+    task.terminalProcess = undefined  // ← cleared even for backgrounded commands
+}
+```
+
+The `finally` block runs after the `Promise.race` resolves — which happens in three scenarios:
+
+1. The process exits naturally (`process` promise resolves)
+2. The agent timeout fires (`runInBackground = true`, `process.continue()`, racer resolves)
+3. The user timeout fires (reject, caught by `catch`)
+
+In scenario 2, the command is still alive in the terminal, but `task.terminalProcess` is set to `undefined`. Any subsequent `handleTerminalOperation("abort")` call is a no-op:
+
+```typescript
+// Task.ts:2935-2941
+async handleTerminalOperation(terminalOperation: "continue" | "abort") {
+    if (terminalOperation === "continue") {
+        this.terminalProcess?.continue()   // ← undefined?.continue() → no-op
+    } else if (terminalOperation === "abort") {
+        this.terminalProcess?.abort()      // ← undefined?.abort() → no-op
+    }
+}
+```
+
+**Bug 2: `TerminalProcess.abort()` is guarded by `isListening`.**
+
+Source: [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts:259-264)
+
+```typescript
+public override abort() {
+    if (this.isListening) {            // ← IS FALSE AFTER backgrounding
+        this.terminal.terminal.sendText("\x03")
+    }
+}
+```
+
+When the command is backgrounded (agent timeout or "Proceed While Running"), several things happen:
+
+```typescript
+// TerminalProcess.ts:252-257
+public override continue() {
+    this.emitRemainingBufferIfListening()
+    this.isListening = false           // ← DISABLED
+    this.removeAllListeners("line")
+    this.emit("continue")
+}
+```
+
+After `continue()`, `isListening` is `false`, so even if `task.terminalProcess` were preserved, `abort()` would silently return without doing anything.
+
+> **Note:** [`ExecaTerminalProcess.abort()`](../src/integrations/terminal/ExecaTerminalProcess.ts:163-219) does NOT have the `isListening` guard — it always kills the subprocess. This bug is specific to the VS Code shell-integration backend.
+
+**Bug 3: The OctagonX button disappears after backgrounding.**
+
+Source: [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx:170-171)
+
+```tsx
+{status?.status === "started" && (
+    // OctagonX button...
+)}
+```
+
+The button is only visible when `status === "started"`. After backgrounding, the UI receives `"output"` status updates (not `"started"`), so the button disappears — the user has no UI affordance to kill the command even if the backend plumbing were functioning.
+
+#### Fix Design
+
+The fix spans three layers:
+
+##### Layer 1: Webview — Keep the Button Visible for All Non-Terminal States
+
+**File:** [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)
+
+Change the visibility condition from `status?.status === "started"` to a non-terminal check:
+
+```tsx
+const isCommandAlive =
+	status !== null && status.status !== "exited" && status.status !== "fallback" && status.status !== "timeout"
+
+{
+	isCommandAlive && (
+		<div className="flex flex-row items-center gap-2 font-mono text-xs">
+			{status?.status === "started" && status.pid && <div className="whitespace-nowrap">(PID: {status.pid})</div>}
+			<StandardTooltip content={t("chat:commandExecution.abort")}>
+				<Button
+					variant="ghost"
+					size="icon"
+					onClick={() =>
+						vscode.postMessage({
+							type: "terminalOperation",
+							terminalOperation: "abort",
+							executionId,
+						})
+					}>
+					<OctagonX className="size-4" />
+				</Button>
+			</StandardTooltip>
+		</div>
+	)
+}
+```
+
+Key changes:
+
+- ✅ Show PID only during `"started"` (it's not available after backgrounding)
+- ✅ Show OctagonX button for any status that isn't terminal (`"exited"`, `"fallback"`, `"timeout"`)
+- ✅ Include `executionId` in the `terminalOperation` message for future-proof routing
+
+##### Layer 2: WebviewMessage — Add `executionId` to `terminalOperation`
+
+**File:** [`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)
+
+Extend the `terminalOperation` message variant:
+
+```typescript
+terminalOperation?: "continue" | "abort"
+executionId?: string  // populated when abort originates from CommandExecution
+```
+
+##### Layer 3: Backend — Preserve `task.terminalProcess` and Fix `TerminalProcess.abort()`
+
+**File A:** [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)
+
+Guard the `task.terminalProcess = undefined` line so it only clears the reference when the command actually completed or was killed:
+
+```typescript
+} finally {
+    clearTimeout(agentTimeoutId)
+    clearTimeout(userTimeoutId)
+    clearTimeout(pendingCommandOutputEmitTimer)
+    // Only clear terminal process reference if the command finished or was killed.
+    // Backgrounded commands continue running and need a live reference for UI abort.
+    if (!runInBackground) {
+        task.terminalProcess = undefined
+    }
+}
+```
+
+> **Corollary:** The global Stop button path (`abortTask()` → `this.terminalProcess?.abort()` → `dispose()` → `TerminalRegistry.releaseTerminalsForTask()`) still needs to work for backgrounded commands. Since `abortTask()` calls `terminalProcess?.abort()`, the process reference must be non-null. This is satisfied by the guard above — `task.terminalProcess` remains set for backgrounded commands.
+
+**File B:** [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)
+
+Remove the `isListening` guard so `sendText("\x03")` is always issued:
+
+```typescript
+public override abort() {
+    // Send SIGINT using CTRL+C regardless of isListening state.
+    // Works for backgrounded commands where continue() set isListening=false.
+    this.terminal.terminal.sendText("\x03")
+}
+```
+
+The `sendText("\x03")` sends a literal `Ctrl+C` byte sequence to the VS Code terminal's stdin, which the shell interprets as SIGINT to the foreground process group. This works:
+
+- ✅ While the command is actively running (`isListening = true`)
+- ✅ After the command is backgrounded via `continue()` (`isListening = false`)
+- ✅ Regardless of whether we're collecting output
+
+If the terminal has no running foreground process, `\x03` is simply ignored by the shell — it's harmless.
+
+##### Data Flow (After Fix)
+
+```
+User clicks OctagonX button on a backgrounded command
+        │
+        ▼
+CommandExecution.tsx
+  postMessage({ type: "terminalOperation", terminalOperation: "abort", executionId })
+        │
+        ▼
+webviewMessageHandler.ts
+  provider.getCurrentTask()?.handleTerminalOperation("abort")
+        │
+        ▼
+Task.ts
+  this.terminalProcess?.abort()      // ← reference is preserved (runInBackground guard)
+        │
+        ▼
+TerminalProcess.ts / ExecaTerminalProcess.ts
+  terminal.sendText("\x03")          // ← sends SIGINT regardless of isListening
+  OR
+  subprocess.kill("SIGKILL")        // ← execa path (no isListening guard)
+        │
+        ▼
+Shell receives SIGINT → process terminates → onShellExecutionComplete fires
+        │
+        ▼
+Webview receives "exited" status → OctagonX button disappears, exit badge appears
+```
+
+##### File Change Summary
+
+| File                                                                             | Change                                                           | Risk                                          |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
+| [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx) | Show button for all alive states; pass `executionId`             | Low — UI-visibility change only               |
+| [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)     | Add optional `executionId` field                                 | Low — optional, backward-compatible           |
+| [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)               | Guard `task.terminalProcess = undefined` with `!runInBackground` | Medium — must not leak process references     |
+| [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)          | Remove `isListening` guard from `abort()`                        | Low — harmless no-op if no process is running |
+
+##### Cleanup Considerations
+
+When a backgrounded command exits naturally after the tool has returned, `onShellExecutionComplete` fires → `"exited"` status is posted to webview → the button disappears automatically. The process reference is still set on `task.terminalProcess` but the subsequent `handleTerminalOperation("abort")` call would be a no-op (the terminal has no running command). It's harmless.
+
+When the task ends (user stops it, task completes), the global `abortTask()` path calls `this.terminalProcess?.abort()` then `dispose()` → `TerminalRegistry.releaseTerminalsForTask()` cleans up the terminal association. No orphaned references.
 
 ---
 

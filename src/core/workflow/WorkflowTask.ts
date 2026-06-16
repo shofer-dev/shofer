@@ -81,16 +81,35 @@ function getConvergeExpr(flow: UpstreamFlowDecl): Expr | undefined {
 	return undefined
 }
 
+/** Resolve a budget expression value: number literal or flow-param identifier. */
+function resolveBudgetNum(expr: Expr, params: Record<string, unknown>): number | undefined {
+	const lit = exprAsNumber(expr)
+	if (lit !== undefined) return lit
+	if (expr.type === "Ident" && expr.name in params) {
+		const v = params[expr.name]
+		if (typeof v === "number") return v
+		if (typeof v === "string") {
+			const n = Number(v)
+			if (!Number.isNaN(n)) return n
+		}
+	}
+	return undefined
+}
+
 /** Get budget values: { tokens, rounds, timeMs } (time in seconds → milliseconds). */
-function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number; bTime?: number } {
+function getBudget(
+	flow: UpstreamFlowDecl,
+	params?: Record<string, unknown>,
+): { bTokens?: number; bRounds?: number; bTime?: number } {
 	const stmt = flow.body.find((n) => n.type === "BudgetStmt")
 	if (!stmt || stmt.type !== "BudgetStmt") return {}
+	const p = params ?? {}
 	const out: { bTokens?: number; bRounds?: number; bTime?: number } = {}
 	for (const item of stmt.items) {
-		if (item.kind === "tokens") out.bTokens = exprAsNumber(item.value)
-		else if (item.kind === "rounds") out.bRounds = exprAsNumber(item.value)
+		if (item.kind === "tokens") out.bTokens = resolveBudgetNum(item.value, p)
+		else if (item.kind === "rounds") out.bRounds = resolveBudgetNum(item.value, p)
 		else if (item.kind === "time") {
-			const t = exprAsNumber(item.value)
+			const t = resolveBudgetNum(item.value, p)
 			if (t !== undefined) out.bTime = t * 1000
 		}
 	}
@@ -595,7 +614,7 @@ export class WorkflowTask extends Task {
 		const provider = this.providerRef.deref()
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
 
-		const budget = getBudget(this.flowDecl)
+		const budget = getBudget(this.flowDecl, this.flowState.params)
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
 		const budgetTime = budget.bTime || DEFAULT_BUDGET_TIME
