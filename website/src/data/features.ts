@@ -13,9 +13,8 @@ export interface Feature {
 	images?: string[]
 }
 
-// Ordered intentionally: the first group is what genuinely sets Shofer apart;
-// the second group is the strong, expected baseline (done well, but common
-// across modern agents).
+// Card order is curated; it also matches the order the detail/target sections
+// appear on the page, so each card's "Learn more" jumps straight down.
 export const features: Feature[] = [
 	{
 		title: "Provable Multi-Agent Workflows",
@@ -55,6 +54,22 @@ export const features: Feature[] = [
 		],
 	},
 	{
+		title: "Memory that stays in-sync",
+		description:
+			"Long-lived memory you can talk to: a persistent, read-only Assistant Agent that accumulates codebase knowledge across tasks — surviving restarts — backed by the local semantic index. Other tasks just ask it instead of reloading context.",
+		icon: "Bot",
+		highlights: [
+			"Runs on a low-cost model with a large context window",
+			"KV-cache friendly append-only context minimizes provider costs",
+			"Strictly read-only — can read, search, and look up symbols only",
+		],
+		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#13-assistant-agent",
+		docsLabel: "Assistant Agent",
+		anchor: "assistant-agent",
+		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
+		images: ["Tasks querying the shared Assistant Agent context"],
+	},
+	{
 		title: "Fast, Local Code & Git RAG Indexing",
 		description:
 			"A semantic index over your code and your entire git history — kept fast because it's incremental (only what changed is re-embedded), and computed and stored on a backend you own.",
@@ -72,41 +87,6 @@ export const features: Feature[] = [
 		images: ["Local RAG over code and git history, indexed incrementally"],
 	},
 	{
-		title: "Hard Cost Caps",
-		description:
-			"Set a USD budget per task or per session. When the limit is hit, the agent loop pauses or aborts — task-level protection against runaway autonomous loops, across any provider.",
-		icon: "DollarSign",
-		highlights: [
-			"Per-task and per-session USD limits",
-			"Automatic halt the moment a threshold is crossed",
-			"Whole-tree cost & token rollups in the header",
-		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#10-per-task-cost-limit",
-		docsLabel: "Cost Limits",
-		anchor: "cost-caps",
-		detail: "Give a task or session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance. It works the same on any provider, including metered cloud APIs.",
-		images: ["A per-task USD budget with live spend tracking"],
-	},
-	{
-		title: "Memory that stays in-sync",
-		description:
-			"Long-lived memory you can talk to: a persistent, read-only Assistant Agent that accumulates codebase knowledge across tasks — surviving restarts — backed by the local semantic index. Other tasks just ask it instead of reloading context.",
-		icon: "Bot",
-		highlights: [
-			"Runs on a low-cost model with a large context window",
-			"KV-cache friendly append-only context minimizes provider costs",
-			"Strictly read-only — can read, search, and look up symbols only",
-		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#13-assistant-agent",
-		docsLabel: "Assistant Agent",
-		anchor: "assistant-agent",
-		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
-		images: ["Tasks querying the shared Assistant Agent context"],
-	},
-
-	// ── The strong, expected baseline ──
-
-	{
 		title: "Parallel Tasks & Async MCP",
 		description:
 			"Parallelism end to end: run many independent tasks at once in a tree, and fire MCP tool calls fire-and-forget instead of blocking the loop. Each task keeps its own mode, provider, and context.",
@@ -122,6 +102,22 @@ export const features: Feature[] = [
 		anchor: "parallel-async",
 		detail: "Parallelism runs through the whole product. Run many independent conversations at once in a task tree — each with its own mode, provider, and context — switching freely without losing state, queueing messages while an agent works, and fanning out background subtasks that report back to their parent. MCP tool calls are async too: dispatch them fire-and-forget, track them by call_id, wait for all or any to finish, and trim results on read so long-running tools never block the loop or bloat the context.",
 		images: ["The task tree with several tasks running at once", "Parallel MCP calls tracked by call_id"],
+	},
+	{
+		title: "Hard Cost Caps",
+		description:
+			"Set a USD budget per task or per session. When the limit is hit, the agent loop pauses or aborts — task-level protection against runaway autonomous loops, across any provider.",
+		icon: "DollarSign",
+		highlights: [
+			"Per-task and per-session USD limits",
+			"Automatic halt the moment a threshold is crossed",
+			"Whole-tree cost & token rollups in the header",
+		],
+		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#10-per-task-cost-limit",
+		docsLabel: "Cost Limits",
+		anchor: "cost-caps",
+		detail: "Give a task or session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance. It works the same on any provider, including metered cloud APIs.",
+		images: ["A per-task USD budget with live spend tracking"],
 	},
 	{
 		title: "Git Worktrees",
