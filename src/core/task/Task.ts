@@ -2939,10 +2939,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Set when the user kills the current command via the inline "Abort" / Kill
+	 * Command button (handleTerminalOperation("abort")). Read (and cleared) by the
+	 * execute_command status emitter so the completion is reported as `"terminated"`
+	 * rather than a plain `"exited"`. Not set by the user-timeout path, which emits
+	 * its own `"timeout"` status.
+	 */
+	public userTerminatedCommand = false
+
 	async handleTerminalOperation(terminalOperation: "continue" | "abort") {
 		if (terminalOperation === "continue") {
 			this.terminalProcess?.continue()
 		} else if (terminalOperation === "abort") {
+			this.userTerminatedCommand = true
 			this.terminalProcess?.abort()
 		}
 	}

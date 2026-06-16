@@ -22,6 +22,14 @@ export const commandExecutionStatusSchema = z.discriminatedUnion("status", [
 		exitCode: z.number().optional(),
 	}),
 	z.object({
+		// User-initiated kill (the inline "Abort"/Kill Command button), as opposed
+		// to a natural `"exited"` or a `"timeout"`. Carries whatever exit code the
+		// signal produced (e.g. 130 for SIGINT, 137 for SIGKILL) when available.
+		executionId: z.string(),
+		status: z.literal("terminated"),
+		exitCode: z.number().optional(),
+	}),
+	z.object({
 		executionId: z.string(),
 		status: z.literal("fallback"),
 	}),

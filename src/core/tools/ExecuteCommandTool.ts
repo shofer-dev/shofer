@@ -404,11 +404,21 @@ export async function executeCommandInTerminal(
 			}
 		},
 		onShellExecutionStarted: (pid: number | undefined) => {
+			// Fresh command — clear any stale user-kill flag from a prior run so a
+			// natural exit isn't misreported as "terminated".
+			task.userTerminatedCommand = false
 			const status: CommandExecutionStatus = { executionId, status: "started", pid, command }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 		},
 		onShellExecutionComplete: (details: ExitCodeDetails) => {
-			const status: CommandExecutionStatus = { executionId, status: "exited", exitCode: details.exitCode }
+			// A completion triggered by the user's inline Abort/Kill button is
+			// reported as "terminated" (distinct "Killed" badge); everything else is
+			// a plain "exited". Consume the flag so it can't leak to the next command.
+			const userTerminated = task.userTerminatedCommand
+			task.userTerminatedCommand = false
+			const status: CommandExecutionStatus = userTerminated
+				? { executionId, status: "terminated", exitCode: details.exitCode }
+				: { executionId, status: "exited", exitCode: details.exitCode }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
 			exitDetails = details
 		},

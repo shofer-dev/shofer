@@ -164,6 +164,20 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 							</StandardTooltip>
 						</div>
 					)}
+					{status?.status === "terminated" && (
+						<div className="flex flex-row items-center gap-2 font-mono text-xs">
+							<StandardTooltip
+								content={t("chat.commandExecution.terminatedStatus", {
+									exitCode: status.exitCode ?? "—",
+								})}>
+								<span
+									data-testid="command-terminated-badge"
+									className="rounded px-1 text-[10px] uppercase tracking-wide bg-red-600/20 text-red-500">
+									{t("chat.commandExecution.killed")}
+								</span>
+							</StandardTooltip>
+						</div>
+					)}
 				</div>
 				<div className=" flex flex-row items-center justify-between gap-2 px-1">
 					<div className="flex flex-row items-center gap-1">
@@ -172,6 +186,7 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 								{status.pid && <div className="whitespace-nowrap">(PID: {status.pid})</div>}
 								<StandardTooltip content={t("chat:commandExecution.abort")}>
 									<Button
+										data-testid="kill-command-button"
 										variant="ghost"
 										size="icon"
 										onClick={() =>
