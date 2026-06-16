@@ -75,19 +75,51 @@ flow "my-flow" (param: "string") {
 
 ## Lexical Elements
 
-| Element    | Form                                                 | Notes                                                         |
-| ---------- | ---------------------------------------------------- | ------------------------------------------------------------- |
-| Comment    | `-- text to end of line`                             | Single-line only. No block comments.                          |
-| String     | `"double quoted"`                                    | The only string form. Used for params, roles, args, etc.      |
-| Number     | `42`, `3.14`                                         | Integer or float.                                             |
-| Boolean    | `true`, `false`                                      | Keywords.                                                     |
-| Identifier | `myVar`, `do_work`, `Agent1`                         | Agent names, bindings, function names, variables.             |
-| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@*`, `@Human` | `@` prefix. `@*` is a wildcard agent ref for `await` sources. |
-| Arrow      | `->`                                                 | Stake recipient.                                              |
-| Back-arrow | `<-`                                                 | Await source.                                                 |
+| Element    | Form                                                 | Notes                                                                                               |
+| ---------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Comment    | `-- text to end of line`                             | Single-line only. No block comments.                                                                |
+| String     | `"double quoted"`                                    | The only string form. Used for params, roles, args, etc. Supports `${…}` interpolation — see below. |
+| Number     | `42`, `3.14`                                         | Integer or float.                                                                                   |
+| Boolean    | `true`, `false`                                      | Keywords.                                                                                           |
+| Identifier | `myVar`, `do_work`, `Agent1`                         | Agent names, bindings, function names, variables.                                                   |
+| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@*`, `@Human` | `@` prefix. `@*` is a wildcard agent ref for `await` sources.                                       |
+| Arrow      | `->`                                                 | Stake recipient.                                                                                    |
+| Back-arrow | `<-`                                                 | Await source.                                                                                       |
 
 There are **no arithmetic operators** (`+`, `-`, `*`, `/`). Counters and loop
 state are expressed with boolean flags and the built-in `round` / `committed_count`.
+
+### String Interpolation
+
+Any string may contain `${…}` placeholders. Each is resolved at evaluation time
+against the **same scope as an expression** — the agent's local bindings, then the
+flow params, then the read-only built-ins (`round`, `committed_count`,
+`all_committed`) — and supports dot-access into object values:
+
+```slang
+flow "deploy" (design_dir: "string", design_filename: "string") {
+  param design_dir { default: "plans" }
+  param design_filename { default: "feature-design.md" }
+
+  agent Architect {
+    role: "Write the design to EXACTLY ${design_dir}/${design_filename}."   -- in role
+    stake build(
+      instructions: "Implement ${design_dir}/${design_filename}."           -- in stake args
+    ) -> @Dev
+    escalate @Human reason: "Review ${design_dir}/${design_filename}."       -- in escalate reason
+    await answers <- @Human
+    log "region = ${answers.region}"                                        -- dot-access on a bound value
+  }
+}
+```
+
+| Property       | Detail                                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| Syntax         | `${name}` or `${name.field.…}` (identifier + optional dot-access chain). No nested braces, no operators.       |
+| Scope          | agent bindings → flow params → built-ins (identical to bare-identifier resolution).                            |
+| Coercion       | scalars inserted as text; objects/arrays are JSON-stringified.                                                 |
+| Unresolved     | a placeholder that resolves to nothing is left **verbatim** (e.g. a typo shows as `${oops}` in the prompt).    |
+| Where it works | stake/call args (via expression evaluation), agent `role:`, and `escalate reason:`. Plain strings are a no-op. |
 
 ---
 
@@ -554,6 +586,22 @@ The flow terminates **successfully** when the condition becomes truthy. Common f
 If no `budget` statement is present, all three limits (`tokens`, `rounds`,
 `time`) default to **unlimited** (0). Exceeding an enforced budget terminates the
 flow with `budget_exceeded`.
+
+Budget values may be numeric literals or references to flow parameters of type
+`"number"` (the value is resolved at workflow start from the user's input):
+
+```slang
+flow "my-flow" (max_tokens: "number", max_rounds: "number") {
+  budget: tokens(max_tokens), rounds(max_rounds)
+  ...
+}
+```
+
+Mixed literals and parameter references are allowed:
+
+```slang
+budget: tokens(token_limit), rounds(10), time(300)
+```
 
 ---
 
