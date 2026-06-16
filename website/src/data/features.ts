@@ -5,6 +5,12 @@ export interface Feature {
 	highlights: string[]
 	docsUrl: string
 	docsLabel: string
+	/** Same-page anchor the card's "Learn more" link jumps to. */
+	anchor: string
+	/** High-level expanded copy for the detail section (omit to skip a detail block — e.g. Workflows links to its own #workflows section). */
+	detail?: string
+	/** Screenshot captions; >1 renders a carousel. Real images TBD — placeholders for now. */
+	images?: string[]
 }
 
 // Ordered intentionally: the first group is what genuinely sets Shofer apart;
@@ -23,6 +29,8 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md",
 		docsLabel: "Slang Spec",
+		// Links to its own dedicated section below — no separate detail block.
+		anchor: "workflows",
 	},
 	{
 		title: "Live Agent Visualization",
@@ -36,6 +44,15 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md",
 		docsLabel: "Visualization",
+		anchor: "live-visualization",
+		detail: "Open WorkflowView and the whole agent tree becomes legible. A topology graph shows the current round — who's running and who they're sending to or waiting on. A sequence timeline replays every message, escalations to @Human included. Per-agent swimlanes mark exactly which step each agent is on, a Stats tab breaks active time down by phase and tool across the entire tree, and a filterable Logs stream shows everything that happened. The same diagrams render for any .slang file in an editor tab.",
+		images: [
+			"Topology — the agent graph for the current round",
+			"Sequence — message timeline, including escalations to @Human",
+			"State — per-agent swimlanes marking the executing op",
+			"Stats — active-time donut + per-tool breakdown across the tree",
+			"Logs — filterable by free text and severity",
+		],
 	},
 	{
 		title: "Kernel-Level Command Sandboxing",
@@ -49,6 +66,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/worktree-shell-sandboxing.md",
 		docsLabel: "Sandboxing",
+		anchor: "sandboxing",
+		detail: "Autonomous agents shouldn't be trusted with your whole filesystem. Shofer runs shell commands inside an OS-level, write-only sandbox (Landlock / bwrap) scoped to the active worktree — so an agent simply cannot write outside its checkout. It's a kernel-enforced guarantee rather than a model's best guess, which makes long, unattended runs far safer. (Linux.)",
+		images: ["A shell command blocked from writing outside the active worktree"],
 	},
 	{
 		title: "Semantic Code + Git-History Search",
@@ -62,6 +82,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#7-semantic-code-search-rag",
 		docsLabel: "RAG Indexing",
+		anchor: "code-git-search",
+		detail: "Shofer indexes both your code (AST-aware, via tree-sitter) and your entire git log into a local embedding store. Ask why a function exists or when a behavior changed, and git_search answers by meaning — across commit messages and historical diffs — not just where the text happens to live today. A file watcher keeps the index current as you edit.",
+		images: ["git_search explaining why and when a change was made"],
 	},
 	{
 		title: "Hard Cost Caps",
@@ -75,6 +98,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#10-per-task-cost-limit",
 		docsLabel: "Cost Limits",
+		anchor: "cost-caps",
+		detail: "Give a task or session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance. It works the same on any provider, including metered cloud APIs.",
+		images: ["A per-task USD budget with live spend tracking"],
 	},
 	{
 		title: "Assistant Agent",
@@ -88,6 +114,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#13-assistant-agent",
 		docsLabel: "Assistant Agent",
+		anchor: "assistant-agent",
+		detail: "A long-lived, read-only companion accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
+		images: ["Tasks querying the shared Assistant Agent context"],
 	},
 
 	// ── The strong, expected baseline ──
@@ -104,6 +133,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#5-parallel-tasks--sub-tasks",
 		docsLabel: "Parallel Tasks",
+		anchor: "parallel-tasks",
+		detail: "Run many independent conversations at once in a task tree — each with its own mode, provider, and context. Switch freely without losing state, queue messages while an agent works, and fan out background subtasks that report results back to their parent.",
+		images: ["The task tree with several tasks running at once"],
 	},
 	{
 		title: "Git Worktrees",
@@ -117,6 +149,9 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#9-git-worktrees",
 		docsLabel: "Git Worktrees",
+		anchor: "git-worktrees",
+		detail: "Keep parallel tasks on separate branches in a single VS Code window — no stash dance, no extra windows for PRs. Create, switch, and delete worktrees from the UI; each task is scoped to its branch, and .worktreeinclude carries over the gitignored files a fresh checkout would miss.",
+		images: ["Worktree selector with per-task branch isolation"],
 	},
 	{
 		title: "Async MCP Tool Calling",
@@ -130,5 +165,8 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#6-mcp-servers",
 		docsLabel: "MCP Servers",
+		anchor: "async-mcp",
+		detail: "Dispatch MCP tool calls fire-and-forget and keep working. Track them by call_id, wait for all or any to finish, and trim results on read — so long-running tools never block the agent loop or bloat the context window.",
+		images: ["Parallel MCP calls tracked by call_id"],
 	},
 ]
