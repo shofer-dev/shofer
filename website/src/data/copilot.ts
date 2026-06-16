@@ -27,6 +27,12 @@ export const copilotComparisons: CopilotComparison[] = [
 		shofer: "Declarative Slang execution graph — deterministic message routing, control flow, and budgets, plus spawn/monitor/converse with child agents",
 	},
 	{
+		aspect: "Cross-Session Memory",
+		copilot:
+			"Copilot Memory — an automated, repo-scoped cloud memory graph that expires after ~28 days (+ a local VS Code memory tool)",
+		shofer: "A persistent local Assistant Agent plus an AST/git embedding index that never expires and stays on your machine",
+	},
+	{
 		aspect: "Async MCP",
 		copilot: "Synchronous request-response — entire loop blocks on tool calls",
 		shofer: "Fire-and-forget async tool calling with parallel execution",

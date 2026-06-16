@@ -28,6 +28,11 @@ export const openCodeComparisons: OpenCodeComparison[] = [
 		shofer: "Declarative, deterministic Slang Workflows — the control flow itself is declarative, repeatable, inspectable, and visualized",
 	},
 	{
+		aspect: "Parallelism",
+		openCode: "Specialized subagents (general / explore / scout) run isolated parallel background tasks",
+		shofer: "Many concurrent tasks and full workflow trees, with background subtasks and async MCP",
+	},
+	{
 		aspect: "Code Understanding",
 		openCode: "Deep real-time LSP integration — feeds live compiler diagnostics & type errors back to the model",
 		shofer: "Precomputed semantic index over code and the entire git log; git_search answers why/when by concept",
