@@ -100,7 +100,7 @@ export const features: Feature[] = [
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#13-assistant-agent",
 		docsLabel: "Assistant Agent",
 		anchor: "assistant-agent",
-		detail: "A long-lived, read-only companion accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
+		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
 		images: ["Tasks querying the shared Assistant Agent context"],
 	},
 
