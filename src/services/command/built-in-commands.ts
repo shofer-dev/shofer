@@ -1136,7 +1136,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list 'worktree/*'
+git branch --list "worktree/*"
 \`\`\`
 
 From the output, identify:
@@ -1221,7 +1221,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list 'worktree/*'
+git branch --list "worktree/*"
 \`\`\`
 
 From the output, identify:
@@ -1307,7 +1307,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list '<SOURCE_BRANCH>'  # should return nothing
+git branch --list "<SOURCE_BRANCH>"  # should return nothing
 \`\`\`
 
 ## Step 8: Report
@@ -1342,7 +1342,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list 'worktree/*'
+git branch --list "worktree/*"
 \`\`\`
 
 From the output, identify:
@@ -1438,7 +1438,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list 'worktree/*'
+git branch --list "worktree/*"
 \`\`\`
 
 From the output, identify:
@@ -1527,7 +1527,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list '<SOURCE_BRANCH>'  # should return nothing
+git branch --list "<SOURCE_BRANCH>"  # should return nothing
 \`\`\`
 
 ## Step 9: Report
@@ -1563,7 +1563,7 @@ git worktree list
 \`\`\`
 
 \`\`\`bash
-git branch --list 'worktree/*'
+git branch --list "worktree/*"
 \`\`\`
 
 From the output, identify:
@@ -1619,10 +1619,11 @@ List them:
 git diff --name-only --diff-filter=U
 \`\`\`
 
-For each conflicted file, show the conflict markers:
+Show the conflict markers across all conflicted files (git-native, works on
+every OS — no grep needed):
 
 \`\`\`bash
-grep -n '<<<<<<<\|=======\\|>>>>>>>' <file>
+git diff --check
 \`\`\`
 
 Report: "Conflicts would occur in <N> file(s): [list]. These will need to be resolved if you proceed with the rebase."
@@ -1712,8 +1713,9 @@ git diff --name-status <BASE_BRANCH>...<CURRENT_BRANCH>
 \`\`\`
 
 \`\`\`bash
-# Uncommitted changes summary
-git status --short | wc -l
+# Uncommitted changes (count the lines of output yourself — each line is one
+# changed tracked file; avoids piping to wc, which doesn't exist on Windows)
+git status --short
 \`\`\`
 
 ## Step 3: Check merge readiness

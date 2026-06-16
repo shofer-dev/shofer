@@ -12,6 +12,7 @@ import fs from "fs"
 import path from "path"
 import { createHash } from "crypto"
 import os from "os"
+import { pathToFileURL } from "url"
 
 import type { CustomToolDefinition, SerializedCustomToolDefinition, CustomToolParametersSchema } from "@shofer/types"
 
@@ -276,7 +277,7 @@ export class CustomToolRegistry {
 		const ext = path.extname(absolutePath)
 
 		if (ext === ".js" || ext === ".mjs") {
-			return import(`file://${absolutePath}`)
+			return import(pathToFileURL(absolutePath).href)
 		}
 
 		const stat = fs.statSync(absolutePath)
@@ -285,7 +286,7 @@ export class CustomToolRegistry {
 		// Check if we have a cached version in memory.
 		if (this.tsCache.has(cacheKey)) {
 			const cachedPath = this.tsCache.get(cacheKey)!
-			return import(`file://${cachedPath}`)
+			return import(pathToFileURL(cachedPath).href)
 		}
 
 		const hash = createHash("sha256").update(cacheKey).digest("hex").slice(0, 16)
@@ -299,7 +300,7 @@ export class CustomToolRegistry {
 		// Check if we have a cached version on disk (from a previous run/instance).
 		if (fs.existsSync(tempFile)) {
 			this.tsCache.set(cacheKey, tempFile)
-			return import(`file://${tempFile}`)
+			return import(pathToFileURL(tempFile).href)
 		}
 
 		// Get the tool's directory to include its node_modules in resolution path.
@@ -336,7 +337,7 @@ export class CustomToolRegistry {
 		this.copyEnvFiles(toolDir, toolCacheDir)
 
 		this.tsCache.set(cacheKey, tempFile)
-		return import(`file://${tempFile}`)
+		return import(pathToFileURL(tempFile).href)
 	}
 
 	/**
