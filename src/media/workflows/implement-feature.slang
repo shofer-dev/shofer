@@ -7,7 +7,7 @@
 -- does not explicitly route codebase-discovery stakes.
 -- ============================================================================
 
-flow "implement-feature" (feature: "string", design_dir: "string", design_filename: "string") {
+flow "implement-feature" (feature: "string", design_path: "string") {
   title: "Implement a Feature"
   description: "Multi-agent feature implementation pipeline.\nThe Architect orchestrates exploration, design approval,\nimplementation, and review with two specialist agents (Developer + Reviewer)."
   icon: "wrench"
@@ -16,38 +16,33 @@ flow "implement-feature" (feature: "string", design_dir: "string", design_filena
     description: "The feature to implement (e.g. `oauth-login`, `dark-mode`)."
   }
 
-  param design_dir {
-    description: "Directory (relative to the workspace) where the design document is written and read."
-    default: "plans"
-  }
-
-  param design_filename {
-    description: "Filename of the design document inside `design_dir` (every agent reads/writes exactly this file)."
-    default: "feature-design.md"
+  param design_path {
+    description: "Workspace-relative path to the design document (every agent creates/reads/writes exactly this file)."
+    default: "plans/feature-design.md"
   }
 
   agent Architect {
     mode: "architect"
-    role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents. The design document for this run lives at EXACTLY ${design_dir}/${design_filename} — always create, reference, and route work against that exact path."
+    role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents. The design document for this run lives at EXACTLY ${design_path} — always create, reference, and route work against that exact path."
 
     stake create_design(
       feature: feature,
-      instructions: "Create the design document and write it to EXACTLY this path: ${design_dir}/${design_filename} (create the ${design_dir}/ directory if it does not exist). Use that exact path — every later step and the user are told the design lives there, so do NOT name it after the feature or place it elsewhere."
+      instructions: "Create the design document and write it to EXACTLY this path: ${design_path} (create any parent directories if they do not exist). Use that exact path — every later step and the user are told the design lives there, so do NOT name it after the feature or place it elsewhere."
     )
 
     escalate @Human reason:
-      "Please review the design document I've created at ${design_dir}/${design_filename}. Reply with 'ACK' to approve and proceed to implementation, or provide feedback for revision."
+      "Please review the design document I've created at ${design_path}. Reply with 'ACK' to approve and proceed to implementation, or provide feedback for revision."
 
     await response <- @Human
 
     stake implement(
       design: feature,
-      instructions: "Implement the design document at ${design_dir}/${design_filename}. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
+      instructions: "Implement the design document at ${design_path}. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
     ) -> @Developer
 
     stake prepare_to_review(
       design: feature,
-      instructions: "You will review the Developer's implementation against the design at ${design_dir}/${design_filename}. Wait for review requests and evaluate each one."
+      instructions: "You will review the Developer's implementation against the design at ${design_path}. Wait for review requests and evaluate each one."
     ) -> @Reviewer
 
     let implementation_done = false
@@ -86,7 +81,7 @@ flow "implement-feature" (feature: "string", design_dir: "string", design_filena
     -- Final review gate before committing
     stake final_review(
       design: feature,
-      instructions: "Request a FINAL comprehensive review of the complete implementation against the design at ${design_dir}/${design_filename}. This is still a review request, NOT the stop signal — set complete=false."
+      instructions: "Request a FINAL comprehensive review of the complete implementation against the design at ${design_path}. This is still a review request, NOT the stop signal — set complete=false."
     ) -> @Reviewer
       output: { complete: "boolean", details: "string" }
 
@@ -110,7 +105,7 @@ flow "implement-feature" (feature: "string", design_dir: "string", design_filena
 
   agent Developer {
     mode: "code"
-    role: "Feature implementation specialist. You implement the design document at EXACTLY ${design_dir}/${design_filename} (read it from that path; do not look elsewhere) by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each significant change, signal READY_FOR_REVIEW so the Reviewer can evaluate. When ALL work is complete, signal DONE."
+    role: "Feature implementation specialist. You implement the design document at EXACTLY ${design_path} (read it from that path; do not look elsewhere) by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each significant change, signal READY_FOR_REVIEW so the Reviewer can evaluate. When ALL work is complete, signal DONE."
 
     await design <- @Architect
 
@@ -138,7 +133,7 @@ flow "implement-feature" (feature: "string", design_dir: "string", design_filena
 
   agent Reviewer {
     mode: "reviewer"
-    role: "Code reviewer. Evaluate implementations against the design document at EXACTLY ${design_dir}/${design_filename}. Approve work that meets the spec. For issues, provide specific, actionable feedback. You have final authority on whether the implementation is satisfactory."
+    role: "Code reviewer. Evaluate implementations against the design document at EXACTLY ${design_path}. Approve work that meets the spec. For issues, provide specific, actionable feedback. You have final authority on whether the implementation is satisfactory."
 
     await init <- @Architect
 
@@ -151,7 +146,7 @@ flow "implement-feature" (feature: "string", design_dir: "string", design_filena
       } otherwise {
         stake review_verdict(
           implementation_summary: review_request.details,
-          task: "Evaluate the implementation against the design at ${design_dir}/${design_filename}. Decide whether it satisfies the design; if not, give specific, actionable feedback. Set approved=true/false."
+          task: "Evaluate the implementation against the design at ${design_path}. Decide whether it satisfies the design; if not, give specific, actionable feedback. Set approved=true/false."
         ) -> @Architect
           output: { approved: "boolean", issues: "string" }
       }
