@@ -337,7 +337,7 @@ directories. Create parent directories as needed.
 	   | Legacy                    | Modern             | Notes                                          |
 	   |---------------------------|--------------------|------------------------------------------------|
 	   | \`.rooignore\`            | \`shoferignore\`   | Ignore patterns for Shofer tools               |
-	   | \`.roomodes\`             | \`shofermodes\`    | Custom mode definitions                        |
+	   | \`.roomodes\`             | \`shofer/shofermodes\`    | Custom mode definitions                        |
 	 </workspace_root_renames>
 
 	 <file_to_directory_migrations>
@@ -486,7 +486,7 @@ to Shofer rules.
 	   1. Scan for all Copilot config files (.github/copilot-instructions.md, .github/instructions/, .github/agents/, .github/skills/)
 	   2. Move and merge .github/copilot-instructions.md into AGENTS.md or .shofer/custom-instructions.md
 	   3. Convert .github/instructions/*.instructions.md to .shofer/rules/ files
-	   4. Convert .github/agents/*.agent.md to .shofermodes custom mode entries
+	   4. Convert .github/agents/*.agent.md to .shofer/shofermodes custom mode entries
 	   5. Move .github/skills/*/ directories to .shofer/skills/
 	   6. Report .vscode/settings.json Copilot settings for manual cleanup
 	   7. Verify migration completeness
@@ -537,7 +537,7 @@ to Shofer rules.
 	   Copilot's custom agent definitions:
 	   | Copilot                              | Shofer Action                                                                               |
 	   |--------------------------------------|---------------------------------------------------------------------------------------------|
-	   | \`.github/agents/*.agent.md\`        | Convert each agent to a custom mode entry in \`.shofermodes\`                               |
+	   | \`.github/agents/*.agent.md\`        | Convert each agent to a custom mode entry in \`.shofer/shofermodes\`                               |
 
 	   HOW for each agent file:
 	   1. Read the file — extract YAML frontmatter (name, description, tools if present)
@@ -548,17 +548,18 @@ to Shofer rules.
 	      - "file-editor" → write group
 	      - "browser" → browser group
 	      - If no tools listed or unrecognized, default to ["read", "mcp"]
-	   4. Check if .shofermodes exists:
-	      - If no: create it with the new mode entry
+	   4. Check if .shofer/shofermodes exists:
+	      - If no: create it with the new mode entry (create .shofer/ directory first)
 	      - If yes: read it and append the new mode (if slug doesn't already exist)
 	   5. The mode slug is the agent name lowercased with hyphens (e.g., "Terraform Expert" → "terraform-expert")
 	   6. YAML format to append:
 	      \`\`\`yaml
-	      - slug: <slug>
-	        name: "<agent name>"
-	        roleDefinition: "<agent instructions>"
-	        groups: [<mapped groups>]
-	        source: project
+	      customModes:
+	        - slug: <slug>
+	          name: "<agent name>"
+	          roleDefinition: "<agent instructions>"
+	          groups: [<mapped groups>]
+	          source: project
 	      \`\`\`
 
 	   After migration, DO NOT delete the original agent files.
@@ -618,7 +619,7 @@ to Shofer rules.
 	 - Every Copilot config file/directory is discovered and accounted for
 	 - Content transformations preserve the original meaning
 	 - Targets are checked for existence to avoid overwrites
-	 - Agent→mode conversions produce valid .shofermodes YAML
+	 - Agent→mode conversions produce valid .shofer/shofermodes YAML
 	 - Skills are moved (not copied) to avoid duplication
 	 - Source files are preserved (except skills, which are moved)
 	 - The final summary lists every file touched with its outcome
@@ -631,7 +632,7 @@ Migration complete:
 	 ✓ .github/copilot-instructions.md → merged into AGENTS.md (original retained)
 	 ✓ .github/instructions/react.instructions.md → .shofer/rules/react.md
 	 ✓ .github/instructions/api.instructions.md → .shofer/rules/api.md
-	 ✓ .github/agents/terraform-expert.agent.md → .shofermodes (custom mode added)
+	 ✓ .github/agents/terraform-expert.agent.md → .shofer/shofermodes (custom mode added)
 	 ✓ .github/skills/error-handling/ → moved to .shofer/skills/error-handling/
 	 ⚠ .vscode/settings.json — 3 Copilot settings found for manual review
 \`\`\``,
@@ -654,7 +655,7 @@ modes, and relocating MCP configuration.
 	   2. Merge CLAUDE.md (and .claude/CLAUDE.md) into AGENTS.md
 	   3. Merge hierarchical CLAUDE.md files from subdirectories
 	   4. Convert .claude/rules/*.md to .shofer/rules/
-	   5. Convert .claude/subagents/ to .shofermodes custom mode entries
+	   5. Convert .claude/subagents/ to .shofer/shofermodes custom mode entries
 	   6. Move .claude/skills/ to .shofer/skills/
 	   7. Migrate .mcp.json to .shofer/mcp.json
 	   8. Report .claude/settings.json and .claude/settings.local.json for manual review
@@ -712,7 +713,7 @@ modes, and relocating MCP configuration.
 	   Claude's subagent definitions:
 	   | Claude                                       | Shofer Action                                                       |
 	   |----------------------------------------------|---------------------------------------------------------------------|
-	   | \`.claude/subagents/*.json\`                 | Convert to \`.shofermodes\` custom mode entries                     |
+	   | \`.claude/subagents/*.json\`                 | Convert to \`.shofer/shofermodes\` custom mode entries                     |
 	   | \`.claude/subagents/*.md\`                   | Same — extract frontmatter (name, systemPrompt, allowedTools)       |
 
 	   HOW for each subagent:
@@ -726,13 +727,14 @@ modes, and relocating MCP configuration.
 	      - "browser" → browser group
 	      - If no tools or unrecognized → ["read", "mcp"]
 	   4. The mode slug = agent name lowercased with hyphens
-	   5. Append to .shofermodes (create if needed):
+	   5. Append to .shofer/shofermodes (create .shofer/ first if needed):
 	      \`\`\`yaml
-	      - slug: <slug>
-	        name: "<agent name>"
-	        roleDefinition: "<systemPrompt>"
-	        groups: [<mapped groups>]
-	        source: project
+	      customModes:
+	        - slug: <slug>
+	          name: "<agent name>"
+	          roleDefinition: "<systemPrompt>"
+	          groups: [<mapped groups>]
+	          source: project
 	      \`\`\`
 	   6. DO NOT delete original subagent files.
 
@@ -867,7 +869,7 @@ modes, and relocating MCP configuration.
 <quality_criteria>
 	 - Every Claude config file/directory is discovered and accounted for
 	 - Hierarchical CLAUDE.md files are preserved with their directory context
-	 - Subagent→mode conversions produce valid .shofermodes YAML
+	 - Subagent→mode conversions produce valid .shofer/shofermodes YAML
 	 - Skills are moved (not copied)
 	 - .mcp.json is safely migrated (no overwrites)
 	 - Settings files are clearly reported for manual follow-up
@@ -882,7 +884,7 @@ Migration complete:
 	 ✓ CLAUDE.md → merged into AGENTS.md (original retained)
 	 ✓ src/api/CLAUDE.md → .shofer/rules/claude-api.md
 	 ✓ .claude/rules/db-migrations.md → .shofer/rules/db-migrations.md
-	 ✓ .claude/subagents/security-auditor.json → .shofermodes (custom mode added)
+	 ✓ .claude/subagents/security-auditor.json → .shofer/shofermodes (custom mode added)
 	 ✓ .claude/skills/generate-test/ → moved to .shofer/skills/generate-test/
 	 ✓ .mcp.json → renamed to .shofer/mcp.json
 	 ℹ worktreeinclude — already supported, no action needed
@@ -905,7 +907,7 @@ permissions model.
 
 	   1. Scan for all OpenCode config (AGENTS.md, .opencode/agent/, .opencode/skill/, opencode.json/.jsonc)
 	   2. Merge AGENTS.md into Shofer's AGENTS.md
-	   3. Convert .opencode/agent/*.md to .shofermodes custom mode entries
+	   3. Convert .opencode/agent/*.md to .shofer/shofermodes custom mode entries
 	   4. Move .opencode/skill/ directories to .shofer/skills/
 	   5. Report opencode.json permissions for manual review
 	   6. Verify migration completeness
@@ -938,7 +940,7 @@ permissions model.
 	   OpenCode's custom agent personas:
 	   | OpenCode                                  | Shofer Action                                                       |
 	   |-------------------------------------------|---------------------------------------------------------------------|
-	   | \`.opencode/agent/*.md\`                  | Convert to \`.shofermodes\` custom mode entries                     |
+	   | \`.opencode/agent/*.md\`                  | Convert to \`.shofer/shofermodes\` custom mode entries                     |
 	   | \`~/.config/opencode/agent/*.md\`         | Report for manual review (global agents outside project scope)      |
 
 	   HOW for each project agent file (.opencode/agent/*.md):
@@ -946,13 +948,14 @@ permissions model.
 	   2. The body becomes the mode's roleDefinition
 	   3. OpenCode agents don't declare tools explicitly — default to ["read", "write", "execute", "mcp"]
 	   4. The mode slug = agent name lowercased with hyphens
-	   5. Append to .shofermodes (create if needed):
+	   5. Append to .shofer/shofermodes (create .shofer/ first if needed):
 	      \`\`\`yaml
-	      - slug: <slug>
-	        name: "<agent name>"
-	        roleDefinition: "<agent instructions>"
-	        groups: ["read", "write", "execute", "mcp"]
-	        source: project
+	      customModes:
+	        - slug: <slug>
+	          name: "<agent name>"
+	          roleDefinition: "<agent instructions>"
+	          groups: ["read", "write", "execute", "mcp"]
+	          source: project
 	      \`\`\`
 	   6. DO NOT delete original agent files.
 
@@ -1004,16 +1007,55 @@ permissions model.
 	 </tool_configuration>
 
 	 <mcp_integration>
-	   OpenCode natively supports MCP servers (local JSON-RPC over STDIO or REST),
-	   governed by the \`permission\` block in opencode.json. OpenCode does NOT
-	   use a separate \`.mcp.json\` file — MCP servers are configured externally
-	   (global/user-level MCP settings) and governed via opencode.json permissions.
+	   OpenCode does NOT store MCP server definitions at the project level.
+	   There is no \`.opencode/mcp.json\` or equivalent project file.
+
+	   - **Server definitions** live in the global/user-level MCP config
+	     (the same \`claude_desktop_config.json\` that Claude Desktop uses).
+	     These are outside the project scope and cannot be migrated automatically.
+	   - **Tool permissions** live in \`opencode.json\` → \`permission\`:
+	     e.g. \`"mymcp_*": "ask"\` — these are name-based glob patterns that
+	     gate individual MCP tools.
+	   - **LSP integration** is governed by the \`lsp\` tool permission in
+	     \`opencode.json\`.
 
 	   | Feature                     | Migration Action                                                   |
 	   |-----------------------------|-------------------------------------------------------------------|
-	   | MCP server configuration    | No file to migrate — MCP servers are configured globally          |
+	   | MCP server definitions      | No project file — servers live in global \`claude_desktop_config.json\` |
+	   | MCP tool permissions        | Report \`opencode.json\` permission block for manual review        |
 	   | LSP integration             | Shofer natively supports LSP diagnostics — no migration needed    |
 	   | \`lsp\` tool permission     | Review in Shofer's auto-approval settings                         |
+
+	   **Server entry compatibility:** If the user wants to manually recreate
+	   their global MCP servers as project-level \`.shofer/mcp.json\` entries,
+	   the server shape is compatible — OpenCode/Claude use the same
+	   \`{command, args, env}\` standard. The only conversion needed is
+	   injecting \`"type": "stdio"\` (Shofer infers it from \`command\` presence
+	   but the schema expects it; see mcp.md §Configuration). Wrap servers under
+	   \`{"mcpServers": {...}}\` — the same top-level key as Claude's \`.mcp.json\`.
+
+	   Example — an OpenCode/Claude server entry converted to \`.shofer/mcp.json\`:
+	   \`\`\`json
+	   {
+	     "mcpServers": {
+	       "my-server": {
+	         "type": "stdio",
+	         "command": "node",
+	         "args": ["path/to/server.js"],
+	         "env": { "KEY": "value" },
+	         "timeout": 60,
+	         "disabled": false
+	       }
+	     }
+	   }
+	   \`\`\`
+	   (The \`cwd\`, \`disabledTools\`, and \`toolGroups\` fields are optional;
+	   see mcp.md for the full schema.)
+
+	   **Permission conversion:** OpenCode's \`permission\` block uses
+	   \`"allow"\` / \`"deny"\` / \`"ask"\` per tool name. Shofer controls this
+	   via the auto-approval Settings UI — there is no file-based equivalent.
+	   Report the \`opencode.json\` permission block for manual review.
 
 	   **Note:** OpenCode's live LSP code diagnostics (intercepting real-time
 	   compiler feedback and type errors) is matched by Shofer's native
@@ -1057,14 +1099,14 @@ permissions model.
 
 	 7. **Check for cross-tool overlap.** If \`migrate-from-claude\` or
 	    \`migrate-from-copilot\` has already been run, avoid duplicating
-	    content in AGENTS.md or .shofermodes. Check for existing entries
+	    content in AGENTS.md or .shofer/shofermodes. Check for existing entries
 	    before appending.
 </execution_rules>
 
 <quality_criteria>
 	 - Every OpenCode config file/directory is discovered and accounted for
 	 - AGENTS.md merge avoids duplication with prior Claude/Copilot migrations
-	 - Agent→mode conversions produce valid .shofermodes YAML
+	 - Agent→mode conversions produce valid .shofer/shofermodes YAML
 	 - Skills are moved (not copied)
 	 - opencode.json is clearly reported for manual follow-up
 	 - Source files are preserved (except skills)
@@ -1076,7 +1118,7 @@ After migration, print a summary like:
 \`\`\`
 Migration complete:
 	 ✓ AGENTS.md → merged into Shofer's AGENTS.md (original retained)
-	 ✓ .opencode/agent/frontend-architect.md → .shofermodes (custom mode added)
+	 ✓ .opencode/agent/frontend-architect.md → .shofer/shofermodes (custom mode added)
 	 ✓ .opencode/skill/docker-deploy/ → moved to .shofer/skills/docker-deploy/
 	 ℹ opencode.json — provider, model, and permission config for manual review
 	 ℹ ~/.config/opencode/agent/ — 2 global agents for manual review
