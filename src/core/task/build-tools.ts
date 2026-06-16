@@ -275,8 +275,8 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	const { GitIndexManager } = await import("../../services/git-index/git-index-manager")
 	const gitIndexManager = GitIndexManager.getInstance(provider.context, cwd)
 
-	const { AssistantAgentManager } = await import("../../services/assistant-agent/manager")
-	const assistantAgentManager = AssistantAgentManager.getInstance(provider.context, cwd)
+	const { LiveMemoryManager } = await import("../../services/live-memory/manager")
+	const liveMemoryManager = LiveMemoryManager.getInstance(provider.context, cwd)
 
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
@@ -301,7 +301,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		gitIndexManager,
 		filterSettings,
 		mcpHub,
-		assistantAgentManager,
+		liveMemoryManager,
 	)
 
 	const mcpTools = getMcpServerTools(mcpHub)

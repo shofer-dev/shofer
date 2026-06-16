@@ -23,7 +23,7 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 	getSkillsSection,
-	getAssistantAgentSection,
+	getLiveMemorySection,
 } from "./sections"
 
 // Helper function to get prompt component, filtering out empty objects
@@ -80,13 +80,13 @@ async function generatePrompt(
 		getSkillsSection(skillsManager, mode as string),
 	])
 
-	// Resolve the AssistantAgentManager lazily to avoid circular-import issues
-	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ AssistantAgentManager).
-	let assistantAgentSection = ""
+	// Resolve the LiveMemoryManager lazily to avoid circular-import issues
+	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ LiveMemoryManager).
+	let liveMemorySection = ""
 	try {
-		const { AssistantAgentManager: aam } = await import("../../services/assistant-agent/manager")
-		const assistantAgentManager = aam.getInstance(context, cwd)
-		assistantAgentSection = getAssistantAgentSection(cwd, assistantAgentManager)
+		const { LiveMemoryManager: aam } = await import("../../services/live-memory/manager")
+		const liveMemoryManager = aam.getInstance(context, cwd)
+		liveMemorySection = getLiveMemorySection(cwd, liveMemoryManager)
 	} catch {
 		// Manager not yet wired or import failed; omit the section silently.
 	}
@@ -110,7 +110,7 @@ ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}
 
-${getObjectiveSection()}${assistantAgentSection ? `\n\n${assistantAgentSection}` : ""}
+${getObjectiveSection()}${liveMemorySection ? `\n\n${liveMemorySection}` : ""}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(vscode.env.language),

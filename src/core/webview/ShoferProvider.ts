@@ -81,7 +81,7 @@ import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckp
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
-import { AssistantAgentManager } from "../../services/assistant-agent/manager"
+import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -159,8 +159,8 @@ export class ShoferProvider
 	private codeIndexManager?: CodeIndexManager
 	private gitIndexStatusSubscription?: vscode.Disposable
 	private gitIndexManager?: GitIndexManager
-	private assistantAgentStatusSubscription?: vscode.Disposable
-	private assistantAgentManager?: AssistantAgentManager
+	private liveMemoryStatusSubscription?: vscode.Disposable
+	private liveMemoryManager?: LiveMemoryManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -1435,8 +1435,8 @@ export class ShoferProvider
 		// Initialize git index status subscription for the current workspace.
 		this.updateGitIndexStatusSubscription()
 
-		// Initialize assistant agent status subscription.
-		this.updateAssistantAgentStatusSubscription()
+		// Initialize live memory status subscription.
+		this.updateLiveMemoryStatusSubscription()
 
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
@@ -1504,7 +1504,7 @@ export class ShoferProvider
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
 					this.gitIndexManager = undefined
-					this.assistantAgentManager = undefined
+					this.liveMemoryManager = undefined
 					if (this.webviewInstanceId === instanceId) {
 						this.view = undefined
 						this.webviewInstanceId = undefined
@@ -3678,10 +3678,10 @@ export class ShoferProvider
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
 			lockApiConfigAcrossModes,
-			assistantAgentEnabled,
-			assistantAgentApiConfigId,
-			assistantAgentMaxContextTokens,
-			assistantAgentContextFillThreshold,
+			liveMemoryEnabled,
+			liveMemoryApiConfigId,
+			liveMemoryMaxContextTokens,
+			liveMemoryContextFillThreshold,
 			logLevel,
 			logCategories,
 		} = await this.getState()
@@ -3900,10 +3900,10 @@ export class ShoferProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
-			assistantAgentEnabled: assistantAgentEnabled ?? true,
-			assistantAgentApiConfigId,
-			assistantAgentMaxContextTokens,
-			assistantAgentContextFillThreshold,
+			liveMemoryEnabled: liveMemoryEnabled ?? true,
+			liveMemoryApiConfigId,
+			liveMemoryMaxContextTokens,
+			liveMemoryContextFillThreshold,
 			logLevel: logLevel ?? "info",
 			logCategories: logCategories ?? undefined,
 			logCategoriesKnown: (() => {
@@ -4151,10 +4151,10 @@ export class ShoferProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
-			assistantAgentEnabled: stateValues.assistantAgentEnabled,
-			assistantAgentApiConfigId: stateValues.assistantAgentApiConfigId,
-			assistantAgentMaxContextTokens: stateValues.assistantAgentMaxContextTokens,
-			assistantAgentContextFillThreshold: stateValues.assistantAgentContextFillThreshold,
+			liveMemoryEnabled: stateValues.liveMemoryEnabled,
+			liveMemoryApiConfigId: stateValues.liveMemoryApiConfigId,
+			liveMemoryMaxContextTokens: stateValues.liveMemoryMaxContextTokens,
+			liveMemoryContextFillThreshold: stateValues.liveMemoryContextFillThreshold,
 			logLevel: stateValues.logLevel,
 			logCategories: stateValues.logCategories,
 		}
@@ -4477,32 +4477,32 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Updates the assistant agent status subscription to push status to the webview.
+	 * Updates the live memory status subscription to push status to the webview.
 	 * Follows the same pattern as updateCodeIndexStatusSubscription.
 	 */
-	private updateAssistantAgentStatusSubscription(): void {
-		const currentManager = AssistantAgentManager.getInstance(this.context)
+	private updateLiveMemoryStatusSubscription(): void {
+		const currentManager = LiveMemoryManager.getInstance(this.context)
 
-		if (currentManager === this.assistantAgentManager) {
+		if (currentManager === this.liveMemoryManager) {
 			return
 		}
 
-		if (this.assistantAgentStatusSubscription) {
-			this.assistantAgentStatusSubscription.dispose()
-			this.assistantAgentStatusSubscription = undefined
+		if (this.liveMemoryStatusSubscription) {
+			this.liveMemoryStatusSubscription.dispose()
+			this.liveMemoryStatusSubscription = undefined
 		}
 
-		this.assistantAgentManager = currentManager
+		this.liveMemoryManager = currentManager
 
 		if (currentManager) {
 			const sendStatus = () => {
-				if (currentManager !== this.assistantAgentManager) return
+				if (currentManager !== this.liveMemoryManager) return
 				this.postMessageToWebview({
-					type: "assistantAgentStatusUpdate",
+					type: "liveMemoryStatusUpdate",
 					text: JSON.stringify({
 						state: currentManager.state,
 						stateMessage: currentManager.stateMessage,
-						isAvailable: currentManager.isAssistantAgentAvailable,
+						isAvailable: currentManager.isLiveMemoryAvailable,
 						modelId: currentManager.modelId,
 						provider: currentManager.provider,
 						contextUsage: currentManager.getContextUsage(),
@@ -4519,10 +4519,10 @@ export class ShoferProvider
 			// into a single disposable so both are cleaned up on re-subscribe.
 			const stateSubscription = currentManager.onStateChange(() => sendStatus())
 			const convSubscription = currentManager.onConversationUpdate(() => sendStatus())
-			this.assistantAgentStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
+			this.liveMemoryStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
 
 			if (this.view) {
-				this.webviewDisposables.push(this.assistantAgentStatusSubscription)
+				this.webviewDisposables.push(this.liveMemoryStatusSubscription)
 			}
 
 			sendStatus()
@@ -4530,25 +4530,25 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Pushes a fresh Assistant Agent status snapshot to the webview. Used by the
+	 * Pushes a fresh Live Memory status snapshot to the webview. Used by the
 	 * webview status badge to populate itself on mount, since the periodic
 	 * subscription only fires on state/conversation changes.
 	 */
-	public sendAssistantAgentStatus(): void {
-		const manager = this.assistantAgentManager ?? AssistantAgentManager.getInstance(this.context)
+	public sendLiveMemoryStatus(): void {
+		const manager = this.liveMemoryManager ?? LiveMemoryManager.getInstance(this.context)
 		if (!manager) {
 			this.postMessageToWebview({
-				type: "assistantAgentStatusUpdate",
+				type: "liveMemoryStatusUpdate",
 				text: JSON.stringify({ state: "Standby", isAvailable: false }),
 			})
 			return
 		}
 		this.postMessageToWebview({
-			type: "assistantAgentStatusUpdate",
+			type: "liveMemoryStatusUpdate",
 			text: JSON.stringify({
 				state: manager.state,
 				stateMessage: manager.stateMessage,
-				isAvailable: manager.isAssistantAgentAvailable,
+				isAvailable: manager.isLiveMemoryAvailable,
 				modelId: manager.modelId,
 				provider: manager.provider,
 				contextUsage: manager.getContextUsage(),

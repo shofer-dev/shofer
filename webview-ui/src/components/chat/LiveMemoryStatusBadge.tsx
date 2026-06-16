@@ -1,7 +1,7 @@
 /**
- * AssistantAgentStatusBadge — Shofer chat-input toolbar badge that displays
- * the Assistant Agent's status as a chat-bubble icon with a colored dot. Now
- * acts as the trigger for AssistantAgentPopover, which exposes the actions
+ * LiveMemoryStatusBadge — Shofer chat-input toolbar badge that displays
+ * the Live Memory's status as a chat-bubble icon with a colored dot. Now
+ * acts as the trigger for LiveMemoryPopover, which exposes the actions
  * previously available from the VS Code status bar quick-pick.
  */
 import React, { useState, useEffect, useMemo } from "react"
@@ -13,23 +13,23 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 import { PopoverTrigger, StandardTooltip, Button } from "@src/components/ui"
 
-import { AssistantAgentPopover, type AssistantAgentStatusData } from "./AssistantAgentPopover"
+import { LiveMemoryPopover, type LiveMemoryStatusData } from "./LiveMemoryPopover"
 
-export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ className }) => {
+export const LiveMemoryStatusBadge: React.FC<{ className?: string }> = ({ className }) => {
 	const { cwd } = useExtensionState()
 
-	const [status, setStatus] = useState<AssistantAgentStatusData>({
+	const [status, setStatus] = useState<LiveMemoryStatusData>({
 		state: "Standby",
 	})
 
 	useEffect(() => {
 		// Request initial snapshot — periodic updates only fire on state changes.
-		vscode.postMessage({ type: "requestAssistantAgentStatus" })
+		vscode.postMessage({ type: "requestLiveMemoryStatus" })
 
 		const handleMessage = (event: MessageEvent<{ type: string; text?: string }>) => {
-			if (event.data.type === "assistantAgentStatusUpdate" && event.data.text) {
+			if (event.data.type === "liveMemoryStatusUpdate" && event.data.text) {
 				try {
-					const parsed = JSON.parse(event.data.text) as AssistantAgentStatusData
+					const parsed = JSON.parse(event.data.text) as LiveMemoryStatusData
 					setStatus(parsed)
 				} catch {
 					// Ignore parse errors
@@ -47,7 +47,7 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 	}, [status.contextUsage])
 
 	const tooltipText = useMemo(() => {
-		const lines: string[] = [`Assistant Agent: ${status.state}`]
+		const lines: string[] = [`Live Memory: ${status.state}`]
 		if (status.stateMessage) lines.push(status.stateMessage)
 		if (fillPct !== undefined) lines.push(`Context: ${fillPct}% full`)
 		if (status.costSnapshot?.sessionEstimatedCostUSD !== undefined) {
@@ -70,7 +70,7 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 	}, [status.state])
 
 	return (
-		<AssistantAgentPopover status={status}>
+		<LiveMemoryPopover status={status}>
 			<StandardTooltip content={tooltipText}>
 				<PopoverTrigger asChild>
 					<Button
@@ -94,6 +94,6 @@ export const AssistantAgentStatusBadge: React.FC<{ className?: string }> = ({ cl
 					</Button>
 				</PopoverTrigger>
 			</StandardTooltip>
-		</AssistantAgentPopover>
+		</LiveMemoryPopover>
 	)
 }

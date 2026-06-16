@@ -84,8 +84,8 @@ export const toolNames = [
 	"answer_subtask_question",
 	"sleep",
 	"sed",
-	// Assistant Agent
-	"ask_assistant_agent",
+	// Live Memory
+	"ask_live_memory",
 	// Git History Search
 	"git_search",
 	// Async MCP tool calling
@@ -165,7 +165,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	answer_subtask_question: "answer subtask question",
 	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
-	ask_assistant_agent: "ask assistant agent",
+	ask_live_memory: "ask live memory",
 	git_search: "search git history",
 	call_mcp_tool_async: "call mcp tools asynchronously",
 	check_mcp_call_status: "check async mcp call status",
@@ -196,7 +196,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"get_changed_files",
 			"lsp_search",
 			"fetch_web_page",
-			"ask_assistant_agent",
+			"ask_live_memory",
 			"git_search",
 		],
 	},

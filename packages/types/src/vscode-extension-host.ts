@@ -169,7 +169,7 @@ export interface ExtensionMessage {
 		| "shoferCreditBalance"
 		| "indexingStatusUpdate"
 		| "gitIndexingStatusUpdate"
-		| "assistantAgentStatusUpdate"
+		| "liveMemoryStatusUpdate"
 		| "indexCleared"
 		| "gitIndexCleared"
 		| "codebaseIndexConfig"
@@ -482,10 +482,10 @@ export type ExtensionState = Pick<
 	| "disabledTools"
 	| "defaultCostLimit"
 	| "archivedTaskRetentionDays"
-	| "assistantAgentEnabled"
-	| "assistantAgentApiConfigId"
-	| "assistantAgentMaxContextTokens"
-	| "assistantAgentContextFillThreshold"
+	| "liveMemoryEnabled"
+	| "liveMemoryApiConfigId"
+	| "liveMemoryMaxContextTokens"
+	| "liveMemoryContextFillThreshold"
 	| "logLevel"
 	| "logCategories"
 > & {
@@ -762,8 +762,8 @@ export interface WebviewMessage {
 		| "requestGitIndexingStatus"
 		| "indexingStatusUpdate"
 		| "indexCleared"
-		| "assistantAgentAction"
-		| "requestAssistantAgentStatus"
+		| "liveMemoryAction"
+		| "requestLiveMemoryStatus"
 		| "toggleWorkspaceIndexing"
 		| "setAutoEnableDefault"
 		| "focusPanelRequest"
@@ -1174,7 +1174,7 @@ export interface ShoferSayTool {
 		| "insertEdit"
 		| "removeFile"
 		| "moveFile"
-		| "askAssistantAgent"
+		| "askLiveMemory"
 		| "gitSearch"
 		| "callMcpToolAsync"
 		| "checkMcpCallStatus"
@@ -1277,9 +1277,9 @@ export interface ShoferSayTool {
 	is_background?: boolean
 	softResultLength?: number
 	softTimeoutSec?: number
-	// Properties for ask_assistant_agent. The `question` field above carries the
-	// prompt sent to the assistant agent; these carry the answer + metadata that
-	// only become known after the assistant agent responds (emitted via a follow-up
+	// Properties for ask_live_memory. The `question` field above carries the
+	// prompt sent to the live memory agent; these carry the answer + metadata that
+	// only become known after the live memory agent responds (emitted via a follow-up
 	// `task.say("tool", ...)` once the call returns).
 	answer?: string
 	contextFiles?: string[]

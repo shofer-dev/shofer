@@ -4,7 +4,7 @@ import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreContr
 import { SKIP_PARTS } from "./directory-tree"
 
 /**
- * AssistantAgentFileWatcher — watches workspace files for external changes
+ * LiveMemoryFileWatcher — watches workspace files for external changes
  * (changes not originating from Shofer tools).
  *
  * Detects create/modify/delete events and notifies the manager so
@@ -15,7 +15,7 @@ import { SKIP_PARTS } from "./directory-tree"
  * .shoferignore patterns (files matching ignored patterns are silently
  * skipped).
  */
-export class AssistantAgentFileWatcher {
+export class LiveMemoryFileWatcher {
 	private readonly _workspacePath: string
 	private readonly _onFileChanged: (filePath: string, event: "changed" | "deleted") => void
 	private readonly _shoferIgnoreController?: ShoferIgnoreController

@@ -10,7 +10,7 @@ If you're coming from GitHub Copilot, Shofer offers everything Copilot does and 
 - **Higher degree of customization** — adjust every aspect exactly to your needs
 - **Open-source and community-driven** — contribute and shape the future of Shofer
 - **Cost control** — set per-task cost limits and monitor usage
-- **Share context across sessions** — using Shofer's Assistant Agent feature
+- **Share context across sessions** — using Shofer's Live Memory feature
 - **Git log indexing** — for better understanding of code history and rationale
 - **Fine-grained tool access control** — via customizable modes and auto-approval settings
 - **Leverage git worktrees** — to keep parallel tasks separate across multiple branches and PRs

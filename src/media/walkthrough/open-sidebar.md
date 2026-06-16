@@ -15,5 +15,5 @@ Shofer lives in one of VS Code's Side Bars. Click the **Open Shofer** button in 
 - **Slash Command Menu** — Access all of Shofer's commands and features from a single menu; includes build-in, global and local commands defined in your repository
 - **Skill Library** — Browse the list of skills (global and local to your repository) that Shofer detected, along with the list of currently loaded ones
 - **File Changes Panel** — Review, accept, or revert every file Shofer modifies
-- **Assistant Agent Status** — Enable the assistant agent to share context between tasks, and across restarts
+- **Live Memory Status** — Enable the live memory to share context between tasks, and across restarts
 - **Codebase Indexing Status** — Enable Codebase & Git log indexing for lighting-fast context gathering

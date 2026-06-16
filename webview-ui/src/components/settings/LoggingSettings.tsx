@@ -47,7 +47,7 @@ export const LoggingSettings = ({
 					"Webview",
 					"Git",
 					"CodeIndex",
-					"AssistantAgent",
+					"LiveMemory",
 					"MCP",
 					"Checkpoints",
 					"API",

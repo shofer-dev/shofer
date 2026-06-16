@@ -435,7 +435,7 @@ const App = () => {
 				/>
 			)}
 			{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
-			 * WorktreeIndicator, AssistantAgentStatusBadge, …). Lives at the App root —
+			 * WorktreeIndicator, LiveMemoryStatusBadge, …). Lives at the App root —
 			 * always visible — so popovers never mount into a `display:none` view.
 			 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
 			 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,

@@ -231,7 +231,7 @@ export function filterNativeToolsForMode(
 	gitIndexManager?: GitIndexManager,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
-	assistantAgentManager?: import("../../../services/assistant-agent/manager").AssistantAgentManager,
+	liveMemoryManager?: import("../../../services/live-memory/manager").LiveMemoryManager,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
 	const modeSlug = mode ?? defaultModeSlug
@@ -286,9 +286,9 @@ export function filterNativeToolsForMode(
 		allowedToolNames.delete("git_search")
 	}
 
-	// Conditionally exclude ask_assistant_agent if assistant agent is not available
-	if (!assistantAgentManager || !assistantAgentManager.isAssistantAgentAvailable) {
-		allowedToolNames.delete("ask_assistant_agent")
+	// Conditionally exclude ask_live_memory if live memory is not available
+	if (!liveMemoryManager || !liveMemoryManager.isLiveMemoryAvailable) {
+		allowedToolNames.delete("ask_live_memory")
 	}
 
 	// Conditionally exclude update_todo_list if disabled in settings

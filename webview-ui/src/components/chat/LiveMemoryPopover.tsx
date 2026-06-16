@@ -1,6 +1,6 @@
 /**
- * AssistantAgentPopover — info + action panel that opens when the user clicks
- * the Assistant Agent badge on the Shofer chat-input toolbar. Replaces the
+ * LiveMemoryPopover — info + action panel that opens when the user clicks
+ * the Live Memory badge on the Shofer chat-input toolbar. Replaces the
  * former VS Code status bar quick-pick menu.
  *
  * Displays:
@@ -9,12 +9,13 @@
  *  - Session cost and pending question count
  *
  * Actions:
- *  - View Chat       → shofer.assistantAgent.showChat
- *  - Clear Context   → shofer.assistantAgent.clearContext
- *  - Configure API   → workbench.action.openSettings
- *  - Start / Restart → shofer.assistantAgent.start
+ *  - View Chat       → shofer.liveMemory.showChat
+ *  - Clear Context   → shofer.liveMemory.clearContext
+ *  - Configure       → in-app SettingsView (Live Memory section), via the
+ *                      settingsButtonClicked action (see openLiveMemorySettings)
+ *  - Start / Restart → shofer.liveMemory.start
  *
- * Action dispatch goes through the `assistantAgentAction` webview message which
+ * Action dispatch goes through the `liveMemoryAction` webview message which
  * is routed by webviewMessageHandler.ts to the corresponding extension
  * commands.
  */
@@ -36,7 +37,7 @@ import {
 import { vscode } from "@src/utils/vscode"
 import { Popover, PopoverContent, Button } from "@src/components/ui"
 
-export interface AssistantAgentStatusData {
+export interface LiveMemoryStatusData {
 	state: string
 	stateMessage?: string
 	isAvailable?: boolean
@@ -46,7 +47,7 @@ export interface AssistantAgentStatusData {
 	/**
 	 * How `contextUsage.maxTokens` was resolved by the manager:
 	 *  - "model-info"  → from the linked profile's `info.contextWindow`
-	 *  - "override"    → from the explicit Settings → Assistant Agent override
+	 *  - "override"    → from the explicit Settings → Live Memory override
 	 *  - "unresolved"  → no API Configuration linked (placeholder value)
 	 * Surfaced as a sub-line on the Context row so a user can tell at a glance
 	 * why the displayed window may differ from the active provider's value.
@@ -62,27 +63,27 @@ export interface AssistantAgentStatusData {
 	contextFiles?: string[]
 }
 
-interface AssistantAgentPopoverProps {
+interface LiveMemoryPopoverProps {
 	children: React.ReactNode
-	status: AssistantAgentStatusData
+	status: LiveMemoryStatusData
 }
 
 const sendAction = (action: "chat" | "clear" | "start" | "stop") => {
-	vscode.postMessage({ type: "assistantAgentAction", text: action })
+	vscode.postMessage({ type: "liveMemoryAction", text: action })
 }
 
 /**
- * Open the in-app SettingsView at the Assistant Agent section.
+ * Open the in-app SettingsView at the Live Memory section.
  * Uses the standard `settingsButtonClicked` action route consumed by App.tsx
  * (see ChatView's AutoApproveDropdown / TooManyToolsWarning for precedent),
- * NOT VS Code's native settings UI — assistantAgent settings live in
+ * NOT VS Code's native settings UI — liveMemory settings live in
  * ContextProxy, not in package.json `configuration` contributions.
  */
-const openAssistantAgentSettings = () => {
-	window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "assistantAgent" } }, "*")
+const openLiveMemorySettings = () => {
+	window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "liveMemory" } }, "*")
 }
 
-export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ children, status }) => {
+export const LiveMemoryPopover: React.FC<LiveMemoryPopoverProps> = ({ children, status }) => {
 	const usage = status.contextUsage
 	const fillPct = usage ? (usage.fillFraction * 100).toFixed(1) : "0.0"
 	const cost = status.costSnapshot
@@ -107,7 +108,7 @@ export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ ch
 				<div className="px-3 py-2 border-b border-vscode-panel-border">
 					<div className="flex items-center gap-2 text-sm font-medium">
 						<MessageCircle className="w-4 h-4" />
-						<span>Assistant Agent</span>
+						<span>Live Memory</span>
 					</div>
 				</div>
 
@@ -135,7 +136,7 @@ export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ ch
 								usage.isNearlyFull
 									? "⚠ Nearly full"
 									: status.contextWindowSource === "override"
-										? "Window: explicit override (Settings → Assistant Agent)"
+										? "Window: explicit override (Settings → Live Memory)"
 										: status.contextWindowSource === "model-info"
 											? "Window: from API Configuration model info"
 											: status.contextWindowSource === "unresolved"
@@ -187,7 +188,7 @@ export const AssistantAgentPopover: React.FC<AssistantAgentPopoverProps> = ({ ch
 					<ActionButton
 						icon={<Settings className="w-3.5 h-3.5" />}
 						label="Configure"
-						onClick={runAction(openAssistantAgentSettings)}
+						onClick={runAction(openLiveMemorySettings)}
 					/>
 					<ActionButton
 						icon={running ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}

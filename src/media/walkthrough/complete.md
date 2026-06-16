@@ -12,7 +12,7 @@ You've completed the Shofer walkthrough. Here's a quick recap of what you learne
 ## Next Steps
 
 - Set up **RAG Indexing** for fast code and git log exploration
-- Enable the **Assistant Agent** to share context across tasks
+- Enable the **Live Memory** to share context across tasks
 - Use **Git Worktrees** to work on multiple branches in parallel
 - Configure **MCP servers** for external tools
 - Create a **custom mode** for your workflow

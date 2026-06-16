@@ -1,11 +1,11 @@
 /**
- * ConversationStore — persistence layer for the Assistant Agent.
+ * ConversationStore — persistence layer for the Live Memory agent.
  *
  * Owns the on-disk representation of a single workspace's conversation:
  * messages, file context entries, cost ledger. Stateless beyond its
  * configured paths; safe to construct multiple times.
  *
- * Lives on disk under <globalStorage>/shofer-assistant-agent-<workspaceHash>.json.
+ * Lives on disk under <globalStorage>/shofer-live-memory-<workspaceHash>.json.
  * The workspace hash is sha256(workspacePath)[:16] so multiple workspaces
  * coexist without conflict and the path stays bounded.
  *
@@ -23,17 +23,17 @@ import {
 	CONVERSATION_STORE_VERSION,
 	type AgentMessage,
 	type FileContextEntry,
-	type AssistantAgentConversationData,
-	type AssistantAgentCostTracking,
+	type LiveMemoryConversationData,
+	type LiveMemoryCostTracking,
 } from "@shofer/types"
 
-import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
 
 /** Persisted snapshot returned by load() / accepted by save(). */
 export interface ConversationSnapshot {
 	messages: AgentMessage[]
 	fileContexts: FileContextEntry[]
-	costTracking: AssistantAgentCostTracking
+	costTracking: LiveMemoryCostTracking
 }
 
 /** Empty snapshot used when no prior conversation exists. */
@@ -59,7 +59,7 @@ export class ConversationStore {
 		globalStorageFsPath: string,
 	) {
 		const workspaceHash = createHash("sha256").update(workspacePath).digest("hex").substring(0, 16)
-		this._filePath = path.join(globalStorageFsPath, `shofer-assistant-agent-${workspaceHash}.json`)
+		this._filePath = path.join(globalStorageFsPath, `shofer-live-memory-${workspaceHash}.json`)
 	}
 
 	/** Absolute path of the on-disk file (visible for diagnostics/tests). */
@@ -73,21 +73,21 @@ export class ConversationStore {
 	 * validated against workspace state and stale entries are dropped.
 	 */
 	public async load(): Promise<ConversationSnapshot> {
-		let parsed: AssistantAgentConversationData
+		let parsed: LiveMemoryConversationData
 		try {
 			const data = await fs.readFile(this._filePath, "utf-8")
-			parsed = JSON.parse(data) as AssistantAgentConversationData
+			parsed = JSON.parse(data) as LiveMemoryConversationData
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
 				logger.error(
-					`[AssistantAgent.ConversationStore] Error reading ${this._filePath}: ${error instanceof Error ? error.message : String(error)}`,
+					`[LiveMemory.ConversationStore] Error reading ${this._filePath}: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
 			return emptyConversation()
 		}
 
 		if (parsed.version !== CONVERSATION_STORE_VERSION) {
-			logger.warn(`[AssistantAgent.ConversationStore] Unknown version ${parsed.version}; starting fresh`)
+			logger.warn(`[LiveMemory.ConversationStore] Unknown version ${parsed.version}; starting fresh`)
 			return emptyConversation()
 		}
 
@@ -105,7 +105,7 @@ export class ConversationStore {
 		const dir = path.dirname(this._filePath)
 		await fs.mkdir(dir, { recursive: true })
 
-		const data: AssistantAgentConversationData = {
+		const data: LiveMemoryConversationData = {
 			version: CONVERSATION_STORE_VERSION as 2,
 			workspacePath: this.workspacePath,
 			createdAt: Date.now(),

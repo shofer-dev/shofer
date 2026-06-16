@@ -1,8 +1,8 @@
 /**
- * AssistantAgentChatProvider — read-only webview panel that streams the
- * Assistant Agent's conversation to the user.
+ * LiveMemoryChatProvider — read-only webview panel that streams the
+ * Live Memory's conversation to the user.
  *
- * Design goals (per docs/assistant_agent.md, §"Chat panel"):
+ * Design goals (per docs/live_memory.md, §"Chat panel"):
  *
  *  1. **Live updates.** The panel never rebuilds its full DOM on each tick.
  *     The host posts a single `state` message per change; an inline script
@@ -38,7 +38,7 @@
 
 import * as vscode from "vscode"
 
-import { AssistantAgentManager } from "../../services/assistant-agent/manager"
+import { LiveMemoryManager } from "../../services/live-memory/manager"
 import type { AgentMessage, AgentMessagePart } from "@shofer/types"
 
 interface PanelStateMessage {
@@ -50,17 +50,17 @@ interface PanelStateMessage {
 }
 
 /** Public entry point used by the registered command. */
-export function showAssistantAgentChatPanel(extensionUri: vscode.Uri): void {
-	const existing = AssistantAgentChatPanel.current
+export function showLiveMemoryChatPanel(extensionUri: vscode.Uri): void {
+	const existing = LiveMemoryChatPanel.current
 	if (existing) {
 		existing.reveal()
 		return
 	}
-	AssistantAgentChatPanel.createOrShow(extensionUri)
+	LiveMemoryChatPanel.createOrShow(extensionUri)
 }
 
-class AssistantAgentChatPanel {
-	static current: AssistantAgentChatPanel | undefined
+class LiveMemoryChatPanel {
+	static current: LiveMemoryChatPanel | undefined
 
 	private readonly _panel: vscode.WebviewPanel
 	private readonly _disposables: vscode.Disposable[] = []
@@ -69,8 +69,8 @@ class AssistantAgentChatPanel {
 
 	static createOrShow(extensionUri: vscode.Uri): void {
 		const panel = vscode.window.createWebviewPanel(
-			"shofer.assistantAgentChat",
-			"Assistant Agent Chat",
+			"shofer.liveMemoryChat",
+			"Live Memory Chat",
 			{ viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
 			{
 				enableScripts: true,
@@ -78,7 +78,7 @@ class AssistantAgentChatPanel {
 				localResourceRoots: [extensionUri],
 			},
 		)
-		AssistantAgentChatPanel.current = new AssistantAgentChatPanel(panel)
+		LiveMemoryChatPanel.current = new LiveMemoryChatPanel(panel)
 	}
 
 	private constructor(panel: vscode.WebviewPanel) {
@@ -90,7 +90,7 @@ class AssistantAgentChatPanel {
 		// Subscribe to every workspace manager. In a multi-root setup we
 		// merge their conversations into a single transcript (the panel is
 		// process-wide). Per-instance filtering can be added later.
-		for (const mgr of AssistantAgentManager.getAllInstances()) {
+		for (const mgr of LiveMemoryManager.getAllInstances()) {
 			this._disposables.push(mgr.onConversationUpdate(() => this._scheduleStatePost()))
 			this._disposables.push(mgr.onStateChange(() => this._scheduleStatePost()))
 		}
@@ -118,10 +118,10 @@ class AssistantAgentChatPanel {
 	}
 
 	private _postState(): void {
-		const managers = AssistantAgentManager.getAllInstances()
+		const managers = LiveMemoryManager.getAllInstances()
 		let messages: ReadonlyArray<AgentMessage> = []
 		let state = "Standby"
-		let stateMessage = "Assistant agent is not configured"
+		let stateMessage = "Live Memory is not configured"
 		let contextUsage = { currentTokens: 0, maxTokens: 0, fillFraction: 0, isNearlyFull: false }
 
 		if (managers.length > 0) {
@@ -137,7 +137,7 @@ class AssistantAgentChatPanel {
 	}
 
 	private _dispose(): void {
-		AssistantAgentChatPanel.current = undefined
+		LiveMemoryChatPanel.current = undefined
 		while (this._disposables.length) {
 			const d = this._disposables.pop()
 			try {
@@ -172,7 +172,7 @@ class AssistantAgentChatPanel {
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Assistant Agent Chat</title>
+<title>Live Memory Chat</title>
 <style>
   body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px; line-height: 1.45; }
   .header { position: sticky; top: 0; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-widget-border); padding: 0 0 8px 0; margin-bottom: 16px; z-index: 10; }
@@ -239,7 +239,7 @@ class AssistantAgentChatPanel {
   <div class="state-msg" id="state-msg"></div>
 </div>
 <div id="messages"></div>
-<div class="empty" id="empty">No conversation history yet.<br>Tasks will ask questions via the ask_assistant_agent tool.</div>
+<div class="empty" id="empty">No conversation history yet.<br>Tasks will ask questions via the ask_live_memory tool.</div>
 
 <script nonce="${nonce}">
 (function () {

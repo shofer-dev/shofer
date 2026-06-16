@@ -596,7 +596,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "ask_assistant_agent":
+			case "ask_live_memory":
 				if (partialArgs.question !== undefined) {
 					nativeArgs = {
 						question: partialArgs.question,
@@ -1329,7 +1329,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "ask_assistant_agent":
+				case "ask_live_memory":
 					if (args.question !== undefined) {
 						nativeArgs = {
 							question: args.question,

@@ -4,8 +4,8 @@ import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
 import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
 /**
- * AssistantAgentDirectoryTree — generates a workspace `find .`-style tree
- * for injection into the assistant agent's system prompt.
+ * LiveMemoryDirectoryTree — generates a workspace `find .`-style tree
+ * for injection into the live memory's system prompt.
  *
  * The tree is:
  * - Capped at ~10% of the context window (token estimate)
@@ -15,7 +15,7 @@ import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreContr
  * On agent startup and after Clear Context, the tree is regenerated
  * and injected via the {directoryTree} placeholder in the system prompt.
  */
-export class AssistantAgentDirectoryTree {
+export class LiveMemoryDirectoryTree {
 	private readonly _workspacePath: string
 	private readonly _maxContextTokens: number
 	private readonly _shoferIgnoreController?: ShoferIgnoreController

@@ -19,6 +19,6 @@ Once you're comfortable, explore these powerful features:
 
 - **Git Worktrees** — Run parallel tasks on different branches in one window
 - **RAG Indexing** — Semantic code and git log search for lightning-fast context gathering
-- **Assistant Agent** — A persistent AI companion that accumulates codebase knowledge
+- **Live Memory** — A persistent AI companion that accumulates codebase knowledge
 
 Let's get started!

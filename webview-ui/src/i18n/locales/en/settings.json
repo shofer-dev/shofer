@@ -35,7 +35,7 @@
 		"tools": "Tools",
 		"checkpoints": "Checkpoints",
 		"notifications": "Notifications",
-		"assistantAgent": "Assistant Agent",
+		"liveMemory": "Live Memory",
 		"contextManagement": "Context",
 		"terminal": "Terminal",
 		"slashCommands": "Slash Commands",
@@ -718,25 +718,25 @@
 			"speedLabel": "Speed"
 		}
 	},
-	"assistantAgent": {
+	"liveMemory": {
 		"enabled": {
-			"label": "Enable Assistant Agent",
+			"label": "Enable Live Memory",
 			"description": "When enabled, the codebase Q&A companion runs in the background and answers questions about the workspace."
 		},
 		"apiConfigId": {
 			"label": "API Configuration",
-			"description": "Profile from Settings → Providers used for the Assistant Agent's LLM calls. Provider, model and credentials all come from the selected profile.",
+			"description": "Profile from Settings → Providers used for the Live Memory's LLM calls. Provider, model and credentials all come from the selected profile.",
 			"placeholder": "Select an API Configuration",
 			"empty": "No API Configurations defined — add one under Settings → Providers."
 		},
 		"maxContextTokens": {
 			"label": "Max context tokens (override)",
-			"description": "Optional override for the Assistant Agent's context window. Leave empty to inherit the value from the selected API Configuration's model.",
+			"description": "Optional override for the Live Memory's context window. Leave empty to inherit the value from the selected API Configuration's model.",
 			"placeholder": "Inherit from API Configuration"
 		},
 		"contextFillThreshold": {
 			"label": "Context fill threshold",
-			"description": "Fraction (0..1) of the context window at which the Assistant Agent starts trimming older turns. Default 0.85."
+			"description": "Fraction (0..1) of the context window at which the Live Memory starts trimming older turns. Default 0.85."
 		}
 	},
 	"contextManagement": {

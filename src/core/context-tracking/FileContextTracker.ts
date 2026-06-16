@@ -9,7 +9,7 @@ import fs from "fs/promises"
 import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
 import { ShoferProvider } from "../webview/ShoferProvider"
-import { AssistantAgentManager } from "../../services/assistant-agent/manager"
+import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { taskLog } from "../../utils/logging/subsystems"
 
 /**
@@ -224,9 +224,9 @@ export class FileContextTracker {
 				const provider = this.providerRef.deref()
 				provider?.scheduleChangedFilesUpdate?.(this.taskId)
 
-				// Notify the assistant agent so it can attach a "recently modified"
+				// Notify the live memory so it can attach a "recently modified"
 				// hint to the next question (KV-cache preserving).
-				this._notifyAssistantAgent(filePath)
+				this._notifyLiveMemory(filePath)
 			}
 		} catch (error) {
 			taskLog.error("Failed to add file to metadata:", error)
@@ -347,17 +347,17 @@ export class FileContextTracker {
 	}
 
 	/**
-	 * Notify the assistant agent that a file was modified by a Shofer tool.
+	 * Notify the live memory that a file was modified by a Shofer tool.
 	 * Best-effort — failures are silently ignored.
 	 */
-	private _notifyAssistantAgent(filePath: string): void {
+	private _notifyLiveMemory(filePath: string): void {
 		try {
-			const managers = AssistantAgentManager.getAllInstances()
+			const managers = LiveMemoryManager.getAllInstances()
 			for (const mgr of managers) {
 				mgr.notifyFileModified(filePath)
 			}
 		} catch {
-			// Assistant agent manager may not be loaded — best-effort only
+			// Live Memory manager may not be loaded — best-effort only
 		}
 	}
 

@@ -555,9 +555,9 @@
 		"wantsToUse": "Shofer wants to use {{tool}}",
 		"didUse": "Shofer used {{tool}}"
 	},
-	"askAssistantAgent": {
-		"wantsToAsk": "Shofer wants to ask the Assistant Agent",
-		"didAsk": "Shofer asked the Assistant Agent",
+	"askLiveMemory": {
+		"wantsToAsk": "Shofer wants to ask the Live Memory",
+		"didAsk": "Shofer asked the Live Memory",
 		"answer": "Answer"
 	},
 	"retiredProvider": {

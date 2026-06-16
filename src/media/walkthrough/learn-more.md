@@ -12,7 +12,7 @@ Shofer has extensive documentation to help you get the most out of it.
 ## Built-in Help
 
 - Use the **Code** or **Ask** modes (custom or built-in) to ask Shofer questions about itself
-- The **Assistant Agent** accumulates codebase knowledge over time
+- The **Live Memory** accumulates codebase knowledge over time
 - Slash commands like `/explain` and `/fix` provide quick actions
 
 Click **Open Documentation** in the step description to visit the docs.
