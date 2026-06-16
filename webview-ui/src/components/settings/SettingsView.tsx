@@ -18,7 +18,6 @@ import {
 	SquareTerminal,
 	FlaskConical,
 	AlertTriangle,
-	Globe,
 	Info,
 	MessageSquare,
 	LucideIcon,
@@ -118,7 +117,6 @@ export const sectionNames = [
 	"prompts",
 	"ui",
 	"experimental",
-	"language",
 	"logging",
 	"about",
 ] as const
@@ -654,7 +652,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "worktrees", icon: GitBranch },
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
-			{ id: "language", icon: Globe },
 			{ id: "logging", icon: ScrollText },
 			{ id: "about", icon: Info },
 		],
@@ -1092,6 +1089,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
+						{/* Language is rendered within the UI/UX tab */}
+						{renderTab === "ui" && (
+							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
+						)}
+
 						{/* Advanced Section (internally still keyed "experimental") */}
 						{renderTab === "experimental" && (
 							<ExperimentalSettings
@@ -1110,11 +1112,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								setOpenRouterImageApiKey={setOpenRouterImageApiKey}
 								setImageGenerationSelectedModel={setImageGenerationSelectedModel}
 							/>
-						)}
-
-						{/* Language Section */}
-						{renderTab === "language" && (
-							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
 						)}
 
 						{/* Logging Section */}
