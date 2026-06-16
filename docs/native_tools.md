@@ -186,7 +186,7 @@ Creates a new workspace/project directory structure with optional subdirectories
 | `rag_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)             |
 | `lsp_search`          | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback                  |
 | `git_search`          | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages only)              |
-| `ask_assistant_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent assistant agent a codebase question |
+| `ask_live_memory` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent live memory a codebase question |
 
 ### `grep_search`
 
@@ -255,15 +255,15 @@ Semantic search over git commit history (commit messages only — not diffs, not
 | `path`       | string \| null |    –     | Directory scope (relative to workspace)       |
 | `maxResults` | number \| null |    –     | Maximum code snippets to return (default: 10) |
 
-### `ask_assistant_agent`
+### `ask_live_memory`
 
-Ask a question to the persistent **assistant agent** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
+Ask a question to the persistent **live memory** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
 
-The tool is synchronous: the calling task blocks until the assistant returns an answer, the `timeoutMs` hard limit is reached, or the assistant is cancelled. The assistant agent runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
+The tool is synchronous: the calling task blocks until the assistant returns an answer, the `timeoutMs` hard limit is reached, or the assistant is cancelled. The live memory runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
 
 | Param              | Type             | Required | Description                                                                                                                                                           |
 | ------------------ | ---------------- | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `question`         | string           |    ✅    | The question to ask the assistant agent.                                                                                                                              |
+| `question`         | string           |    ✅    | The question to ask the live memory.                                                                                                                              |
 | `contextFiles`     | string[] \| null |    –     | File paths the assistant should preload into its context window for this question.                                                                                    |
 | `timeoutMs`        | number \| null   |    –     | **Hard** maximum wall time in milliseconds (default: 300000 = 5 minutes). On timeout the assistant is aborted and a timeout error is returned.                        |
 | `softTimeoutSec`   | number \| null   |    –     | Soft recommendation (in seconds) for how long the assistant should spend on the question (default: 60). Embedded as prompt guidance; not enforced via cancellation.   |

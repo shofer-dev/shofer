@@ -457,7 +457,7 @@ wording. Replaced with a factual description of the controller's API.
 The 2026-05-20 audit claimed [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
 was never imported. It is now a **central, widely-used** component (wired after that
 audit): instantiated in `Task.ts` (every task gets one via `new ShoferIgnoreController(this.cwd)`),
-the code indexer (`manager.ts`, `scanner.ts`, `file-watcher.ts`), the assistant agent
+the code indexer (`manager.ts`, `scanner.ts`, `file-watcher.ts`), the live memory
 (`directory-tree.ts`, `file-watcher.ts`, `manager.ts`), and consumed by
 `tree-sitter`, `ripgrep`, `context-management`, and `webviewMessageHandler`. The
 `.shofer/shoferignore` enforcement path is live via its `validateAccess()`.

@@ -245,7 +245,7 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 
 #### 3.1 ChatToolbar Status Badge — extend `IndexingStatusBadge`
 
-**Location:** `webview-ui/src/components/chat/ChatTextArea.tsx` (badge row, right side, next to the AssistantAgent badge)
+**Location:** `webview-ui/src/components/chat/ChatTextArea.tsx` (badge row, right side, next to the LiveMemory badge)
 
 The existing `IndexingStatusBadge` component currently reflects only the code index state.
 

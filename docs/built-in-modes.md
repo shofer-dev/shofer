@@ -88,7 +88,7 @@ is defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 
 | Group           | Category              | Member Tools                                                                                                                                                                                                                                                       |
 | --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `read`          | Read-only data access | `read_file`, `grep_search`, `list_files`, `rag_search`, `find_files`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page`, `ask_assistant_agent`, `git_search` |
+| `read`          | Read-only data access | `read_file`, `grep_search`, `list_files`, `rag_search`, `find_files`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page`, `ask_live_memory`, `git_search` |
 | `write`         | Content mutations     | `apply_diff`, `write_to_file`, `generate_image`, `insert_edit`, `rename_symbol`, `create_directory`, `create_new_workspace`, `file`, `sed` (+ `customTools`: `edit`, `search_replace`, `edit_file`, `apply_patch`)                                                 |
 | `execute`       | System commands       | `execute_command`, `read_command_output`, `sleep`                                                                                                                                                                                                                  |
 | `mcp`           | MCP protocol          | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`                                                                                                                                                         |
@@ -192,7 +192,7 @@ runtime filters on top of the mode's group-based tool set:
 5. **Feature gates** — conditionally remove tools that aren't configured:
     - `rag_search` — removed if code indexer is not initialized
     - `git_search` — removed if git indexer is not initialized
-    - `ask_assistant_agent` — removed if assistant agent is not available
+    - `ask_live_memory` — removed if live memory is not available
     - `update_todo_list` — removed if `todoListEnabled === false`
     - `generate_image` — removed if `imageGeneration` experiment is off
     - `run_slash_command` — removed if `runSlashCommand` experiment is off

@@ -120,7 +120,7 @@ The `ctx` is the tag shown in the output channel.
 | `Webview`        | `webviewLog`        | Webview ↔ extension-host IPC, the provider, and message routing.                                                                                             |
 | `Git`            | `gitLog`            | Git index, the working-tree file watcher, and git history queries.                                                                                            |
 | `CodeIndex`      | `codeIndexLog`      | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                                                                                     |
-| `AssistantAgent` | `assistantAgentLog` | The assistant-agent subsystem that answers questions and drives clarifying prompts.                                                                           |
+| `LiveMemory` | `liveMemoryLog` | The live-memory subsystem that answers questions and drives clarifying prompts.                                                                           |
 | `MCP`            | `mcpLog`            | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
 | `IPC`            | `ipcLog`            | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
 | `Checkpoints`    | `checkpointLog`     | Checkpoint creation/restore via the shadow-git workspace snapshots.                                                                                           |

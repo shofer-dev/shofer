@@ -188,7 +188,7 @@ scenarios:
         tool: gitSearch
         expect_decision: ask
       - ask: tool
-        tool: askAssistantAgent
+        tool: askLiveMemory
         expect_decision: ask
 
   - name: "read tools approved when alwaysAllowReadOnly is ON"
@@ -206,7 +206,7 @@ scenarios:
         tool: gitSearch
         expect_decision: approve
       - ask: tool
-        tool: askAssistantAgent
+        tool: askLiveMemory
         expect_decision: approve
 
   - name: "read tools outside workspace require alwaysAllowReadOnlyOutsideWorkspace"

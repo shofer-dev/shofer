@@ -352,18 +352,18 @@ scenarios:
       wait: all
     expect: allowed_and_executes
 
-  # ── ask_assistant_agent ───────────────────────────────────────────────────
+  # ── ask_live_memory ───────────────────────────────────────────────────
 
-  - name: "ask_assistant_agent: returns answer within timeout"
-    tool: ask_assistant_agent
+  - name: "ask_live_memory: returns answer within timeout"
+    tool: ask_live_memory
     params:
       question: "What does the UserService class do?"
     expect: allowed_and_executes
     preconditions:
-      assistant_agent_configured: true
+      live_memory_configured: true
 
-  - name: "ask_assistant_agent: with context files"
-    tool: ask_assistant_agent
+  - name: "ask_live_memory: with context files"
+    tool: ask_live_memory
     params:
       question: "How does this middleware work?"
       contextFiles:
@@ -371,7 +371,7 @@ scenarios:
       softResultLength: 500
     expect: allowed_and_executes
     preconditions:
-      assistant_agent_configured: true
+      live_memory_configured: true
 
   # ── sleep tool ────────────────────────────────────────────────────────────
 
