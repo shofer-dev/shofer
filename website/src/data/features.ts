@@ -55,36 +55,21 @@ export const features: Feature[] = [
 		],
 	},
 	{
-		title: "Kernel-Level Command Sandboxing",
+		title: "Fast, Local Code & Git RAG Indexing",
 		description:
-			"Shell commands run inside an OS-level, write-only sandbox (Landlock / bwrap) that confines writes to the active worktree — a deterministic guarantee, not a model-based heuristic. (Linux.)",
-		icon: "Shield",
-		highlights: [
-			"Landlock / bwrap write-only confinement",
-			"rename_symbol and edits scoped to the worktree",
-			"Safer autonomous runs without trusting a classifier",
-		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/worktree-shell-sandboxing.md",
-		docsLabel: "Sandboxing",
-		anchor: "sandboxing",
-		detail: "Autonomous agents shouldn't be trusted with your whole filesystem. Shofer runs shell commands inside an OS-level, write-only sandbox (Landlock / bwrap) scoped to the active worktree — so an agent simply cannot write outside its checkout. It's a kernel-enforced guarantee rather than a model's best guess, which makes long, unattended runs far safer. (Linux.)",
-		images: ["A shell command blocked from writing outside the active worktree"],
-	},
-	{
-		title: "Semantic Code + Git-History Search",
-		description:
-			"Build a semantic index over your codebase AND your entire git log. Find code and commits by meaning — and discover why and when a change was made, not just where.",
+			"A semantic index over your code and your entire git history — kept fast because it's incremental (only what changed is re-embedded), and computed and stored on a backend you own.",
 		icon: "Search",
 		highlights: [
-			"AST-aware parsing via tree-sitter for accurate code chunking",
-			"git_search over commit messages and historical diffs",
-			"File watcher keeps the index up to date as you edit",
+			"Semantic code search — AST-aware chunking via tree-sitter",
+			"Git-history indexing — git_search finds why & when a change was made",
+			"Incremental — only changed files/segments are re-embedded",
+			"Bring your own backend — choose the embedding model and vector store",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#7-semantic-code-search-rag",
 		docsLabel: "RAG Indexing",
 		anchor: "code-git-search",
-		detail: "Shofer indexes both your code (AST-aware, via tree-sitter) and your entire git log into a local embedding store. Ask why a function exists or when a behavior changed, and git_search answers by meaning — across commit messages and historical diffs — not just where the text happens to live today. A file watcher keeps the index current as you edit.",
-		images: ["git_search explaining why and when a change was made"],
+		detail: "Shofer's RAG is fast because it's incremental — it re-embeds only what changed, not the whole repo on every edit. It indexes your code with AST-aware, tree-sitter chunking and your entire git log (commit messages + diffs), so git_search answers why and when a change was made, by meaning, not just where the text lives today. And it runs on a backend you own: pick your embedding model (e.g. local via Ollama) and your vector store, so the index is computed and stored on infrastructure you control.",
+		images: ["Local RAG over code and git history, indexed incrementally"],
 	},
 	{
 		title: "Hard Cost Caps",
@@ -141,18 +126,22 @@ export const features: Feature[] = [
 	{
 		title: "Git Worktrees",
 		description:
-			"Run parallel tasks on different branches in one VS Code window. No more stash/commit gymnastics or multiple windows for PRs.",
+			"Run parallel tasks on different branches in one VS Code window. No more stash/commit gymnastics or multiple windows for PRs — and each worktree is kernel-sandboxed.",
 		icon: "TreePine",
 		highlights: [
 			"UI-driven create, switch, and delete operations",
 			"Each task scoped to a specific worktree branch",
 			"Automatic .worktreeinclude for gitignored files",
+			"Kernel-level (Landlock/bwrap) command sandboxing confined to the worktree",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#9-git-worktrees",
 		docsLabel: "Git Worktrees",
 		anchor: "git-worktrees",
-		detail: "Keep parallel tasks on separate branches in a single VS Code window — no stash dance, no extra windows for PRs. Create, switch, and delete worktrees from the UI; each task is scoped to its branch, and .worktreeinclude carries over the gitignored files a fresh checkout would miss.",
-		images: ["Worktree selector with per-task branch isolation"],
+		detail: "Keep parallel tasks on separate branches in a single VS Code window — no stash dance, no extra windows for PRs. Create, switch, and delete worktrees from the UI; each task is scoped to its branch, and .worktreeinclude carries over the gitignored files a fresh checkout would miss. Each worktree is also a security boundary: shell commands run inside an OS-level, write-only sandbox (Landlock / bwrap) that confines writes to the active worktree — a kernel-enforced guarantee, not a model's best guess — making long, unattended runs far safer. (Linux.)",
+		images: [
+			"Worktree selector with per-task branch isolation",
+			"A shell command blocked from writing outside the active worktree",
+		],
 	},
 	{
 		title: "6 Built-in Modes. Infinite Customizations.",
