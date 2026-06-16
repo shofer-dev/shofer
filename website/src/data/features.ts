@@ -88,9 +88,9 @@ export const features: Feature[] = [
 		images: ["A per-task USD budget with live spend tracking"],
 	},
 	{
-		title: "Assistant Agent",
+		title: "Memory with a Voice",
 		description:
-			"A persistent, read-only companion that accumulates codebase knowledge across tasks — surviving restarts — backed by the local semantic index. Other tasks query it instead of reloading context.",
+			"Long-lived memory you can talk to: a persistent, read-only Assistant Agent that accumulates codebase knowledge across tasks — surviving restarts — backed by the local semantic index. Other tasks just ask it instead of reloading context.",
 		icon: "Bot",
 		highlights: [
 			"Runs on a low-cost model with a large context window",
