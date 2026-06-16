@@ -1366,12 +1366,18 @@ export class WorkflowTask extends Task {
 		const pendingQuestion = liveInstance.getPendingParentQuestion()
 		if (!pendingQuestion) return false
 
+		// Identify which agent is asking. The agent's slang `name` is its task
+		// title (set as `initialTitle` when spawned), so the user sees the same
+		// label that appears in the workflow's swimlane / task list.
+		const agentName = [...this.flowState.agents.values()].find((a) => a.taskId === childTaskId)?.name
+
 		// Emit followup ask as the SAME JSON shape AskFollowupQuestionTool
 		// sends (line 43): { question, suggest: [{ answer, mode }] }.
 		// ChatRow.tsx:528 parses followup asks with safeJsonParse<FollowUpData>,
 		// so a plain string would render degraded and lose suggestion buttons.
+		const asker = agentName ? `Agent \`${agentName}\`` : "Agent"
 		const followUpJson = {
-			question: `Agent asked:\n> ${pendingQuestion.question}\n\nYour answer:`,
+			question: `${asker} is asking:\n> ${pendingQuestion.question}\n\nYour answer:`,
 			suggest: pendingQuestion.suggestions.map((s) => ({ answer: s.answer, mode: s.mode })),
 		}
 
