@@ -1,10 +1,9 @@
 -- ============================================================================
 -- Flow: Debug
 --
--- The Orchestrator clarifies the issue with the user, then dispatches two
--- developers for independent triage. The developers iterate a peer-review
--- consensus loop (brokered by the Orchestrator) until both agree on the root
--- cause. After user sign-off, Developer1 implements the fix and Developer2
+-- The Orchestrator dispatches two developers for independent triage, then
+-- runs a peer-review consensus loop until both agree on the root cause.
+-- After user sign-off, Developer1 implements the fix and Developer2
 -- reviews it, iterating until the reviewer is satisfied.
 --
 -- Topology note: every loop is COUNT-MATCHED. The Orchestrator drives each
@@ -18,6 +17,10 @@ flow "debug" (issue: "string") {
   description: "Two developers independently triage, converge on the root cause through peer review, get user sign-off, then one fixes and the other reviews — iterating until both are satisfied."
   icon: "bug"
 
+  param issue {
+    description: "Describe the issue in as much detail as possible: what you expected to happen, what actually happened, steps to reproduce, relevant error messages or logs, and any recent changes."
+  }
+
   -- =========================================================================
   -- Orchestrator — drives every loop in lockstep with the developers
   -- =========================================================================
@@ -25,22 +28,16 @@ flow "debug" (issue: "string") {
     mode: "architect"
     role: "Debug workflow orchestrator. You clarify the issue with the user, coordinate parallel investigation by two developers, broker consensus between them, and drive the fix-and-review loop to completion. You do NOT write or review code yourself."
 
-    -- Phase 1 — Clarify the issue with the user
-    escalate @Human reason:
-      "Please describe the issue you are experiencing in as much detail as possible: what you expected to happen, what actually happened, steps to reproduce, relevant error messages or logs, and any recent changes."
-
-    await user_description <- @Human
-
-    -- Phase 2 — Parallel triage
+    -- Phase 1 — Parallel triage
     stake triage(
       issue: issue,
-      user_description: user_description,
+      user_description: issue,
       task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer1
 
     stake triage(
       issue: issue,
-      user_description: user_description,
+      user_description: issue,
       task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer2
 
@@ -98,7 +95,10 @@ flow "debug" (issue: "string") {
 
     -- Phase 4 — User sign-off on the agreed root cause
     escalate @Human reason:
-      "The developers reached consensus on the root cause. Review their analysis below.\n\nReply 'Agree' to proceed with the fix, or provide guidance."
+      "The developers reached consensus on the root cause. Review their analysis below." form: {
+      decision: "string" { widget: "radio", options: ["Agree — proceed with fix", "I'll provide guidance"] }
+      guidance: "string" { description: "Your guidance (optional)" }
+    }
 
     await user_signoff <- @Human
 

@@ -31,7 +31,10 @@ flow "implement-feature" (feature: "string", design_path: "string") {
     )
 
     escalate @Human reason:
-      "Please review the design document I've created at ${design_path}. Reply with 'ACK' to approve and proceed to implementation, or provide feedback for revision."
+      "Please review the design document I've created at ${design_path}." form: {
+      decision: "string" { widget: "radio", options: ["I approve", "Needs work"] }
+      feedback: "string" { description: "What needs to change? (optional)" }
+    }
 
     await response <- @Human
 
@@ -97,7 +100,10 @@ flow "implement-feature" (feature: "string", design_path: "string") {
       commit
     } otherwise {
       escalate @Human reason:
-        "Final review found issues. Please review and decide how to proceed. Reply ACK to commit anyway, or provide instructions for fixes."
+        "Final review found issues. Please review and decide how to proceed." form: {
+        decision: "string" { widget: "radio", options: ["ACK — commit anyway", "I'll provide fix instructions"] }
+        instructions: "string" { description: "Your fix instructions (optional)" }
+      }
       await human_decision <- @Human
       commit
     }
