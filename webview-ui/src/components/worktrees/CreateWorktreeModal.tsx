@@ -174,7 +174,11 @@ export const CreateWorktreeModal = ({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
-			<DialogContent className="max-w-lg">
+			{/* Sit above the TaskSelector slide-in panel (z-50): this modal opens from
+			    the worktree `+` while that panel may be open, so overlay + content are
+			    bumped to z-[60]. The internal SearchableSelect is absolute-positioned
+			    inside the content, so its dropdown rides along correctly. */}
+			<DialogContent className="max-w-lg z-[60]" overlayClassName="z-[60]">
 				<DialogHeader>
 					<DialogTitle>{t("worktrees:createWorktree")}</DialogTitle>
 				</DialogHeader>
