@@ -122,20 +122,21 @@ export const features: Feature[] = [
 	// ── The strong, expected baseline ──
 
 	{
-		title: "True Parallel Tasks",
+		title: "Parallel Tasks & Async MCP",
 		description:
-			"Run multiple independent conversations simultaneously in a tree hierarchy. Each task has its own mode, provider, and context — switch freely without losing state.",
+			"Parallelism end to end: run many independent tasks at once in a tree, and fire MCP tool calls fire-and-forget instead of blocking the loop. Each task keeps its own mode, provider, and context.",
 		icon: "GitBranch",
 		highlights: [
-			"Background subtasks with parent-child communication",
-			"Message queuing — type ahead while the AI works",
-			"Task states with colored indicators (idle, running, waiting, completed)",
+			"Many independent tasks in a tree — switch without losing state",
+			"Background subtasks with parent-child communication + message queuing",
+			"Fire-and-forget call_mcp_tool_async with call_id tracking",
+			"wait_for_mcp_call all/any strategies; delete-on-read trimming",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#5-parallel-tasks--sub-tasks",
 		docsLabel: "Parallel Tasks",
-		anchor: "parallel-tasks",
-		detail: "Run many independent conversations at once in a task tree — each with its own mode, provider, and context. Switch freely without losing state, queue messages while an agent works, and fan out background subtasks that report results back to their parent.",
-		images: ["The task tree with several tasks running at once"],
+		anchor: "parallel-async",
+		detail: "Parallelism runs through the whole product. Run many independent conversations at once in a task tree — each with its own mode, provider, and context — switching freely without losing state, queueing messages while an agent works, and fanning out background subtasks that report back to their parent. MCP tool calls are async too: dispatch them fire-and-forget, track them by call_id, wait for all or any to finish, and trim results on read so long-running tools never block the loop or bloat the context.",
+		images: ["The task tree with several tasks running at once", "Parallel MCP calls tracked by call_id"],
 	},
 	{
 		title: "Git Worktrees",
@@ -154,19 +155,18 @@ export const features: Feature[] = [
 		images: ["Worktree selector with per-task branch isolation"],
 	},
 	{
-		title: "Async MCP Tool Calling",
+		title: "6 Built-in Modes. Infinite Customizations.",
 		description:
-			"Fire-and-forget MCP tool invocation with true parallelism. Fan out multiple calls and collect results when they're ready.",
-		icon: "Zap",
+			"Code, Architect, Debug, Code Search, Web Search, and Reviewer out of the box — each with scoped tool access. Define your own modes via .shofermodes to match any workflow exactly.",
+		icon: "Layers",
 		highlights: [
-			"Non-blocking call_mcp_tool_async with call_id tracking",
-			"wait_for_mcp_call with all/any completion strategies",
-			"Delete-on-read trimming prevents context bloat",
+			"Fine-grained tool-category control (read, write, execute, mcp, …)",
+			"File-scoped restrictions (e.g. write only .md files)",
+			"Custom role definitions and a model assignment per mode",
 		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#6-mcp-servers",
-		docsLabel: "MCP Servers",
-		anchor: "async-mcp",
-		detail: "Dispatch MCP tool calls fire-and-forget and keep working. Track them by call_id, wait for all or any to finish, and trim results on read — so long-running tools never block the agent loop or bloat the context window.",
-		images: ["Parallel MCP calls tracked by call_id"],
+		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#3-custom-modes",
+		docsLabel: "Custom Modes",
+		// Links to its own dedicated #modes section — no separate detail block.
+		anchor: "modes",
 	},
 ]

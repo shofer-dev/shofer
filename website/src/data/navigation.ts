@@ -22,8 +22,6 @@ export interface NavItem {
 export const navigation: NavItem[] = [
 	{ label: "Demo", href: "#demo" },
 	{ label: "Features", href: "#features" },
-	{ label: "Workflows", href: "#workflows" },
-	{ label: "Modes", href: "#modes" },
 	{ label: "Migration", href: "#migration" },
 	{ label: "Community", href: "#community" },
 	{ label: "Docs", href: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md", external: true },

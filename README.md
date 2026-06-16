@@ -58,7 +58,7 @@ Try the built-in `/init` slash command to analyze your codebase and create an `A
 | ----------------------- | ----------------------------------------------------------------- |
 | **Chat View**           | Interact with the AI — type messages, see results                 |
 | **Task Selector**       | Switch between multiple parallel tasks in a tree hierarchy        |
-| **Mode Selector**       | Choose Code, Architect, Ask, Debug, Orchestrator, or custom modes |
+| **Mode Selector**       | Choose Code, Architect, Debug, Code Search, Web Search, Reviewer, or custom modes |
 | **API Config Selector** | Pick which AI provider and model to use per task                  |
 | **Worktree Selector**   | Create and select git worktrees for isolated parallel work        |
 | **File Changes Panel**  | Review, accept, revert, or diff every file Shofer modifies        |
@@ -66,17 +66,18 @@ Try the built-in `/init` slash command to analyze your codebase and create an `A
 
 ## Modes
 
-Shofer ships with 5 built-in modes — choose from the Mode Selector dropdown in the chat input bar:
+Shofer ships with 6 built-in modes — choose from the Mode Selector dropdown in the chat input bar:
 
-| Mode                | Best For                                                                 |
-| ------------------- | ------------------------------------------------------------------------ |
-| 💻 **Code**         | Writing, modifying, and refactoring code. Broadest tool access.          |
-| 🏗️ **Architect**    | Planning and designing before writing code. Read + markdown-only writes. |
-| ❓ **Ask**          | Getting explanations, answers, or recommendations. Read-only + MCP.      |
-| 🪲 **Debug**        | Troubleshooting errors and diagnosing root causes.                       |
-| 🪃 **Orchestrator** | Coordinating complex multi-step work by delegating to sub-tasks.         |
+| Mode               | Best For                                                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| 💻 **Code**        | Writing, modifying, and refactoring code. Broadest tool access.          |
+| 🏗️ **Architect**   | Planning and designing before writing code. Read + markdown-only writes. |
+| 🪲 **Debug**       | Troubleshooting errors and diagnosing root causes.                       |
+| 🔎 **Code Search** | Navigating and explaining the codebase — read-only.                      |
+| 🌐 **Web Search**  | Researching with web/browser tools.                                      |
+| 👀 **Reviewer**    | Reviewing changes and inspecting work.                                   |
 
-Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofer/shofermodes`](USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
+Create your own modes (and override the built-ins) via [`.shofer/shofermodes`](USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
 
 Learn more: [User Manual](USER_MANUAL.md) • [Custom Modes](USER_MANUAL.md#4-custom-modes)
 
