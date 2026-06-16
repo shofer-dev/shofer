@@ -48,6 +48,7 @@
 		"about": "About Shofer"
 	},
 	"about": {
+		"changelog": "View the full changelog",
 		"bugReport": {
 			"label": "Found a bug?",
 			"link": "Report on GitHub"

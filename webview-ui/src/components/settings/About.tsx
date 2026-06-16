@@ -37,6 +37,11 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 						? `Version: ${Package.version} (${Package.sha.slice(0, 8)})`
 						: `Version: ${Package.version}`}
 				</p>
+				<p className="mt-0">
+					<VSCodeLink href="https://github.com/shofer-dev/shofer/blob/master/CHANGELOG.md">
+						{t("settings:about.changelog")}
+					</VSCodeLink>
+				</p>
 				{TelemetryClient.isGloballyEnabled() && (
 					<SearchableSetting
 						settingId="about-telemetry"
