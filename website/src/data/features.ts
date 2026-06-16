@@ -12,14 +12,14 @@ export interface Feature {
 // across modern agents).
 export const features: Feature[] = [
 	{
-		title: "Deterministic Multi-Agent Workflows",
+		title: "Provable Multi-Agent Workflows",
 		description:
-			"Specify a whole multi-agent pipeline declaratively in a .slang file — agents, message routing, control flow, a convergence condition, and budgets — driven by a non-LLM executor. Repeatable and inspectable, not ad-hoc runtime delegation.",
+			"Specify a whole multi-agent pipeline declaratively in a .slang file — agents, message routing, control flow, a convergence condition, and budgets — then a non-LLM executor runs it. Few agents offer this; fewer make the pipeline statically analyzable before it runs.",
 		icon: "Workflow",
 		highlights: [
 			"Slang DSL: stake/await, when/repeat, converge, budgets",
-			"Per-agent output contracts with automatic retry",
-			"A deterministic scheduler — the control flow is the spec",
+			"Statically analyzable — deadlocks & orphan agents caught before a run",
+			"Per-agent output contracts + a deterministic, repeatable scheduler",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md",
 		docsLabel: "Slang Spec",
@@ -104,19 +104,6 @@ export const features: Feature[] = [
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#5-parallel-tasks--sub-tasks",
 		docsLabel: "Parallel Tasks",
-	},
-	{
-		title: "Built-in & Custom Modes",
-		description:
-			"Switch between Code, Architect, Debug, and search/review modes — each with scoped tool access. Create fully custom modes via .shofermodes files to match your exact workflow.",
-		icon: "Layers",
-		highlights: [
-			"Fine-grained tool category control (read, write, execute, mcp, etc.)",
-			"File-scoped restrictions (e.g., write only .md files)",
-			"Custom role definitions and model assignments per mode",
-		],
-		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#3-custom-modes",
-		docsLabel: "Custom Modes",
 	},
 	{
 		title: "Git Worktrees",
