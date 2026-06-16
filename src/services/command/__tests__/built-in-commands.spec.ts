@@ -5,13 +5,14 @@ describe("Built-in Commands", () => {
 		it("should return all built-in commands", async () => {
 			const commands = await getBuiltInCommands()
 
-			expect(commands).toHaveLength(10)
+			expect(commands).toHaveLength(11)
 			expect(commands.map((cmd) => cmd.name)).toEqual(
 				expect.arrayContaining([
 					"init",
 					"migrate-from-roocode",
 					"migrate-from-copilot",
 					"migrate-from-claude",
+					"migrate-from-opencode",
 					"merge-worktree",
 					"merge-worktree-cleanup",
 					"rebase-worktree",
@@ -76,13 +77,14 @@ describe("Built-in Commands", () => {
 		it("should return all built-in command names", async () => {
 			const names = await getBuiltInCommandNames()
 
-			expect(names).toHaveLength(10)
+			expect(names).toHaveLength(11)
 			expect(names).toEqual(
 				expect.arrayContaining([
 					"init",
 					"migrate-from-roocode",
 					"migrate-from-copilot",
 					"migrate-from-claude",
+					"migrate-from-opencode",
 					"merge-worktree",
 					"merge-worktree-cleanup",
 					"rebase-worktree",
@@ -99,6 +101,7 @@ describe("Built-in Commands", () => {
 				"merge-worktree-cleanup",
 				"migrate-from-claude",
 				"migrate-from-copilot",
+				"migrate-from-opencode",
 				"migrate-from-roocode",
 				"rebase-worktree",
 				"rebase-worktree-cleanup",

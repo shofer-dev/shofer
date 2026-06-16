@@ -283,11 +283,14 @@ Please analyze this codebase and create an AGENTS.md file containing:
      placed under workspaceroot/.shofer/worktrees/projectname-randomid/. This is
      auto-generated and not user-configurable.
   
-  3. **Available slash commands**: The project has worktree management slash
-     commands in .shofer/commands/ that assist with merging and cleanup:
+  3. **Available slash commands**: Shofer ships built-in worktree management
+     slash commands that assist with merging, rebasing, and cleanup:
+     - merge-worktree — merge a worktree branch into base (no cleanup)
      - merge-worktree-cleanup — merge a worktree branch + delete branch + remove worktree
      - rebase-worktree — rebase a worktree branch onto base
      - rebase-worktree-cleanup — rebase + fast-forward + delete branch + remove worktree
+     - dryrun-rebase-worktree — preview rebase conflicts without committing
+     - worktree-status — detailed status report for a worktree branch
   
   4. **Orchestrator mode**: The built-in orchestrator mode has access to
      the \`worktree\` native tool for creating, listing, merging, and destroying
@@ -332,12 +335,13 @@ directories. Create parent directories as needed.
 
 <migration_mapping>
 	 <workspace_root_renames>
-	   Rename these files at the workspace root (simple rename):
+	   Move these workspace-root files into the project's .shofer/ directory
+	   (create .shofer/ first with create_directory if it doesn't exist):
 
-	   | Legacy                    | Modern             | Notes                                          |
-	   |---------------------------|--------------------|------------------------------------------------|
-	   | \`.rooignore\`            | \`shoferignore\`   | Ignore patterns for Shofer tools               |
-	   | \`.roomodes\`             | \`shofer/shofermodes\`    | Custom mode definitions                        |
+	   | Legacy          | Modern                    | Notes                            |
+	   |-----------------|---------------------------|----------------------------------|
+	   | \`.rooignore\`  | \`.shofer/shoferignore\`  | Ignore patterns for Shofer tools |
+	   | \`.roomodes\`   | \`.shofer/shofermodes\`   | Custom mode definitions          |
 	 </workspace_root_renames>
 
 	 <file_to_directory_migrations>
@@ -766,7 +770,6 @@ modes, and relocating MCP configuration.
 	   | Claude          | Shofer Action                                                                     |
 	   |-----------------|-----------------------------------------------------------------------------------|
 	   | \`.mcp.json\`   | Convert format and write to \`.shofer/mcp.json\` if target does not already exist |
-	   | \`.mcp.json\`   | (GitHub Copilot version — Copilot does NOT use local .mcp.json; see migration/copilot.md)   |
 
 	   Claude's .mcp.json uses STDIO-based MCP servers without an explicit
 	   \`"type"\` field. Shofer requires \`"type": "stdio"\` for all
@@ -830,16 +833,6 @@ modes, and relocating MCP configuration.
 	   prompts) has no Shofer counterpart; review Shofer's auto-approval settings
 	   in the Settings UI as an alternative.
 	 </settings_report>
-
-	 <worktree_include>
-	   | Claude                 | Shofer Action                                      |
-	   |------------------------|----------------------------------------------------|
-	   \`worktreeinclude\`   | Already supported — NO action needed               |
-
-	   Shofer natively supports worktreeinclude files under \`.shofer/\`
-	   with the same syntax. If the file already exists, it will be picked up
-	   automatically.
-	 </worktree_include>
 </migration_mapping>
 
 <execution_rules>
@@ -887,7 +880,6 @@ Migration complete:
 	 ✓ .claude/subagents/security-auditor.json → .shofer/shofermodes (custom mode added)
 	 ✓ .claude/skills/generate-test/ → moved to .shofer/skills/generate-test/
 	 ✓ .mcp.json → renamed to .shofer/mcp.json
-	 ℹ worktreeinclude — already supported, no action needed
 \`\`\``,
 	},
 
@@ -1373,10 +1365,12 @@ git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
 
 If empty, the branch has no unique commits. Report this and ask if the user still wants to proceed.
 
-Fetch latest base (ask first):
+Update the base branch in its own worktree (ask first) so the rebase targets
+an up-to-date base. Do NOT \`git pull\` while on SOURCE_BRANCH — that would
+merge base INTO the source branch and defeat the rebase:
 
 \`\`\`bash
-git pull origin <BASE_BRANCH>
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH> && git pull origin <BASE_BRANCH>
 \`\`\`
 
 ## Step 3: Rebase the source branch onto base
@@ -1468,10 +1462,12 @@ git log <BASE_BRANCH>..<SOURCE_BRANCH> --oneline
 
 If empty, the branch has no unique commits. Report: "<SOURCE_BRANCH> has no unique commits relative to <BASE_BRANCH>. There is nothing to rebase." Then ask: "Do you still want to clean up (delete the branch and worktree)?" If yes, skip to Step 6.
 
-Fetch latest base (ask first):
+Update the base branch in its own worktree (ask first) so the rebase targets
+an up-to-date base. Do NOT \`git pull\` while on SOURCE_BRANCH — that would
+merge base INTO the source branch and defeat the rebase:
 
 \`\`\`bash
-git pull origin <BASE_BRANCH>
+cd <BASE_WORKTREE_PATH> && git checkout <BASE_BRANCH> && git pull origin <BASE_BRANCH>
 \`\`\`
 
 ## Step 3: Rebase the source branch onto base
@@ -1681,6 +1677,7 @@ Identify:
 - **CURRENT_BRANCH**: the branch to report on
 - **CURRENT_WORKTREE_PATH**: the filesystem path of the current worktree
 - **BASE_BRANCH**: check if main or master exists locally. Prefer whichever exists. If both, prefer main.
+- **BASE_WORKTREE_PATH**: the filesystem path of the worktree with BASE_BRANCH checked out (only needed for the merge-readiness fallback)
 - **ALL_WORKTREES**: all worktrees listed
 
 If CURRENT_BRANCH is the base branch, skip ahead/behind and focus on files changed and last-commit info.
@@ -1721,14 +1718,24 @@ git status --short | wc -l
 
 ## Step 3: Check merge readiness
 
-Simulate a merge to detect conflicts:
+If CURRENT_BRANCH is the base branch, skip this step (a branch cannot conflict with itself).
+
+Probe whether CURRENT_BRANCH would merge cleanly into BASE_BRANCH using a
+read-only merge — this touches no working tree and avoids the "merge a branch
+into itself" trap of running a plain \`git merge\` while standing on CURRENT_BRANCH
+(which always reports clean):
 
 \`\`\`bash
-git merge --no-commit --no-ff <CURRENT_BRANCH>
+git merge-tree --write-tree <BASE_BRANCH> <CURRENT_BRANCH>
 \`\`\`
 
-If the merge fails due to conflicts: git diff --name-only --diff-filter=U, then git merge --abort
-If the merge succeeds cleanly: git merge --abort
+A zero exit code means the merge is clean. A non-zero exit code means conflicts —
+the output lists the conflicted paths (lines under "CONFLICT"). Nothing to abort,
+since no merge was actually started.
+
+(Fallback for git older than 2.38, which lacks \`--write-tree\`: in BASE_WORKTREE_PATH
+run \`git checkout <BASE_BRANCH> && git merge --no-commit --no-ff <CURRENT_BRANCH>\`,
+inspect with \`git diff --name-only --diff-filter=U\`, then \`git merge --abort\`.)
 
 ## Step 4: Present the report
 
