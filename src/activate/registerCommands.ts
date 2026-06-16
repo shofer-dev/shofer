@@ -112,6 +112,25 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// Also explicitly post the visibility message to trigger scroll reliably
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},
+	aboutButtonClicked: () => {
+		// "About Shofer" lives as a section within the in-app SettingsView. Route
+		// through the standard `settingsButtonClicked` action with a target
+		// `section: "about"`, mirroring `assistantAgent.openSettings` above.
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
+		}
+
+		TelemetryService.instance.captureTitleButtonClicked("about")
+
+		visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "settingsButtonClicked",
+			values: { section: "about" },
+		})
+		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
+	},
 	historyButtonClicked: () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
 

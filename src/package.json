@@ -125,6 +125,11 @@
 				"icon": "$(settings-gear)"
 			},
 			{
+				"command": "shofer.aboutButtonClicked",
+				"title": "%command.about.title%",
+				"icon": "$(info)"
+			},
+			{
 				"command": "shofer.openInNewTab",
 				"title": "%command.openInNewTab.title%",
 				"category": "%configuration.title%"
@@ -313,6 +318,11 @@
 				{
 					"command": "shofer.walkthrough.open",
 					"group": "overflow@5",
+					"when": "view == shofer.SidebarProvider"
+				},
+				{
+					"command": "shofer.aboutButtonClicked",
+					"group": "overflow@6",
 					"when": "view == shofer.SidebarProvider"
 				}
 			],
