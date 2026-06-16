@@ -151,5 +151,5 @@ flow "implement-feature" (feature: "string") {
   }
 
   converge when: @Architect.committed
-  budget: rounds(30), tokens(300000)
+  budget: rounds(30)
 }

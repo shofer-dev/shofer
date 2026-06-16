@@ -245,5 +245,5 @@ flow "debug" (issue: "string") {
   -- Flow constraints
   -- =========================================================================
   converge when: @Orchestrator.committed
-  budget: rounds(40), tokens(400000)
+  budget: rounds(40)
 }
