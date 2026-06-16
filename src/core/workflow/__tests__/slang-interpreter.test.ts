@@ -18,6 +18,7 @@ import {
 	committedCount,
 	consumeMail,
 	evalExpr,
+	interpolate,
 	formatEmittedValue,
 	type AdvanceResult,
 	type EmittedMessage,
@@ -183,6 +184,32 @@ describe("evalExpr — literals", () => {
 	it("evaluates NumberLit", () => expect(evalExpr(numExpr(42), state, fs)).toBe(42))
 	it("evaluates BoolLit true", () => expect(evalExpr(boolExpr(true), state, fs)).toBe(true))
 	it("evaluates BoolLit false", () => expect(evalExpr(boolExpr(false), state, fs)).toBe(false))
+})
+
+describe("string interpolation", () => {
+	it("substitutes flow params and bound values, incl. dot-access", () => {
+		const state = freshAgent("A")
+		state.bindings.set("answers", { region: "us" })
+		const fs = freshFlowState({ params: { design_dir: "plans", design_filename: "feature-design.md" } })
+		expect(interpolate("Write to ${design_dir}/${design_filename}", state, fs)).toBe(
+			"Write to plans/feature-design.md",
+		)
+		expect(interpolate("Region: ${answers.region}", state, fs)).toBe("Region: us")
+		// number/builtin coercion
+		expect(interpolate("round ${round}", state, freshFlowState({ round: 3 }))).toBe("round 3")
+	})
+
+	it("leaves unresolved placeholders verbatim and is a no-op for plain strings", () => {
+		const state = freshAgent("A")
+		const fs = freshFlowState()
+		expect(interpolate("hello, no braces", state, fs)).toBe("hello, no braces")
+		expect(interpolate("missing ${nope}", state, fs)).toBe("missing ${nope}")
+	})
+
+	it("flows through StringLit evaluation (stake args interpolate)", () => {
+		const fs = freshFlowState({ params: { design_filename: "x.md" } })
+		expect(evalExpr(strExpr("file=${design_filename}"), freshAgent("A"), fs)).toBe("file=x.md")
+	})
 })
 
 // ══════════════════════════════════════════════════════════════════════

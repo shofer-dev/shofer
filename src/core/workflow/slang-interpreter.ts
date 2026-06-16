@@ -320,6 +320,66 @@ export function consumeMail(mailbox: MailboxEntry[], recipient: string, sources:
 	return entry
 }
 
+// ── Name resolution & string interpolation ──
+
+/**
+ * Resolve a bare name against the agent's local bindings, then the flow params,
+ * then the read-only built-ins (`round`, `committed_count`, `all_committed`).
+ * Shared by the `Ident` evaluation and by {@link interpolate}.
+ */
+function resolveName(name: string, state: AgentState, flowState: FlowState): unknown {
+	if (state.bindings.has(name)) return state.bindings.get(name)
+	if (name in flowState.params) return flowState.params[name]
+	switch (name) {
+		case "all_committed":
+			return allAgentsCommitted(flowState.agents)
+		case "committed_count":
+			return committedCount(flowState.agents)
+		case "round":
+			return flowState.round
+		default:
+			return undefined
+	}
+}
+
+const INTERPOLATION_RE = /\$\{([^}]*)\}/g
+
+/**
+ * Substitute `${name}` / `${name.field.…}` placeholders in a string with values
+ * from the agent's bindings + flow params (same scope as {@link resolveName} +
+ * dot-access for object fields). Used so flow inputs and bound values can be
+ * woven into stake instructions, agent `role:`, and `escalate reason:` text —
+ * e.g. `"Write the design to ${design_dir}/${design_filename}."`.
+ *
+ * Resolution rules:
+ *   - scalars are inserted as text; objects/arrays are JSON-stringified;
+ *   - an unresolved placeholder is left **verbatim** (so typos/missing params
+ *     are visible in the prompt rather than silently blanked).
+ */
+export function interpolate(template: string, state: AgentState, flowState: FlowState): string {
+	if (!template.includes("${")) return template
+	return template.replace(INTERPOLATION_RE, (whole, raw: string) => {
+		const path = raw
+			.trim()
+			.split(".")
+			.map((s) => s.trim())
+			.filter(Boolean)
+		if (path.length === 0) return whole
+		let val: unknown = resolveName(path[0], state, flowState)
+		for (let i = 1; i < path.length; i++) {
+			if (val && typeof val === "object") val = (val as Record<string, unknown>)[path[i]]
+			else {
+				val = undefined
+				break
+			}
+		}
+		if (val === undefined || val === null) return whole
+		if (typeof val === "string") return val
+		if (typeof val === "object") return JSON.stringify(val)
+		return String(val)
+	})
+}
+
 // ── evalExpr ──
 
 /**
@@ -329,22 +389,14 @@ export function consumeMail(mailbox: MailboxEntry[], recipient: string, sources:
 export function evalExpr(expr: Expr, state: AgentState, flowState: FlowState): unknown {
 	switch (expr.type) {
 		case "StringLit":
+			// String literals may carry `${…}` interpolation (e.g. stake
+			// instructions referencing flow params). No-op for plain strings.
+			return interpolate(expr.value, state, flowState)
 		case "NumberLit":
 		case "BoolLit":
 			return expr.value
 		case "Ident":
-			if (state.bindings.has(expr.name)) return state.bindings.get(expr.name)
-			if (expr.name in flowState.params) return flowState.params[expr.name]
-			switch (expr.name) {
-				case "all_committed":
-					return allAgentsCommitted(flowState.agents)
-				case "committed_count":
-					return committedCount(flowState.agents)
-				case "round":
-					return flowState.round
-				default:
-					return undefined
-			}
+			return resolveName(expr.name, state, flowState)
 		case "AgentRef":
 			return flowState.agents.get(expr.name)
 		case "ListLit":

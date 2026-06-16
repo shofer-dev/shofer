@@ -42,6 +42,7 @@ import {
 	compileAgentProgram,
 	consumeMail as consumeMailPure,
 	evalExpr as evalExprPure,
+	interpolate as interpolatePure,
 	routeOutput as routeOutputPure,
 	toBool as toBoolPure,
 	type AdvanceResult,
@@ -1034,7 +1035,11 @@ export class WorkflowTask extends Task {
 				// Inject the agent's declared `.slang` role into its system prompt
 				// (the slang `role:` is otherwise parsed-but-not-consumed). Layered
 				// on top of the mode's roleDefinition for this agent task only.
-				agentRole: agentDecl.meta?.role,
+				// `${…}` placeholders in the role resolve against the flow params +
+				// the agent's bindings (e.g. ${design_dir}/${design_filename}).
+				agentRole: agentDecl.meta?.role
+					? interpolatePure(agentDecl.meta.role, agentState, this.flowState)
+					: undefined,
 				initialState: { lifecycle: "idle" },
 				openInStack: false,
 				keepCurrentTask: true,
@@ -1613,7 +1618,11 @@ export class WorkflowTask extends Task {
 		if (!instr || instr.kind !== "escalate") return
 
 		this.flowState.status = "escalated"
-		const reason = instr.op.reason || `Agent '${agentName}' needs your input.`
+		// Resolve `${…}` placeholders in the reason against flow params + the
+		// agent's bindings (e.g. ${design_dir}/${design_filename}).
+		const reason = instr.op.reason
+			? interpolatePure(instr.op.reason, state, this.flowState)
+			: `Agent '${agentName}' needs your input.`
 		const humanRef = instr.op.target || "Human"
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}', awaiting human input: ${reason}`,
