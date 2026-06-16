@@ -1,8 +1,8 @@
 export const siteConfig = {
 	name: "Shofer",
-	tagline: "Open-source, complete replacement for GitHub Copilot",
+	tagline: "Deterministic, observable multi-agent coding — open source, in VS Code",
 	description:
-		"Shofer is an open-source, complete replacement for GitHub Copilot, Cursor, Claude Code, and similar development environments — built for full control over your data, your models, and how your tools work.",
+		"Shofer is an open-source AI coding agent for VS Code. Specify multi-agent workflows declaratively, watch them execute as live diagrams, and confine them at the kernel and the dollar — on top of the parallel tasks, custom modes, MCP, and BYO-model support you'd expect from any modern agent.",
 	url: "https://shofer.dev",
 	ogImage: "/og-image.png",
 	links: {
