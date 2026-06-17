@@ -242,6 +242,20 @@ between simdjson and a tail-read.
   `messages[0] === root` invariant. `HistoryItem.task` is text-only, so a first
   prompt with images shows text-only until "Load older messages" pulls the real
   root in (`hasMoreShoferMessages` clears and the real message is used).
+- **TaskHeader first-prompt poisoning (fixed 2026-06-17).** The 2026-06-13 fix
+  patched only the webview, but the host still corrupted the field it reads from.
+  `taskMetadata` derives `historyItem.task`/`createdAt` from `messages[0]`
+  ("first message is always the task say") and `_refreshTaskMetadata` calls it
+  with the windowed `this.shoferMessages` on every debounced save during the
+  resumed turn. On a cold-loaded long task `messages[0]` is the window-start
+  `api_req_started` whose `.text` is the wire-request JSON blob, so the upsert
+  merge clobbered the canonical `HistoryItem.task` with that blob — and the
+  webview's synthetic header (which reads `currentTaskItem.task`) then rendered
+  the JSON object. Fix: `taskMetadata` takes a `windowedMessages` flag (set from
+  `Task.hasMoreShoferMessages`); when true it OMITS `task`/`createdAt` entirely
+  (not `undefined`, which would overwrite on merge) so `upsert`
+  (`{ ...existing, ...item }`) preserves the values persisted at task creation.
+  Regression tests in `taskMetadata.spec.ts`.
 - **Residual hardening (advisory, not blocking)**: (a)
   `shoferMessagesPrepended` carries no `taskId`, so a task switch during
   the awaited send could apply the page to the wrong array — the window is

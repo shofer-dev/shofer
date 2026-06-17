@@ -42,11 +42,6 @@ export const openCodeComparisons: OpenCodeComparison[] = [
 		openCode: "Manual git worktree; permission prompts",
 		shofer: "Native worktree UI + OS-level command sandboxing (Landlock/bwrap)",
 	},
-	{
-		aspect: "Config Portability",
-		openCode: "opencode.json + AGENTS.md",
-		shofer: "Reads AGENTS.md directly — your project rules carry over",
-	},
 ]
 
 export const openCodeMigration = {

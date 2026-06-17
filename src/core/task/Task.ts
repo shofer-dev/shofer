@@ -2287,6 +2287,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
 				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
+				// When a long task is cold-loaded, `shoferMessages` is only the tail
+				// window — `messages[0]` is not the originating prompt. Tell
+				// taskMetadata to omit `task`/`createdAt` so the upsert merge preserves
+				// the canonical first prompt instead of clobbering it with the
+				// window-start `api_req_started` wire blob.
+				windowedMessages: this.hasMoreShoferMessages,
 				...(useCachedTokenUsage ? { tokenUsageOverride: this._cachedTokenUsage } : {}),
 			})
 
