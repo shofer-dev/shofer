@@ -420,6 +420,9 @@ export async function executeCommandInTerminal(
 				? { executionId, status: "terminated", exitCode: details.exitCode }
 				: { executionId, status: "exited", exitCode: details.exitCode }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
+			// If this command had been backgrounded, it is now done — drop it from
+			// the task's background-process registry.
+			task.unregisterBackgroundProcess(executionId)
 			exitDetails = details
 		},
 	}
@@ -453,9 +456,28 @@ export async function executeCommandInTerminal(
 	let agentTimeoutId: NodeJS.Timeout | undefined
 	let userTimeoutId: NodeJS.Timeout | undefined
 	let isUserTimedOut = false
+	let abortListener: (() => void) | undefined
 
 	try {
 		const racers: Promise<void>[] = [process]
+
+		// Abort racer: the global Stop button aborts task.abortSignal. Without
+		// this, Promise.race only settles when the command finishes or a timeout
+		// fires — so a never-terminating command (e.g. a dev server) would leave
+		// this await hanging forever and the Stop button unable to unwind the
+		// agent loop. abortTask() separately force-kills the process; this just
+		// releases the await so the task can stop immediately.
+		racers.push(
+			new Promise<void>((_, reject) => {
+				const signal = task.abortSignal
+				if (signal.aborted) {
+					reject(new Error("Task aborted"))
+					return
+				}
+				abortListener = () => reject(new Error("Task aborted"))
+				signal.addEventListener("abort", abortListener, { once: true })
+			}),
+		)
 
 		// Agent timeout: transition to background (command keeps running).
 		// This allows the agent to continue its turn and monitor the process
@@ -500,11 +522,25 @@ export async function executeCommandInTerminal(
 				`The command was terminated after exceeding a user-configured ${commandExecutionTimeoutSeconds}s timeout. Do not try to re-run the command.`,
 			]
 		}
+		// Stop was pressed: unwind immediately. abortTask() force-kills the
+		// command; the agent loop's abort check ends the task right after this.
+		if (task.abortSignal.aborted) {
+			return [false, "Command execution was aborted by the user."]
+		}
 		throw error
 	} finally {
 		clearTimeout(agentTimeoutId)
 		clearTimeout(userTimeoutId)
 		clearTimeout(pendingCommandOutputEmitTimer)
+		if (abortListener) {
+			task.abortSignal.removeEventListener("abort", abortListener)
+		}
+		// If the command was backgrounded and is still running, hand it to the
+		// task's background-process registry so the Stop/Kill buttons can still
+		// terminate it after this tool returns. Skip if it already completed.
+		if (runInBackground && !completed && !exitDetails) {
+			task.registerBackgroundProcess(executionId, process)
+		}
 		task.terminalProcess = undefined
 	}
 

@@ -53,6 +53,9 @@ describe("executeCommand", () => {
 			},
 			say: vitest.fn().mockResolvedValue(undefined),
 			terminalProcess: undefined,
+			abortSignal: new AbortController().signal,
+			registerBackgroundProcess: vitest.fn(),
+			unregisterBackgroundProcess: vitest.fn(),
 		}
 
 		// Create mock process that resolves immediately

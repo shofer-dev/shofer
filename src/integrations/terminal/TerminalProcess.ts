@@ -1,5 +1,7 @@
 import * as vscode from "vscode"
 import { inspect } from "util"
+import nodeProcess from "process"
+import psTree from "ps-tree"
 
 import type { ExitCodeDetails } from "./types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
@@ -9,6 +11,12 @@ import { webviewLog } from "../../utils/logging/subsystems"
 export class TerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<Terminal>
 
+	// Grace period between the best-effort SIGINT (Ctrl+C) sent by abort() and
+	// the SIGKILL force-kill fallback. A process that traps/ignores SIGINT gets
+	// this long to exit cleanly before we kill its process tree.
+	private static readonly FORCE_KILL_GRACE_MS = 2_000
+	private forceKillTimer?: NodeJS.Timeout
+
 	constructor(terminal: Terminal) {
 		super()
 
@@ -16,6 +24,9 @@ export class TerminalProcess extends BaseTerminalProcess {
 
 		this.once("completed", () => {
 			this.terminal.busy = false
+			// The command finished (naturally or via Ctrl+C) — cancel any pending
+			// force-kill so we don't SIGKILL a PID the shell has since reused.
+			this.clearForceKill()
 		})
 
 		this.once("no_shell_integration", () => {
@@ -258,9 +269,71 @@ export class TerminalProcess extends BaseTerminalProcess {
 
 	public override abort() {
 		if (this.isListening) {
-			// Send SIGINT using CTRL+C
+			// Best-effort graceful stop: SIGINT via Ctrl+C to the foreground group.
 			this.terminal.terminal.sendText("\x03")
 		}
+
+		// Escalation. Ctrl+C is best-effort: a process that traps/ignores SIGINT
+		// (e.g. some dev servers) would survive, and once the command has been
+		// backgrounded `isListening` is false so no Ctrl+C is even sent. After a
+		// short grace window, force-kill the terminal's process tree so the Stop /
+		// Kill action always terminates the command. Mirrors the SIGKILL+psTree
+		// behavior of ExecaTerminalProcess.abort().
+		this.scheduleForceKill()
+	}
+
+	private scheduleForceKill() {
+		if (this.forceKillTimer) {
+			return
+		}
+
+		this.forceKillTimer = setTimeout(() => {
+			this.forceKillTimer = undefined
+			void this.forceKill()
+		}, TerminalProcess.FORCE_KILL_GRACE_MS)
+	}
+
+	private clearForceKill() {
+		if (this.forceKillTimer) {
+			clearTimeout(this.forceKillTimer)
+			this.forceKillTimer = undefined
+		}
+	}
+
+	private async forceKill() {
+		// Nothing left to kill if the command already completed (Ctrl+C worked,
+		// or it exited on its own). `busy` is cleared by the "completed" handler.
+		if (!this.terminal.busy) {
+			return
+		}
+
+		let shellPid: number | undefined
+
+		try {
+			shellPid = await this.terminal.terminal.processId
+		} catch {
+			shellPid = undefined
+		}
+
+		if (!shellPid) {
+			return
+		}
+
+		// SIGKILL the children of the shell (the actual running command and its
+		// descendants) rather than the shell itself, so the terminal stays usable.
+		psTree(shellPid, (err, children) => {
+			if (err) {
+				return
+			}
+
+			for (const child of children) {
+				try {
+					nodeProcess.kill(parseInt(child.PID, 10), "SIGKILL")
+				} catch {
+					// Process already gone — ignore.
+				}
+			}
+		})
 	}
 
 	public override hasUnretrievedOutput(): boolean {

@@ -48,6 +48,12 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 	const [isExpanded, setIsExpanded] = useState(terminalShellIntegrationDisabled)
 	const [streamingOutput, setStreamingOutput] = useState("")
 	const [status, setStatus] = useState<CommandExecutionStatus | null>(null)
+	// Whether the command is currently executing. Latched true on the first
+	// "started"/"output" status and cleared only when a terminal status arrives.
+	// We can't key the kill button off `status === "started"` alone: a "started"
+	// event can be missed (e.g. the block re-mounts mid-run and the first status
+	// seen is "output"), which would hide the kill affordance for a live command.
+	const [isRunning, setIsRunning] = useState(false)
 
 	// The command's output can either come from the text associated with the
 	// task message (this is the case for completed commands) or from the
@@ -126,12 +132,20 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 					switch (data.status) {
 						case "started":
 							setStatus(data)
+							setIsRunning(true)
 							break
 						case "output":
 							setStreamingOutput(data.output)
+							setIsRunning(true)
 							break
 						case "fallback":
 							setIsExpanded(true)
+							break
+						case "exited":
+						case "terminated":
+						case "timeout":
+							setStatus(data)
+							setIsRunning(false)
 							break
 						default:
 							setStatus(data)
@@ -181,9 +195,11 @@ export const CommandExecution = ({ executionId, text, icon, title }: CommandExec
 				</div>
 				<div className=" flex flex-row items-center justify-between gap-2 px-1">
 					<div className="flex flex-row items-center gap-1">
-						{status?.status === "started" && (
+						{isRunning && (
 							<div className="flex flex-row items-center gap-2 font-mono text-xs">
-								{status.pid && <div className="whitespace-nowrap">(PID: {status.pid})</div>}
+								{status?.status === "started" && status.pid && (
+									<div className="whitespace-nowrap">(PID: {status.pid})</div>
+								)}
 								<StandardTooltip content={t("chat:commandExecution.abort")}>
 									<Button
 										data-testid="kill-command-button"

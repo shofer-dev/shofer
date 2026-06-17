@@ -635,6 +635,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	fileContextTracker: FileContextTracker
 	terminalProcess?: ShoferTerminalProcess
 
+	/**
+	 * Backgrounded command processes — an execute_command the agent moved on from
+	 * (agent timeout, or the user chose "Proceed While Running") while it is still
+	 * running. The foreground `terminalProcess` reference is cleared once the tool
+	 * returns, so without this map a backgrounded command could no longer be
+	 * terminated by the Stop button or the per-command Kill button. Keyed by
+	 * executionId; entries are removed when the command actually completes.
+	 */
+	backgroundTerminalProcesses = new Map<string, ShoferTerminalProcess>()
+
 	// Editing
 	diffViewProvider: DiffViewProvider
 	diffStrategy?: DiffStrategy
@@ -2960,6 +2970,35 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} else if (terminalOperation === "abort") {
 			this.userTerminatedCommand = true
 			this.terminalProcess?.abort()
+			// Also terminate any backgrounded command so the per-command Kill
+			// button works after the agent has moved on from it.
+			this.abortBackgroundTerminalProcesses()
+		}
+	}
+
+	/**
+	 * Register a command process that has been backgrounded while still running so
+	 * it can be terminated later. Removed via {@link unregisterBackgroundProcess}
+	 * when the command completes.
+	 */
+	registerBackgroundProcess(executionId: string, process: ShoferTerminalProcess) {
+		this.backgroundTerminalProcesses.set(executionId, process)
+	}
+
+	unregisterBackgroundProcess(executionId: string) {
+		this.backgroundTerminalProcesses.delete(executionId)
+	}
+
+	/** Abort every backgrounded command process. Each abort() escalates to a
+	 * force-kill, and the command's own completion handler removes it from the map
+	 * (and emits the terminated status), so we don't clear the map here. */
+	private abortBackgroundTerminalProcesses() {
+		for (const process of this.backgroundTerminalProcesses.values()) {
+			try {
+				process.abort()
+			} catch (error) {
+				taskLog.error(`Error aborting background terminal process for task ${this.taskId}:`, error)
+			}
 		}
 	}
 
@@ -3944,8 +3983,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Abort any running terminal process (e.g., from execute_command)
 		// so the Global Stop button kills the process instead of leaving
-		// it orphaned after the task loop exits.
+		// it orphaned after the task loop exits. Covers both the foreground
+		// command and any commands the agent backgrounded while still running.
 		this.terminalProcess?.abort()
+		this.abortBackgroundTerminalProcesses()
+		this.backgroundTerminalProcesses.clear()
 
 		// Reset consecutive error counters on abort (manual intervention)
 		this.consecutiveNoToolUseCount = 0
