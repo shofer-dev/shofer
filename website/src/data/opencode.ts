@@ -53,7 +53,6 @@ export const openCodeMigration = {
 	title: "Migrating from OpenCode",
 	description:
 		"Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, semantic code & git-log search, native worktrees, and a deterministic multi-agent Workflow engine. Your AGENTS.md rules carry over directly.",
-	// No automated importer yet — AGENTS.md rules port over as-is.
-	command: "",
+	command: "/migrate-from-opencode",
 	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md",
 }
