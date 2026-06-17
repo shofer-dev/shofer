@@ -19,10 +19,10 @@ export const features: Feature[] = [
 	{
 		title: "Provable Multi-Agent Workflows",
 		description:
-			"Specify a whole multi-agent pipeline declaratively in a .slang file — agents, message routing, control flow, a convergence condition, and budgets — then a non-LLM executor runs it. Few agents offer this; fewer make the pipeline statically analyzable before it runs.",
+			"Specify a whole multi-agent pipeline declaratively in a .slang file — agents, message routing, control flow, a convergence condition, and budgets — then a non-LLM executor runs it.",
 		icon: "Workflow",
 		highlights: [
-			"Slang DSL: stake/await, when/repeat, converge, budgets",
+			"Slang DSL: a deliberately constrained language to express multi-agent interactions",
 			"Statically analyzable — deadlocks & orphan agents caught before a run",
 			"Per-agent output contracts + a deterministic, repeatable scheduler",
 		],
@@ -34,12 +34,12 @@ export const features: Feature[] = [
 	{
 		title: "Live Agent Visualization",
 		description:
-			"Watch an agent tree execute as it runs: a topology graph, a message-sequence timeline, per-agent swimlanes, an active-time breakdown, and filterable logs — all in-editor.",
+			"Shofer gives you the tools to introspect, troubleshoot and optimize your multi-agent workflows, with beautiful diagrams right on your IDE.",
 		icon: "Activity",
 		highlights: [
 			"Topology / Sequence / Swimlane diagrams with live runtime overlays",
-			"Stats: active-time donut + per-tool breakdown across the whole tree",
-			"Filterable per-task Logs (free-text + severity)",
+			"Latency/Reliability breakdowns: active-time donut + per-tool breakdown across the whole tree",
+			"Filterable per-session Logs",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md",
 		docsLabel: "Visualization",
@@ -54,25 +54,24 @@ export const features: Feature[] = [
 		],
 	},
 	{
-		title: "Memory that stays in-sync",
+		title: "Codebase memory that stays in-sync",
 		description:
-			"Long-lived memory you can talk to: a persistent, read-only Assistant Agent that accumulates codebase knowledge across tasks — surviving restarts — backed by the local semantic index. Other tasks just ask it instead of reloading context.",
+			"Long-lived memory you can talk to: a persistent, read-only Assistant Agent that accumulates codebase knowledge across sessions — backed by the local semantic index. Other sessions just ask it instead of reloading context.",
 		icon: "Bot",
 		highlights: [
 			"Runs on a low-cost model with a large context window",
-			"KV-cache friendly append-only context minimizes provider costs",
-			"Strictly read-only — can read, search, and look up symbols only",
+			"KV-cache friendly and Read-only — with powerful code exploration tools",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#13-assistant-agent",
 		docsLabel: "Assistant Agent",
 		anchor: "assistant-agent",
-		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work and survives restarts, backed by the local semantic index. Other tasks query it via ask_assistant_agent instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
-		images: ["Tasks querying the shared Assistant Agent context"],
+		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work, backed by the local semantic index (RAG). Other sessions query it instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
+		images: ["Sessions querying the shared Assistant Agent context"],
 	},
 	{
-		title: "Fast, Local Code & Git RAG Indexing",
+		title: "Fast Code & Git Indexing",
 		description:
-			"A semantic index over your code and your entire git history — kept fast because it's incremental (only what changed is re-embedded), and computed and stored on a backend you own.",
+			"A semantic index over your code and your entire git history — kept fast because it's incremental, and computed and stored on the backend of your choice.",
 		icon: "Search",
 		highlights: [
 			"Semantic code search — AST-aware chunking via tree-sitter",
@@ -83,16 +82,16 @@ export const features: Feature[] = [
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#7-semantic-code-search-rag",
 		docsLabel: "RAG Indexing",
 		anchor: "code-git-search",
-		detail: "Shofer's RAG is fast because it's incremental — it re-embeds only what changed, not the whole repo on every edit. It indexes your code with AST-aware, tree-sitter chunking and your entire git log (commit messages + diffs), so git_search answers why and when a change was made, by meaning, not just where the text lives today. And it runs on a backend you own: pick your embedding model (e.g. local via Ollama) and your vector store, so the index is computed and stored on infrastructure you control.",
+		detail: "Shofer's RAG is fast because it's incremental — it re-embeds only what changed. It indexes your code with AST-aware, tree-sitter chunking and your entire git log, so your agents can get the historical context of a change. And it runs on a backend you own: pick your embedding model (e.g. local via Ollama) and your vector store, so the index is computed and stored on infrastructure you control.",
 		images: ["Local RAG over code and git history, indexed incrementally"],
 	},
 	{
-		title: "Parallel Tasks & Async MCP",
+		title: "Parallel and Asynchronous Calls",
 		description:
-			"Parallelism end to end: run many independent tasks at once in a tree, and fire MCP tool calls fire-and-forget instead of blocking the loop. Each task keeps its own mode, provider, and context.",
+			"Parallelism end to end: run many independent sessions at once in a tree, and asynchronous MCP tool calls (fire-and-forget) instead of blocking the loop.",
 		icon: "GitBranch",
 		highlights: [
-			"Many independent tasks in a tree — switch without losing state",
+			"Many independent sessions in a tree — switch without losing state",
 			"Background subtasks with parent-child communication + message queuing",
 			"Fire-and-forget call_mcp_tool_async with call_id tracking",
 			"wait_for_mcp_call all/any strategies; delete-on-read trimming",
@@ -100,42 +99,42 @@ export const features: Feature[] = [
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#5-parallel-tasks--sub-tasks",
 		docsLabel: "Parallel Tasks",
 		anchor: "parallel-async",
-		detail: "Parallelism runs through the whole product. Run many independent conversations at once in a task tree — each with its own mode, provider, and context — switching freely without losing state, queueing messages while an agent works, and fanning out background subtasks that report back to their parent. MCP tool calls are async too: dispatch them fire-and-forget, track them by call_id, wait for all or any to finish, and trim results on read so long-running tools never block the loop or bloat the context.",
+		detail: "Parallelism runs through the whole product. Run many independent conversations at once in a task tree — switching freely without losing state, queueing messages while an agent works, and fanning out background subtasks that report back to their parent. Both A2A and MCP tool calling are fully asynchronous, so that your agents can do more work in the same amount of time.",
 		images: ["The task tree with several tasks running at once", "Parallel MCP calls tracked by call_id"],
 	},
 	{
 		title: "Hard Cost Caps",
 		description:
-			"Set a USD budget per task or per session. When the limit is hit, the agent loop pauses or aborts — task-level protection against runaway autonomous loops, across any provider.",
+			"Set a USD budget per session. When the limit is hit, the agent loop pauses or aborts — session-level protection against runaway autonomous loops, across any provider.",
 		icon: "DollarSign",
 		highlights: [
-			"Per-task and per-session USD limits",
-			"Automatic halt the moment a threshold is crossed",
+			"Per-session USD limits",
+			"Automatic halt soon after the moment a threshold is crossed",
 			"Whole-tree cost & token rollups in the header",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#10-per-task-cost-limit",
 		docsLabel: "Cost Limits",
 		anchor: "cost-caps",
-		detail: "Give a task or session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance. It works the same on any provider, including metered cloud APIs.",
-		images: ["A per-task USD budget with live spend tracking"],
+		detail: "Give a session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts soon after the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance.",
+		images: ["A per-session USD budget with live spend tracking"],
 	},
 	{
-		title: "Git Worktrees",
+		title: "Excellent Git Worktree Support",
 		description:
-			"Run parallel tasks on different branches in one VS Code window. No more stash/commit gymnastics or multiple windows for PRs — and each worktree is kernel-sandboxed.",
+			"Run parallel sessions on different branches in one VS Code window. No more stash/commit gymnastics or accidental overwrites — and each worktree is kernel-sandboxed.",
 		icon: "TreePine",
 		highlights: [
 			"UI-driven create, switch, and delete operations",
-			"Each task scoped to a specific worktree branch",
+			"Each session scoped to a specific worktree branch",
 			"Automatic .worktreeinclude for gitignored files",
 			"Kernel-level (Landlock/bwrap) command sandboxing confined to the worktree",
 		],
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md#9-git-worktrees",
 		docsLabel: "Git Worktrees",
 		anchor: "git-worktrees",
-		detail: "Keep parallel tasks on separate branches in a single VS Code window — no stash dance, no extra windows for PRs. Create, switch, and delete worktrees from the UI; each task is scoped to its branch, and .worktreeinclude carries over the gitignored files a fresh checkout would miss. Each worktree is also a security boundary: shell commands run inside an OS-level, write-only sandbox (Landlock / bwrap) that confines writes to the active worktree — a kernel-enforced guarantee, not a model's best guess — making long, unattended runs far safer. (Linux.)",
+		detail: "Keep parallel sessions on separate branches in a single VS Code window — no stash dance, no extra windows. Create, switch, and delete worktrees from the UI; each session is scoped to its branch. Each worktree is a security boundary: shell commands run inside an OS-level sandbox that confines writes to the active worktree. (available in Linux only)",
 		images: [
-			"Worktree selector with per-task branch isolation",
+			"Worktree selector with per-session branch isolation",
 			"A shell command blocked from writing outside the active worktree",
 		],
 	},
