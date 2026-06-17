@@ -11,11 +11,6 @@ export const copilotComparisons: CopilotComparison[] = [
 		shofer: "100% local execution — no remote server processes your workspace",
 	},
 	{
-		aspect: "Model Ecosystem",
-		copilot: "Curated, vendor-managed picker — OpenAI + Anthropic clusters (Google Gemini removed in 2026)",
-		shofer: "Bring-Your-Own-Model — Ollama, LM Studio, Anthropic, OpenAI, OpenRouter, niche/open-weight endpoints, and more",
-	},
-	{
 		aspect: "Network Autonomy",
 		copilot: "Requires active internet and constant telemetry handshake",
 		shofer: "Fully operational in air-gapped environments with local models",
@@ -39,7 +34,7 @@ export const copilotComparisons: CopilotComparison[] = [
 	},
 	{
 		aspect: "Cost Control",
-		copilot: "Monthly credit allotment; no per-task hard USD cap that halts an agent mid-loop",
+		copilot: "No per-task hard USD cap that halts an agent mid-loop",
 		shofer: "Per-task / per-session hard USD caps with automatic agent halting",
 	},
 	{

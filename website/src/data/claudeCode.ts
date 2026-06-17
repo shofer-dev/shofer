@@ -27,7 +27,7 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 	},
 	{
 		aspect: "Multi-Agent Orchestration",
-		claudeCode: "Imperative subagents the model spawns at runtime",
+		claudeCode: "Imperative subagents the model spawns at runtime, plus dynamic workflows expressed in Javascript",
 		shofer: "Declarative, deterministic Slang Workflows — repeatable, inspectable, and visualized",
 	},
 	{
