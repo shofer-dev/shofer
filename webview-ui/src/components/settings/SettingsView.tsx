@@ -245,6 +245,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		maxGitStatusFiles,
 		defaultCostLimit,
 		archivedTaskRetentionDays,
+		maxParallelTasks,
 		liveMemoryEnabled,
 		liveMemoryApiConfigId,
 		liveMemoryMaxContextTokens,
@@ -476,6 +477,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					maxGitStatusFiles: maxGitStatusFiles ?? 0,
 					defaultCostLimit: defaultCostLimit ?? null,
 					archivedTaskRetentionDays: archivedTaskRetentionDays ?? null,
+					maxParallelTasks: maxParallelTasks ?? null,
 					profileThresholds,
 					imageGenerationProvider,
 					openRouterImageApiKey,
@@ -1102,6 +1104,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								apiConfiguration={apiConfiguration}
 								setApiConfigurationField={setApiConfigurationField}
 								archivedTaskRetentionDays={archivedTaskRetentionDays}
+								maxParallelTasks={maxParallelTasks}
 								setCachedStateField={setCachedStateField}
 								imageGenerationProvider={imageGenerationProvider}
 								openRouterImageApiKey={openRouterImageApiKey as string | undefined}

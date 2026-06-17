@@ -71,11 +71,11 @@ async function generatePrompt(
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
-	// Effective capability groups: the mode's groups, optionally narrowed by a
+	// Effective capability groups: the mode's tools, optionally narrowed by a
 	// workflow agent's `.slang` `tools:` restriction (settings.agentToolGroups).
 	// When the restriction is set, the CAPABILITIES section is gated to only
 	// what the agent can actually do; undefined ⇒ no gating.
-	const modeGroupNames = new Set((modeConfig.groups ?? []).map((g) => getGroupName(g)))
+	const modeGroupNames = new Set((modeConfig.tools ?? []).map((g) => getGroupName(g)))
 	const capabilityGroups =
 		settings?.agentToolGroups !== undefined
 			? new Set(settings.agentToolGroups.filter((g) => modeGroupNames.has(g as ToolGroup)))

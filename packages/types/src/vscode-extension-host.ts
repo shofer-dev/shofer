@@ -482,6 +482,7 @@ export type ExtensionState = Pick<
 	| "disabledTools"
 	| "defaultCostLimit"
 	| "archivedTaskRetentionDays"
+	| "maxParallelTasks"
 	| "liveMemoryEnabled"
 	| "liveMemoryApiConfigId"
 	| "liveMemoryMaxContextTokens"

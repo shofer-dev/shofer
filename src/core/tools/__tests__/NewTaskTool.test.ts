@@ -35,11 +35,15 @@ describe("NewTaskTool — peer_task_ids", () => {
 				registerBlockingChildResolver: vi.fn(),
 				setState: vi.fn(),
 				hasPendingSyncResolver: vi.fn().mockReturnValue(false),
+				countActiveTasks: vi.fn().mockReturnValue(0),
 				on: vi.fn(),
 				off: vi.fn(),
 			},
 			registerBlockingChildResolver: vi.fn(),
-			contextProxy: { globalStorageUri: { fsPath: "/tmp/test-storage" } },
+			contextProxy: {
+				globalStorageUri: { fsPath: "/tmp/test-storage" },
+				getValue: vi.fn().mockReturnValue(undefined), // undefined → default 10 → 0 active always passes
+			},
 			log: vi.fn(),
 			...overrides,
 		}
@@ -378,5 +382,74 @@ describe("NewTaskTool — peer_task_ids", () => {
 
 		const options = provider.createTask.mock.calls[0][3]
 		expect(options.initialTitle).toBe("Fix the bug")
+	})
+
+	// ─── Parallel task limit guard ───────────────────────────────────
+
+	it("rejects new task when parallel-task limit is reached", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.contextProxy.getValue = vi.fn().mockReturnValue(3)
+		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(3)
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task limit reached"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("3/3"))
+		expect(provider.createTask).not.toHaveBeenCalled()
+	})
+
+	it("allows new task when under the parallel-task limit", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.contextProxy.getValue = vi.fn().mockReturnValue(5)
+		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(3)
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started"))
+		expect(provider.createTask).toHaveBeenCalled()
+	})
+
+	it("allows unlimited tasks when limit is 0", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.contextProxy.getValue = vi.fn().mockReturnValue(0)
+		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(999)
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Child task started"))
+		expect(provider.createTask).toHaveBeenCalled()
+	})
+
+	it("enforces the default limit (10) when maxParallelTasks is unset", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.contextProxy.getValue = vi.fn().mockReturnValue(undefined)
+		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(10)
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task limit reached"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("10/10"))
+		expect(provider.createTask).not.toHaveBeenCalled()
+	})
+
+	it("rejects at exactly the limit with correct active count", async () => {
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		provider.contextProxy.getValue = vi.fn().mockReturnValue(2)
+		provider.taskManager.countActiveTasks = vi.fn().mockReturnValue(2)
+		const cbs = buildCallbacks()
+
+		await tool.execute({ mode: "code", message: "do work", is_background: true }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("2/2"))
+		expect(provider.createTask).not.toHaveBeenCalled()
 	})
 })

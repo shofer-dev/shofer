@@ -243,6 +243,15 @@ export const globalSettingsSchema = z.object({
 	archivedTaskRetentionDays: z.number().int().min(0).nullish(),
 
 	/**
+	 * Maximum number of parallel (non-terminal, non-idle) tasks allowed globally.
+	 * When the number of running/waiting tasks reaches this limit, new_task
+	 * returns an error asking the caller to wait and retry or accomplish the
+	 * work through other means. Set to 0 for unlimited.
+	 * @default 10
+	 */
+	maxParallelTasks: z.number().int().min(0).optional(),
+
+	/**
 	 * Enable integration with the Shofer LLM Model Provider extension
 	 * (shofer.llm.getModelPricing, shofer.llm.getRequestCost, etc.).
 	 * When disabled (default), the vscode-lm provider uses only the

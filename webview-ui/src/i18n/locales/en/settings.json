@@ -952,6 +952,11 @@
 			"label": "Archived task retention (days)",
 			"placeholder": "7",
 			"description": "How many days an archived task is kept before it is permanently deleted. Leave empty for the default of 7 days, or set 0 to keep archived tasks forever. Deletion is irreversible."
+		},
+		"maxParallelTasks": {
+			"label": "Max parallel tasks",
+			"placeholder": "10",
+			"description": "Maximum number of tasks (running or waiting) allowed at the same time across the entire extension. When the limit is reached, new_task requests are rejected with an error. Set to 0 for unlimited."
 		}
 	},
 	"experimental": {

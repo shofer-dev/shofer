@@ -142,6 +142,23 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 			task.consecutiveMistakeCount = 0
 
+			// Enforce the global parallel-task limit.
+			const maxParallel = provider.contextProxy.getValue("maxParallelTasks")
+			const effectiveLimit = maxParallel ?? 10 // default when unset
+			if (effectiveLimit > 0) {
+				const activeCount = provider.taskManager.countActiveTasks()
+				if (activeCount >= effectiveLimit) {
+					pushToolResult(
+						formatResponse.toolError(
+							`Task limit reached: ${activeCount}/${effectiveLimit} tasks are currently running. ` +
+								`Please wait for one to complete and try again later, ` +
+								`or accomplish this work through other means (e.g., inline tool calls).`,
+						),
+					)
+					return
+				}
+			}
+
 			// Refuse to spawn a subtask that would push the root over its cost cap.
 			// Walks up to the true root, then aggregates costs across the whole subtree.
 			let rootCursor: Task = task
