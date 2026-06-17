@@ -31,16 +31,24 @@ flow "debug" (issue: "string") {
     role: "Debug workflow orchestrator. You clarify the issue with the user, coordinate parallel investigation by two developers, broker consensus between them, and drive the fix-and-review loop to completion. You do NOT write or review code yourself."
 
     -- Phase 1 — Parallel triage
+    --
+    -- NOTE: a stake declared here is executed by the ORCHESTRATOR; `-> @DeveloperN`
+    -- only routes the *result* to that developer's mailbox (consumed by its
+    -- `await triage_task <- @Orchestrator`). It does NOT make the developer run
+    -- this stake. So the instruction is a DISPATCH addressed to the Orchestrator
+    -- — never "investigate…"/"implement…", which would make the Orchestrator do
+    -- the work itself (and, for writes, stall in architect mode). Each developer
+    -- does the real work via its own `investigate` / `fix` / `review` stake.
     stake triage(
       issue: issue,
       user_description: issue,
-      task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
+      task: "Dispatch read-only triage to this developer. You are the orchestrator: you do NOT investigate or modify anything yourself. Produce the triage assignment as your result, instructing the developer: STRICT READ-ONLY TRIAGE — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer1
 
     stake triage(
       issue: issue,
       user_description: issue,
-      task: "STRICT READ-ONLY TRIAGE. Investigate using read/search tools ONLY. You MUST NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file), and MUST NOT run any command that mutates the workspace or git. Examine the codebase, logs, and context; identify the root cause — what is actually broken and why. Output analysis only — describe the proposed fix in words, do NOT implement it."
+      task: "Dispatch read-only triage to this developer. You are the orchestrator: you do NOT investigate or modify anything yourself. Produce the triage assignment as your result, instructing the developer: STRICT READ-ONLY TRIAGE — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer2
 
     await dev1 <- @Developer1
@@ -108,7 +116,7 @@ flow "debug" (issue: "string") {
     stake assign_fix(
       root_cause: dev1_verdict,
       analysis: dev1_analysis,
-      task: "Implement the fix for the agreed-upon root cause. Write the necessary code changes. Keep changes minimal and targeted. After implementing, describe what was changed and why."
+      task: "Assign the fix to Developer1. You are the orchestrator: you do NOT write code yourself. Produce the fix assignment as your result, instructing the developer: implement the fix for the agreed-upon root cause, write the necessary code changes, keep them minimal and targeted, then describe what was changed and why."
     ) -> @Developer1
 
     await fix_output <- @Developer1

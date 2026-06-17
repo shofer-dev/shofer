@@ -38,14 +38,21 @@ flow "implement-feature" (feature: "string", design_path: "string") {
 
     await response <- @Human
 
+    -- NOTE: a stake declared here is executed by the ARCHITECT; `-> @Developer`
+    -- only routes the *result* to the Developer's mailbox (consumed by its
+    -- `await design <- @Architect`). It does NOT make the Developer run this
+    -- stake. So these instructions are addressed to the Architect as a HAND-OFF
+    -- — never "implement…"/"review…", which would make the Architect try to do
+    -- the work itself (and stall in architect mode). The Developer/Reviewer do
+    -- the actual work via their own stakes below.
     stake implement(
       design: feature,
-      instructions: "Implement the design document at ${design_path}. After each slice, report progress so it can be reviewed (set done=false and summarise the slice). When ALL work is complete and accepted, set done=true. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
+      instructions: "Hand the approved design off to the Developer so it can begin implementing. You are the architect: you do NOT write code, do NOT switch modes, and will NOT be switched to code mode — the Developer implements. Produce a concise hand-off as your result: the design lives at EXACTLY ${design_path}; summarise the approved scope and any constraints the Developer must honour. The Developer will read ${design_path}, implement it slice by slice, and report back for review."
     ) -> @Developer
 
     stake prepare_to_review(
       design: feature,
-      instructions: "You will review the Developer's implementation against the design at ${design_path}. Wait for review requests and evaluate each one."
+      instructions: "Brief the Reviewer so it is ready to evaluate the Developer's work. You are the architect: do NOT review or edit code yourself. Produce a short standing brief as your result — the design is at EXACTLY ${design_path}; the Reviewer waits for per-round review requests and evaluates each one against it."
     ) -> @Reviewer
 
     let implementation_done = false

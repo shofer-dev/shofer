@@ -148,18 +148,24 @@ flow "implement-feature" (feature: "string") {
 
     -- ------------------------------------------------------------------
     -- Phase 4: Kick off implementation
-    -- Spawn the Developer (code mode) and Reviewer (reviewer mode).
-    -- The Developer is given the approved design.
-    -- The Reviewer receives context so it's ready to evaluate.
+    --
+    -- IMPORTANT — stake routing semantics: a stake declared in this block is
+    -- executed by the ARCHITECT. `-> @Developer` routes only the *result* to
+    -- the Developer's mailbox (consumed by its `await design <- @Architect`);
+    -- it does NOT dispatch the Developer to run this stake. So the instruction
+    -- below is a HAND-OFF addressed to the Architect — phrasing it as
+    -- "Implement the design…" makes the Architect try to write code itself and
+    -- stall (it cannot, in architect mode). The Developer/Reviewer do the real
+    -- work via their own stakes (`progress_update`, `review_verdict`).
     -- ------------------------------------------------------------------
     stake implement(
       design: design,
-      instructions: "Implement the design document at plans/feature-design.md. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE."
+      instructions: "Hand the approved design off to the Developer so it can begin implementing. You are the architect: you do NOT write code or switch modes — the Developer implements. Produce a concise hand-off as your result: the design lives at plans/feature-design.md; summarise the approved scope. The Developer reads it, implements slice by slice, and signals READY_FOR_REVIEW / DONE."
     ) -> @Developer
 
     stake prepare_to_review(
       design: design,
-      instructions: "You will review the Developer's implementation against the design at plans/feature-design.md. Wait for review requests and evaluate each one."
+      instructions: "Brief the Reviewer so it is ready to evaluate the Developer's work. You are the architect: do NOT review or edit code yourself. Produce a short standing brief — the design is at plans/feature-design.md; the Reviewer waits for review requests and evaluates each one against it."
     ) -> @Reviewer
 
     -- ------------------------------------------------------------------
