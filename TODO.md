@@ -1,20 +1,13 @@
-migration guide for claude code
-migration guide for opencode
-Finalize the UI aspect of the workflows (visualization, etc)
-fix workflows
-- "Running" commands don't seem to have the ability to kill
-- parent can give title (workflow does) and then the agent should not change it
-- Maybe update the HistoryView for Workflows
-- new_task can have a name param for each task
+- Make the dir name same as worktree & branch:
 
-- Improve README, walkthrough, and video (update changelog)
+- currently the number of parallel tasks (globally not just subtasks) is not limitted. We should enforce a limit (by having new_task error our when the limit is hit, asking the caller to either wait and try again later or do the work via other means). Expose the limit in Settings->Advanced settings
+
+- Settings->Worktrees : when a new worktree is created to deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
+
+====
 
 - Announce https://gemini.google.com/app/bc25f481142e4161
   https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling).
-
-- make the dir name same as worktree & branch:
-  alsterg@laptop:~/Projects/arkware.ai/.shofer/worktrees/arkware.ai-kom7c$ git branch
-
 
 * DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
     - project documentation standarization/structure
@@ -30,17 +23,7 @@ fix workflows
     - when you assign a subtask a task, you should not do it yourself, but wait for it to complete, or terminate first and then do it.
       only spawn subtasks if you have other work to do in parallel, that can be parallelized.
 
-=== P1
-
-- new logo
-
-- TEST pasting images
-
 === P2
-
-- test: /migrate-from-copilot /migrate-from-roocode
-
-- DEV set limit on the number of parallel tasks by limitting who can use new_task (limit on depth of task tree, and number of active tasks per parent task)
 
 - "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:
   | Setting | Purpose | Default |
@@ -56,3 +39,7 @@ fix workflows
 - DEV memories (copilot_memory, copilot_resolveMemoryFileUri) (filter by age)
 
 - preemptive summarization (in the background)
+
+- test the migration commands
+
+- test pasting images
