@@ -67,20 +67,20 @@ const mockMultiModeSkill: SkillMetadata = {
 }
 
 const mockCustomModes: ModeConfig[] = [
-	{ slug: "code", name: "Code", description: "Write code", roleDefinition: "", groups: ["read", "write"] },
+	{ slug: "code", name: "Code", description: "Write code", roleDefinition: "", tools: ["read", "write"] },
 	{
 		slug: "debug",
 		name: "Debug",
 		description: "Debug issues",
 		roleDefinition: "",
-		groups: ["read", "write"],
+		tools: ["read", "write"],
 	},
 	{
 		slug: "architect",
 		name: "Architect",
 		description: "Design systems",
 		roleDefinition: "",
-		groups: ["read"],
+		tools: ["read"],
 	},
 ]
 

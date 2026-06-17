@@ -51,7 +51,7 @@ describe("ModesView Import Auto-Switch", () => {
 				slug: importedModeSlug,
 				name: "Custom Test Mode",
 				roleDefinition: "Test role",
-				groups: [],
+				tools: [],
 			},
 		]
 

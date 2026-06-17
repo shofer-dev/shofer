@@ -583,7 +583,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 			roleDefinition: newModeRoleDefinition.trim(),
 			whenToUse: newModeWhenToUse.trim() || undefined,
 			customInstructions: newModeCustomInstructions.trim() || undefined,
-			groups: newModeGroups,
+			tools: newModeGroups,
 			source,
 		}
 
@@ -609,7 +609,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 					case "roleDefinition":
 						setRoleDefinitionError(message)
 						break
-					case "groups":
+					case "tools":
 						setGroupsError(message)
 						break
 				}
@@ -666,7 +666,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 				if (!isCustomMode) return // Prevent changes to built-in modes
 				const target = (e as CustomEvent)?.detail?.target || (e.target as HTMLInputElement)
 				const checked = target.checked
-				const oldGroups = customMode?.groups || []
+				const oldGroups = customMode?.tools || []
 				let newGroups: GroupEntry[]
 				if (checked) {
 					newGroups = [...oldGroups, group]
@@ -678,7 +678,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 
 					updateCustomMode(customMode.slug, {
 						...customMode,
-						groups: newGroups,
+						tools: newGroups,
 						source,
 					})
 				}
@@ -1289,8 +1289,8 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 									const isCustomMode = findModeBySlug(visualMode, customModes)
 									const customMode = isCustomMode
 									const isGroupEnabled = isCustomMode
-										? customMode?.groups?.some((g) => getGroupName(g) === group)
-										: currentMode?.groups?.some((g) => getGroupName(g) === group)
+										? customMode?.tools?.some((g) => getGroupName(g) === group)
+										: currentMode?.tools?.some((g) => getGroupName(g) === group)
 
 									return (
 										<VSCodeCheckbox
@@ -1304,7 +1304,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 													{t("prompts:tools.allowedFiles")}{" "}
 													{(() => {
 														const currentMode = getCurrentMode()
-														const editGroup = currentMode?.groups?.find(
+														const editGroup = currentMode?.tools?.find(
 															(g) =>
 																Array.isArray(g) && g[0] === "write" && g[1]?.fileRegex,
 														)
@@ -1321,7 +1321,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							<div className="text-sm text-vscode-foreground mb-2 leading-relaxed">
 								{(() => {
 									const currentMode = getCurrentMode()
-									const enabledGroups = currentMode?.groups || []
+									const enabledGroups = currentMode?.tools || []
 
 									// If there are no enabled groups, display translated "None"
 									if (enabledGroups.length === 0) {

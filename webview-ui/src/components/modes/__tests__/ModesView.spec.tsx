@@ -142,7 +142,7 @@ describe("PromptsView", () => {
 			slug: "custom-mode",
 			name: "Custom Mode",
 			roleDefinition: "Custom role",
-			groups: [],
+			tools: [],
 		}
 
 		// Test with built-in mode (code)
@@ -189,7 +189,7 @@ describe("PromptsView", () => {
 			name: "Custom Mode",
 			roleDefinition: "Custom role",
 			description: "Custom description",
-			groups: [],
+			tools: [],
 		}
 
 		// Test with built-in mode (code) - description section should be shown with reset button

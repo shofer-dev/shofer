@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { globalSettingsSchema } from "../global-settings"
+import { globalSettingsSchema } from "../global-settings.js"
 
 describe("globalSettingsSchema — maxParallelTasks", () => {
 	// The settings UI persists `null` to represent the "unset" state (so the
