@@ -33,7 +33,7 @@ DEFAULT_MODES (packages/types/src/mode.ts:199)
     │
     └── modes = DEFAULT_MODES (src/shared/modes.ts:90)
             │
-            ├── groups[] → TOOL_GROUPS → allowedTools
+            ├── tools[] → TOOL_GROUPS → allowedTools
             │     (src/shared/tools.ts → packages/types/src/tool.ts:175)
             │
             └── getModeBySlug(slug, customModes)
@@ -133,7 +133,7 @@ via the `disabledTools` setting or excluded by `tools_denied`:
 Assembles the final tool name set from a mode's `tools`, `tools_allowed`, and
 `tools_denied` fields. The resolution rules:
 
-1. Iterate `groups[]` → look up each in `TOOL_GROUPS` → collect tools
+1. Iterate `tools[]` → look up each in `TOOL_GROUPS` → collect tools
 2. **Scoped group entries** (`{ "groupName": { allowed: [...], denied: [...] } }`) narrow the tool set:
     - `allowed`: exclusive list — only these tools from that group
     - `denied`: removes the listed tools from the group's normal set

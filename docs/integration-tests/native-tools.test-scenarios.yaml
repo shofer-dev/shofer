@@ -135,7 +135,7 @@ scenarios:
 
   - name: "always-available: attempt_completion works in empty-group mode"
     mode:
-      groups: []
+      tools: []
     tool: attempt_completion
     params:
       result: "Done"
@@ -144,7 +144,7 @@ scenarios:
 
   - name: "always-available: set_task_title works in empty-group mode"
     mode:
-      groups: []
+      tools: []
     tool: set_task_title
     params:
       title: "Test title"
@@ -152,7 +152,7 @@ scenarios:
 
   - name: "always-available: give_feedback works in empty-group mode"
     mode:
-      groups: []
+      tools: []
     tool: give_feedback
     params:
       feedback: "Integration test feedback"
@@ -160,7 +160,7 @@ scenarios:
 
   - name: "always-available: skills works in empty-group mode"
     mode:
-      groups: []
+      tools: []
     tool: skills
     params:
       skill: "some-skill"
@@ -168,7 +168,7 @@ scenarios:
 
   - name: "always-available: ask_followup_question works in empty-group mode"
     mode:
-      groups: []
+      tools: []
     tool: ask_followup_question
     params:
       question: "What next?"
@@ -181,7 +181,7 @@ scenarios:
 
   - name: "read-only mode: write_to_file denied in ask mode"
     mode:
-      groups: [read, mcp]
+      tools: [read, mcp]
     tool: write_to_file
     params:
       path: "test.txt"
@@ -190,7 +190,7 @@ scenarios:
 
   - name: "architect mode: write_to_file allowed for .md files"
     mode:
-      groups: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
+      tools: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
     tool: write_to_file
     params:
       path: "docs/test.md"
@@ -199,7 +199,7 @@ scenarios:
 
   - name: "architect mode: write_to_file denied for .ts files"
     mode:
-      groups: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
+      tools: [read, [write, { fileRegex: "\\.md$" }], mcp, questions]
     tool: write_to_file
     params:
       path: "src/test.ts"

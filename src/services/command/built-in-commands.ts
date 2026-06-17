@@ -562,7 +562,7 @@ to Shofer rules.
 	        - slug: <slug>
 	          name: "<agent name>"
 	          roleDefinition: "<agent instructions>"
-	          groups: [<mapped groups>]
+	          tools: [<mapped groups>]
 	          source: project
 	      \`\`\`
 
@@ -737,7 +737,7 @@ modes, and relocating MCP configuration.
 	        - slug: <slug>
 	          name: "<agent name>"
 	          roleDefinition: "<systemPrompt>"
-	          groups: [<mapped groups>]
+	          tools: [<mapped groups>]
 	          source: project
 	      \`\`\`
 	   6. DO NOT delete original subagent files.
@@ -946,7 +946,7 @@ permissions model.
 	        - slug: <slug>
 	          name: "<agent name>"
 	          roleDefinition: "<agent instructions>"
-	          groups: ["read", "write", "execute", "mcp"]
+	          tools: ["read", "write", "execute", "mcp"]
 	          source: project
 	      \`\`\`
 	   6. DO NOT delete original agent files.

@@ -103,7 +103,7 @@ MCP tools are classified via a three-tier priority system (highest first):
 
 ## Mode-Based Filtering
 
-When a mode requests tools, each tool's group is checked against the mode's allowed groups. The `mcp` group itself is a **gateway** — the `use_mcp_tool` and `access_mcp_resource` gateway tools live in the `mcp` group, but individual MCP tools use their own assigned groups. This means a mode with `groups: ["read", "mcp"]` gets `use_mcp_tool` + all MCP tools classified as `read`.
+When a mode requests tools, each tool's group is checked against the mode's allowed groups. The `mcp` group itself is a **gateway** — the `use_mcp_tool` and `access_mcp_resource` gateway tools live in the `mcp` group, but individual MCP tools use their own assigned groups. This means a mode with `tools: ["read", "mcp"]` gets `use_mcp_tool` + all MCP tools classified as `read`.
 
 | Built-in mode | Allowed groups                                                                      |
 | ------------- | ----------------------------------------------------------------------------------- |
@@ -139,7 +139,7 @@ This section tracks known deficiencies in this document and in the tool-group sy
 - **No coverage of `TOOL_ALIASES`**: The [`TOOL_ALIASES`](../packages/types/src/tool.ts) constant maps deprecated tool names to canonical ones (e.g., `write_file` → `write_to_file`, `search_and_replace` → `edit`). This document does not explain how aliases interact with tool groups — aliased tools inherit the group of their canonical form.
 - **No coverage of `customTools`**: The `write` group has a `customTools` array (`["edit", "search_replace", "edit_file", "apply_patch"]`). These are legacy/alias edit tools that receive special handling in the parser. The document does not explain what `customTools` means or how they differ from regular `tools`.
 - **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed. All three filters live in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts).
-- **No discussion of how `uncategorized` actually gates access**: The `uncategorized` group is listed as a fallback, but the document does not explain that a mode must explicitly include `"uncategorized"` in its `groups` array for uncategorized tools to be available. Currently only `code` and `debug` include it; `architect`, `code-search`, `web-search`, and `reviewer` do not.
+- **No discussion of how `uncategorized` actually gates access**: The `uncategorized` group is listed as a fallback, but the document does not explain that a mode must explicitly include `"uncategorized"` in its `tools` array for uncategorized tools to be available. Currently only `code` and `debug` include it; `architect`, `code-search`, `web-search`, and `reviewer` do not.
 - **Missing external-tool group resolution detail**: External LM tools (`ide_*` from `arkware-vscode-tools`) get their groups from `arkware.vscodeTools.toolGroups` in `package.json`, processed by `filterPrivateToolsForMode`. For auto-approval, `getToolGroupForSayTool()` in [`auto-approval/tools.ts`](../src/core/auto-approval/tools.ts) falls back to prefix-based inference (`ide_*` → `"execute"`, `browser_*` → `"browser"`). These two resolution paths are not documented on the same page.
 
 ### Source-of-truth risks

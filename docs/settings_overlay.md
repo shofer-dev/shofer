@@ -164,7 +164,7 @@ customModes:
       whenToUse: "Use this mode for all code changes"
       tools: ["read", "edit", "command", "mcp"]
       tools_allowed: ["update_todo_list"] # optional: per-mode whitelist (additive)
-      tools_denied: ["execute_command"] # optional: per-mode blacklist (overrides groups)
+      tools_denied: ["execute_command"] # optional: per-mode blacklist (overrides tools)
 ```
 
 > **`tools` semantics.** A mode's `tools` field controls **two things at once**:
@@ -178,7 +178,7 @@ customModes:
 >    _group_ level. If a mode does not include a group, the corresponding
 >    auto-approval toggle has no effect for that mode.
 >
-> `tools_allowed` is additive (whitelist on top of groups). `tools_denied`
+> `tools_allowed` is additive (whitelist on top of tools). `tools_denied`
 > takes precedence over both `tools_allowed` and groups. Both are evaluated
 > in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts).
 
@@ -979,7 +979,7 @@ It exports a **single mode** as a YAML file (e.g., `code-export.yaml`) via
 Single mode definition (YAML)
 ├── slug, name, roleDefinition
 ├── customInstructions, whenToUse
-├── groups, tools_allowed, tools_denied
+├── tools, tools_allowed, tools_denied
 ├── Any .shofer/rules-<mode>/ rules (bundled inline)
 └── Custom prompts merged in for built-in modes
 ```

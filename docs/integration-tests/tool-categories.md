@@ -52,7 +52,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
     			"slug": "notes",
     			"name": "Notes",
     			"roleDefinition": "...",
-    			"groups": ["read", ["write", { "fileRegex": "\\.md$" }]]
+    			"tools": ["read", ["write", { "fileRegex": "\\.md$" }]]
     		}
     	]
     }

@@ -29,7 +29,7 @@ export const modeConfigObjectSchema = z.object({
 
 export const modeConfigSchema = modeConfigObjectSchema.refine(
 	(data) => data.tools !== undefined || data.tools_allowed !== undefined,
-	{ message: "Either 'groups' or 'tools_allowed' must be provided" },
+	{ message: "Either 'tools' or 'tools_allowed' must be provided" },
 )
 ```
 
@@ -45,7 +45,7 @@ For any tool `t` and any mode `m`, the runtime decision (in
 is:
 
 ```
-allowed(t, m)  ⇔  ( t ∈ groups(m)  ∨  t ∈ tools_allowed(m) )  ∧  t ∉ tools_denied(m)
+allowed(t, m)  ⇔  ( t ∈ tools(m)  ∨  t ∈ tools_allowed(m) )  ∧  t ∉ tools_denied(m)
 ```
 
 Where `groups(m)` includes per-group scoping: if a group entry uses the
@@ -145,7 +145,7 @@ Result: every tool in any of those five groups is allowed. No
 ### Example 2: tools_allowed only (a hypothetical read-only custom mode)
 
 ```yaml
-# A custom .shofer/shofermodes mode — NOT the built-in `reviewer` (which uses groups).
+# A custom .shofer/shofermodes mode — NOT the built-in `reviewer` (which uses tools).
 - slug: read-only-auditor
   name: 🔍 Read-Only Auditor
   roleDefinition: "You audit code; you never modify it."
@@ -155,7 +155,7 @@ Result: every tool in any of those five groups is allowed. No
 Result: only those four tool IDs are allowed. The mode has no `tools` array,
 which is valid because `tools_allowed` is present.
 
-### Example 3: groups + tools_allowed (additive)
+### Example 3: tools + tools_allowed (additive)
 
 ```yaml
 - slug: architect
@@ -165,7 +165,7 @@ which is valid because `tools_allowed` is present.
 
 Result: every tool in `read`, plus `new_task`. The two sources are unioned.
 
-### Example 4: groups + tools_denied (subtractive)
+### Example 4: tools + tools_denied (subtractive)
 
 ```yaml
 - slug: safe-coder
@@ -220,8 +220,8 @@ Previously the exported JSON schema in
 `required`, contradicting the Zod `modeConfigSchema` `.refine` (which allows
 `tools_allowed` without `tools`) and rejecting valid tools_allowed-only modes.
 Corrected: the item `required` is now `["slug", "name", "roleDefinition"]` plus an
-`anyOf: [{ required: ["groups"] }, { required: ["tools_allowed"] }]`, matching the
-Zod "either groups or tools_allowed" constraint.
+`anyOf: [{ required: ["tools"] }, { required: ["tools_allowed"] }]`, matching the
+Zod "either tools or tools_allowed" constraint.
 
 ### Decision rule omits `ALWAYS_AVAILABLE_TOOLS` fast-path
 
