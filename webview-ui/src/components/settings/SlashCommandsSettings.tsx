@@ -27,7 +27,13 @@ import { CreateSlashCommandDialog } from "./CreateSlashCommandDialog"
 export const SlashCommandsSettings: React.FC = () => {
 	const { t } = useAppTranslation()
 	const { commands: rawCommands, cwd } = useExtensionState()
-	const commands = useMemo(() => rawCommands ?? [], [rawCommands])
+	// Filter out skill entries that get merged into the command list by
+	// getDiscoveredCommands(). Skills have their own Settings tab and their
+	// file path points into a .shofer/skills/ directory (ending in /SKILL.md).
+	const commands = useMemo(
+		() => (rawCommands ?? []).filter((cmd) => !cmd.filePath?.includes("/skills/")),
+		[rawCommands],
+	)
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [commandToDelete, setCommandToDelete] = useState<Command | null>(null)
