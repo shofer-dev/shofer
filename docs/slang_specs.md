@@ -23,6 +23,7 @@ Where the two differ, this document wins.
 2. [Lexical Elements](#lexical-elements)
 3. [Reserved Keywords](#reserved-keywords)
 4. [Flow Declaration](#flow-declaration)
+    - [Using `param description` Instead of Initial `escalate`](#using-param-description-instead-of-initial-escalate)
 5. [Agent Declaration](#agent-declaration)
 6. [Operations](#operations)
 7. [Control Flow](#control-flow)
@@ -245,6 +246,17 @@ flow "report" (format: "string", sections: "string", verbosity: "number", notes:
     ...
   }
 }
+
+### Using `param description` Instead of Initial `escalate`
+
+When a workflow needs the user to provide a detailed input (e.g., a bug report),
+annotate the flow parameter with a descriptive `param { description: "…" }` block
+instead of wasting a round-trip with `escalate @Human reason: "…"`. The
+param-collection form renders the `description` as markdown beneath the field label,
+guiding the user to fill it in before the flow starts.
+
+See [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang) for the canonical example.
+
 ```
 
 ---
