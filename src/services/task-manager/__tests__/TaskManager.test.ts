@@ -63,10 +63,10 @@ describe("TaskManager.countActiveTasks", () => {
 		expect(taskManager.countActiveTasks()).toBe(1)
 	})
 
-	it("excludes terminal states (completed, errored)", () => {
+	it("excludes terminal states (completed, error)", () => {
 		addManagedTask("t1", "running")
 		addManagedTask("t2", "completed")
-		addManagedTask("t3", "errored")
+		addManagedTask("t3", "error")
 
 		expect(taskManager.countActiveTasks()).toBe(1)
 	})
@@ -78,7 +78,7 @@ describe("TaskManager.countActiveTasks", () => {
 		addManagedTask("t4", "paused")
 		addManagedTask("t5", "waiting_input")
 		addManagedTask("t6", "completed")
-		addManagedTask("t7", "errored")
+		addManagedTask("t7", "error")
 
 		// Only running + waiting = 2
 		expect(taskManager.countActiveTasks()).toBe(2)
@@ -87,7 +87,7 @@ describe("TaskManager.countActiveTasks", () => {
 	it("returns 0 when only terminal and idle states exist", () => {
 		addManagedTask("t1", "idle")
 		addManagedTask("t2", "completed")
-		addManagedTask("t3", "errored")
+		addManagedTask("t3", "error")
 		addManagedTask("t4", "paused")
 		addManagedTask("t5", "waiting_input")
 

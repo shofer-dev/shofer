@@ -249,7 +249,7 @@ export const globalSettingsSchema = z.object({
 	 * work through other means. Set to 0 for unlimited.
 	 * @default 10
 	 */
-	maxParallelTasks: z.number().int().min(0).optional(),
+	maxParallelTasks: z.number().int().min(0).nullish(),
 
 	/**
 	 * Enable integration with the Shofer LLM Model Provider extension
