@@ -120,6 +120,123 @@ Non-destructive task switching uses `popFromStackWithoutAborting()` to remove a 
 
 ---
 
+## Global Parallel Task Limit
+
+To prevent resource exhaustion (too many concurrent LLM calls, file-system contention, runaway API costs), Shofer enforces a configurable **global cap** on the number of parallel tasks. When the cap is hit, [`new_task`](native_tools.md#new_task) returns a clear error instructing the caller to wait and retry, or accomplish the work through other means (inline tool calls, sequential work, etc.).
+
+### Motivation
+
+Without a limit, the number of parallel tasks is unbounded. A runaway agent or a poorly-constrained delegation pattern can spawn dozens of concurrent tasks, each holding an LLM context window and consuming API quota. A configurable hard cap lets users bound concurrency at the system level.
+
+### Setting: `maxParallelTasks`
+
+Defined in the [`globalSettingsSchema`](../packages/types/src/global-settings.ts) Zod schema:
+
+```typescript
+/**
+ * Maximum number of parallel (non-terminal, non-idle) tasks allowed globally.
+ * When the number of running/waiting tasks reaches this limit, new_task
+ * returns an error asking the caller to wait and retry or accomplish the
+ * work through other means. Set to 0 for unlimited.
+ * @default 10
+ */
+maxParallelTasks: z.number().int().min(0).optional(),
+```
+
+| Value               | Behavior                            |
+| ------------------- | ----------------------------------- |
+| `undefined` (unset) | Defaults to `10`                    |
+| `0`                 | Unlimited (no enforcement)          |
+| `1..N`              | Hard cap on concurrent active tasks |
+
+The `0 = unlimited` convention is consistent with [`archivedTaskRetentionDays`](../packages/types/src/global-settings.ts) and [`commandExecutionTimeout`](#) which both use `0` to mean "disabled."
+
+### What Counts as "Active"
+
+A task is considered **active** if its lifecycle is `"running"` or `"waiting"` — the same predicate used by [`TaskManager.isActive()`](../src/services/task-manager/TaskManager.ts). Tasks in `"idle"`, `"paused"`, `"waiting_input"`, or any terminal state (`"completed"`, `"error"`) do **not** consume a concurrency slot.
+
+Rationale: `"waiting"` tasks (blocked on `wait_for_task` or sync `send_message_to_task`) still hold an LLM context window and count against practical concurrency. `"waiting_input"` tasks (awaiting user approval) are idle — they consume no LLM resources.
+
+### Enforcement in `new_task`
+
+The limit is enforced as a gate inside [`NewTaskTool.execute()`](../src/core/tools/NewTaskTool.ts), **after** mode/message/todos validation but **before** the cost-limit check and task creation. This ensures cheap failures (no cost computation, no task instantiation).
+
+```typescript
+const maxParallel = provider.contextProxy.getValue("maxParallelTasks")
+const effectiveLimit = maxParallel ?? 10
+if (effectiveLimit > 0) {
+	const activeCount = provider.taskManager.countActiveTasks()
+	if (activeCount >= effectiveLimit) {
+		pushToolResult(
+			formatResponse.toolError(
+				`Task limit reached: ${activeCount}/${effectiveLimit} tasks are currently running. ` +
+					`Please wait for one to complete and try again later, ` +
+					`or accomplish this work through other means (e.g., inline tool calls).`,
+			),
+		)
+		return
+	}
+}
+```
+
+The error is a **tool error** (not an ask), so the LLM loop continues without blocking on user input — the model can decide to retry later or use alternative approaches.
+
+**Why gate in `NewTaskTool` rather than `ShoferProvider.createTask()`?** `createTask()` is also called for history rehydration (`createTaskWithHistoryItem()`) and workflow launches — those paths should not be subject to the concurrency limit. The `new_task` tool is the correct single choke point.
+
+### `TaskManager.countActiveTasks()`
+
+[`TaskManager`](../src/services/task-manager/TaskManager.ts) exposes a public query method:
+
+```typescript
+/**
+ * Count of non-terminal, non-idle managed tasks (running or waiting).
+ * Used as the live concurrency count for the parallel-task limit.
+ */
+countActiveTasks(): number {
+    let count = 0
+    for (const m of this.managedTasks.values()) {
+        if (TaskManager.isActive(m.state.lifecycle)) {
+            count++
+        }
+    }
+    return count
+}
+```
+
+This is a thin public wrapper around the existing private `TaskManager.isActive()` helper.
+
+### Settings UI
+
+`maxParallelTasks` is exposed as a number input in **Settings → Advanced** ([`ExperimentalSettings`](../webview-ui/src/components/settings/ExperimentalSettings.tsx)), alongside other system-level limits like `archivedTaskRetentionDays`. The value is persisted via `ContextProxy` in `globalState`, surviving VS Code restarts.
+
+### Design Decisions
+
+| Decision                                                             | Rationale                                                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Count uses `isActive()` (`running` \| `waiting`), not just `running` | `waiting` tasks hold an LLM context window and count against practical concurrency                             |
+| Gate in `NewTaskTool`, not `ShoferProvider.createTask()`             | `createTask()` is called for history rehydration and workflow launches — those should not be gated             |
+| Default value is `10`, not unlimited                                 | A reasonable default prevents runaway concurrency for new users while being generous enough for most workflows |
+| Value `0` means unlimited                                            | Consistent with `archivedTaskRetentionDays` (`0 = disabled`) conventions                                       |
+| Error is a tool error, not an ask                                    | Keeps the agent loop moving; the LLM can retry or use alternative approaches                                   |
+| Settings in Advanced tab                                             | Co-located with other system-level limits (`archivedTaskRetentionDays`, `defaultCostLimit`)                    |
+
+```mermaid
+flowchart TD
+    A["LLM calls new_task"] --> B{"Mode & message valid?"}
+    B -->|No| C["Return missing-param error"]
+    B -->|Yes| D["Resolve maxParallelTasks from ContextProxy"]
+    D --> E{"effectiveLimit > 0?"}
+    E -->|"No (unlimited)"| F["Skip limit check"]
+    E -->|Yes| G["TaskManager.countActiveTasks()"]
+    G --> H{"activeCount >= effectiveLimit?"}
+    H -->|Yes| I["Return error: Task limit reached..."]
+    H -->|No| F
+    F --> J["Proceed with cost-limit check"]
+    J --> K["Proceed with task creation"]
+```
+
+---
+
 ## `new_task` Tool
 
 The [`new_task`](native_tools.md#new_task) tool creates a child task in a chosen mode. It supports two execution models controlled by the `is_background` parameter.
