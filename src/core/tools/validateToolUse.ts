@@ -350,8 +350,8 @@ export function isToolAllowedForMode(
 		}
 	}
 
-	// Check if tool is in any of the mode's groups and respects any group options
-	for (const group of mode.groups ?? []) {
+	// Check if tool is in any of the mode's tools and respects any group options
+	for (const group of mode.tools ?? []) {
 		const groupName = getGroupName(group)
 		const options = getGroupOptions(group)
 		const scope = getGroupScope(group)

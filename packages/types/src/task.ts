@@ -150,7 +150,7 @@ export interface CreateTaskOptions {
 	 */
 	agentRole?: string
 	/**
-	 * Tool-group allow-list for this task, on top of the mode's own groups.
+	 * Tool-group allow-list for this task, on top of the mode's own tools.
 	 * Used by workflow agents to make the `.slang` `agent { tools: [...] }`
 	 * restriction actually narrow the spawned task's tools (otherwise
 	 * parsed-but-not-consumed). Each entry is a `ToolGroup` name (`read`,

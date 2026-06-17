@@ -242,7 +242,7 @@ function filterPrivateToolsForMode(
 		return privateMeta.map((m) => m.tool)
 	}
 
-	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => getGroupName(g)))
+	const allowedGroups = new Set<string>((modeConfig.tools ?? []).map((g) => getGroupName(g)))
 
 	if (allowedGroups.size === 0) {
 		return privateMeta.map((m) => m.tool)

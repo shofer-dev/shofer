@@ -4,7 +4,7 @@ This document describes how a mode's available toolset is computed at runtime
 from its configuration. It is the authoritative reference for the three
 mode-level fields that govern tool access:
 
-- `groups`
+- `tools`
 - `tools_allowed`
 - `tools_denied`
 
@@ -20,7 +20,7 @@ export const modeConfigObjectSchema = z.object({
 	whenToUse: z.string().optional(),
 	description: z.string().optional(),
 	customInstructions: z.string().optional(),
-	groups: groupEntryArraySchema.optional(),
+	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
 	source: z.enum(["global", "project"]).optional(),
@@ -28,13 +28,13 @@ export const modeConfigObjectSchema = z.object({
 })
 
 export const modeConfigSchema = modeConfigObjectSchema.refine(
-	(data) => data.groups !== undefined || data.tools_allowed !== undefined,
+	(data) => data.tools !== undefined || data.tools_allowed !== undefined,
 	{ message: "Either 'groups' or 'tools_allowed' must be provided" },
 )
 ```
 
 All three access-control fields are individually optional. The only structural
-constraint is that **at least one of `groups` or `tools_allowed` must be
+constraint is that **at least one of `tools` or `tools_allowed` must be
 present** — `tools_denied` alone is not a valid configuration because there
 would be no allow source for it to subtract from.
 
@@ -58,7 +58,7 @@ union of the two allow sources. The check order in code is:
 1. **Deny check first.** If `t ∈ tools_denied`, return `false` immediately.
    The deny-list always wins; there is no override.
 2. **Explicit allow.** If `t ∈ tools_allowed`, return `true`.
-3. **Group allow.** Otherwise, walk `groups` and return `true` if `t` is in
+3. **Group allow.** Otherwise, walk `tools` and return `true` if `t` is in
    any allowed group (subject to per-group scoping and options such as the
    `edit` group's `fileRegex` restriction).
 4. If none of the above match, return `false`.
@@ -68,7 +68,7 @@ So for the ultimate decision, allow sources combine with **OR** semantics
 
 ## Field-by-field reference
 
-### `groups`
+### `tools`
 
 A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
 `browser`). Each entry can be one of three forms:
@@ -76,13 +76,13 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
 1. **Bare group name** (string): grants all tools in the group.
 
     ```yaml
-    groups: [read, mcp]
+    tools: [read, mcp]
     ```
 
 2. **Tuple `[name, options]`**: group with metadata such as `fileRegex`.
 
     ```yaml
-    groups: [["write", { fileRegex: "\\.md$" }]]
+    tools: [["write", { fileRegex: "\\.md$" }]]
     ```
 
 3. **Scoped group object** `{ name: { allowed?, denied? } }`: narrows the
@@ -91,7 +91,7 @@ A list of broad capability groups (e.g. `read`, `write`, `execute`, `mcp`,
       Must be a subset of what the group normally registers.
     - `denied`: removes the listed tools from the group's normal set.
     ```yaml
-    groups:
+    tools:
         - browser
         - mcp
         - read:
@@ -115,17 +115,17 @@ group membership. Use this when:
 - you want to add a single tool to a mode whose other permissions come from
   groups (the two compose with OR).
 
-A mode may declare access purely through `tools_allowed` and omit `groups`
-entirely (the schema requires _either_ `groups` or `tools_allowed`). This is the
+A mode may declare access purely through `tools_allowed` and omit `tools`
+entirely (the schema requires _either_ `tools` or `tools_allowed`). This is the
 pattern for a tightly-scoped read-only custom mode — e.g. a `.shofer/shofermodes`
 mode that grants only `read_file`/`grep_search` and nothing else. (Note: the
-built-in `reviewer` mode is **not** such a mode — it uses `groups`; see
+built-in `reviewer` mode is **not** such a mode — it uses `tools`; see
 [`built-in-modes.md`](built-in-modes.md).)
 
 ### `tools_denied`
 
 A flat list of tool IDs that are unconditionally forbidden, regardless of
-whether `groups` or `tools_allowed` would otherwise grant them. This is the
+whether `tools` or `tools_allowed` would otherwise grant them. This is the
 right field for "subtract one tool from an otherwise broad permission set"
 patterns — e.g. grant the `execute` group but deny `execute_command`.
 
@@ -136,7 +136,7 @@ patterns — e.g. grant the `execute` group but deny `execute_command`.
 ```yaml
 - slug: code
   name: 💻 Code
-  groups: [read, write, execute, mcp, browser]
+  tools: [read, write, execute, mcp, browser]
 ```
 
 Result: every tool in any of those five groups is allowed. No
@@ -152,14 +152,14 @@ Result: every tool in any of those five groups is allowed. No
   tools_allowed: [read_file, grep_search, list_files, lsp_search]
 ```
 
-Result: only those four tool IDs are allowed. The mode has no `groups` array,
+Result: only those four tool IDs are allowed. The mode has no `tools` array,
 which is valid because `tools_allowed` is present.
 
 ### Example 3: groups + tools_allowed (additive)
 
 ```yaml
 - slug: architect
-  groups: [read]
+  tools: [read]
   tools_allowed: [new_task]
 ```
 
@@ -169,7 +169,7 @@ Result: every tool in `read`, plus `new_task`. The two sources are unioned.
 
 ```yaml
 - slug: safe-coder
-  groups: [read, write, execute]
+  tools: [read, write, execute]
   tools_denied: [execute_command]
 ```
 
@@ -207,8 +207,8 @@ short-circuits.
 
 - [`src/core/tools/__tests__/validateToolUse.spec.ts`](../src/core/tools/__tests__/validateToolUse.spec.ts)
   pins the decision rule, including:
-    - allows from `tools_allowed` whitelist alone (no `groups`),
-    - additive OR semantics when both `groups` and `tools_allowed` are set,
+    - allows from `tools_allowed` whitelist alone (no `tools`),
+    - additive OR semantics when both `tools` and `tools_allowed` are set,
     - `tools_denied` priority over `tools_allowed`.
 
 ## Known Gaps, Issues & Improvement Areas
@@ -216,9 +216,9 @@ short-circuits.
 ### JSON Schema vs Zod Schema discrepancy — ✅ fixed
 
 Previously the exported JSON schema in
-[`schemas/shofermodes.json`](../schemas/shofermodes.json) listed `groups` in
+[`schemas/shofermodes.json`](../schemas/shofermodes.json) listed `tools` in
 `required`, contradicting the Zod `modeConfigSchema` `.refine` (which allows
-`tools_allowed` without `groups`) and rejecting valid tools_allowed-only modes.
+`tools_allowed` without `tools`) and rejecting valid tools_allowed-only modes.
 Corrected: the item `required` is now `["slug", "name", "roleDefinition"]` plus an
 `anyOf: [{ required: ["groups"] }, { required: ["tools_allowed"] }]`, matching the
 Zod "either groups or tools_allowed" constraint.
@@ -232,7 +232,7 @@ fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
 `attempt_completion`, `wait`, `update_todo_list`, `run_slash_command`, `skills`,
 `set_task_title`, `give_feedback`, `list_background_tasks`, and
 `send_message_to_task`) unconditionally returns `true`. This
-means these nine tools always pass mode-level checks regardless of `groups`,
+means these nine tools always pass mode-level checks regardless of `tools`,
 `tools_allowed`, or `tools_denied`. Disabling them requires the `disabledTools`
 setting (checked earlier in `validateToolUse()` via `toolRequirements`), not
 mode configuration.

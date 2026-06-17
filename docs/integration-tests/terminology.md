@@ -26,7 +26,7 @@ Tests that verify the canonical terminology, naming, and concepts described in [
 
 ### M4 — Custom Mode with Tool Group Restrictions
 
-- **Setup**: `.shofer/shofermodes` defines a mode `docs-only` with `groups: ["read"]` and `tools_allowed: ["write_to_file"]` with `fileRegex: "\\.md$"`.
+- **Setup**: `.shofer/shofermodes` defines a mode `docs-only` with `tools: ["read"]` and `tools_allowed: ["write_to_file"]` with `fileRegex: "\\.md$"`.
 - **Action**: Select **docs-only** mode. Ask Shofer to edit `src/app.ts`.
 - **Assert**: Shofer refuses or is blocked by `FileRestrictionError`. Ask Shofer to edit `docs/README.md` — it succeeds.
 

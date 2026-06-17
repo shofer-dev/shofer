@@ -31,7 +31,7 @@ export const groupOptionsSchema = z.object({
 export type GroupOptions = z.infer<typeof groupOptionsSchema>
 
 /**
- * GroupScope — per-group tool allow/deny lists within a mode's groups array.
+ * GroupScope — per-group tool allow/deny lists within a mode's tools array.
  *
  * When a group entry is an object (e.g., `{ read: { allowed: [...] } }`),
  * the scope narrows the tool set the group normally provides:
@@ -119,7 +119,7 @@ export const modeConfigObjectSchema = z.object({
 	whenToUse: z.string().optional(),
 	description: z.string().optional(),
 	customInstructions: z.string().optional(),
-	groups: groupEntryArraySchema.optional(),
+	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
 	source: z.enum(["global", "project"]).optional(),
@@ -127,8 +127,8 @@ export const modeConfigObjectSchema = z.object({
 })
 
 export const modeConfigSchema = modeConfigObjectSchema.refine(
-	(data) => data.groups !== undefined || data.tools_allowed !== undefined,
-	{ message: "Either 'groups' or 'tools_allowed' must be provided" },
+	(data) => data.tools !== undefined || data.tools_allowed !== undefined,
+	{ message: "Either 'tools' or 'tools_allowed' must be provided" },
 )
 
 export type ModeConfig = z.infer<typeof modeConfigSchema>
@@ -205,7 +205,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to write, modify, or refactor code. Ideal for implementing features, fixing bugs, creating new files, or making code improvements across any programming language or framework.",
 		description: "Write, modify, and refactor code",
-		groups: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
+		tools: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
 	},
 	{
 		slug: "architect",
@@ -215,7 +215,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to plan, design, or strategize before implementation. Perfect for breaking down complex problems, creating technical specifications, designing system architecture, or brainstorming solutions before coding.",
 		description: "Plan and design before implementation",
-		groups: [
+		tools: [
 			"read",
 			["write", { fileRegex: "\\.md$", description: "Markdown files only" }],
 			"mcp",
@@ -233,7 +233,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you're troubleshooting issues, investigating errors, or diagnosing problems. Specialized in systematic debugging, adding logging, analyzing stack traces, and identifying root causes before applying fixes.",
 		description: "Diagnose and fix software issues",
-		groups: ["read", "write", "execute", "mcp", "subtasks", "questions", "uncategorized"],
+		tools: ["read", "write", "execute", "mcp", "subtasks", "questions", "uncategorized"],
 		customInstructions:
 			"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",
 	},
@@ -245,7 +245,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to quickly search the codebase for specific information - find where a function is defined, locate all usages of a symbol, discover patterns, or gather context about how something works. Ideal for use as a sub-task via new_task to parallelize codebase exploration.",
 		description: "Search and explore the codebase",
-		groups: ["read", "execute", "mcp", "questions"],
+		tools: ["read", "execute", "mcp", "questions"],
 		customInstructions:
 			"When searching:\n1. Use codebase_search for semantic/meaning-based searches first.\n2. Use search_files or get_search_results for regex/text pattern matching.\n3. Use list_files or read_project_structure to explore directory layouts.\n4. Use execute_command with grep, sed, awk, find, rg, fd, or similar tools for fast CLI searches.\n5. Use list_code_usages to find all references to a symbol.\n6. Be thorough but fast - prioritize breadth over depth.\n7. Return results in a clear, structured summary with file paths and line numbers.\n8. Do NOT edit any files. Do NOT use write_to_file, apply_diff, or insert_edit. Your role is search and retrieval only.\n9. Signal completion with attempt_completion, providing a concise summary of findings.",
 	},
@@ -257,7 +257,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to use a web browser to find information, research topics, interact with web applications, extract data from websites, replay a saved browser workflow, or capture a new repeatable browser skill.",
 		description: "Browse and extract web content",
-		groups: ["browser", "questions", "mcp"],
+		tools: ["browser", "questions", "mcp"],
 		customInstructions:
 			'## Web interaction primitives\n\n**First, check if you have an active tab.** If no tabs are open, `browser_navigate` will fail with "No tab with given id". Always start a new session with `browser_open_page` (or `browser_list_tabs` to see what\'s already open).\n\n1. Use `browser_list_tabs` to check which tabs exist, or `browser_list_executors` to verify a browser is connected.\n2. Use `browser_open_page` to create the first tab - returns a tabId. You can optionally pass `url` to navigate to it immediately.\n3. Use `browser_navigate` to change the URL of an *existing* tab. Requires an active tab - use `browser_open_page` first.\n4. Use `browser_read_page` to extract page content (aria/html/text/links/smart).\n5. Use `browser_screenshot` to capture visual state when needed.\n6. Use `browser_click`, `browser_type`, `browser_hover`, and `browser_select_option` for interactions.\n7. Use `browser_run_code` to execute JavaScript for advanced extraction or interaction.\n8. Use `browser_get_console_logs` and `browser_get_network_logs` for debugging.\n9. Use `browser_set_intercept_rules` to block or redirect requests when needed.\n\n## When the page is ambiguous\n\n10. **Ask the user before guessing.** If the page state is unexpected, multiple controls plausibly match the intent, a login/2FA/CAPTCHA appears, or an irreversible action (submit, pay, delete) is about to happen, stop and ask the user with `ask_followup_question`. Always include a screenshot or a short `browser_read_page` excerpt so the question is grounded.\n\nSignal completion with `attempt_completion`, providing a concise summary of what was accomplished.',
 	},
@@ -269,7 +269,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need a thorough code review, want to identify potential issues, or need recommendations for improvements without making changes to the codebase.",
 		description: "Review code and identify issues",
-		groups: ["read", "execute", "mcp", "subtasks", "questions"],
+		tools: ["read", "execute", "mcp", "subtasks", "questions"],
 		customInstructions:
 			"When reviewing code:\n1. Read the relevant files thoroughly using read_file.\n2. Run static analysis or linting tools via execute_command when helpful.\n3. Query logs, metrics, or traces via MCP tools (Loki, Mimir, Tempo) if runtime behavior is relevant.\n4. Present findings clearly: what the issue is, why it matters, where it occurs (file:line), and a specific proposed fix.\n5. Do NOT edit any files. Do NOT use write_to_file, apply_diff, or insert_edit. Your role stops at proposing fixes.",
 	},

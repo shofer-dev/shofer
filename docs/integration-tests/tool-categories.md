@@ -31,12 +31,12 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 
 **Goal:** Verify that always-available tools work in every mode, including modes with no groups.
 
-1. Start a task in **Orchestrator** mode (has `groups: []`).
+1. Start a task in **Orchestrator** mode (has `tools: []`).
 2. Confirm the model can call `attempt_completion`, `new_task`, `update_todo_list`, `skills`, `set_task_title`, `give_feedback`, and `run_slash_command`.
 3. Start a task in **Ask** mode.
 4. Confirm all always-available tools are callable alongside the mode's `read` and `mcp` tools.
 
-**Expected:** The 8 always-available tools are callable in every mode regardless of `groups`.
+**Expected:** The 8 always-available tools are callable in every mode regardless of `tools`.
 
 ---
 
@@ -71,7 +71,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 **Goal:** Verify that MCP tools inherit the group assigned in the user's `mcp.json` configuration.
 
 1. Configure an MCP server in `mcp.json` with `toolGroups` mapping.
-2. Start a task in **Ask** mode (groups: `read`, `mcp`).
+2. Start a task in **Ask** mode (tools: `read`, `mcp`).
 3. Confirm that MCP tools assigned to `read` are callable.
 4. Confirm that MCP tools assigned to `write` are NOT callable (Ask mode has no `write` group).
 5. Switch to **Code** mode and confirm both `read` and `write` MCP tools are callable.
@@ -117,7 +117,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 2. Start a task in **Code** mode.
 3. Confirm `ide_file_read` (in `read` group) is available.
 4. Confirm `ide_panel_open` (in `execute` group) is available.
-5. Start a task in **Ask** mode (groups: `read`, `mcp`).
+5. Start a task in **Ask** mode (tools: `read`, `mcp`).
 6. Confirm `ide_file_read` is available.
 7. Confirm `ide_panel_open` is NOT available (Ask mode has no `execute` group).
 
@@ -130,7 +130,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 **Goal:** Verify that `browser_*` tools are classified as `browser` and gated by the `browser` group in modes.
 
 1. Ensure `arkware-browser-tools` is installed.
-2. Start a task in **Ask** mode (groups: `read`, `mcp` — NO `browser`).
+2. Start a task in **Ask** mode (tools: `read`, `mcp` — NO `browser`).
 3. Confirm `browser_navigate` and `browser_click` are NOT available.
 4. Start a task in **Code** mode (includes `browser` implicitly via `uncategorized`... verify that `browser` group must be explicitly included).
 5. Confirm browser tools are correctly classified as `browser` group and only available when the mode allows `browser`.
@@ -143,7 +143,7 @@ Tests for the tool-group classification system, mode-based filtering, and auto-a
 
 **Goal:** Verify that `tools_allowed` can add individual tools beyond group membership and `tools_denied` can remove tools from a group.
 
-1. Create a custom mode with `groups: ["read"], tools_allowed: ["execute_command"], tools_denied: ["grep_search"]`.
+1. Create a custom mode with `tools: ["read"], tools_allowed: ["execute_command"], tools_denied: ["grep_search"]`.
 2. Start a task in this custom mode.
 3. Confirm `read_file` is available (from `read` group).
 4. Confirm `execute_command` is available (from `tools_allowed`).

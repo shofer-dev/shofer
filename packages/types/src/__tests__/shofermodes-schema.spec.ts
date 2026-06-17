@@ -35,7 +35,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "my-mode",
 					name: "My Mode",
 					roleDefinition: "You are a helpful assistant.",
-					groups: ["read"],
+					tools: ["read"],
 				},
 			],
 		}
@@ -45,7 +45,7 @@ describe("shofermodes JSON schema", () => {
 		expect(valid).toBe(true)
 	})
 
-	it("should accept a mode with tools_allowed instead of groups", () => {
+	it("should accept a mode with tools_allowed instead of tools", () => {
 		const config = {
 			customModes: [
 				{
@@ -53,7 +53,7 @@ describe("shofermodes JSON schema", () => {
 					name: "Tools Only",
 					roleDefinition: "A mode with only tools_allowed.",
 					tools_allowed: ["read_file", "grep_search"],
-					groups: ["read"],
+					tools: ["read"],
 				},
 			],
 		}
@@ -63,14 +63,14 @@ describe("shofermodes JSON schema", () => {
 		expect(valid).toBe(true)
 	})
 
-	it("should accept a mode with both groups and tools_allowed", () => {
+	it("should accept a mode with both tools and tools_allowed", () => {
 		const config = {
 			customModes: [
 				{
 					slug: "both-mode",
 					name: "Both Mode",
-					roleDefinition: "A mode with both groups and tools_allowed.",
-					groups: ["read"],
+					roleDefinition: "A mode with both tools and tools_allowed.",
+					tools: ["read"],
 					tools_allowed: ["execute_command", "read_command_output"],
 				},
 			],
@@ -88,7 +88,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "deny-mode",
 					name: "Deny Mode",
 					roleDefinition: "A mode with denied tools.",
-					groups: ["read", "execute"],
+					tools: ["read", "execute"],
 					tools_denied: ["execute_command"],
 				},
 			],
@@ -108,7 +108,7 @@ describe("shofermodes JSON schema", () => {
 					roleDefinition: "A mode with all tool fields.",
 					tools_allowed: ["read_file", "execute_command"],
 					tools_denied: ["write_to_file"],
-					groups: ["read"],
+					tools: ["read"],
 				},
 			],
 		}
@@ -128,7 +128,7 @@ describe("shofermodes JSON schema", () => {
 					whenToUse: "Use when you need everything.",
 					description: "A mode with all properties.",
 					customInstructions: "Follow these additional rules.",
-					groups: ["read", "write", "execute", "mcp"],
+					tools: ["read", "write", "execute", "mcp"],
 					source: "project",
 				},
 			],
@@ -148,7 +148,7 @@ describe("shofermodes JSON schema", () => {
 					roleDefinition: "You are an experienced technical leader.",
 					whenToUse: "Use this mode when you need to plan.",
 					description: "Plan and design before implementation",
-					groups: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }], "mcp"],
+					tools: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }], "mcp"],
 					source: "project",
 				},
 			],
@@ -166,7 +166,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "restricted",
 					name: "Restricted",
 					roleDefinition: "Limited editor.",
-					groups: [["write", { fileRegex: "\\.ts$" }]],
+					tools: [["write", { fileRegex: "\\.ts$" }]],
 				},
 			],
 		}
@@ -183,7 +183,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "empty-opts",
 					name: "Empty Options",
 					roleDefinition: "Mode with empty group options.",
-					groups: [["write", {}]],
+					tools: [["write", {}]],
 				},
 			],
 		}
@@ -200,7 +200,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "orchestrator",
 					name: "Orchestrator",
 					roleDefinition: "You orchestrate other modes.",
-					groups: ["read", "mode"],
+					tools: ["read", "mode"],
 				},
 			],
 		}
@@ -223,7 +223,7 @@ describe("shofermodes JSON schema", () => {
 				{
 					name: "No Slug",
 					roleDefinition: "Missing slug.",
-					groups: ["read"],
+					tools: ["read"],
 				},
 			],
 		}
@@ -232,13 +232,13 @@ describe("shofermodes JSON schema", () => {
 		expect(valid).toBe(false)
 	})
 
-	it("should reject a mode missing both groups and tools", () => {
+	it("should reject a mode missing both tools and tools_allowed", () => {
 		const config = {
 			customModes: [
 				{
-					slug: "no-groups",
-					name: "No Groups",
-					roleDefinition: "Missing groups and tools.",
+					slug: "no-tools",
+					name: "No Tools",
+					roleDefinition: "Missing tools and tools_allowed.",
 				},
 			],
 		}
@@ -254,7 +254,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "invalid slug!",
 					name: "Bad Slug",
 					roleDefinition: "Invalid slug characters.",
-					groups: ["read"],
+					tools: ["read"],
 				},
 			],
 		}
@@ -270,7 +270,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "bad-group",
 					name: "Bad Group",
 					roleDefinition: "Invalid group name.",
-					groups: ["nonexistent"],
+					tools: ["nonexistent"],
 				},
 			],
 		}
@@ -286,7 +286,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "extra-props",
 					name: "Extra Props",
 					roleDefinition: "Has extra properties.",
-					groups: ["read"],
+					tools: ["read"],
 					unknownField: true,
 				},
 			],
@@ -303,7 +303,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "bad-opts",
 					name: "Bad Options",
 					roleDefinition: "Extra options properties.",
-					groups: [["write", { fileRegex: "\\.md$", unknownOpt: true }]],
+					tools: [["write", { fileRegex: "\\.md$", unknownOpt: true }]],
 				},
 			],
 		}
@@ -319,7 +319,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "big-tuple",
 					name: "Big Tuple",
 					roleDefinition: "Too many tuple elements.",
-					groups: [["write", { fileRegex: "\\.md$" }, "extra"]],
+					tools: [["write", { fileRegex: "\\.md$" }, "extra"]],
 				},
 			],
 		}
@@ -335,7 +335,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "bad-source",
 					name: "Bad Source",
 					roleDefinition: "Invalid source.",
-					groups: ["read"],
+					tools: ["read"],
 					source: "unknown",
 				},
 			],
@@ -362,7 +362,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "browser-mode",
 					name: "Browser Mode",
 					roleDefinition: "A mode that uses the browser tool group.",
-					groups: ["read", "browser", "execute"],
+					tools: ["read", "browser", "execute"],
 				},
 			],
 		}
@@ -379,7 +379,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "browser-tuple",
 					name: "Browser Tuple",
 					roleDefinition: "A mode with browser tuple.",
-					groups: [["browser", { fileRegex: "\\.html$", description: "HTML files only" }]],
+					tools: [["browser", { fileRegex: "\\.html$", description: "HTML files only" }]],
 				},
 			],
 		}
@@ -396,7 +396,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "rules-mode",
 					name: "Rules Mode",
 					roleDefinition: "A mode with rules files.",
-					groups: ["read"],
+					tools: ["read"],
 					rulesFiles: [
 						{
 							relativePath: "rule1.md",
@@ -423,7 +423,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "empty-rules",
 					name: "Empty Rules",
 					roleDefinition: "A mode with empty rules files.",
-					groups: ["read"],
+					tools: ["read"],
 					rulesFiles: [],
 				},
 			],
@@ -441,7 +441,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "path-only-rules",
 					name: "Path Only Rules",
 					roleDefinition: "A mode with rules files that only have relativePath.",
-					groups: ["read"],
+					tools: ["read"],
 					rulesFiles: [{ relativePath: "rule1.md" }],
 				},
 			],
@@ -459,7 +459,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "bad-rules",
 					name: "Bad Rules",
 					roleDefinition: "A mode with invalid rules files.",
-					groups: ["read"],
+					tools: ["read"],
 					rulesFiles: [{ content: "some content" }],
 				},
 			],
@@ -476,7 +476,7 @@ describe("shofermodes JSON schema", () => {
 					slug: "extra-rules",
 					name: "Extra Rules",
 					roleDefinition: "A mode with extra rule properties.",
-					groups: ["read"],
+					tools: ["read"],
 					rulesFiles: [{ relativePath: "rule1.md", content: "content", extra: true }],
 				},
 			],
@@ -493,13 +493,13 @@ describe("shofermodes JSON schema", () => {
 					slug: "mode-a",
 					name: "Mode A",
 					roleDefinition: "First mode.",
-					groups: ["read"],
+					tools: ["read"],
 				},
 				{
 					slug: "mode-b",
 					name: "Mode B",
 					roleDefinition: "Second mode.",
-					groups: ["read", "write"],
+					tools: ["read", "write"],
 				},
 			],
 		}

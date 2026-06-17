@@ -1060,7 +1060,7 @@ export class WorkflowTask extends Task {
 					? interpolatePure(agentDecl.meta.role, agentState, this.flowState)
 					: undefined,
 				// Enforce the agent's declared `.slang` `tools:` restriction (otherwise
-				// parsed-but-not-consumed). Intersects with the mode's groups when the
+				// parsed-but-not-consumed). Intersects with the mode's tools when the
 				// task builds its tool array, so e.g. an `architect`-mode orchestrator
 				// declared `tools: [questions, subtasks]` cannot read or edit files —
 				// it can only coordinate. ALWAYS_AVAILABLE tools are retained.

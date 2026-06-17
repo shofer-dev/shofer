@@ -24,9 +24,9 @@ const ruleFileSchema = z.object({
 })
 
 // Build an extended ModeConfig schema that includes rulesFiles and uses the
-// extended groups (with deprecated entries).
-const exportedModeConfigSchema = modeConfigObjectSchema.omit({ groups: true }).extend({
-	groups: z.array(groupEntrySchema),
+// extended tools (with deprecated entries).
+const exportedModeConfigSchema = modeConfigObjectSchema.omit({ tools: true }).extend({
+	tools: z.array(groupEntrySchema),
 	rulesFiles: z.array(ruleFileSchema).optional(),
 })
 

@@ -162,16 +162,16 @@ customModes:
       customInstructions: |
           Use our team's code style guide...
       whenToUse: "Use this mode for all code changes"
-      groups: ["read", "edit", "command", "mcp"]
+      tools: ["read", "edit", "command", "mcp"]
       tools_allowed: ["update_todo_list"] # optional: per-mode whitelist (additive)
       tools_denied: ["execute_command"] # optional: per-mode blacklist (overrides groups)
 ```
 
-> **`groups` semantics.** A mode's `groups` field controls **two things at once**:
+> **`tools` semantics.** A mode's `tools` field controls **two things at once**:
 >
 > 1. **Visibility** — which tools the LLM is allowed to see in its tool catalog
 >    (`filterNativeToolsForMode` only emits tools whose canonical name passes
->    `isToolAllowedForMode` for the mode's groups, plus `tools_allowed`, minus
+>    `isToolAllowedForMode` for the mode's tools, plus `tools_allowed`, minus
 >    `tools_denied`).
 > 2. **Auto-approval eligibility** — the All (Read/Edit/Command/MCP/Browser/
 >    Modes/Subtasks) toggles in the auto-approval UI gate approval at the
@@ -683,7 +683,7 @@ The final list of tools sent to the LLM is computed by
 
 ```
 all native tools
-  ∩  (mode.groups ∪ mode.tools_allowed ∪ ALWAYS_AVAILABLE_TOOLS)
+  ∩  (mode.tools ∪ mode.tools_allowed ∪ ALWAYS_AVAILABLE_TOOLS)
   −  mode.tools_denied
   −  feature-disabled tools (rag_search, update_todo_list,
                               generate_image, run_slash_command,
@@ -700,11 +700,11 @@ per-server `disabledTools` list in `mcp_settings.json`.
 
 ### Visibility kill-switches
 
-| Layer                         | Storage                                        | Scope                | Edited via                                                        |
-| ----------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Per-mode `groups` / `tools_*` | `.shofer/shofermodes` / `custom_modes.yaml`    | Per mode             | Mode editor / file                                                |
-| Global `disabledTools`        | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
-| MCP per-tool visibility       | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
+| Layer                        | Storage                                        | Scope                | Edited via                                                        |
+| ---------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| Per-mode `tools` / `tools_*` | `.shofer/shofermodes` / `custom_modes.yaml`    | Per mode             | Mode editor / file                                                |
+| Global `disabledTools`       | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
+| MCP per-tool visibility      | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
 
 `ALWAYS_AVAILABLE_TOOLS` (defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts))
 bypasses mode/group restrictions — but **not** `disabledTools`. The execution-time
@@ -715,7 +715,7 @@ guard in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts) honors
 
 Auto-approval is decided by
 [`checkAutoApproval`](../src/core/auto-approval/index.ts) and operates on
-`(mode.groups ∋ groupForTool, All toggle for that group, isProtected)`. It is
+`(mode.tools ∋ groupForTool, All toggle for that group, isProtected)`. It is
 **independent** of `disabledTools`: if a tool is visible _and_ the matching All
 toggle is on for the tool's group, the action is auto-approved.
 
@@ -1226,7 +1226,7 @@ The 19 Shofer settings tabs break down as follows:
 | **Codebase Index**     | Low        | ✅ Mostly portable — enable (boolean), config object (nested object editor, basic but functional)                                                                                                                       |
 | **Checkpoints**        | Low        | ✅ Portable — enable (boolean), timeout (number)                                                                                                                                                                        |
 | **Notifications**      | Low        | ✅ Portable — toggles (boolean), volume/speed (number, no slider)                                                                                                                                                       |
-| **Live Memory**    | Low        | ⚠️ **Degraded** — enable (boolean) works, but profile picker needs dynamic list and context window config is a nested object                                                                                            |
+| **Live Memory**        | Low        | ⚠️ **Degraded** — enable (boolean) works, but profile picker needs dynamic list and context window config is a nested object                                                                                            |
 | **UI**                 | Low        | ✅ Portable — toggles (boolean), enter behavior (enum), collapse (boolean)                                                                                                                                              |
 | **Language**           | Low        | ✅ Portable — language selector (enum)                                                                                                                                                                                  |
 | **About**              | —          | ❌ **Impossible** — export/import/reset buttons, version display, diagnostic info are actions, not settings                                                                                                             |

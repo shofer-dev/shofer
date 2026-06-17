@@ -330,7 +330,7 @@ Checklist deltas for a delegating alias:
 
 ## Mode Filtering
 
-Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts). The mode's `groups` array determines which ToolGroup categories are available. `ALWAYS_AVAILABLE_TOOLS` bypass mode filtering entirely. See [`tool_access.md`](tool_access.md) for the complete decision rule.
+Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts). The mode's `tools` array determines which ToolGroup categories are available. `ALWAYS_AVAILABLE_TOOLS` bypass mode filtering entirely. See [`tool_access.md`](tool_access.md) for the complete decision rule.
 
 ---
 
@@ -408,5 +408,5 @@ The Step 4 handler example is intentionally minimal, but real tool implementatio
 | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | [`tool-categories.md`](tool-categories.md) | The 9 ToolGroup categories, where each tool gets its group, mode filtering, backward compat |
 | [`auto_approval.md`](auto_approval.md)     | Decision flow, toggles, unconditionally-approved tools, cost/request limits                 |
-| [`tool_access.md`](tool_access.md)         | `groups`, `tools_allowed`, `tools_denied` field reference and decision rules                |
+| [`tool_access.md`](tool_access.md)         | `tools`, `tools_allowed`, `tools_denied` field reference and decision rules                 |
 | [`native_tools.md`](native_tools.md)       | Complete reference of all native tools, their groups, params, and mode availability         |

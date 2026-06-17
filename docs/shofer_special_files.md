@@ -77,7 +77,7 @@ customModes:
       roleDefinition: "You are Shofer, a custom code assistant..."
       customInstructions: |
           Use our team's code style guide...
-      groups: ["read", "edit", "command", "mcp"]
+      tools: ["read", "edit", "command", "mcp"]
       tools_allowed: ["update_todo_list"]
       tools_denied: ["execute_command"]
 ```

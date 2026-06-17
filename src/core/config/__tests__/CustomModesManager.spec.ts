@@ -95,9 +95,9 @@ describe("CustomModesManager", () => {
 
 	describe("getCustomModes", () => {
 		it("should handle valid YAML in .shofer/shofermodes file and JSON for global customModes", async () => {
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 
-			const shofermodesModes = [{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", groups: ["read"] }]
+			const shofermodesModes = [{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", tools: ["read"] }]
 
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
@@ -116,13 +116,13 @@ describe("CustomModesManager", () => {
 
 		it("should merge modes with .shofer/shofermodes taking precedence", async () => {
 			const settingsModes = [
-				{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] },
-				{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", groups: ["read"] },
+				{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] },
+				{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", tools: ["read"] },
 			]
 
 			const shofermodesModes = [
-				{ slug: "mode2", name: "Mode 2 Override", roleDefinition: "Role 2 Override", groups: ["read"] },
-				{ slug: "mode3", name: "Mode 3", roleDefinition: "Role 3", groups: ["read"] },
+				{ slug: "mode2", name: "Mode 2 Override", roleDefinition: "Role 2 Override", tools: ["read"] },
+				{ slug: "mode3", name: "Mode 3", roleDefinition: "Role 3", tools: ["read"] },
 			]
 
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
@@ -148,7 +148,7 @@ describe("CustomModesManager", () => {
 		})
 
 		it("should handle missing .shofer/shofermodes file", async () => {
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockSettingsPath
@@ -167,7 +167,7 @@ describe("CustomModesManager", () => {
 		})
 
 		it("should handle invalid YAML in .shofer/shofermodes", async () => {
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
@@ -188,7 +188,7 @@ describe("CustomModesManager", () => {
 
 		it("should memoize results for 10 seconds", async () => {
 			// Setup test data
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
 					return yaml.stringify({ customModes: settingsModes })
@@ -230,7 +230,7 @@ describe("CustomModesManager", () => {
 
 		it("should invalidate cache when modes are updated", async () => {
 			// Setup initial data
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
 					return yaml.stringify({ customModes: settingsModes })
@@ -250,7 +250,7 @@ describe("CustomModesManager", () => {
 				slug: "mode1",
 				name: "Updated Mode 1",
 				roleDefinition: "Updated Role 1",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -276,7 +276,7 @@ describe("CustomModesManager", () => {
 
 		it("should invalidate cache when modes are deleted", async () => {
 			// Setup initial data
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
 					return yaml.stringify({ customModes: settingsModes })
@@ -312,7 +312,7 @@ describe("CustomModesManager", () => {
 
 		it("should invalidate cache when modes are updated (simulating file changes)", async () => {
 			// Setup initial data
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
 					return yaml.stringify({ customModes: settingsModes })
@@ -335,7 +335,7 @@ describe("CustomModesManager", () => {
 				slug: "mode1",
 				name: "Updated Mode 1",
 				roleDefinition: "Updated Role 1",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -373,7 +373,7 @@ describe("CustomModesManager", () => {
 
 		it("should refresh cache after TTL expires", async () => {
 			// Setup test data
-			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", groups: ["read"] }]
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
 					return yaml.stringify({ customModes: settingsModes })
@@ -444,7 +444,7 @@ describe("CustomModesManager", () => {
 				slug: "mode1",
 				name: "Updated Mode 1",
 				roleDefinition: "Updated Role 1",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -453,13 +453,13 @@ describe("CustomModesManager", () => {
 					slug: "mode1",
 					name: "Roomodes Mode 1",
 					roleDefinition: "Role 1",
-					groups: ["read"],
+					tools: ["read"],
 					source: "project",
 				},
 			]
 
 			const existingModes = [
-				{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", groups: ["read"], source: "global" },
+				{ slug: "mode2", name: "Mode 2", roleDefinition: "Role 2", tools: ["read"], source: "global" },
 			]
 
 			let settingsContent = { customModes: existingModes }
@@ -522,7 +522,7 @@ describe("CustomModesManager", () => {
 				slug: "project-mode",
 				name: "Project Mode",
 				roleDefinition: "Project Role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "project",
 			}
 
@@ -581,14 +581,14 @@ describe("CustomModesManager", () => {
 				slug: "mode1",
 				name: "Mode 1",
 				roleDefinition: "Role 1",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 			const mode2: ModeConfig = {
 				slug: "mode2",
 				name: "Mode 2",
 				roleDefinition: "Role 2",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -722,7 +722,7 @@ describe("CustomModesManager", () => {
 				slug: "mode-to-delete",
 				name: "Mode To Delete",
 				roleDefinition: "Test role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -780,7 +780,7 @@ describe("CustomModesManager", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test Role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -827,7 +827,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test Role",
-							groups: ["read"],
+							tools: ["read"],
 						},
 					],
 				})
@@ -845,7 +845,7 @@ describe("CustomModesManager", () => {
 							slug: "imported-mode",
 							name: "Imported Mode",
 							roleDefinition: "Imported Role",
-							groups: ["read", "write"],
+							tools: ["read", "write"],
 						},
 					],
 				})
@@ -884,7 +884,7 @@ describe("CustomModesManager", () => {
 							slug: "imported-mode",
 							name: "Imported Mode",
 							roleDefinition: "Imported Role",
-							groups: ["read"],
+							tools: ["read"],
 							rulesFiles: [
 								{
 									relativePath: "rules-imported-mode/rule1.md",
@@ -954,13 +954,13 @@ describe("CustomModesManager", () => {
 							slug: "mode1",
 							name: "Mode 1",
 							roleDefinition: "Role 1",
-							groups: ["read"],
+							tools: ["read"],
 						},
 						{
 							slug: "mode2",
 							name: "Mode 2",
 							roleDefinition: "Role 2",
-							groups: ["write"],
+							tools: ["write"],
 							rulesFiles: [
 								{
 									relativePath: "rules-mode2/rule.md",
@@ -1003,7 +1003,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test Role",
-							groups: ["read"],
+							tools: ["read"],
 							rulesFiles: [
 								{
 									relativePath: "rules-test-mode/rule.md",
@@ -1044,7 +1044,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test Role",
-							groups: ["read"],
+							tools: ["read"],
 							rulesFiles: [
 								{
 									relativePath: "../../../etc/passwd",
@@ -1101,7 +1101,7 @@ describe("CustomModesManager", () => {
 			- slug: test-mode
 			  name: Test Mode
 			  roleDefinition: Test Role
-			  groups: [read
+			  tools: [read
 			    invalid yaml here
 				`
 
@@ -1118,7 +1118,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "", // Invalid: empty name
 							roleDefinition: "", // Invalid: empty role definition
-							groups: ["invalid-group"], // Invalid group
+							tools: ["invalid-group"], // Invalid group
 						},
 					],
 				})
@@ -1136,7 +1136,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test Role",
-							groups: ["read"],
+							tools: ["read"],
 							// No rulesFiles property - this mode has no rules
 						},
 					],
@@ -1185,7 +1185,7 @@ describe("CustomModesManager", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test Role",
-							groups: ["read"],
+							tools: ["read"],
 							rulesFiles: [
 								{
 									relativePath: "rules-test-mode/new-rule.md",
@@ -1343,7 +1343,7 @@ describe("CustomModesManager", () => {
 
 		it("should work with global custom modes when .shofer/shofermodes doesn't exist", async () => {
 			const settingsContent = {
-				customModes: [{ slug: "test-mode", name: "Test Mode", groups: ["read"], roleDefinition: "Test Role" }],
+				customModes: [{ slug: "test-mode", name: "Test Mode", tools: ["read"], roleDefinition: "Test Role" }],
 			}
 
 			// Create a fresh manager instance to avoid cache issues
@@ -1413,7 +1413,7 @@ describe("CustomModesManager", () => {
 
 		it("should successfully export mode without rules when rules directory doesn't exist", async () => {
 			const shofermodesContent = {
-				customModes: [{ slug: "test-mode", name: "Test Mode", roleDefinition: "Test Role", groups: ["read"] }],
+				customModes: [{ slug: "test-mode", name: "Test Mode", roleDefinition: "Test Role", tools: ["read"] }],
 			}
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockRoomodes
@@ -1435,7 +1435,7 @@ describe("CustomModesManager", () => {
 
 		it("should successfully export mode without rules when no rule files are found", async () => {
 			const shofermodesContent = {
-				customModes: [{ slug: "test-mode", name: "Test Mode", roleDefinition: "Test Role", groups: ["read"] }],
+				customModes: [{ slug: "test-mode", name: "Test Mode", roleDefinition: "Test Role", tools: ["read"] }],
 			}
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {
 				return path === mockRoomodes
@@ -1462,7 +1462,7 @@ describe("CustomModesManager", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test Role",
-						groups: ["read"],
+						tools: ["read"],
 						customInstructions: "Existing instructions",
 					},
 				],
@@ -1502,7 +1502,7 @@ describe("CustomModesManager", () => {
 						slug: "code",
 						name: "Custom Code Mode",
 						roleDefinition: "Custom Role",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			}
@@ -1543,7 +1543,7 @@ describe("CustomModesManager", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test Role",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			}
@@ -1578,7 +1578,7 @@ describe("CustomModesManager", () => {
 				slug: "global-test-mode",
 				name: "Global Test Mode",
 				roleDefinition: "Global Test Role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -1624,7 +1624,7 @@ describe("CustomModesManager", () => {
 				slug: "global-test-mode",
 				name: "Global Test Mode",
 				roleDefinition: "Global Test Role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -1657,7 +1657,7 @@ describe("CustomModesManager", () => {
 				slug: "global-test-mode",
 				name: "Global Test Mode",
 				roleDefinition: "Global Test Role",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			}
 
@@ -1707,7 +1707,7 @@ describe("CustomModesManager", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test Role",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			}

@@ -57,7 +57,7 @@ produced by `shoferIgnoreInstructions`.
 ### 6. MCP server info appears only when mode has MCP group AND servers are configured
 
 **Given** MCP servers are configured (e.g., `filesystem-server`)
-**When** a task starts in a mode whose `groups` includes `"mcp"`
+**When** a task starts in a mode whose `tools` includes `"mcp"`
 **Then** the capabilities section mentions MCP servers
 **And** starting a task in a mode without the `"mcp"` group does NOT mention MCP servers
 

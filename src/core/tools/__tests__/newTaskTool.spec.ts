@@ -158,7 +158,7 @@ describe("newTaskTool", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
-			groups: ["execute", "read", "write"],
+			tools: ["execute", "read", "write"],
 		})
 		mockShofer.consecutiveMistakeCount = 0
 		mockShofer.didToolFailInCurrentTurn = false
@@ -683,7 +683,7 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
-			groups: ["execute", "read", "write"],
+			tools: ["execute", "read", "write"],
 		})
 		mockShofer.consecutiveMistakeCount = 0
 		mockShofer.didToolFailInCurrentTurn = false
@@ -857,7 +857,7 @@ describe("newTaskTool delegation flow", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "Test role definition",
-			groups: ["execute", "read", "write"],
+			tools: ["execute", "read", "write"],
 		})
 		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
 			get: vi.fn().mockReturnValue(false),

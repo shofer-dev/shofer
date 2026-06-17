@@ -106,7 +106,7 @@ Components related to viewing, switching, and managing multiple tasks.
 
 These are the native VS Code icon buttons rendered by VS Code itself in the title bar of the Shofer panel — **not** React components inside the webview. They are declared in `src/package.json` under `contributes.menus.view/title` (sidebar) and `contributes.menus.editor/title` (tab panel), and backed by commands registered in `src/activate/registerCommands.ts`.
 
-There are two display groups:
+There are two display tools:
 
 - **Navigation buttons** (`group: "navigation@N"`) — shown as icons directly in the title bar, left-to-right in ascending `N` order.
 - **Overflow buttons** (`group: "overflow@N"`) — hidden inside the `⋯` ("More Actions…") dropdown.
@@ -409,7 +409,7 @@ Defined in [`worktree.ts`](../packages/types/src/worktree.ts).
 | **LauncherWorkflow**    | `vscode-extension-host.ts` | Workflow metadata for the launcher UI: `{ name, title, description?, icon?, agents: string[], params: Array<{ name, type, description? }> }`. Mirrors `FlowDecl` + `FlowParam` fields from the Slang AST. Sent in `workflowsList` IPC messages and consumed by `LauncherView`. |
 | **ExtensionState**      | `vscode-extension-host.ts` | Full state object sent from extension host to webview. Contains `shoferMessages`, `taskHistory`, `apiConfiguration`, `mode`, `parallelTasks`, `taskNotifications`, etc.                                                                                                        |
 | **ProviderSettings**    | `provider-settings.ts`     | API provider configuration: `apiProvider`, `apiModelId`, `apiKey`, `baseUrl`, etc.                                                                                                                                                                                             |
-| **ModeConfig**          | `mode.ts`                  | Custom mode definition: `slug`, `name`, `roleDefinition`, `groups`, `customInstructions`, `tools_allowed`, `tools_denied`.                                                                                                                                                     |
+| **ModeConfig**          | `mode.ts`                  | Custom mode definition: `slug`, `name`, `roleDefinition`, `tools`, `customInstructions`, `tools_allowed`, `tools_denied`.                                                                                                                                                      |
 | **WebviewMessage**      | `vscode-extension-host.ts` | Union of all messages sent from webview → extension host. Every message has a `type` discriminant.                                                                                                                                                                             |
 | **ExtensionMessage**    | `vscode-extension-host.ts` | Union of all messages sent from extension host → webview.                                                                                                                                                                                                                      |
 | **ManagedTask**         | `vscode-extension-host.ts` | (via `TaskManager`) Runtime task descriptor: `{ id, name, taskId, workspace, createdAt, lastActiveAt, state, activeTimeMs }`. `activeTimeMs` accumulates wall-clock time in the `running` lifecycle only.                                                                      |
@@ -644,7 +644,7 @@ Built-in modes (defined in [`mode.ts`](../packages/types/src/mode.ts) as `DEFAUL
 
 Custom modes can be defined via [`.shofer/shofermodes`](#13-special-files--directories) files.
 
-**Custom Mode Fields**: `slug`, `name`, `roleDefinition`, `groups` (tool groups), `tools_allowed`, `tools_denied`, `customInstructions`, `whenToUse`, `description`, `source` (`"project"` | `"global"`), `provider`.
+**Custom Mode Fields**: `slug`, `name`, `roleDefinition`, `tools` (tool groups), `tools_allowed`, `tools_denied`, `customInstructions`, `whenToUse`, `description`, `source` (`"project"` | `"global"`), `provider`.
 
 ---
 
