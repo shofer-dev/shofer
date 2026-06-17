@@ -153,4 +153,26 @@ export const features: Feature[] = [
 		// Links to its own dedicated #modes section — no separate detail block.
 		anchor: "modes",
 	},
+	{
+		title: "UI/UX Polish",
+		description:
+			"Thoughtful details that make the agent feel like a first-class development tool — session changelog, agent self-assessment, native git submodule support, and MCP-aware auto-approval.",
+		icon: "Zap",
+		highlights: [
+			"Changelog: see every file changed in a session at a glance",
+			"Agent self-assessment & rating after each task",
+			"Git submodule support — works out of the box, no configuration needed",
+			"Auto-approval categories extend to MCP tools",
+		],
+		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md",
+		docsLabel: "User Manual",
+		anchor: "ui-ux",
+		detail: "Shofer polishes the everyday developer experience. A session changelog shows every file modified at a glance — no more git diff to remember what happened. Each task ends with an agent self-assessment and rating, giving you a quick signal on quality. Git submodules work out of the box — no configuration, no workarounds — Shofer's code-indexer, git-history watcher, and file watcher descend into nested repos automatically. And the auto-approval system extends to per-MCP-tool toggles and categories, so you can keep fast iteration with fine-grained control.",
+		images: [
+			"Session changelog — every file changed, at a glance",
+			"Agent self-assessment and rating overlay after a task completes",
+			"Git submodule — fully indexed, with git-history search across repos",
+			"Per-MCP-tool auto-approval toggles in Settings",
+		],
+	},
 ]
