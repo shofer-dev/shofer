@@ -1,6 +1,6 @@
 {
 	"extension.displayName": "Shofer",
-	"extension.description": "Open-source, complete replacement for GitHub Copilot \u2014 runs locally, supports any model, with 50+ tools and parallel tasks.",
+	"extension.description": "Open-source, complete replacement for Claude Code / GitHub Copilot \u2014 Shofer is an open-source AI coding agent for VS Code. Specify multi-agent workflows declaratively, and watch them execute as live diagrams \u2014 on top of all the standard features you expect from your AI-powered development environment.",
 	"views.contextMenu.label": "Shofer",
 	"views.terminalMenu.label": "Shofer",
 	"views.activitybar.title": "Shofer",
