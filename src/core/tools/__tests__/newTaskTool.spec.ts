@@ -111,7 +111,11 @@ const mockShofer = {
 			updateTaskHistory: mockUpdateTaskHistory,
 			taskManager: {
 				registerBackgroundTask: mockRegisterBackgroundTask,
+				// Global parallel-task limit guard (NewTaskTool): 0 active so the
+				// default limit (10) never blocks task creation in these tests.
+				countActiveTasks: vi.fn(() => 0),
 			},
+			contextProxy: { getValue: vi.fn(() => undefined) },
 		})),
 	},
 }
@@ -848,7 +852,8 @@ describe("newTaskTool delegation flow", () => {
 					registerBlockingChildResolver: localRegisterBlockingChildResolver,
 					getTaskWithId: localGetTaskWithId,
 					updateTaskHistory: localUpdateTaskHistory,
-					taskManager: { registerBackgroundTask: vi.fn() },
+					taskManager: { registerBackgroundTask: vi.fn(), countActiveTasks: vi.fn(() => 0) },
+					contextProxy: { getValue: vi.fn(() => undefined) },
 				})),
 			},
 		}
