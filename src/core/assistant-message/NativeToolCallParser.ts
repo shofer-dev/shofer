@@ -280,6 +280,7 @@ export class NativeToolCallParser {
 		// partial-json-parser extracts partial values (strings, arrays, objects) immediately
 		try {
 			const partialArgs = parseJSON(toolCall.argumentsAccumulator)
+			this.normalizeArgAliases(partialArgs)
 
 			// Resolve tool alias to canonical name
 			const resolvedName = resolveToolAlias(toolCall.name) as ToolName
@@ -350,6 +351,42 @@ export class NativeToolCallParser {
 		if (!extractedPath) return null
 		const sanitized = value.slice(0, match.index!)
 		return { path: extractedPath, sanitized }
+	}
+
+	/**
+	 * Common argument-name aliases that some models emit instead of Shofer's
+	 * canonical `path` (e.g. Anthropic/Claude-Code's `file_path`, Cursor's
+	 * `target_directory`). Mapped to `path` so a model trained on a different
+	 * tool schema still parses. The existing per-tool `?? filePath` fallbacks
+	 * stay as a backstop; this centralizes the snake_case variants too.
+	 */
+	private static readonly PATH_ARG_ALIASES = [
+		"file_path",
+		"filePath",
+		"filepath",
+		"target_directory",
+		"targetDirectory",
+		"directory_path",
+		"dir_path",
+	]
+
+	/**
+	 * Normalize known argument-name aliases onto their canonical Shofer names,
+	 * in place. Only fills a canonical field when it is absent (never clobbers an
+	 * explicitly-provided value). Applied right after JSON parsing so both the
+	 * required-field check and the per-tool arg builders see the canonical name.
+	 */
+	private static normalizeArgAliases(args: unknown): void {
+		if (!args || typeof args !== "object") return
+		const a = args as Record<string, unknown>
+		if (a.path === undefined) {
+			for (const alias of this.PATH_ARG_ALIASES) {
+				if (a[alias] !== undefined) {
+					a.path = a[alias]
+					break
+				}
+			}
+		}
 	}
 
 	/**
@@ -596,7 +633,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "ask_assistant_agent":
+			case "ask_live_memory":
 				if (partialArgs.question !== undefined) {
 					nativeArgs = {
 						question: partialArgs.question,
@@ -858,6 +895,7 @@ export class NativeToolCallParser {
 						softResultLength: this.coerceOptionalNumber(partialArgs.softResultLength),
 						softTimeoutSec: this.coerceOptionalNumber(partialArgs.softTimeoutSec),
 						peer_task_ids: Array.isArray(partialArgs.peer_task_ids) ? partialArgs.peer_task_ids : undefined,
+						title: partialArgs.title,
 					}
 				}
 				break
@@ -1155,6 +1193,7 @@ export class NativeToolCallParser {
 		try {
 			// Parse the arguments JSON string
 			const args = toolCall.arguments === "" ? {} : JSON.parse(toolCall.arguments)
+			this.normalizeArgAliases(args)
 
 			// Build stringified params for display/logging.
 			// Tool execution MUST use nativeArgs (typed) and does not support legacy fallbacks.
@@ -1329,7 +1368,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "ask_assistant_agent":
+				case "ask_live_memory":
 					if (args.question !== undefined) {
 						nativeArgs = {
 							question: args.question,
@@ -1563,6 +1602,7 @@ export class NativeToolCallParser {
 							softResultLength: this.coerceOptionalNumber(args.softResultLength),
 							softTimeoutSec: this.coerceOptionalNumber(args.softTimeoutSec),
 							peer_task_ids: Array.isArray(args.peer_task_ids) ? args.peer_task_ids : undefined,
+							title: args.title,
 						} as NativeArgsFor<TName>
 					}
 					break

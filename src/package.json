@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "1.8.25",
+	"version": "1.11.1",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -125,6 +125,11 @@
 				"icon": "$(settings-gear)"
 			},
 			{
+				"command": "shofer.aboutButtonClicked",
+				"title": "%command.about.title%",
+				"icon": "$(info)"
+			},
+			{
 				"command": "shofer.openInNewTab",
 				"title": "%command.openInNewTab.title%",
 				"category": "%configuration.title%"
@@ -200,23 +205,23 @@
 				"category": "%configuration.title%"
 			},
 			{
-				"command": "shofer.assistantAgent.showChat",
-				"title": "Show Assistant Agent Chat",
+				"command": "shofer.liveMemory.showChat",
+				"title": "Show Live Memory Chat",
 				"category": "%configuration.title%"
 			},
 			{
-				"command": "shofer.assistantAgent.start",
-				"title": "Start Assistant Agent",
+				"command": "shofer.liveMemory.start",
+				"title": "Start Live Memory",
 				"category": "%configuration.title%"
 			},
 			{
-				"command": "shofer.assistantAgent.stop",
-				"title": "Stop Assistant Agent",
+				"command": "shofer.liveMemory.stop",
+				"title": "Stop Live Memory",
 				"category": "%configuration.title%"
 			},
 			{
-				"command": "shofer.assistantAgent.clearContext",
-				"title": "Clear Assistant Agent Context",
+				"command": "shofer.liveMemory.clearContext",
+				"title": "Clear Live Memory Context",
 				"category": "%configuration.title%"
 			},
 			{
@@ -313,6 +318,11 @@
 				{
 					"command": "shofer.walkthrough.open",
 					"group": "overflow@5",
+					"when": "view == shofer.SidebarProvider"
+				},
+				{
+					"command": "shofer.aboutButtonClicked",
+					"group": "overflow@6",
 					"when": "view == shofer.SidebarProvider"
 				}
 			],
@@ -726,11 +736,11 @@
 						}
 					},
 					{
-						"id": "assistantAgent",
-						"title": "Next Steps: Assistant Agent",
+						"id": "liveMemory",
+						"title": "Next Steps: Live Memory",
 						"description": "A persistent, read-only AI companion that accumulates codebase knowledge over time — survives tasks and restarts.",
 						"media": {
-							"markdown": "media/walkthrough/assistant-agent.md"
+							"markdown": "media/walkthrough/live-memory.md"
 						}
 					},
 					{
