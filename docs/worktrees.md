@@ -52,7 +52,7 @@ Handlers translate webview IPC messages to core service calls:
 - `handleListWorktrees` — Enforces constraints (no multi-root; subfolder workspaces allowed only when the subfolder lives under `<gitRoot>/.shofer/worktrees/` — i.e., it is itself an embedded worktree)
 - `handleCreateWorktree` — Creates worktree then auto-copies `.shofer/worktreeinclude` files with progress
 - `handleDeleteWorktree` — Delegates to core service
-- `handleGetWorktreeDefaults` — Generates a single random token `shofer-<random>` used verbatim as the branch name, the worktree directory basename (`<workspace>/.shofer/worktrees/shofer-<random>`), and the worktree label — one name across all three surfaces
+- `handleGetWorktreeDefaults` — Generates a single random token `shofer-<random>` used verbatim as the branch name, the worktree directory basename (`<workspace>/.shofer/worktrees/shofer-<random>`), and the worktree label — one name across all three surfaces. The webview derives the worktree path from the branch name so that user edits to the branch keep the directory basename in lock-step.
 
 ### 3. Per-Task `cwd`
 
@@ -289,7 +289,6 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 | 7   | **Add sequence diagrams**                                            | A sequence diagram for worktree creation (webview → `createWorktree` → `handleCreateWorktree` → `WorktreeService.createWorktree` + `WorktreeIncludeService.copyWorktreeIncludeFiles` → `worktreeCopyProgress` → result) would clarify the multi-step flow.                                                                       |
 | 8   | **Document `handleGetWorktreeStatus` parallelism**                   | The handler runs 5+ git queries in parallel (`getCurrentBranch`, `detectBaseBranch`, `listWorktrees`, `git log`, `git status`, then `git rev-list` ahead/behind). This performance design choice should be surfaced in the Architecture section.                                                                                 |
 | 9   | **Cross-reference checkpoint isolation with `submodule-support.md`** | The checkpoint section should explicitly link to how `GIT_DIR` sanitization in `createSanitizedGit` (see [`ShadowCheckpointService.ts`](src/services/checkpoints/ShadowCheckpointService.ts:34-60)) prevents submodule gitlink pollution. This is mentioned for submodules (§Caveats) but not for the checkpoint section itself. |
-| 10  | **Document the embedded-worktree path enforcement**                  | `handleCreateWorktree` normalizes any path outside `.shofer/worktrees/` by prepending the convention prefix (see [`handlers.ts:172-182`](src/core/webview/worktree/handlers.ts:172)). This enforcement should be documented in §2 or §5.                                                                                         |
 
 ## Known Limitations
 

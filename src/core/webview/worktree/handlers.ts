@@ -184,6 +184,16 @@ export async function handleCreateWorktree(
 		options = { ...options, path: path.join(conventionPrefix, dirName) }
 	}
 
+	// Enforce branch-path coherence: when creating a new branch, the
+	// directory basename MUST match the branch name so there is exactly
+	// one name to reason about across the branch, directory, and UI badge.
+	if (options.createNewBranch && options.branch) {
+		const dirName = path.basename(options.path)
+		if (dirName !== options.branch) {
+			options = { ...options, path: path.join(conventionPrefix, options.branch) }
+		}
+	}
+
 	const result = await worktreeService.createWorktree(cwd, options)
 
 	// If successful, optionally copy worktreeinclude files.
