@@ -639,6 +639,8 @@ export class NativeToolCallParser {
 						question: partialArgs.question,
 						contextFiles: Array.isArray(partialArgs.contextFiles) ? partialArgs.contextFiles : undefined,
 						timeoutMs: this.coerceOptionalNumber(partialArgs.timeoutMs),
+						softTimeoutSec: this.coerceOptionalNumber(partialArgs.softTimeoutSec),
+						softResultLength: this.coerceOptionalNumber(partialArgs.softResultLength),
 					}
 				}
 				break
@@ -1374,6 +1376,8 @@ export class NativeToolCallParser {
 							question: args.question,
 							contextFiles: Array.isArray(args.contextFiles) ? args.contextFiles : undefined,
 							timeoutMs: this.coerceOptionalNumber(args.timeoutMs),
+							softTimeoutSec: this.coerceOptionalNumber(args.softTimeoutSec),
+							softResultLength: this.coerceOptionalNumber(args.softResultLength),
 						} as NativeArgsFor<TName>
 					}
 					break
