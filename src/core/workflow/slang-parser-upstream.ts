@@ -299,10 +299,51 @@ class Parser {
 				this.advance()
 				this.expect(TokenType.Colon)
 				meta.role = this.expect(TokenType.String).value
+			} else if (
+				this.check(TokenType.Ident) &&
+				this.peek().value === "api_configuration" &&
+				this.tokens[this.pos + 1]?.type === TokenType.Colon
+			) {
+				// Shofer extension: 'api_configuration: "profile"' — selects the
+				// agent Task's API-configuration profile by name.
+				this.advance() // "api_configuration"
+				this.expect(TokenType.Colon)
+				meta.apiConfiguration = this.expect(TokenType.String).value
 			} else if (this.check(TokenType.Model)) {
+				// Deprecated alias for `api_configuration:` (kept for back-compat).
 				this.advance()
 				this.expect(TokenType.Colon)
-				meta.model = this.expect(TokenType.String).value
+				meta.apiConfiguration = this.expect(TokenType.String).value
+			} else if (
+				this.check(TokenType.Ident) &&
+				this.peek().value === "context" &&
+				(this.tokens[this.pos + 1]?.type === TokenType.LBrace ||
+					this.tokens[this.pos + 1]?.type === TokenType.Colon)
+			) {
+				// Shofer extension: 'context { include_agents_md: <bool> }'
+				// (a leading colon — 'context: { ... }' — is also accepted) —
+				// controls ambient project context injected into the agent's
+				// system prompt. Unknown keys are ignored (forward-compatible).
+				this.advance() // "context"
+				this.match(TokenType.Colon) // optional `:` before the block
+				this.expect(TokenType.LBrace)
+				const ctx: { include_agents_md?: boolean } = {}
+				while (!this.check(TokenType.RBrace)) {
+					const key = this.expect(TokenType.Ident).value
+					this.expect(TokenType.Colon)
+					const boolTok = this.peek()
+					if (boolTok.type === TokenType.True || boolTok.type === TokenType.False) {
+						this.advance()
+						if (key === "include_agents_md") {
+							ctx.include_agents_md = boolTok.type === TokenType.True
+						}
+					} else {
+						this.expect(TokenType.True) // raise a clear "expected boolean" error
+					}
+					this.match(TokenType.Comma) // optional separator
+				}
+				this.expect(TokenType.RBrace)
+				meta.context = ctx
 			} else if (this.check(TokenType.Tools)) {
 				this.advance()
 				this.expect(TokenType.Colon)

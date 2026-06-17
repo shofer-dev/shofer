@@ -608,6 +608,80 @@ flow "tools-meta" () {
 		expect(worker!.meta.tools).toEqual(["read", "execute", "mcp"])
 	})
 
+	it("parses api_configuration/role/retry/tools meta together (the wired agent-block fields)", () => {
+		const src = `
+flow "meta-fields" () {
+	 agent Worker {
+	   mode: "code"
+	   tools: [read]
+	   api_configuration: "sonnet-profile"
+	   role: "Specialist."
+	   retry: 5
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.tools).toEqual(["read"])
+		expect(worker.meta.apiConfiguration).toBe("sonnet-profile")
+		expect(worker.meta.role).toBe("Specialist.")
+		expect(worker.meta.retry).toBe(5)
+	})
+
+	it("parses a context { include_agents_md } block into meta.context", () => {
+		const src = `
+flow "ctx" () {
+	 agent Worker {
+	   mode: "code"
+	   context {
+	     include_agents_md: false
+	   }
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.context).toEqual({ include_agents_md: false })
+	})
+
+	it("accepts the `context:` block form (leading colon) too", () => {
+		const src = `
+flow "ctx-colon" () {
+	 agent Worker {
+	   mode: "code"
+	   context: {
+	     include_agents_md: true
+	   }
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.context).toEqual({ include_agents_md: true })
+	})
+
+	it("parses the deprecated `model:` alias into meta.apiConfiguration", () => {
+		const src = `
+flow "model-alias" () {
+	 agent Worker {
+	   mode: "code"
+	   model: "legacy-profile"
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.apiConfiguration).toBe("legacy-profile")
+	})
+
 	it("parses converge with all_committed keyword", () => {
 		const src = `
 flow "all-committed" () {

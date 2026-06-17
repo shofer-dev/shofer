@@ -28,6 +28,13 @@ flow "debug" (issue: "string") {
   -- =========================================================================
   agent Orchestrator {
     mode: "architect"
+    -- Pure coordinator: NO read/write/execute (so it cannot triage or fix the
+    -- issue itself — its only job is to dispatch, relay, and signal), NO `mode`
+    -- (cannot switch into code) and NO `subtasks` (cannot spawn its own
+    -- children — the workflow spawns the two developers). Only `questions`, so
+    -- it can still escalate/clarify with the user. Always-available tools
+    -- (attempt_completion, send_message_to_task, …) are retained regardless.
+    tools: [questions]
     role: "Debug workflow orchestrator. You clarify the issue with the user, coordinate parallel investigation by two developers, broker consensus between them, and drive the fix-and-review loop to completion. You do NOT write or review code yourself."
 
     -- Phase 1 — Parallel triage

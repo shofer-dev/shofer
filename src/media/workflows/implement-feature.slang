@@ -23,6 +23,14 @@ flow "implement-feature" (feature: "string", design_path: "string") {
 
   agent Architect {
     mode: "architect"
+    -- Coordinator tool scope. `read` (explore for the design) + `write` (author
+    -- the .md design — architect mode already blocks non-.md writes) + `questions`
+    -- (clarify). Deliberately NO `mode` (cannot switch_mode into code) and NO
+    -- `subtasks` (cannot spawn its own code subtask) — the two escape hatches the
+    -- Architect used to try to implement itself. The workflow spawns the
+    -- Developer/Reviewer; the Architect never needs to. Always-available tools
+    -- (attempt_completion, send_message_to_task, …) are retained regardless.
+    tools: [read, write, questions]
     role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents. The design document for this run lives at EXACTLY ${design_path} — always create, reference, and route work against that exact path."
 
     stake create_design(

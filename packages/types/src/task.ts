@@ -149,6 +149,24 @@ export interface CreateTaskOptions {
 	 * parsed-but-not-consumed). Applied for this task only — never mutates the mode.
 	 */
 	agentRole?: string
+	/**
+	 * Tool-group allow-list for this task, on top of the mode's own groups.
+	 * Used by workflow agents to make the `.slang` `agent { tools: [...] }`
+	 * restriction actually narrow the spawned task's tools (otherwise
+	 * parsed-but-not-consumed). Each entry is a `ToolGroup` name (`read`,
+	 * `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`,
+	 * `uncategorized`). The effective tool set is the mode's tools INTERSECTED
+	 * with these groups (always-available tools like `attempt_completion` are
+	 * retained). A restriction only — it can never grant tools the mode denies.
+	 * When undefined or empty, no extra restriction is applied.
+	 */
+	agentToolGroups?: string[]
+	/**
+	 * Per-task override for whether AGENTS.md / AGENT.md rules are injected into
+	 * the system prompt (workflow agents' `.slang` `context { include_agents_md }`).
+	 * When undefined, inherits the global `useAgentRules` setting.
+	 */
+	agentIncludeAgentsMd?: boolean
 	/** Initial execution state for the task's history item. */
 	initialState?: TaskState
 	/**

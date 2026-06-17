@@ -106,9 +106,21 @@ export interface AgentDecl extends BaseNode {
 
 export interface AgentMeta {
 	role?: string
-	model?: string
+	/**
+	 * Slang key `api_configuration:` — selects the agent Task's API-configuration
+	 * profile by name. The legacy key `model:` is a deprecated alias that parses
+	 * into this same field.
+	 */
+	apiConfiguration?: string
 	tools?: string[]
 	retry?: number
+	/**
+	 * Slang `context { ... }` block — controls ambient project context injected
+	 * into the agent Task's system prompt. Currently one knob:
+	 * `include_agents_md` (default inherits the global `useAgentRules` setting),
+	 * which gates whether AGENTS.md / AGENT.md rules are injected.
+	 */
+	context?: { include_agents_md?: boolean }
 	/** Agent names (from @refs) this agent may send_message_to_task to directly.
 	 *  Wildcards / external sinks are excluded. Absent ⇒ no sibling grant
 	 *  (parent + own children only, per least-privilege). */

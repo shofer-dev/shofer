@@ -419,6 +419,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	agentRole?: string
 
 	/**
+	 * Per-task tool-group allow-list (workflow agents pass their `.slang`
+	 * `tools:` here). Intersected with the mode's groups when building the
+	 * tool array; see {@link CreateTaskOptions.agentToolGroups}. A restriction
+	 * only — never grants tools beyond the mode.
+	 */
+	agentToolGroups?: string[]
+
+	/**
+	 * Per-task override for AGENTS.md injection (workflow agents' `.slang`
+	 * `context { include_agents_md }`); see {@link CreateTaskOptions.agentIncludeAgentsMd}.
+	 * Undefined ⇒ inherit the global `useAgentRules` setting.
+	 */
+	agentIncludeAgentsMd?: boolean
+
+	/**
 	 * The mode associated with this task. Persisted across sessions
 	 * to maintain user context when reopening tasks from history.
 	 *
@@ -908,6 +923,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialKnownPeers,
 		initialTitle,
 		agentRole,
+		agentToolGroups,
+		agentIncludeAgentsMd,
 	}: TaskOptions) {
 		super()
 
@@ -1005,6 +1022,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.rootTask = rootTask
 		this.taskNumber = taskNumber
 		this.agentRole = agentRole
+		this.agentToolGroups = agentToolGroups
+		this.agentIncludeAgentsMd = agentIncludeAgentsMd
 		this.softResultLength = softResultLength
 		this.softTimeoutSec = softTimeoutSec
 		this.completionSchema = completionSchema
@@ -3046,6 +3065,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6119,6 +6139,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			? `# Agent Role\n\n${this.agentRole.trim()}${customInstructions ? `\n\n${customInstructions}` : ""}`
 			: customInstructions
 
+		// Workflow agents may override AGENTS.md injection via `.slang`
+		// `context { include_agents_md }`; otherwise inherit the global setting.
+		const effectiveUseAgentRules = this.agentIncludeAgentsMd ?? useAgentRules ?? true
+
 		// H15: Build a cache key covering every stable input to the system
 		// prompt.  Peer notifications + subtask constraints are appended
 		// below; they don't participate in the cache key because they are
@@ -6136,7 +6160,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			JSON.stringify(experiments ?? {}),
 			language ?? "",
 			enableSubfolderRules ?? false,
-			useAgentRules ?? true,
+			effectiveUseAgentRules,
 			apiConfiguration?.todoListEnabled ?? true,
 			modelInfo?.isStealthModel ?? false,
 			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false),
@@ -6188,7 +6212,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				shoferIgnoreInstructions,
 				{
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
-					useAgentRules: useAgentRules ?? true,
+					useAgentRules: effectiveUseAgentRules,
 					enableSubfolderRules: enableSubfolderRules ?? false,
 					newTaskRequireTodos: vscode.workspace
 						.getConfiguration(Package.name)
@@ -6358,6 +6382,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			supportsAllowedFunctionNames,
 			this.api.getModel().id,
 			JSON.stringify(this.completionSchema ?? null),
+			JSON.stringify(this.agentToolGroups ?? null),
 		].join("|")
 	}
 
@@ -6391,6 +6416,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			includeAllToolsWithRestrictions: false,
 			completionSchema: this.completionSchema,
 			titleLocked: this.nameLocked,
+			agentToolGroups: this.agentToolGroups,
 		})
 		this._cachedToolsResult = {
 			tools: toolsResult.tools,
@@ -6446,6 +6472,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6850,6 +6877,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			this._cachedToolsResult = {
 				tools: toolsResult.tools,

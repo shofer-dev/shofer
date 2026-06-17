@@ -16,7 +16,7 @@ import {
 	filterMcpToolsForMode,
 	resolveToolAlias,
 } from "../prompts/tools/filter-tools-for-mode"
-import { defaultModeSlug, getGroupName, getModeBySlug } from "../../shared/modes"
+import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode } from "../../shared/modes"
 
 interface BuildToolsOptions {
 	provider: ShoferProvider
@@ -48,6 +48,18 @@ interface BuildToolsOptions {
 	 * {@link Task.nameLocked}.
 	 */
 	titleLocked?: boolean
+	/**
+	 * Per-task tool-group allow-list (workflow agents' `.slang` `tools:`).
+	 * Threaded from {@link Task.agentToolGroups}. When set, the final tool list
+	 * is intersected with these groups — a tool survives only if its group is
+	 * declared (native tools resolved via `TOOL_GROUPS`, MCP tools via the
+	 * `mcp` group, private/custom tools via their own group), EXCEPT
+	 * `ALWAYS_AVAILABLE_TOOLS`, which are always retained so the agent can still
+	 * complete/coordinate. This is a restriction layered on top of mode
+	 * filtering — it can only remove tools, never add them. Unknown group names
+	 * are ignored.
+	 */
+	agentToolGroups?: string[]
 }
 
 interface BuildToolsResult {
@@ -251,6 +263,56 @@ export async function buildNativeToolsArray(options: BuildToolsOptions): Promise
 	return result.tools
 }
 
+/** The already-mode-filtered tool categories, plus the private-tool metadata
+ *  needed to resolve each private tool's group. */
+export interface ToolCategories {
+	native: OpenAI.Chat.ChatCompletionTool[]
+	mcp: OpenAI.Chat.ChatCompletionTool[]
+	custom: OpenAI.Chat.ChatCompletionFunctionTool[]
+	private: OpenAI.Chat.ChatCompletionFunctionTool[]
+	privateMeta: PrivateToolMeta[]
+}
+
+/**
+ * Apply a workflow agent's declared `.slang` `tools:` restriction to the
+ * already-mode-filtered tool set. Pure intersection — only removes tools,
+ * never adds them.
+ *
+ * Semantics:
+ * - `agentToolGroups === undefined` → no restriction (returns categories as-is).
+ * - declared (incl. `[]`) → keep a tool only if its group is declared. Native
+ *   tools are matched via `getToolsForMode` (which also re-adds
+ *   `ALWAYS_AVAILABLE_TOOLS`, so `attempt_completion` etc. always survive — a
+ *   restricted agent can still complete stakes). MCP tools belong to the `mcp`
+ *   group; native custom tools to `write`; private tools carry their own group.
+ * - Unknown group names are dropped (fail-closed): `tools: [typo]` restricts to
+ *   always-available only.
+ */
+export function restrictToolsToDeclaredGroups(
+	agentToolGroups: string[] | undefined,
+	categories: ToolCategories,
+): Omit<ToolCategories, "privateMeta"> {
+	const { native, mcp, custom, private: priv, privateMeta } = categories
+	if (agentToolGroups === undefined) {
+		return { native, mcp, custom, private: priv }
+	}
+	const declaredGroups = agentToolGroups.filter((g): g is ToolGroup =>
+		(toolGroupsSchema.options as readonly string[]).includes(g),
+	)
+	const declaredSet = new Set<ToolGroup>(declaredGroups)
+	const allowedNativeNames = new Set(getToolsForMode(declaredGroups))
+	const privateGroupByName = new Map(privateMeta.map((m) => [getToolName(m.tool), m.group]))
+	return {
+		native: native.filter((t) => allowedNativeNames.has(resolveToolAlias(getToolName(t)))),
+		mcp: declaredSet.has("mcp") ? mcp : [],
+		custom: declaredSet.has("write") ? custom : [],
+		private: priv.filter((t) => {
+			const g = privateGroupByName.get(getToolName(t))
+			return g !== undefined && declaredSet.has(g)
+		}),
+	}
+}
+
 /**
  * Builds the complete tools array for native protocol requests with optional mode restrictions.
  */
@@ -327,7 +389,21 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	// Build the invoke-command lookup map for the execution layer.
 	_privateToolInvokeMap = new Map(privateMeta.map((m) => [getToolName(m.tool), m.invokeCommand]))
 
-	const filteredTools = [...filteredNativeTools, ...filteredMcpTools, ...nativeCustomTools, ...filteredPrivateTools]
+	// Per-task `.slang` `tools:` restriction (no-op when the field is absent).
+	const {
+		native: restrictedNative,
+		mcp: restrictedMcp,
+		custom: restrictedCustom,
+		private: restrictedPrivate,
+	} = restrictToolsToDeclaredGroups(options.agentToolGroups, {
+		native: filteredNativeTools,
+		mcp: filteredMcpTools,
+		custom: nativeCustomTools,
+		private: filteredPrivateTools,
+		privateMeta,
+	})
+
+	const filteredTools = [...restrictedNative, ...restrictedMcp, ...restrictedCustom, ...restrictedPrivate]
 
 	if (includeAllToolsWithRestrictions) {
 		const allTools = [...nativeTools, ...mcpTools, ...nativeCustomTools, ...allPrivateTools]

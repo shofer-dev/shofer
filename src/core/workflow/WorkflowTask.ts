@@ -1059,6 +1059,22 @@ export class WorkflowTask extends Task {
 				agentRole: agentDecl.meta?.role
 					? interpolatePure(agentDecl.meta.role, agentState, this.flowState)
 					: undefined,
+				// Enforce the agent's declared `.slang` `tools:` restriction (otherwise
+				// parsed-but-not-consumed). Intersects with the mode's groups when the
+				// task builds its tool array, so e.g. an `architect`-mode orchestrator
+				// declared `tools: [questions, subtasks]` cannot read or edit files —
+				// it can only coordinate. ALWAYS_AVAILABLE tools are retained.
+				agentToolGroups: agentDecl.meta?.tools,
+				// The agent's declared `.slang` `api_configuration:` (legacy alias
+				// `model:`) selects its API-configuration profile by name (per-task
+				// only — never activates the profile globally). An unknown name falls
+				// back to the global profile. Lets different agents in one workflow
+				// run on different models.
+				initialApiConfigName: agentDecl.meta?.apiConfiguration,
+				// The agent's `.slang` `context { include_agents_md }` overrides
+				// whether AGENTS.md rules are injected into its system prompt
+				// (undefined ⇒ inherit the global setting).
+				agentIncludeAgentsMd: agentDecl.meta?.context?.include_agents_md,
 				initialState: { lifecycle: "idle" },
 				openInStack: false,
 				keepCurrentTask: true,
@@ -1415,8 +1431,11 @@ export class WorkflowTask extends Task {
 			const instr = program[state.opIndex]
 			if (!instr || instr.kind !== "stake") continue
 
-			// Per-stake retry budget: an explicit `retries(N)` overrides the default.
-			const maxRetries = instr.op.retries ?? MAX_RETRIES
+			// Per-stake retry budget. Precedence: an explicit per-stake
+			// `retries(N)` wins; otherwise the staking agent's declared
+			// `retry:` meta sets its default; otherwise the global MAX_RETRIES.
+			const agentDefaultRetries = getAgentDecls(this.flowDecl).find((a) => a.name === name)?.meta?.retry
+			const maxRetries = instr.op.retries ?? agentDefaultRetries ?? MAX_RETRIES
 
 			try {
 				// Freshness guard: only consume an agent's result once it has actually

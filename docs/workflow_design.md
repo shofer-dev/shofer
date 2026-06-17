@@ -88,7 +88,7 @@ flow "implement-feature" (feature: "string") {
   -- =========================================================================
   agent Architect {
     mode: "architect"
-    model: "claude-sonnet"
+    api_configuration: "claude-sonnet"
     role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents."
 
     -- ------------------------------------------------------------------
@@ -443,7 +443,7 @@ The Workflow **is** a Shofer [`Task`](../src/core/task/Task.ts) — but its **lo
     ```slang
     agent Developer {
       mode: "code"          ← maps directly to an existing Shofer mode
-      model: "claude-sonnet" ← selects API profile within that mode
+      api_configuration: "claude-sonnet" ← selects API profile within that mode
     }
     ```
 
@@ -463,23 +463,23 @@ The Workflow **is** a Shofer [`Task`](../src/core/task/Task.ts) — but its **lo
 
 ### Concepts
 
-| Slang Concept                 | Shofer Execution                                                                                                                                                                                                 |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flow "name"`                 | A **Workflow Task** (extends `Task`). Mode string = the flow name. Loop: `slangLoop()`, not `recursivelyMakeShoferRequests()`.                                                                                   |
-| `agent Name { mode: "code" }` | Agent is a background Task spawned via `new_task(is_background=true, mode: "code")`. The linked mode provides the system prompt, tool access, and API configuration.                                             |
-| `agent Name { tools: [...] }` | ToolGroup names mapped directly to the mode's `groups:` at spawn time. Only the 9 group names (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) are valid values. |
-| `agent Name { model: "x" }`   | (Parsed, not yet wired) Would override the mode's default API Configuration profile.                                                                                                                             |
-| `agent Name { role: "..." }`  | (Parsed, not yet wired) Would override the mode's `roleDefinition`. Currently used only for peer resource descriptions.                                                                                          |
-| `stake func(args) -> @Target` | Workflow: (1) resumes/prompts agent Task, (2) blocks via `wait_for_task`, (3) validates output against schema (retries on failure), (4) routes result to `@Target`'s mailbox.                                    |
-| `stake func(args)` (local)    | Workflow prompts agent; result stored in `FlowState.bindings`, not routed.                                                                                                                                       |
-| `await binding <- @Source`    | Workflow blocks until `@Source`'s result in mailbox, resumes awaiting agent.                                                                                                                                     |
-| `commit`                      | Agent calls `attempt_completion`. Workflow marks agent `committed`.                                                                                                                                              |
-| `escalate @Human`             | Workflow Task handles this directly. Slang loop pauses, blocks on `ask_followup_question`. Agent never knows it was escalated.                                                                                   |
-| `let / set`                   | Stored in `FlowState.bindings` (Workflow memory).                                                                                                                                                                |
-| `repeat until / when`         | Workflow Task's `slangLoop()` evaluates and branches.                                                                                                                                                            |
-| `converge when:`              | Workflow checks condition each round; on true → `attempt_completion` on the Workflow Task itself.                                                                                                                |
-| `budget:`                     | Aggregate descendant costs. On exhaustion → `abortBackgroundChildren()` + `attempt_completion(error)`.                                                                                                           |
-| `output: { ... }`             | Injected into agent Task's system prompt as structured-output directive. Validated against schema on completion; malformed JSON or missing fields trigger retry (max 3).                                         |
+| Slang Concept                           | Shofer Execution                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flow "name"`                           | A **Workflow Task** (extends `Task`). Mode string = the flow name. Loop: `slangLoop()`, not `recursivelyMakeShoferRequests()`.                                                                                                                                                                                                                                                                                   |
+| `agent Name { mode: "code" }`           | Agent is a background Task spawned via `new_task(is_background=true, mode: "code")`. The linked mode provides the system prompt, tool access, and API configuration.                                                                                                                                                                                                                                             |
+| `agent Name { tools: [...] }`           | ✅ Wired. ToolGroup names **intersected** with the mode's tools at spawn time (restriction only — never grants beyond the mode; `ALWAYS_AVAILABLE_TOOLS` always retained). Only the 9 group names (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`) are valid. See [slang_specs.md → Per-agent `tools:` restriction](slang_specs.md#per-agent-tools-restriction). |
+| `agent Name { api_configuration: "x" }` | ✅ Wired. Selects the agent Task's API-configuration profile by name (per-task; unknown → global fallback). Deprecated alias: `model:`.                                                                                                                                                                                                                                                                          |
+| `agent Name { role: "..." }`            | ✅ Wired. Injected as `# Agent Role` on top of the mode's `roleDefinition` for that task (`createTask({ agentRole })`); also used for peer resource descriptions.                                                                                                                                                                                                                                                |
+| `stake func(args) -> @Target`           | Workflow: (1) resumes/prompts agent Task, (2) blocks via `wait_for_task`, (3) validates output against schema (retries on failure), (4) routes result to `@Target`'s mailbox.                                                                                                                                                                                                                                    |
+| `stake func(args)` (local)              | Workflow prompts agent; result stored in `FlowState.bindings`, not routed.                                                                                                                                                                                                                                                                                                                                       |
+| `await binding <- @Source`              | Workflow blocks until `@Source`'s result in mailbox, resumes awaiting agent.                                                                                                                                                                                                                                                                                                                                     |
+| `commit`                                | Agent calls `attempt_completion`. Workflow marks agent `committed`.                                                                                                                                                                                                                                                                                                                                              |
+| `escalate @Human`                       | Workflow Task handles this directly. Slang loop pauses, blocks on `ask_followup_question`. Agent never knows it was escalated.                                                                                                                                                                                                                                                                                   |
+| `let / set`                             | Stored in `FlowState.bindings` (Workflow memory).                                                                                                                                                                                                                                                                                                                                                                |
+| `repeat until / when`                   | Workflow Task's `slangLoop()` evaluates and branches.                                                                                                                                                                                                                                                                                                                                                            |
+| `converge when:`                        | Workflow checks condition each round; on true → `attempt_completion` on the Workflow Task itself.                                                                                                                                                                                                                                                                                                                |
+| `budget:`                               | Aggregate descendant costs. On exhaustion → `abortBackgroundChildren()` + `attempt_completion(error)`.                                                                                                                                                                                                                                                                                                           |
+| `output: { ... }`                       | Injected into agent Task's system prompt as structured-output directive. Validated against schema on completion; malformed JSON or missing fields trigger retry (max 3).                                                                                                                                                                                                                                         |
 
 ### Execution Flow (Round Model)
 
@@ -642,22 +642,23 @@ When spawning an agent Task, the Workflow selects a mode by slug:
 ```slang
 agent Developer {
   mode: "code"               → uses the "code" Shofer mode (required)
-  tools: [write, execute,     → ToolGroup names → mode's groups at spawn
+  tools: [write, execute,     → ✅ wired: intersect with mode tools at spawn
           read, mcp]
-  model: "claude-sonnet"     → (parsed, not yet wired)
-  role: "Feature implementer" → (parsed, not yet wired; used for peer descriptions)
-  context: {                  → controls what context the agent receives
-    include_agents_md: true   → (planned) inject AGENTS.md rules
+  api_configuration: "sonnet" → ✅ wired: API-config profile by name (per-task; alias: model:)
+  role: "Feature implementer" → ✅ wired (agentRole; also used for peer descriptions)
+  context {                   → ✅ wired: ambient context for the agent
+    include_agents_md: true   → inject AGENTS.md rules (override the global setting)
   }
 }
 ```
 
 The mapping is:
 
-1. `tools: [...]` → each value is a **ToolGroup name** (one of `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). These become the mode's `groups:` at spawn time, restricting the agent to only those tool groups.
-2. `model: "..."` → not yet wired; would select the API Configuration profile by name.
-3. `role: "..."` → not yet wired; would override the mode's `roleDefinition`.
-4. `context: {...}` → (not yet wired) controls what context the agent receives from the project. Initial knob: `include_agents_md` (boolean) to inject AGENTS.md rules into the agent's system prompt.
+1. `tools: [...]` → each value is a **ToolGroup name** (one of `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). At spawn time the spawned Task's tools are **intersected** with these groups — a restriction only (never grants beyond the mode), with `ALWAYS_AVAILABLE_TOOLS` always retained. `tools: []` = pure coordinator; absent = no restriction. See [slang_specs.md → Per-agent `tools:` restriction](slang_specs.md#per-agent-tools-restriction).
+2. `api_configuration: "..."` (deprecated alias `model:`) → ✅ wired: selects the agent Task's API-configuration profile **by name** (per-task only, never activated globally; unknown name falls back to the global profile). Lets different agents in one workflow run on different models.
+3. `role: "..."` → ✅ wired as the per-task `agentRole` (layered onto the mode's `roleDefinition` for that task); also surfaced in peer resource descriptions.
+4. `retry: N` → ✅ wired: per-agent **default** stake retry budget (a per-stake `retries(N)` clause still wins; else falls back to the global `MAX_RETRIES`).
+5. `context { ... }` → ✅ wired: controls ambient project context. Knob: `include_agents_md` (boolean) — per-agent override for injecting AGENTS.md rules (maps to `useAgentRules` for that task; absent ⇒ inherits the global setting). Written as a block; a leading colon (`context: { ... }`) is also accepted.
 
 For simple agents (e.g., Reviewer: read-only tools), existing modes work directly. For specialized agents, the Workflow restricts the mode's tool groups via the `tools:` field at spawn time — no persisted `.shofer/shofermodes` entry needed.
 
@@ -669,10 +670,12 @@ For simple agents (e.g., Reviewer: read-only tools), existing modes work directl
 > `new_task` (`subtasks`), and — crucially — **cannot edit code** (`write` is
 > restricted to `.md`), matching the role's "you do NOT write code yourself". This
 > replaced an earlier `mode: "orchestrator"` that referenced a non-existent mode and
-> silently fell back to `code` (full write/execute access). If a dedicated, even
-> tighter orchestrator persona is ever wanted (e.g. no `.md` write at all), add an
-> `orchestrator` built-in mode or wire the per-agent `tools:` restriction (Planned)
-> to narrow the mode's groups at spawn.
+> silently fell back to `code` (full write/execute access). For a tighter
+> orchestrator persona, the now-wired per-agent **`tools:`** restriction narrows
+> the mode's tools at spawn without a custom mode — e.g. the Architect declares
+> `tools: [read, write, questions]` and the debug Orchestrator `tools: [questions]`,
+> dropping `mode`/`subtasks` so neither can `switch_mode` into code nor spawn its
+> own children. See [slang_specs.md → Per-agent `tools:` restriction](slang_specs.md#per-agent-tools-restriction).
 
 ---
 
@@ -682,20 +685,18 @@ The `.slang` `agent` block extends the vendored Slang specification with Shofer-
 
 ### Implemented (current execution)
 
-| `.slang` key   | Status                   | Shofermode field        | Description                                                                                                                                                                                        |
-| -------------- | ------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode: "code"` | ✅ Wired                 | Maps to the mode `slug` | Spawns agent as a background Task in the named Shofer mode. The mode provides `roleDefinition`, `customInstructions`, `groups`, and API configuration.                                             |
-| `tools: [...]` | ⚙️ Parsed, not yet wired | Maps to `groups:`       | Each value is a ToolGroup name (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). When wired, restricts the spawned Task to only the listed groups. |
+| `.slang` key                                    | Status   | Shofermode field               | Description                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------- | -------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode: "code"`                                  | ✅ Wired | Maps to the mode `slug`        | Spawns agent as a background Task in the named Shofer mode. The mode provides `roleDefinition`, `customInstructions`, `groups`, and API configuration.                                                                                                                                               |
+| `tools: [...]`                                  | ✅ Wired | Intersected with mode tools    | Each value is a ToolGroup name (`read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`). Intersected with the mode's tools at spawn (restriction only; `ALWAYS_AVAILABLE_TOOLS` retained). See [slang_specs.md](slang_specs.md#per-agent-tools-restriction). |
+| `api_configuration: "profile"` (alias `model:`) | ✅ Wired | API Configuration profile name | Selects the agent Task's API profile **by name** (per-task only; unknown name → global fallback). Threaded as `createTask({ initialApiConfigName })`. Different agents in one workflow can run on different models.                                                                                  |
+| `role: "..."`                                   | ✅ Wired | layered on `roleDefinition`    | Injected as `# Agent Role` on top of the mode's `roleDefinition` for that task; also surfaced in peer descriptions. Threaded as `createTask({ agentRole })`.                                                                                                                                         |
+| `retry: <n>`                                    | ✅ Wired | N/A                            | Per-agent **default** stake retry budget. Precedence: per-stake `retries(N)` > agent `retry:` > global `MAX_RETRIES` (3). Bounds re-dispatch on output-contract / `timeout(N)` failures.                                                                                                             |
+| `context { ... }`                               | ✅ Wired | `useAgentRules` (per-task)     | Ambient context control. Knob `include_agents_md` (boolean) overrides whether AGENTS.md rules are injected for that task (absent ⇒ inherits the global setting). Block form; leading colon also accepted. Threaded as `createTask({ agentIncludeAgentsMd })`.                                        |
 
 ### Planned (parsed but not yet consumed by execution)
 
-| `.slang` key                | Status               | Shofermode field               | Description                                                                                                                                                                                                                                                                                        |
-| --------------------------- | -------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model: "profile"`          | Parsed, not consumed | API Configuration profile name | Overrides the mode's default API profile. Allows different agents in the same workflow to use different models (e.g., Architect uses Claude, Developer uses GPT-4).                                                                                                                                |
-| `role: "..."`               | Parsed, not consumed | `roleDefinition`               | Overrides the mode's system-prompt role definition. Currently used only for peer resource descriptions.                                                                                                                                                                                            |
-| `retry: <n>`                | Parsed, not consumed | N/A                            | Max LLM-call retries per `stake`. Default: 1. Would override the mode's implicit retry behavior.                                                                                                                                                                                                   |
-| `context: { ... }`          | Parsed, not consumed | N/A (new concept)              | Controls what ambient context the agent receives from the project. Initial knob:                                                                                                                                                                                                                   |
-| `context.include_agents_md` | Planned              | —                              | When `true`, injects the project's AGENTS.md rules (agent behavior conventions) into the agent's system prompt. Useful for agents that need to follow project-specific conventions (Developer, Reviewer). Default: `false` for shared resources (Codebase, Internet), `true` for execution agents. |
+_All current `agent`-block fields are now wired. Future context knobs (beyond `include_agents_md`) will be added to the `context { ... }` block — see below._
 
 ### Context block design
 
@@ -716,13 +717,15 @@ agent Developer {
 
 Each knob controls a specific category of ambient context injected into the agent's system prompt at Task spawn time. The default values are agent-role-aware: shared-resource agents (Codebase, Internet) get minimal context; execution agents (Developer, Reviewer) get richer project context.
 
-> **⚠️ Future Item:** Currently [`spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts) only consumes `mode:` (the Shofer mode slug) when creating agent Tasks. The fields `tools:`, `model:`, `role:`, `retry:`, and `context:` are **parsed** and stored on the AST but **not wired** into task creation. When wired:
+> **Wiring status:** [`spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts)
+> now consumes `mode:`, `tools:`, `api_configuration:` (alias `model:`), `role:` at task creation, and the
+> executor's stake-retry budget honours `retry:`. Specifically:
 >
-> - **`tools:`** would restrict the spawned Task to only the listed ToolGroup names at spawn time (`provider.createTask(…, { toolGroups: […] })`), giving slang authors per-agent tool control without creating custom modes.
-> - **`model:`** would select the API Configuration profile by name, allowing different agents in the same workflow to use different models (e.g., Architect uses Claude, Developer uses GPT-4).
-> - **`role:`** would override the mode's `roleDefinition`, making the agent's system prompt fully self-describing in the `.slang` file rather than split between the slang source and the mode definition.
-> - **`retry:`** would set the max LLM-call retries per `stake`.
-> - **`context:`** (and its `include_agents_md` knob) would control what ambient project context is injected into the agent's system prompt at spawn time.
+> - **`tools:`** restricts the spawned Task by intersecting the listed ToolGroup names with the mode's tools (`createTask(…, { agentToolGroups: […] })`) — per-agent tool control without custom modes. See [slang_specs.md → Per-agent `tools:` restriction](slang_specs.md#per-agent-tools-restriction).
+> - **`api_configuration:`** (deprecated alias `model:`) selects the API Configuration profile by name (`createTask(…, { initialApiConfigName })`), so different agents in one workflow can use different models.
+> - **`role:`** is layered onto the mode's `roleDefinition` as the per-task `agentRole` (`createTask(…, { agentRole })`).
+> - **`retry:`** sets the agent's default stake retry budget (a per-stake `retries(N)` still overrides it; else falls back to `MAX_RETRIES`).
+> - **`context { ... }`** (its `include_agents_md` knob) overrides whether AGENTS.md rules are injected into the agent's system prompt (`createTask(…, { agentIncludeAgentsMd })`); absent ⇒ inherits the global `useAgentRules` setting. All `agent`-block fields are now wired.
 
 ## Reusable Code from `@riktar/slang`
 
@@ -781,12 +784,12 @@ The loop structure (findExecutableAgents, parallel dispatch, mailbox routing, co
 
 ### What We Write (~200 lines new code)
 
-| New Code                 | Purpose                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `WorkflowTask` class     | Extends `Task`. Stores `.slang` source + `FlowState`. Override `start()` → `slangLoop()`. |
-| `spawnAgentTask()`       | Creates background Task from `.slang` agent declaration. Maps `mode:`/`model:`/`role:`.   |
-| `promptAgentTask()`      | Enqueues next `stake` prompt via `messageQueueService.addMessage()`.                      |
-| `HistoryItem` extensions | `slangSource: string`, `flowState: FlowState` in Zod schema.                              |
+| New Code                 | Purpose                                                                                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `WorkflowTask` class     | Extends `Task`. Stores `.slang` source + `FlowState`. Override `start()` → `slangLoop()`.                                                 |
+| `spawnAgentTask()`       | Creates background Task from `.slang` agent declaration. Maps `mode:`/`tools:`/`api_configuration:`/`role:` (+ `retry:` in the executor). |
+| `promptAgentTask()`      | Enqueues next `stake` prompt via `messageQueueService.addMessage()`.                                                                      |
+| `HistoryItem` extensions | `slangSource: string`, `flowState: FlowState` in Zod schema.                                                                              |
 
 ---
 
