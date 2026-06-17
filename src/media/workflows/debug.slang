@@ -7,9 +7,11 @@
 -- reviews it, iterating until the reviewer is satisfied.
 --
 -- Topology note: every loop is COUNT-MATCHED. The Orchestrator drives each
--- loop and ends it with a terminal signal word (PROCEED_TO_FIX / FIX_APPROVED /
--- REVIEW_COMPLETE) that the corresponding agent's loop detects via `contains`,
--- so both sides exit in lockstep and the message counts never desync.
+-- loop and ends it with a terminal structured stop signal — a boolean field on
+-- the stake's output (`proceed` for the consensus loop, `approved` for the fix
+-- loop, `complete` for the review loop) that the corresponding agent detects
+-- with a `when` check, so both sides exit in lockstep and the message counts
+-- never desync.
 -- ============================================================================
 
 flow "debug" (issue: "string") {
@@ -51,7 +53,7 @@ flow "debug" (issue: "string") {
     let dev1_agrees = false
     let dev2_agrees = false
 
-    -- Phase 3 — Consensus loop (count-matched: each round the Orchestrator
+    -- Phase 2 — Consensus loop (count-matched: each round the Orchestrator
     -- sends one `share` to BOTH developers and awaits one reply from each).
     let converged = false
     repeat until converged {
@@ -93,7 +95,7 @@ flow "debug" (issue: "string") {
     stake proceed(task: "Consensus reached on the root cause; stop reconsidering. This IS the terminal signal — set proceed=true.") -> @Developer2
       output: { proceed: "boolean", details: "string" }
 
-    -- Phase 4 — User sign-off on the agreed root cause
+    -- Phase 3 — User sign-off on the agreed root cause
     escalate @Human reason:
       "The developers reached consensus on the root cause. Review their analysis below." form: {
       decision: "string" { widget: "radio", options: ["Agree — proceed with fix", "I'll provide guidance"] }
@@ -102,7 +104,7 @@ flow "debug" (issue: "string") {
 
     await user_signoff <- @Human
 
-    -- Phase 5 — Developer1 implements the fix
+    -- Phase 4 — Developer1 implements the fix
     stake assign_fix(
       root_cause: dev1_verdict,
       analysis: dev1_analysis,
@@ -111,7 +113,7 @@ flow "debug" (issue: "string") {
 
     await fix_output <- @Developer1
 
-    -- Phase 6 — Review loop (count-matched). Each round: ask Developer2 to
+    -- Phase 5 — Review loop (count-matched). Each round: ask Developer2 to
     -- review the latest fix; if not approved, send feedback to Developer1 and
     -- await the revised fix.
     let reviewer_happy = false
@@ -144,7 +146,7 @@ flow "debug" (issue: "string") {
     stake review_done(task: "The fix is approved; no further reviews needed. This IS the terminal signal — set complete=true.") -> @Developer2
       output: { complete: "boolean", details: "string" }
 
-    -- Phase 7 — Done
+    -- Phase 6 — Done
     stake report(
       issue: issue,
       root_cause: dev1_verdict,
@@ -166,7 +168,7 @@ flow "debug" (issue: "string") {
     stake investigate(task: triage_task) -> @Orchestrator
       output: { analysis: "string", root_cause: "string" }
 
-    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on PROCEED_TO_FIX)
+    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on the `proceed` stop signal)
     let consensus_done = false
     repeat until consensus_done {
       await peer_round <- @Orchestrator
@@ -184,7 +186,7 @@ flow "debug" (issue: "string") {
     stake fix(task: fix_task) -> @Orchestrator
       output: { changes_summary: "string", files_changed: "string" }
 
-    -- Phase D — Revise on review feedback (mirrors the review loop; ends on FIX_APPROVED)
+    -- Phase D — Revise on review feedback (mirrors the review loop; ends on the `approved` stop signal)
     let fix_done = false
     repeat until fix_done {
       await fix_directive <- @Orchestrator
@@ -212,7 +214,7 @@ flow "debug" (issue: "string") {
     stake investigate(task: triage_task) -> @Orchestrator
       output: { analysis: "string", root_cause: "string" }
 
-    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on PROCEED_TO_FIX)
+    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on the `proceed` stop signal)
     let consensus_done = false
     repeat until consensus_done {
       await peer_round <- @Orchestrator
@@ -225,7 +227,7 @@ flow "debug" (issue: "string") {
       }
     }
 
-    -- Phase C — Review loop (mirrors the Orchestrator; ends on REVIEW_COMPLETE)
+    -- Phase C — Review loop (mirrors the Orchestrator; ends on the `complete` stop signal)
     let review_done = false
     repeat until review_done {
       await review_task <- @Orchestrator

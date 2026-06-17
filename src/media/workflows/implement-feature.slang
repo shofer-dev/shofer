@@ -40,7 +40,7 @@ flow "implement-feature" (feature: "string", design_path: "string") {
 
     stake implement(
       design: feature,
-      instructions: "Implement the design document at ${design_path}. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
+      instructions: "Implement the design document at ${design_path}. After each slice, report progress so it can be reviewed (set done=false and summarise the slice). When ALL work is complete and accepted, set done=true. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
     ) -> @Developer
 
     stake prepare_to_review(
@@ -111,7 +111,7 @@ flow "implement-feature" (feature: "string", design_path: "string") {
 
   agent Developer {
     mode: "code"
-    role: "Feature implementation specialist. You implement the design document at EXACTLY ${design_path} (read it from that path; do not look elsewhere) by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each significant change, signal READY_FOR_REVIEW so the Reviewer can evaluate. When ALL work is complete, signal DONE."
+    role: "Feature implementation specialist. You implement the design document at EXACTLY ${design_path} (read it from that path; do not look elsewhere) by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each slice, report progress (done=false) so the Reviewer can evaluate; when ALL work is complete and accepted, set done=true."
 
     await design <- @Architect
 
