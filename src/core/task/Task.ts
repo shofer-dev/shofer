@@ -6161,6 +6161,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			language ?? "",
 			enableSubfolderRules ?? false,
 			effectiveUseAgentRules,
+			JSON.stringify(this.agentToolGroups ?? null),
 			apiConfiguration?.todoListEnabled ?? true,
 			modelInfo?.isStealthModel ?? false,
 			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false),
@@ -6213,6 +6214,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				{
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 					useAgentRules: effectiveUseAgentRules,
+					// Gate the CAPABILITIES prose to the agent's actual tool groups so a
+					// restricted workflow agent isn't told it can read/write/execute.
+					agentToolGroups: this.agentToolGroups,
 					enableSubfolderRules: enableSubfolderRules ?? false,
 					newTaskRequireTodos: vscode.workspace
 						.getConfiguration(Package.name)

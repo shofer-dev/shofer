@@ -1,6 +1,12 @@
 import * as vscode from "vscode"
 
-import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@shofer/types"
+import {
+	type ModeConfig,
+	type PromptComponent,
+	type CustomModePrompts,
+	type TodoItem,
+	type ToolGroup,
+} from "@shofer/types"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
@@ -65,10 +71,22 @@ async function generatePrompt(
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
+	// Effective capability groups: the mode's groups, optionally narrowed by a
+	// workflow agent's `.slang` `tools:` restriction (settings.agentToolGroups).
+	// When the restriction is set, the CAPABILITIES section is gated to only
+	// what the agent can actually do; undefined ⇒ no gating.
+	const modeGroupNames = new Set((modeConfig.groups ?? []).map((g) => getGroupName(g)))
+	const capabilityGroups =
+		settings?.agentToolGroups !== undefined
+			? new Set(settings.agentToolGroups.filter((g) => modeGroupNames.has(g as ToolGroup)))
+			: undefined
+
 	// Check if MCP functionality should be included
-	const hasMcpGroup = (modeConfig.groups ?? []).some((groupEntry) => getGroupName(groupEntry) === "mcp")
+	const hasMcpGroup = modeGroupNames.has("mcp")
 	const hasMcpServers = mcpHub && mcpHub.getServers().length > 0
-	const shouldIncludeMcp = hasMcpGroup && hasMcpServers
+	// A `tools:` restriction that omits `mcp` also suppresses the MCP section.
+	const mcpAllowedByRestriction = capabilityGroups === undefined || capabilityGroups.has("mcp")
+	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
 
 	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
 
@@ -102,7 +120,7 @@ ${getSharedToolUseSection()}${toolsCatalog}
 
 	${getToolUseGuidelinesSection()}
 
-${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
+${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined, capabilityGroups)}
 
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}
