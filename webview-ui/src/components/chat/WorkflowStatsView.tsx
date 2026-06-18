@@ -189,7 +189,11 @@ const WorkflowStatsView: React.FC<WorkflowStatsViewProps> = ({ taskHistory, root
 				]
 			: []),
 		{ label: "Cost", value: `$${totals.totalCost.toFixed(totals.totalCost < 1 ? 4 : 2)}` },
-		{ label: "Active time", value: formatDurationMs(totals.activeTimeMs) },
+		{
+			label: "Active time (tree total)",
+			value: formatDurationMs(totals.activeTimeMs),
+			sub: `summed across ${totals.tasks} ${totals.tasks === 1 ? "task" : "tasks"}`,
+		},
 	]
 
 	return (
