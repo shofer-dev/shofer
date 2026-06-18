@@ -12,14 +12,13 @@ import { cn } from "@src/lib/utils"
 import ApiOptions from "../settings/ApiOptions"
 import { Tab, TabContent } from "../common/Tab"
 
-import { DiscordIcon, RedditIcon } from "../common/BrandIcons"
+import { DiscordIcon, RedditIcon, XIcon } from "../common/BrandIcons"
 import ShoferHero from "./ShoferHero"
 import { Trans } from "react-i18next"
 import {
 	ArrowLeft,
 	ArrowRight,
 	Github,
-	Globe,
 	GraduationCap,
 	Heart,
 	KeyRound,
@@ -178,41 +177,57 @@ const WelcomeViewProvider = ({ onClose }: { onClose?: () => void }) => {
 						</button>
 					</div>
 
-					{/* External links: website, GitHub star, Marketplace rating, sponsor. */}
-					<div className="absolute bottom-5 right-5 flex items-center gap-2">
-						<span className="text-xs text-vscode-descriptionForeground">
-							{t("welcome:links.encourage")}
-						</span>
-						<div className="flex items-center gap-0.5">
-							{[
-							{ icon: Globe, url: "https://shofer.dev/", label: t("welcome:links.website") },
-							{
-								icon: Github,
-								url: "https://github.com/shofer-dev/shofer",
-								label: t("welcome:links.starGithub"),
-							},
-							{
-								icon: Store,
-								url: "https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer",
-								label: t("welcome:links.starMarketplace"),
-							},
-							{ icon: DiscordIcon, url: "https://discord.gg/shofer", label: t("welcome:links.discord") },
-							{ icon: RedditIcon, url: "https://www.reddit.com/r/Shofer_dev/", label: t("welcome:links.reddit") },
-							{
-								icon: Heart,
-								url: "https://github.com/sponsors/alsterg",
-								label: t("welcome:links.sponsor"),
-							},
-						].map(({ icon: Icon, url, label }) => (
-							<button
-								key={url}
-								title={label}
-								aria-label={label}
-								onClick={() => vscode.postMessage({ type: "openExternal", url })}
-								className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-vscode-descriptionForeground hover:bg-[rgba(255,255,255,0.07)] hover:text-vscode-foreground">
-								<Icon className="size-4" />
-							</button>
-						))}
+					{/* External links: GitHub star, Marketplace rating, sponsor (row 1); Discord, Reddit, X (row 2). */}
+					<div className="absolute bottom-5 right-5 flex flex-col items-end gap-1.5">
+						<div className="flex items-center gap-2">
+							<span className="text-xs text-vscode-descriptionForeground">
+								{t("welcome:links.encourage")}
+							</span>
+							<div className="flex items-center gap-0.5">
+								{[
+								{ icon: Github, url: "https://github.com/shofer-dev/shofer", label: t("welcome:links.starGithub") },
+								{
+									icon: Store,
+									url: "https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer",
+									label: t("welcome:links.starMarketplace"),
+								},
+								{
+									icon: Heart,
+									url: "https://github.com/sponsors/alsterg",
+									label: t("welcome:links.sponsor"),
+								},
+							].map(({ icon: Icon, url, label }) => (
+								<button
+									key={url}
+									title={label}
+									aria-label={label}
+									onClick={() => vscode.postMessage({ type: "openExternal", url })}
+									className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-vscode-descriptionForeground hover:bg-[rgba(255,255,255,0.07)] hover:text-vscode-foreground">
+									<Icon className="size-4" />
+								</button>
+							))}
+							</div>
+						</div>
+						<div className="flex items-center gap-2">
+							<span className="text-xs text-vscode-descriptionForeground">
+								{t("welcome:links.conversationMessage")}
+							</span>
+							<div className="flex items-center gap-0.5">
+								{[
+								{ icon: DiscordIcon, url: "https://discord.gg/shofer", label: t("welcome:links.discord") },
+								{ icon: RedditIcon, url: "https://www.reddit.com/r/Shofer_dev/", label: t("welcome:links.reddit") },
+								{ icon: XIcon, url: "https://x.com/", label: t("welcome:links.x") },
+							].map(({ icon: Icon, url, label }) => (
+								<button
+									key={url}
+									title={label}
+									aria-label={label}
+									onClick={() => vscode.postMessage({ type: "openExternal", url })}
+									className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-vscode-descriptionForeground hover:bg-[rgba(255,255,255,0.07)] hover:text-vscode-foreground">
+									<Icon className="size-4" />
+								</button>
+							))}
+							</div>
 						</div>
 					</div>
 				</TabContent>

@@ -32,6 +32,7 @@
 	"close": "Close",
 	"links": {
 		"encourage": "Enjoying Shofer? Support us",
+		"conversationMessage": "Help shape Shofer's future roadmap — be part of the conversation",
 		"website": "Visit shofer.dev",
 		"starGithub": "Star us on GitHub",
 		"starMarketplace": "Rate us on the VS Code Marketplace",

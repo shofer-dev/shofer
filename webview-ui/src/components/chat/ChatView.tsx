@@ -22,7 +22,7 @@ import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { Heart, Star, Store } from "lucide-react"
 
-import { DiscordIcon, RedditIcon } from "@src/components/common/BrandIcons"
+import { DiscordIcon, RedditIcon, XIcon } from "@src/components/common/BrandIcons"
 
 import { vscode } from "@src/utils/vscode"
 import { type DroppedContextFile, extractUriPayload, parseDroppedUris } from "@src/utils/droppedContextFiles"
@@ -2193,6 +2193,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 													label: t("chat:supportLinks.marketplace"),
 												},
 												{
+													icon: Heart,
+													url: "https://github.com/sponsors/alsterg",
+													label: t("chat:supportLinks.sponsor"),
+												},
+											].map(({ icon: Icon, url, label }) => (
+												<button
+													key={url}
+													onClick={() => vscode.postMessage({ type: "openExternal", url })}
+													className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs font-medium text-vscode-textLink-foreground hover:underline">
+													<Icon className="size-3.5" />
+													{label}
+												</button>
+											))}
+										</div>
+										<div className="mt-2 text-xs text-vscode-descriptionForeground">
+											{t("chat:supportLinks.conversationMessage")}
+										</div>
+										<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+											{[
+												{
 													icon: DiscordIcon,
 													url: "https://discord.gg/shofer",
 													label: t("chat:supportLinks.discord"),
@@ -2203,9 +2223,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 													label: t("chat:supportLinks.reddit"),
 												},
 												{
-													icon: Heart,
-													url: "https://github.com/sponsors/alsterg",
-													label: t("chat:supportLinks.sponsor"),
+													icon: XIcon,
+													url: "https://x.com/",
+													label: t("chat:supportLinks.x"),
 												},
 											].map(({ icon: Icon, url, label }) => (
 												<button
