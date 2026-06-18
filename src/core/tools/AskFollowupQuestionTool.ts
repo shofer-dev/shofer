@@ -125,40 +125,27 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 				}
 
 				// Transition the child to "waiting" while blocked on the parent's
-				// answer. This matches the pattern used by WaitForTaskTool and
-				// WaitForMcpCallTool — the child is blocked on a non-user external
-				// event (the parent agent answering via answer_subtask_question),
-				// not actively processing.
+				// answer, matching WaitForTaskTool / WaitForMcpCallTool: the child
+				// is blocked on a non-user external event (the parent agent
+				// answering via answer_subtask_question), not actively processing.
 				provider.taskManager.setState(task.taskId, { lifecycle: "waiting" })
 
-				// Register the pending question on the child and wake any
-				// wait_for_task currently blocked on this child.
-				const answerPromise = task.setPendingParentQuestion({
-					question,
-					suggestions,
-				})
-				provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
-
 				try {
+					// Register the pending question on the child and wake any
+					// wait_for_task currently blocked on this child.
+					const answerPromise = task.setPendingParentQuestion({
+						question,
+						suggestions,
+					})
+					provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
+
 					const answer = await answerPromise
-					// Child is resuming after parent answered — transition back to running.
-					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
-					// Restore parent handle status — the child is about to resume.
-					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
-						handleOnParent.status = previousHandleStatus ?? "running"
-					}
 					await task.say("user_feedback", answer, undefined)
 					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`))
 				} catch (rejectErr) {
 					// The promise rejected because the task was aborted (or the
-					// question was superseded). Transition back to running even
-					// on rejection so the child is not stranded in "waiting".
-					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
-					// Surface a clean tool error rather than letting the
-					// cast-style error leak up.
-					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
-						handleOnParent.status = previousHandleStatus ?? "running"
-					}
+					// question was superseded). Surface a clean tool error rather
+					// than letting the cast-style error leak up.
 					pushToolResult(
 						formatResponse.toolError(
 							`ask_followup_question was cancelled before the parent answered: ${
@@ -166,6 +153,17 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 							}`,
 						),
 					)
+				} finally {
+					// The child is resuming — whether the parent answered, the wait
+					// was aborted/superseded, or setup (setPendingParentQuestion /
+					// emit) threw synchronously. Restore "running" and the parent's
+					// handle view here so neither is stranded in
+					// "waiting"/"waiting_for_parent". Mirrors the finally in
+					// WaitForTaskTool / WaitForMcpCallTool.
+					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
+						handleOnParent.status = previousHandleStatus ?? "running"
+					}
 				}
 				return
 			}

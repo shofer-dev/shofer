@@ -504,6 +504,39 @@ describe("askFollowupQuestionTool", () => {
 			expect(toolResult).toContain("task aborted")
 		})
 
+		it("restores running (in finally) when setup throws synchronously — no stranding", async () => {
+			// Regression: a synchronous throw during setup (here the
+			// needs-parent-input emit, e.g. a wait_for_task listener throwing)
+			// must not strand the child in "waiting" nor the parent handle in
+			// "waiting_for_parent". The finally restores both.
+			const task = buildBackgroundChildTask(Promise.resolve("never awaited"))
+			providerRef.deref().taskManager.emit.mockImplementation(() => {
+				throw new Error("listener boom")
+			})
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: { question: "Need help?", follow_up: [{ text: "Yes" }] },
+				partial: false,
+			}
+
+			// Must not throw — the setup error is caught and surfaced as a tool error.
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn().mockResolvedValue(true),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// waiting was set, and running was STILL restored despite the throw.
+			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
+			expect(setStateSpy).toHaveBeenLastCalledWith("child-task-1", { lifecycle: "running" })
+			// Parent's view of the child is restored too (not stranded).
+			expect(handleOnParent.status).toBe("running")
+			expect(toolResult).toContain("listener boom")
+		})
+
 		it("does NOT set waiting when askApproval returns false", async () => {
 			const answerPromise = Promise.resolve("parent's answer")
 			const task = buildBackgroundChildTask(answerPromise)
