@@ -460,9 +460,15 @@ const App = () => {
 					 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
 					 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
 					 * which is why workflow-mode dropdowns rendered behind/under the view. */}
-					<div id="shofer-portal" />
 				</>
 			)}
+			{/* The portal target for always-mounted popovers (the "+" chooser and
+			 * Tasks drawer). It must live OUTSIDE the welcome/main branch so it is
+			 * never unmounted — useShoferPortal resolves it once on mount, so a
+			 * conditionally-rendered container would leave those popovers with a
+			 * detached/missing node when the welcome panel (or any non-chat view)
+			 * is active. Rendered exactly once to keep the id unique. */}
+			<div id="shofer-portal" />
 			{/* Overlays mounted regardless of the welcome panel, so the title-bar
 			 * "+" chooser and Tasks drawer pop up over it without dismissing it.
 			 * Only picking New Task/Workflow (which opens the launcher) replaces it. */}
