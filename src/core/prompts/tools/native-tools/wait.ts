@@ -1,13 +1,15 @@
 import type OpenAI from "openai"
 
-const WAIT_DESCRIPTION = `Wait for an incoming message. Call this tool WHENEVER you have nothing to do right now except wait for a message, reply, or signal to arrive from another task, a peer, or the orchestrator.
+const WAIT_DESCRIPTION = `Wait for an incoming MESSAGE from another task. Call this tool WHENEVER you have nothing to do right now except wait for a message, reply, or signal to arrive from another task, a peer, or the orchestrator.
 
-This is the CORRECT and ONLY way to wait. Do NOT loop, poll, re-read state, or call other tools to "pass the time" — that wastes turns and tokens. The moment you find yourself waiting for a message to arrive, call \`wait\`. You will be automatically resumed and re-activated as soon as a message arrives, so it is always safe to wait.
+Use \`wait_for_message\` ONLY for inter-task messages — i.e. when you are blocked on another task/peer/orchestrator sending you something. To wait for anything else (a fixed delay, an external process, a rate-limit window), use \`sleep\` instead; \`sleep\` pauses for a set number of seconds and does NOT listen for messages.
 
-Typical triggers — call \`wait\` immediately if any of these is true:
+This is the CORRECT and ONLY way to wait for a message. Do NOT loop, poll, re-read state, \`sleep\`, or call other tools to "pass the time" while waiting for a message — that wastes turns and tokens. The moment you find yourself waiting for a message to arrive, call \`wait_for_message\`. You will be automatically resumed and re-activated as soon as a message arrives, so it is always safe to wait.
+
+Typical triggers — call \`wait_for_message\` immediately if any of these is true:
 - You sent a message to a peer task and are waiting for its reply.
 - You delegated work and are waiting for a result or a notification.
-- You have been told to wait for further instructions or for an event.
+- You have been told to wait for further instructions or for an event from another task.
 - You have completed everything you can do until someone messages you.
 
 Mechanically this yields control like \`attempt_completion\` (it ends the current turn and returns control), but you do NOT need to formulate a full result — just rate the work done so far and optionally say what you are waiting for.
@@ -16,12 +18,14 @@ Parameters:
 - rating: (required) A self-assessment of the work you have completed so far, up to this point of waiting. One of "poor" (significant issues or incomplete), "well" (acceptable, room for improvement), or "excellent" (high quality).
 - reason: (optional) A short note on what you are waiting for. Defaults to "waiting" if omitted.
 
-Example: { "rating": "well", "reason": "waiting for a reply from the research task" }`
+Example: { "rating": "well", "reason": "waiting for a reply from the research task" }
+
+(To wait for a fixed amount of time rather than a message, use \`sleep\` instead.)`
 
 export default {
 	type: "function",
 	function: {
-		name: "wait",
+		name: "wait_for_message",
 		description: WAIT_DESCRIPTION,
 		// `rating` is required, but `reason` is optional/advisory with a host-side
 		// default, so this schema is intentionally NOT strict (OpenAI Structured

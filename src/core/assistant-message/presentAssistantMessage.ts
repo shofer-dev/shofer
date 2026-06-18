@@ -478,7 +478,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.question}']`
 					case "attempt_completion":
 						return `[${block.name}]`
-					case "wait":
+					case "wait_for_message":
 						return `[${block.name}${block.params.reason ? `: ${block.params.reason}` : ""}]`
 					case "switch_mode":
 						return `[${block.name} to '${block.params.mode_slug}'${block.params.task_id ? ` for task ${block.params.task_id}` : ""}${block.params.reason ? ` because: ${block.params.reason}` : ""}]`
@@ -1199,18 +1199,18 @@ export async function presentAssistantMessage(shofer: Task) {
 					)
 					break
 				}
-				case "wait": {
-					// `wait` is an alias for attempt_completion with canned params — it
-					// is the same self-declared terminal state, so it shares the
-					// duplicate-completion guard (see the attempt_completion case above).
+				case "wait_for_message": {
+					// `wait_for_message` is an alias for attempt_completion with canned
+					// params — it is the same self-declared terminal state, so it shares
+					// the duplicate-completion guard (see the attempt_completion case above).
 					if (!block.partial) {
 						if (shofer.didExecuteAttemptCompletion) {
 							webviewLog.info(
-								`[presentAssistantMessage] Skipping duplicate completion via wait (tool_use_id: ${toolCallId})`,
+								`[presentAssistantMessage] Skipping duplicate completion via wait_for_message (tool_use_id: ${toolCallId})`,
 							)
 							pushToolResult(
 								formatResponse.toolError(
-									"Skipped duplicate completion. Only one attempt_completion / wait is allowed per response.",
+									"Skipped duplicate completion. Only one attempt_completion / wait_for_message is allowed per response.",
 								),
 							)
 							break
@@ -1225,7 +1225,7 @@ export async function presentAssistantMessage(shofer: Task) {
 						askFinishSubTaskApproval,
 						toolDescription,
 					}
-					await waitTool.handle(shofer, block as ToolUse<"wait">, waitCallbacks)
+					await waitTool.handle(shofer, block as ToolUse<"wait_for_message">, waitCallbacks)
 					break
 				}
 				case "run_slash_command":

@@ -287,7 +287,7 @@ parameters. `TOOL_ALIASES` (in [`tool.ts`](../packages/types/src/tool.ts)) only
 covers **pure renames** — same params, different name. When the alias needs to
 **inject different params**, it must be a real tool whose handler delegates.
 
-The `wait` tool is the reference example: it is an alias for `attempt_completion`
+The `wait_for_message` tool is the reference example: it is an alias for `attempt_completion`
 that lets the agent yield as a self-declared terminal state without formulating a
 full result. The agent may pass optional `rating` / `reason`; the handler maps
 `reason → result`, defaults `rating → "well"`, and calls
@@ -303,28 +303,28 @@ Checklist deltas for a delegating alias:
 - **Parser must emit `nativeArgs` for the alias's no-blocking-param case.** Do
   **not** add a missing-field check or guard the assignment (`if (args.x)`) for
   params the handler defaults — emit `nativeArgs` unconditionally, or the
-  dispatcher rejects the call as "missing nativeArgs". (`wait`'s parser cases set
-  `{ rating, reason }` with no guard. Note `wait`'s `rating` is schema-_required_
+  dispatcher rejects the call as "missing nativeArgs". (`wait_for_message`'s parser cases set
+  `{ rating, reason }` with no guard. Note `wait_for_message`'s `rating` is schema-_required_
   but, like `attempt_completion`'s rating, gets no parser-level missing check
   because the handler applies a defensive default — the schema enforces it at the
   model boundary, the handler tolerates non-strict providers.)
 - **Handler delegates via `.execute()`, not `.handle()`.** Call the target's
   `execute(mappedParams, task, callbacks)` directly so you control the params.
-  The router constructs whatever callback bag the target needs (for `wait`, the
+  The router constructs whatever callback bag the target needs (for `wait_for_message`, the
   same `AttemptCompletionCallbacks` the `attempt_completion` case builds).
 - **Resolve defaults in the alias, not the target.** Defaults can differ:
-  `attempt_completion` defaults a missing rating to `"poor"`, but `wait` wants
+  `attempt_completion` defaults a missing rating to `"poor"`, but `wait_for_message` wants
   `"well"`, so `WaitTool.execute` resolves `"well"` _before_ delegating. Keep the
-  schema non-strict whenever any param is optional (e.g. `wait`'s `reason`), since
+  schema non-strict whenever any param is optional (e.g. `wait_for_message`'s `reason`), since
   strict mode would force the model to emit every property — even when other
-  params (e.g. `wait`'s `rating`) are required, per the Advisory Parameter
+  params (e.g. `wait_for_message`'s `rating`) are required, per the Advisory Parameter
   Defaults Rule.
 - **Auto-approval / `ShoferSayTool` / `ChatRow` (Steps 8–11) may be unneeded.**
   `attempt_completion` never calls `askApproval` — it is terminal and just
-  `say`s `completion_result` — so `wait` inherits that rendering and needs none
+  `say`s `completion_result` — so `wait_for_message` inherits that rendering and needs none
   of the auto-approval wiring. An alias whose target _does_ post an `ask("tool")`
   would still need Step 10.
-- **Shared terminal/side-effect guards belong in the router.** `wait` mirrors the
+- **Shared terminal/side-effect guards belong in the router.** `wait_for_message` mirrors the
   `didExecuteAttemptCompletion` duplicate-completion guard in its router case
   because it is the same terminal state.
 

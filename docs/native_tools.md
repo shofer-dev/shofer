@@ -383,7 +383,7 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 
 ### `sleep`
 
-Pauses agent execution for the given number of seconds. Useful for polling external resources where a small back-off is needed between checks.
+Pauses agent execution for the given number of seconds. Useful for polling external resources where a small back-off is needed between checks, or any other time-based wait. To wait for a **message from another task** (not a fixed delay), use [`wait_for_message`](#wait_for_message) instead — it resumes the instant a message arrives.
 
 | Param     | Type   | Required | Description                  |
 | --------- | ------ | :------: | ---------------------------- |
@@ -393,23 +393,23 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 
 ## Task & Workflow Management
 
-| Tool                      | Origin | Group | Always Available | Status | Description                                                   |
-| ------------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------------------- |
-| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form) |
-| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                        |
-| `wait`                    | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield / wait for a message    |
-| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                  |
-| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                         |
-| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                |
-| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)   |
-| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks             |
-| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task            |
-| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                     |
-| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root        |
-| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                          |
-| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                      |
-| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                            |
-| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                    |
+| Tool                      | Origin | Group | Always Available | Status | Description                                                                                                            |
+| ------------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------------------------------------------------------------------------------- |
+| `ask_followup_question`   | 🔵 RC  | –     |        ✅        |   ✅   | Ask the user a question (suggested answers and/or typed form)                                                          |
+| `attempt_completion`      | 🔵 RC  | –     |        ✅        |   ✅   | Signal task completion                                                                                                 |
+| `wait_for_message`        | 🟣 AW  | –     |        ✅        |   ✅   | Alias for `attempt_completion`: yield while waiting for a message from another task (use `sleep` for time-based waits) |
+| `switch_mode`             | 🔵 RC  | mode  |        ✅        |   ✅   | Switch own or child task to a different mode                                                                           |
+| `new_task`                | 🔵 RC  | mode  |        ✅        |   ✅   | Spawn a sub-task (sync or background)                                                                                  |
+| `check_task_status`       | 🟣 AW  | –     |        ✅        |   ✅   | Check status/result of a background child task                                                                         |
+| `wait_for_task`           | 🟣 AW  | –     |        ✅        |   ✅   | Block until one or more background tasks complete (all/any)                                                            |
+| `cancel_tasks`            | 🟣 AW  | –     |        ✅        |   ✅   | Cancel one or more running background child tasks                                                                      |
+| `answer_subtask_question` | 🟣 AW  | –     |        ✅        |   ✅   | Answer a question asked by a background child task                                                                     |
+| `list_background_tasks`   | 🟣 AW  | –     |        ✅        |   ✅   | List background tasks (children or peers)                                                                              |
+| `send_message_to_task`    | 🟣 AW  | –     |        ✅        |   ✅   | Send async/sync messages to peer tasks under same root                                                                 |
+| `update_todo_list`        | 🔵 RC  | –     |        ✅        |   ✅   | Update the TODO list                                                                                                   |
+| `skills`                  | 🔵 RC  | –     |        ✅        |   ✅   | Load and execute a skill                                                                                               |
+| `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                                                                     |
+| `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                                                                             |
 
 ### `ask_followup_question`
 
@@ -702,9 +702,9 @@ The `rating` parameter provides a self-assessment of how well the task was compl
 
 The optional `feedback` parameter captures concrete observations about tooling or system prompt shortcomings encountered during the task. This feedback is routed to Shofer.Dev developers for continuous improvement.
 
-### `wait`
+### `wait_for_message`
 
-A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended for message-driven / orchestrator flows: after sending a message to a peer (`send_message_to_task`), call `wait` to yield, and you are automatically resumed when a reply/message arrives.
+A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended **specifically for waiting on an inter-task message**: after sending a message to a peer (`send_message_to_task`), call `wait_for_message` to yield, and you are automatically resumed when a reply/message arrives. To wait for a fixed amount of time (an external process, a rate-limit window) rather than a message, use [`sleep`](#sleep) instead.
 
 The handler ([`WaitTool.ts`](../src/core/tools/WaitTool.ts)) maps the params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. `rating` is **required** (it covers the work completed so far); `reason` is optional and defaults to `"waiting"`. The handler keeps a defensive `"well"` fallback for the rating only for providers that don't enforce strict schemas (mirroring `attempt_completion`, which defaults a missing rating to `"poor"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
 
@@ -818,7 +818,7 @@ To read off availability for any tool:
 
 `ALWAYS_AVAILABLE_TOOLS` (available in every mode): `attempt_completion`,
 `update_todo_list`, `run_slash_command` (🔒), `skills`, `set_task_title`,
-`give_feedback`, `list_background_tasks`, `send_message_to_task`, `wait`. Note
+`give_feedback`, `list_background_tasks`, `send_message_to_task`, `wait_for_message`. Note
 `switch_mode` is **not** always-available — it lives in the `mode` group (only
 `code` carries it), and the `subtasks` tools (`new_task`, `check_task_status`,
 `wait_for_task`, `cancel_tasks`, `answer_subtask_question`) require the `subtasks`

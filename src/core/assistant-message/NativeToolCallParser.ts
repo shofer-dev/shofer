@@ -591,7 +591,7 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "wait":
+			case "wait_for_message":
 				// Both params optional — always emit nativeArgs so the dispatcher
 				// does not reject the call as "missing nativeArgs".
 				nativeArgs = {
@@ -1291,7 +1291,7 @@ export class NativeToolCallParser {
 					}
 					break
 
-				case "wait":
+				case "wait_for_message":
 					// Both params optional — always emit nativeArgs so the dispatcher
 					// does not reject the call as "missing nativeArgs".
 					nativeArgs = {
