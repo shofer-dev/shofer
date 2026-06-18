@@ -124,6 +124,13 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 					handleOnParent.status = "waiting_for_parent"
 				}
 
+				// Transition the child to "waiting" while blocked on the parent's
+				// answer. This matches the pattern used by WaitForTaskTool and
+				// WaitForMcpCallTool — the child is blocked on a non-user external
+				// event (the parent agent answering via answer_subtask_question),
+				// not actively processing.
+				provider.taskManager.setState(task.taskId, { lifecycle: "waiting" })
+
 				// Register the pending question on the child and wake any
 				// wait_for_task currently blocked on this child.
 				const answerPromise = task.setPendingParentQuestion({
@@ -134,6 +141,8 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 
 				try {
 					const answer = await answerPromise
+					// Child is resuming after parent answered — transition back to running.
+					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
 					// Restore parent handle status — the child is about to resume.
 					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
 						handleOnParent.status = previousHandleStatus ?? "running"
@@ -142,8 +151,11 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`))
 				} catch (rejectErr) {
 					// The promise rejected because the task was aborted (or the
-					// question was superseded). Surface a clean tool error
-					// rather than letting the cast-style error leak up.
+					// question was superseded). Transition back to running even
+					// on rejection so the child is not stranded in "waiting".
+					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+					// Surface a clean tool error rather than letting the
+					// cast-style error leak up.
 					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
 						handleOnParent.status = previousHandleStatus ?? "running"
 					}

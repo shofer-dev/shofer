@@ -405,4 +405,162 @@ describe("askFollowupQuestionTool", () => {
 			}
 		})
 	})
+
+	describe("background child state transitions", () => {
+		let setStateSpy: ReturnType<typeof vi.fn>
+		let providerRef: { deref: () => any }
+		let handleOnParent: { status: string }
+
+		beforeEach(() => {
+			setStateSpy = vi.fn()
+			handleOnParent = { status: "running" }
+
+			const parentInstance = {
+				backgroundChildren: new Map([["child-task-1", handleOnParent]]),
+			}
+
+			const provider = {
+				taskManager: {
+					setState: setStateSpy,
+					getManagedTaskInstance: vi.fn().mockReturnValue(parentInstance),
+					emit: vi.fn(),
+				},
+			}
+
+			providerRef = { deref: () => provider }
+		})
+
+		function buildBackgroundChildTask(answerPromise: Promise<string>): typeof mockShofer {
+			return {
+				...mockShofer,
+				taskId: "child-task-1",
+				parentTaskId: "parent-task-1",
+				isBackgroundTask: true,
+				providerRef,
+				setPendingParentQuestion: vi.fn().mockReturnValue(answerPromise),
+			}
+		}
+
+		it("transitions to waiting while awaiting parent answer, then running on resolve", async () => {
+			const answerPromise = Promise.resolve("parent's answer")
+			const task = buildBackgroundChildTask(answerPromise)
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: {
+					question: "Need help?",
+					follow_up: [{ text: "Yes" }],
+				},
+				partial: false,
+			}
+
+			const askApproval = vi.fn().mockResolvedValue(true)
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval,
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
+			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "running" })
+			expect(setStateSpy.mock.calls[0]).toEqual(["child-task-1", { lifecycle: "waiting" }])
+			expect(setStateSpy.mock.calls[1]).toEqual(["child-task-1", { lifecycle: "running" }])
+		})
+
+		it("transitions to waiting then back to running on rejection", async () => {
+			const answerPromise = Promise.reject(new Error("task aborted"))
+			const task = buildBackgroundChildTask(answerPromise)
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: {
+					question: "Need help?",
+					follow_up: [{ text: "Yes" }],
+				},
+				partial: false,
+			}
+
+			const askApproval = vi.fn().mockResolvedValue(true)
+
+			// The catch block swallows the rejection and emits a tool error,
+			// so handle() does not throw.
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval,
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
+			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "running" })
+			expect(setStateSpy.mock.calls[0]).toEqual(["child-task-1", { lifecycle: "waiting" }])
+			expect(setStateSpy.mock.calls[1]).toEqual(["child-task-1", { lifecycle: "running" }])
+
+			// The tool error should surface the rejection reason.
+			expect(toolResult).toContain("task aborted")
+		})
+
+		it("does NOT set waiting when askApproval returns false", async () => {
+			const answerPromise = Promise.resolve("parent's answer")
+			const task = buildBackgroundChildTask(answerPromise)
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: {
+					question: "Need help?",
+					follow_up: [{ text: "Yes" }],
+				},
+				partial: false,
+			}
+
+			const askApproval = vi.fn().mockResolvedValue(false)
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval,
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(setStateSpy).not.toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
+			expect(setStateSpy).not.toHaveBeenCalled()
+		})
+
+		it("foreground task does NOT call setState('waiting')", async () => {
+			// Foreground task has no parentTaskId and no isBackgroundTask —
+			// it goes through the normal task.ask("followup", ...) path.
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "What now?" },
+				nativeArgs: {
+					question: "What now?",
+					follow_up: [{ text: "Option 1" }],
+				},
+				partial: false,
+			}
+
+			// Reset mockShofer.ask to the default so the foreground path works.
+			mockShofer.ask.mockResolvedValue({ text: "User's answer" })
+
+			// The default mockShofer has no providerRef/parentTaskId/isBackgroundTask,
+			// so it falls through to the foreground path.
+			await askFollowupQuestionTool.handle(mockShofer as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// No setState spy on the foreground task — the mock doesn't have
+			// taskManager at all. The state transition goes through TaskInteractive
+			// → waiting_input, which is out of scope for this test. We just verify
+			// that the foreground path was taken (task.ask was called).
+			expect(mockShofer.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
+		})
+	})
 })
