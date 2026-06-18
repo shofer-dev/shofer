@@ -9,13 +9,16 @@ export interface Feature {
 	anchor: string
 	/** High-level expanded copy for the detail section (omit to skip a detail block — e.g. Workflows links to its own #workflows section). */
 	detail?: string
+	/** Alternative to `detail`: render the expanded copy as a bulleted list. */
+	detailBullets?: string[]
 	/** Screenshots for the detail section. */
 	images?: { src: string; caption: string }[]
 	/** Controls how images are laid out.
 	 *  - "carousel" (default for >1): scrolls one at a time.
 	 *  - "grid": shows images side-by-side in a responsive grid.
-	 *  - "side": image sits to the right of the text (single images only). */
-	imageLayout?: "carousel" | "grid" | "side"
+	 *  - "side": image sits to the right of the text (single images only).
+	 *  - "side-carousel": a carousel of all images sits to the right of the text. */
+	imageLayout?: "carousel" | "grid" | "side" | "side-carousel"
 }
 
 // Card order is curated; it also matches the order the detail/target sections
@@ -184,12 +187,18 @@ export const features: Feature[] = [
 		docsUrl: "https://github.com/shofer-dev/shofer/blob/master/USER_MANUAL.md",
 		docsLabel: "User Manual",
 		anchor: "ui-ux",
-		detail: "A session changelog shows every file modified at a glance — no more git diff to remember what happened. Each task ends with an agent self-assessment and rating, giving you a quick signal on quality. Git submodules work out of the box — no configuration, no workarounds — Shofer's code-indexer, git-history watcher, and file watcher descend into nested repos automatically. LSP integration lets the agent rename symbols and find all usages across the workspace via the language server. And the auto-approval system extends to per-MCP-tool toggles and categories, so you can keep fast iteration with fine-grained control.",
+		detailBullets: [
+			"A session changelog shows every file modified at a glance — no more git diff to remember what happened.",
+			"Each task ends with an agent self-assessment and rating, giving you a quick signal on quality.",
+			"Git submodules work out of the box — no configuration, no workarounds — Shofer's code-indexer, git-history watcher, and file watcher descend into nested repos automatically.",
+			"LSP integration lets the agent rename symbols and find all usages across the workspace via the language server.",
+			"And the auto-approval system extends to per-MCP-tool toggles and categories, so you can keep fast iteration with fine-grained control.",
+		],
 		images: [
 			{ src: "changelist.png", caption: "Session changelog — every file changed, at a glance" },
 			{ src: "rating.png", caption: "Agent self-assessment and rating overlay after a task completes" },
 			{ src: "auto-approve.png", caption: "Per-MCP-tool auto-approval toggles in Settings" },
 		],
-		imageLayout: "side",
+		imageLayout: "side-carousel",
 	},
 ]

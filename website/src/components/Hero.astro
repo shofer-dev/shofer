@@ -68,30 +68,24 @@ import { siteConfig } from "../data/navigation";
       <!-- Carousel — right side, only visible on lg+ -->
       <div class="hidden lg:block flex-shrink-0 w-96 xl:w-[29rem] animate-fade-in">
         <div id="hero-carousel" class="relative w-full">
-          <img
-            src="/task-stats.png"
-            alt=""
-            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
-            loading="eager"
-          />
-          <img
-            src="/workflow-topology.png"
-            alt=""
-            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
-            loading="eager"
-          />
-          <img
-            src="/swimlanes.png"
-            alt=""
-            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
-            loading="eager"
-          />
-          <img
-            src="/task-sequence-diagram.png"
-            alt=""
-            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
-            loading="eager"
-          />
+          <!-- DESIGN #1: Crossfade + counter -->
+          <div class="hero-stage relative w-full rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40 overflow-hidden">
+            <img src="/task-stats.png" alt="" class="hero-slide" loading="eager" />
+            <img src="/workflow-topology.png" alt="" class="hero-slide" loading="eager" />
+            <img src="/swimlanes.png" alt="" class="hero-slide" loading="eager" />
+            <img src="/task-sequence-diagram.png" alt="" class="hero-slide" loading="eager" />
+            <div
+              class="hero-counter absolute top-3 right-3 px-2 py-0.5 rounded-md text-xs font-medium text-white bg-gray-900/70 backdrop-blur-sm tabular-nums"
+            >
+              1 / 4
+            </div>
+          </div>
+          <div class="hero-dots flex justify-center gap-2 mt-4">
+            <button type="button" class="hero-dot" aria-label="Go to slide 1" />
+            <button type="button" class="hero-dot" aria-label="Go to slide 2" />
+            <button type="button" class="hero-dot" aria-label="Go to slide 3" />
+            <button type="button" class="hero-dot" aria-label="Go to slide 4" />
+          </div>
         </div>
       </div>
     </div>
@@ -99,83 +93,71 @@ import { siteConfig } from "../data/navigation";
 </section>
 
 <style>
-  /* Stacked-deck carousel: the front card is in normal flow (defines the
-     container height); the rest fan out behind it with a slight shift so it's
-     visible that more screenshots are coming. */
-  .hero-card {
-    display: block;
-    height: auto;
-    margin: 0;
-    background: white;
-    transform-origin: top left;
-    will-change: transform, opacity;
-    transition:
-      transform 0.5s ease,
-      opacity 0.5s ease;
-  }
-  :global(.dark) .hero-card {
-    background: rgb(17 24 39);
-  }
-  .hero-card.is-front {
-    position: relative;
-  }
-  .hero-card:not(.is-front) {
+  /* DESIGN #1 — Crossfade + counter: all slides stacked, one visible at a time;
+     JS sizes the stage to the active image so it always hugs the screenshot. */
+  .hero-slide {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: auto;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .hero-slide.is-active {
+    opacity: 1;
+  }
+  .hero-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: rgb(209 213 219);
+    transition:
+      background 0.2s,
+      transform 0.2s;
+  }
+  :global(.dark) .hero-dot {
+    background: rgb(75 85 99);
+  }
+  .hero-dot[aria-selected="true"] {
+    background: rgb(37 99 235);
+    transform: scale(1.3);
   }
 </style>
 
 <script>
-  // Stacked-deck autoplay carousel. The upcoming cards peek out behind the
-  // front one with a slight diagonal shift, so the user sees more are coming.
-  const PEEK_X = 16; // px horizontal offset per card of depth
-  const PEEK_Y = 14; // px vertical offset per card of depth
-  const DEPTH = 3; // how many upcoming cards stay visible behind the front
-  const INTERVAL = 2200; // ms between auto-advances
+  // DESIGN #1 — Crossfade + counter.
+  const INTERVAL = 3000; // ms between auto-advances
 
-  const container = document.getElementById("hero-carousel");
-  const slides = Array.from(document.querySelectorAll<HTMLImageElement>("#hero-carousel .hero-card"));
+  const stage = document.querySelector<HTMLElement>("#hero-carousel .hero-stage");
+  const slides = Array.from(document.querySelectorAll<HTMLImageElement>("#hero-carousel .hero-slide"));
+  const dots = Array.from(document.querySelectorAll<HTMLElement>("#hero-carousel .hero-dot"));
+  const counter = document.querySelector<HTMLElement>("#hero-carousel .hero-counter");
   const n = slides.length;
-  if (container && n > 0) {
+  if (stage && n > 0) {
     let current = 0;
-    const reserveX = DEPTH * PEEK_X;
-    const reserveY = DEPTH * PEEK_Y;
 
-    // Cards are narrower than the column by the fan width, leaving room on the
-    // right; the bottom padding reserves room for the downward shift.
-    const size = () => {
-      const w = container.clientWidth - reserveX;
-      slides.forEach((s) => (s.style.width = `${w}px`));
-      container.style.paddingBottom = `${reserveY}px`;
+    const sizeStage = () => {
+      const img = slides[current];
+      if (img.naturalWidth && img.naturalHeight) {
+        stage.style.height = `${(img.naturalHeight / img.naturalWidth) * stage.clientWidth}px`;
+      }
     };
 
-    const layout = () => {
-      slides.forEach((s, i) => {
-        const depth = (i - current + n) % n; // 0 = front, 1 = next, ...
-        s.classList.toggle("is-front", depth === 0);
-        if (depth === 0) {
-          s.style.transform = "translate(0, 0) scale(1)";
-          s.style.opacity = "1";
-          s.style.zIndex = "30";
-        } else if (depth <= DEPTH) {
-          s.style.transform = `translate(${depth * PEEK_X}px, ${depth * PEEK_Y}px) scale(${1 - depth * 0.045})`;
-          s.style.opacity = "1";
-          s.style.zIndex = `${30 - depth}`;
-        } else {
-          s.style.transform = "translate(0, 0)";
-          s.style.opacity = "0";
-          s.style.zIndex = "0";
-        }
-      });
+    const show = (i: number) => {
+      current = (i + n) % n;
+      slides.forEach((s, k) => s.classList.toggle("is-active", k === current));
+      dots.forEach((d, k) => d.setAttribute("aria-selected", k === current ? "true" : "false"));
+      if (counter) counter.textContent = `${current + 1} / ${n}`;
+      sizeStage();
     };
 
-    size();
-    layout();
     slides.forEach((s) => {
-      if (!s.complete) s.addEventListener("load", () => { size(); layout(); }, { once: true });
+      if (!s.complete) s.addEventListener("load", sizeStage, { once: true });
     });
-    window.addEventListener("resize", () => { size(); layout(); });
-    if (n > 1) setInterval(() => { current = (current + 1) % n; layout(); }, INTERVAL);
+    dots.forEach((d, i) => d.addEventListener("click", () => show(i)));
+    window.addEventListener("resize", sizeStage);
+    show(0);
+    if (n > 1) setInterval(() => show(current + 1), INTERVAL);
   }
 </script>
