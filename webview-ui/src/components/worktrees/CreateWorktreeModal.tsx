@@ -44,6 +44,8 @@ export const CreateWorktreeModal = ({
 	worktreePathRef.current = worktreePath
 	const branchNameRef = useRef(branchName)
 	branchNameRef.current = branchName
+	const openRef = useRef(open)
+	openRef.current = open
 
 	// Data state
 	const [defaults, setDefaults] = useState<WorktreeDefaultsResponse | null>(null)
@@ -116,6 +118,14 @@ export const CreateWorktreeModal = ({
 					break
 				}
 				case "worktreeResult": {
+					// Guard: only process this message when the modal is actually open.
+					// Multiple CreateWorktreeModal instances (e.g. WorktreesView in Settings
+					// and WorktreeIndicator in ChatView) listen on the same IPC channel;
+					// a closed instance must ignore stray worktreeResult messages from
+					// another instance's operation, otherwise it fires createParallelTask
+					// \→ invoke:newChat \→ tab switch that unmounts the active view.
+					if (!openRef.current) break
+
 					setIsCreating(false)
 					setCopyProgress(null)
 					if (message.success) {

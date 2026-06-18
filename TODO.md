@@ -1,12 +1,15 @@
-FR: Add the submodule structure of the current repo (if workspace is a git) in system-prompt context (see extensions/shofer/docs/system_prompt.md)
+DONE FR: Add the submodule structure of the current repo (if workspace is a git) in system-prompt context (see extensions/shofer/docs/system_prompt.md)
 
-FR: When a task or subtask uses ask_followup_question, its state should transition to "waiting" or similar. Today is still `running`.
+DONE FR: When a task or subtask uses ask_followup_question, its state should transition to "waiting" or similar. Today is still `running`.
 
-BUG: Settings->Worktrees : when a new worktree is created to deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
+FR:
+FR: Amend the ask_live_memory tool description to clarify that it should be used for bigger tasks, and not for simple questions that can be answered quickly by the agent itself with a few reads.
 
-BUG: Sometimes when exporting a workflow json file, the UI becomes unresponsive.
+DONE BUG: Settings->Worktrees : when a new worktree is created or deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
 
-BUG: extensions/shofer/docs/performance_optimizations.md the implementation of "Load older messages..." is working per se, but is causing the ChatView to jump at the very top first, and then down to the very button, with every message posted.
+WIP BUG: Sometimes when exporting a workflow json file, the UI becomes unresponsive.
+
+WIP BUG: extensions/shofer/docs/performance_optimizations.md the implementation of "Load older messages..." is working per se, but is causing the ChatView to jump at the very top first, and then down to the very button, with every message posted.
 
 BUG: ask_followup_question `follow_up` param should be optional, since we introduced the `form` param (also optional). But one of them should be present (not both).
 
