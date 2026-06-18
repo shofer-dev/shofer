@@ -136,6 +136,72 @@ export async function listSubmoduleDisplayPaths(workspacePath: string): Promise<
 }
 
 /**
+ * Resolve URL/branch metadata for a set of submodule display paths, correctly
+ * handling nested submodules.
+ *
+ * `listSubmoduleDisplayPaths` returns workspace-relative `$displaypath`s
+ * (recursively), but `.gitmodules` entries are *superproject*-relative. A flat
+ * top-level parse therefore can't find nested submodules (e.g. a top-level
+ * `.gitmodules` has no entry for `code-server/lib/vscode`). For each display
+ * path we read the `.gitmodules` of its *immediate* superproject — the
+ * workspace root for top-level submodules, or the nearest ancestor submodule
+ * for nested ones — and look it up by its superproject-relative path.
+ *
+ * Display paths whose metadata can't be resolved are still returned (with an
+ * empty `url`), so a submodule is never silently dropped from the listing.
+ */
+export async function resolveSubmoduleEntries(
+	workspacePath: string,
+	displayPaths: string[],
+): Promise<SubmoduleEntry[]> {
+	const gitmodulesCache = new Map<string, Map<string, SubmoduleEntry>>()
+	const getMap = async (dir: string): Promise<Map<string, SubmoduleEntry>> => {
+		let map = gitmodulesCache.get(dir)
+		if (!map) {
+			map = await parseGitmodules(dir)
+			gitmodulesCache.set(dir, map)
+		}
+		return map
+	}
+
+	const entries: SubmoduleEntry[] = []
+	for (const displayPath of displayPaths) {
+		// The immediate superproject is the longest *other* display path that is
+		// an ancestor directory of this one (guarding against partial-name matches
+		// like `a` vs `a-b` via the trailing slash). Absent ⇒ a top-level submodule.
+		let parentRel = ""
+		for (const candidate of displayPaths) {
+			if (
+				candidate !== displayPath &&
+				displayPath.startsWith(`${candidate}/`) &&
+				candidate.length > parentRel.length
+			) {
+				parentRel = candidate
+			}
+		}
+		const parentDir = parentRel ? path.join(workspacePath, parentRel) : workspacePath
+		const relativePath = parentRel ? displayPath.slice(parentRel.length + 1) : displayPath
+		const meta = (await getMap(parentDir)).get(relativePath)
+		entries.push({ path: displayPath, url: meta?.url ?? "", branch: meta?.branch })
+	}
+	return entries
+}
+
+/**
+ * Enumerate every initialised submodule of the workspace (recursively) as
+ * {@link SubmoduleEntry} records with resolved URL/branch metadata — including
+ * nested submodules. Returns an empty array when the repo has no submodules or
+ * git/.gitmodules is unavailable.
+ */
+export async function listSubmodules(workspacePath: string): Promise<SubmoduleEntry[]> {
+	const displayPaths = await listSubmoduleDisplayPaths(workspacePath)
+	if (displayPaths.length === 0) {
+		return []
+	}
+	return resolveSubmoduleEntries(workspacePath, displayPaths)
+}
+
+/**
  * Build a "WORKSPACE SUBMODULES" block for the system prompt.
  *
  * Returns an empty string when `entries` is empty or undefined — no block
@@ -162,7 +228,10 @@ export function formatSubmoduleBlock(entries: SubmoduleEntry[] | undefined): str
 
 	for (const entry of visible) {
 		const branchSuffix = entry.branch ? ` (branch: ${entry.branch})` : ""
-		lines.push(`- \`${entry.path}\` → ${entry.url}${branchSuffix}`)
+		// URL may be empty when metadata couldn't be resolved (e.g. a corrupt or
+		// missing `.gitmodules` entry); still list the path so it isn't hidden.
+		const target = entry.url ? ` → ${entry.url}` : ""
+		lines.push(`- \`${entry.path}\`${target}${branchSuffix}`)
 	}
 
 	if (truncated) {

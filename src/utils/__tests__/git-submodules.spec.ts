@@ -11,7 +11,7 @@ vi.mock("fs/promises", async () => {
 })
 
 import * as fs from "fs/promises"
-import { parseGitmodules, formatSubmoduleBlock, type SubmoduleEntry } from "../git-submodules"
+import { parseGitmodules, formatSubmoduleBlock, resolveSubmoduleEntries, type SubmoduleEntry } from "../git-submodules"
 
 const readFileMock = fs.readFile as unknown as ReturnType<typeof vi.fn>
 
@@ -240,5 +240,98 @@ describe("formatSubmoduleBlock", () => {
 		expect(result).toContain("`sub-0`")
 		expect(result).toContain("`sub-49`")
 		expect(result).not.toContain("truncated")
+	})
+})
+
+describe("resolveSubmoduleEntries", () => {
+	const ws = "/test/workspace"
+
+	// Dispatch readFile by directory so each level's `.gitmodules` is served.
+	const mockGitmodulesByDir = (byDir: Record<string, string>) => {
+		readFileMock.mockImplementation(async (p: string) => {
+			for (const [dir, content] of Object.entries(byDir)) {
+				if (p === path.join(dir, ".gitmodules")) {
+					return content
+				}
+			}
+			const err = new Error("ENOENT") as NodeJS.ErrnoException
+			err.code = "ENOENT"
+			throw err
+		})
+	}
+
+	afterEach(() => {
+		vi.clearAllMocks()
+	})
+
+	it("resolves metadata for top-level submodules from the root .gitmodules", async () => {
+		mockGitmodulesByDir({
+			[ws]: `[submodule "code-server"]
+	path = code-server
+	url = https://github.com/coder/code-server.git
+[submodule "shofer"]
+	path = extensions/shofer
+	url = https://github.com/shofer-dev/shofer.git
+	branch = master
+`,
+		})
+
+		const entries = await resolveSubmoduleEntries(ws, ["code-server", "extensions/shofer"])
+
+		expect(entries).toEqual([
+			{ path: "code-server", url: "https://github.com/coder/code-server.git", branch: undefined },
+			{ path: "extensions/shofer", url: "https://github.com/shofer-dev/shofer.git", branch: "master" },
+		])
+	})
+
+	it("resolves a NESTED submodule from its immediate superproject .gitmodules (regression)", async () => {
+		// Top-level .gitmodules knows `code-server`; the nested `lib/vscode` lives
+		// only in `code-server/.gitmodules`. A flat top-level parse would drop it.
+		mockGitmodulesByDir({
+			[ws]: `[submodule "code-server"]
+	path = code-server
+	url = https://github.com/coder/code-server.git
+`,
+			[path.join(ws, "code-server")]: `[submodule "vscode"]
+	path = lib/vscode
+	url = https://github.com/microsoft/vscode.git
+	branch = main
+`,
+		})
+
+		const entries = await resolveSubmoduleEntries(ws, ["code-server", "code-server/lib/vscode"])
+
+		expect(entries).toEqual([
+			{ path: "code-server", url: "https://github.com/coder/code-server.git", branch: undefined },
+			{ path: "code-server/lib/vscode", url: "https://github.com/microsoft/vscode.git", branch: "main" },
+		])
+	})
+
+	it("returns an empty url (never drops) when metadata cannot be resolved", async () => {
+		mockGitmodulesByDir({}) // no .gitmodules anywhere
+
+		const entries = await resolveSubmoduleEntries(ws, ["code-server/lib/vscode"])
+
+		expect(entries).toEqual([{ path: "code-server/lib/vscode", url: "", branch: undefined }])
+	})
+
+	it("does not treat a partial-name sibling as a parent (a vs a-b)", async () => {
+		mockGitmodulesByDir({
+			[ws]: `[submodule "a"]
+	path = a
+	url = https://example.com/a.git
+[submodule "a-b"]
+	path = a-b
+	url = https://example.com/a-b.git
+`,
+		})
+
+		const entries = await resolveSubmoduleEntries(ws, ["a", "a-b"])
+
+		// `a-b` must resolve from the ROOT .gitmodules, not be mis-parented under `a`.
+		expect(entries).toEqual([
+			{ path: "a", url: "https://example.com/a.git", branch: undefined },
+			{ path: "a-b", url: "https://example.com/a-b.git", branch: undefined },
+		])
 	})
 })

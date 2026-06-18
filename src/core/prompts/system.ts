@@ -17,7 +17,7 @@ import { McpHub } from "../../services/mcp/McpHub"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 
-import { listSubmoduleDisplayPaths, parseGitmodules, type SubmoduleEntry } from "../../utils/git-submodules"
+import { listSubmodules } from "../../utils/git-submodules"
 
 import type { SystemPromptSettings } from "./types"
 import {
@@ -121,17 +121,12 @@ async function generatePrompt(
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
 
-	// Enumerate workspace submodules for inclusion in the SYSTEM INFORMATION
-	// section. Separates the listing (git submodule foreach) from URL/branch
-	// resolution (.gitmodules parse) so each step can degrade gracefully.
-	const submodulePaths = await listSubmoduleDisplayPaths(cwd)
-	let submoduleInfos: SubmoduleEntry[] | undefined
-	if (submodulePaths.length > 0) {
-		const gitmodulesMap = await parseGitmodules(cwd)
-		submoduleInfos = submodulePaths
-			.map((p) => gitmodulesMap.get(p))
-			.filter((e): e is SubmoduleEntry => e !== undefined)
-	}
+	// Enumerate workspace submodules (recursively, including nested ones) for the
+	// SYSTEM INFORMATION section, with URL/branch resolved from each submodule's
+	// immediate superproject `.gitmodules`. Degrades to no block when git or
+	// `.gitmodules` is unavailable.
+	const submoduleList = await listSubmodules(cwd)
+	const submoduleInfos = submoduleList.length > 0 ? submoduleList : undefined
 
 	const basePrompt = `${roleDefinition}
 
