@@ -256,6 +256,19 @@ between simdjson and a tail-read.
   (not `undefined`, which would overwrite on merge) so `upsert`
   (`{ ...existing, ...item }`) preserves the values persisted at task creation.
   Regression tests in `taskMetadata.spec.ts`.
+- **Scroll flash to top on every append (fixed 2026-06-19).** With the "Load
+  older messages…" sentinel active (`hasMoreShoferMessages`), every posted
+  message made the list jump to the very top and then back to the bottom. Cause:
+  the sentinel was supplied via an **inline `components={{ Header: () => … }}`**
+  object on `<Virtuoso>`. react-virtuoso (v4) **remounts its internal components
+  whenever the `components` prop changes identity**, and that object — plus a
+  fresh `Header` arrow — was recreated on every render, so each append remounted
+  the list (flash to top) before `followOutput` re-pinned it to the bottom. Fix:
+  hoist a module-level `LoadOlderMessagesHeader` and two frozen `components`
+  objects (`…_WITH_HEADER` / `…_NO_HEADER`), and select between them with a
+  `useMemo` keyed on `hasMoreShoferMessages` — so the `components` identity is
+  stable across routine appends and only changes when the sentinel itself
+  appears/disappears. (Same class of fix as H22's hoisted `increaseViewportBy`.)
 - **Residual hardening (advisory, not blocking)**: (a)
   `shoferMessagesPrepended` carries no `taskId`, so a task switch during
   the awaited send could apply the page to the wrong array — the window is

@@ -70,6 +70,35 @@ const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
 /** H22: Hoisted to module level to avoid new object identity per render. */
 const VIRTUOSO_VIEWPORT_INCREASE = { top: 3_000, bottom: 1000 } as const
 
+/**
+ * The "Load older messages…" sentinel rendered as Virtuoso's `Header` when an
+ * older page is available (windowed loading, H24). Hoisted to module level so
+ * its identity is stable across renders — see `VIRTUOSO_COMPONENTS_*` below.
+ */
+const LoadOlderMessagesHeader = () => (
+	<div className="flex justify-center py-3">
+		<button
+			type="button"
+			className="text-sm text-vscode-textLink-foreground hover:text-vscode-textLink-activeForeground hover:underline"
+			onClick={() => {
+				vscode.postMessage({ type: "loadOlderMessages" })
+			}}>
+			Load older messages…
+		</button>
+	</div>
+)
+
+/**
+ * Stable `components` identities for the message Virtuoso. react-virtuoso
+ * **remounts its internal components whenever the `components` prop changes
+ * identity** — passing an inline `{ Header: () => … }` object (recreated every
+ * render) made the list remount on every posted message, flashing to the top
+ * before `followOutput` re-pinned it to the bottom. We hand Virtuoso one of two
+ * frozen objects, switched only when the "has older messages" flag flips.
+ */
+const VIRTUOSO_COMPONENTS_WITH_HEADER = { Header: LoadOlderMessagesHeader } as const
+const VIRTUOSO_COMPONENTS_NO_HEADER = {} as const
+
 /** H22: Hoisted to module level to avoid new array identity per render. */
 const ALWAYS_HIDDEN_ONCE_PROCESSED_ASK: ShoferAsk[] = ["api_req_failed", "resume_task", "resume_completed_task"]
 
@@ -292,6 +321,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const skipHydration = taskTs ? hydratedTaskTsRef.current.has(taskTs) : false
 	const restoreSnapshot = taskTs ? virtuosoStateByTaskTsRef.current.get(taskTs) : undefined
+
+	// Stable Virtuoso `components` identity (see the module-level constants):
+	// changes ONLY when the "load older messages" sentinel appears/disappears,
+	// never on a routine message append — otherwise Virtuoso remounts and the
+	// list flashes to the top on every posted message.
+	const virtuosoComponents = useMemo(
+		() => (hasMoreShoferMessages ? VIRTUOSO_COMPONENTS_WITH_HEADER : VIRTUOSO_COMPONENTS_NO_HEADER),
+		[hasMoreShoferMessages],
+	)
 
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
@@ -2294,21 +2332,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									followOutput={followOutputCallback}
 									atBottomStateChange={atBottomStateChangeCallback}
 									atBottomThreshold={16}
-									components={{
-										Header: () =>
-											hasMoreShoferMessages ? (
-												<div className="flex justify-center py-3">
-													<button
-														type="button"
-														className="text-sm text-vscode-textLink-foreground hover:text-vscode-textLink-activeForeground hover:underline"
-														onClick={() => {
-															vscode.postMessage({ type: "loadOlderMessages" })
-														}}>
-														Load older messages…
-													</button>
-												</div>
-											) : null,
-									}}
+									components={virtuosoComponents}
 								/>
 								<SessionSearch
 									messages={messages}
