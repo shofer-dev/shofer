@@ -27,8 +27,19 @@ export const claudeCodeComparisons: ClaudeCodeComparison[] = [
 	},
 	{
 		aspect: "Multi-Agent Orchestration",
-		claudeCode: "Imperative subagents the model spawns at runtime",
+		claudeCode: "Imperative subagents the model spawns at runtime, plus dynamic workflows expressed in Javascript",
 		shofer: "Declarative, deterministic Slang Workflows — repeatable, inspectable, and visualized",
+	},
+	{
+		aspect: "Agent Visibility",
+		claudeCode: "Terminal-first with /agents and /tasks, plus a companion Desktop app (parallel tasks, diffs, PRs)",
+		shofer: "In-editor agent graph, sequence/swimlane diagrams, a Stats breakdown, and filterable Logs",
+	},
+	{
+		aspect: "Autonomy & Sandboxing",
+		claudeCode:
+			"Auto Mode risk classifier + /batch worktree orchestration; safety via permission prompts/classification",
+		shofer: "Kernel-level Landlock/bwrap write sandbox + native worktrees — a deterministic guarantee, not a classifier",
 	},
 	{
 		aspect: "Semantic RAG (code + git)",

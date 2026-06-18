@@ -1,0 +1,328 @@
+---
+import { features } from "../data/features";
+
+// Only features with `detail` get a block here. Workflows links to its own
+// dedicated <Workflows /> section instead.
+const detailed = features.filter((f) => f.detail);
+
+/** Classify how a feature's images should be rendered. */
+function getImageLayout(feature: (typeof detailed)[number]): "none" | "single" | "grid" | "carousel" | "side" | "single_plus_side" {
+  if (!feature.images?.length) return "none";
+  if (feature.imageLayout === "side" && feature.images.length >= 2) return "single_plus_side";
+  if (feature.imageLayout === "side") return "side";
+  if (feature.images.length === 1) return "single";
+  if (feature.imageLayout === "grid") return "grid";
+  return "carousel";
+}
+---
+
+<section class="border-t border-gray-100 dark:border-gray-800/60">
+  {
+    detailed.map((feature, i) => {
+      const layout = getImageLayout(feature);
+
+      return (
+        <div
+          id={feature.anchor}
+          class:list={[
+            "scroll-mt-24 py-20 sm:py-24",
+            i % 2 === 1 ? "bg-gray-50 dark:bg-gray-900/40" : "",
+          ]}
+        >
+          <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+            {layout === "side" ? (
+              /* Side-by-side: text left, image right */
+              <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
+                <div class="flex-1">
+                  <span class="text-sm font-semibold text-shofer-600 dark:text-shofer-400 uppercase tracking-wider">
+                    Feature
+                  </span>
+                  <h2 class="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                    {feature.title}
+                  </h2>
+                  <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 leading-relaxed">{feature.detail}</p>
+                  <a
+                    href={feature.docsUrl}
+                    target="_blank"
+                    rel="noopener"
+                    class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+                  >
+                    Read the full docs
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+                  </a>
+                </div>
+                <figure class="fd-figure flex-shrink-0">
+                  <img src={`/${feature.images![0].src}`} alt={feature.images![0].caption} class="fd-img block rounded-xl" loading="lazy" />
+                  <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{feature.images![0].caption}</figcaption>
+                </figure>
+              </div>
+            ) : layout === "single_plus_side" ? (
+              /* Text left, the last image to its right (two cols); any remaining
+                 images sit side-by-side in a grid below. */
+              <>
+                <div class="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
+                  <div class="flex-1">
+                    <span class="text-sm font-semibold text-shofer-600 dark:text-shofer-400 uppercase tracking-wider">
+                      Feature
+                    </span>
+                    <h2 class="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                      {feature.title}
+                    </h2>
+                    <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 leading-relaxed">{feature.detail}</p>
+                    <a
+                      href={feature.docsUrl}
+                      target="_blank"
+                      rel="noopener"
+                      class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+                    >
+                      Read the full docs
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+                    </a>
+                  </div>
+                  <figure class="fd-figure flex-shrink-0 lg:w-80 xl:w-96">
+                    <img src={`/${feature.images![feature.images!.length - 1].src}`} alt={feature.images![feature.images!.length - 1].caption} class="fd-img block rounded-xl" loading="lazy" />
+                    <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{feature.images![feature.images!.length - 1].caption}</figcaption>
+                  </figure>
+                </div>
+                {feature.images!.length > 1 && (
+                  <div class={`fd-grid mt-10 grid grid-cols-1 gap-6 items-start ${feature.images!.length - 1 >= 2 ? "sm:grid-cols-[3fr_2fr]" : ""}`}>
+                    {feature.images!.slice(0, -1).map((img) => (
+                      <figure class="fd-figure">
+                        <img src={`/${img.src}`} alt={img.caption} class="fd-img block w-full rounded-xl" style="max-height: 80vh;" loading="lazy" />
+                        <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{img.caption}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div class="max-w-2xl mb-10">
+                  <span class="text-sm font-semibold text-shofer-600 dark:text-shofer-400 uppercase tracking-wider">
+                    Feature
+                  </span>
+                  <h2 class="mt-3 text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                    {feature.title}
+                  </h2>
+                  <p class="mt-4 text-lg text-gray-500 dark:text-gray-400 leading-relaxed">{feature.detail}</p>
+                  <a
+                    href={feature.docsUrl}
+                    target="_blank"
+                    rel="noopener"
+                    class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-shofer-600 dark:text-shofer-400 hover:text-shofer-700 dark:hover:text-shofer-300 transition-colors"
+                  >
+                    Read the full docs
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+                  </a>
+                </div>
+
+                {layout === "single" && (
+                  <figure class="fd-figure">
+                    <img
+                      src={`/${feature.images![0].src}`}
+                      alt={feature.images![0].caption}
+                      class="fd-img block mx-auto rounded-xl"
+                      style="max-height: 80vh;"
+                      loading="lazy"
+                    />
+                    <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{feature.images![0].caption}</figcaption>
+                  </figure>
+                )}
+
+                {layout === "grid" && (
+                  <div class="fd-grid grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {feature.images!.map((img) => (
+                      <figure class="fd-figure">
+                        <img src={`/${img.src}`} alt={img.caption} class="fd-img block w-full rounded-xl" loading="lazy" />
+                        <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{img.caption}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+
+                {layout === "carousel" && (
+                  <div class="fd-carousel relative mx-auto" data-carousel>
+                    <div class="fd-stage relative mx-auto" data-carousel-stage>
+                      {feature.images!.map((img, di) => (
+                        <figure class="fd-slide" data-carousel-slide={di}>
+                          <img
+                            src={`/${img.src}`}
+                            alt={img.caption}
+                            class="fd-img block rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/10"
+                            loading="lazy"
+                          />
+                          <figcaption class="mt-2 text-sm text-gray-500 dark:text-gray-400 text-center">{img.caption}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      data-carousel-prev
+                      aria-label="Previous"
+                      class="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 dark:bg-gray-900/90 border border-gray-200 dark:border-gray-700 shadow flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button
+                      type="button"
+                      data-carousel-next
+                      aria-label="Next"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/90 dark:bg-gray-900/90 border border-gray-200 dark:border-gray-700 shadow flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+
+                    <div class="flex justify-center gap-2 mt-4 relative z-20" data-carousel-dots>
+                      {feature.images!.map((_, di) => (
+                        <button type="button" class="fd-dot" data-carousel-dot={di} aria-label={`Go to slide ${di + 1}`} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      );
+    })
+  }
+</section>
+
+<style>
+  .fd-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: rgb(209 213 219);
+    transition:
+      background 0.2s,
+      transform 0.2s;
+  }
+  :global(.dark) .fd-dot {
+    background: rgb(75 85 99);
+  }
+  .fd-dot[aria-selected="true"] {
+    background: rgb(37 99 235);
+    transform: scale(1.3);
+  }
+
+  /* Carousel: the active slide stays in normal flow so the stage's height
+     always matches the current image; the other slides are stacked absolutely
+     behind it (and, on the first carousel, peek out with a slight shift). */
+  /* The carousel hugs the image it is rendering (request: container == image). */
+  .fd-carousel {
+    width: fit-content;
+    max-width: 100%;
+  }
+  .fd-stage {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    /* Clip the fanned peek cards to a clean sliver (JS adds right/bottom padding
+       to reveal them); also stops a taller upcoming image bleeding past. */
+    overflow: hidden;
+  }
+  .fd-slide {
+    margin: 0;
+    transform-origin: top left;
+    transition:
+      transform 0.4s ease,
+      opacity 0.4s ease;
+  }
+  .fd-slide:not(.is-active) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .fd-slide.is-active {
+    position: relative;
+    z-index: 10;
+  }
+  .fd-slide .fd-img {
+    width: 100%;
+    height: auto;
+  }
+</style>
+
+<script>
+  /** Scale factor applied to natural dimensions. */
+  const SCALE = 1.2
+
+  /** Determine the container that limits this figure's width:
+   *  the nearest ancestor with an explicit width (grid cell, flex column,
+   *  carousel slide, or the outer detail block). */
+  function findContainer(figure: HTMLElement): HTMLElement {
+    let el: HTMLElement | null = figure.parentElement
+    while (el) {
+      const style = getComputedStyle(el)
+      if (style.width !== "auto" || el.classList.contains("fd-slide") || el.classList.contains("fd-carousel") || el.classList.contains("fd-grid-stack") || el.dataset.carousel !== undefined) {
+        return el
+      }
+      el = el.parentElement
+    }
+    return figure.parentElement!
+  }
+
+  // Size a single <figure> to a multiple of its <img>'s natural dimensions.
+  function sizeFigure(figure: HTMLElement): { w: number; h: number } | null {
+    const img = figure.querySelector<HTMLImageElement>("img")
+    if (!img) return null
+    if (img.complete && img.naturalWidth) {
+      const container = findContainer(figure)
+      const maxW = container.clientWidth
+      const w = Math.min(img.naturalWidth * SCALE, maxW)
+      const h = (img.naturalHeight / img.naturalWidth) * w
+      img.style.maxWidth = `${w}px`
+      img.style.height = "auto"
+      img.style.removeProperty("width")
+      figure.style.width = "auto"
+      figure.style.maxWidth = `${w}px`
+      return { w, h }
+    }
+    img.addEventListener("load", () => sizeFigure(figure), { once: true })
+    return null
+  }
+
+  // --- Size all standalone figures. Figures inside an .fd-grid are skipped:
+  //     they fill their own grid cell (width:100%) instead of being scaled to
+  //     the full container width (which would overflow and overlap neighbors). ---
+  document
+    .querySelectorAll<HTMLElement>(".fd-figure")
+    .forEach((fig) => {
+      if (!fig.closest(".fd-grid")) sizeFigure(fig)
+    })
+
+  // --- Carousels: the active slide stays in normal flow (so the container's
+  //     height always matches the current image and hugs it); the other slides
+  //     are stacked absolutely behind it, hidden, and revealed on navigation. ---
+  document.querySelectorAll<HTMLElement>("[data-carousel]").forEach((root) => {
+    const stage = root.querySelector<HTMLElement>("[data-carousel-stage]")
+    const slides = Array.from(root.querySelectorAll<HTMLElement>(".fd-slide"))
+    const dots = Array.from(root.querySelectorAll<HTMLElement>("[data-carousel-dot]"))
+    const n = slides.length
+    if (!stage || n === 0) return
+
+    let active = 0
+    const layout = () => {
+      slides.forEach((s, i) => {
+        const isActive = i === active
+        s.classList.toggle("is-active", isActive)
+        s.style.opacity = isActive ? "1" : "0"
+        s.style.zIndex = isActive ? "10" : "0"
+        s.style.pointerEvents = isActive ? "auto" : "none"
+      })
+      dots.forEach((dt, i) => dt.setAttribute("aria-selected", i === active ? "true" : "false"))
+    }
+    const go = (k: number) => {
+      active = (k + n) % n
+      layout()
+    }
+
+    root.querySelector("[data-carousel-prev]")?.addEventListener("click", () => go(active - 1))
+    root.querySelector("[data-carousel-next]")?.addEventListener("click", () => go(active + 1))
+    dots.forEach((dt, i) => dt.addEventListener("click", () => go(i)))
+    layout()
+  })
+</script>

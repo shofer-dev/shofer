@@ -7,62 +7,175 @@ import { siteConfig } from "../data/navigation";
   <div class="absolute top-20 left-1/4 w-72 h-72 bg-shofer-400/20 dark:bg-shofer-600/10 rounded-full blur-3xl animate-glow-pulse" />
   <div class="absolute top-40 right-1/4 w-96 h-96 bg-accent-purple/10 dark:bg-accent-purple/10 rounded-full blur-3xl" />
 
-  <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-    <div class="animate-slide-down">
-      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-shofer-100 dark:bg-shofer-900 text-shofer-700 dark:text-shofer-300 mb-8 border border-shofer-200 dark:border-shofer-800">
-        <span class="w-1.5 h-1.5 rounded-full bg-shofer-500 animate-pulse" />
-        Open Source &bull; Apache 2.0
-      </span>
-    </div>
+  <div class="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
+      <!-- Text content — shifted left on large screens -->
+      <div class="flex-1 text-center max-w-2xl mx-auto lg:max-w-none">
+        <div class="animate-slide-down">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-shofer-100 dark:bg-shofer-900 text-shofer-700 dark:text-shofer-300 mb-8 border border-shofer-200 dark:border-shofer-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-shofer-500 animate-pulse" />
+            Open Source &bull; Apache 2.0
+          </span>
+        </div>
 
-    <h1 class="animate-fade-in text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white max-w-4xl mx-auto leading-[1.1]">
-      Your Devevelopment Environment.
-      <br />
-      <span class="text-gradient">Your Models.</span> <span class="text-gradient-rose">Your Control.</span>
-    </h1>
+        <h1 class="animate-fade-in text-4xl sm:text-5xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white max-w-4xl mx-auto lg:max-w-none leading-[1.1]">
+          Parallel multi-agent workflows.
+          <br />
+          <span class="text-gradient">Provable.</span> <span class="text-gradient">Observable.</span> <span class="text-gradient-rose">Controllable.</span>
+        </h1>
 
-    <p class="animate-fade-in mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-      {siteConfig.description}
-    </p>
+        <p class="animate-fade-in mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          {siteConfig.description}
+        </p>
 
-    <div class="animate-slide-up mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-      <a
-        href="https://github.com/shofer-dev/shofer"
-        target="_blank"
-        rel="noopener"
-        class="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors shadow-lg shadow-gray-900/20"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
-        Star on GitHub
-      </a>
-      <a
-        href="https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer"
-        target="_blank"
-        rel="noopener"
-        class="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-shofer-600 hover:bg-shofer-700 transition-colors shadow-lg shadow-shofer-600/20"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Install from VS Code Marketplace
-      </a>
-    </div>
+        <div class="animate-slide-up mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="https://github.com/shofer-dev/shofer"
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors shadow-lg shadow-gray-900/20"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+            Star on GitHub
+          </a>
+          <a
+            href="https://marketplace.visualstudio.com/items?itemName=shoferdev.shofer"
+            target="_blank"
+            rel="noopener"
+            class="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-shofer-600 hover:bg-shofer-700 transition-colors shadow-lg shadow-shofer-600/20"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Install from VS Code Marketplace
+          </a>
+        </div>
 
-    <div class="animate-fade-in mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-sm text-gray-400 dark:text-gray-500">
-      <span class="flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        Runs locally
-      </span>
-      <span class="flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3v10"></path><path d="M12.67 5.5l8.66 5"></path><path d="M12.67 10.5l8.66-5"></path><path d="M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2z"></path></svg>
-        Parallel tasks
-      </span>
-      <span class="flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-        Any model
-      </span>
-      <span class="flex items-center gap-1.5">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-        50+ tools
-      </span>
+        <div class="animate-fade-in mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-6 text-sm text-gray-400 dark:text-gray-500">
+          <span class="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            Runs locally
+          </span>
+          <span class="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
+            Any model (BYOM)
+          </span>
+          <span class="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+            All the standard features and more
+          </span>
+        </div>
+      </div>
+
+      <!-- Carousel — right side, only visible on lg+ -->
+      <div class="hidden lg:block flex-shrink-0 w-96 xl:w-[29rem] animate-fade-in">
+        <div id="hero-carousel" class="relative w-full">
+          <img
+            src="/task-stats.png"
+            alt=""
+            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
+            loading="eager"
+          />
+          <img
+            src="/workflow-topology.png"
+            alt=""
+            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
+            loading="eager"
+          />
+          <img
+            src="/swimlanes.png"
+            alt=""
+            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
+            loading="eager"
+          />
+          <img
+            src="/task-sequence-diagram.png"
+            alt=""
+            class="hero-card rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xl shadow-black/20 dark:shadow-black/40"
+            loading="eager"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </section>
+
+<style>
+  /* Stacked-deck carousel: the front card is in normal flow (defines the
+     container height); the rest fan out behind it with a slight shift so it's
+     visible that more screenshots are coming. */
+  .hero-card {
+    display: block;
+    height: auto;
+    margin: 0;
+    background: white;
+    transform-origin: top left;
+    will-change: transform, opacity;
+    transition:
+      transform 0.5s ease,
+      opacity 0.5s ease;
+  }
+  :global(.dark) .hero-card {
+    background: rgb(17 24 39);
+  }
+  .hero-card.is-front {
+    position: relative;
+  }
+  .hero-card:not(.is-front) {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+</style>
+
+<script>
+  // Stacked-deck autoplay carousel. The upcoming cards peek out behind the
+  // front one with a slight diagonal shift, so the user sees more are coming.
+  const PEEK_X = 16; // px horizontal offset per card of depth
+  const PEEK_Y = 14; // px vertical offset per card of depth
+  const DEPTH = 3; // how many upcoming cards stay visible behind the front
+  const INTERVAL = 2200; // ms between auto-advances
+
+  const container = document.getElementById("hero-carousel");
+  const slides = Array.from(document.querySelectorAll<HTMLImageElement>("#hero-carousel .hero-card"));
+  const n = slides.length;
+  if (container && n > 0) {
+    let current = 0;
+    const reserveX = DEPTH * PEEK_X;
+    const reserveY = DEPTH * PEEK_Y;
+
+    // Cards are narrower than the column by the fan width, leaving room on the
+    // right; the bottom padding reserves room for the downward shift.
+    const size = () => {
+      const w = container.clientWidth - reserveX;
+      slides.forEach((s) => (s.style.width = `${w}px`));
+      container.style.paddingBottom = `${reserveY}px`;
+    };
+
+    const layout = () => {
+      slides.forEach((s, i) => {
+        const depth = (i - current + n) % n; // 0 = front, 1 = next, ...
+        s.classList.toggle("is-front", depth === 0);
+        if (depth === 0) {
+          s.style.transform = "translate(0, 0) scale(1)";
+          s.style.opacity = "1";
+          s.style.zIndex = "30";
+        } else if (depth <= DEPTH) {
+          s.style.transform = `translate(${depth * PEEK_X}px, ${depth * PEEK_Y}px) scale(${1 - depth * 0.045})`;
+          s.style.opacity = "1";
+          s.style.zIndex = `${30 - depth}`;
+        } else {
+          s.style.transform = "translate(0, 0)";
+          s.style.opacity = "0";
+          s.style.zIndex = "0";
+        }
+      });
+    };
+
+    size();
+    layout();
+    slides.forEach((s) => {
+      if (!s.complete) s.addEventListener("load", () => { size(); layout(); }, { once: true });
+    });
+    window.addEventListener("resize", () => { size(); layout(); });
+    if (n > 1) setInterval(() => { current = (current + 1) % n; layout(); }, INTERVAL);
+  }
+</script>

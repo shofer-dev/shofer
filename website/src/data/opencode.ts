@@ -28,6 +28,11 @@ export const openCodeComparisons: OpenCodeComparison[] = [
 		shofer: "Declarative, deterministic Slang Workflows — the control flow itself is declarative, repeatable, inspectable, and visualized",
 	},
 	{
+		aspect: "Parallelism",
+		openCode: "Specialized subagents (general / explore / scout) run isolated parallel background tasks",
+		shofer: "Many concurrent tasks and full workflow trees, with background subtasks and async MCP",
+	},
+	{
 		aspect: "Code Understanding",
 		openCode: "Deep real-time LSP integration — feeds live compiler diagnostics & type errors back to the model",
 		shofer: "Precomputed semantic index over code and the entire git log; git_search answers why/when by concept",
@@ -37,18 +42,12 @@ export const openCodeComparisons: OpenCodeComparison[] = [
 		openCode: "Manual git worktree; permission prompts",
 		shofer: "Native worktree UI + OS-level command sandboxing (Landlock/bwrap)",
 	},
-	{
-		aspect: "Config Portability",
-		openCode: "opencode.json + AGENTS.md",
-		shofer: "Reads AGENTS.md directly — your project rules carry over",
-	},
 ]
 
 export const openCodeMigration = {
 	title: "Migrating from OpenCode",
 	description:
 		"Same open-source, model-agnostic philosophy — plus a graphical VS Code cockpit, parallel orchestration, semantic code & git-log search, native worktrees, and a deterministic multi-agent Workflow engine. Your AGENTS.md rules carry over directly.",
-	// No automated importer yet — AGENTS.md rules port over as-is.
-	command: "",
+	command: "/migrate-from-opencode",
 	docsUrl: "https://github.com/shofer-dev/shofer/blob/master/docs/migration/shofer_for_opencode_users.md",
 }
