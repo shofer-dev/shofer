@@ -4,13 +4,14 @@ import {
 	type McpServerUse,
 	type FollowUpData,
 	type ExtensionState,
+	type ToolGroup,
 	isAutoApprovableAsk,
 } from "@shofer/types"
 
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
 
 import { isWriteToolAction, isReadOnlyToolAction, getToolGroupForSayTool } from "./tools"
-import { isMcpToolUncategorized } from "./mcp"
+import { getMcpToolGroup } from "./mcp"
 import { getCommandDecision } from "./commands"
 import { webviewLog } from "../../utils/logging/subsystems"
 
@@ -36,6 +37,24 @@ export type AutoApprovalStateOptions =
 	| "mcpServers" // For `alwaysAllowMcp`.
 	| "allowedCommands" // For `alwaysAllowExecute`.
 	| "deniedCommands"
+
+// Maps a resolved MCP tool group to the per-group auto-approval toggle that must
+// ALSO be enabled — on top of the master `alwaysAllowMcp` gate — before a tool
+// in that group is auto-approved. This mirrors the per-group gating applied to
+// native tools (the `ask === "tool"` path) so that, e.g., browser tools served
+// over MCP honor `alwaysAllowBrowser` instead of being approved by
+// `alwaysAllowMcp` alone. Groups absent from this map (e.g. the generic "mcp"
+// protocol group) are gated by `alwaysAllowMcp` by itself.
+const MCP_GROUP_APPROVAL_GATE: Partial<Record<ToolGroup, AutoApprovalState>> = {
+	read: "alwaysAllowReadOnly",
+	write: "alwaysAllowWrite",
+	execute: "alwaysAllowExecute",
+	browser: "alwaysAllowBrowser",
+	mode: "alwaysAllowModeSwitch",
+	subtasks: "alwaysAllowSubtasks",
+	questions: "alwaysAllowFollowupQuestions",
+	uncategorized: "alwaysAllowUncategorized",
+}
 
 export type CheckAutoApprovalResult =
 	| { decision: "approve" }
@@ -110,16 +129,22 @@ export async function checkAutoApproval({
 
 			if (mcpServerUse.type === "use_mcp_tool") {
 				// `alwaysAllowMcp` is the master gate for auto-approving MCP tool
-				// calls. Per-tool granularity is controlled by tool groups (see
-				// `filterMcpToolsForMode`); tools without a group default to
-				// "uncategorized" and require an additional opt-in via
-				// `alwaysAllowUncategorized` (which is only meaningful when
-				// `alwaysAllowMcp` is also true).
+				// calls.
 				if (state.alwaysAllowMcp !== true) {
 					return { decision: "ask" }
 				}
 
-				if (isMcpToolUncategorized(mcpServerUse, state.mcpServers) && state.alwaysAllowUncategorized !== true) {
+				// Per-group gating: beyond the master gate, a tool is only
+				// auto-approved if its group's dedicated toggle is also enabled
+				// (e.g. "browser" → `alwaysAllowBrowser`, "uncategorized" →
+				// `alwaysAllowUncategorized`). This keeps MCP-served tools aligned
+				// with the same per-group control that mode filtering and native
+				// tools already respect. Groups without a dedicated toggle are
+				// approved by `alwaysAllowMcp` alone.
+				const group = getMcpToolGroup(mcpServerUse, state.mcpServers)
+				const groupGate = MCP_GROUP_APPROVAL_GATE[group]
+
+				if (groupGate && state[groupGate] !== true) {
 					return { decision: "ask" }
 				}
 

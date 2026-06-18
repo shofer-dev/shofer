@@ -32,16 +32,16 @@ The possible decisions are:
 
 These are the boolean toggles exposed in the UI. Each controls a specific class of actions.
 
-| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                                    |
-| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`          |
-| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                                        |
-| `alwaysAllowMcp`               | MCP tool calls and resource access                                             | `alwaysAllowUncategorized` (for tools without a `group` in `mcpServers`) |
-| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                        |
-| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`, `answer_subtask_question`            | –                                                                        |
-| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                      |
-| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                           |
+| Toggle (`alwaysAllow*`)        | Controls                                                                       | Additional Options                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `alwaysAllowReadOnly`          | Tools in the `read` ToolGroup                                                  | `alwaysAllowReadOnlyOutsideWorkspace`                                           |
+| `alwaysAllowWrite`             | Tools in the `write` ToolGroup                                                 | `alwaysAllowWriteOutsideWorkspace`, `alwaysAllowWriteProtected`                 |
+| `alwaysAllowBrowser`           | Tools in the `browser` ToolGroup                                               | –                                                                               |
+| `alwaysAllowMcp`               | Master gate for MCP tool calls and resource access                             | Per-group toggle for the tool's group (see [`alwaysAllowMcp`](#alwaysallowmcp)) |
+| `alwaysAllowModeSwitch`        | `switch_mode` tool                                                             | –                                                                               |
+| `alwaysAllowSubtasks`          | `new_task`, `finishTask`, `cancel_tasks`, `answer_subtask_question`            | –                                                                               |
+| `alwaysAllowExecute`           | Shell command execution (gate — requires `allowedCommands` to have any effect) | `allowedCommands`, `deniedCommands`                                             |
+| `alwaysAllowFollowupQuestions` | Follow-up question suggestions                                                 | `followupAutoApproveTimeoutMs`                                                  |
 
 > **Each toggle maps to a ToolGroup** (see [`tool-categories.md`](tool-categories.md)).
 > Adding a new group to `TOOL_GROUPS` in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)
@@ -254,11 +254,30 @@ approval, regardless of `allowedCommands` or `deniedCommands` configuration.
 
 ### `alwaysAllowMcp`
 
-Controls MCP tool calls and resource access. For `use_mcp_tool`, the tool must be
-categorized into a tool group (via its `group` field in MCP server configuration).
-Tools without an explicit group default to `"uncategorized"` and require the
-additional `alwaysAllowUncategorized` toggle. For `access_mcp_resource`, the
-`alwaysAllowMcp` toggle alone is sufficient.
+The **master gate** for auto-approving MCP tool calls and resource access — if it is
+off, every MCP call prompts. When it is on, `use_mcp_tool` calls go through a second,
+**per-group** gate that mirrors the per-group control applied to native tools:
+[`getMcpToolGroup()`](../src/core/auto-approval/mcp.ts) resolves the tool's group (user
+override in `mcp.json` → server-declared → `"uncategorized"`) and `MCP_GROUP_APPROVAL_GATE`
+in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts) maps it to the toggle that
+must **also** be enabled:
+
+| Resolved group  | Required toggle (in addition to `alwaysAllowMcp`) |
+| --------------- | ------------------------------------------------- |
+| `read`          | `alwaysAllowReadOnly`                             |
+| `write`         | `alwaysAllowWrite`                                |
+| `execute`       | `alwaysAllowExecute`                              |
+| `browser`       | `alwaysAllowBrowser`                              |
+| `mode`          | `alwaysAllowModeSwitch`                           |
+| `subtasks`      | `alwaysAllowSubtasks`                             |
+| `questions`     | `alwaysAllowFollowupQuestions`                    |
+| `uncategorized` | `alwaysAllowUncategorized`                        |
+
+Groups not in the map (e.g. the generic `mcp` protocol group) are approved by
+`alwaysAllowMcp` alone. So a browser tool served over MCP honors `alwaysAllowBrowser`
+exactly like a native browser tool, rather than being approved by `alwaysAllowMcp` on its
+own. For `access_mcp_resource`, the `alwaysAllowMcp` toggle alone is sufficient (no
+per-group stage).
 
 ### `alwaysAllowFollowupQuestions`
 
@@ -301,14 +320,14 @@ When either limit is exceeded, the user is prompted regardless of per-tool toggl
 
 ## Related Files
 
-| File                                                                                                | Purpose                                                 |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                                     |
-| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `isReadOnlyToolAction` / `isWriteToolAction`            |
-| [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | Uncategorized MCP tool check (`isMcpToolUncategorized`) |
-| [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                   |
-| [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                           |
-| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                       | `ALWAYS_AVAILABLE_TOOLS`, tool groups                   |
+| File                                                                                                | Purpose                                                                 |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                                                     |
+| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `isReadOnlyToolAction` / `isWriteToolAction`                            |
+| [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | MCP tool group resolution (`getMcpToolGroup`, `isMcpToolUncategorized`) |
+| [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                                   |
+| [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                                           |
+| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                       | `ALWAYS_AVAILABLE_TOOLS`, tool groups                                   |
 
 ---
 

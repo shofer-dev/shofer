@@ -59,6 +59,101 @@ describe("checkAutoApproval", () => {
 		})
 	})
 
+	describe("MCP tool auto-approval (use_mcp_server ask)", () => {
+		// A connected MCP server whose tools carry resolved groups, mirroring what
+		// McpHub pushes to the webview (group resolved from mcp.json toolGroups).
+		const mcpServers = [
+			{
+				name: "browser-tools",
+				tools: [
+					{ name: "navigate", group: "browser" },
+					{ name: "read_dom", group: "read" },
+				],
+			},
+			{
+				name: "misc",
+				tools: [
+					{ name: "do_thing", group: "mcp" },
+					{ name: "ungrouped", group: "uncategorized" },
+				],
+			},
+		] as any
+
+		const mcpUse = (serverName: string, toolName: string) =>
+			JSON.stringify({ type: "use_mcp_tool", serverName, toolName })
+
+		it("asks for a browser-group MCP tool when alwaysAllowBrowser is off (even with alwaysAllowMcp on)", async () => {
+			const result = await checkAutoApproval({
+				state: { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers } as any,
+				ask: "use_mcp_server",
+				text: mcpUse("browser-tools", "navigate"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
+		})
+
+		it("approves a browser-group MCP tool when both alwaysAllowMcp and alwaysAllowBrowser are on", async () => {
+			const result = await checkAutoApproval({
+				state: {
+					autoApprovalEnabled: true,
+					alwaysAllowMcp: true,
+					alwaysAllowBrowser: true,
+					mcpServers,
+				} as any,
+				ask: "use_mcp_server",
+				text: mcpUse("browser-tools", "navigate"),
+			})
+
+			expect(result).toEqual({ decision: "approve" })
+		})
+
+		it("asks for a read-group MCP tool when alwaysAllowReadOnly is off", async () => {
+			const result = await checkAutoApproval({
+				state: { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers } as any,
+				ask: "use_mcp_server",
+				text: mcpUse("browser-tools", "read_dom"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
+		})
+
+		it("approves a generic 'mcp'-group tool with only alwaysAllowMcp on (no dedicated gate)", async () => {
+			const result = await checkAutoApproval({
+				state: { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers } as any,
+				ask: "use_mcp_server",
+				text: mcpUse("misc", "do_thing"),
+			})
+
+			expect(result).toEqual({ decision: "approve" })
+		})
+
+		it("asks for an uncategorized tool unless alwaysAllowUncategorized is on", async () => {
+			const base = { autoApprovalEnabled: true, alwaysAllowMcp: true, mcpServers } as any
+
+			expect(
+				await checkAutoApproval({ state: base, ask: "use_mcp_server", text: mcpUse("misc", "ungrouped") }),
+			).toEqual({ decision: "ask" })
+
+			expect(
+				await checkAutoApproval({
+					state: { ...base, alwaysAllowUncategorized: true },
+					ask: "use_mcp_server",
+					text: mcpUse("misc", "ungrouped"),
+				}),
+			).toEqual({ decision: "approve" })
+		})
+
+		it("asks when the master gate alwaysAllowMcp is off regardless of group toggles", async () => {
+			const result = await checkAutoApproval({
+				state: { autoApprovalEnabled: true, alwaysAllowBrowser: true, mcpServers } as any,
+				ask: "use_mcp_server",
+				text: mcpUse("browser-tools", "navigate"),
+			})
+
+			expect(result).toEqual({ decision: "ask" })
+		})
+	})
+
 	it("asks for everything when the master gate is off", async () => {
 		const result = await checkAutoApproval({
 			state: { autoApprovalEnabled: false } as any,
