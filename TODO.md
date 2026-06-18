@@ -1,35 +1,41 @@
-DONE FR: Add the submodule structure of the current repo (if workspace is a git) in system-prompt context (see extensions/shofer/docs/system_prompt.md)
+Date/time: 2026-06-18T14:52:26.505Z
+Extension version: 1.11.3
+Provider: vscode-lm
+Model: shofer/deepseek-v4-pro
 
-DONE FR: When a task or subtask uses ask_followup_question, its state should transition to "waiting" or similar. Today is still `running`.
+# Tool call failed for "new_task": the parser could not produce a valid tool invocation. Reason: [NativeToolCallParser] Invalid arguments for tool 'new_task'. Native tool calls require a valid JSON payload matching the tool schema. Missing required field(s): message. Received (truncated): {"description":"Investigate WorktreesView component","prompt":"Examine the WorktreesView component at extensions/shofer/webview-ui/src/components/worktrees/WorktreesView.tsx. \n\nI need to understand:\n1. How does the panel render? What component wraps it (e.g., Popover, Dialog, Accordion)?\n2. What happens when a worktree is created or deleted at the UI level? Are there any state changes that would cause the panel to close?\n3. Look for any state management (useState, useEffect, context) that m
 
-FR:
-FR: Amend the ask_live_memory tool description to clarify that it should be used for bigger tasks, and not for simple questions that can be answered quickly by the agent itself with a few reads.
+Date/time: 2026-06-18T09:16:22.951Z
+Extension version: 1.11.2
+Provider: vscode-lm
+Model: shofer/deepseek-v4-pro
 
-DONE BUG: Settings->Worktrees : when a new worktree is created or deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
+# Tool call failed for "search_file": the parser could not produce a valid tool invocation. This may be due to an unknown tool name, malformed JSON arguments, or missing required parameters.
 
-WIP BUG: Sometimes when exporting a workflow json file, the UI becomes unresponsive.
+Date/time: 2026-06-18T04:21:28.419Z
+Extension version: 1.11.2
+Provider: vscode-lm
+Model: shofer/deepseek-v4-pro
 
-WIP BUG: extensions/shofer/docs/performance_optimizations.md the implementation of "Load older messages..." is working per se, but is causing the ChatView to jump at the very top first, and then down to the very button, with every message posted.
+# Tool call failed for "apply_diff": the parser could not produce a valid tool invocation. Reason: [NativeToolCallParser] Invalid arguments for tool 'apply_diff'. Native tool calls require a valid JSON payload matching the tool schema. Missing required field(s): path. Received (truncated): {"diff":"<<<<<<< SEARCH\n:start_line:70\n-------\n\t\timages: [\"Sessions querying the shared Assistant Agent context\"],\n=======\n\t\timages: [{ src: \"live-memory.png\", caption: \"Sessions querying the shared Assistant Agent context\" }],\n>>>>>>> REPLACE\n<｜｜DSML｜｜parameter name=\"path\" string=\"true\">extensions/shofer/website/src/data/features.ts"}
 
-BUG: ask_followup_question `follow_up` param should be optional, since we introduced the `form` param (also optional). But one of them should be present (not both).
+Date/time: 2026-06-17T16:40:44.111Z
+Extension version: 1.10.0
+Provider: vscode-lm
+Model: shofer/deepseek-v4-pro
 
-BUG: I run a workflow and got two different "active time" values, one in Stats (38m13s) and one in TaskHeader (18m55s). They should be measuring the same, no?
+Ask ignored: superseded
+
+======
+
+- TaskHeader 1st message
+- Load older messages..
+- debug.slang test
+
+=======
 
 - Announce https://gemini.google.com/app/bc25f481142e4161
   https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling).
-
-* DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
-    - project documentation standarization/structure
-    - Do not double answer: both with a regular message and with attempt_completion. The latter is the way you should provide your final answer/conclusion.
-    - set title
-    - environment_details
-    - use tools instead of executing cli commands
-    - git structure (submodules etc)
-    - do not cut corners; do not use bandaids or hacks; always pick the cleanest and most future-proof/sustaninable solution/approach/design/implementation.
-    - do not disable or deactivate unit tests, lint checks, or anything else that is there for checking quality, just for comiting code, or for accomblishing your goals
-    - TERMINOLOGY.md
-    - when you assign a subtask a task, you should not do it yourself, but wait for it to complete, or terminate first and then do it.
-      only spawn subtasks if you have other work to do in parallel, that can be parallelized.
 
 === P2
 
