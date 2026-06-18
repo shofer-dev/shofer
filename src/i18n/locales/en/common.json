@@ -164,7 +164,11 @@
 		"mode_imported": "Mode imported successfully",
 		"exporting_task_json_title": "Exporting task to JSON…",
 		"exporting_task_json_progress": "{{count}} task(s) exported",
-		"export_task_json_cancelled": "Task export cancelled"
+		"export_task_json_cancelled": "Task export cancelled",
+		"exporting_task_json_writing": "Writing JSON export to disk…",
+		"export_task_json_large": "JSON export saved ({{mb}} MB). It wasn't opened automatically because large files can make the editor unresponsive.",
+		"export_task_json_open": "Open",
+		"export_task_json_reveal": "Reveal in File Explorer"
 	},
 	"answers": {
 		"yes": "Yes",

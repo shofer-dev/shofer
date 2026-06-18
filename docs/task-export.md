@@ -189,12 +189,12 @@ interface JsonExportToolCall {
 
 A **WorkflowTask** runs the slang loop (`slangLoop()`) and makes **no direct LLM calls**, so its `apiConversationHistory` is empty and `calls` is `[]` (token/cost totals are `0`). The orchestration is captured instead, so the export is not empty:
 
-| Field         | Source                                  | Contents                                                                                                                                                       |
-| ------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isWorkflow`  | `HistoryItem.isWorkflow`                | `true` for workflow exports.                                                                                                                                   |
+| Field         | Source                                         | Contents                                                                                                                                                                                          |
+| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isWorkflow`  | `HistoryItem.isWorkflow`                       | `true` for workflow exports.                                                                                                                                                                      |
 | `flowState`   | `HistoryItem.flowState` (`serializeFlowState`) | The slang **state machine + the data passing through it**: `flowName`, `params`, per-agent `status`/`bindings`/`output`, `round`, `status`, and the inter-agent `mailbox` + **`mailboxHistory`**. |
-| `slangSource` | `HistoryItem.slangSource`               | The `.slang` flow definition.                                                                                                                                  |
-| `events`      | `ui_messages.jsonl`                     | Chronological UI state-transition / status log (`say` / `ask` with `ts` + `text`). **Excludes `peer_message`** — peer-to-peer agent messages don't flow through the workflow state machine.       |
+| `slangSource` | `HistoryItem.slangSource`                      | The `.slang` flow definition.                                                                                                                                                                     |
+| `events`      | `ui_messages.jsonl`                            | Chronological UI state-transition / status log (`say` / `ask` with `ts` + `text`). **Excludes `peer_message`** — peer-to-peer agent messages don't flow through the workflow state machine.       |
 
 **Reproducing the diagrams:** `flowState.mailboxHistory` is the ordered `from → to` message log (each `MailboxEntry` has `from`, `to`, `value`, `timestamp`, and `funcName`/`tokensUsed`/`costUsd`/`durationMs`/`mode`). Together with `slangSource`, this is exactly the input to `buildWorkflowVizHtml(slangSource, flowState, …)`, so the **sequence / swimlane / topology diagrams can be reconstructed post-mortem** from the export alone. (The agents the workflow spawns are separate tasks with their own per-call exports; the workflow export covers only the orchestration.)
 
@@ -268,6 +268,15 @@ This is useful for diagnosing what data was actually transmitted to the provider
 ```
 
 The JSON exporter resolves the default save filename before calling `downloadJsonTask()` (via `getTaskFileName()`), and reads `ui_messages.jsonl` through the JSONL reader `readTaskMessages()` wrapped in a `try/catch` that falls back to an empty `uiMessages` array — a defensive guard against missing or unreadable data. (There is no separate `fs.stat()` pre-check; the reader returns `[]` when the file is absent.)
+
+### Serialization (off the main thread)
+
+A **workflow** JSON export is the entire descendant task tree — the workflow node plus every per-agent sub-task, each contributing its full `apiConversationHistory`. That trace can reach many megabytes, so two steps that were once inline on the extension-host thread are now handled carefully:
+
+1. **Serialize + write run in a worker thread.** `downloadJsonTask()` calls [`stringifyJsonToFile()`](../src/utils/exportJsonWorker.ts), which hands the trace to a `workerpool` worker ([`workers/exportJson.ts`](../src/workers/exportJson.ts)) that does the `JSON.stringify(…, null, 2)` **and** the file write, returning only a byte count. This keeps the heavy serialization and the big-string round-trip off the event loop so the webview stays responsive (mirrors how [`countTokens`](../src/utils/countTokens.ts) offloads tokenization). If the worker can't be spawned or errors, it falls back to an in-process write. The write runs inside a `withProgress("Writing JSON export…")` notification — indeterminate (`JSON.stringify` is atomic), but it actually animates now that the main thread is free.
+2. **Large exports are not auto-opened.** Opening a multi-MB JSON document makes VS Code tokenize/fold it on the **UI thread**, which is itself a freeze. Files at or below `LARGE_EXPORT_BYTES` (5 MB) still auto-open in a preview tab; above it, an information message offers **Open** / **Reveal in File Explorer** instead.
+
+> One residual main-thread cost remains: structured-cloning the trace object _into_ the worker is `O(n)`. It is far cheaper than the former `stringify` + pretty-print + `Buffer.from` + editor-open chain, but not zero.
 
 ### Data Sources
 
@@ -351,6 +360,8 @@ Both capture points call [`snapshotApiReqError()`](../src/core/task/Task.ts) whi
 | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) | `exportCurrentTask`, `exportCurrentTaskJson`, `exportTaskWithId`, `exportTaskWithIdJson` handlers |
 | [`TaskActions.tsx`](../webview-ui/src/components/chat/TaskActions.tsx)     | Export buttons in the task header                                                                 |
 | [`export.ts`](../src/utils/export.ts)                                      | Export path resolution and last-path persistence                                                  |
+| [`workers/exportJson.ts`](../src/workers/exportJson.ts)                    | Worker thread — off-main-thread `JSON.stringify` + file write                                     |
+| [`utils/exportJsonWorker.ts`](../src/utils/exportJsonWorker.ts)            | `stringifyJsonToFile()` — worker-pool wrapper with synchronous in-process fallback                |
 
 ### Version History
 

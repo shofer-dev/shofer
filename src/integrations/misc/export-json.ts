@@ -4,6 +4,8 @@ import * as path from "path"
 import * as vscode from "vscode"
 
 import type { ExtendedContentBlock } from "./export-markdown"
+import { t } from "../../i18n"
+import { stringifyJsonToFile } from "../../utils/exportJsonWorker"
 
 /**
  * JSON task trace export — produces a structured, machine-readable trace
@@ -547,24 +549,62 @@ export async function buildJsonTraceTree(
  * @param defaultUri - Default save URI.
  * @returns The URI of the saved file, or undefined if the user cancelled.
  */
+/**
+ * Above this serialized size, auto-opening the export in an editor tab would
+ * make VS Code tokenize/fold a multi-MB document on the UI thread — itself a
+ * freeze — so we surface an explicit open action instead.
+ */
+const LARGE_EXPORT_BYTES = 5 * 1024 * 1024
+
 export async function downloadJsonTask(
-	dateTs: number,
+	_dateTs: number,
 	trace: JsonExportTrace,
 	defaultUri: vscode.Uri,
 ): Promise<vscode.Uri | undefined> {
-	const fileName = getJsonExportFileName(dateTs)
-
-	const jsonContent = JSON.stringify(trace, null, 2)
-
 	const saveUri = await vscode.window.showSaveDialog({
 		filters: { JSON: ["json"] },
 		defaultUri,
 	})
 
-	if (saveUri) {
-		await vscode.workspace.fs.writeFile(saveUri, Buffer.from(jsonContent))
-		vscode.window.showTextDocument(saveUri, { preview: true })
-		return saveUri
+	if (!saveUri) {
+		return undefined
 	}
-	return undefined
+
+	// Serialize + write off the extension-host thread. A workflow trace is the
+	// full descendant task tree (every sub-task's history), so doing this inline
+	// would block the event loop for seconds and freeze the webview. The progress
+	// notification is indeterminate — JSON.stringify is atomic — but it now
+	// actually animates, because the heavy work no longer holds the main thread.
+	const bytes = await vscode.window.withProgress(
+		{
+			location: vscode.ProgressLocation.Notification,
+			title: t("common:info.exporting_task_json_writing"),
+		},
+		() => stringifyJsonToFile(trace, saveUri.fsPath),
+	)
+
+	if (bytes <= LARGE_EXPORT_BYTES) {
+		// Small enough to open instantly — auto-open for convenience.
+		vscode.window.showTextDocument(saveUri, { preview: true })
+	} else {
+		// Opening a multi-MB JSON document makes VS Code tokenize/fold it on the
+		// UI thread — itself a freeze — so offer an explicit open action instead.
+		const open = t("common:info.export_task_json_open")
+		const reveal = t("common:info.export_task_json_reveal")
+		void vscode.window
+			.showInformationMessage(
+				t("common:info.export_task_json_large", { mb: (bytes / (1024 * 1024)).toFixed(1) }),
+				open,
+				reveal,
+			)
+			.then((choice) => {
+				if (choice === open) {
+					vscode.window.showTextDocument(saveUri, { preview: false })
+				} else if (choice === reveal) {
+					void vscode.commands.executeCommand("revealFileInOS", saveUri)
+				}
+			})
+	}
+
+	return saveUri
 }

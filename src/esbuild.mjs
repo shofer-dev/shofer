@@ -174,7 +174,7 @@ async function main() {
 	// (see docs/multi_threaded.md §9 "esbuild entry points").
 	const workerConfig = {
 		...buildOptions,
-		entryPoints: ["workers/countTokens.ts"],
+		entryPoints: ["workers/countTokens.ts", "workers/exportJson.ts"],
 		outdir: "dist/workers",
 	}
 
