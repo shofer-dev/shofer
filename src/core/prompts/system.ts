@@ -17,6 +17,8 @@ import { McpHub } from "../../services/mcp/McpHub"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 
+import { listSubmoduleDisplayPaths, parseGitmodules, type SubmoduleEntry } from "../../utils/git-submodules"
+
 import type { SystemPromptSettings } from "./types"
 import {
 	getRulesSection,
@@ -119,6 +121,18 @@ async function generatePrompt(
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
 
+	// Enumerate workspace submodules for inclusion in the SYSTEM INFORMATION
+	// section. Separates the listing (git submodule foreach) from URL/branch
+	// resolution (.gitmodules parse) so each step can degrade gracefully.
+	const submodulePaths = await listSubmoduleDisplayPaths(cwd)
+	let submoduleInfos: SubmoduleEntry[] | undefined
+	if (submodulePaths.length > 0) {
+		const gitmodulesMap = await parseGitmodules(cwd)
+		submoduleInfos = submodulePaths
+			.map((p) => gitmodulesMap.get(p))
+			.filter((e): e is SubmoduleEntry => e !== undefined)
+	}
+
 	const basePrompt = `${roleDefinition}
 
 ${markdownFormattingSection()}
@@ -132,7 +146,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefine
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}
 ${getRulesSection(cwd, settings)}
-${includeSystemInfo ? `\n${getSystemInfoSection(cwd)}` : ""}
+${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}` : ""}
 
 ${getObjectiveSection()}${liveMemorySection ? `\n\n${liveMemorySection}` : ""}
 

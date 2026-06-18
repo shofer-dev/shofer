@@ -13,7 +13,7 @@ ${getCapabilitiesSection()}                ← Detailed tool capabilities
 ${modesSection}                            ← Available modes listing
 ${skillsSection}                           ← Available skills listing (gated by include_skills)
 ${getRulesSection()}                       ← Operational constraints & rules
-${getSystemInfoSection()}                  ← OS, shell, workspace paths (gated by include_system_info)
+${getSystemInfoSection()}                  ← OS, shell, workspace paths + submodules (gated by include_system_info)
 ${getObjectiveSection()}                   ← Task workflow instructions
 ${addCustomInstructions()}                 ← Mode-specific + user rules (gated by include_mode_rules, include_user_rules, include_agents_md)
 ```
@@ -105,10 +105,12 @@ The largest section, containing operational constraints:
 
 ### 9. [`sections/system-info.ts`](../src/core/prompts/sections/system-info.ts)
 
-**Function:** `getSystemInfoSection(cwd)`
+**Function:** `getSystemInfoSection(cwd, submoduleInfos?)`
 
 - Reports the actual OS (via `os-name`), shell, home directory, and workspace directory.
 - Explains the workspace directory semantics: it's the VS Code project directory, the default for all tool operations, and changing directories in a terminal doesn't modify it.
+- **Submodule augmentation:** When `submoduleInfos` is non-empty, appends a `WORKSPACE SUBMODULES` block listing each submodule's path, remote URL, and optional branch (from `.gitmodules`). Instructs the model to `cd` into submodule directories before performing git operations. Capped at 50 entries with a truncation notice.
+- **Fallback:** If `.gitmodules` is missing or unparseable, submodule paths are still listed from `git submodule foreach` but without URL/branch details (the block is omitted when no initialized submodules exist).
 
 ### 10. [`sections/objective.ts`](../src/core/prompts/sections/objective.ts)
 
