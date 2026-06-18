@@ -996,7 +996,8 @@ export const ChatRowContent = ({
 				//   - `ask` (approval): show the question we're about to send.
 				//   - `say` (after answer arrives): show the question + the
 				//     answer (markdown, expandable) + cost/duration footer.
-				const headerKey = message.type === "ask" ? "chat:askLiveMemory.wantsToAsk" : "chat:askLiveMemory.didAsk"
+				const headerKey =
+					message.type === "ask" ? "chat:askLiveMemory.wantsToAsk" : "chat:askLiveMemory.didAsk"
 				const hasAnswer = typeof tool.answer === "string" && tool.answer.length > 0
 				const footerBits: string[] = []
 				if (typeof tool.durationMs === "number") footerBits.push(`${(tool.durationMs / 1000).toFixed(1)}s`)

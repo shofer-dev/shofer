@@ -11,7 +11,7 @@ vi.mock("../../../utils/shell", () => ({
 
 import { getSystemInfoSection } from "../system-info"
 import osName from "os-name"
-import { type SubmoduleEntry } from "../../../utils/git-submodules"
+import { type SubmoduleEntry } from "../../../../utils/git-submodules"
 
 const mockOsName = osName as unknown as ReturnType<typeof vi.fn>
 

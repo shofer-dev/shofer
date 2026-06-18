@@ -40,7 +40,10 @@ type LiveMemorySettingsProps = HTMLAttributes<HTMLDivElement> & {
 	liveMemoryContextFillThreshold?: number
 	listApiConfigMeta: ApiConfigMeta[]
 	setCachedStateField: SetCachedStateField<
-		"liveMemoryEnabled" | "liveMemoryApiConfigId" | "liveMemoryMaxContextTokens" | "liveMemoryContextFillThreshold"
+		| "liveMemoryEnabled"
+		| "liveMemoryApiConfigId"
+		| "liveMemoryMaxContextTokens"
+		| "liveMemoryContextFillThreshold"
 	>
 }
 
@@ -125,7 +128,9 @@ export const LiveMemorySettings = ({
 					section="liveMemory"
 					label={t("settings:liveMemory.maxContextTokens.label")}>
 					<VSCodeTextField
-						value={liveMemoryMaxContextTokens === undefined ? "" : String(liveMemoryMaxContextTokens)}
+						value={
+							liveMemoryMaxContextTokens === undefined ? "" : String(liveMemoryMaxContextTokens)
+						}
 						className="w-full"
 						onInput={(e: any) => {
 							const raw = e.target.value as string
