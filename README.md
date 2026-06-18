@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <strong>Shofer is the open-source agentic coding platform.</strong><br>
-  Take full control of your data, your models, and how your tools work — with parallel tasks, custom modes, and deep codebase intelligence.
+  <strong>Shofer is the open-source agentic coding platform for VS Code.</strong><br>
+  Specify multi-agent workflows declaratively, watch them execute as live diagrams, and confine them at the kernel and the dollar — on a foundation of parallel tasks, custom modes, MCP, and bring-your-own-model.
 </p>
 
 <p align="center">
@@ -27,8 +27,20 @@
 </p>
 
 <p align="center">
-  50+ tools. Custom modes. Parallel tasks. Semantic code search. Open source under <a href="https://github.com/shofer-dev/shofer/blob/master/LICENSE">Apache 2.0</a>.
+  Deterministic multi-agent workflows · live agent visualization · kernel-level sandboxing · code + git-history search — plus 50+ tools, custom modes, parallel tasks, and BYO model. Open source under <a href="https://github.com/shofer-dev/shofer/blob/master/LICENSE">Apache 2.0</a>.
 </p>
+
+## What Sets Shofer Apart
+
+Parallel tasks, custom modes, MCP, and bring-your-own-model are strong — and, honestly, table stakes for a modern agent. What's harder to find anywhere else:
+
+- **Deterministic multi-agent workflows** — specify a pipeline declaratively in a [`.slang`](docs/slang_specs.md) file (agents, message routing, control flow, `converge`, budgets). A non-LLM executor drives it, so runs are repeatable and inspectable — not ad-hoc runtime delegation.
+- **Live agent visualization** — watch the agent tree execute: [topology, sequence, and swimlane diagrams](docs/workflow_visualization.md), an active-time/cost **Stats** breakdown across the whole tree, and a filterable **Logs** tab — all in-editor.
+- **Kernel-level command sandboxing** — shell commands run in an OS-level write-only sandbox ([Landlock/bwrap](docs/worktree-shell-sandboxing.md)) scoped to the active worktree — a deterministic guarantee, not a model-based heuristic (Linux).
+- **Semantic search over code _and_ git history** — `git_search` finds _why_ and _when_ a change was made, not just where.
+- **Hard cost caps** — per-task / per-session USD limits that halt runaway loops, across any provider.
+
+Everything else — parallel tasks, modes, worktrees, async MCP, semantic code search, local/offline models — is the solid baseline below.
 
 ## Quick Start
 
@@ -42,29 +54,30 @@ Try the built-in `/init` slash command to analyze your codebase and create an `A
 
 <img src="src/media/walkthrough/images/WelcomeView.png" alt="Shofer Welcome Screen" width="500" />
 
-| UI Element              | Purpose                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| **Chat View**           | Interact with the AI — type messages, see results                 |
-| **Task Selector**       | Switch between multiple parallel tasks in a tree hierarchy        |
-| **Mode Selector**       | Choose Code, Architect, Ask, Debug, Orchestrator, or custom modes |
-| **API Config Selector** | Pick which AI provider and model to use per task                  |
-| **Worktree Selector**   | Create and select git worktrees for isolated parallel work        |
-| **File Changes Panel**  | Review, accept, revert, or diff every file Shofer modifies        |
-| **Context Window Bar**  | Monitor token usage and cost for the current task                 |
+| UI Element              | Purpose                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| **Chat View**           | Interact with the AI — type messages, see results                                 |
+| **Task Selector**       | Switch between multiple parallel tasks in a tree hierarchy                        |
+| **Mode Selector**       | Choose Code, Architect, Debug, Code Search, Web Search, Reviewer, or custom modes |
+| **API Config Selector** | Pick which AI provider and model to use per task                                  |
+| **Worktree Selector**   | Create and select git worktrees for isolated parallel work                        |
+| **File Changes Panel**  | Review, accept, revert, or diff every file Shofer modifies                        |
+| **Context Window Bar**  | Monitor token usage and cost for the current task                                 |
 
 ## Modes
 
-Shofer ships with 5 built-in modes — choose from the Mode Selector dropdown in the chat input bar:
+Shofer ships with 6 built-in modes — choose from the Mode Selector dropdown in the chat input bar:
 
-| Mode                | Best For                                                                 |
-| ------------------- | ------------------------------------------------------------------------ |
-| 💻 **Code**         | Writing, modifying, and refactoring code. Broadest tool access.          |
-| 🏗️ **Architect**    | Planning and designing before writing code. Read + markdown-only writes. |
-| ❓ **Ask**          | Getting explanations, answers, or recommendations. Read-only + MCP.      |
-| 🪲 **Debug**        | Troubleshooting errors and diagnosing root causes.                       |
-| 🪃 **Orchestrator** | Coordinating complex multi-step work by delegating to sub-tasks.         |
+| Mode               | Best For                                                                 |
+| ------------------ | ------------------------------------------------------------------------ |
+| 💻 **Code**        | Writing, modifying, and refactoring code. Broadest tool access.          |
+| 🏗️ **Architect**   | Planning and designing before writing code. Read + markdown-only writes. |
+| 🪲 **Debug**       | Troubleshooting errors and diagnosing root causes.                       |
+| 🔎 **Code Search** | Navigating and explaining the codebase — read-only.                      |
+| 🌐 **Web Search**  | Researching with web/browser tools.                                      |
+| 👀 **Reviewer**    | Reviewing changes and inspecting work.                                   |
 
-Create your own modes (Reviewer, Search, Opinion, Browser, and more) via [`.shofer/shofermodes`](USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
+Create your own modes (and override the built-ins) via [`.shofer/shofermodes`](USER_MANUAL.md#4-custom-modes) files at the project or global level. Control exactly which tool categories are available per mode, with file-scoped restrictions.
 
 Learn more: [User Manual](USER_MANUAL.md) • [Custom Modes](USER_MANUAL.md#4-custom-modes)
 

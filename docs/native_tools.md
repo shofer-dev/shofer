@@ -178,15 +178,15 @@ Creates a new workspace/project directory structure with optional subdirectories
 
 ## Search & Discovery
 
-| Tool                  | Origin | Group | Always Available | Status | Description                                            |
-| --------------------- | :----: | ----- | :--------------: | :----: | ------------------------------------------------------ |
-| `grep_search`         | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context         |
-| `find_files`          | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                             |
-| `list_code_usages`    | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                       |
-| `rag_search`          | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)             |
-| `lsp_search`          | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback                  |
-| `git_search`          | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages only)              |
-| `ask_assistant_agent` | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent assistant agent a codebase question |
+| Tool               | Origin | Group | Always Available | Status | Description                                        |
+| ------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |
+| `grep_search`      | 🔵 RC  | read  |        –         |   ✅   | Regex/literal search across files with context     |
+| `find_files`       | 🆕 WS  | read  |        –         |   ✅   | Find files by glob pattern                         |
+| `list_code_usages` | 🆕 WS  | read  |        –         |   ✅   | Find all symbol references (LSP)                   |
+| `rag_search`       | 🔵 RC  | read  |        –         |   🔒   | Semantic code search (requires code index)         |
+| `lsp_search`       | 🆕 WS  | read  |        –         |   ✅   | Symbol search via LSP + text fallback              |
+| `git_search`       | 🟣 AW  | read  |        –         |   ✅   | Search git history (commit messages only)          |
+| `ask_live_memory`  | 🆕 WS  | read  |        –         |   ✅   | Ask the persistent live memory a codebase question |
 
 ### `grep_search`
 
@@ -255,15 +255,15 @@ Semantic search over git commit history (commit messages only — not diffs, not
 | `path`       | string \| null |    –     | Directory scope (relative to workspace)       |
 | `maxResults` | number \| null |    –     | Maximum code snippets to return (default: 10) |
 
-### `ask_assistant_agent`
+### `ask_live_memory`
 
-Ask a question to the persistent **assistant agent** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
+Ask a question to the persistent **live memory** — a separate, cost-optimized tool-using agent that maintains long-term context about the codebase across questions. Use this for codebase-knowledge questions that don't require the calling task's full conversation context to be loaded.
 
-The tool is synchronous: the calling task blocks until the assistant returns an answer, the `timeoutMs` hard limit is reached, or the assistant is cancelled. The assistant agent runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
+The tool is synchronous: the calling task blocks until the assistant returns an answer, the `timeoutMs` hard limit is reached, or the assistant is cancelled. The live memory runs its own tool loop using the read-only native tools (`read_file`, `grep_search`, `find_files`, …) under its own model configuration.
 
 | Param              | Type             | Required | Description                                                                                                                                                           |
 | ------------------ | ---------------- | :------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `question`         | string           |    ✅    | The question to ask the assistant agent.                                                                                                                              |
+| `question`         | string           |    ✅    | The question to ask the live memory.                                                                                                                                  |
 | `contextFiles`     | string[] \| null |    –     | File paths the assistant should preload into its context window for this question.                                                                                    |
 | `timeoutMs`        | number \| null   |    –     | **Hard** maximum wall time in milliseconds (default: 300000 = 5 minutes). On timeout the assistant is aborted and a timeout error is returned.                        |
 | `softTimeoutSec`   | number \| null   |    –     | Soft recommendation (in seconds) for how long the assistant should spend on the question (default: 60). Embedded as prompt guidance; not enforced via cancellation.   |
@@ -803,7 +803,7 @@ Rather than maintain a hand-written tool×mode grid (which drifts — earlier
 revisions listed a non-existent "Ask" mode and miscategorised mode/subtask tools
 as always-available), availability follows one mechanical rule:
 
-> **A tool is available in a mode iff** the mode's `groups` include the tool's
+> **A tool is available in a mode iff** the mode's `tools` include the tool's
 > **group**, **or** the tool is in `ALWAYS_AVAILABLE_TOOLS`. Feature-gated tools
 > (🔒) are additionally removed when their gate is off.
 
@@ -811,7 +811,7 @@ To read off availability for any tool:
 
 1. Find the tool's group in the per-group sections above (Read / Write / Execute /
    MCP / Mode / Subtasks / Questions), or note it as always-available.
-2. Look up the mode's `groups` in [§ Mode Availability](#mode-availability) (or the
+2. Look up the mode's `tools` in [§ Mode Availability](#mode-availability) (or the
    authoritative [`built-in-modes.md`](built-in-modes.md) / `DEFAULT_MODES`).
 3. The tool is available iff the group is present. Architect's `write` group is
    **`.md`-only** (`fileRegex`), enforced at execution time.

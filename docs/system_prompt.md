@@ -11,11 +11,11 @@ ${getSharedToolUseSection()}               ← Tool availability summary
 ${getToolUseGuidelinesSection()}           ← How to choose and chain tools
 ${getCapabilitiesSection()}                ← Detailed tool capabilities
 ${modesSection}                            ← Available modes listing
-${skillsSection}                           ← Available skills listing
+${skillsSection}                           ← Available skills listing (gated by include_skills)
 ${getRulesSection()}                       ← Operational constraints & rules
-${getSystemInfoSection()}                  ← OS, shell, workspace paths
+${getSystemInfoSection()}                  ← OS, shell, workspace paths (gated by include_system_info)
 ${getObjectiveSection()}                   ← Task workflow instructions
-${addCustomInstructions()}                 ← Mode-specific + user rules
+${addCustomInstructions()}                 ← Mode-specific + user rules (gated by include_mode_rules, include_user_rules, include_agents_md)
 ```
 
 ## Section Details
@@ -128,9 +128,9 @@ The largest section, containing operational constraints:
 - Loads and concatenates custom instructions from multiple sources:
     - **Mode-specific `customInstructions`** (from the mode definition).
     - **Global custom instructions** (from settings).
-    - **`.shofer/rules/` directory** — loads all text files recursively, sorted alphabetically.
-    - **`AGENTS.md` / `AGENT.md`** — from workspace root and optionally from subdirectories.
-    - **`.shofer/rules-{mode}/`** — mode-specific rule directories (e.g., `.shofer/rules-code/`).
+    - **`.shofer/rules/` directory** — loads all text files recursively, sorted alphabetically (gated by `include_user_rules`).
+    - **`AGENTS.md` / `AGENT.md`** — from workspace root and optionally from subdirectories (gated by `include_agents_md`).
+    - **`.shofer/rules-{mode}/`** — mode-specific rule directories e.g. `.shofer/rules-code/` (gated by `include_mode_rules`).
     - **Legacy fallback**: `.roorules` and `.clinerules` files.
 - Respects `.shofer/shoferignore` for file filtering.
 - Supports symlinks for all discovered files.

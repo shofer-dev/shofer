@@ -178,10 +178,10 @@ ShoferProvider                    ExtensionStateContext
 
 ```bash
 # Build extension
-deploy.sh dev build shofer-code
+deploy2.sh dev build shofer-code
 
 # Install in code-server
-deploy.sh dev install-extensions
+deploy2.sh dev install-extensions
 ```
 
 ---
@@ -198,10 +198,10 @@ The tree shows a simplified subset of the monorepo. Missing from the diagram:
 - `packages/core/` — shared worktree, task-history, custom-tools, debug-log, and message-utils packages.
 - `packages/telemetry/` — TelemetryService, PostHogTelemetryClient.
 - `packages/ipc/` — IPC client/server for CLI ↔ extension communication.
-- `src/core/tools/` — 15+ native tool implementations (ApplyDiffTool.ts, AskAssistantAgentTool.ts, AttemptCompletionTool.ts, etc.).
+- `src/core/tools/` — 15+ native tool implementations (ApplyDiffTool.ts, AskLiveMemoryTool.ts, AttemptCompletionTool.ts, etc.).
 - `src/core/auto-approval/` — AutoApprovalHandler, per-group approval policies.
 - `src/services/code-index/` — RAG codebase indexing (embedders, file-watcher, git-ignore-filter).
-- `src/services/assistant-agent/` — persistent LLM-based codebase Q&A service.
+- `src/services/live-memory/` — persistent LLM-based codebase Q&A service.
 - `src/services/mcp/` — MCP server hub and server manager.
 - `src/services/skills/` — skills discovery, caching, and lifecycle management.
 - `webview-ui/src/components/chat/` — ~50+ React components, not just the 3 listed.

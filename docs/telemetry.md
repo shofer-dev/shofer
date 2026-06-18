@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+  <!-- /TOC -->
 
 ---
 
@@ -289,7 +289,7 @@ enum TelemetryEventName {
 	SHELL_INTEGRATION_ERROR = "Shell Integration Error",
 	CONSECUTIVE_MISTAKE_ERROR = "Consecutive Mistake Error",
 	CODE_INDEX_ERROR = "Code Index Error",
-	ASSISTANT_AGENT_ERROR = "Assistant Agent Error",
+	LIVE_MEMORY_ERROR = "Live Memory Error",
 	TELEMETRY_SETTINGS_CHANGED = "Telemetry Settings Changed",
 	MODEL_CACHE_EMPTY_RESPONSE = "Model Cache Empty Response",
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
@@ -536,7 +536,7 @@ Caller (e.g., Task.ts, Provider code)
 | `SHELL_INTEGRATION_ERROR`     | Shell integration              | `taskId`                                         |
 | `CONSECUTIVE_MISTAKE_ERROR`   | Mistake limit reached          | `taskId`                                         |
 | `CODE_INDEX_ERROR`            | Code indexing service          | `error` (message), plus service-specific context |
-| `ASSISTANT_AGENT_ERROR`       | Assistant agent service        | `error` (message), service-specific context      |
+| `LIVE_MEMORY_ERROR`           | Live Memory service            | `error` (message), service-specific context      |
 | `MODEL_CACHE_EMPTY_RESPONSE`  | Model cache                    | —                                                |
 | `error_boundary_caught_error` | React error boundary (webview) | `error` (message), `componentStack`              |
 
@@ -809,7 +809,7 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **No `captureException` for non-PostHog clients.** `TelemetryService` delegates `captureException` to all registered clients, but only `PostHogTelemetryClient` implements meaningful exception capture. If a second client is registered, it must also implement `captureException`.
 
-- **The `shoferTelemetryEventSchema` union does not gate `captureEvent` at runtime, but enum↔union parity is now test-enforced.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is still no per-call compile-time safety net (a previous version of this doc wrongly claimed there was). However, the three events that were formerly absent from the union — `ASSISTANT_AGENT_ERROR`, `BUDGET_EXCEEDED`, and `CODE_INDEX_SEGMENT_DEDUP` — have been added, and a parity test in [`telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) now asserts that **every `TelemetryEventName` appears in the union and the union references no unknown names**, so future drift fails CI.
+- **The `shoferTelemetryEventSchema` union does not gate `captureEvent` at runtime, but enum↔union parity is now test-enforced.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is still no per-call compile-time safety net (a previous version of this doc wrongly claimed there was). However, the three events that were formerly absent from the union — `LIVE_MEMORY_ERROR`, `BUDGET_EXCEEDED`, and `CODE_INDEX_SEGMENT_DEDUP` — have been added, and a parity test in [`telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) now asserts that **every `TelemetryEventName` appears in the union and the union references no unknown names**, so future drift fails CI.
 
 ### Coverage Gaps (features without telemetry)
 
@@ -818,12 +818,12 @@ product/operational blind spots. Listed for awareness; wiring them is tracked
 separately. (Subtask spawning, task cancellation, and tool rejection — formerly
 listed here — are now implemented; see [Task Outcome Events](#task-outcome-events).)
 
-| Feature                       | Source (no emitter)                   | Proposed signal                                                        |
-| ----------------------------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| RAG / `codebase_search` usage | `core/tools/RagSearchTool.ts`         | `RAG_SEARCH_PERFORMED { resultCount, latencyMs }`                      |
-| Skill load                    | `core/tools/SkillsTool.ts`            | `SKILL_LOADED { skillName }`                                           |
-| Image generation              | `core/tools/GenerateImageTool.ts`     | `IMAGE_GENERATED { model, success }`                                   |
-| assistantAgent success/usage  | `services/assistant-agent/manager.ts` | `ASSISTANT_AGENT_INVOKED { success, turnCount }` (error already emits) |
+| Feature                       | Source (no emitter)               | Proposed signal                                                    |
+| ----------------------------- | --------------------------------- | ------------------------------------------------------------------ |
+| RAG / `codebase_search` usage | `core/tools/RagSearchTool.ts`     | `RAG_SEARCH_PERFORMED { resultCount, latencyMs }`                  |
+| Skill load                    | `core/tools/SkillsTool.ts`        | `SKILL_LOADED { skillName }`                                       |
+| Image generation              | `core/tools/GenerateImageTool.ts` | `IMAGE_GENERATED { model, success }`                               |
+| liveMemory success/usage      | `services/live-memory/manager.ts` | `LIVE_MEMORY_INVOKED { success, turnCount }` (error already emits) |
 
 Additionally, **only 9 of ~36 provider implementations call `captureException`**
 (the AI Providers table above lists them). The remaining providers — including

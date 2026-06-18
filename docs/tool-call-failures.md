@@ -167,7 +167,7 @@ This is the literal string thrown by `parseToolCall()`. It reaches the chat as t
 
 ### B3. Tool Not Allowed in Current Mode
 
-**Trigger:** Model calls a tool whose `ToolGroup` is not included in the current mode's `groups` array, and the tool is not explicitly in `tools_allowed`.
+**Trigger:** Model calls a tool whose `ToolGroup` is not included in the current mode's `tools` array, and the tool is not explicitly in `tools_allowed`.
 
 **Error message:**
 

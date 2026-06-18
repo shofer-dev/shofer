@@ -294,9 +294,9 @@ During streaming, the tool uses [`hasPathStabilized(filePath)`](../../src/core/t
 
 `view_image` belongs to [`TOOL_GROUPS.read`](../../packages/types/src/tool.ts) and is gated by the **alwaysAllowReadOnly** auto-approval toggle. It is unconditionally read-only — it never modifies files, runs commands, or accesses the network.
 
-### Assistant Agent Variant
+### Live Memory Variant
 
-The assistant agent has a separate implementation in [`tool-executor.ts`](../../src/services/assistant-agent/tool-executor.ts) that returns **metadata only** (file path and size). It explicitly notes that the assistant agent cannot render images inline and suggests using context clues instead. This is because the assistant agent's cost-optimized model context does not surface multimodal content blocks.
+The live memory has a separate implementation in [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts) that returns **metadata only** (file path and size). It explicitly notes that the live memory cannot render images inline and suggests using context clues instead. This is because the live memory's cost-optimized model context does not surface multimodal content blocks.
 
 ### Relationship to User Image Input
 
@@ -323,7 +323,7 @@ The assistant agent has a separate implementation in [`tool-executor.ts`](../../
 | [`image-cleaning.ts`](../../src/api/transform/image-cleaning.ts)                                                     | Removal/conversion of image blocks for non-vision models |
 | [`openai-format.ts`](../../src/api/transform/openai-format.ts)                                                       | Image block → OpenAI `image_url` conversion              |
 | [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts)                                           | Image block → Responses API `input_image` conversion     |
-| [`tool-executor.ts`](../../src/services/assistant-agent/tool-executor.ts)                                            | Assistant agent's metadata-only `_viewImage` variant     |
+| [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts)                                                | Live Memory's metadata-only `_viewImage` variant         |
 | [`ChatView.preserve-images.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatView.preserve-images.spec.tsx) | Test suite for image preservation behavior               |
 | [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)                         | Test suite for textarea image behavior                   |
 

@@ -33,7 +33,7 @@ DEFAULT_MODES (packages/types/src/mode.ts:199)
     │
     └── modes = DEFAULT_MODES (src/shared/modes.ts:90)
             │
-            ├── groups[] → TOOL_GROUPS → allowedTools
+            ├── tools[] → TOOL_GROUPS → allowedTools
             │     (src/shared/tools.ts → packages/types/src/tool.ts:175)
             │
             └── getModeBySlug(slug, customModes)
@@ -62,7 +62,7 @@ exported from the `@shofer/types` package. Each mode entry contains:
 | `roleDefinition`     | `string`       | The system-prompt role for the LLM agent                   |
 | `whenToUse`          | `string`       | Guidance text shown in the mode selector tooltip           |
 | `description`        | `string`       | Short description for mode picker UI                       |
-| `groups`             | `GroupEntry[]` | Symbolic tool-group names with optional file-regex scoping |
+| `tools`              | `GroupEntry[]` | Symbolic tool-group names with optional file-regex scoping |
 | `customInstructions` | `string`       | Default custom instructions for the mode                   |
 
 The six built-in modes:
@@ -83,20 +83,20 @@ a mode slug cannot be resolved to any known mode.
 
 **File:** [`packages/types/src/tool.ts`](../packages/types/src/tool.ts:175-246)
 
-The `groups` field in each mode uses symbolic names. The actual tool membership
+The `tools` field in each mode uses symbolic names. The actual tool membership
 is defined in `TOOL_GROUPS` — a `Record<ToolGroup, ToolGroupConfig>`:
 
-| Group           | Category              | Member Tools                                                                                                                                                                                                                                                       |
-| --------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `read`          | Read-only data access | `read_file`, `grep_search`, `list_files`, `rag_search`, `find_files`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page`, `ask_assistant_agent`, `git_search` |
-| `write`         | Content mutations     | `apply_diff`, `write_to_file`, `generate_image`, `insert_edit`, `rename_symbol`, `create_directory`, `create_new_workspace`, `file`, `sed` (+ `customTools`: `edit`, `search_replace`, `edit_file`, `apply_patch`)                                                 |
-| `execute`       | System commands       | `execute_command`, `read_command_output`, `sleep`                                                                                                                                                                                                                  |
-| `mcp`           | MCP protocol          | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`                                                                                                                                                         |
-| `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                      |
-| `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                                                        |
-| `questions`     | User interaction      | `ask_followup_question`                                                                                                                                                                                                                                            |
-| `browser`       | Browser automation    | _(empty — browser tools are provided by the `browser-tools` MCP server)_                                                                                                                                                                                           |
-| `uncategorized` | Fallback              | _(empty — for tools without explicit classification)_                                                                                                                                                                                                              |
+| Group           | Category              | Member Tools                                                                                                                                                                                                                                                   |
+| --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`          | Read-only data access | `read_file`, `grep_search`, `list_files`, `rag_search`, `find_files`, `read_project_structure`, `view_image`, `list_code_usages`, `get_errors`, `get_project_setup_info`, `get_changed_files`, `lsp_search`, `fetch_web_page`, `ask_live_memory`, `git_search` |
+| `write`         | Content mutations     | `apply_diff`, `write_to_file`, `generate_image`, `insert_edit`, `rename_symbol`, `create_directory`, `create_new_workspace`, `file`, `sed` (+ `customTools`: `edit`, `search_replace`, `edit_file`, `apply_patch`)                                             |
+| `execute`       | System commands       | `execute_command`, `read_command_output`, `sleep`                                                                                                                                                                                                              |
+| `mcp`           | MCP protocol          | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async`, `check_mcp_call_status`, `wait_for_mcp_call`                                                                                                                                                     |
+| `mode`          | Mode switching        | `switch_mode`                                                                                                                                                                                                                                                  |
+| `subtasks`      | Task orchestration    | `new_task`, `check_task_status`, `wait_for_task`, `cancel_tasks`, `answer_subtask_question`                                                                                                                                                                    |
+| `questions`     | User interaction      | `ask_followup_question`                                                                                                                                                                                                                                        |
+| `browser`       | Browser automation    | _(empty — browser tools are provided by the `browser-tools` MCP server)_                                                                                                                                                                                       |
+| `uncategorized` | Fallback              | _(empty — for tools without explicit classification)_                                                                                                                                                                                                          |
 
 **Note:** The `customTools` array (currently only on `write`) lists tools that are
 **opt-in only** — they are not included automatically by group membership. They
@@ -130,10 +130,10 @@ via the `disabledTools` setting or excluded by `tools_denied`:
 
 **File:** [`src/shared/modes.ts`](../src/shared/modes.ts:29-87)
 
-Assembles the final tool name set from a mode's `groups`, `tools_allowed`, and
+Assembles the final tool name set from a mode's `tools`, `tools_allowed`, and
 `tools_denied` fields. The resolution rules:
 
-1. Iterate `groups[]` → look up each in `TOOL_GROUPS` → collect tools
+1. Iterate `tools[]` → look up each in `TOOL_GROUPS` → collect tools
 2. **Scoped group entries** (`{ "groupName": { allowed: [...], denied: [...] } }`) narrow the tool set:
     - `allowed`: exclusive list — only these tools from that group
     - `denied`: removes the listed tools from the group's normal set
@@ -192,7 +192,7 @@ runtime filters on top of the mode's group-based tool set:
 5. **Feature gates** — conditionally remove tools that aren't configured:
     - `rag_search` — removed if code indexer is not initialized
     - `git_search` — removed if git indexer is not initialized
-    - `ask_assistant_agent` — removed if assistant agent is not available
+    - `ask_live_memory` — removed if live memory is not available
     - `update_todo_list` — removed if `todoListEnabled === false`
     - `generate_image` — removed if `imageGeneration` experiment is off
     - `run_slash_command` — removed if `runSlashCommand` experiment is off
@@ -228,7 +228,7 @@ Custom modes from `.shofer/shofermodes` files (project-level) and
 | 3           | Built-in `DEFAULT_MODES`       | Shipped with extension |
 
 The override is **complete** — a custom mode with the same slug replaces every
-field of the built-in mode. There is no partial merging of `groups` or
+field of the built-in mode. There is no partial merging of `tools` or
 `customInstructions`.
 
 Custom modes with new slugs (not matching any built-in mode) are appended after

@@ -350,10 +350,10 @@ text: string, images?: string[] }`. The `timestamp` and `id` fields
    publication → subscription path (event types `QueueEvents`,
    `MessageQueueState`).
 
-4. **`questionQueue` interaction.** When the assistant agent asks the
+4. **`questionQueue` interaction.** When the live memory asks the
    user a follow-up question while a task message is queued, the two
    queue subsystems interact. This doc covers the per-task webview queue
-   but not the assistant-agent `question-queue.ts`.
+   but not the live-memory `question-queue.ts`.
 
 5. **`prependMessage` ID semantics.** The doc says `prependMessage`
    re-inserts "a message that was just dequeued" at the front. In

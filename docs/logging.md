@@ -114,27 +114,27 @@ brand-new subsystem appears immediately with its `ctx` as the label.
 Each subsystem logger is created via `getLogger().child({ ctx: "Name" })`.
 The `ctx` is the tag shown in the output channel.
 
-| ctx              | Logger export       | Description                                                                                                                                                   |
-| ---------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Task`           | `taskLog`           | Core task engine — task lifecycle, tool execution, context condensing, and the agent loop.                                                                    |
-| `Webview`        | `webviewLog`        | Webview ↔ extension-host IPC, the provider, and message routing.                                                                                             |
-| `Git`            | `gitLog`            | Git index, the working-tree file watcher, and git history queries.                                                                                            |
-| `CodeIndex`      | `codeIndexLog`      | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                                                                                     |
-| `AssistantAgent` | `assistantAgentLog` | The assistant-agent subsystem that answers questions and drives clarifying prompts.                                                                           |
-| `MCP`            | `mcpLog`            | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
-| `IPC`            | `ipcLog`            | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
-| `Checkpoints`    | `checkpointLog`     | Checkpoint creation/restore via the shadow-git workspace snapshots.                                                                                           |
-| `API`            | `apiLog`            | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.                                                                         |
-| `FS`             | `fsLog`             | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.                                                                              |
-| `Config`         | `configLog`         | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
-| `Skills`         | `skillsLog`         | Skill discovery, loading, and invocation.                                                                                                                     |
-| `Marketplace`    | `marketplaceLog`    | Marketplace browsing and the item installer.                                                                                                                  |
-| `Metrics`        | `metricsLog`        | Metrics collection and the Prometheus exporter.                                                                                                               |
-| `Workflow`       | `workflowLog`       | The `.slang` workflow engine — parsing, execution, and stake resolution.                                                                                      |
-| `Tools`          | `toolsLog`          | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
-| `I18n`           | `i18nLog`           | Translation loading and locale resolution.                                                                                                                    |
-| `Scroll`         | `scrollLog`         | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.                                                                                |
-| `Utils`          | `utilLog`           | General-purpose utilities (token counting, path handling, perf timing, …).                                                                                    |
+| ctx           | Logger export    | Description                                                                                                                                                   |
+| ------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Task`        | `taskLog`        | Core task engine — task lifecycle, tool execution, context condensing, and the agent loop.                                                                    |
+| `Webview`     | `webviewLog`     | Webview ↔ extension-host IPC, the provider, and message routing.                                                                                             |
+| `Git`         | `gitLog`         | Git index, the working-tree file watcher, and git history queries.                                                                                            |
+| `CodeIndex`   | `codeIndexLog`   | Code (RAG) indexing, embeddings, and tree-sitter parsing.                                                                                                     |
+| `LiveMemory`  | `liveMemoryLog`  | The live-memory subsystem that answers questions and drives clarifying prompts.                                                                               |
+| `MCP`         | `mcpLog`         | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
+| `IPC`         | `ipcLog`         | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
+| `Checkpoints` | `checkpointLog`  | Checkpoint creation/restore via the shadow-git workspace snapshots.                                                                                           |
+| `API`         | `apiLog`         | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.                                                                         |
+| `FS`          | `fsLog`          | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.                                                                              |
+| `Config`      | `configLog`      | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
+| `Skills`      | `skillsLog`      | Skill discovery, loading, and invocation.                                                                                                                     |
+| `Marketplace` | `marketplaceLog` | Marketplace browsing and the item installer.                                                                                                                  |
+| `Metrics`     | `metricsLog`     | Metrics collection and the Prometheus exporter.                                                                                                               |
+| `Workflow`    | `workflowLog`    | The `.slang` workflow engine — parsing, execution, and stake resolution.                                                                                      |
+| `Tools`       | `toolsLog`       | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
+| `I18n`        | `i18nLog`        | Translation loading and locale resolution.                                                                                                                    |
+| `Scroll`      | `scrollLog`      | Webview scroll-lifecycle diagnostics forwarded from the chat view to the host.                                                                                |
+| `Utils`       | `utilLog`        | General-purpose utilities (token counting, path handling, perf timing, …).                                                                                    |
 
 ## Output Format
 

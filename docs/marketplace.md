@@ -243,10 +243,10 @@ User clicks "Remove" on an installed card
 
 ### Mode-Specific Fields
 
-| Field     | Type     | Required | Description                                                               |
-| --------- | -------- | -------- | ------------------------------------------------------------------------- |
-| `type`    | `"mode"` | Yes      | Discriminant                                                              |
-| `content` | `string` | Yes      | YAML content defining the mode (slug, name, roleDefinition, groups, etc.) |
+| Field     | Type     | Required | Description                                                              |
+| --------- | -------- | -------- | ------------------------------------------------------------------------ |
+| `type`    | `"mode"` | Yes      | Discriminant                                                             |
+| `content` | `string` | Yes      | YAML content defining the mode (slug, name, roleDefinition, tools, etc.) |
 
 ### MCP-Specific Fields
 

@@ -23,6 +23,7 @@ Where the two differ, this document wins.
 2. [Lexical Elements](#lexical-elements)
 3. [Reserved Keywords](#reserved-keywords)
 4. [Flow Declaration](#flow-declaration)
+    - [Using `param description` Instead of Initial `escalate`](#using-param-description-instead-of-initial-escalate)
 5. [Agent Declaration](#agent-declaration)
 6. [Operations](#operations)
 7. [Control Flow](#control-flow)
@@ -75,19 +76,51 @@ flow "my-flow" (param: "string") {
 
 ## Lexical Elements
 
-| Element    | Form                                                 | Notes                                                         |
-| ---------- | ---------------------------------------------------- | ------------------------------------------------------------- |
-| Comment    | `-- text to end of line`                             | Single-line only. No block comments.                          |
-| String     | `"double quoted"`                                    | The only string form. Used for params, roles, args, etc.      |
-| Number     | `42`, `3.14`                                         | Integer or float.                                             |
-| Boolean    | `true`, `false`                                      | Keywords.                                                     |
-| Identifier | `myVar`, `do_work`, `Agent1`                         | Agent names, bindings, function names, variables.             |
-| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@*`, `@Human` | `@` prefix. `@*` is a wildcard agent ref for `await` sources. |
-| Arrow      | `->`                                                 | Stake recipient.                                              |
-| Back-arrow | `<-`                                                 | Await source.                                                 |
+| Element    | Form                                                 | Notes                                                                                               |
+| ---------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Comment    | `-- text to end of line`                             | Single-line only. No block comments.                                                                |
+| String     | `"double quoted"`                                    | The only string form. Used for params, roles, args, etc. Supports `${…}` interpolation — see below. |
+| Number     | `42`, `3.14`                                         | Integer or float.                                                                                   |
+| Boolean    | `true`, `false`                                      | Keywords.                                                                                           |
+| Identifier | `myVar`, `do_work`, `Agent1`                         | Agent names, bindings, function names, variables.                                                   |
+| Agent ref  | `@Architect`, `@out`, `@all`, `@any`, `@*`, `@Human` | `@` prefix. `@*` is a wildcard agent ref for `await` sources.                                       |
+| Arrow      | `->`                                                 | Stake recipient.                                                                                    |
+| Back-arrow | `<-`                                                 | Await source.                                                                                       |
 
 There are **no arithmetic operators** (`+`, `-`, `*`, `/`). Counters and loop
 state are expressed with boolean flags and the built-in `round` / `committed_count`.
+
+### String Interpolation
+
+Any string may contain `${…}` placeholders. Each is resolved at evaluation time
+against the **same scope as an expression** — the agent's local bindings, then the
+flow params, then the read-only built-ins (`round`, `committed_count`,
+`all_committed`) — and supports dot-access into object values:
+
+```slang
+flow "deploy" (design_dir: "string", design_filename: "string") {
+  param design_dir { default: "plans" }
+  param design_filename { default: "feature-design.md" }
+
+  agent Architect {
+    role: "Write the design to EXACTLY ${design_dir}/${design_filename}."   -- in role
+    stake build(
+      instructions: "Implement ${design_dir}/${design_filename}."           -- in stake args
+    ) -> @Dev
+    escalate @Human reason: "Review ${design_dir}/${design_filename}."       -- in escalate reason
+    await answers <- @Human
+    log "region = ${answers.region}"                                        -- dot-access on a bound value
+  }
+}
+```
+
+| Property       | Detail                                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| Syntax         | `${name}` or `${name.field.…}` (identifier + optional dot-access chain). No nested braces, no operators.       |
+| Scope          | agent bindings → flow params → built-ins (identical to bare-identifier resolution).                            |
+| Coercion       | scalars inserted as text; objects/arrays are JSON-stringified.                                                 |
+| Unresolved     | a placeholder that resolves to nothing is left **verbatim** (e.g. a typo shows as `${oops}` in the prompt).    |
+| Where it works | stake/call args (via expression evaluation), agent `role:`, and `escalate reason:`. Plain strings are a no-op. |
 
 ---
 
@@ -213,6 +246,17 @@ flow "report" (format: "string", sections: "string", verbosity: "number", notes:
     ...
   }
 }
+
+### Using `param description` Instead of Initial `escalate`
+
+When a workflow needs the user to provide a detailed input (e.g., a bug report),
+annotate the flow parameter with a descriptive `param { description: "…" }` block
+instead of wasting a round-trip with `escalate @Human reason: "…"`. The
+param-collection form renders the `description` as markdown beneath the field label,
+guiding the user to fill it in before the flow starts.
+
+See [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang) for the canonical example.
+
 ```
 
 ---
@@ -222,7 +266,7 @@ flow "report" (format: "string", sections: "string", verbosity: "number", notes:
 ```slang
 agent <Name> {
   mode: "<slug>"          -- Shofer mode slug (Shofer extension)
-  model: "<profile>"      -- optional: override API/model profile
+  api_configuration: "<profile>"  -- optional: API-config profile by name (alias: model:)
   role: "<description>"   -- optional: system-prompt role definition
   tools: [group_a, ...]   -- optional: ToolGroup names, comma-separated
   retry: <number>         -- optional: max LLM-call retries
@@ -235,18 +279,52 @@ agent <Name> {
 }
 ```
 
-| Meta field                  | Required | Wire status              | Value form              | Notes                                                                                                                                                                                                                                                                                               |
-| --------------------------- | -------- | ------------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mode`                      | no\*     | ✅ wired                 | string                  | Shofer mode slug. Shofer extension (`mode: "code"`). Defaults to `"code"` at spawn if omitted.                                                                                                                                                                                                      |
-| `tools`                     | no       | ⚙️ parsed, not yet wired | list of ToolGroup names | **Only valid values are the 9 ToolGroup names:** `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`. Each maps to its corresponding `TOOL_GROUPS` entry. When wired, restricts the spawned Task to only those groups. Bare identifiers, **not quoted.** |
-| `model`                     | no       | parsed, not consumed     | string                  | Would select the API-configuration profile by name.                                                                                                                                                                                                                                                 |
-| `role`                      | no       | parsed, not consumed\*\* | string                  | Would become the agent Task's role/system prompt. Currently used only for peer resource descriptions in dispatch prompts.                                                                                                                                                                           |
-| `retry`                     | no       | parsed, not consumed     | number                  | Would set max retries for the agent's LLM calls per stake.                                                                                                                                                                                                                                          |
-| `context`                   | no       | ❌ not parsed            | object                  | (Planned) Controls what project context the agent receives. Currently not recognized by the parser — using it causes a parse error.                                                                                                                                                                 |
-| `context.include_agents_md` | no       | planned                  | boolean                 | (Planned) When `true`, injects the project's AGENTS.md rules into the agent's system prompt. Useful for agents that need to follow project-specific conventions.                                                                                                                                    |
+| Meta field          | Required | Wire status | Value form              | Notes                                                                                                                                                                                                                                                                                                                |
+| ------------------- | -------- | ----------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mode`              | no\*     | ✅ wired    | string                  | Shofer mode slug. Shofer extension (`mode: "code"`). Defaults to `"code"` at spawn if omitted.                                                                                                                                                                                                                       |
+| `tools`             | no       | ✅ wired    | list of ToolGroup names | **Only valid values are the 9 ToolGroup names:** `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized`. Restricts the spawned Task to these groups — see [Per-agent `tools:` restriction](#per-agent-tools-restriction). Bare identifiers, **not quoted.**                  |
+| `api_configuration` | no       | ✅ wired    | string                  | Selects the agent Task's API-configuration **profile by name** (per-task only; never activates it globally). Unknown name → falls back to the global profile. Threaded as `createTask({ initialApiConfigName })`. Stored on `AgentMeta.apiConfiguration`. **Deprecated alias:** `model:` parses into the same field. |
+| `role`              | no       | ✅ wired    | string                  | Injected into the agent Task's system prompt as `# Agent Role` (layered on top of the mode's `roleDefinition` for that task), and surfaced in peer resource descriptions. Threaded as `createTask({ agentRole })`. `${…}` placeholders resolve against flow params + the agent's bindings.                           |
+| `retry`             | no       | ✅ wired    | number                  | Per-agent **default** stake retry budget. Precedence: a per-stake `retries(N)` clause wins, else this agent `retry:`, else the global `MAX_RETRIES` (3). Bounds re-dispatches on output-contract / `timeout(N)` failures — see [`stake`](#stake) `retries(N)`.                                                       |
+| `context`           | no       | ✅ wired    | block                   | `context { … }` (a leading colon — `context: { … }` — is also accepted). Boolean toggles for system-prompt components. Threaded as `createTask({ agentContext })`. See [`context { ... }`](#context--) for the full key table. Unknown keys are ignored (forward-compatible).                                        |
 
 \* `mode` is technically optional in the grammar but will default to `"code"` at spawn.
-\*\* `role` is consumed in `getPeerResources()` for peer listings but does NOT override the mode's `roleDefinition`.
+
+`role` is **layered on top of** the mode's `roleDefinition` (prepended as `# Agent Role`), not a replacement — the mode's base persona still applies.
+
+### Per-agent `tools:` restriction
+
+`tools:` narrows the spawned agent Task to the listed [ToolGroup](#10-tool-groups-categories)
+names. It is threaded from the AST through
+[`WorkflowTask.spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts) →
+`createTask({ agentToolGroups })` → `Task` →
+[`build-tools.ts`](../src/core/task/build-tools.ts) `restrictToolsToDeclaredGroups()`,
+which is applied **after** the mode's own tool filtering. Semantics:
+
+- **Restriction only — never a grant.** The declared groups are _intersected_
+  with the mode's tools; an agent can never gain a tool its mode denies. (So
+  `tools: [write]` on a `reviewer`-mode agent still yields no write tools.)
+- **`ALWAYS_AVAILABLE_TOOLS` are always retained** (`attempt_completion`,
+  `update_todo_list`, `send_message_to_task`, `set_task_title`, …) regardless of
+  the declared groups, so a restricted agent can still complete stakes and
+  coordinate. This is what makes `tools: []` a _pure coordinator_ (only the
+  always-available set) rather than an unusable agent.
+- **Absent vs empty:** an **absent** `tools:` field applies no restriction
+  (mode tools only); an explicit **`tools: []`** restricts to always-available.
+- **Unknown group names fail closed** (silently dropped) — `tools: [reed]`
+  restricts to always-available only. (A static-analysis warning for unknown
+  group names is a planned addition.)
+- Group→category mapping: native tools resolve via `TOOL_GROUPS`; MCP tools
+  belong to the `mcp` group; native custom tools to `write`; private LM tools
+  carry their own declared group.
+
+**Typical use — lock an orchestrator to coordination.** An `architect`-mode
+orchestrator that should delegate (not implement) declares e.g.
+`tools: [read, write, questions]` (or `tools: [questions]` for a pure
+coordinator): omitting `mode` removes `switch_mode` (it cannot escape into code
+mode) and omitting `subtasks` removes `new_task` (it cannot spawn its own
+children — the workflow spawns the agents). See `implement-feature.slang` /
+`debug.slang`.
 
 ### `peers:` — Declared Direct-Message Peers
 
@@ -271,9 +349,25 @@ agent Worker {
 | Back-fill                   | If peer B is spawned after agent A, A's `knownPeers` is updated at B's spawn time.                                                                                                                                                                 |
 | Relationship to stake/await | `peers:` governs only the **direct-message** (`send_message_to_task`) permission. The executor-mediated stake/await plane (mailbox) is unaffected — an agent may declare a `peers:` grant for an agent it also stakes to, and both planes coexist. |
 
-### `context:`
+### `context { ... }`
 
-(Planned) Controls what project context the agent receives. Currently not recognized by the parser — using it causes a parse error.
+Controls ambient project context injected into the agent Task's system prompt
+via a set of boolean toggles. Written as a block — `context { include_agents_md: false }` —
+and a leading colon (`context: { ... }`) is also accepted. Each key gates a
+specific system-prompt component; absent keys inherit the global default.
+
+| Key                       | Default | Effect                                                                                |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `include_agents_md`       | `true`  | Inject AGENTS.md / AGENT.md rules (maps to `useAgentRules`).                          |
+| `include_subfolder_rules` | `false` | Recursively scan `.shofer/rules/` in subdirectories (maps to `enableSubfolderRules`). |
+| `include_mode_rules`      | `true`  | Load `.shofer/rules-{mode}/` rules.                                                   |
+| `include_user_rules`      | `true`  | Load `.shofer/rules/` rules (non-mode).                                               |
+| `include_skills`          | `true`  | Include the skills listing section in the prompt.                                     |
+| `require_todos`           | `false` | Enforce TODO list in the prompt.                                                      |
+| `include_system_info`     | `true`  | Include OS/shell/workspace info section.                                              |
+| `include_mcp`             | `true`  | Include MCP tools in the capabilities section.                                        |
+
+Unknown keys inside the block are silently ignored (forward-compatible).
 
 By convention, meta fields appear **before** the operations. Note this is **not
 enforced** by the parser — the agent-body loop in
@@ -555,6 +649,22 @@ If no `budget` statement is present, all three limits (`tokens`, `rounds`,
 `time`) default to **unlimited** (0). Exceeding an enforced budget terminates the
 flow with `budget_exceeded`.
 
+Budget values may be numeric literals or references to flow parameters of type
+`"number"` (the value is resolved at workflow start from the user's input):
+
+```slang
+flow "my-flow" (max_tokens: "number", max_rounds: "number") {
+  budget: tokens(max_tokens), rounds(max_rounds)
+  ...
+}
+```
+
+Mixed literals and parameter references are allowed:
+
+```slang
+budget: tokens(token_limit), rounds(10), time(300)
+```
+
 ---
 
 ## Structured Output Contracts
@@ -686,27 +796,17 @@ These are accepted by the grammar (and stored on the AST) but the current
 interpreter does **not** act on them. They are safe to include for documentation
 or forward-compatibility, but do not rely on runtime behaviour:
 
-| Construct                | Status                                                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `import "..." as alias`  | Parsed and recorded on the flow; no module resolution is performed.                                                                        |
-| `deliver func(args)`     | Flow-level statement; parsed, not executed.                                                                                                |
-| `expect <expr>`          | Flow-level statement; parsed, not executed.                                                                                                |
-| `await` trailing options | `await x <- @A, key: expr` — options are parsed but unused (and fragile; prefer a bare source list).                                       |
-| `tools`                  | ⚙️ Parsed, stored on `AgentMeta.tools`, not yet consumed by `spawnAgentTask()`. Values are ToolGroup names.                                |
-| `model`                  | Parsed, stored on `AgentMeta.model`, not consumed by WorkflowTask.                                                                         |
-| `role`                   | Parsed, stored on `AgentMeta.role`, consumed only in `getPeerResources()` for descriptions. Does NOT override the mode's `roleDefinition`. |
-| `retry`                  | Parsed, stored on `AgentMeta.retry`, not consumed by WorkflowTask.                                                                         |
+| Construct                | Status                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `import "..." as alias`  | Parsed and recorded on the flow; no module resolution is performed.                                  |
+| `deliver func(args)`     | Flow-level statement; parsed, not executed.                                                          |
+| `expect <expr>`          | Flow-level statement; parsed, not executed.                                                          |
+| `await` trailing options | `await x <- @A, key: expr` — options are parsed but unused (and fragile; prefer a bare source list). |
 
-### Planned (Not Yet Parsed)
-
-These constructs appear in the design documents and the EBNF grammar but the
-current lexer/parser does **not** recognize them. Using them today will cause a
-parse error.
-
-| Construct                   | Planned for                                                           |
-| --------------------------- | --------------------------------------------------------------------- |
-| `context: { ... }`          | Agent meta block controlling what project context the agent receives. |
-| `context.include_agents_md` | When `true`, injects AGENTS.md rules into the agent's system prompt.  |
+> The agent-meta fields `tools`, `api_configuration` (alias `model`), `role`,
+> `retry`, and `context` are all now **wired** — see the agent meta-field table
+> and [Per-agent `tools:` restriction](#per-agent-tools-restriction). They were
+> previously documented here as parsed-but-not-executed.
 
 ---
 
@@ -837,9 +937,10 @@ rationale and a couple of items that are observations rather than fixes.
   [`slang-types.ts`](../src/core/workflow/slang-types.ts) exactly.
 - **`MAX_CONTROL_FLOW_STEPS = 10_000`** (§7) matches the constant in
   [`slang-interpreter.ts`](../src/core/workflow/slang-interpreter.ts).
-- **`context:` causes a parse error** (§5, §15) — confirmed: `context` is not a keyword
-  and is not a recognized meta field, so the agent-body loop falls through to the
-  `P203 "Expected an operation"` error.
+- **`context { ... }` is now parsed and wired** (§15) — the agent-body loop
+  recognizes a `context` block with any boolean keys, leading
+  colon optional) and stores it on `AgentMeta.context`. (Previously `context`
+  fell through to the `P203 "Expected an operation"` error.)
 - **Output-contract injection** is prompt-level and reads `completionResultSummary`
   from the agent's `HistoryItem` — confirmed in `WorkflowTask`.
 
@@ -848,5 +949,5 @@ rationale and a couple of items that are observations rather than fixes.
 | #   | Where                                                                       | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts) `analyzeFlow` | The orphan-output check (`stakesToAgents && !awaitedAgents.has(name) && !stakesToOut`) excludes `-> @all` from `stakesToAgents`, so an agent whose only output is a `@all` broadcast is **never** evaluated by this warning. A broadcast that no agent actually `await`s therefore goes unreported (a quiet false-negative gap), whereas the same dangling output via a concrete `-> @Peer` would warn. Consider treating `@all` as a producer for completeness. |
-| 2   | Agent meta `tools` / `model` / `retry`                                      | Parsed and stored on `AgentMeta` but still **not consumed** at spawn (`spawnAgentTask` uses only `mode`, defaulting to `"code"`). §15 documents this correctly; flagged here so the gap stays visible. `role` is consumed only via `getPeerResources()` for peer descriptions.                                                                                                                                                                                   |
+| 2   | Agent meta `context:`                                                       | All `context` knobs are now fully wired — `spawnAgentTask` threads `agentContext` into `createTask()`, resolving each key via `?? globalDefault` and gating the corresponding system-prompt component in [`system.ts`](../src/core/prompts/system.ts) and [`custom-instructions.ts`](../src/core/prompts/sections/custom-instructions.ts). See [context { ... }](#context--) for the full key table.                                                             |
 | 3   | `escalate` target                                                           | `EscalateOp.target` is the agent ref without `@`; the interpreter logs `target                                                                                                                                                                                                                                                                                                                                                                                   |     | "Human"`. The spec only shows `escalate @Human` — worth stating explicitly whether non-`@Human`escalation targets are meaningful, since the runtime always treats the reply as mail from`@Human`. |

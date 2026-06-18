@@ -33,7 +33,7 @@ This document catalogues every **user-facing feature** and **opinionated change*
 19. [Cost Calculation & Limits](#19-cost-calculation--limits)
 20. [Cloud removal and marketplace/telemetry feature flags](#20-cloud-removal-and-marketplacetelemetry-feature-flags)
 21. [UI/UX Opinionated Changes](#21-uiux-opinionated-changes)
-22. [Assistant Agent](#22-assistant-agent)
+22. [Live Memory](#22-live-memory)
 23. [LSP-Powered Symbol Refactoring](#23-lsp-powered-symbol-refactoring)
 
 ---
@@ -439,33 +439,33 @@ These are deliberate design decisions that changed the default behavior or appea
 | **Background editing enabled by default** | The experiment graduated — background diffs are now the standard editing experience.                                                                                                                                                    |
 | **API request started row auto-hides**    | The "API request started" indicator row now hides on success, reducing chat clutter. Only persists on errors or cancellations.                                                                                                          |
 | **Hero logo animation redesigned**        | The welcome screen hero animation was changed from a bouncing kangaroo to a road/parallax wheel-roll theme for a cleaner, more professional look.                                                                                       |
-| **GFM table rendering in chat**           | Assistant agent responses and markdown blocks now render GitHub-flavored markdown tables using the standard table component, improving readability of tabular data.                                                                     |
+| **GFM table rendering in chat**           | Live Memory responses and markdown blocks now render GitHub-flavored markdown tables using the standard table component, improving readability of tabular data.                                                                         |
 | **Expandable tool input/output**          | Tool calls in chat now render expandable/collapsible input and output sections (gated behind an experimental flag). Tool result output is size-capped and suppressed entirely for tools with dedicated inline UI, keeping chat concise. |
 
 ---
 
-## 22. Assistant Agent
+## 22. Live Memory
 
-The **Assistant Agent** is a persistent, long-lived, read-only LLM companion that accumulates codebase knowledge across tasks — surviving task completion and VS Code restarts. It runs on a **separate, cost-optimized model with a large context window**, and is exposed to tasks via the [`ask_assistant_agent`](../../src/core/tools/AskAssistantAgentTool.ts) native tool.
+The **Live Memory** is a persistent, long-lived, read-only LLM companion that accumulates codebase knowledge across tasks — surviving task completion and VS Code restarts. It runs on a **separate, cost-optimized model with a large context window**, and is exposed to tasks via the [`ask_live_memory`](../../src/core/tools/AskLiveMemoryTool.ts) native tool.
 
 Previously, every task had to load its own context from scratch. There was no mechanism for sharing codebase knowledge between tasks, and repetitive file reads burned tokens.
 
 ### What Was Built
 
-| Feature                            | Description                                                                                                                                                                                                                                           |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Persistent conversation**        | The agent's full conversation survives task termination and VS Code restarts. Uses a versioned JSON snapshot (`globalStorage`) with SHA-256 file-context validation.                                                                                  |
-| **Separate, cheap model**          | User selects a low-cost, large-context model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku) via a linked API Configuration profile.                                                                                                                  |
-| **Read-only tool set**             | The assistant agent is **strictly read-only** — [`tool-executor.ts`](../../src/services/assistant-agent/tool-executor.ts) restricts it to `TOOL_GROUPS.read` only (file reading, search, LSP lookups). No write, execute, MCP, or task-control tools. |
-| **KV-cache-preserving context**    | Context is append-only; files modified by tasks are NOT evicted. Instead a "recently modified" notification is attached to the next question, keeping the LLM provider's attention cache warm.                                                        |
-| **Question queue + timeout**       | Questions are serialized via a bounded FIFO queue. The hard `timeoutMs` covers queue wait + LLM processing. Soft `softTimeoutSec` / `softResultLength` hints guide the agent's response.                                                              |
-| **Context window truncation**      | No summarization — oldest messages are dropped when the budget is exceeded. Oldest file contexts (by `lastReferencedAt`) are evicted first, then oldest conversation turns.                                                                           |
-| **Directory tree injection**       | A `find .`-style workspace directory tree (capped at ~10% of context window) is injected into the system prompt, giving immediate project structure awareness.                                                                                        |
-| **File watcher + tool hooks**      | Detects external file changes (VSCode `FileSystemWatcher`) and task-initiated edits (tool execution hooks). Stale files are lazily re-read on next reference.                                                                                         |
-| **Toolbar badge + dedicated chat** | Status badge in the chat-input toolbar shows agent state, context fill %, and cost. Popover provides Start/Stop/Clear Context actions. A dedicated read-only chat panel streams live Q&A.                                                             |
-| **Subtask question routing**       | Questions from `ask_assistant_agent` in background subtasks route to the calling task synchronously — the task blocks until the answer or timeout.                                                                                                    |
+| Feature                            | Description                                                                                                                                                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Persistent conversation**        | The agent's full conversation survives task termination and VS Code restarts. Uses a versioned JSON snapshot (`globalStorage`) with SHA-256 file-context validation.                                                                          |
+| **Separate, cheap model**          | User selects a low-cost, large-context model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku) via a linked API Configuration profile.                                                                                                          |
+| **Read-only tool set**             | The live memory is **strictly read-only** — [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts) restricts it to `TOOL_GROUPS.read` only (file reading, search, LSP lookups). No write, execute, MCP, or task-control tools. |
+| **KV-cache-preserving context**    | Context is append-only; files modified by tasks are NOT evicted. Instead a "recently modified" notification is attached to the next question, keeping the LLM provider's attention cache warm.                                                |
+| **Question queue + timeout**       | Questions are serialized via a bounded FIFO queue. The hard `timeoutMs` covers queue wait + LLM processing. Soft `softTimeoutSec` / `softResultLength` hints guide the agent's response.                                                      |
+| **Context window truncation**      | No summarization — oldest messages are dropped when the budget is exceeded. Oldest file contexts (by `lastReferencedAt`) are evicted first, then oldest conversation turns.                                                                   |
+| **Directory tree injection**       | A `find .`-style workspace directory tree (capped at ~10% of context window) is injected into the system prompt, giving immediate project structure awareness.                                                                                |
+| **File watcher + tool hooks**      | Detects external file changes (VSCode `FileSystemWatcher`) and task-initiated edits (tool execution hooks). Stale files are lazily re-read on next reference.                                                                                 |
+| **Toolbar badge + dedicated chat** | Status badge in the chat-input toolbar shows agent state, context fill %, and cost. Popover provides Start/Stop/Clear Context actions. A dedicated read-only chat panel streams live Q&A.                                                     |
+| **Subtask question routing**       | Questions from `ask_live_memory` in background subtasks route to the calling task synchronously — the task blocks until the answer or timeout.                                                                                                |
 
-<!-- 📸 TODO: screenshot of Assistant Agent toolbar badge and popover showing state, context fill, and cost -->
+<!-- 📸 TODO: screenshot of Live Memory toolbar badge and popover showing state, context fill, and cost -->
 
 ---
 

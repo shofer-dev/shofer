@@ -13,7 +13,7 @@ scenarios:
 
   - name: "groups-only: read group grants read_file"
     mode:
-      groups: [read]
+      tools: [read]
     test:
       - tool: read_file
         expect: allowed
@@ -22,7 +22,7 @@ scenarios:
 
   - name: "groups-only: write group does not grant execute_command"
     mode:
-      groups: [write]
+      tools: [write]
     test:
       - tool: apply_diff
         expect: allowed
@@ -31,7 +31,7 @@ scenarios:
 
   - name: "groups-only: code mode (all groups) allows every tool"
     mode:
-      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+      tools: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
     test:
       - tool: read_file
         expect: allowed
@@ -70,7 +70,7 @@ scenarios:
 
   - name: "OR: tool from tools_allowed allowed even when group differs"
     mode:
-      groups: [read]
+      tools: [read]
       tools_allowed: [new_task]
     test:
       - tool: read_file
@@ -84,7 +84,7 @@ scenarios:
 
   - name: "deny: blocks tool even when group grants it"
     mode:
-      groups: [read, write, execute]
+      tools: [read, write, execute]
       tools_denied: [execute_command]
     test:
       - tool: read_file
@@ -115,7 +115,7 @@ scenarios:
 
   - name: "scoped allowed: only listed tools granted from that group"
     mode:
-      groups:
+      tools:
         - read:
             allowed: [read_file]
     test:
@@ -126,7 +126,7 @@ scenarios:
 
   - name: "scoped denied: removes tools from group's normal set"
     mode:
-      groups:
+      tools:
         - read:
             denied: [grep_search]
     test:
@@ -139,7 +139,7 @@ scenarios:
 
   - name: "fileRegex: write to matching file allowed"
     mode:
-      groups:
+      tools:
         - - write
           - fileRegex: "\\.md$"
       toolParams:
@@ -152,7 +152,7 @@ scenarios:
 
   - name: "fileRegex: write to non-matching file throws FileRestrictionError"
     mode:
-      groups:
+      tools:
         - - write
           - fileRegex: "\\.md$"
       toolParams:
@@ -165,7 +165,7 @@ scenarios:
 
   - name: "always-available: attempt_completion works regardless of groups"
     mode:
-      groups: []
+      tools: []
       tools_allowed: [read_file]
     test:
       - tool: attempt_completion
@@ -179,7 +179,7 @@ scenarios:
 
   - name: "always-available: can still be blocked via disabledTools setting"
     mode:
-      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+      tools: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
       toolRequirements:
         attempt_completion: false
     test:
@@ -190,7 +190,7 @@ scenarios:
 
   - name: "dynamic MCP: mcp_* tools allowed when mcp group present"
     mode:
-      groups: [read, mcp]
+      tools: [read, mcp]
     test:
       - tool: "mcp_context7_resolve-library-id"
         expect: allowed
@@ -199,7 +199,7 @@ scenarios:
 
   - name: "dynamic MCP: mcp_* tools denied when mcp group absent"
     mode:
-      groups: [read, write]
+      tools: [read, write]
     test:
       - tool: "mcp_context7_resolve-library-id"
         expect: denied
@@ -211,7 +211,7 @@ scenarios:
   - name: "custom overrides built-in: restricted code mode"
     mode:
       slug: code  # overrides built-in code mode
-      groups: [read]
+      tools: [read]
     test:
       - tool: read_file
         expect: allowed
@@ -224,7 +224,7 @@ scenarios:
 
   - name: "unknown tool name throws descriptive error"
     mode:
-      groups: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
+      tools: [read, write, execute, mcp, browser, mode, subtasks, questions, uncategorized]
     test:
       - tool: unknown_tool
         expect: error
@@ -234,7 +234,7 @@ scenarios:
 
   - name: "old group name 'edit' auto-maps to 'write'"
     mode:
-      groups: [edit]
+      tools: [edit]
     test:
       - tool: apply_diff
         expect: allowed      # belongs to write group
@@ -243,7 +243,7 @@ scenarios:
 
   - name: "old group name 'command' auto-maps to 'execute'"
     mode:
-      groups: [command]
+      tools: [command]
     test:
       - tool: execute_command
         expect: allowed      # belongs to execute group
@@ -254,7 +254,7 @@ scenarios:
 
   - name: "filterNativeToolsForMode only returns allowed tools"
     mode:
-      groups: [read]
+      tools: [read]
     test:
       - assert: "system prompt tool list contains read_file"
         expect: true
@@ -263,7 +263,7 @@ scenarios:
 
   - name: "filterMcpToolsForMode hides MCP tools when mcp group absent"
     mode:
-      groups: [read]
+      tools: [read]
     test:
       - assert: "MCP tool list returned to system prompt is empty"
         expect: true

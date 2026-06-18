@@ -180,7 +180,7 @@ Controls the read-only tool actions as classified by `isReadOnlyToolAction()`:
 | `get_project_setup_info` |
 | `list_code_usages`       |
 | `git_search`             |
-| `ask_assistant_agent`    |
+| `ask_live_memory`        |
 
 > **Note:** Some tools appear both here and in the unconditionally-approved list.
 > The unconditional path takes precedence — these tools are approved before the
@@ -330,7 +330,7 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
 3. **Missing `alwaysAllowUncategorized` toggle** — defined as an `AutoApprovalState`
    variant in code but absent from the toggles table. Added as additional option for `alwaysAllowMcp`.
 
-4. **Missing `git_search` and `ask_assistant_agent`** from the `alwaysAllowReadOnly` tool table.
+4. **Missing `git_search` and `ask_live_memory`** from the `alwaysAllowReadOnly` tool table.
    Both are in `TOOL_GROUPS.read` and therefore gated by this toggle.
 
 5. **Incorrect `run_slash_command` in `alwaysAllowReadOnly` table** — `run_slash_command` is

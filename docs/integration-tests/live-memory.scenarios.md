@@ -1,22 +1,22 @@
-# Assistant Agent — Integration Test Scenarios
+# Live Memory — Integration Test Scenarios
 
-> Design doc: [`docs/assistant_agent.md`](../docs/assistant_agent.md)
-> User manual: [`docs/user-manual/assistant-agent.md`](../docs/user-manual/assistant-agent.md)
-> Implementation: [`src/services/assistant-agent/manager.ts`](../src/services/assistant-agent/manager.ts),
-> [`src/services/assistant-agent/conversation-store.ts`](../src/services/assistant-agent/conversation-store.ts),
-> [`src/services/assistant-agent/question-queue.ts`](../src/services/assistant-agent/question-queue.ts),
-> [`src/services/assistant-agent/context-window.ts`](../src/services/assistant-agent/context-window.ts),
-> [`src/services/assistant-agent/llm-client.ts`](../src/services/assistant-agent/llm-client.ts),
-> [`src/services/assistant-agent/tool-executor.ts`](../src/services/assistant-agent/tool-executor.ts),
-> [`src/core/tools/AskAssistantAgentTool.ts`](../src/core/tools/AskAssistantAgentTool.ts),
-> [`src/core/webview/AssistantAgentChatProvider.ts`](../src/core/webview/AssistantAgentChatProvider.ts)
+> Design doc: [`docs/live_memory.md`](../docs/live_memory.md)
+> User manual: [`docs/user-manual/live-memory.md`](../docs/user-manual/live-memory.md)
+> Implementation: [`src/services/live-memory/manager.ts`](../src/services/live-memory/manager.ts),
+> [`src/services/live-memory/conversation-store.ts`](../src/services/live-memory/conversation-store.ts),
+> [`src/services/live-memory/question-queue.ts`](../src/services/live-memory/question-queue.ts),
+> [`src/services/live-memory/context-window.ts`](../src/services/live-memory/context-window.ts),
+> [`src/services/live-memory/llm-client.ts`](../src/services/live-memory/llm-client.ts),
+> [`src/services/live-memory/tool-executor.ts`](../src/services/live-memory/tool-executor.ts),
+> [`src/core/tools/AskLiveMemoryTool.ts`](../src/core/tools/AskLiveMemoryTool.ts),
+> [`src/core/webview/LiveMemoryChatProvider.ts`](../src/core/webview/LiveMemoryChatProvider.ts)
 
 ## Prerequisites
 
 - A workspace with at least one API Configuration profile configured and working.
 - The workspace should contain a reasonable number of source files (50+ recommended).
-- The `assistantAgentEnabled` setting toggled ON.
-- An API Configuration profile linked via `assistantAgentApiConfigId`.
+- The `liveMemoryEnabled` setting toggled ON.
+- An API Configuration profile linked via `liveMemoryApiConfigId`.
 
 ---
 
@@ -24,12 +24,12 @@
 
 **Goal:** Verify the agent starts from Standby and reaches Ready state.
 
-1. Ensure `assistantAgentEnabled` is `true` and a valid profile is linked.
+1. Ensure `liveMemoryEnabled` is `true` and a valid profile is linked.
 2. Trigger agent startup via the toolbar badge "Start" action or the
-   `Shofer: Assistant Agent: Start` command.
-3. Observe the `AssistantAgentStatusBadge` transitions:
+   `Shofer: Live Memory: Start` command.
+3. Observe the `LiveMemoryStatusBadge` transitions:
    `Standby` → `Initializing...` → `Ready (0%)`.
-4. Open the `AssistantAgentPopover`: confirm the linked model name is displayed,
+4. Open the `LiveMemoryPopover`: confirm the linked model name is displayed,
    context usage shows `0 / N` tokens, and the "Start" action is replaced with
    "Stop".
 
@@ -44,15 +44,15 @@ output channel. The popover shows correct model + token window info.
 
 1. Start a new Shofer task (Code mode).
 2. Ask: "What programming languages are used in this project?"
-3. The task agent should call `ask_assistant_agent` with the question.
-4. Verify the Assistant Agent transitions to `Busy`, processes the question,
+3. The task agent should call `ask_live_memory` with the question.
+4. Verify the Live Memory transitions to `Busy`, processes the question,
    and returns to `Ready`.
 5. Verify the answer is relevant to the project (mentions actual files/languages).
-6. Check the `AssistantAgentCostTracking`: `totalInputTokens` and
+6. Check the `LiveMemoryCostTracking`: `totalInputTokens` and
    `totalOutputTokens` should both be > 0.
 
 **Expected:** Answer returned within 120 seconds. Tool call shows in the task's
-chat history. The Assistant Agent chat panel shows the Q&A pair.
+chat history. The Live Memory chat panel shows the Q&A pair.
 
 ---
 
@@ -63,7 +63,7 @@ chat history. The Assistant Agent chat panel shows the Q&A pair.
 1. Ask: "What does the file `src/core/tools/BaseTool.ts` export?" with
    `contextFiles: ["src/core/tools/BaseTool.ts"]`.
 2. Verify the answer references the file's actual exports.
-3. Open the Assistant Agent popover: confirm `src/core/tools/BaseTool.ts`
+3. Open the Live Memory popover: confirm `src/core/tools/BaseTool.ts`
    appears in the "Files in context" list with a non-zero `tokenEstimate`.
 
 **Expected:** The file is loaded into context and the answer is file-accurate.
@@ -78,7 +78,7 @@ The file persists in context for subsequent questions.
 1. Perform Scenario 2 (ask a question, get an answer).
 2. Note the answer content and the files-in-context list.
 3. Close and re-open the VS Code window (or reload the extension).
-4. Open the Assistant Agent chat panel: confirm the previous Q&A pair is visible.
+4. Open the Live Memory chat panel: confirm the previous Q&A pair is visible.
 5. Open the popover: confirm files-in-context are restored (validated against
    current disk state).
 
@@ -93,8 +93,8 @@ was modified externally before reload, it is evicted from context.
 
 1. Start 3 Shofer tasks simultaneously (or use `new_task` with
    `is_background=true`).
-2. Each task should ask a distinct question via `ask_assistant_agent`.
-3. Observe the Assistant Agent status: transitions `Ready` → `Busy` → `Ready`
+2. Each task should ask a distinct question via `ask_live_memory`.
+3. Observe the Live Memory status: transitions `Ready` → `Busy` → `Ready`
    → `Busy` → `Ready` → `Busy` → `Ready` (no overlapping Busy periods).
 4. Verify all 3 answers are returned, each different from the others.
 5. Verify the chat panel shows 3 Q&A pairs in FIFO order.
@@ -112,8 +112,8 @@ total processing time is under the per-task timeout.
    timeout, e.g., `timeoutMs: 500`).
 2. Ask a question that requires tool calls (e.g., "Read all TypeScript files
    and summarize them").
-3. Verify the `ask_assistant_agent` call returns a timeout error.
-4. Verify the Assistant Agent transitions back to `Ready`.
+3. Verify the `ask_live_memory` call returns a timeout error.
+4. Verify the Live Memory transitions back to `Ready`.
 5. Verify any file reads already completed are retained in context (partial work
    is NOT rolled back).
 
@@ -226,7 +226,7 @@ animation only activates during `Busy`.
 
 **Goal:** Verify the chat panel shows live token-by-token updates during Busy.
 
-1. Open the Assistant Agent chat panel via "View Chat".
+1. Open the Live Memory chat panel via "View Chat".
 2. Ask a question that requires a long answer.
 3. Observe the chat panel: the latest answer should appear incrementally
    (partial text, not full replacement).
@@ -262,7 +262,7 @@ history prior to the error is not corrupted.
 
 1. Ask a question that takes a long time (e.g., search across many files).
 2. While the agent is `Busy`, click "Stop".
-3. Verify the current question is aborted and the `ask_assistant_agent` call
+3. Verify the current question is aborted and the `ask_live_memory` call
    returns an error.
 4. Verify the agent transitions to `Standby`.
 5. Verify any queued questions are rejected.
@@ -290,7 +290,7 @@ prompt without tool calls, confirming the directory tree is injected.
 
 ## Scenario 17: Multi-workspace isolation
 
-**Goal:** Verify each workspace has its own independent assistant agent.
+**Goal:** Verify each workspace has its own independent live memory.
 
 1. Open two VS Code windows with different workspaces, each with Shofer.
 2. In workspace A, ask: "What is in the src directory of project A?"
