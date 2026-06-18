@@ -1,22 +1,23 @@
 -- ============================================================================
 -- Flow: Debug
 --
--- The Orchestrator dispatches two developers for independent triage, then
--- runs a peer-review consensus loop until both agree on the root cause.
--- After user sign-off, Developer1 implements the fix and Developer2
--- reviews it, iterating until the reviewer is satisfied.
+-- Two developers independently investigate the issue READ-ONLY (no fixes) —
+-- both receive the same brief. Their findings go to the Architect, who
+-- consolidates them into a SINGLE fix plan and assigns it to one developer
+-- (Developer1, the writer). Once Developer1 reports the fix done, Developer2
+-- (the read-only reviewer) reviews the implementation; its feedback is relayed
+-- back to Developer1, who revises — looping until the reviewer is satisfied.
 --
--- Topology note: every loop is COUNT-MATCHED. The Orchestrator drives each
--- loop and ends it with a terminal structured stop signal — a boolean field on
--- the stake's output (`proceed` for the consensus loop, `approved` for the fix
--- loop, `complete` for the review loop) that the corresponding agent detects
--- with a `when` check, so both sides exit in lockstep and the message counts
--- never desync.
+-- Topology note: the review loop is COUNT-MATCHED. The Architect drives it and
+-- ends each peer's loop with a terminal structured stop signal — a boolean
+-- field on the stake's output (`approved` for the writer, `complete` for the
+-- reviewer) that the developer detects with a `when` check, so both sides exit
+-- in lockstep and the message counts never desync.
 -- ============================================================================
 
 flow "debug" (issue: "string") {
   title: "Collaborative Debug"
-  description: "Two developers independently triage, converge on the root cause through peer review, get user sign-off, then one fixes and the other reviews — iterating until both are satisfied."
+  description: "Two developers independently investigate the issue (read-only); the Architect consolidates their findings into one fix plan for the writer, then the other developer reviews the implementation — iterating until the reviewer is satisfied."
   icon: "bug"
 
   param issue {
@@ -24,119 +25,68 @@ flow "debug" (issue: "string") {
   }
 
   -- =========================================================================
-  -- Orchestrator — drives every loop in lockstep with the developers
+  -- Architect — dispatches investigation, consolidates the findings into a
+  -- single fix plan, and drives the review loop. Does NOT write or review code.
   -- =========================================================================
-  agent Orchestrator {
+  agent Architect {
     mode: "architect"
-    -- Pure coordinator: NO read/write/execute (so it cannot triage or fix the
-    -- issue itself — its only job is to dispatch, relay, and signal), NO `mode`
-    -- (cannot switch into code) and NO `subtasks` (cannot spawn its own
-    -- children — the workflow spawns the two developers). Only `questions`, so
-    -- it can still escalate/clarify with the user. Always-available tools
-    -- (attempt_completion, send_message_to_task, …) are retained regardless.
+    -- Pure coordinator: only `questions` (so it can still clarify with the user).
+    -- NO read/write/execute (it consolidates from the developers' written
+    -- findings; it does not investigate or fix), NO `mode` (cannot switch into
+    -- code) and NO `subtasks` (the workflow spawns the developers). Always-available
+    -- tools (attempt_completion, send_message_to_task, …) are retained regardless.
     tools: [questions]
-    role: "Debug workflow orchestrator. You clarify the issue with the user, coordinate parallel investigation by two developers, broker consensus between them, and drive the fix-and-review loop to completion. You do NOT write or review code yourself."
+    role: "Debug workflow architect. You dispatch parallel read-only investigation to two developers, consolidate their independent findings into a single coherent fix plan, assign it to the writer, and drive the review loop to completion. You do NOT investigate, write, or review code yourself."
 
-    -- Phase 1 — Parallel triage
+    -- Phase 1 — Parallel READ-ONLY investigation (the SAME brief to both).
     --
-    -- NOTE: a stake declared here is executed by the ORCHESTRATOR; `-> @DeveloperN`
-    -- only routes the *result* to that developer's mailbox (consumed by its
-    -- `await triage_task <- @Orchestrator`). It does NOT make the developer run
-    -- this stake. So the instruction is a DISPATCH addressed to the Orchestrator
-    -- — never "investigate…"/"implement…", which would make the Orchestrator do
-    -- the work itself (and, for writes, stall in architect mode). Each developer
-    -- does the real work via its own `investigate` / `fix` / `review` stake.
-    stake triage(
+    -- NOTE: a stake declared here is executed by the ARCHITECT; `-> @DeveloperN`
+    -- only routes the *result* (the dispatch brief) to that developer's mailbox
+    -- (consumed by its `await investigate_task <- @Architect`). It does NOT make
+    -- the developer run this stake. So the instruction is a DISPATCH addressed to
+    -- the Architect — "Produce the investigation brief…", never "investigate…",
+    -- which would make the Architect do the work itself (and stall in architect
+    -- mode). Each developer does the real work via its own `investigate` stake.
+    stake investigate_brief(
       issue: issue,
       user_description: issue,
-      task: "Dispatch read-only triage to this developer. You are the orchestrator: you do NOT investigate or modify anything yourself. Produce the triage assignment as your result, instructing the developer: STRICT READ-ONLY TRIAGE — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
+      task: "Dispatch read-only investigation to this developer. You are the architect: you do NOT investigate or modify anything yourself. Produce the investigation brief as your result, instructing the developer: STRICT READ-ONLY INVESTIGATION — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer1
 
-    stake triage(
+    stake investigate_brief(
       issue: issue,
       user_description: issue,
-      task: "Dispatch read-only triage to this developer. You are the orchestrator: you do NOT investigate or modify anything yourself. Produce the triage assignment as your result, instructing the developer: STRICT READ-ONLY TRIAGE — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed / file) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
+      task: "Dispatch read-only investigation to this developer. You are the architect: you do NOT investigate or modify anything yourself. Produce the investigation brief as your result, instructing the developer: STRICT READ-ONLY INVESTIGATION — investigate using read/search tools ONLY; do NOT modify, create, delete, move, or apply any change to any file (no apply_diff / write_to_file / insert_edit / sed) and do NOT run any command that mutates the workspace or git; examine the codebase, logs, and context; identify the root cause — what is actually broken and why; output analysis only — describe the proposed fix in words, do NOT implement it."
     ) -> @Developer2
 
     await dev1 <- @Developer1
     await dev2 <- @Developer2
 
     let dev1_analysis = dev1.analysis
-    let dev1_verdict = dev1.root_cause
+    let dev1_root_cause = dev1.root_cause
     let dev2_analysis = dev2.analysis
-    let dev2_verdict = dev2.root_cause
-    let dev1_agrees = false
-    let dev2_agrees = false
+    let dev2_root_cause = dev2.root_cause
 
-    -- Phase 2 — Consensus loop (count-matched: each round the Orchestrator
-    -- sends one `share` to BOTH developers and awaits one reply from each).
-    let converged = false
-    repeat until converged {
-      stake share(
-        my_root_cause: dev1_verdict,
-        peer_analysis: dev2_analysis,
-        peer_root_cause: dev2_verdict,
-        task: "Relay the peer developer's analysis and root-cause verdict to Developer1 for reconsideration. This is a consensus round, NOT the terminal stop signal — set proceed=false and put the peer's analysis/verdict in `details`."
-      ) -> @Developer1
-        output: { proceed: "boolean", details: "string" }
-
-      stake share(
-        my_root_cause: dev2_verdict,
-        peer_analysis: dev1_analysis,
-        peer_root_cause: dev1_verdict,
-        task: "Relay the peer developer's analysis and root-cause verdict to Developer2 for reconsideration. This is a consensus round, NOT the terminal stop signal — set proceed=false and put the peer's analysis/verdict in `details`."
-      ) -> @Developer2
-        output: { proceed: "boolean", details: "string" }
-
-      await renewed1 <- @Developer1
-      await renewed2 <- @Developer2
-
-      set dev1_analysis = renewed1.analysis
-      set dev1_verdict = renewed1.root_cause
-      set dev1_agrees = renewed1.agrees_with_peer
-
-      set dev2_analysis = renewed2.analysis
-      set dev2_verdict = renewed2.root_cause
-      set dev2_agrees = renewed2.agrees_with_peer
-
-      when dev1_agrees && dev2_agrees {
-        set converged = true
-      }
-    }
-
-    -- End both consensus loops in lockstep with the terminal structured signal.
-    stake proceed(task: "Consensus reached on the root cause; stop reconsidering. This IS the terminal signal — set proceed=true.") -> @Developer1
-      output: { proceed: "boolean", details: "string" }
-    stake proceed(task: "Consensus reached on the root cause; stop reconsidering. This IS the terminal signal — set proceed=true.") -> @Developer2
-      output: { proceed: "boolean", details: "string" }
-
-    -- Phase 3 — User sign-off on the agreed root cause
-    escalate @Human reason:
-      "The developers reached consensus on the root cause. Review their analysis below." form: {
-      decision: "string" { widget: "radio", options: ["Agree — proceed with fix", "I'll provide guidance"] }
-      guidance: "string" { description: "Your guidance (optional)" }
-    }
-
-    await user_signoff <- @Human
-
-    -- Phase 4 — Developer1 implements the fix
+    -- Phase 2 — Consolidate BOTH investigations into ONE fix plan for the writer.
     stake assign_fix(
-      root_cause: dev1_verdict,
-      analysis: dev1_analysis,
-      task: "Assign the fix to Developer1. You are the orchestrator: you do NOT write code yourself. Produce the fix assignment as your result, instructing the developer: implement the fix for the agreed-upon root cause, write the necessary code changes, keep them minimal and targeted, then describe what was changed and why."
+      dev1_analysis: dev1_analysis,
+      dev1_root_cause: dev1_root_cause,
+      dev2_analysis: dev2_analysis,
+      dev2_root_cause: dev2_root_cause,
+      task: "Consolidate the two independent investigations (provided in your inputs) into a SINGLE, coherent fix plan and assign it to Developer1. You are the architect: you do NOT write code yourself. Reconcile the two analyses — resolve any disagreement on the root cause, pick the best-supported diagnosis, and merge complementary findings. Produce the fix assignment as your result, instructing Developer1: implement the fix for the consolidated root cause, keep the changes minimal and targeted, then describe what was changed and why."
     ) -> @Developer1
 
     await fix_output <- @Developer1
 
-    -- Phase 5 — Review loop (count-matched). Each round: ask Developer2 to
-    -- review the latest fix; if not approved, send feedback to Developer1 and
-    -- await the revised fix.
+    -- Phase 3 — Review loop (count-matched). Each round: ask Developer2 to review
+    -- the latest fix; if not approved, relay the feedback to Developer1 and await
+    -- the revised fix.
     let reviewer_happy = false
     repeat until reviewer_happy {
       stake ask_review(
-        root_cause: dev1_verdict,
+        root_cause: dev1_root_cause,
         implementation: fix_output,
-        task: "Ask Developer2 to review the latest fix against the agreed-upon root cause. This is a review request, NOT the terminal stop signal — set complete=false and put the fix to review in `details`."
+        task: "Ask Developer2 to review the latest fix (read-only) against the agreed root cause. This is a review request, NOT the terminal stop signal — set complete=false and put the fix to review in `details`."
       ) -> @Developer2
         output: { complete: "boolean", details: "string" }
 
@@ -155,16 +105,17 @@ flow "debug" (issue: "string") {
       }
     }
 
-    -- End both fix/review loops in lockstep with their terminal structured signals.
+    -- End both loops in lockstep with their terminal structured signals.
     stake fix_approved(task: "The reviewer accepted your fix; you are done. This IS the terminal signal — set approved=true.") -> @Developer1
       output: { approved: "boolean", details: "string" }
     stake review_done(task: "The fix is approved; no further reviews needed. This IS the terminal signal — set complete=true.") -> @Developer2
       output: { complete: "boolean", details: "string" }
 
-    -- Phase 6 — Done
+    -- Phase 4 — Done
     stake report(
       issue: issue,
-      root_cause: dev1_verdict,
+      consolidated_root_cause: dev1_root_cause,
+      peer_root_cause: dev2_root_cause,
       fix_summary: fix_output
     ) -> @out
 
@@ -172,44 +123,31 @@ flow "debug" (issue: "string") {
   }
 
   -- =========================================================================
-  -- Developer1 — investigates, reaches consensus, then implements the fix
+  -- Developer1 — investigates (read-only), then implements & revises the fix
   -- =========================================================================
   agent Developer1 {
     mode: "code"
-    role: "Senior developer specializing in debugging. CRITICAL RULE: you have TWO distinct stages. During TRIAGE and CONSENSUS you are STRICTLY READ-ONLY — investigate and form hypotheses, but do NOT modify, create, or delete any file and do NOT run mutating commands. You may ONLY make changes when the orchestrator explicitly assigns you a FIX task (or fix-revision feedback). Implement precise, minimal fixes only in that fix stage."
+    role: "Senior developer specializing in debugging. CRITICAL RULE: during INVESTIGATION you are STRICTLY READ-ONLY — investigate and form hypotheses, but do NOT modify, create, or delete any file and do NOT run mutating commands. You may ONLY make changes when the architect assigns you the FIX task (or fix-revision feedback). Implement precise, minimal fixes only in that fix stage."
 
-    -- Phase A — Initial triage
-    await triage_task <- @Orchestrator
-    stake investigate(task: triage_task) -> @Orchestrator
+    -- Phase A — Read-only investigation
+    await investigate_task <- @Architect
+    stake investigate(task: investigate_task) -> @Architect
       output: { analysis: "string", root_cause: "string" }
 
-    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on the `proceed` stop signal)
-    let consensus_done = false
-    repeat until consensus_done {
-      await peer_round <- @Orchestrator
-
-      when peer_round.proceed {
-        set consensus_done = true
-      } otherwise {
-        stake reconsider(task: peer_round.details) -> @Orchestrator
-          output: { analysis: "string", root_cause: "string", agrees_with_peer: "boolean" }
-      }
-    }
-
-    -- Phase C — Implement the fix
-    await fix_task <- @Orchestrator
-    stake fix(task: fix_task) -> @Orchestrator
+    -- Phase B — Implement the consolidated fix
+    await fix_task <- @Architect
+    stake fix(task: fix_task) -> @Architect
       output: { changes_summary: "string", files_changed: "string" }
 
-    -- Phase D — Revise on review feedback (mirrors the review loop; ends on the `approved` stop signal)
+    -- Phase C — Revise on review feedback (ends on the `approved` stop signal)
     let fix_done = false
     repeat until fix_done {
-      await fix_directive <- @Orchestrator
+      await fix_directive <- @Architect
 
       when fix_directive.approved {
         set fix_done = true
       } otherwise {
-        stake revise(task: fix_directive.details) -> @Orchestrator
+        stake revise(task: fix_directive.details) -> @Architect
           output: { changes_summary: "string", files_changed: "string" }
       }
     }
@@ -218,39 +156,26 @@ flow "debug" (issue: "string") {
   }
 
   -- =========================================================================
-  -- Developer2 — investigates, reaches consensus, then reviews the fix
+  -- Developer2 — investigates (read-only), then reviews the fix (read-only)
   -- =========================================================================
   agent Developer2 {
     mode: "reviewer"
-    role: "Senior developer specializing in debugging and code review. You are READ-ONLY for the entire workflow: you investigate, form hypotheses, reach consensus with your peer, and rigorously review the other developer's fix for correctness and minimality — but you NEVER modify files yourself. Your `reviewer` mode has no write tools by design."
+    role: "Senior developer specializing in debugging and code review. You are READ-ONLY for the entire workflow: you investigate, form hypotheses, and rigorously review the other developer's fix for correctness and minimality — but you NEVER modify files yourself. Your `reviewer` mode has no write tools by design."
 
-    -- Phase A — Initial triage
-    await triage_task <- @Orchestrator
-    stake investigate(task: triage_task) -> @Orchestrator
+    -- Phase A — Read-only investigation
+    await investigate_task <- @Architect
+    stake investigate(task: investigate_task) -> @Architect
       output: { analysis: "string", root_cause: "string" }
 
-    -- Phase B — Consensus loop (mirrors the Orchestrator; ends on the `proceed` stop signal)
-    let consensus_done = false
-    repeat until consensus_done {
-      await peer_round <- @Orchestrator
-
-      when peer_round.proceed {
-        set consensus_done = true
-      } otherwise {
-        stake reconsider(task: peer_round.details) -> @Orchestrator
-          output: { analysis: "string", root_cause: "string", agrees_with_peer: "boolean" }
-      }
-    }
-
-    -- Phase C — Review loop (mirrors the Orchestrator; ends on the `complete` stop signal)
+    -- Phase B — Review loop (mirrors the Architect; ends on the `complete` stop signal)
     let review_done = false
     repeat until review_done {
-      await review_task <- @Orchestrator
+      await review_task <- @Architect
 
       when review_task.complete {
         set review_done = true
       } otherwise {
-        stake review(task: review_task.details) -> @Orchestrator
+        stake review(task: review_task.details) -> @Architect
           output: { approved: "boolean", feedback: "string" }
       }
     }
@@ -261,6 +186,6 @@ flow "debug" (issue: "string") {
   -- =========================================================================
   -- Flow constraints
   -- =========================================================================
-  converge when: @Orchestrator.committed
+  converge when: @Architect.committed
   budget: rounds(40)
 }
