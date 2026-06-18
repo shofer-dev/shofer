@@ -206,6 +206,8 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 			"Use this mode when you need to write, modify, or refactor code. Ideal for implementing features, fixing bugs, creating new files, or making code improvements across any programming language or framework.",
 		description: "Write, modify, and refactor code",
 		tools: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
+		customInstructions:
+			"Never disable, skip, weaken, or comment out unit tests, lint checks, type checks, or any other quality gate in order to commit code or accomplish a goal. If such a check fails, fix the underlying cause — quality gates exist to catch real problems, so work with them, not around them.",
 	},
 	{
 		slug: "architect",
