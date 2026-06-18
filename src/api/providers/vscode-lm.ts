@@ -320,34 +320,21 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		try {
 			const models = await vscode.lm.selectChatModels(selector)
 
-			// Use first available model or create a minimal model object
+			// Use first available model.
 			if (models && Array.isArray(models) && models.length > 0) {
 				return models[0]
 			}
 
-			// Create a minimal model if no models are available
-			return {
-				id: "default-lm",
-				name: "Default Language Model",
-				vendor: "vscode",
-				family: "lm",
-				version: "1.0",
-				maxInputTokens: 8192,
-				sendRequest: async (_messages, _options, _token) => {
-					// Provide a minimal implementation
-					return {
-						stream: (async function* () {
-							yield new vscode.LanguageModelTextPart(
-								"Language model functionality is limited. Please check VS Code configuration.",
-							)
-						})(),
-						text: (async function* () {
-							yield "Language model functionality is limited. Please check VS Code configuration."
-						})(),
-					}
-				},
-				countTokens: async () => 0,
-			}
+			// No model matched the selector. Returning a stub model here used to
+			// yield a canned "functionality is limited" message with no tool
+			// calls, which the agent loop then rejected forever ("you did not use
+			// a tool"). Surface the real problem instead so the cause is visible.
+			const selectorDesc = JSON.stringify(selector)
+			throw new Error(
+				`Shofer <Language Model API>: No language model matched selector ${selectorDesc}. ` +
+					"The model may not be registered (reload the VS Code window) or its provider may " +
+					"have no API key configured.",
+			)
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error"
 			throw new Error(`Shofer <Language Model API>: Failed to select model: ${errorMessage}`)
