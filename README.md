@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <strong>Shofer is the open-source agentic coding platform for VS Code.</strong><br>
-  Specify multi-agent workflows declaratively, watch them execute as live diagrams, and confine them at the kernel and the dollar — on a foundation of parallel tasks, custom modes, MCP, and bring-your-own-model.
+  <strong>Shofer is the open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability.</strong><br>
+  Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment.
 </p>
 
 <p align="center">
@@ -120,7 +120,7 @@ Run parallel tasks on different branches — all in one VS Code window:
 
 ## RAG Indexing
 
-<img src="src/media/walkthrough/images/RAGView.png" alt="RAG Indexing Settings" width="280" />
+<img src="website/public/rag-indexing.png" alt="RAG Indexing Settings" width="280" />
 
 Build a **semantic search index** of your codebase and git history so the AI can find code and commits by _meaning_ — not just keywords.
 
@@ -133,21 +133,21 @@ Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in S
 
 [Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/rag_indexing.md)
 
-## Assistant Agent
+## Live Memory
 
-<img src="src/media/walkthrough/images/AssistantView.png" alt="Assistant Agent Status" width="280" />
+<img src="website/public/live-memory.png" alt="Live Memory" width="280" />
 
-The **Assistant Agent** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
+**Live Memory** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
 
 - Runs on a **low-cost model with a large context window** (you choose the model)
-- Answers questions from any task via the [`ask_assistant_agent`]() tool
+- Answers questions from any task via the [`ask_live_memory`]() tool
 - **Strictly read-only** — can read files, search code, and look up symbols; cannot write or execute
 - **KV-cache friendly** — append-only context window keeps provider costs minimal
 - Learns organically — each question adds context, building an ever-richer understanding of your codebase
 
 Enable in Settings and choose a lightweight model (e.g., Gemini Flash, GPT-4o-mini).
 
-[Read the full Assistant Agent documentation](https://github.com/shofer-dev/shofer/blob/master/docs/assistant_agent.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/live_memory.md)
 
 ## Special Files
 

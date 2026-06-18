@@ -1,5 +1,7 @@
 # Shofer User Manual
 
+_Shofer is the open-source AI coding agent for VS Code with unparalleled parallelism, usability and observability. Specify multi-agent workflows declaratively, and watch them execute as live diagrams — on top of all the standard features you expect from your AI-powered development environment._
+
 Welcome to Shofer (from the French _chauffeur_ — driver). This manual covers the concepts and configuration you need to use Shofer effectively.
 
 ---
@@ -19,7 +21,7 @@ Welcome to Shofer (from the French _chauffeur_ — driver). This manual covers t
 11. [Per-Task Cost Limit](#11-per-task-cost-limit)
 12. [Slash Commands](#12-slash-commands)
 13. [Special Files](#13-special-files)
-14. [Assistant Agent](#14-assistant-agent)
+14. [Live Memory](#14-live-memory)
 15. [Community](#15-community)
 
 ---
@@ -64,7 +66,7 @@ An API Provider Profile bundles your API key, model selection, and endpoint URL 
 
 ### Switching Tasks
 
-<img src="src/media/walkthrough/images/tasks.png" alt="Task Selector" width="280" />
+<img src="website/public/task-selector.png" alt="Task Selector" width="280" />
 
 Shofer supports **true parallel tasks** organized in a tree hierarchy. Use the **Task Selector** dropdown in the Task Header to switch between them:
 
@@ -77,7 +79,7 @@ Shofer supports **true parallel tasks** organized in a tree hierarchy. Use the *
 
 Once a task is running, the chat view shows:
 
-<img src="src/media/walkthrough/images/TaskView.png" alt="Shofer Task Screen" width="500" />
+<img src="website/public/taskview.png" alt="Shofer Task Screen" width="500" />
 
 | Element                | What It Shows                                                    |
 | ---------------------- | ---------------------------------------------------------------- |
@@ -91,31 +93,31 @@ Once a task is running, the chat view shows:
 
 ## 2. Settings
 
-<img src="src/media/walkthrough/images/SettingsView.png" alt="Full Settings Sidebar" width="180" />
+<img src="website/public/settingsview.png" alt="Full Settings Sidebar" width="180" />
 
 Shofer's settings are organized by tab in the Settings panel (⚙️ gear icon):
 
-| Tab                 | What You Configure                                         |
-| ------------------- | ---------------------------------------------------------- |
-| **Providers**       | API profiles, models, endpoints, pricing overrides         |
-| **Auto-Approve**    | Toggle which tool categories run without asking permission |
-| **Tools**           | Global tool disable list and tool group assignments        |
-| **Slash Commands**  | Configure built-in and custom slash commands               |
-| **Skills**          | Browse, load, and manage skill packs                       |
-| **Checkpoints**     | Git-based workspace snapshots for diff and revert          |
-| **Notifications**   | Telemetry, error reporting, and notification preferences   |
-| **Assistant Agent** | Configure the persistent read-only AI companion            |
-| **Context**         | Adjust condensation thresholds and context window limits   |
-| **Terminal**        | Configure command execution timeouts and allowlists        |
-| **RAG Indexer**     | Semantic code and git log search index configuration       |
-| **Modes**           | Create and edit built-in and custom modes                  |
-| **MCP Servers**     | Connect external tools (browser, databases, Kubernetes)    |
-| **Worktrees**       | Manage git worktrees (create, delete, view status)         |
-| **Prompts**         | Customize per-mode system prompts and instructions         |
-| **UI**              | Chat view and sidebar display preferences                  |
-| **Experimental**    | Feature flags and opt-in experimental capabilities         |
-| **Language**        | Change the display language                                |
-| **About**           | Export, import, or reset all Shofer settings               |
+| Tab                | What You Configure                                         |
+| ------------------ | ---------------------------------------------------------- |
+| **Providers**      | API profiles, models, endpoints, pricing overrides         |
+| **Auto-Approve**   | Toggle which tool categories run without asking permission |
+| **Tools**          | Global tool disable list and tool group assignments        |
+| **Slash Commands** | Configure built-in and custom slash commands               |
+| **Skills**         | Browse, load, and manage skill packs                       |
+| **Checkpoints**    | Git-based workspace snapshots for diff and revert          |
+| **Notifications**  | Telemetry, error reporting, and notification preferences   |
+| **Live Memory**    | Configure the persistent read-only AI companion            |
+| **Context**        | Adjust condensation thresholds and context window limits   |
+| **Terminal**       | Configure command execution timeouts and allowlists        |
+| **RAG Indexer**    | Semantic code and git log search index configuration       |
+| **Modes**          | Create and edit built-in and custom modes                  |
+| **MCP Servers**    | Connect external tools (browser, databases, Kubernetes)    |
+| **Worktrees**      | Manage git worktrees (create, delete, view status)         |
+| **Prompts**        | Customize per-mode system prompts and instructions         |
+| **UI**             | Chat view and sidebar display preferences                  |
+| **Experimental**   | Feature flags and opt-in experimental capabilities         |
+| **Language**       | Change the display language                                |
+| **About**          | Export, import, or reset all Shofer settings               |
 
 ### Settings Backup & Reset
 
@@ -170,7 +172,7 @@ A mode must have at least `groups` or `tools_allowed`. Project-level modes overr
 
 Auto-approval controls when Shofer acts without asking permission. Configure it via the **AutoApproveDropdown** (shield icon) in the chat input bar.
 
-<img src="src/media/walkthrough/images/AutoApproval.png" alt="Auto-Approval Toggle Menu" width="280" />
+<img src="website/public/auto-approve.png" alt="Auto-Approval Toggle Menu" width="280" />
 
 ### Toggles
 
@@ -566,9 +568,9 @@ Same syntax as `.gitignore`. Files matching the patterns are invisible to Shofer
 
 ---
 
-## 13. Assistant Agent
+## 13. Live Memory
 
-The **Assistant Agent** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
+**Live Memory** is a persistent, read-only AI companion that accumulates codebase knowledge over time — surviving task completion and VS Code restarts.
 
 ### What It Does
 
@@ -579,15 +581,15 @@ The **Assistant Agent** is a persistent, read-only AI companion that accumulates
 
 ### How Tasks Use It
 
-Any task can call the `ask_assistant_agent` tool to ask the Assistant Agent a question. The agent answers from its accumulated knowledge, saving the calling task from re-loading files into its own context window.
+Any task can call the `ask_live_memory` tool to ask Live Memory a question. The agent answers from its accumulated knowledge, saving the calling task from re-loading files into its own context window.
 
 ### Setup
 
-1. Open **Settings** → enable the Assistant Agent
+1. Open **Settings** → enable Live Memory
 2. Link an **API Configuration profile** with a lightweight model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku)
 3. The agent starts with an empty context and fills it as tasks ask questions
 
-The **Assistant Agent Status** badge in the Shofer sidebar shows whether the agent is active and processing.
+The **Live Memory Status** badge in the Shofer sidebar shows whether the agent is active and processing.
 
 ### Key Benefits
 
@@ -596,7 +598,7 @@ The **Assistant Agent Status** badge in the Shofer sidebar shows whether the age
 - **KV-cache friendly** — append-only context window keeps the provider's attention cache warm
 - **File-aware** — notified of file changes to keep its knowledge fresh
 
-[Read the full Assistant Agent documentation](https://github.com/shofer-dev/shofer/blob/master/docs/assistant_agent.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/live_memory.md)
 
 ---
 
