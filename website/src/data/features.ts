@@ -195,9 +195,9 @@ export const features: Feature[] = [
 			"And the auto-approval system extends to per-MCP-tool toggles and categories, so you can keep fast iteration with fine-grained control.",
 		],
 		images: [
+			{ src: "auto-approve.png", caption: "Per-MCP-tool auto-approval toggles in Settings" },
 			{ src: "changelist.png", caption: "Session changelog — every file changed, at a glance" },
 			{ src: "rating.png", caption: "Agent self-assessment and rating overlay after a task completes" },
-			{ src: "auto-approve.png", caption: "Per-MCP-tool auto-approval toggles in Settings" },
 		],
 		imageLayout: "side-carousel",
 	},
