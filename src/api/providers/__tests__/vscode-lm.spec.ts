@@ -104,6 +104,12 @@ describe("VsCodeLmHandler", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		// Default: a matching model is available, so the constructor's
+		// fire-and-forget initializeClient() succeeds. createClient now THROWS
+		// on no match (it no longer returns a silent stub), so without this an
+		// unmocked selectChatModels would surface as an unhandled rejection.
+		// Individual tests override the first call via mockResolvedValueOnce.
+		;(vscode.lm.selectChatModels as Mock).mockResolvedValue([mockLanguageModelChat])
 		handler = new VsCodeLmHandler(defaultOptions)
 	})
 
@@ -143,14 +149,12 @@ describe("VsCodeLmHandler", () => {
 			})
 		})
 
-		it("should return default client when no models available", async () => {
+		it("should throw when no models are available", async () => {
 			;(vscode.lm.selectChatModels as Mock).mockResolvedValueOnce([])
 
-			const client = await handler["createClient"]({})
-
-			expect(client).toBeDefined()
-			expect(client.id).toBe("default-lm")
-			expect(client.vendor).toBe("vscode")
+			// No matching model now surfaces a real error instead of a silent
+			// stub client (see fix(vscode-lm): throw on unmatched model).
+			await expect(handler["createClient"]({})).rejects.toThrow(/No language model matched selector/)
 		})
 	})
 
