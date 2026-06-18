@@ -1,10 +1,10 @@
-BUG: Settings->Worktrees : when a new worktree is created to deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
-
-BUG: Sometimes when exporting a workflow json file, the UI becomes unresponsive.
-
 FR: Add the submodule structure of the current repo (if workspace is a git) in system-prompt context (see extensions/shofer/docs/system_prompt.md)
 
 FR: When a task or subtask uses ask_followup_question, its state should transition to "waiting" or similar. Today is still `running`.
+
+BUG: Settings->Worktrees : when a new worktree is created to deleted, the panel is closed. No, it should stay open and refresh the list of worktrees.
+
+BUG: Sometimes when exporting a workflow json file, the UI becomes unresponsive.
 
 BUG: extensions/shofer/docs/performance_optimizations.md the implementation of "Load older messages..." is working per se, but is causing the ChatView to jump at the very top first, and then down to the very button, with every message posted.
 
@@ -18,7 +18,6 @@ BUG: I run a workflow and got two different "active time" values, one in Stats (
 * DEV default system prompt update to let the model know all these (native tools, capabilities, conventions)
     - project documentation standarization/structure
     - Do not double answer: both with a regular message and with attempt_completion. The latter is the way you should provide your final answer/conclusion.
-    -
     - set title
     - environment_details
     - use tools instead of executing cli commands
