@@ -419,6 +419,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	agentRole?: string
 
 	/**
+	 * Per-task tool-group allow-list (workflow agents pass their `.slang`
+	 * `tools:` here). Intersected with the mode's groups when building the
+	 * tool array; see {@link CreateTaskOptions.agentToolGroups}. A restriction
+	 * only — never grants tools beyond the mode.
+	 */
+	agentToolGroups?: string[]
+
+	/**
+	 * Per-task overrides for system-prompt components (workflow agents'
+	 * `.slang` `context { ... }` block); see {@link CreateTaskOptions.agentContext}.
+	 * Each key is a boolean toggle for a specific component. Absent keys
+	 * inherit the global default.
+	 *
+	 * Supported keys: `include_agents_md`, `include_subfolder_rules`,
+	 * `include_mode_rules`, `include_user_rules`, `include_skills`,
+	 * `require_todos`, `include_system_info`, `include_mcp`.
+	 */
+	agentContext?: Record<string, boolean>
+
+	/**
 	 * The mode associated with this task. Persisted across sessions
 	 * to maintain user context when reopening tasks from history.
 	 *
@@ -634,6 +654,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	_currentRequestIndex = 0
 	fileContextTracker: FileContextTracker
 	terminalProcess?: ShoferTerminalProcess
+
+	/**
+	 * Backgrounded command processes — an execute_command the agent moved on from
+	 * (agent timeout, or the user chose "Proceed While Running") while it is still
+	 * running. The foreground `terminalProcess` reference is cleared once the tool
+	 * returns, so without this map a backgrounded command could no longer be
+	 * terminated by the Stop button or the per-command Kill button. Keyed by
+	 * executionId; entries are removed when the command actually completes.
+	 */
+	backgroundTerminalProcesses = new Map<string, ShoferTerminalProcess>()
 
 	// Editing
 	diffViewProvider: DiffViewProvider
@@ -898,6 +928,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialKnownPeers,
 		initialTitle,
 		agentRole,
+		agentToolGroups,
+		agentContext,
 	}: TaskOptions) {
 		super()
 
@@ -995,6 +1027,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.rootTask = rootTask
 		this.taskNumber = taskNumber
 		this.agentRole = agentRole
+		this.agentToolGroups = agentToolGroups
+		this.agentContext = agentContext
 		this.softResultLength = softResultLength
 		this.softTimeoutSec = softTimeoutSec
 		this.completionSchema = completionSchema
@@ -2287,6 +2321,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				isBackground: this.isBackground,
 				costLimit: this.costLimit,
 				loadedSkills: this.loadedSkills.size > 0 ? Array.from(this.loadedSkills.keys()) : undefined,
+				// When a long task is cold-loaded, `shoferMessages` is only the tail
+				// window — `messages[0]` is not the originating prompt. Tell
+				// taskMetadata to omit `task`/`createdAt` so the upsert merge preserves
+				// the canonical first prompt instead of clobbering it with the
+				// window-start `api_req_started` wire blob.
+				windowedMessages: this.hasMoreShoferMessages,
 				...(useCachedTokenUsage ? { tokenUsageOverride: this._cachedTokenUsage } : {}),
 			})
 
@@ -2939,11 +2979,50 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
+	/**
+	 * Set when the user kills the current command via the inline "Abort" / Kill
+	 * Command button (handleTerminalOperation("abort")). Read (and cleared) by the
+	 * execute_command status emitter so the completion is reported as `"terminated"`
+	 * rather than a plain `"exited"`. Not set by the user-timeout path, which emits
+	 * its own `"timeout"` status.
+	 */
+	public userTerminatedCommand = false
+
 	async handleTerminalOperation(terminalOperation: "continue" | "abort") {
 		if (terminalOperation === "continue") {
 			this.terminalProcess?.continue()
 		} else if (terminalOperation === "abort") {
+			this.userTerminatedCommand = true
 			this.terminalProcess?.abort()
+			// Also terminate any backgrounded command so the per-command Kill
+			// button works after the agent has moved on from it.
+			this.abortBackgroundTerminalProcesses()
+		}
+	}
+
+	/**
+	 * Register a command process that has been backgrounded while still running so
+	 * it can be terminated later. Removed via {@link unregisterBackgroundProcess}
+	 * when the command completes.
+	 */
+	registerBackgroundProcess(executionId: string, process: ShoferTerminalProcess) {
+		this.backgroundTerminalProcesses.set(executionId, process)
+	}
+
+	unregisterBackgroundProcess(executionId: string) {
+		this.backgroundTerminalProcesses.delete(executionId)
+	}
+
+	/** Abort every backgrounded command process. Each abort() escalates to a
+	 * force-kill, and the command's own completion handler removes it from the map
+	 * (and emits the terminated status), so we don't clear the map here. */
+	private abortBackgroundTerminalProcesses() {
+		for (const process of this.backgroundTerminalProcesses.values()) {
+			try {
+				process.abort()
+			} catch (error) {
+				taskLog.error(`Error aborting background terminal process for task ${this.taskId}:`, error)
+			}
 		}
 	}
 
@@ -2991,6 +3070,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			allTools = toolsResult.tools
 		}
@@ -3928,8 +4008,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Abort any running terminal process (e.g., from execute_command)
 		// so the Global Stop button kills the process instead of leaving
-		// it orphaned after the task loop exits.
+		// it orphaned after the task loop exits. Covers both the foreground
+		// command and any commands the agent backgrounded while still running.
 		this.terminalProcess?.abort()
+		this.abortBackgroundTerminalProcesses()
+		this.backgroundTerminalProcesses.clear()
 
 		// Reset consecutive error counters on abort (manual intervention)
 		this.consecutiveNoToolUseCount = 0
@@ -6061,6 +6144,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			? `# Agent Role\n\n${this.agentRole.trim()}${customInstructions ? `\n\n${customInstructions}` : ""}`
 			: customInstructions
 
+		// Workflow agents may override system-prompt components via `.slang`
+		// `context { ... }`; each absent key inherits the global default.
+		const ctx = this.agentContext
+		const effectiveUseAgentRules = ctx?.include_agents_md ?? useAgentRules ?? true
+		const effectiveEnableSubfolderRules = ctx?.include_subfolder_rules ?? enableSubfolderRules ?? false
+		const effectiveIncludeModeRules = ctx?.include_mode_rules ?? true
+		const effectiveIncludeUserRules = ctx?.include_user_rules ?? true
+		const effectiveIncludeSkills = ctx?.include_skills ?? true
+		const effectiveRequireTodos =
+			ctx?.require_todos ??
+			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false)
+		const effectiveIncludeSystemInfo = ctx?.include_system_info ?? true
+		const effectiveIncludeMcp = ctx?.include_mcp ?? true
+
 		// H15: Build a cache key covering every stable input to the system
 		// prompt.  Peer notifications + subtask constraints are appended
 		// below; they don't participate in the cache key because they are
@@ -6077,11 +6174,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			effectiveCustomInstructions ?? "",
 			JSON.stringify(experiments ?? {}),
 			language ?? "",
-			enableSubfolderRules ?? false,
-			useAgentRules ?? true,
+			effectiveUseAgentRules,
+			effectiveEnableSubfolderRules,
+			effectiveIncludeModeRules,
+			effectiveIncludeUserRules,
+			effectiveIncludeSkills,
+			effectiveRequireTodos,
+			effectiveIncludeSystemInfo,
+			effectiveIncludeMcp,
+			JSON.stringify(this.agentToolGroups ?? null),
+			JSON.stringify(this.agentContext ?? null),
 			apiConfiguration?.todoListEnabled ?? true,
 			modelInfo?.isStealthModel ?? false,
-			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false),
 			this.api.getModel().id,
 			mcpEnabled ?? true,
 			// Fold the MCP server-set ID so a connecting server mid-turn busts the cache.
@@ -6130,12 +6234,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				shoferIgnoreInstructions,
 				{
 					todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
-					useAgentRules: useAgentRules ?? true,
-					enableSubfolderRules: enableSubfolderRules ?? false,
-					newTaskRequireTodos: vscode.workspace
-						.getConfiguration(Package.name)
-						.get<boolean>("newTaskRequireTodos", false),
+					useAgentRules: effectiveUseAgentRules,
+					// Gate the CAPABILITIES prose to the agent's actual tool groups so a
+					// restricted workflow agent isn't told it can read/write/execute.
+					agentToolGroups: this.agentToolGroups,
+					enableSubfolderRules: effectiveEnableSubfolderRules,
+					newTaskRequireTodos: effectiveRequireTodos,
 					isStealthModel: modelInfo?.isStealthModel,
+					// Per-agent context overrides (workflow agents' `.slang` `context { ... }`).
+					includeModeRules: effectiveIncludeModeRules,
+					includeUserRules: effectiveIncludeUserRules,
+					includeSkills: effectiveIncludeSkills,
+					includeSystemInfo: effectiveIncludeSystemInfo,
+					includeMcp: effectiveIncludeMcp,
 				},
 				undefined, // todoList
 				this.api.getModel().id,
@@ -6300,6 +6411,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			supportsAllowedFunctionNames,
 			this.api.getModel().id,
 			JSON.stringify(this.completionSchema ?? null),
+			JSON.stringify(this.agentToolGroups ?? null),
 		].join("|")
 	}
 
@@ -6333,6 +6445,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			includeAllToolsWithRestrictions: false,
 			completionSchema: this.completionSchema,
 			titleLocked: this.nameLocked,
+			agentToolGroups: this.agentToolGroups,
 		})
 		this._cachedToolsResult = {
 			tools: toolsResult.tools,
@@ -6388,6 +6501,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: false,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			allTools = toolsResult.tools
 		}
@@ -6792,6 +6906,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				includeAllToolsWithRestrictions: supportsAllowedFunctionNames,
 				completionSchema: this.completionSchema,
 				titleLocked: this.nameLocked,
+				agentToolGroups: this.agentToolGroups,
 			})
 			this._cachedToolsResult = {
 				tools: toolsResult.tools,

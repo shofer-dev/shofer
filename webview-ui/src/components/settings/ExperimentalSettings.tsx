@@ -22,7 +22,8 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	apiConfiguration?: any
 	setApiConfigurationField?: any
 	archivedTaskRetentionDays?: number | null
-	setCachedStateField: SetCachedStateField<"archivedTaskRetentionDays">
+	maxParallelTasks?: number | undefined
+	setCachedStateField: SetCachedStateField<"archivedTaskRetentionDays" | "maxParallelTasks">
 	imageGenerationProvider?: ImageGenerationProvider
 	openRouterImageApiKey?: string
 	openRouterImageGenerationSelectedModel?: string
@@ -37,6 +38,7 @@ export const ExperimentalSettings = ({
 	apiConfiguration,
 	setApiConfigurationField,
 	archivedTaskRetentionDays,
+	maxParallelTasks,
 	setCachedStateField,
 	imageGenerationProvider,
 	openRouterImageApiKey,
@@ -81,6 +83,36 @@ export const ExperimentalSettings = ({
 					</VSCodeTextField>
 					<div className="text-vscode-descriptionForeground text-sm mt-1">
 						{t("settings:advanced.archivedTaskRetention.description")}
+					</div>
+				</SearchableSetting>
+
+				<SearchableSetting
+					settingId="advanced-max-parallel-tasks"
+					section="experimental"
+					label={t("settings:advanced.maxParallelTasks.label")}>
+					<VSCodeTextField
+						value={maxParallelTasks == null ? "" : String(maxParallelTasks)}
+						className="w-full"
+						onInput={(e: any) => {
+							const raw = (e.target.value as string).trim()
+							if (raw === "") {
+								// Empty → unset → backend falls back to the 10 default.
+								setCachedStateField("maxParallelTasks", null as unknown as number)
+								return
+							}
+							const parsed = Number(raw)
+							if (Number.isInteger(parsed) && parsed >= 0) {
+								setCachedStateField("maxParallelTasks", parsed)
+							}
+						}}
+						placeholder={t("settings:advanced.maxParallelTasks.placeholder")}
+						data-testid="max-parallel-tasks-input">
+						<label className="block font-medium mb-1">
+							{t("settings:advanced.maxParallelTasks.label")}
+						</label>
+					</VSCodeTextField>
+					<div className="text-vscode-descriptionForeground text-sm mt-1">
+						{t("settings:advanced.maxParallelTasks.description")}
 					</div>
 				</SearchableSetting>
 

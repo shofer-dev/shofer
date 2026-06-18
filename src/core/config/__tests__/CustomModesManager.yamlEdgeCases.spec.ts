@@ -105,7 +105,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 							slug: "test-mode",
 							name: "Test Mode",
 							roleDefinition: "Test role",
-							groups: ["read"],
+							tools: ["read"],
 						},
 					],
 				})
@@ -132,7 +132,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 							slug: "utf16-mode",
 							name: "UTF-16 Mode",
 							roleDefinition: "Test role",
-							groups: ["read"],
+							tools: ["read"],
 						},
 					],
 				})
@@ -156,7 +156,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
   - slug: "test-mode"
     name: "Test\u00A0Mode"
     roleDefinition: "Test\u00A0role\u00A0with\u00A0non-breaking\u00A0spaces"
-    groups: ["read"]`
+    tools: ["read"]`
 
 			mockFsReadFile({
 				[mockRoomodes]: yamlWithNonBreakingSpaces,
@@ -176,7 +176,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
   - slug: "test-mode"
     name: "Test\u200BMode\u200C"
     roleDefinition: "Test\u200Drole"
-    groups: ["read"]`
+    tools: ["read"]`
 
 			mockFsReadFile({
 				[mockRoomodes]: yamlWithZeroWidth,
@@ -199,7 +199,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test role with \u2018fancy\u2019 quotes and \u201Ccurly\u201D quotes",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			})
@@ -227,7 +227,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test role",
-						groups: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }]],
+						tools: ["read", ["write", { fileRegex: "\\.md$", description: "Markdown files only" }]],
 					},
 				],
 			})
@@ -241,8 +241,8 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 
 			// Should successfully parse the complex fileRegex syntax
 			expect(modes).toHaveLength(1)
-			expect(modes[0].groups).toHaveLength(2)
-			expect(modes[0].groups![1]).toEqual(["write", { fileRegex: "\\.md$", description: "Markdown files only" }])
+			expect(modes[0].tools).toHaveLength(2)
+			expect(modes[0].tools![1]).toEqual(["write", { fileRegex: "\\.md$", description: "Markdown files only" }])
 		})
 
 		it("should handle invalid fileRegex syntax with clear error", async () => {
@@ -251,7 +251,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 		- slug: "test-mode"
 			 name: "Test Mode"
 			 roleDefinition: "Test role"
-			 groups:
+			 tools:
 			   - read
 			   - ["write", { fileRegex: "\\.md$" }]  # This line has invalid YAML syntax`
 
@@ -274,7 +274,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 	 - slug: "test-mode"
 	   name: "Test Mode"
 	   roleDefinition: "Test role
-	   groups: ["read"]` // Missing closing quote
+	   tools: ["read"]` // Missing closing quote
 
 			mockFsReadFile({
 				[mockRoomodes]: invalidYaml,
@@ -295,7 +295,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						// Missing required 'roleDefinition' field
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			})
@@ -321,7 +321,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "emoji-mode",
 						name: "📝 Writing Mode",
 						roleDefinition: "A mode for writing with emojis 🚀",
-						groups: ["read", "write"],
+						tools: ["read", "write"],
 					},
 				],
 			})
@@ -345,7 +345,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "intl-mode",
 						name: "Mode Français",
 						roleDefinition: "Mode für Deutsch, 日本語モード, Режим русский",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			})
@@ -372,7 +372,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 				'  - slug: "test-mode"\n' +
 				'    name: "Test Mode"\r\n' +
 				'    roleDefinition: "Test role with mixed line endings"\n' +
-				'    groups: ["read"]'
+				'    tools: ["read"]'
 
 			mockFsReadFile({
 				[mockRoomodes]: yamlWithMixedLineEndings,
@@ -396,7 +396,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 							slug: "multi-bom-mode",
 							name: "Multi BOM Mode",
 							roleDefinition: "Test role",
-							groups: ["read"],
+							tools: ["read"],
 						},
 					],
 				})
@@ -419,7 +419,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 						slug: "complex-mode",
 						name: "Complex\u00A0Mode\u2019s Name",
 						roleDefinition: "Complex role with \u201Cquotes\u201D and \u2014dashes\u2014",
-						groups: [
+						tools: [
 							"read",
 							[
 								"write",
@@ -443,7 +443,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 			expect(modes).toHaveLength(1)
 			expect(modes[0].name).toBe("Complex Mode's Name")
 			expect(modes[0].roleDefinition).toBe('Complex role with "quotes" and -dashes-')
-			expect(modes[0].groups![1]).toEqual([
+			expect(modes[0].tools![1]).toEqual([
 				"write",
 				{
 					fileRegex: "\\.md$",

@@ -16,8 +16,8 @@ import { EXPERIMENT_IDS, experiments } from "../shared/experiments"
 import { handleNewTask } from "./handleTask"
 import { CodeIndexManager } from "../services/code-index/manager"
 import { GitIndexManager } from "../services/git-index/git-index-manager"
-import { AssistantAgentManager } from "../services/assistant-agent/manager"
-import { showAssistantAgentChatPanel } from "../core/webview/AssistantAgentChatProvider"
+import { LiveMemoryManager } from "../services/live-memory/manager"
+import { showLiveMemoryChatPanel } from "../core/webview/LiveMemoryChatProvider"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 
 /**
@@ -112,6 +112,25 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// Also explicitly post the visibility message to trigger scroll reliably
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},
+	aboutButtonClicked: () => {
+		// "About Shofer" lives as a section within the in-app SettingsView. Route
+		// through the standard `settingsButtonClicked` action with a target
+		// `section: "about"`, mirroring `liveMemory.openSettings` above.
+		const visibleProvider = getVisibleProviderOrLog(outputChannel)
+
+		if (!visibleProvider) {
+			return
+		}
+
+		TelemetryService.instance.captureTitleButtonClicked("about")
+
+		visibleProvider.postMessageToWebview({
+			type: "action",
+			action: "settingsButtonClicked",
+			values: { section: "about" },
+		})
+		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
+	},
 	historyButtonClicked: () => {
 		const visibleProvider = getVisibleProviderOrLog(outputChannel)
 
@@ -202,51 +221,51 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		})
 	},
 
-	// ─── Assistant Agent ──────────────────────────────────────────────────
-	// The Assistant Agent's status indicator and action menu live in the
-	// Shofer chat-input toolbar (AssistantAgentStatusBadge → AssistantAgentPopover),
+	// ─── Live Memory ──────────────────────────────────────────────────
+	// The Live Memory's status indicator and action menu live in the
+	// Shofer chat-input toolbar (LiveMemoryStatusBadge → LiveMemoryPopover),
 	// not in the VS Code status bar. The commands below back the popover
 	// actions and are also exposed through the command palette.
-	"assistantAgent.showChat": () => {
-		showAssistantAgentChatPanel(context.extensionUri)
+	"liveMemory.showChat": () => {
+		showLiveMemoryChatPanel(context.extensionUri)
 	},
-	"assistantAgent.start": async () => {
+	"liveMemory.start": async () => {
 		// `initialize()` swallows configuration/connection errors and sets the
 		// manager state to "Error" rather than throwing. Surface the failure to
 		// the user instead of unconditionally claiming success.
-		const managers = AssistantAgentManager.getAllInstances()
+		const managers = LiveMemoryManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.initialize()))
 		const failed = managers.filter((mgr) => mgr.state === "Error")
 		if (failed.length > 0) {
 			const detail = failed[0].stateMessage || "Unknown error"
-			vscode.window.showErrorMessage(`Assistant Agent failed to start: ${detail}`)
+			vscode.window.showErrorMessage(`Live Memory failed to start: ${detail}`)
 			return
 		}
 		const standby = managers.filter((mgr) => mgr.state === "Standby")
 		if (standby.length === managers.length && managers.length > 0) {
-			vscode.window.showWarningMessage(`Assistant Agent is on standby: ${standby[0].stateMessage}`)
+			vscode.window.showWarningMessage(`Live Memory is on standby: ${standby[0].stateMessage}`)
 			return
 		}
-		vscode.window.showInformationMessage("Assistant Agent started.")
+		vscode.window.showInformationMessage("Live Memory started.")
 	},
-	"assistantAgent.stop": () => {
+	"liveMemory.stop": () => {
 		// Cancel pending work, then dispose every instance. disposeAll() calls
 		// dispose() on each, which already cancels questions and tears down
 		// watchers/emitters; the explicit cancel here is defensive in case a
 		// caller invokes stop() repeatedly.
-		for (const mgr of AssistantAgentManager.getAllInstances()) {
+		for (const mgr of LiveMemoryManager.getAllInstances()) {
 			mgr.cancelAllQuestions()
 		}
-		AssistantAgentManager.disposeAll()
-		vscode.window.showInformationMessage("Assistant Agent stopped.")
+		LiveMemoryManager.disposeAll()
+		vscode.window.showInformationMessage("Live Memory stopped.")
 	},
-	"assistantAgent.clearContext": async () => {
-		const managers = AssistantAgentManager.getAllInstances()
+	"liveMemory.clearContext": async () => {
+		const managers = LiveMemoryManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.clearContext()))
-		vscode.window.showInformationMessage("Assistant Agent context cleared.")
+		vscode.window.showInformationMessage("Live Memory context cleared.")
 	},
-	"assistantAgent.openSettings": () => {
-		// Assistant Agent settings live in ContextProxy (Typed Settings Rule), not
+	"liveMemory.openSettings": () => {
+		// Live Memory settings live in ContextProxy (Typed Settings Rule), not
 		// in package.json `configuration` contributions, so the in-app
 		// SettingsView is the single source of truth for editing them. Route
 		// through the standard `settingsButtonClicked` action with a target
@@ -258,7 +277,7 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		visibleProvider.postMessageToWebview({
 			type: "action",
 			action: "settingsButtonClicked",
-			values: { section: "assistantAgent" },
+			values: { section: "liveMemory" },
 		})
 		visibleProvider.postMessageToWebview({ type: "action", action: "didBecomeVisible" })
 	},

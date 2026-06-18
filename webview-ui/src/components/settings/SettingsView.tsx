@@ -18,7 +18,6 @@ import {
 	SquareTerminal,
 	FlaskConical,
 	AlertTriangle,
-	Globe,
 	Info,
 	MessageSquare,
 	LucideIcon,
@@ -70,7 +69,7 @@ import ApiConfigManager from "./ApiConfigManager"
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
-import { AssistantAgentSettings } from "./AssistantAgentSettings"
+import { LiveMemorySettings } from "./LiveMemorySettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -108,7 +107,7 @@ export const sectionNames = [
 	"slashCommands",
 	"skills",
 	"checkpoints",
-	"assistantAgent",
+	"liveMemory",
 	"contextManagement",
 	"terminal",
 	"codebaseIndex",
@@ -118,7 +117,6 @@ export const sectionNames = [
 	"prompts",
 	"ui",
 	"experimental",
-	"language",
 	"logging",
 	"about",
 ] as const
@@ -247,10 +245,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		maxGitStatusFiles,
 		defaultCostLimit,
 		archivedTaskRetentionDays,
-		assistantAgentEnabled,
-		assistantAgentApiConfigId,
-		assistantAgentMaxContextTokens,
-		assistantAgentContextFillThreshold,
+		maxParallelTasks,
+		liveMemoryEnabled,
+		liveMemoryApiConfigId,
+		liveMemoryMaxContextTokens,
+		liveMemoryContextFillThreshold,
 		codebaseIndexConfig,
 		logLevel,
 		logCategories,
@@ -478,6 +477,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					maxGitStatusFiles: maxGitStatusFiles ?? 0,
 					defaultCostLimit: defaultCostLimit ?? null,
 					archivedTaskRetentionDays: archivedTaskRetentionDays ?? null,
+					maxParallelTasks: maxParallelTasks ?? null,
 					profileThresholds,
 					imageGenerationProvider,
 					openRouterImageApiKey,
@@ -485,10 +485,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
-					assistantAgentEnabled: assistantAgentEnabled ?? true,
-					assistantAgentApiConfigId: assistantAgentApiConfigId ?? "",
-					assistantAgentMaxContextTokens: assistantAgentMaxContextTokens,
-					assistantAgentContextFillThreshold: assistantAgentContextFillThreshold,
+					liveMemoryEnabled: liveMemoryEnabled ?? true,
+					liveMemoryApiConfigId: liveMemoryApiConfigId ?? "",
+					liveMemoryMaxContextTokens: liveMemoryMaxContextTokens,
+					liveMemoryContextFillThreshold: liveMemoryContextFillThreshold,
 					codebaseIndexConfig,
 					logLevel,
 					logCategories,
@@ -646,7 +646,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
 			{ id: "checkpoints", icon: GitCommitVertical },
-			{ id: "assistantAgent", icon: MessageCircle },
+			{ id: "liveMemory", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "codebaseIndex", icon: Archive },
@@ -654,7 +654,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "worktrees", icon: GitBranch },
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
-			{ id: "language", icon: Globe },
 			{ id: "logging", icon: ScrollText },
 			{ id: "about", icon: Info },
 		],
@@ -986,13 +985,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
-						{/* Assistant Agent Section */}
-						{renderTab === "assistantAgent" && (
-							<AssistantAgentSettings
-								assistantAgentEnabled={assistantAgentEnabled}
-								assistantAgentApiConfigId={assistantAgentApiConfigId}
-								assistantAgentMaxContextTokens={assistantAgentMaxContextTokens}
-								assistantAgentContextFillThreshold={assistantAgentContextFillThreshold}
+						{/* Live Memory Section */}
+						{renderTab === "liveMemory" && (
+							<LiveMemorySettings
+								liveMemoryEnabled={liveMemoryEnabled}
+								liveMemoryApiConfigId={liveMemoryApiConfigId}
+								liveMemoryMaxContextTokens={liveMemoryMaxContextTokens}
+								liveMemoryContextFillThreshold={liveMemoryContextFillThreshold}
 								listApiConfigMeta={listApiConfigMeta ?? []}
 								setCachedStateField={setCachedStateField}
 							/>
@@ -1092,6 +1091,11 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
+						{/* Language is rendered within the UI/UX tab */}
+						{renderTab === "ui" && (
+							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
+						)}
+
 						{/* Advanced Section (internally still keyed "experimental") */}
 						{renderTab === "experimental" && (
 							<ExperimentalSettings
@@ -1100,6 +1104,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								apiConfiguration={apiConfiguration}
 								setApiConfigurationField={setApiConfigurationField}
 								archivedTaskRetentionDays={archivedTaskRetentionDays}
+								maxParallelTasks={maxParallelTasks ?? undefined}
 								setCachedStateField={setCachedStateField}
 								imageGenerationProvider={imageGenerationProvider}
 								openRouterImageApiKey={openRouterImageApiKey as string | undefined}
@@ -1110,11 +1115,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								setOpenRouterImageApiKey={setOpenRouterImageApiKey}
 								setImageGenerationSelectedModel={setImageGenerationSelectedModel}
 							/>
-						)}
-
-						{/* Language Section */}
-						{renderTab === "language" && (
-							<LanguageSettings language={language || "en"} setCachedStateField={setCachedStateField} />
 						)}
 
 						{/* Logging Section */}

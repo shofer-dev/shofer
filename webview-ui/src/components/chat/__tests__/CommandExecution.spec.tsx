@@ -1,7 +1,8 @@
 // pnpm --filter @shofer/vscode-webview test src/components/chat/__tests__/CommandExecution.spec.tsx
 
 import React from "react"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
+import { useEvent } from "react-use"
 
 import { CommandExecution } from "../CommandExecution"
 import { ExtensionStateContext } from "../../../context/ExtensionStateContext"
@@ -603,6 +604,80 @@ Output:
 			const terminalOutput = screen.getByTestId("terminal-output")
 			expect(terminalOutput).toBeInTheDocument()
 			expect(terminalOutput).toHaveTextContent("0 total")
+		})
+	})
+
+	describe("command termination (kill button + terminated status)", () => {
+		// The component registers its status listener via react-use's `useEvent`,
+		// which is mocked to a no-op here — so grab the handler it registered and
+		// invoke it directly to simulate `commandExecutionStatus` pushes.
+		const emitStatus = (statusPayload: Record<string, unknown>) => {
+			const calls = vi.mocked(useEvent).mock.calls.filter((c) => c[0] === "message")
+			const handler = calls[calls.length - 1]?.[1] as ((e: MessageEvent) => void) | undefined
+			if (!handler) throw new Error("CommandExecution did not register a message handler")
+			act(() => {
+				handler(
+					new MessageEvent("message", {
+						data: { type: "commandExecutionStatus", text: JSON.stringify(statusPayload) },
+					}),
+				)
+			})
+		}
+
+		it("shows the kill button while started and posts terminalOperation:abort on click", () => {
+			render(
+				<ExtensionStateWrapper>
+					<CommandExecution executionId="kill-1" text="sleep 100" />
+				</ExtensionStateWrapper>,
+			)
+			emitStatus({ executionId: "kill-1", status: "started", pid: 4242, command: "sleep 100" })
+
+			expect(screen.getByText("(PID: 4242)")).toBeInTheDocument()
+			const killBtn = screen.getByTestId("kill-command-button")
+			expect(killBtn).toBeInTheDocument()
+
+			fireEvent.click(killBtn)
+			expect(vscode.postMessage).toHaveBeenCalledWith({
+				type: "terminalOperation",
+				terminalOperation: "abort",
+			})
+		})
+
+		it("hides the kill button once the command exits", () => {
+			render(
+				<ExtensionStateWrapper>
+					<CommandExecution executionId="kill-2" text="sleep 100" />
+				</ExtensionStateWrapper>,
+			)
+			emitStatus({ executionId: "kill-2", status: "started", pid: 5, command: "sleep 100" })
+			expect(screen.getByTestId("kill-command-button")).toBeInTheDocument()
+
+			emitStatus({ executionId: "kill-2", status: "exited", exitCode: 0 })
+			expect(screen.queryByTestId("kill-command-button")).not.toBeInTheDocument()
+			expect(screen.queryByTestId("command-terminated-badge")).not.toBeInTheDocument()
+		})
+
+		it("renders the Killed badge (and no kill button) on the terminated status", () => {
+			render(
+				<ExtensionStateWrapper>
+					<CommandExecution executionId="kill-3" text="sleep 100" />
+				</ExtensionStateWrapper>,
+			)
+			emitStatus({ executionId: "kill-3", status: "started", pid: 9, command: "sleep 100" })
+			emitStatus({ executionId: "kill-3", status: "terminated", exitCode: 137 })
+
+			expect(screen.getByTestId("command-terminated-badge")).toBeInTheDocument()
+			expect(screen.queryByTestId("kill-command-button")).not.toBeInTheDocument()
+		})
+
+		it("ignores status pushes addressed to a different executionId", () => {
+			render(
+				<ExtensionStateWrapper>
+					<CommandExecution executionId="kill-4" text="sleep 100" />
+				</ExtensionStateWrapper>,
+			)
+			emitStatus({ executionId: "someone-else", status: "started", pid: 1, command: "x" })
+			expect(screen.queryByTestId("kill-command-button")).not.toBeInTheDocument()
 		})
 	})
 })

@@ -126,31 +126,31 @@ vi.mock("../../../shared/modes", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		},
 		{
 			slug: "architect",
 			name: "Architect Mode",
 			roleDefinition: "You are an architect",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		},
 		{
 			slug: "custom-ask-override",
 			name: "Custom Ask Override Mode",
 			roleDefinition: "You are an assistant",
-			groups: ["read"],
+			tools: ["read"],
 		},
 		{
 			slug: "debug",
 			name: "Debug Mode",
 			roleDefinition: "You are a debugger",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		},
 		{
 			slug: "custom-orchestrator",
 			name: "Custom Orchestrator Mode",
 			roleDefinition: "You are an orchestrator",
-			groups: [],
+			tools: [],
 		},
 	]
 
@@ -175,7 +175,7 @@ vi.mock("../../../shared/modes", () => {
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		}),
 		defaultModeSlug: "code",
 	}

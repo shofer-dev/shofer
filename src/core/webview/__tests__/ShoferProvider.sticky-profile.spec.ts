@@ -138,20 +138,20 @@ vi.mock("../../../shared/modes", () => ({
 			slug: "code",
 			name: "Code Mode",
 			roleDefinition: "You are a code assistant",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		},
 		{
 			slug: "architect",
 			name: "Architect Mode",
 			roleDefinition: "You are an architect",
-			groups: ["read", "write"],
+			tools: ["read", "write"],
 		},
 	],
 	getModeBySlug: vi.fn().mockReturnValue({
 		slug: "code",
 		name: "Code Mode",
 		roleDefinition: "You are a code assistant",
-		groups: ["read", "write"],
+		tools: ["read", "write"],
 	}),
 	defaultModeSlug: "code",
 }))

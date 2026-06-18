@@ -1,5 +1,5 @@
 /**
- * ContextWindow — token accounting + LRU eviction for the Assistant Agent.
+ * ContextWindow — token accounting + LRU eviction for the Live Memory.
  *
  * Owns the in-memory list of conversation messages and file context entries
  * and is the single source of truth for "how full is the window". Pure

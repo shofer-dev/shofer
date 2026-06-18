@@ -27,15 +27,15 @@ export function getGroupName(group: GroupEntry): ToolGroup {
 
 // Helper to get all tools for a mode
 export function getToolsForMode(
-	groups: readonly GroupEntry[] | undefined,
+	tools: readonly GroupEntry[] | undefined,
 	toolsAllowed?: readonly string[],
 	toolsDenied?: readonly string[],
 ): string[] {
-	const tools = new Set<string>()
+	const toolSet = new Set<string>()
 
 	// Add tools from each group (excluding customTools which are opt-in only)
-	if (groups) {
-		groups.forEach((group) => {
+	if (tools) {
+		tools.forEach((group) => {
 			const groupName = getGroupName(group)
 			const groupConfig = TOOL_GROUPS[groupName]
 
@@ -50,40 +50,40 @@ export function getToolsForMode(
 				const groupTools = groupConfig.tools as readonly string[]
 				scope.allowed.forEach((tool: string) => {
 					if (groupTools.includes(tool)) {
-						tools.add(tool)
+						toolSet.add(tool)
 					}
 				})
 			} else {
 				// Add all tools from the group
-				groupConfig.tools.forEach((tool: string) => tools.add(tool))
+				groupConfig.tools.forEach((tool: string) => toolSet.add(tool))
 			}
 
 			// Apply group-level denied (removes from what was added)
 			if (scope?.denied) {
-				scope.denied.forEach((tool: string) => tools.delete(tool))
+				scope.denied.forEach((tool: string) => toolSet.delete(tool))
 			}
 		})
 	}
 
 	// Add explicitly whitelisted tools from the mode's tools_allowed field (OR semantics)
 	if (toolsAllowed) {
-		toolsAllowed.forEach((tool: string) => tools.add(tool))
+		toolsAllowed.forEach((tool: string) => toolSet.add(tool))
 	}
 
-	// Remove explicitly denied tools (denial takes priority over groups)
+	// Remove explicitly denied tools (denial takes priority over tool groups)
 	if (toolsDenied) {
-		toolsDenied.forEach((tool: string) => tools.delete(tool))
+		toolsDenied.forEach((tool: string) => toolSet.delete(tool))
 	}
 
 	// Always add required tools
-	ALWAYS_AVAILABLE_TOOLS.forEach((tool) => tools.add(tool))
+	ALWAYS_AVAILABLE_TOOLS.forEach((tool) => toolSet.add(tool))
 
 	// Denial also applies to always-available tools
 	if (toolsDenied) {
-		toolsDenied.forEach((tool: string) => tools.delete(tool))
+		toolsDenied.forEach((tool: string) => toolSet.delete(tool))
 	}
 
-	return Array.from(tools)
+	return Array.from(toolSet)
 }
 
 // Main modes configuration as an ordered array

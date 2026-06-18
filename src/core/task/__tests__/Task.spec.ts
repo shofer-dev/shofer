@@ -26,7 +26,7 @@ vi.mock("../../../utils/logging/subsystems", () => {
 		fsLog: { error: noop, info: noop, warn: noop },
 		gitLog: { error: noop, info: noop, warn: noop },
 		checkpointLog: { error: noop, info: noop, warn: noop },
-		assistantAgentLog: { error: noop, info: noop, warn: noop },
+		liveMemoryLog: { error: noop, info: noop, warn: noop },
 		mcpLog: { error: noop, info: noop, warn: noop },
 		skillsLog: { error: noop, info: noop, warn: noop },
 		marketplaceLog: { error: noop, info: noop, warn: noop },

@@ -189,7 +189,7 @@ export function applyModelToolCustomization(
 		}
 
 		// Get the list of allowed groups for this mode
-		const allowedGroups = new Set((modeConfig.groups ?? []).map((groupEntry) => getGroupName(groupEntry)))
+		const allowedGroups = new Set((modeConfig.tools ?? []).map((groupEntry) => getGroupName(groupEntry)))
 
 		// Add included tools only if they belong to an allowed group
 		// If the tool was specified as an alias, track the rename
@@ -231,7 +231,7 @@ export function filterNativeToolsForMode(
 	gitIndexManager?: GitIndexManager,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
-	assistantAgentManager?: import("../../../services/assistant-agent/manager").AssistantAgentManager,
+	liveMemoryManager?: import("../../../services/live-memory/manager").LiveMemoryManager,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
 	const modeSlug = mode ?? defaultModeSlug
@@ -245,7 +245,7 @@ export function filterNativeToolsForMode(
 	}
 
 	// Get all tools for this mode (including always-available tools)
-	const allToolsForMode = getToolsForMode(modeConfig.groups, modeConfig.tools_allowed, modeConfig.tools_denied)
+	const allToolsForMode = getToolsForMode(modeConfig.tools, modeConfig.tools_allowed, modeConfig.tools_denied)
 
 	// Filter to only tools that pass permission checks
 	let allowedToolNames = new Set(
@@ -286,9 +286,9 @@ export function filterNativeToolsForMode(
 		allowedToolNames.delete("git_search")
 	}
 
-	// Conditionally exclude ask_assistant_agent if assistant agent is not available
-	if (!assistantAgentManager || !assistantAgentManager.isAssistantAgentAvailable) {
-		allowedToolNames.delete("ask_assistant_agent")
+	// Conditionally exclude ask_live_memory if live memory is not available
+	if (!liveMemoryManager || !liveMemoryManager.isLiveMemoryAvailable) {
+		allowedToolNames.delete("ask_live_memory")
 	}
 
 	// Conditionally exclude update_todo_list if disabled in settings
@@ -478,7 +478,7 @@ export function filterMcpToolsForMode(
 	// Mode-level MCP visibility: a mode entry is either a slug or a tuple
 	// `[slug, options]`. If the mode does not include the `mcp` group, hide all
 	// MCP tools.
-	const allowedGroups = new Set<string>((modeConfig.groups ?? []).map((g) => getGroupName(g)))
+	const allowedGroups = new Set<string>((modeConfig.tools ?? []).map((g) => getGroupName(g)))
 	if (!allowedGroups.has("mcp")) {
 		return []
 	}

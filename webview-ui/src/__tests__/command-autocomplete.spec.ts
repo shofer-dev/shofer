@@ -132,14 +132,14 @@ describe("Command Autocomplete", () => {
 				slug: "code",
 				description: "Write and edit code",
 				roleDefinition: "You are a code assistant",
-				groups: ["read", "edit"],
+				tools: ["read", "edit"],
 			},
 			{
 				name: "Debug",
 				slug: "debug",
 				description: "Debug applications",
 				roleDefinition: "You are a debug assistant",
-				groups: ["read", "edit"],
+				tools: ["read", "edit"],
 			},
 		] as any[]
 

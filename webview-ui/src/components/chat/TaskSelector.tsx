@@ -311,20 +311,24 @@ export interface TaskSelectorProps {
  * Returns the display name for a history item, preferring the user-set name
  * then falling back to the first 60 chars of the task text (same as HistoryView).
  *
- * For WorkflowTasks, uses the flow name from the mode field or the persisted
- * workflow metadata.
+ * For WorkflowTasks, shows `Workflow: <flow name>` — matching the title rendered
+ * in WorkflowView/WorkflowHeader. Both derive the flow name from `slangSource`
+ * (the `flow "<name>"` declaration), so the two stay in sync; e.g.
+ * implement-feature.slang → "Workflow: implement-feature".
  */
 export function getTaskDisplayName(item: HistoryItem): string {
 	// WorkflowTask: show flow name
 	if (item.isWorkflow) {
-		// The mode field holds the flow name (e.g., "implement-feature")
+		// Authoritative source: the flow name as written in the .slang, same as
+		// WorkflowHeader parses. Anchored to the start of a line so a `flow "…"`
+		// inside a comment can't be matched by accident.
+		if (item.slangSource) {
+			const match = /^flow\s+"([^"]+)"/m.exec(item.slangSource)
+			if (match) return `Workflow: ${match[1]}`
+		}
+		// Fallback: the mode field also holds the flow name for workflow tasks.
 		if (item.mode) {
 			return `Workflow: ${item.mode}`
-		}
-		// Fallback: try to extract from slangSource
-		if (item.slangSource) {
-			const match = /flow\s+"([^"]+)"/.exec(item.slangSource)
-			if (match) return `Workflow: ${match[1]}`
 		}
 		return `Workflow ${item.number}`
 	}

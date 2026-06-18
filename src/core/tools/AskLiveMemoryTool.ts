@@ -1,15 +1,15 @@
 import * as vscode from "vscode"
 import { Task } from "../task/Task"
-import { AssistantAgentManager } from "../../services/assistant-agent/manager"
+import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { getWorkspacePath } from "../../utils/path"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
 
-const LOG_PREFIX = "[AskAssistantAgentTool]"
+const LOG_PREFIX = "[AskLiveMemoryTool]"
 
-interface AskAssistantAgentParams {
+interface AskLiveMemoryParams {
 	question: string
 	contextFiles?: string[] | null
 	timeoutMs?: number | null
@@ -17,10 +17,10 @@ interface AskAssistantAgentParams {
 	softResultLength?: number | null
 }
 
-export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
-	readonly name = "ask_assistant_agent" as const
+export class AskLiveMemoryTool extends BaseTool<"ask_live_memory"> {
+	readonly name = "ask_live_memory" as const
 
-	async execute(params: AskAssistantAgentParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: AskLiveMemoryParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 		const { question } = params
 		// `?? undefined` collapses the nullable strict-mode placeholders the
@@ -33,19 +33,19 @@ export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
 		const workspacePath = task.cwd && task.cwd.trim() !== "" ? task.cwd : getWorkspacePath()
 
 		if (!workspacePath) {
-			await handleError("ask_assistant_agent", new Error("Could not determine workspace path."))
+			await handleError("ask_live_memory", new Error("Could not determine workspace path."))
 			return
 		}
 
 		if (!question) {
 			task.consecutiveMistakeCount++
 			task.didToolFailInCurrentTurn = true
-			pushToolResult(await task.sayAndCreateMissingParamError("ask_assistant_agent", "question"))
+			pushToolResult(await task.sayAndCreateMissingParamError("ask_live_memory", "question"))
 			return
 		}
 
 		const sharedMessageProps = {
-			tool: "askAssistantAgent",
+			tool: "askLiveMemory",
 			question,
 			contextFiles: contextFiles ?? [],
 			timeoutMs: timeoutMs ?? 300000,
@@ -70,19 +70,19 @@ export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
 				throw new Error("Extension context is not available.")
 			}
 
-			const manager = AssistantAgentManager.getInstance(context, workspacePath)
+			const manager = LiveMemoryManager.getInstance(context, workspacePath)
 
 			if (!manager) {
-				throw new Error("AssistantAgentManager is not available.")
+				throw new Error("LiveMemoryManager is not available.")
 			}
 
 			logger.info(
-				`${LOG_PREFIX} manager state=${manager.state} available=${manager.isAssistantAgentAvailable} stateMessage=${JSON.stringify(manager.stateMessage)}`,
+				`${LOG_PREFIX} manager state=${manager.state} available=${manager.isLiveMemoryAvailable} stateMessage=${JSON.stringify(manager.stateMessage)}`,
 			)
 
-			if (!manager.isAssistantAgentAvailable) {
+			if (!manager.isLiveMemoryAvailable) {
 				throw new Error(
-					`Assistant agent is not available (state: ${manager.state}). ` +
+					`Live memory is not available (state: ${manager.state}). ` +
 						`Make sure it is enabled and configured in settings.`,
 				)
 			}
@@ -100,12 +100,12 @@ export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
 				`${LOG_PREFIX} <- manager.askQuestion taskId=${task.taskId} durationMs=${Date.now() - startedAt} answerLen=${result.answer.length} prompt=${result.tokensUsed.prompt} completion=${result.tokensUsed.completion}`,
 			)
 
-			// Render the assistant agent's answer in chat as a follow-up `tool` say
+			// Render the live memory answer in chat as a follow-up `tool` say
 			// so the user can read (and expand) the response inline. Without this
-			// the chat would only show "Shofer wants to use Ask Assistant Agent" and
+			// the chat would only show "Shofer wants to use Ask Live Memory" and
 			// the answer would be silently appended to the model's tool_result.
 			const sayPayload = {
-				tool: "askAssistantAgent",
+				tool: "askLiveMemory",
 				question,
 				answer: result.answer,
 				contextFiles: result.contextFiles ?? [],
@@ -116,7 +116,7 @@ export class AskAssistantAgentTool extends BaseTool<"ask_assistant_agent"> {
 			}
 			await task.say("tool", JSON.stringify(sayPayload))
 
-			const output = `Assistant Agent Answer:
+			const output = `Live Memory Answer:
 ${result.answer}
 
 ---
@@ -131,15 +131,15 @@ Files in context: ${result.contextFiles.length}`
 			logger.error(
 				`${LOG_PREFIX} execute() FAILED taskId=${task.taskId} error=${error?.message ?? String(error)}\n${error?.stack ?? "(no stack)"}`,
 			)
-			await handleError("ask_assistant_agent", error)
+			await handleError("ask_live_memory", error)
 		}
 	}
 
-	override async handlePartial(task: Task, block: ToolUse<"ask_assistant_agent">): Promise<void> {
+	override async handlePartial(task: Task, block: ToolUse<"ask_live_memory">): Promise<void> {
 		const question: string | undefined = block.params.question
 
 		const sharedMessageProps = {
-			tool: "askAssistantAgent",
+			tool: "askLiveMemory",
 			question: question,
 		}
 
@@ -147,4 +147,4 @@ Files in context: ${result.contextFiles.length}`
 	}
 }
 
-export const askAssistantAgentTool = new AskAssistantAgentTool()
+export const askLiveMemoryTool = new AskLiveMemoryTool()

@@ -26,10 +26,7 @@ export const LanguageSettings = ({ language, setCachedStateField, className, ...
 			<SectionHeader>{t("settings:sections.language")}</SectionHeader>
 
 			<Section>
-				<SearchableSetting
-					settingId="language-select"
-					section="language"
-					label={t("settings:sections.language")}>
+				<SearchableSetting settingId="language-select" section="ui" label={t("settings:sections.language")}>
 					<Select
 						value={language}
 						onValueChange={(value) => setCachedStateField("language", value as Language)}>

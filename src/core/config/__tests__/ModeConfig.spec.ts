@@ -15,18 +15,18 @@ describe("CustomModeSchema", () => {
 				slug: "test",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies ModeConfig
 
 			expect(() => validateCustomMode(validMode)).not.toThrow()
 		})
 
-		test("accepts mode with multiple groups", () => {
+		test("accepts mode with multiple tool groups", () => {
 			const validMode = {
 				slug: "test",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				groups: ["read", "write"] as const,
+				tools: ["read", "write"] as const,
 			} satisfies ModeConfig
 
 			expect(() => validateCustomMode(validMode)).not.toThrow()
@@ -38,7 +38,7 @@ describe("CustomModeSchema", () => {
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
 				customInstructions: "Custom instructions",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies ModeConfig
 
 			expect(() => validateCustomMode(validMode)).not.toThrow()
@@ -51,7 +51,7 @@ describe("CustomModeSchema", () => {
 				{
 					name: "Test",
 					roleDefinition: "Role",
-				}, // Missing slug and groups
+				}, // Missing slug and tools
 			]
 
 			invalidModes.forEach((invalidMode) => {
@@ -64,7 +64,7 @@ describe("CustomModeSchema", () => {
 				slug: "not@a@valid@slug",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies Omit<ModeConfig, "slug"> & { slug: string }
 
 			expect(() => validateCustomMode(invalidMode)).toThrow(ZodError)
@@ -75,14 +75,14 @@ describe("CustomModeSchema", () => {
 				slug: "123e4567-e89b-12d3-a456-426614174000",
 				name: "",
 				roleDefinition: "Test role definition",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies ModeConfig
 
 			const emptyRoleMode = {
 				slug: "123e4567-e89b-12d3-a456-426614174000",
 				name: "Test Mode",
 				roleDefinition: "",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies ModeConfig
 
 			expect(() => validateCustomMode(emptyNameMode)).toThrow(ZodError)
@@ -94,7 +94,7 @@ describe("CustomModeSchema", () => {
 				slug: "123e4567-e89b-12d3-a456-426614174000",
 				name: "Test Mode",
 				roleDefinition: "Test role definition",
-				groups: ["not-a-valid-group"] as any,
+				tools: ["not-a-valid-group"] as any,
 			}
 
 			expect(() => validateCustomMode(invalidGroupMode)).toThrow(ZodError)
@@ -120,14 +120,14 @@ describe("CustomModeSchema", () => {
 				slug: "markdown-editor",
 				name: "Markdown Editor",
 				roleDefinition: "Markdown editing mode",
-				groups: ["read", ["write", { fileRegex: "\\.md$" }]],
+				tools: ["read", ["write", { fileRegex: "\\.md$" }]],
 			}
 
 			const modeWithDescription = {
 				slug: "docs-editor",
 				name: "Documentation Editor",
 				roleDefinition: "Documentation editing mode",
-				groups: ["read", ["write", { fileRegex: "\\.(md|txt)$", description: "Documentation files only" }]],
+				tools: ["read", ["write", { fileRegex: "\\.(md|txt)$", description: "Documentation files only" }]],
 			}
 
 			expect(() => modeConfigSchema.parse(modeWithJustRegex)).not.toThrow()
@@ -143,7 +143,7 @@ describe("CustomModeSchema", () => {
 					slug: "test",
 					name: "Test",
 					roleDefinition: "Test",
-					groups: ["read", ["write", { fileRegex: pattern }]],
+					tools: ["read", ["write", { fileRegex: pattern }]],
 				}
 				expect(() => modeConfigSchema.parse(mode)).not.toThrow()
 			})
@@ -153,18 +153,18 @@ describe("CustomModeSchema", () => {
 					slug: "test",
 					name: "Test",
 					roleDefinition: "Test",
-					groups: ["read", ["write", { fileRegex: pattern }]],
+					tools: ["read", ["write", { fileRegex: pattern }]],
 				}
 				expect(() => modeConfigSchema.parse(mode)).toThrow()
 			})
 		})
 
-		it("prevents duplicate groups", () => {
+		it("prevents duplicate tool entries", () => {
 			const modeWithDuplicates = {
 				slug: "test",
 				name: "Test",
 				roleDefinition: "Test",
-				groups: ["read", "read", ["write", { fileRegex: "\\.md$" }], ["write", { fileRegex: "\\.txt$" }]],
+				tools: ["read", "read", ["write", { fileRegex: "\\.md$" }], ["write", { fileRegex: "\\.txt$" }]],
 			}
 
 			expect(() => modeConfigSchema.parse(modeWithDuplicates)).toThrow(ZodError)
@@ -181,25 +181,25 @@ describe("CustomModeSchema", () => {
 		test("accepts single group", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			} satisfies ModeConfig
 
 			expect(() => modeConfigSchema.parse(mode)).not.toThrow()
 		})
 
-		test("accepts multiple groups", () => {
+		test("accepts multiple tool groups", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read", "write"] as const,
+				tools: ["read", "write"] as const,
 			} satisfies ModeConfig
 
 			expect(() => modeConfigSchema.parse(mode)).not.toThrow()
 		})
 
-		test("accepts all available groups", () => {
+		test("accepts all available tool groups", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read", "write", "execute", "mcp"] as const,
+				tools: ["read", "write", "execute", "mcp"] as const,
 			} satisfies ModeConfig
 
 			expect(() => modeConfigSchema.parse(mode)).not.toThrow()
@@ -208,7 +208,7 @@ describe("CustomModeSchema", () => {
 		test("rejects non-array group format", () => {
 			const mode = {
 				...validBaseMode,
-				groups: "not-an-array" as any,
+				tools: "not-an-array" as any,
 			}
 
 			expect(() => modeConfigSchema.parse(mode)).toThrow()
@@ -217,30 +217,30 @@ describe("CustomModeSchema", () => {
 		test("rejects invalid group names", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["invalid_group"] as any,
+				tools: ["invalid_group"] as any,
 			}
 
 			expect(() => modeConfigSchema.parse(mode)).toThrow()
 		})
 
-		test("rejects duplicate groups", () => {
+		test("rejects duplicate tool entries", () => {
 			const mode = {
 				...validBaseMode,
-				groups: ["read", "read"] as any,
+				tools: ["read", "read"] as any,
 			}
 
 			expect(() => modeConfigSchema.parse(mode)).toThrow(ZodError)
 		})
 
-		test("rejects null or undefined groups", () => {
+		test("rejects null or undefined tools", () => {
 			const modeWithNull = {
 				...validBaseMode,
-				groups: null as any,
+				tools: null as any,
 			}
 
 			const modeWithUndefined = {
 				...validBaseMode,
-				groups: undefined as any,
+				tools: undefined as any,
 			}
 
 			expect(() => modeConfigSchema.parse(modeWithNull)).toThrow()
@@ -254,9 +254,9 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", "write"],
+				tools: ["read", "write"],
 			})
-			expect(result.groups).toEqual(["read", "write"])
+			expect(result.tools).toEqual(["read", "write"])
 		})
 
 		it("should accept browser group with options", () => {
@@ -264,9 +264,9 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", ["browser", { fileRegex: ".*", description: "test" }]],
+				tools: ["read", ["browser", { fileRegex: ".*", description: "test" }]],
 			})
-			expect(result.groups).toEqual(["read", ["browser", { fileRegex: ".*", description: "test" }]])
+			expect(result.tools).toEqual(["read", ["browser", { fileRegex: ".*", description: "test" }]])
 		})
 
 		it("should accept browser-only mode", () => {
@@ -274,9 +274,9 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["browser"],
+				tools: ["browser"],
 			})
-			expect(result.groups).toEqual(["browser"])
+			expect(result.tools).toEqual(["browser"])
 		})
 
 		it("should reject invalid group names", () => {
@@ -284,7 +284,7 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", "nonexistent"],
+				tools: ["read", "nonexistent"],
 			})
 			expect(result.success).toBe(false)
 		})
@@ -294,7 +294,7 @@ describe("CustomModeSchema", () => {
 				slug: "test-mode",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read", "write"],
+				tools: ["read", "write"],
 			})
 			expect(result.success).toBe(true)
 		})

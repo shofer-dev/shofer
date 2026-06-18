@@ -106,9 +106,33 @@ export interface AgentDecl extends BaseNode {
 
 export interface AgentMeta {
 	role?: string
-	model?: string
+	/**
+	 * Slang key `api_configuration:` — selects the agent Task's API-configuration
+	 * profile by name. The legacy key `model:` is a deprecated alias that parses
+	 * into this same field.
+	 */
+	apiConfiguration?: string
 	tools?: string[]
 	retry?: number
+	/**
+	 * Slang `context { ... }` block — controls ambient project context injected
+	 * into the agent Task's system prompt. Each key is a boolean toggle for a
+	 * specific system-prompt component. Unknown keys are ignored
+	 * (forward-compatible).
+	 *
+	 * Supported keys:
+	 *   - `include_agents_md`       — AGENTS.md / AGENT.md rules injection
+	 *   - `include_subfolder_rules` — recursive .shofer/rules/ scanning
+	 *   - `include_mode_rules`      — .shofer/rules-{mode}/ loading
+	 *   - `include_user_rules`      — .shofer/rules/ loading (non-mode)
+	 *   - `include_skills`          — skills listing section
+	 *   - `require_todos`           — TODO enforcement
+	 *   - `include_system_info`     — OS/shell/workspace info section
+	 *   - `include_mcp`             — MCP tools in capabilities
+	 *
+	 * Absent keys inherit the global default for that component.
+	 */
+	context?: Record<string, boolean>
 	/** Agent names (from @refs) this agent may send_message_to_task to directly.
 	 *  Wildcards / external sinks are excluded. Absent ⇒ no sibling grant
 	 *  (parent + own children only, per least-privilege). */

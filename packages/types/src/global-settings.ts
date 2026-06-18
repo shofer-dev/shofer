@@ -243,6 +243,15 @@ export const globalSettingsSchema = z.object({
 	archivedTaskRetentionDays: z.number().int().min(0).nullish(),
 
 	/**
+	 * Maximum number of parallel (non-terminal, non-idle) tasks allowed globally.
+	 * When the number of running/waiting tasks reaches this limit, new_task
+	 * returns an error asking the caller to wait and retry or accomplish the
+	 * work through other means. Set to 0 for unlimited.
+	 * @default 10
+	 */
+	maxParallelTasks: z.number().int().min(0).nullish(),
+
+	/**
 	 * Enable integration with the Shofer LLM Model Provider extension
 	 * (shofer.llm.getModelPricing, shofer.llm.getRequestCost, etc.).
 	 * When disabled (default), the vscode-lm provider uses only the
@@ -254,21 +263,21 @@ export const globalSettingsSchema = z.object({
 	 */
 	enableLlmProviderIntegration: z.boolean().optional(),
 
-	// ─── Assistant Agent ──────────────────────────────────────────────────
+	// ─── Live Memory ──────────────────────────────────────────────────────
 	// Persistent codebase Q&A companion. Configuration is stored in
 	// GlobalState (typed via ContextProxy) instead of vscode workspace
 	// configuration so it shares the same lifecycle and migration hooks
 	// as the rest of the extension.
-	assistantAgentEnabled: z.boolean().optional(),
+	liveMemoryEnabled: z.boolean().optional(),
 	// ID of the API Configuration profile (managed by ProviderSettingsManager
-	// under Settings → Providers) used for assistant-agent LLM calls. The
+	// under Settings → Providers) used for live-memory LLM calls. The
 	// profile is the single source of truth for provider/model/credentials.
-	assistantAgentApiConfigId: z.string().optional(),
-	// Optional override for the assistant-agent context window. When unset,
+	liveMemoryApiConfigId: z.string().optional(),
+	// Optional override for the live-memory context window. When unset,
 	// the manager falls back to the model info reported by the resolved
 	// API Configuration's ApiHandler (or DEFAULT_MAX_CONTEXT_TOKENS).
-	assistantAgentMaxContextTokens: z.number().int().positive().optional(),
-	assistantAgentContextFillThreshold: z.number().min(0).max(1).optional(),
+	liveMemoryMaxContextTokens: z.number().int().positive().optional(),
+	liveMemoryContextFillThreshold: z.number().min(0).max(1).optional(),
 
 	/**
 	 * Maximum inline byte length of a tool result / message text stored in

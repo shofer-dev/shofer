@@ -665,7 +665,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 				name: "Test Project Mode",
 				slug,
 				roleDefinition: "Test Role",
-				groups: [],
+				tools: [],
 				source: "project",
 			} as ModeConfig,
 		])
@@ -690,7 +690,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 				name: "Test Global Mode",
 				slug,
 				roleDefinition: "Test Role",
-				groups: [],
+				tools: [],
 				source: "global",
 			} as ModeConfig,
 		])
@@ -712,7 +712,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 				name: "Test Mode No Rules",
 				slug,
 				roleDefinition: "Test Role",
-				groups: [],
+				tools: [],
 				source: "project",
 			} as ModeConfig,
 		])
@@ -737,7 +737,7 @@ describe("webviewMessageHandler - deleteCustomMode", () => {
 				name: "Test Mode Error",
 				slug,
 				roleDefinition: "Test Role",
-				groups: [],
+				tools: [],
 				source: "project",
 			} as ModeConfig,
 		])

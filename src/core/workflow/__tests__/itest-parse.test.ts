@@ -29,8 +29,10 @@ describe("slang file parse smoke test", () => {
 		expect(agents).toHaveLength(3)
 		expect(agents.map((a) => a.name)).toEqual(["Architect", "Developer", "Reviewer"])
 
-		// Zero structural warnings
+		// One warning allowed: "no budget statement" since the built-in
+		// workflows intentionally omit it (budget constraints are optional).
 		const warnings = validateSlangAST(ast)
-		expect(warnings).toHaveLength(0)
+		const nonBudgetWarnings = warnings.filter((w) => !w.includes("no budget"))
+		expect(nonBudgetWarnings).toHaveLength(0)
 	})
 })

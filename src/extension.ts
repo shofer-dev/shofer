@@ -54,7 +54,7 @@ import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { GitIndexManager } from "./services/git-index/git-index-manager"
-import { AssistantAgentManager } from "./services/assistant-agent/manager"
+import { LiveMemoryManager } from "./services/live-memory/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -246,26 +246,26 @@ export async function activate(context: vscode.ExtensionContext) {
 				context.subscriptions.push(gitIndexManager)
 			}
 
-			// Initialize assistant agent manager for this workspace folder.
-			const assistantAgentManager = AssistantAgentManager.getInstance(context, folder.uri.fsPath)
+			// Initialize live memory manager for this workspace folder.
+			const liveMemoryManager = LiveMemoryManager.getInstance(context, folder.uri.fsPath)
 
-			if (assistantAgentManager) {
+			if (liveMemoryManager) {
 				// Initialize in background; do not block extension activation
-				void assistantAgentManager.initialize().catch((error) => {
+				void liveMemoryManager.initialize().catch((error) => {
 					const message = error instanceof Error ? error.message : String(error)
 					outputChannel.appendLine(
-						`[AssistantAgentManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
+						`[LiveMemoryManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
 					)
 				})
 
-				context.subscriptions.push(assistantAgentManager)
+				context.subscriptions.push(liveMemoryManager)
 			}
 		}
 	}
 
-	// ─── Assistant Agent ──────────────────────────────────────────────────
-	// The Assistant Agent's status indicator and action menu live in the
-	// Shofer chat-input toolbar (AssistantAgentStatusBadge → AssistantAgentPopover),
+	// ─── Live Memory ──────────────────────────────────────────────────
+	// The Live Memory's status indicator and action menu live in the
+	// Shofer chat-input toolbar (LiveMemoryStatusBadge → LiveMemoryPopover),
 	// not in the VS Code status bar. Commands are registered through
 	// registerCommands() (typed CommandId system) below.
 
@@ -281,7 +281,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}),
 	)
 
-	// ─── End Assistant Agent Chat View ───────────────────────────────────
+	// ─── End Live Memory Chat View ───────────────────────────────────
 
 	// Native TreeView used as a reliable file drop target on Desktop.  See
 	// ContextDropZoneProvider for rationale.  Registered collapsed-by-default
@@ -473,7 +473,7 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
-	AssistantAgentManager.disposeAll()
+	LiveMemoryManager.disposeAll()
 	CodeIndexManager.disposeAll()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()

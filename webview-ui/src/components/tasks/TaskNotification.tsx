@@ -25,11 +25,24 @@ export interface TaskNotificationProps {
 /**
  * Notification type configuration with icons and colors.
  */
-const NOTIFICATION_CONFIG: Record<string, { icon: typeof AlertCircle; color: string; bgColor: string }> = {
-	needs_input: { icon: AlertCircle, color: "text-yellow-500", bgColor: "bg-yellow-500/10" },
-	completed: { icon: CheckCircle, color: "text-green-500", bgColor: "bg-green-500/10" },
-	error: { icon: AlertTriangle, color: "text-red-500", bgColor: "bg-red-500/10" },
-	file_conflict: { icon: AlertTriangle, color: "text-orange-500", bgColor: "bg-orange-500/10" },
+const NOTIFICATION_CONFIG: Record<
+	string,
+	{ icon: typeof AlertCircle; color: string; bgColor: string; textColor: string }
+> = {
+	needs_input: {
+		icon: AlertCircle,
+		color: "text-yellow-500",
+		bgColor: "bg-yellow-500/90",
+		textColor: "text-yellow-950",
+	},
+	completed: { icon: CheckCircle, color: "text-green-500", bgColor: "bg-green-500/90", textColor: "text-green-950" },
+	error: { icon: AlertTriangle, color: "text-red-500", bgColor: "bg-red-500/90", textColor: "text-red-950" },
+	file_conflict: {
+		icon: AlertTriangle,
+		color: "text-orange-500",
+		bgColor: "bg-orange-500/90",
+		textColor: "text-orange-950",
+	},
 }
 
 /**
@@ -77,6 +90,7 @@ export const TaskNotification = memo(({ notification, taskName, onDismiss, onFoc
 				"flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg",
 				"border border-[var(--vscode-editorWidget-border,#454545)]",
 				config.bgColor,
+				config.textColor,
 				"animate-slide-in-right",
 			)}>
 			{/* Icon */}
@@ -84,8 +98,8 @@ export const TaskNotification = memo(({ notification, taskName, onDismiss, onFoc
 
 			{/* Content */}
 			<div className="flex-1 min-w-0">
-				<div className="font-medium text-sm truncate">{taskName}</div>
-				<div className="text-xs text-[var(--vscode-descriptionForeground,#8b8b8b)] truncate">{notification.message}</div>
+				<div className={cn("font-medium text-sm truncate", config.textColor)}>{taskName}</div>
+				<div className={cn("text-xs truncate opacity-80", config.textColor)}>{notification.message}</div>
 			</div>
 
 			{/* Actions */}
@@ -97,7 +111,7 @@ export const TaskNotification = memo(({ notification, taskName, onDismiss, onFoc
 				)}
 				<button
 					onClick={handleDismiss}
-					className="p-1 hover:bg-[var(--vscode-toolbar-hoverBackground,#5a5d5e)] rounded"
+					className={cn("p-1 hover:bg-black/10 rounded", config.textColor)}
 					aria-label={t("chat:taskNotification.dismiss", "Dismiss")}>
 					<X className="w-4 h-4" />
 				</button>

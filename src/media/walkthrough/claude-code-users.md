@@ -9,7 +9,7 @@ Coming from Anthropic's Claude Code? Shofer gives you the same agentic power in 
 - **VS Code-native cockpit** — task tree plus live Topology/Sequence/Swimlane diagrams, Stats, and Logs, with the agent graph visualized in-editor
 - **Deterministic Workflows** — declarative Slang multi-agent orchestration, not ad-hoc runtime delegation
 - **Semantic RAG over code _and_ git history** — `git_search` finds _why_ and _when_, not just keywords
-- **Assistant Agent** — a persistent, cross-session context window that other tasks reuse to cut token spend
+- **Live Memory** — a persistent, cross-session context window that other tasks reuse to cut token spend
 - **Native worktrees + OS-level sandboxing** — parallel branches in one window; shell commands confined via Landlock/bwrap
 - **Hard cost caps** — per-task and per-session USD budgets that halt runaway loops
 - **Open-source (Apache 2.0)** — inspect and modify every tool hook and prompt

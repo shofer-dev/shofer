@@ -608,6 +608,80 @@ flow "tools-meta" () {
 		expect(worker!.meta.tools).toEqual(["read", "execute", "mcp"])
 	})
 
+	it("parses api_configuration/role/retry/tools meta together (the wired agent-block fields)", () => {
+		const src = `
+flow "meta-fields" () {
+	 agent Worker {
+	   mode: "code"
+	   tools: [read]
+	   api_configuration: "sonnet-profile"
+	   role: "Specialist."
+	   retry: 5
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.tools).toEqual(["read"])
+		expect(worker.meta.apiConfiguration).toBe("sonnet-profile")
+		expect(worker.meta.role).toBe("Specialist.")
+		expect(worker.meta.retry).toBe(5)
+	})
+
+	it("parses a context { include_agents_md } block into meta.context", () => {
+		const src = `
+flow "ctx" () {
+	 agent Worker {
+	   mode: "code"
+	   context {
+	     include_agents_md: false
+	   }
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.context).toEqual({ include_agents_md: false })
+	})
+
+	it("accepts the `context:` block form (leading colon) too", () => {
+		const src = `
+flow "ctx-colon" () {
+	 agent Worker {
+	   mode: "code"
+	   context: {
+	     include_agents_md: true
+	   }
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.context).toEqual({ include_agents_md: true })
+	})
+
+	it("parses the deprecated `model:` alias into meta.apiConfiguration", () => {
+		const src = `
+flow "model-alias" () {
+	 agent Worker {
+	   mode: "code"
+	   model: "legacy-profile"
+	   commit
+	 }
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const worker = agentsOf(ast.flows[0]!).find((a) => a.name === "Worker")!
+		expect(worker.meta.apiConfiguration).toBe("legacy-profile")
+	})
+
 	it("parses converge with all_committed keyword", () => {
 		const src = `
 flow "all-committed" () {
@@ -620,6 +694,70 @@ flow "all-committed" () {
 `
 		const { ast, errors } = parseSlang(src)
 		expect(errors).toHaveLength(0)
+	})
+
+	it("parses budget with flow-param identifier references", () => {
+		const src = `
+flow "param-budget" (max_tokens: "number", max_rounds: "number", time_limit: "number") {
+		agent A {
+		  mode: "code"
+		  commit
+		}
+		converge when: @A.committed
+		budget: tokens(max_tokens), rounds(max_rounds), time(time_limit)
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const flow = ast.flows[0]!
+		const stmt = flow.body.find((n): n is BudgetStmt => n.type === "BudgetStmt")
+		expect(stmt).toBeDefined()
+		expect(stmt!.items).toHaveLength(3)
+
+		// All three budget items should be Ident expressions, not NumberLit
+		const tokensItem = stmt!.items.find((i) => i.kind === "tokens")
+		expect(tokensItem!.value.type).toBe("Ident")
+		expect((tokensItem!.value as any).name).toBe("max_tokens")
+
+		const roundsItem = stmt!.items.find((i) => i.kind === "rounds")
+		expect(roundsItem!.value.type).toBe("Ident")
+		expect((roundsItem!.value as any).name).toBe("max_rounds")
+
+		const timeItem = stmt!.items.find((i) => i.kind === "time")
+		expect(timeItem!.value.type).toBe("Ident")
+		expect((timeItem!.value as any).name).toBe("time_limit")
+	})
+
+	it("parses budget with mixed literals and identifiers", () => {
+		const src = `
+flow "mixed-budget" (token_limit: "number") {
+		agent A {
+		  mode: "code"
+		  commit
+		}
+		converge when: @A.committed
+		budget: tokens(token_limit), rounds(10), time(300)
+}
+`
+		const { ast, errors } = parseSlang(src)
+		expect(errors).toHaveLength(0)
+		const flow = ast.flows[0]!
+		const stmt = flow.body.find((n): n is BudgetStmt => n.type === "BudgetStmt")
+		expect(stmt).toBeDefined()
+		expect(stmt!.items).toHaveLength(3)
+
+		// tokens is an Ident, rounds and time are NumberLit
+		const tokensItem = stmt!.items.find((i) => i.kind === "tokens")
+		expect(tokensItem!.value.type).toBe("Ident")
+		expect((tokensItem!.value as any).name).toBe("token_limit")
+
+		const roundsItem = stmt!.items.find((i) => i.kind === "rounds")
+		expect(roundsItem!.value.type).toBe("NumberLit")
+		expect((roundsItem!.value as any).value).toBe(10)
+
+		const timeItem = stmt!.items.find((i) => i.kind === "time")
+		expect(timeItem!.value.type).toBe("NumberLit")
+		expect((timeItem!.value as any).value).toBe(300)
 	})
 })
 

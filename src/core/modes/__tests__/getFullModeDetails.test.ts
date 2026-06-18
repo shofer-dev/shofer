@@ -32,7 +32,7 @@ describe("getFullModeDetails", () => {
 				slug: "debug",
 				name: "Custom Debug",
 				roleDefinition: "Custom debug role",
-				groups: ["read"],
+				tools: ["read"],
 			},
 		]
 
@@ -41,7 +41,7 @@ describe("getFullModeDetails", () => {
 			slug: "debug",
 			name: "Custom Debug",
 			roleDefinition: "Custom debug role",
-			groups: ["read"],
+			tools: ["read"],
 		})
 	})
 

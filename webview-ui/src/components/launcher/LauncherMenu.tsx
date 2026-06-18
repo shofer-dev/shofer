@@ -47,7 +47,13 @@ export const LauncherMenu = ({ open, onOpenChange, onPick }: LauncherMenuProps) 
 			<PopoverAnchor asChild>
 				<div className="fixed right-2 top-0 h-0 w-0" aria-hidden />
 			</PopoverAnchor>
-			<PopoverContent align="end" sideOffset={6} container={portalContainer} className="w-64 p-1">
+			{/*
+			 * !z-[51] overrides the default z-50 in PopoverContent so this popover
+			 * renders above the TaskSelector sidebar drawer (also z-50 fixed).
+			 * Both compete at the viewport stacking context because PopoverPrimitive
+			 * uses position:fixed; a parent stacking context won't help.
+			 */}
+			<PopoverContent align="end" sideOffset={6} container={portalContainer} className="w-64 p-1 !z-[51]">
 				<div className="flex flex-col gap-0.5">
 					{ITEMS.map((item) => (
 						<button

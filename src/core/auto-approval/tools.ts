@@ -12,7 +12,7 @@ import { TOOL_GROUPS } from "../../shared/tools"
 const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	// read group
 	readFile: "read_file",
-	askAssistantAgent: "ask_assistant_agent",
+	askLiveMemory: "ask_live_memory",
 	listFiles: "list_files",
 	listFilesTopLevel: "list_files",
 	listFilesRecursive: "list_files",

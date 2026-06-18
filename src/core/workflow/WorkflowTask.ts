@@ -42,6 +42,7 @@ import {
 	compileAgentProgram,
 	consumeMail as consumeMailPure,
 	evalExpr as evalExprPure,
+	interpolate as interpolatePure,
 	routeOutput as routeOutputPure,
 	toBool as toBoolPure,
 	type AdvanceResult,
@@ -80,16 +81,35 @@ function getConvergeExpr(flow: UpstreamFlowDecl): Expr | undefined {
 	return undefined
 }
 
+/** Resolve a budget expression value: number literal or flow-param identifier. */
+function resolveBudgetNum(expr: Expr, params: Record<string, unknown>): number | undefined {
+	const lit = exprAsNumber(expr)
+	if (lit !== undefined) return lit
+	if (expr.type === "Ident" && expr.name in params) {
+		const v = params[expr.name]
+		if (typeof v === "number") return v
+		if (typeof v === "string") {
+			const n = Number(v)
+			if (!Number.isNaN(n)) return n
+		}
+	}
+	return undefined
+}
+
 /** Get budget values: { tokens, rounds, timeMs } (time in seconds → milliseconds). */
-function getBudget(flow: UpstreamFlowDecl): { bTokens?: number; bRounds?: number; bTime?: number } {
+function getBudget(
+	flow: UpstreamFlowDecl,
+	params?: Record<string, unknown>,
+): { bTokens?: number; bRounds?: number; bTime?: number } {
 	const stmt = flow.body.find((n) => n.type === "BudgetStmt")
 	if (!stmt || stmt.type !== "BudgetStmt") return {}
+	const p = params ?? {}
 	const out: { bTokens?: number; bRounds?: number; bTime?: number } = {}
 	for (const item of stmt.items) {
-		if (item.kind === "tokens") out.bTokens = exprAsNumber(item.value)
-		else if (item.kind === "rounds") out.bRounds = exprAsNumber(item.value)
+		if (item.kind === "tokens") out.bTokens = resolveBudgetNum(item.value, p)
+		else if (item.kind === "rounds") out.bRounds = resolveBudgetNum(item.value, p)
 		else if (item.kind === "time") {
-			const t = exprAsNumber(item.value)
+			const t = resolveBudgetNum(item.value, p)
 			if (t !== undefined) out.bTime = t * 1000
 		}
 	}
@@ -594,7 +614,7 @@ export class WorkflowTask extends Task {
 		const provider = this.providerRef.deref()
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
 
-		const budget = getBudget(this.flowDecl)
+		const budget = getBudget(this.flowDecl, this.flowState.params)
 		const budgetRounds = budget.bRounds || DEFAULT_BUDGET_ROUNDS
 		const budgetTokens = budget.bTokens || DEFAULT_BUDGET_TOKENS
 		const budgetTime = budget.bTime || DEFAULT_BUDGET_TIME
@@ -1034,7 +1054,26 @@ export class WorkflowTask extends Task {
 				// Inject the agent's declared `.slang` role into its system prompt
 				// (the slang `role:` is otherwise parsed-but-not-consumed). Layered
 				// on top of the mode's roleDefinition for this agent task only.
-				agentRole: agentDecl.meta?.role,
+				// `${…}` placeholders in the role resolve against the flow params +
+				// the agent's bindings (e.g. ${design_dir}/${design_filename}).
+				agentRole: agentDecl.meta?.role
+					? interpolatePure(agentDecl.meta.role, agentState, this.flowState)
+					: undefined,
+				// Enforce the agent's declared `.slang` `tools:` restriction (otherwise
+				// parsed-but-not-consumed). Intersects with the mode's tools when the
+				// task builds its tool array, so e.g. an `architect`-mode orchestrator
+				// declared `tools: [questions, subtasks]` cannot read or edit files —
+				// it can only coordinate. ALWAYS_AVAILABLE tools are retained.
+				agentToolGroups: agentDecl.meta?.tools,
+				// The agent's declared `.slang` `api_configuration:` (legacy alias
+				// `model:`) selects its API-configuration profile by name (per-task
+				// only — never activates the profile globally). An unknown name falls
+				// back to the global profile. Lets different agents in one workflow
+				// run on different models.
+				initialApiConfigName: agentDecl.meta?.apiConfiguration,
+				// The agent's `.slang` `context { ... }` block maps to per-task
+				// system-prompt component overrides.
+				agentContext: agentDecl.meta?.context,
 				initialState: { lifecycle: "idle" },
 				openInStack: false,
 				keepCurrentTask: true,
@@ -1342,12 +1381,18 @@ export class WorkflowTask extends Task {
 		const pendingQuestion = liveInstance.getPendingParentQuestion()
 		if (!pendingQuestion) return false
 
+		// Identify which agent is asking. The agent's slang `name` is its task
+		// title (set as `initialTitle` when spawned), so the user sees the same
+		// label that appears in the workflow's swimlane / task list.
+		const agentName = [...this.flowState.agents.values()].find((a) => a.taskId === childTaskId)?.name
+
 		// Emit followup ask as the SAME JSON shape AskFollowupQuestionTool
 		// sends (line 43): { question, suggest: [{ answer, mode }] }.
 		// ChatRow.tsx:528 parses followup asks with safeJsonParse<FollowUpData>,
 		// so a plain string would render degraded and lose suggestion buttons.
+		const asker = agentName ? `Agent \`${agentName}\`` : "Agent"
 		const followUpJson = {
-			question: `Agent asked:\n> ${pendingQuestion.question}\n\nYour answer:`,
+			question: `${asker} is asking:\n> ${pendingQuestion.question}\n\nYour answer:`,
 			suggest: pendingQuestion.suggestions.map((s) => ({ answer: s.answer, mode: s.mode })),
 		}
 
@@ -1385,8 +1430,11 @@ export class WorkflowTask extends Task {
 			const instr = program[state.opIndex]
 			if (!instr || instr.kind !== "stake") continue
 
-			// Per-stake retry budget: an explicit `retries(N)` overrides the default.
-			const maxRetries = instr.op.retries ?? MAX_RETRIES
+			// Per-stake retry budget. Precedence: an explicit per-stake
+			// `retries(N)` wins; otherwise the staking agent's declared
+			// `retry:` meta sets its default; otherwise the global MAX_RETRIES.
+			const agentDefaultRetries = getAgentDecls(this.flowDecl).find((a) => a.name === name)?.meta?.retry
+			const maxRetries = instr.op.retries ?? agentDefaultRetries ?? MAX_RETRIES
 
 			try {
 				// Freshness guard: only consume an agent's result once it has actually
@@ -1613,7 +1661,11 @@ export class WorkflowTask extends Task {
 		if (!instr || instr.kind !== "escalate") return
 
 		this.flowState.status = "escalated"
-		const reason = instr.op.reason || `Agent '${agentName}' needs your input.`
+		// Resolve `${…}` placeholders in the reason against flow params + the
+		// agent's bindings (e.g. ${design_dir}/${design_filename}).
+		const reason = instr.op.reason
+			? interpolatePure(instr.op.reason, state, this.flowState)
+			: `Agent '${agentName}' needs your input.`
 		const humanRef = instr.op.target || "Human"
 		workflowLog.info(
 			`[WorkflowTask#${this.taskId}] Escalation from '${agentName}', awaiting human input: ${reason}`,

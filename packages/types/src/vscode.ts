@@ -35,6 +35,7 @@ export const commandIds = [
 	"marketplaceButtonClicked",
 	"popoutButtonClicked",
 	"settingsButtonClicked",
+	"aboutButtonClicked",
 
 	"openInNewTab",
 
@@ -48,12 +49,12 @@ export const commandIds = [
 	"focusPanel",
 	"toggleAutoApprove",
 
-	// Assistant Agent
-	"assistantAgent.start",
-	"assistantAgent.stop",
-	"assistantAgent.clearContext",
-	"assistantAgent.showChat",
-	"assistantAgent.openSettings",
+	// Live Memory
+	"liveMemory.start",
+	"liveMemory.stop",
+	"liveMemory.clearContext",
+	"liveMemory.showChat",
+	"liveMemory.openSettings",
 
 	// Git Index
 	"startGitIndexing",

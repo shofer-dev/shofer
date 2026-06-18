@@ -56,7 +56,7 @@ describe("mode-validator", () => {
 						slug: "custom-mode",
 						name: "Custom Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "write"] as const,
+						tools: ["read", "write"] as const,
 					},
 				]
 				// Should allow tools from read and edit groups
@@ -72,7 +72,7 @@ describe("mode-validator", () => {
 						slug: codeMode,
 						name: "Custom Code Mode",
 						roleDefinition: "Custom role",
-						groups: ["read"] as const,
+						tools: ["read"] as const,
 					},
 				]
 				// Should allow tools from read group
@@ -87,7 +87,7 @@ describe("mode-validator", () => {
 						slug: "custom-mode",
 						name: "Custom Mode",
 						roleDefinition: "Custom role",
-						groups: ["write"] as const,
+						tools: ["write"] as const,
 					},
 				]
 				const requirements = { apply_diff: false }
@@ -105,7 +105,7 @@ describe("mode-validator", () => {
 						slug: "tools-only-mode",
 						name: "Tools Only Mode",
 						roleDefinition: "Custom role",
-						groups: [],
+						tools: [],
 						tools_allowed: ["read_file", "grep_search"],
 					},
 				]
@@ -132,13 +132,13 @@ describe("mode-validator", () => {
 				expect(isToolAllowedForMode("grep_search", "tools-alone-mode", customModes)).toBe(false)
 			})
 
-			it("allows tools when both groups and tools_allowed are present (OR semantics)", () => {
+			it("allows tools when both tools and tools_allowed are present (OR semantics)", () => {
 				const customModes: ModeConfig[] = [
 					{
 						slug: "or-mode",
 						name: "OR Mode",
 						roleDefinition: "Custom role",
-						groups: ["read"],
+						tools: ["read"],
 						tools_allowed: ["execute_command", "read_command_output"],
 					} as ModeConfig,
 				]
@@ -173,11 +173,11 @@ describe("mode-validator", () => {
 						slug: "deny-mode",
 						name: "Deny Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "execute"],
+						tools: ["read", "execute"],
 						tools_denied: ["execute_command", "write_to_file"],
 					} as ModeConfig,
 				]
-				// Tools in groups should be allowed
+				// Tools in tools should be allowed
 				expect(isToolAllowedForMode("read_file", "deny-mode", customModes)).toBe(true)
 				expect(isToolAllowedForMode("grep_search", "deny-mode", customModes)).toBe(true)
 				// Denied tools should be blocked even if group allows them
@@ -216,7 +216,7 @@ describe("mode-validator", () => {
 						slug: "no-mcp-mode",
 						name: "No MCP Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "write"] as const,
+						tools: ["read", "write"] as const,
 					},
 				]
 				// Custom mode without mcp group should not allow dynamic MCP tools
@@ -230,7 +230,7 @@ describe("mode-validator", () => {
 						slug: "custom-mcp-mode",
 						name: "Custom MCP Mode",
 						roleDefinition: "Custom role",
-						groups: ["read", "mcp"] as const,
+						tools: ["read", "mcp"] as const,
 					},
 				]
 				expect(isToolAllowedForMode("mcp_context7_resolve-library-id", "custom-mcp-mode", customModes)).toBe(

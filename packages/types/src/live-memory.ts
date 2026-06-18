@@ -5,7 +5,7 @@ import type { ProviderSettings } from "./provider-settings.js"
 // ─── Agent State ────────────────────────────────────────────────────────────
 
 /**
- * AssistantAgentState — lifecycle states for the assistant agent.
+ * LiveMemoryState — lifecycle states for the live memory agent.
  *
  *   Standby      – Agent is configured but not started
  *   Initializing – Loading config, creating LLM provider, restoring conversation
@@ -14,9 +14,9 @@ import type { ProviderSettings } from "./provider-settings.js"
  *   Error        – Configuration or connection issue
  *   Stopping     – Graceful shutdown in progress
  */
-export const assistantAgentStates = ["Standby", "Initializing", "Ready", "Busy", "Error", "Stopping"] as const
-export const assistantAgentStateSchema = z.enum(assistantAgentStates)
-export type AssistantAgentState = z.infer<typeof assistantAgentStateSchema>
+export const liveMemoryStates = ["Standby", "Initializing", "Ready", "Busy", "Error", "Stopping"] as const
+export const liveMemoryStateSchema = z.enum(liveMemoryStates)
+export type LiveMemoryState = z.infer<typeof liveMemoryStateSchema>
 
 // ─── Conversation Messages ──────────────────────────────────────────────────
 
@@ -76,17 +76,17 @@ export type FileContextEntry = z.infer<typeof fileContextEntrySchema>
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 /**
- * AssistantAgentConfig — runtime configuration resolved from settings.
+ * LiveMemoryConfig — runtime configuration resolved from settings.
  *
  *   `apiConfigId`/`apiConfigName` identify the API Configuration profile
  *   (managed under Settings → Providers) that supplied the credentials.
  *   `providerSettings` is the resolved profile, fed verbatim into
- *   `buildApiHandler` — the assistant agent does NOT carry its own
+ *   `buildApiHandler` — the live memory agent does NOT carry its own
  *   per-provider keys or model ids.
- *   `maxContextTokens` may be overridden in Settings → Assistant Agent;
+ *   `maxContextTokens` may be overridden in Settings → Live Memory;
  *   otherwise it is taken from the model info reported by the handler.
  */
-export interface AssistantAgentConfig {
+export interface LiveMemoryConfig {
 	enabled: boolean
 	apiConfigId: string
 	apiConfigName: string
@@ -96,7 +96,7 @@ export interface AssistantAgentConfig {
 	 * How `maxContextTokens` was resolved. Surfaced in the popover so a user
 	 * can tell at a glance whether the displayed value comes from the linked
 	 * model's reported `info.contextWindow` or from an explicit override under
-	 * Settings → Assistant Agent. `"unresolved"` is reserved for partial
+	 * Settings → Live Memory. `"unresolved"` is reserved for partial
 	 * configs (e.g. no API Configuration linked yet) where the agent will be
 	 * in Error/Standby state and the value is just a placeholder.
 	 */
@@ -106,27 +106,27 @@ export interface AssistantAgentConfig {
 
 // ─── Cost Tracking ──────────────────────────────────────────────────────────
 
-export const assistantAgentCostTrackingSchema = z.object({
+export const liveMemoryCostTrackingSchema = z.object({
 	totalInputTokens: z.number(),
 	totalOutputTokens: z.number(),
 	totalTokensTruncated: z.number(),
 	estimatedCostUSD: z.number(),
 	lastUpdated: z.number(), // Unix ms
 })
-export type AssistantAgentCostTracking = z.infer<typeof assistantAgentCostTrackingSchema>
+export type LiveMemoryCostTracking = z.infer<typeof liveMemoryCostTrackingSchema>
 
 // ─── Conversation Store ─────────────────────────────────────────────────────
 
-export const assistantAgentConversationDataSchema = z.object({
+export const liveMemoryConversationDataSchema = z.object({
 	version: z.literal(2),
 	workspacePath: z.string(),
 	createdAt: z.number(),
 	updatedAt: z.number(),
 	messages: z.array(agentMessageSchema),
 	fileContexts: z.array(fileContextEntrySchema),
-	costTracking: assistantAgentCostTrackingSchema,
+	costTracking: liveMemoryCostTrackingSchema,
 })
-export type AssistantAgentConversationData = z.infer<typeof assistantAgentConversationDataSchema>
+export type LiveMemoryConversationData = z.infer<typeof liveMemoryConversationDataSchema>
 
 // ─── Question Result ────────────────────────────────────────────────────────
 
@@ -171,19 +171,19 @@ export const MAX_QUESTION_QUEUE_SIZE = 50
 export const QUESTION_TIMEOUT_MS = 300_000
 
 /**
- * Default soft timeout (seconds) recommended to the assistant agent for how
+ * Default soft timeout (seconds) recommended to the live memory for how
  * long it should spend answering a question. This is a hint embedded in
  * the prompt, NOT a hard cancellation — see {@link QUESTION_TIMEOUT_MS}
  * for the hard limit.
  */
-export const DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC = 60
+export const DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC = 60
 
 /**
- * Default soft cap (characters) recommended to the assistant agent for its
+ * Default soft cap (characters) recommended to the live memory for its
  * final answer length. This is a hint embedded in the prompt, NOT a
  * post-hoc truncation of the response.
  */
-export const DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH = 2000
+export const DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH = 2000
 
 /** Debounce window for file change notifications (ms). */
 export const FILE_CHANGE_DEBOUNCE_MS = 500
@@ -206,11 +206,11 @@ export const CONVERSATION_STORE_VERSION = 2
 // ─── System Prompt ──────────────────────────────────────────────────────────
 
 /**
- * Fixed system prompt for the assistant agent. Not user-configurable.
+ * Fixed system prompt for the live memory. Not user-configurable.
  * The {directoryTree} placeholder is replaced with the workspace directory
  * tree snapshot on agent startup and after Clear Context.
  */
-export const ASSISTANT_AGENT_SYSTEM_PROMPT = `You are the Shofer Assistant Agent — a persistent, read-only codebase Q&A assistant.
+export const LIVE_MEMORY_SYSTEM_PROMPT = `You are the Shofer Live Memory — a persistent, read-only codebase Q&A assistant.
 
 Your purpose is to maintain long-term knowledge about the codebase and answer questions from other Shofer agents. You run on a separate, cost-optimized model with a large context window.
 

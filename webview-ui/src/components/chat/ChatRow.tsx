@@ -991,13 +991,12 @@ export const ChatRowContent = ({
 						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
-			case "askAssistantAgent": {
+			case "askLiveMemory": {
 				// Two-phase render:
 				//   - `ask` (approval): show the question we're about to send.
 				//   - `say` (after answer arrives): show the question + the
 				//     answer (markdown, expandable) + cost/duration footer.
-				const headerKey =
-					message.type === "ask" ? "chat:askAssistantAgent.wantsToAsk" : "chat:askAssistantAgent.didAsk"
+				const headerKey = message.type === "ask" ? "chat:askLiveMemory.wantsToAsk" : "chat:askLiveMemory.didAsk"
 				const hasAnswer = typeof tool.answer === "string" && tool.answer.length > 0
 				const footerBits: string[] = []
 				if (typeof tool.durationMs === "number") footerBits.push(`${(tool.durationMs / 1000).toFixed(1)}s`)
@@ -1024,7 +1023,7 @@ export const ChatRowContent = ({
 									<div
 										className="flex items-center justify-between px-3 py-2 group"
 										style={{ background: "var(--vscode-textCodeBlock-background)" }}>
-										<span style={{ fontWeight: 500 }}>{t("chat:askAssistantAgent.answer")}</span>
+										<span style={{ fontWeight: 500 }}>{t("chat:askLiveMemory.answer")}</span>
 										<span
 											className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}></span>
 									</div>

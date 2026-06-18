@@ -9,7 +9,7 @@ describe("CustomModesSettings", () => {
 		slug: "123e4567-e89b-12d3-a456-426614174000",
 		name: "Test Mode",
 		roleDefinition: "Test role definition",
-		groups: ["read"] as const,
+		tools: ["read"] as const,
 	} satisfies ModeConfig
 
 	describe("schema validation", () => {
@@ -115,7 +115,7 @@ describe("CustomModesSettings", () => {
 				customModes: [
 					{
 						...validMode,
-						groups: ["invalid_group"] as any,
+						tools: ["invalid_group"] as any,
 					},
 				],
 			}
@@ -125,12 +125,12 @@ describe("CustomModesSettings", () => {
 			}).toThrow(ZodError)
 		})
 
-		it("handles multiple groups", () => {
+		it("handles multiple tool groups", () => {
 			const validSettings = {
 				customModes: [
 					{
 						...validMode,
-						groups: ["read", "write"] as const,
+						tools: ["read", "write"] as const,
 					},
 				],
 			}
@@ -151,7 +151,7 @@ describe("CustomModesSettings", () => {
 			expect(settings.customModes[0].slug).toBeDefined()
 			expect(settings.customModes[0].name).toBeDefined()
 			expect(settings.customModes[0].roleDefinition).toBeDefined()
-			expect(settings.customModes[0].groups).toBeDefined()
+			expect(settings.customModes[0].tools).toBeDefined()
 		})
 
 		it("inferred type allows optional fields", () => {
@@ -177,32 +177,32 @@ describe("CustomModesSettings", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test role",
-						groups: ["read", "write"],
+						tools: ["read", "write"],
 					},
 				],
 			})
-			expect(result.customModes[0].groups).toEqual(["read", "write"])
+			expect(result.customModes[0].tools).toEqual(["read", "write"])
 		})
 
-		it("should accept multiple modes with browser and execute groups", () => {
+		it("should accept multiple modes with browser and execute tools", () => {
 			const result = customModesSettingsSchema.parse({
 				customModes: [
 					{
 						slug: "mode-a",
 						name: "Mode A",
 						roleDefinition: "Role A",
-						groups: ["read", "browser"],
+						tools: ["read", "browser"],
 					},
 					{
 						slug: "mode-b",
 						name: "Mode B",
 						roleDefinition: "Role B",
-						groups: ["write", "execute"],
+						tools: ["write", "execute"],
 					},
 				],
 			})
-			expect(result.customModes[0].groups).toEqual(["read", "browser"])
-			expect(result.customModes[1].groups).toEqual(["write", "execute"])
+			expect(result.customModes[0].tools).toEqual(["read", "browser"])
+			expect(result.customModes[1].tools).toEqual(["write", "execute"])
 		})
 	})
 })

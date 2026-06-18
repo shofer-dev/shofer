@@ -410,6 +410,27 @@ describe("SlashCommandsSettings", () => {
 		expect(addButtons.length).toBe(1)
 	})
 
+	it("filters out skill entries that get merged into commands by getDiscoveredCommands()", () => {
+		// Simulate the actual backend behavior: skills are merged into the command
+		// list by getDiscoveredCommands() in webviewMessageHandler.ts. Their filePath
+		// points into a .shofer/skills/ subdirectory.
+		const commandsWithSkills: Command[] = [
+			{ name: "global-command", source: "global", filePath: "/path/to/global.md" },
+			{ name: "project-command", source: "project", filePath: "/path/to/project.md" },
+			// Skill masquerading as a command — has /skills/ in its filePath
+			{ name: "eauction-search", source: "project", filePath: "/.shofer/skills/eauction-search/SKILL.md" },
+		]
+
+		renderSlashCommandsSettings(commandsWithSkills)
+
+		// Real commands should still appear
+		expect(screen.getByText("global-command")).toBeInTheDocument()
+		expect(screen.getByText("project-command")).toBeInTheDocument()
+
+		// Skill entry should be filtered out
+		expect(screen.queryByText("eauction-search")).not.toBeInTheDocument()
+	})
+
 	it("renders footer text", () => {
 		renderSlashCommandsSettings()
 

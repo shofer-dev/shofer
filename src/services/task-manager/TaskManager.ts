@@ -417,6 +417,20 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 	}
 
+	/**
+	 * Count of non-terminal, non-idle managed tasks (running or waiting).
+	 * Used as the live concurrency count for the parallel-task limit.
+	 */
+	countActiveTasks(): number {
+		let count = 0
+		for (const m of this.managedTasks.values()) {
+			if (TaskManager.isActive(m.state.lifecycle)) {
+				count++
+			}
+		}
+		return count
+	}
+
 	getActiveManagedTasks(): ManagedTask[] {
 		return this.getManagedTasks().filter((s) => this.activeTasks.has(s.id))
 	}

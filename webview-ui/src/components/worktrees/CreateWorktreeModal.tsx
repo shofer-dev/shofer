@@ -50,6 +50,12 @@ export const CreateWorktreeModal = ({
 	const [branches, setBranches] = useState<BranchInfo | null>(null)
 	const [includeStatus, setIncludeStatus] = useState<WorktreeIncludeStatus | null>(null)
 
+	// Stable prefix for worktree path derivation: when the user edits the
+	// branch name, we rebuild the path as <prefix>/<branchName> so the
+	// directory basename and branch name stay in lock-step. Captured once
+	// from the defaults response.
+	const [conventionPrefix, setConventionPrefix] = useState<string | null>(null)
+
 	// UI state
 	const [isCreating, setIsCreating] = useState(false)
 	const [error, setError] = useState<string | null>(null)
@@ -79,6 +85,14 @@ export const CreateWorktreeModal = ({
 					setDefaults(data)
 					setBranchName(data.suggestedBranch)
 					setWorktreePath(data.suggestedPath)
+					// Capture the parent directory of the suggested path as the
+					// stable convention prefix (<workspace>/.shofer/worktrees/)
+					// so the path can be rebuilt when the user edits the branch.
+					const sep = data.suggestedPath.includes("\\") ? "\\" : "/"
+					const lastSep = data.suggestedPath.lastIndexOf(sep)
+					if (lastSep !== -1) {
+						setConventionPrefix(data.suggestedPath.substring(0, lastSep))
+					}
 					break
 				}
 				case "branchList": {
@@ -136,6 +150,18 @@ export const CreateWorktreeModal = ({
 		return () => window.removeEventListener("message", handleMessage)
 	}, [])
 
+	// Sync worktree path to branch name: whenever the user types a new branch
+	// name, update the worktree directory basename to match. This ensures the
+	// directory name and branch name stay in lock-step so there is one name to
+	// track across the branch, filesystem, and UI badge.
+	useEffect(() => {
+		if (!conventionPrefix || !branchName.trim()) return
+		const newPath = `${conventionPrefix}/${branchName}`
+		if (newPath !== worktreePath) {
+			setWorktreePath(newPath)
+		}
+	}, [branchName, conventionPrefix, worktreePath])
+
 	const handleCreate = useCallback(() => {
 		setError(null)
 		setIsCreating(true)
@@ -174,7 +200,11 @@ export const CreateWorktreeModal = ({
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
-			<DialogContent className="max-w-lg">
+			{/* Sit above the TaskSelector slide-in panel (z-50): this modal opens from
+			    the worktree `+` while that panel may be open, so overlay + content are
+			    bumped to z-[60]. The internal SearchableSelect is absolute-positioned
+			    inside the content, so its dropdown rides along correctly. */}
+			<DialogContent className="max-w-lg z-[60]" overlayClassName="z-[60]">
 				<DialogHeader>
 					<DialogTitle>{t("worktrees:createWorktree")}</DialogTitle>
 				</DialogHeader>

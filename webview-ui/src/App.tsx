@@ -352,96 +352,108 @@ const App = () => {
 				/>
 			) : (
 				<>
-			{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
-			{tab === "launcher" && (
-				<LauncherView modes={launcherModes} initialStage={launcherStage} onClose={() => switchTab("chat")} />
-			)}
-			{tab === "settings" && (
-				<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
-			)}
-			<ChatView
-				ref={chatViewRef}
-				isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
-				showAnnouncement={showAnnouncement}
-				hideAnnouncement={() => setShowAnnouncement(false)}
-			/>
-			{/* WorkflowView mirrors ChatView for WorkflowTasks. Both stay mounted
-			 * and are toggled via isHidden so webview-local state survives task
-			 * switches; visibility is mutually exclusive based on whether the
-			 * focused task is a workflow. */}
-			<WorkflowView
-				ref={workflowViewRef}
-				isHidden={tab !== "chat" || !currentTaskItem?.isWorkflow}
-				showAnnouncement={showAnnouncement}
-				hideAnnouncement={() => setShowAnnouncement(false)}
-			/>
-			{deleteMessageDialogState.hasCheckpoint ? (
-				<MemoizedCheckpointRestoreDialog
-					open={deleteMessageDialogState.isOpen}
-					type="delete"
-					hasCheckpoint={deleteMessageDialogState.hasCheckpoint}
-					onOpenChange={(open: boolean) => setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: open }))}
-					onConfirm={(restoreCheckpoint: boolean) => {
-						vscode.postMessage({
-							type: "deleteMessageConfirm",
-							messageTs: deleteMessageDialogState.messageTs,
-							restoreCheckpoint,
-						})
-						setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: false }))
-					}}
-				/>
-			) : (
-				<MemoizedDeleteMessageDialog
-					open={deleteMessageDialogState.isOpen}
-					onOpenChange={(open: boolean) => setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: open }))}
-					onConfirm={() => {
-						vscode.postMessage({
-							type: "deleteMessageConfirm",
-							messageTs: deleteMessageDialogState.messageTs,
-						})
-						setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: false }))
-					}}
-				/>
-			)}
-			{editMessageDialogState.hasCheckpoint ? (
-				<MemoizedCheckpointRestoreDialog
-					open={editMessageDialogState.isOpen}
-					type="edit"
-					hasCheckpoint={editMessageDialogState.hasCheckpoint}
-					onOpenChange={(open: boolean) => setEditMessageDialogState((prev) => ({ ...prev, isOpen: open }))}
-					onConfirm={(restoreCheckpoint: boolean) => {
-						vscode.postMessage({
-							type: "editMessageConfirm",
-							messageTs: editMessageDialogState.messageTs,
-							text: editMessageDialogState.text,
-							restoreCheckpoint,
-						})
-						setEditMessageDialogState((prev) => ({ ...prev, isOpen: false }))
-					}}
-				/>
-			) : (
-				<MemoizedEditMessageDialog
-					open={editMessageDialogState.isOpen}
-					onOpenChange={(open: boolean) => setEditMessageDialogState((prev) => ({ ...prev, isOpen: open }))}
-					onConfirm={() => {
-						vscode.postMessage({
-							type: "editMessageConfirm",
-							messageTs: editMessageDialogState.messageTs,
-							text: editMessageDialogState.text,
-							images: editMessageDialogState.images,
-						})
-						setEditMessageDialogState((prev) => ({ ...prev, isOpen: false }))
-					}}
-				/>
-			)}
-			{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
-			 * WorktreeIndicator, AssistantAgentStatusBadge, …). Lives at the App root —
-			 * always visible — so popovers never mount into a `display:none` view.
-			 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
-			 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
-			 * which is why workflow-mode dropdowns rendered behind/under the view. */}
-			<div id="shofer-portal" />
-		</>
+					{tab === "history" && <HistoryView onDone={() => switchTab("chat")} />}
+					{tab === "launcher" && (
+						<LauncherView
+							modes={launcherModes}
+							initialStage={launcherStage}
+							onClose={() => switchTab("chat")}
+						/>
+					)}
+					{tab === "settings" && (
+						<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
+					)}
+					<ChatView
+						ref={chatViewRef}
+						isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
+						showAnnouncement={showAnnouncement}
+						hideAnnouncement={() => setShowAnnouncement(false)}
+					/>
+					{/* WorkflowView mirrors ChatView for WorkflowTasks. Both stay mounted
+					 * and are toggled via isHidden so webview-local state survives task
+					 * switches; visibility is mutually exclusive based on whether the
+					 * focused task is a workflow. */}
+					<WorkflowView
+						ref={workflowViewRef}
+						isHidden={tab !== "chat" || !currentTaskItem?.isWorkflow}
+						showAnnouncement={showAnnouncement}
+						hideAnnouncement={() => setShowAnnouncement(false)}
+					/>
+					{deleteMessageDialogState.hasCheckpoint ? (
+						<MemoizedCheckpointRestoreDialog
+							open={deleteMessageDialogState.isOpen}
+							type="delete"
+							hasCheckpoint={deleteMessageDialogState.hasCheckpoint}
+							onOpenChange={(open: boolean) =>
+								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: open }))
+							}
+							onConfirm={(restoreCheckpoint: boolean) => {
+								vscode.postMessage({
+									type: "deleteMessageConfirm",
+									messageTs: deleteMessageDialogState.messageTs,
+									restoreCheckpoint,
+								})
+								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: false }))
+							}}
+						/>
+					) : (
+						<MemoizedDeleteMessageDialog
+							open={deleteMessageDialogState.isOpen}
+							onOpenChange={(open: boolean) =>
+								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: open }))
+							}
+							onConfirm={() => {
+								vscode.postMessage({
+									type: "deleteMessageConfirm",
+									messageTs: deleteMessageDialogState.messageTs,
+								})
+								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: false }))
+							}}
+						/>
+					)}
+					{editMessageDialogState.hasCheckpoint ? (
+						<MemoizedCheckpointRestoreDialog
+							open={editMessageDialogState.isOpen}
+							type="edit"
+							hasCheckpoint={editMessageDialogState.hasCheckpoint}
+							onOpenChange={(open: boolean) =>
+								setEditMessageDialogState((prev) => ({ ...prev, isOpen: open }))
+							}
+							onConfirm={(restoreCheckpoint: boolean) => {
+								vscode.postMessage({
+									type: "editMessageConfirm",
+									messageTs: editMessageDialogState.messageTs,
+									text: editMessageDialogState.text,
+									restoreCheckpoint,
+								})
+								setEditMessageDialogState((prev) => ({ ...prev, isOpen: false }))
+							}}
+						/>
+					) : (
+						<MemoizedEditMessageDialog
+							open={editMessageDialogState.isOpen}
+							onOpenChange={(open: boolean) =>
+								setEditMessageDialogState((prev) => ({ ...prev, isOpen: open }))
+							}
+							onConfirm={() => {
+								vscode.postMessage({
+									type: "editMessageConfirm",
+									messageTs: editMessageDialogState.messageTs,
+									text: editMessageDialogState.text,
+									images: editMessageDialogState.images,
+								})
+								setEditMessageDialogState((prev) => ({ ...prev, isOpen: false }))
+							}}
+						/>
+					)}
+					{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
+					 * WorktreeIndicator, LiveMemoryStatusBadge, …). Lives at the App root —
+					 * always visible — so popovers never mount into a `display:none` view.
+					 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
+					 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
+					 * which is why workflow-mode dropdowns rendered behind/under the view. */}
+					<div id="shofer-portal" />
+				</>
 			)}
 			{/* Overlays mounted regardless of the welcome panel, so the title-bar
 			 * "+" chooser and Tasks drawer pop up over it without dismissing it.

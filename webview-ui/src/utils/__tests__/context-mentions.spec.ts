@@ -464,13 +464,13 @@ describe("getContextMenuOptions", () => {
 				slug: "code",
 				name: "Code",
 				roleDefinition: "You are a coding assistant",
-				groups: ["read" as const, "write" as const],
+				tools: ["read" as const, "write" as const],
 			},
 			{
 				slug: "architect",
 				name: "Architect",
 				roleDefinition: "You are an architecture assistant",
-				groups: ["read" as const],
+				tools: ["read" as const],
 			},
 		]
 

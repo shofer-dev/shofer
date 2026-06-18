@@ -44,7 +44,7 @@ import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { ragSearchTool } from "../tools/RagSearchTool"
 import { gitSearchTool } from "../tools/GitSearchTool"
 import { lspSearchTool } from "../tools/LspSearchTool"
-import { askAssistantAgentTool } from "../tools/AskAssistantAgentTool"
+import { askLiveMemoryTool } from "../tools/AskLiveMemoryTool"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool"
@@ -499,7 +499,7 @@ export async function presentAssistantMessage(shofer: Task) {
 							? `[${block.name} for '${block.params.query}' (${range})]`
 							: `[${block.name} for '${block.params.query}']`
 					}
-					case "ask_assistant_agent":
+					case "ask_live_memory":
 						return `[${block.name} for '${block.params.question}']`
 					case "lsp_search":
 						return `[${block.name} for '${block.params.query}']`
@@ -744,7 +744,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					"switch_mode",
 					"skills",
 					"run_slash_command",
-					"ask_assistant_agent",
+					"ask_live_memory",
 					"new_task",
 					"check_task_status",
 					"wait_for_task",
@@ -1073,8 +1073,8 @@ export async function presentAssistantMessage(shofer: Task) {
 						pushToolResult,
 					})
 					break
-				case "ask_assistant_agent":
-					await askAssistantAgentTool.handle(shofer, block as ToolUse<"ask_assistant_agent">, {
+				case "ask_live_memory":
+					await askLiveMemoryTool.handle(shofer, block as ToolUse<"ask_live_memory">, {
 						askApproval,
 						handleError,
 						pushToolResult,

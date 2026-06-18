@@ -124,7 +124,7 @@ vi.mock("@shofer/cloud", () => ({
 // Built-in mode `code` plus a custom mode `reviewer` are returned via getModeBySlug.
 // Each test replaces this default with a more specific mock.
 vi.mock("../../../shared/modes", () => {
-	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", groups: ["read", "write"] }]
+	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", tools: ["read", "write"] }]
 	return {
 		modes: builtins,
 		getAllModes: vi.fn(() => [...builtins]),
@@ -289,7 +289,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "reviewer",
 				name: "Reviewer",
 				roleDefinition: "review",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 				provider: "yaml-profile",
 			})
@@ -309,7 +309,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 					slug: "reviewer",
 					name: "Reviewer",
 					roleDefinition: "review",
-					groups: ["read"],
+					tools: ["read"],
 					source: "global",
 					provider: "yaml-profile",
 				},
@@ -332,7 +332,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "reviewer",
 				name: "Reviewer",
 				roleDefinition: "review",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 			})
 
@@ -364,7 +364,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "code",
 				name: "Code",
 				roleDefinition: "code",
-				groups: ["read", "write"],
+				tools: ["read", "write"],
 			})
 			vi.spyOn(provider.customModesManager, "getCustomModes").mockResolvedValue([])
 			const updateSpy = vi.spyOn(provider.customModesManager, "updateCustomMode").mockResolvedValue(undefined)
@@ -380,7 +380,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "reviewer",
 				name: "Reviewer",
 				roleDefinition: "review",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 				provider: "same-profile",
 			})
@@ -400,7 +400,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "reviewer",
 				name: "Reviewer",
 				roleDefinition: "review",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 				provider: "old-profile",
 			})
@@ -424,7 +424,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 				slug: "reviewer",
 				name: "Reviewer",
 				roleDefinition: "review",
-				groups: ["read"],
+				tools: ["read"],
 				source: "global",
 				provider: "old-profile",
 			})

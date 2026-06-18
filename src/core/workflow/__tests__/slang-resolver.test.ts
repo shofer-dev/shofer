@@ -304,6 +304,28 @@ describe("analyzeFlow — warnings", () => {
 		expect(diags).toHaveLength(0)
 	})
 
+	it("unknown tools: group → warning", () => {
+		const f = flow(
+			"bad-tools",
+			[agent("A", [commitOp()], { tools: ["read", "bogus_group"] })],
+			[converge(), budget([{ kind: "rounds", value: 10 }])],
+		)
+		const diags = analyzeFlow(f)
+		expect(diags.some((d) => d.level === "warning" && d.message.includes('unknown tool group "bogus_group"'))).toBe(
+			true,
+		)
+	})
+
+	it("valid tools: groups → no tool-group warning", () => {
+		const f = flow(
+			"ok-tools",
+			[agent("A", [commitOp()], { tools: ["read", "write", "questions"] })],
+			[converge(), budget([{ kind: "rounds", value: 10 }])],
+		)
+		const diags = analyzeFlow(f)
+		expect(diags.some((d) => d.message.includes("unknown tool group"))).toBe(false)
+	})
+
 	it("orphan agent: produces output no one awaits → warning", () => {
 		const f = flow(
 			"orphan",

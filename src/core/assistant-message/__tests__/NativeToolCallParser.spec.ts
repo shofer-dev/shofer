@@ -73,6 +73,71 @@ describe("NativeToolCallParser", () => {
 				}
 			})
 
+			it("should parse read_file with snake_case file_path alias (Claude-Code-style)", () => {
+				const toolCall = {
+					id: "toolu_file_path_alias",
+					name: "read_file" as const,
+					arguments: JSON.stringify({
+						file_path: "/abs/src/components/WorktreesView.tsx",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as { path: string }
+					expect(nativeArgs.path).toBe("/abs/src/components/WorktreesView.tsx")
+				}
+			})
+
+			it("does not report a missing path when file_path is supplied", () => {
+				const toolCall = {
+					id: "toolu_file_path_noerror",
+					name: "read_file" as const,
+					arguments: JSON.stringify({ file_path: "src/a.ts" }),
+				}
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+				// An error result would be an assistant "say" with a missing-field message;
+				// a successful parse yields a tool_use with the aliased path.
+				expect(result?.type).toBe("tool_use")
+			})
+
+			it("should parse list_files with target_directory alias (Cursor-style)", () => {
+				const toolCall = {
+					id: "toolu_target_dir",
+					name: "list_files" as const,
+					arguments: JSON.stringify({
+						target_directory: "src/components",
+						recursive: false,
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as { path: string }
+					expect(nativeArgs.path).toBe("src/components")
+				}
+			})
+
+			it("should prefer path over file_path when both are present", () => {
+				const toolCall = {
+					id: "toolu_both_snake",
+					name: "read_file" as const,
+					arguments: JSON.stringify({ file_path: "src/wrong.ts", path: "src/right.ts" }),
+				}
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as { path: string }
+					expect(nativeArgs.path).toBe("src/right.ts")
+				}
+			})
+
 			it("should parse slice-mode params", () => {
 				const toolCall = {
 					id: "toolu_123",

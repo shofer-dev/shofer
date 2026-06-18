@@ -7,7 +7,7 @@
 -- does not explicitly route codebase-discovery stakes.
 -- ============================================================================
 
-flow "implement-feature" (feature: "string") {
+flow "implement-feature" (feature: "string", design_path: "string") {
   title: "Implement a Feature"
   description: "Multi-agent feature implementation pipeline.\nThe Architect orchestrates exploration, design approval,\nimplementation, and review with two specialist agents (Developer + Reviewer)."
   icon: "wrench"
@@ -16,28 +16,51 @@ flow "implement-feature" (feature: "string") {
     description: "The feature to implement (e.g. `oauth-login`, `dark-mode`)."
   }
 
+  param design_path {
+    description: "Workspace-relative path to the design document (every agent creates/reads/writes exactly this file)."
+    default: "plans/feature-design.md"
+  }
+
   agent Architect {
     mode: "architect"
-    role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents."
+    -- Coordinator tool scope. `read` (explore for the design) + `write` (author
+    -- the .md design — architect mode already blocks non-.md writes) + `questions`
+    -- (clarify). Deliberately NO `mode` (cannot switch_mode into code) and NO
+    -- `subtasks` (cannot spawn its own code subtask) — the two escape hatches the
+    -- Architect used to try to implement itself. The workflow spawns the
+    -- Developer/Reviewer; the Architect never needs to. Always-available tools
+    -- (attempt_completion, send_message_to_task, …) are retained regardless.
+    tools: [read, write, questions]
+    role: "Senior software architect. You decompose feature requests into designs, coordinate exploration, gate-keep on user approval, and drive implementation through to completion. You do NOT write code yourself — you delegate to specialist agents. The design document for this run lives at EXACTLY ${design_path} — always create, reference, and route work against that exact path."
 
     stake create_design(
       feature: feature,
-      instructions: "Create the design document and write it to EXACTLY this path: plans/feature-design.md (create the plans/ directory if it does not exist). Use that exact filename — later steps and the user are told the design lives there, so do NOT name it after the feature or place it elsewhere."
+      instructions: "Create the design document and write it to EXACTLY this path: ${design_path} (create any parent directories if they do not exist). Use that exact path — every later step and the user are told the design lives there, so do NOT name it after the feature or place it elsewhere."
     )
 
     escalate @Human reason:
-      "Please review the design document I've created at plans/feature-design.md. Reply with 'ACK' to approve and proceed to implementation, or provide feedback for revision."
+      "Please review the design document I've created at ${design_path}." form: {
+      decision: "string" { widget: "radio", options: ["I approve", "Needs work"] }
+      feedback: "string" { description: "What needs to change? (optional)" }
+    }
 
     await response <- @Human
 
+    -- NOTE: a stake declared here is executed by the ARCHITECT; `-> @Developer`
+    -- only routes the *result* to the Developer's mailbox (consumed by its
+    -- `await design <- @Architect`). It does NOT make the Developer run this
+    -- stake. So these instructions are addressed to the Architect as a HAND-OFF
+    -- — never "implement…"/"review…", which would make the Architect try to do
+    -- the work itself (and stall in architect mode). The Developer/Reviewer do
+    -- the actual work via their own stakes below.
     stake implement(
       design: feature,
-      instructions: "Implement the design document at plans/feature-design.md. After each significant change, signal READY_FOR_REVIEW. When ALL work is complete, signal DONE. Do NOT commit any changes to git — you will be instructed when to commit. Ask clarification questions if you are not sure about something."
+      instructions: "Hand the approved design off to the Developer so it can begin implementing. You are the architect: you do NOT write code, do NOT switch modes, and will NOT be switched to code mode — the Developer implements. Produce a concise hand-off as your result: the design lives at EXACTLY ${design_path}; summarise the approved scope and any constraints the Developer must honour. The Developer will read ${design_path}, implement it slice by slice, and report back for review."
     ) -> @Developer
 
     stake prepare_to_review(
       design: feature,
-      instructions: "You will review the Developer's implementation against the design at plans/feature-design.md. Wait for review requests and evaluate each one."
+      instructions: "Brief the Reviewer so it is ready to evaluate the Developer's work. You are the architect: do NOT review or edit code yourself. Produce a short standing brief as your result — the design is at EXACTLY ${design_path}; the Reviewer waits for per-round review requests and evaluates each one against it."
     ) -> @Reviewer
 
     let implementation_done = false
@@ -76,7 +99,7 @@ flow "implement-feature" (feature: "string") {
     -- Final review gate before committing
     stake final_review(
       design: feature,
-      instructions: "Request a FINAL comprehensive review of the complete implementation against the design at plans/feature-design.md. This is still a review request, NOT the stop signal — set complete=false."
+      instructions: "Request a FINAL comprehensive review of the complete implementation against the design at ${design_path}. This is still a review request, NOT the stop signal — set complete=false."
     ) -> @Reviewer
       output: { complete: "boolean", details: "string" }
 
@@ -92,7 +115,10 @@ flow "implement-feature" (feature: "string") {
       commit
     } otherwise {
       escalate @Human reason:
-        "Final review found issues. Please review and decide how to proceed. Reply ACK to commit anyway, or provide instructions for fixes."
+        "Final review found issues. Please review and decide how to proceed." form: {
+        decision: "string" { widget: "radio", options: ["ACK — commit anyway", "I'll provide fix instructions"] }
+        instructions: "string" { description: "Your fix instructions (optional)" }
+      }
       await human_decision <- @Human
       commit
     }
@@ -100,7 +126,7 @@ flow "implement-feature" (feature: "string") {
 
   agent Developer {
     mode: "code"
-    role: "Feature implementation specialist. You implement the design document by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each significant change, signal READY_FOR_REVIEW so the Reviewer can evaluate. When ALL work is complete, signal DONE."
+    role: "Feature implementation specialist. You implement the design document at EXACTLY ${design_path} (read it from that path; do not look elsewhere) by writing, modifying, and refactoring code. Do NOT commit changes to git — you will be instructed when to commit. After each slice, report progress (done=false) so the Reviewer can evaluate; when ALL work is complete and accepted, set done=true."
 
     await design <- @Architect
 
@@ -128,7 +154,7 @@ flow "implement-feature" (feature: "string") {
 
   agent Reviewer {
     mode: "reviewer"
-    role: "Code reviewer. Evaluate implementations against the design document. Approve work that meets the spec. For issues, provide specific, actionable feedback. You have final authority on whether the implementation is satisfactory."
+    role: "Code reviewer. Evaluate implementations against the design document at EXACTLY ${design_path}. Approve work that meets the spec. For issues, provide specific, actionable feedback. You have final authority on whether the implementation is satisfactory."
 
     await init <- @Architect
 
@@ -141,7 +167,7 @@ flow "implement-feature" (feature: "string") {
       } otherwise {
         stake review_verdict(
           implementation_summary: review_request.details,
-          task: "Evaluate the implementation against the design at plans/feature-design.md. Decide whether it satisfies the design; if not, give specific, actionable feedback. Set approved=true/false."
+          task: "Evaluate the implementation against the design at ${design_path}. Decide whether it satisfies the design; if not, give specific, actionable feedback. Set approved=true/false."
         ) -> @Architect
           output: { approved: "boolean", issues: "string" }
       }
@@ -151,5 +177,5 @@ flow "implement-feature" (feature: "string") {
   }
 
   converge when: @Architect.committed
-  budget: rounds(30), tokens(300000)
+  budget: rounds(30)
 }

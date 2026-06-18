@@ -24,9 +24,14 @@ function getGitSha() {
 // show real release notes captured at build time (no runtime file access in the
 // webview). The latest entry is the first `## <version>` section; we slice up to
 // the next `## ` heading and strip the trailing `---` separator.
+//
+// Read the CANONICAL root CHANGELOG.md — the file developers actually edit and the
+// same one esbuild injects into the vsix. The `src/CHANGELOG.md` copy is only
+// refreshed by `changeset version`, so reading it could bake a STALE entry (the
+// Announcement would show an old release while the shipped CHANGELOG.md is current).
 function getLatestChangelog() {
 	try {
-		const md = fs.readFileSync(path.join(__dirname, "..", "src", "CHANGELOG.md"), "utf8")
+		const md = fs.readFileSync(path.join(__dirname, "..", "CHANGELOG.md"), "utf8")
 		const start = md.indexOf("\n## ")
 		if (start === -1) return ""
 		const rest = md.slice(start + 1)

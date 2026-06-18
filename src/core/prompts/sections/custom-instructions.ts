@@ -206,7 +206,9 @@ function formatDirectoryContent(files: Array<{ filename: string; content: string
 export async function loadRuleFiles(cwd: string, enableSubfolderRules: boolean = false): Promise<string> {
 	const rules: string[] = []
 	// Use recursive discovery only if enableSubfolderRules is true
-	const shoferDirectories = enableSubfolderRules ? await getAllRooDirectoriesForCwd(cwd) : getRooDirectoriesForCwd(cwd)
+	const shoferDirectories = enableSubfolderRules
+		? await getAllRooDirectoriesForCwd(cwd)
+		: getRooDirectoriesForCwd(cwd)
 
 	// Check for .shofer/rules/ directories in order (global, project-local, and optionally subfolders)
 	for (const shoferDir of shoferDirectories) {
@@ -395,11 +397,17 @@ export async function addCustomInstructions(
 	// Get the enableSubfolderRules setting (default: false)
 	const enableSubfolderRules = options.settings?.enableSubfolderRules ?? false
 
-	// Load mode-specific rules if mode is provided
+	// Per-agent `.slang` `context { ... }` overrides for custom-instruction
+	// sections. Default to enabled (true) when absent.
+	const includeModeRules = options.settings?.includeModeRules ?? true
+	const includeUserRules = options.settings?.includeUserRules ?? true
+
+	// Load mode-specific rules if mode is provided AND includeModeRules gate
+	// is not explicitly false.
 	let modeRuleContent = ""
 	let usedRuleFile = ""
 
-	if (mode) {
+	if (includeModeRules !== false && mode) {
 		const modeRules: string[] = []
 		// Use recursive discovery only if enableSubfolderRules is true
 		const shoferDirectories = enableSubfolderRules
@@ -481,10 +489,12 @@ export async function addCustomInstructions(
 		}
 	}
 
-	// Add generic rules
-	const genericRuleContent = await loadRuleFiles(cwd, enableSubfolderRules)
-	if (genericRuleContent && genericRuleContent.trim()) {
-		rules.push(genericRuleContent.trim())
+	// Add generic rules (gated by include_user_rules; default true)
+	if (includeUserRules !== false) {
+		const genericRuleContent = await loadRuleFiles(cwd, enableSubfolderRules)
+		if (genericRuleContent && genericRuleContent.trim()) {
+			rules.push(genericRuleContent.trim())
+		}
 	}
 
 	if (rules.length > 0) {

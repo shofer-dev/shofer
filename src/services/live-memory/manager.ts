@@ -1,14 +1,14 @@
 /**
- * AssistantAgentManager — singleton-per-workspace orchestrator for the
- * Assistant Agent (a persistent, read-only codebase Q&A companion).
+ * LiveMemoryManager — singleton-per-workspace orchestrator for the
+ * Live Memory (a persistent, read-only codebase Q&A companion).
  *
  * Responsibilities (delegated to focused collaborators):
  *   - persistence            → ConversationStore
  *   - request serialization  → QuestionQueue
  *   - context budget         → ContextWindow
- *   - LLM dispatch           → AssistantAgentLlmClient (wraps shared ApiHandler)
- *   - workspace scan         → AssistantAgentDirectoryTree
- *   - external file changes  → AssistantAgentFileWatcher
+ *   - LLM dispatch           → LiveMemoryLlmClient (wraps shared ApiHandler)
+ *   - workspace scan         → LiveMemoryDirectoryTree
+ *   - external file changes  → LiveMemoryFileWatcher
  *
  * The Manager itself is a thin state machine: it owns the lifecycle, the
  * configuration, and the event emitters consumed by the webview. All
@@ -27,46 +27,43 @@ import { createHash, randomUUID } from "crypto"
 import { TelemetryService } from "@shofer/telemetry"
 import {
 	TelemetryEventName,
-	type AssistantAgentState,
-	type AssistantAgentConfig,
+	type LiveMemoryState,
+	type LiveMemoryConfig,
 	type AgentMessage,
 	type AgentMessagePart,
 	type FileContextEntry,
 	type QuestionResult,
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
-	ASSISTANT_AGENT_SYSTEM_PROMPT,
+	LIVE_MEMORY_SYSTEM_PROMPT,
 	QUESTION_TIMEOUT_MS,
-	DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC,
-	DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH,
+	DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC,
+	DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH,
 } from "@shofer/types"
 
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { buildApiHandler } from "../../api"
-import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
-import { AssistantAgentDirectoryTree } from "./directory-tree"
-import { AssistantAgentFileWatcher } from "./file-watcher"
+import { LiveMemoryDirectoryTree } from "./directory-tree"
+import { LiveMemoryFileWatcher } from "./file-watcher"
 import { ConversationStore, type ConversationSnapshot } from "./conversation-store"
 import { QuestionQueue } from "./question-queue"
 import { ContextWindow, estimateTokens } from "./context-window"
-import { AssistantAgentLlmClient } from "./llm-client"
-import { AssistantAgentToolExecutor, ASSISTANT_AGENT_READ_TOOLS } from "./tool-executor"
+import { LiveMemoryLlmClient } from "./llm-client"
+import { LiveMemoryToolExecutor, LIVE_MEMORY_READ_TOOLS } from "./tool-executor"
 import { getNativeTools } from "../../core/prompts/tools/native-tools"
 import type { Anthropic } from "@anthropic-ai/sdk"
 import type OpenAI from "openai"
 
-export class AssistantAgentManager implements vscode.Disposable {
+export class LiveMemoryManager implements vscode.Disposable {
 	// ─── Singleton Implementation ────────────────────────────────────────
 
-	private static instances = new Map<string, AssistantAgentManager>()
+	private static instances = new Map<string, LiveMemoryManager>()
 
-	public static getInstance(
-		context: vscode.ExtensionContext,
-		workspacePath?: string,
-	): AssistantAgentManager | undefined {
+	public static getInstance(context: vscode.ExtensionContext, workspacePath?: string): LiveMemoryManager | undefined {
 		let folder: vscode.WorkspaceFolder | undefined
 
 		if (workspacePath) {
@@ -84,23 +81,23 @@ export class AssistantAgentManager implements vscode.Disposable {
 			workspacePath = folder.uri.fsPath
 		}
 
-		let instance = AssistantAgentManager.instances.get(workspacePath)
+		let instance = LiveMemoryManager.instances.get(workspacePath)
 		if (!instance) {
-			instance = new AssistantAgentManager(workspacePath, context)
-			AssistantAgentManager.instances.set(workspacePath, instance)
+			instance = new LiveMemoryManager(workspacePath, context)
+			LiveMemoryManager.instances.set(workspacePath, instance)
 		}
 		return instance
 	}
 
-	public static getAllInstances(): AssistantAgentManager[] {
-		return Array.from(AssistantAgentManager.instances.values())
+	public static getAllInstances(): LiveMemoryManager[] {
+		return Array.from(LiveMemoryManager.instances.values())
 	}
 
 	public static disposeAll(): void {
-		for (const instance of AssistantAgentManager.instances.values()) {
+		for (const instance of LiveMemoryManager.instances.values()) {
 			instance.dispose()
 		}
-		AssistantAgentManager.instances.clear()
+		LiveMemoryManager.instances.clear()
 	}
 
 	// ─── Instance Fields ─────────────────────────────────────────────────
@@ -108,29 +105,29 @@ export class AssistantAgentManager implements vscode.Disposable {
 	private readonly workspacePath: string
 	private readonly context: vscode.ExtensionContext
 
-	private _state: AssistantAgentState = "Standby"
+	private _state: LiveMemoryState = "Standby"
 	private _stateMessage: string = ""
-	private _config: AssistantAgentConfig | null = null
+	private _config: LiveMemoryConfig | null = null
 
 	private readonly _store: ConversationStore
 	private readonly _queue: QuestionQueue
 	private readonly _window: ContextWindow
-	private _llm: AssistantAgentLlmClient | null = null
+	private _llm: LiveMemoryLlmClient | null = null
 
 	/** Workspace structure scanner — feeds the system prompt. */
-	private _directoryTree: AssistantAgentDirectoryTree | null = null
+	private _directoryTree: LiveMemoryDirectoryTree | null = null
 	private _directoryTreeString: string = "[No workspace structure available]"
 
 	/** External-edit detector — invalidates file context on writes. */
-	private _fileWatcher: AssistantAgentFileWatcher | null = null
+	private _fileWatcher: LiveMemoryFileWatcher | null = null
 
 	/** .shoferignore controller — filters file watcher, directory tree, and notifications. */
 	private _shoferIgnoreController?: ShoferIgnoreController
 
 	/** Read-only tool dispatcher used inside the agent loop. */
-	private _toolExecutor: AssistantAgentToolExecutor | null = null
+	private _toolExecutor: LiveMemoryToolExecutor | null = null
 
-	/** Cached tool catalog — the Read group minus `ask_assistant_agent`. */
+	/** Cached tool catalog — the Read group minus `ask_live_memory`. */
 	private _toolCatalog: OpenAI.Chat.ChatCompletionTool[] | null = null
 
 	/** Hard cap on agent-loop iterations per question (tool round-trips). */
@@ -147,7 +144,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 		lastUpdated: Date.now(),
 	}
 
-	private _stateChangeEmitter = new vscode.EventEmitter<AssistantAgentState>()
+	private _stateChangeEmitter = new vscode.EventEmitter<LiveMemoryState>()
 	public readonly onStateChange = this._stateChangeEmitter.event
 
 	private _conversationUpdateEmitter = new vscode.EventEmitter<void>()
@@ -166,7 +163,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 	// ─── Public API ──────────────────────────────────────────────────────
 
-	public get state(): AssistantAgentState {
+	public get state(): LiveMemoryState {
 		return this._state
 	}
 
@@ -182,7 +179,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 		return !!this._config?.apiConfigId
 	}
 
-	public get isAssistantAgentAvailable(): boolean {
+	public get isLiveMemoryAvailable(): boolean {
 		return this._state === "Ready" || this._state === "Busy"
 	}
 
@@ -249,7 +246,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 	}
 
 	/**
-	 * Notify the assistant agent that a file was modified by a task tool.
+	 * Notify the live memory agent that a file was modified by a task tool.
 	 * The path is accumulated and surfaced as a hint on the next question
 	 * (no eviction → preserves the LLM provider's KV cache).
 	 *
@@ -278,7 +275,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 			const config = await this._loadConfiguration()
 			if (!config) {
-				this._setState("Standby", "Assistant agent is not configured")
+				this._setState("Standby", "Live Memory is not configured")
 				return { requiresRestart: false }
 			}
 			this._config = config
@@ -292,7 +289,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			this._startFileWatcher()
 
 			if (!config.enabled) {
-				this._setState("Standby", "Assistant agent is disabled")
+				this._setState("Standby", "Live Memory is disabled")
 				return { requiresRestart: false }
 			}
 
@@ -304,14 +301,14 @@ export class AssistantAgentManager implements vscode.Disposable {
 				return { requiresRestart: false }
 			}
 
-			this._llm = new AssistantAgentLlmClient(config)
+			this._llm = new LiveMemoryLlmClient(config)
 
 			this._setState("Ready", "Agent is ready")
 			return { requiresRestart: false }
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error)
 			this._setState("Error", message)
-			TelemetryService.instance.captureEvent(TelemetryEventName.ASSISTANT_AGENT_ERROR, {
+			TelemetryService.instance.captureEvent(TelemetryEventName.LIVE_MEMORY_ERROR, {
 				error: message,
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "initialize",
@@ -332,10 +329,10 @@ export class AssistantAgentManager implements vscode.Disposable {
 		} = {},
 	): Promise<QuestionResult> {
 		if (!this._config || !this._llm) {
-			throw new Error("Assistant agent is not initialized. Call initialize() first.")
+			throw new Error("Live Memory is not initialized. Call initialize() first.")
 		}
-		if (!this.isAssistantAgentAvailable && this._state !== "Busy") {
-			throw new Error(`Assistant agent is not available (state: ${this._state})`)
+		if (!this.isLiveMemoryAvailable && this._state !== "Busy") {
+			throw new Error(`Live Memory is not available (state: ${this._state})`)
 		}
 		const { timeoutMs = QUESTION_TIMEOUT_MS, softTimeoutSec, softResultLength } = opts
 		return this._queue.enqueue(question, contextFiles, timeoutMs, {
@@ -353,10 +350,10 @@ export class AssistantAgentManager implements vscode.Disposable {
 	): Promise<QuestionResult> {
 		const startTime = Date.now()
 		const llm = this._llm
-		if (!llm) throw new Error("Assistant agent LLM client is not initialized")
+		if (!llm) throw new Error("Live Memory LLM client is not initialized")
 
 		logger.info(
-			`[AssistantAgent.Manager] _processQuestion start questionLen=${question.length} contextFiles=${(contextFiles ?? []).length}`,
+			`[LiveMemory.Manager] _processQuestion start questionLen=${question.length} contextFiles=${(contextFiles ?? []).length}`,
 		)
 
 		this._setState("Busy", "Processing question...")
@@ -436,19 +433,19 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 			for (;;) {
 				if (signal.aborted) {
-					const err = new Error("Assistant agent aborted")
+					const err = new Error("Live Memory agent aborted")
 					err.name = "AbortError"
 					throw err
 				}
-				if (iterations >= AssistantAgentManager.MAX_AGENT_ITERATIONS) {
+				if (iterations >= LiveMemoryManager.MAX_AGENT_ITERATIONS) {
 					finalAnswer =
 						finalAnswer ||
-						`I was unable to finish this question within ${AssistantAgentManager.MAX_AGENT_ITERATIONS} tool iterations. Please narrow the scope or try again.`
+						`I was unable to finish this question within ${LiveMemoryManager.MAX_AGENT_ITERATIONS} tool iterations. Please narrow the scope or try again.`
 					break
 				}
 				iterations += 1
 				logger.info(
-					`[AssistantAgent.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
+					`[LiveMemory.Manager] agent-loop iter=${iterations} convLen=${conversation.length} tools=${tools.length}`,
 				)
 				const result = await llm.chatWithTools({
 					systemPrompt,
@@ -546,7 +543,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			}
 
 			logger.info(
-				`[AssistantAgent.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
+				`[LiveMemory.Manager] agent-loop done iters=${iterations} answerLen=${finalAnswer.length} prompt=${totalPrompt} completion=${totalCompletion}`,
 			)
 
 			// Finalize the in-flight assistant message. `finalAnswer` is the
@@ -593,7 +590,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 				(error.name === "AbortError" || error.name === "TimeoutError" || message.includes("aborted"))
 
 			logger.error(
-				`[AssistantAgent.Manager] _processQuestion FAILED isAbort=${isAbort} error=${message}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
+				`[LiveMemory.Manager] _processQuestion FAILED isAbort=${isAbort} error=${message}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
 			)
 
 			if (!isAbort) {
@@ -603,7 +600,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 				this._setState("Ready", "Agent is ready")
 			}
 
-			TelemetryService.instance.captureEvent(TelemetryEventName.ASSISTANT_AGENT_ERROR, {
+			TelemetryService.instance.captureEvent(TelemetryEventName.LIVE_MEMORY_ERROR, {
 				error: message,
 				stack: error instanceof Error ? error.stack : undefined,
 				location: "askQuestion",
@@ -682,7 +679,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			await this._store.save(this._snapshot())
 		} catch (error) {
 			logger.error(
-				`[AssistantAgent] Failed to persist conversation: ${error instanceof Error ? error.message : String(error)}`,
+				`[LiveMemory] Failed to persist conversation: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
@@ -690,22 +687,21 @@ export class AssistantAgentManager implements vscode.Disposable {
 	// ─── Configuration (via ContextProxy) ────────────────────────────────
 
 	/**
-	 * Read assistant-agent configuration from ContextProxy + ProviderSettingsManager.
+	 * Read live-memory configuration from ContextProxy + ProviderSettingsManager.
 	 *
-	 * The assistant agent does not own provider/model/credentials — those come
+	 * The live memory agent does not own provider/model/credentials — those come
 	 * from an API Configuration profile (managed under Settings → Providers,
-	 * persisted via ProviderSettingsManager). The Settings → Assistant Agent tab
+	 * persisted via ProviderSettingsManager). The Settings → Live Memory tab
 	 * only stores: enabled flag, apiConfigId link, optional context-window
 	 * override, and the context-fill threshold.
 	 */
-	private async _loadConfiguration(): Promise<AssistantAgentConfig | null> {
+	private async _loadConfiguration(): Promise<LiveMemoryConfig | null> {
 		const proxy = await ContextProxy.getInstance(this.context)
 
-		const enabled = proxy.getValue("assistantAgentEnabled") ?? true
-		const apiConfigId = proxy.getValue("assistantAgentApiConfigId") ?? ""
-		const overrideMaxContextTokens = proxy.getValue("assistantAgentMaxContextTokens")
-		const contextFillThreshold =
-			proxy.getValue("assistantAgentContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
+		const enabled = proxy.getValue("liveMemoryEnabled") ?? true
+		const apiConfigId = proxy.getValue("liveMemoryApiConfigId") ?? ""
+		const overrideMaxContextTokens = proxy.getValue("liveMemoryMaxContextTokens")
+		const contextFillThreshold = proxy.getValue("liveMemoryContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
 
 		// No profile linked → return a partial config; initialize() turns this
 		// into an Error state with a "No API Configuration selected" message.
@@ -739,12 +735,12 @@ export class AssistantAgentManager implements vscode.Disposable {
 			resolvedMaxContextTokens = overrideMaxContextTokens
 			contextWindowSource = "override"
 		} else {
-			const handler = buildApiHandler(profile, { taskId: "shofer-assistant-agent" })
+			const handler = buildApiHandler(profile, { taskId: "shofer-live-memory" })
 			const info = handler.getModel().info
 			if (!info?.contextWindow || info.contextWindow <= 0) {
 				throw new Error(
 					`API Configuration '${profile.name}' did not report a context window. ` +
-						`Set 'Max context tokens' under Settings → Assistant Agent to override.`,
+						`Set 'Max context tokens' under Settings → Live Memory to override.`,
 				)
 			}
 			resolvedMaxContextTokens = info.contextWindow
@@ -766,7 +762,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 	private async _initDirectoryTree(): Promise<void> {
 		try {
-			this._directoryTree = new AssistantAgentDirectoryTree(
+			this._directoryTree = new LiveMemoryDirectoryTree(
 				this.workspacePath,
 				this._window.maxContextTokens,
 				this._shoferIgnoreController,
@@ -774,7 +770,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			this._directoryTreeString = await this._directoryTree.generate()
 		} catch (error) {
 			logger.warn(
-				`[AssistantAgent] Failed to generate directory tree: ${error instanceof Error ? error.message : String(error)}`,
+				`[LiveMemory] Failed to generate directory tree: ${error instanceof Error ? error.message : String(error)}`,
 			)
 			this._directoryTreeString = "[Workspace directory tree unavailable]"
 		}
@@ -783,7 +779,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 	private _startFileWatcher(): void {
 		if (this._fileWatcher) return
 
-		this._fileWatcher = new AssistantAgentFileWatcher(
+		this._fileWatcher = new LiveMemoryFileWatcher(
 			this.workspacePath,
 			(filePath, event) => {
 				if (event === "deleted") {
@@ -801,7 +797,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 	// ─── Message Construction ────────────────────────────────────────────
 
 	/**
-	 * Build the system prompt for the assistant agent. This holds ONLY content
+	 * Build the system prompt for the live memory agent. This holds ONLY content
 	 * that is stable from one question to the next — the directory tree, the
 	 * file-context manifest, and folded-in system markers — so the provider's
 	 * prompt/KV cache survives across questions. Per-question volatile hints
@@ -818,7 +814,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			? `[Workspace structure:\n${this._directoryTreeString}\n\nshoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
 
-		const parts = [ASSISTANT_AGENT_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
+		const parts = [LIVE_MEMORY_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
 
 		for (const fc of this._window.fileContexts) {
 			parts.push(
@@ -855,8 +851,8 @@ export class AssistantAgentManager implements vscode.Disposable {
 			)
 		}
 
-		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC
-		const softResultLength = softLimits.softResultLength ?? DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH
+		const softTimeoutSec = softLimits.softTimeoutSec ?? DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC
+		const softResultLength = softLimits.softResultLength ?? DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH
 		parts.push(
 			`[Soft constraints for this question — recommendations, not hard limits, and not enforced by the runtime: aim to complete within ~${softTimeoutSec}s of wall time (use fewer tool round-trips when possible) and keep your final answer under ~${softResultLength} characters. If the question genuinely requires more, exceed the limits rather than giving an incorrect or misleading answer.]`,
 		)
@@ -884,13 +880,13 @@ export class AssistantAgentManager implements vscode.Disposable {
 		return conv
 	}
 
-	/** Lazily construct the Read-category tool catalog (minus ask_assistant_agent). */
+	/** Lazily construct the Read-category tool catalog (minus ask_live_memory). */
 	private _getToolCatalog(): OpenAI.Chat.ChatCompletionTool[] {
 		if (!this._toolCatalog) {
-			const allowed = new Set<string>(ASSISTANT_AGENT_READ_TOOLS)
+			const allowed = new Set<string>(LIVE_MEMORY_READ_TOOLS)
 			this._toolCatalog = getNativeTools().filter((t) => t.type === "function" && allowed.has(t.function.name))
 			logger.info(
-				`[AssistantAgent.Manager] tool catalog built: ${this._toolCatalog.length} tools — ${this._toolCatalog
+				`[LiveMemory.Manager] tool catalog built: ${this._toolCatalog.length} tools — ${this._toolCatalog
 					.map((t) => (t as any).function.name)
 					.join(", ")}`,
 			)
@@ -899,9 +895,9 @@ export class AssistantAgentManager implements vscode.Disposable {
 	}
 
 	/** Lazily construct the workspace-scoped tool executor. */
-	private _getToolExecutor(): AssistantAgentToolExecutor {
+	private _getToolExecutor(): LiveMemoryToolExecutor {
 		if (!this._toolExecutor) {
-			this._toolExecutor = new AssistantAgentToolExecutor(this.workspacePath, this.context)
+			this._toolExecutor = new LiveMemoryToolExecutor(this.workspacePath, this.context)
 		}
 		return this._toolExecutor
 	}
@@ -927,7 +923,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 			this._costTracking.totalTokensTruncated += this._window.consumeEvictedTokens()
 		} catch (error) {
 			logger.warn(
-				`[AssistantAgent] Could not load file into context: ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+				`[LiveMemory] Could not load file into context: ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
@@ -943,7 +939,7 @@ export class AssistantAgentManager implements vscode.Disposable {
 
 	// ─── State Management ────────────────────────────────────────────────
 
-	private _setState(newState: AssistantAgentState, message: string): void {
+	private _setState(newState: LiveMemoryState, message: string): void {
 		const stateChanged = newState !== this._state || message !== this._stateMessage
 		if (stateChanged) {
 			this._state = newState
@@ -954,6 +950,6 @@ export class AssistantAgentManager implements vscode.Disposable {
 }
 
 // ─── Provider → Secret Key Mapping ─────────────────────────────────────
-// (removed) The assistant agent now consumes credentials from an API
+// (removed) The live memory agent now consumes credentials from an API
 // Configuration profile via ProviderSettingsManager — no per-provider
-// assistant-agent secrets exist in storage.
+// live-memory secrets exist in storage.

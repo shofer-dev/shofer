@@ -226,12 +226,12 @@ vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 }))
 
 vi.mock("../../../shared/modes", () => ({
-	modes: [{ slug: "code", name: "Code Mode", roleDefinition: "You are a code assistant", groups: ["read", "write"] }],
+	modes: [{ slug: "code", name: "Code Mode", roleDefinition: "You are a code assistant", tools: ["read", "write"] }],
 	getModeBySlug: vi.fn().mockReturnValue({
 		slug: "code",
 		name: "Code Mode",
 		roleDefinition: "You are a code assistant",
-		groups: ["read", "write"],
+		tools: ["read", "write"],
 	}),
 	getGroupName: vi.fn().mockReturnValue("General Tools"),
 	defaultModeSlug: "code",

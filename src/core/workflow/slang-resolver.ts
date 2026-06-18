@@ -6,7 +6,11 @@
  * and perform static analysis (warnings about missing converge, unknown refs, etc.).
  */
 
+import { toolGroups } from "@shofer/types"
+
 import type { FlowDecl, AgentDecl, Operation } from "./slang-ast"
+
+const VALID_TOOL_GROUPS = new Set<string>(toolGroups)
 
 export interface AgentDep {
 	name: string
@@ -170,6 +174,21 @@ export function analyzeFlow(flow: FlowDecl): FlowDiagnostic[] {
 				level: "warning",
 				message: `Agent "${agent.name}" has no commit — it will never signal completion`,
 			})
+		}
+
+		// Validate declared tool groups: each must be one of the 9 ToolGroup
+		// names. Unknown names fail closed at spawn (the agent silently loses
+		// those tools), so surface a warning rather than letting a typo quietly
+		// over-restrict the agent.
+		if (agent.meta.tools && agent.meta.tools.length > 0) {
+			for (const group of agent.meta.tools) {
+				if (!VALID_TOOL_GROUPS.has(group)) {
+					diagnostics.push({
+						level: "warning",
+						message: `Agent "${agent.name}" declares unknown tool group "${group}" in tools: — valid groups are ${[...VALID_TOOL_GROUPS].join(", ")}. It will be ignored (the agent loses those tools).`,
+					})
+				}
+			}
 		}
 
 		// Validate declared peers: every @ref must resolve to a known agent.

@@ -68,7 +68,7 @@ describe("SimpleInstaller", () => {
 				slug: "test",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read"],
+				tools: ["read"],
 			}),
 		}
 
@@ -213,7 +213,7 @@ describe("SimpleInstaller", () => {
 				slug: "test",
 				name: "Test Mode",
 				roleDefinition: "Test role",
-				groups: ["read"],
+				tools: ["read"],
 			}),
 		}
 
@@ -307,7 +307,7 @@ describe("SimpleInstaller", () => {
 				content: yaml.stringify({
 					name: "Test Mode",
 					roleDefinition: "Test role",
-					groups: ["read"],
+					tools: ["read"],
 				}),
 			}
 
@@ -327,7 +327,7 @@ describe("SimpleInstaller", () => {
 							slug: "test-array",
 							name: "Test Array Mode",
 							roleDefinition: "Test role",
-							groups: ["read"],
+							tools: ["read"],
 						}),
 					},
 				] as any,

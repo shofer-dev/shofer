@@ -352,7 +352,7 @@ describe("SYSTEM_PROMPT", () => {
 				name: "Custom Mode",
 				roleDefinition: "Custom role definition",
 				customInstructions: modeCustomInstructions,
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			},
 		]
 

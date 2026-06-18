@@ -101,7 +101,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 						slug: "test-mode",
 						name: "Test Mode",
 						roleDefinition: "Test Role",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			}
@@ -154,7 +154,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 						slug: "root-mode",
 						name: "Root Mode",
 						roleDefinition: "Root Role",
-						groups: ["read"],
+						tools: ["read"],
 					},
 				],
 			}
@@ -211,7 +211,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 						slug: "new-slug-name", // Changed slug
 						name: "Imported Mode",
 						roleDefinition: "Imported Role",
-						groups: ["read"],
+						tools: ["read"],
 						rulesFiles: [
 							{
 								relativePath: "rule1.md", // New format without rules folder
@@ -275,7 +275,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 						slug: "new-slug-name", // Changed slug
 						name: "Imported Mode",
 						roleDefinition: "Imported Role",
-						groups: ["read"],
+						tools: ["read"],
 						rulesFiles: [
 							{
 								relativePath: "rules-old-slug/rule1.md", // Old format with rules folder
@@ -335,7 +335,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 						slug: "mixed-mode",
 						name: "Mixed Mode",
 						roleDefinition: "Mixed Role",
-						groups: ["read"],
+						tools: ["read"],
 						rulesFiles: [
 							{
 								relativePath: "rules-old-slug/old-format.md", // Old format
@@ -389,7 +389,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 				slug: "original-mode",
 				name: "Original Mode",
 				roleDefinition: "Original Role",
-				groups: ["read"],
+				tools: ["read"],
 			}
 
 			;(fileExistsAtPath as Mock).mockImplementation(async (path: string) => {

@@ -1,7 +1,7 @@
 /**
- * AssistantAgentToolExecutor — read-only tool dispatcher for the Assistant Agent.
+ * LiveMemoryToolExecutor — read-only tool dispatcher for the Live Memory.
  *
- * The Assistant Agent runs outside the main `Task` plumbing (no chat UI, no
+ * The Live Memory runs outside the main `Task` plumbing (no chat UI, no
  * approval flow, no file-context tracker), so it cannot reuse the
  * `BaseTool` implementations directly — those are tightly coupled to
  * `Task` (consecutiveMistakeCount, providerRef, fileContextTracker,
@@ -12,7 +12,7 @@
  * the model to consume in the next turn of the agent loop.
  *
  * Only Read-category tools are exposed (TOOL_GROUPS.read in
- * packages/types/src/tool.ts), minus `ask_assistant_agent` itself to prevent
+ * packages/types/src/tool.ts), minus `ask_live_memory` itself to prevent
  * recursion. Every implementation is read-only and side-effect-free with
  * respect to workspace files.
  */
@@ -27,9 +27,9 @@ import { regexGrepSearch } from "../ripgrep"
 import { listFiles as globListFiles } from "../glob/list-files"
 import { CodeIndexManager } from "../code-index/manager"
 import { GitIndexManager } from "../git-index/git-index-manager"
-import { assistantAgentLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
 
-const LOG_PREFIX = "[AssistantAgent.ToolExecutor]"
+const LOG_PREFIX = "[LiveMemory.ToolExecutor]"
 
 /** Maximum bytes returned for a single tool call; over this we truncate. */
 const MAX_TOOL_OUTPUT_BYTES = 200_000
@@ -45,8 +45,8 @@ export interface ToolExecutionResult {
 	isError?: boolean
 }
 
-/** Set of tool names the assistant agent is allowed to call. */
-export const ASSISTANT_AGENT_READ_TOOLS = [
+/** Set of tool names the live memory is allowed to call. */
+export const LIVE_MEMORY_READ_TOOLS = [
 	"read_file",
 	"grep_search",
 	"list_files",
@@ -61,9 +61,9 @@ export const ASSISTANT_AGENT_READ_TOOLS = [
 	"lsp_search",
 ] as const
 
-export type AssistantAgentReadTool = (typeof ASSISTANT_AGENT_READ_TOOLS)[number]
+export type LiveMemoryReadTool = (typeof LIVE_MEMORY_READ_TOOLS)[number]
 
-export class AssistantAgentToolExecutor {
+export class LiveMemoryToolExecutor {
 	private readonly _cwd: string
 	private readonly _context: vscode.ExtensionContext
 
@@ -136,7 +136,7 @@ export class AssistantAgentToolExecutor {
 					result = await this._fetchWebPage(args, signal)
 					break
 				default:
-					result = { isError: true, content: `Tool '${name}' is not available to the assistant agent.` }
+					result = { isError: true, content: `Tool '${name}' is not available to the live memory.` }
 			}
 			result.content = truncateOutput(result.content)
 			logger.info(
@@ -266,10 +266,10 @@ export class AssistantAgentToolExecutor {
 		const abs = path.resolve(this._cwd, args.path)
 		const stat = await fs.stat(abs)
 		// Returning a base64 image as part of a tool_result string is not ideal,
-		// but the assistant agent currently does not surface multimodal content
+		// but the live memory currently does not surface multimodal content
 		// blocks back to the model. We return metadata + a note instead.
 		return {
-			content: `Image file ${args.path} (${stat.size} bytes). The assistant agent does not currently support inline image rendering; describe the image's role from context instead.`,
+			content: `Image file ${args.path} (${stat.size} bytes). The live memory does not currently support inline image rendering; describe the image's role from context instead.`,
 		}
 	}
 

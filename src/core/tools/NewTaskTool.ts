@@ -110,9 +110,11 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 
 			// Use Package.name (dynamic at build time) as the VSCode configuration namespace.
 			// Supports multiple extension variants (e.g., stable/nightly) without hardcoded strings.
-			const requireTodos = vscode.workspace
-				.getConfiguration(Package.name)
-				.get<boolean>("newTaskRequireTodos", false)
+			// A workflow agent's `.slang` `context { require_todos: <bool> }` overrides the
+			// global setting for that agent (undefined ⇒ inherit the global default).
+			const requireTodos =
+				task.agentContext?.require_todos ??
+				vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false)
 
 			// Check if todos are required based on VSCode setting.
 			// Note: `undefined` means not provided, empty string is valid.
@@ -141,6 +143,23 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			}
 
 			task.consecutiveMistakeCount = 0
+
+			// Enforce the global parallel-task limit.
+			const maxParallel = provider.contextProxy.getValue("maxParallelTasks")
+			const effectiveLimit = maxParallel ?? 10 // default when unset
+			if (effectiveLimit > 0) {
+				const activeCount = provider.taskManager.countActiveTasks()
+				if (activeCount >= effectiveLimit) {
+					pushToolResult(
+						formatResponse.toolError(
+							`Task limit reached: ${activeCount}/${effectiveLimit} tasks are currently running. ` +
+								`Please wait for one to complete and try again later, ` +
+								`or accomplish this work through other means (e.g., inline tool calls).`,
+						),
+					)
+					return
+				}
+			}
 
 			// Refuse to spawn a subtask that would push the root over its cost cap.
 			// Walks up to the true root, then aggregates costs across the whole subtree.

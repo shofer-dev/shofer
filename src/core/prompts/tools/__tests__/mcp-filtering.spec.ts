@@ -43,7 +43,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read", "mcp"],
+				tools: ["read", "mcp"],
 			},
 		]
 
@@ -61,7 +61,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "edit-only",
 				name: "Edit Only",
 				roleDefinition: "ed",
-				groups: ["write", "mcp"],
+				tools: ["write", "mcp"],
 			},
 		]
 
@@ -77,7 +77,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "loose",
 				name: "Loose",
 				roleDefinition: "any",
-				groups: ["uncategorized", "mcp"],
+				tools: ["uncategorized", "mcp"],
 			},
 		]
 
@@ -96,7 +96,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "loose",
 				name: "Loose",
 				roleDefinition: "any",
-				groups: ["uncategorized", "mcp"],
+				tools: ["uncategorized", "mcp"],
 			},
 		]
 
@@ -115,7 +115,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read", "mcp"],
+				tools: ["read", "mcp"],
 			},
 		]
 
@@ -137,7 +137,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read", "mcp"],
+				tools: ["read", "mcp"],
 			},
 		]
 
@@ -159,7 +159,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "default-like",
 				name: "Default-like",
 				roleDefinition: "rd",
-				groups: ["read", "mcp"],
+				tools: ["read", "mcp"],
 			},
 		]
 
@@ -183,7 +183,7 @@ describe("filterMcpToolsForMode", () => {
 				slug: "read-only",
 				name: "Read Only",
 				roleDefinition: "rd",
-				groups: ["read"],
+				tools: ["read"],
 			},
 		]
 		expect(filterMcpToolsForMode([], [], "read-only", customModes, {})).toEqual([])

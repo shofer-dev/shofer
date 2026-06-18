@@ -46,7 +46,7 @@
 					"provider": {
 						"type": "string"
 					},
-					"groups": {
+					"tools": {
 						"type": "array",
 						"items": {
 							"anyOf": [
@@ -117,7 +117,7 @@
 						}
 					}
 				},
-				"required": ["slug", "name", "roleDefinition", "groups"],
+				"required": ["slug", "name", "roleDefinition", "tools"],
 				"additionalProperties": false
 			}
 		}

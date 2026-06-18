@@ -1,6 +1,12 @@
 import * as vscode from "vscode"
 
-import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@shofer/types"
+import {
+	type ModeConfig,
+	type PromptComponent,
+	type CustomModePrompts,
+	type TodoItem,
+	type ToolGroup,
+} from "@shofer/types"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
@@ -23,7 +29,7 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 	getSkillsSection,
-	getAssistantAgentSection,
+	getLiveMemorySection,
 } from "./sections"
 
 // Helper function to get prompt component, filtering out empty objects
@@ -65,28 +71,47 @@ async function generatePrompt(
 	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
+	// Effective capability groups: the mode's tools, optionally narrowed by a
+	// workflow agent's `.slang` `tools:` restriction (settings.agentToolGroups).
+	// When the restriction is set, the CAPABILITIES section is gated to only
+	// what the agent can actually do; undefined ⇒ no gating.
+	const modeGroupNames = new Set((modeConfig.tools ?? []).map((g) => getGroupName(g)))
+	const capabilityGroups =
+		settings?.agentToolGroups !== undefined
+			? new Set(settings.agentToolGroups.filter((g) => modeGroupNames.has(g as ToolGroup)))
+			: undefined
+
 	// Check if MCP functionality should be included
-	const hasMcpGroup = (modeConfig.groups ?? []).some((groupEntry) => getGroupName(groupEntry) === "mcp")
+	const hasMcpGroup = modeGroupNames.has("mcp")
 	const hasMcpServers = mcpHub && mcpHub.getServers().length > 0
-	const shouldIncludeMcp = hasMcpGroup && hasMcpServers
+	// A `tools:` restriction that omits `mcp` also suppresses the MCP section.
+	const mcpAllowedByRestriction = capabilityGroups === undefined || capabilityGroups.has("mcp")
+	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
 
 	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
 
 	// Tool calling is native-only.
 	const effectiveProtocol = "native"
 
-	const [modesSection, skillsSection] = await Promise.all([
+	// Per-task context overrides: each defaults to true (enabled) unless
+	// explicitly suppressed via a workflow agent's `.slang` `context { ... }`.
+	const includeSkills = settings?.includeSkills ?? true
+	const includeSystemInfo = settings?.includeSystemInfo ?? true
+	const includeMcp = settings?.includeMcp ?? true
+
+	const [modesSection, rawSkillsSection] = await Promise.all([
 		getModesSection(context),
 		getSkillsSection(skillsManager, mode as string),
 	])
+	const skillsSection = includeSkills ? rawSkillsSection : ""
 
-	// Resolve the AssistantAgentManager lazily to avoid circular-import issues
-	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ AssistantAgentManager).
-	let assistantAgentSection = ""
+	// Resolve the LiveMemoryManager lazily to avoid circular-import issues
+	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ LiveMemoryManager).
+	let liveMemorySection = ""
 	try {
-		const { AssistantAgentManager: aam } = await import("../../services/assistant-agent/manager")
-		const assistantAgentManager = aam.getInstance(context, cwd)
-		assistantAgentSection = getAssistantAgentSection(cwd, assistantAgentManager)
+		const { LiveMemoryManager: aam } = await import("../../services/live-memory/manager")
+		const liveMemoryManager = aam.getInstance(context, cwd)
+		liveMemorySection = getLiveMemorySection(cwd, liveMemoryManager)
 	} catch {
 		// Manager not yet wired or import failed; omit the section silently.
 	}
@@ -102,15 +127,14 @@ ${getSharedToolUseSection()}${toolsCatalog}
 
 	${getToolUseGuidelinesSection()}
 
-${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
+${getCapabilitiesSection(cwd, shouldIncludeMcp && includeMcp ? mcpHub : undefined, capabilityGroups)}
 
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}
 ${getRulesSection(cwd, settings)}
+${includeSystemInfo ? `\n${getSystemInfoSection(cwd)}` : ""}
 
-${getSystemInfoSection(cwd)}
-
-${getObjectiveSection()}${assistantAgentSection ? `\n\n${assistantAgentSection}` : ""}
+${getObjectiveSection()}${liveMemorySection ? `\n\n${liveMemorySection}` : ""}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(vscode.env.language),

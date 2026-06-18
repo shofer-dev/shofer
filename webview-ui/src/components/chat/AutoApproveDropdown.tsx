@@ -33,12 +33,12 @@ import { AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoA
  */
 function getModeAllowedGroups(
 	modeSlug: string | undefined,
-	customModes: Array<{ slug: string; groups?: Array<string | [string, unknown]> }> | undefined,
+	customModes: Array<{ slug: string; tools?: Array<string | [string, unknown]> }> | undefined,
 ): Set<string> {
 	// Build the default-mode group map from the single source of truth.
 	const defaultModeGroups: Record<string, string[]> = {}
 	for (const m of DEFAULT_MODES) {
-		defaultModeGroups[m.slug] = (m.groups ?? []).map((g) =>
+		defaultModeGroups[m.slug] = (m.tools ?? []).map((g) =>
 			typeof g === "string" ? g : Array.isArray(g) ? g[0] : Object.keys(g)[0]!,
 		)
 	}
@@ -46,8 +46,8 @@ function getModeAllowedGroups(
 	// Check custom modes first
 	if (customModes && modeSlug) {
 		const custom = customModes.find((m) => m.slug === modeSlug)
-		if (custom?.groups) {
-			return new Set(custom.groups.map((g) => (Array.isArray(g) ? g[0] : g)))
+		if (custom?.tools) {
+			return new Set(custom.tools.map((g) => (Array.isArray(g) ? g[0] : g)))
 		}
 	}
 

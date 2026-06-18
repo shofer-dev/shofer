@@ -10,14 +10,14 @@ describe("Native Tools Filtering by Mode", () => {
 				slug: "architect",
 				name: "Architect",
 				roleDefinition: "Test architect",
-				groups: ["read", "mcp"] as const,
+				tools: ["read", "mcp"] as const,
 			}
 
 			const codeMode: ModeConfig = {
 				slug: "code",
 				name: "Code",
 				roleDefinition: "Test code",
-				groups: ["read", "write", "execute", "mcp"] as const,
+				tools: ["read", "write", "execute", "mcp"] as const,
 			}
 
 			// Import the functions we need to test
@@ -27,7 +27,7 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Test architect mode - should NOT have edit tools
 			const architectAllowedTools = new Set<string>()
-			architectMode.groups!.forEach((groupEntry) => {
+			architectMode.tools!.forEach((groupEntry) => {
 				const groupName = getGroupName(groupEntry)
 				const toolGroup = TOOL_GROUPS[groupName]
 				if (toolGroup) {
@@ -54,7 +54,7 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Test code mode - SHOULD have edit tools
 			const codeAllowedTools = new Set<string>()
-			codeMode.groups!.forEach((groupEntry) => {
+			codeMode.tools!.forEach((groupEntry) => {
 				const groupName = getGroupName(groupEntry)
 				const toolGroup = TOOL_GROUPS[groupName]
 				if (toolGroup) {
@@ -84,14 +84,14 @@ describe("Native Tools Filtering by Mode", () => {
 				slug: "test-mode-with-mcp",
 				name: "Test Mode",
 				roleDefinition: "Test",
-				groups: ["read", "mcp"] as const,
+				tools: ["read", "mcp"] as const,
 			}
 
 			const modeWithoutMcp: ModeConfig = {
 				slug: "test-mode-no-mcp",
 				name: "Test Mode No MCP",
 				roleDefinition: "Test",
-				groups: ["read"] as const,
+				tools: ["read"] as const,
 			}
 
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
@@ -108,7 +108,7 @@ describe("Native Tools Filtering by Mode", () => {
 				slug: "restrictive",
 				name: "Restrictive",
 				roleDefinition: "Test",
-				groups: [] as const, // No groups at all
+				tools: [] as const, // No tools at all
 			}
 
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
