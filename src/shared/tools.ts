@@ -12,6 +12,7 @@ export {
 	TOOL_GROUPS,
 	ALWAYS_AVAILABLE_TOOLS,
 	TOOL_ALIASES,
+	CROSS_ASSISTANT_ALIASES,
 } from "@shofer/types"
 
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>

@@ -1,7 +1,7 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofer/types"
 import { getGroupName, getModeBySlug, getToolsForMode } from "../../../shared/modes"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../../shared/tools"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES, CROSS_ASSISTANT_ALIASES } from "../../../shared/tools"
 import { defaultModeSlug } from "../../../shared/modes"
 import { buildMcpToolName } from "../../../utils/mcp-name"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
@@ -96,7 +96,7 @@ function getOrCreateRenamedTool(
  * @returns The canonical tool name
  */
 export function resolveToolAlias(toolName: string): string {
-	const canonical = ALIAS_TO_CANONICAL.get(toolName)
+	const canonical = ALIAS_TO_CANONICAL.get(toolName) ?? CROSS_ASSISTANT_ALIASES[toolName]
 	return canonical ?? toolName
 }
 

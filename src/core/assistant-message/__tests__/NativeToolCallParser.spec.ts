@@ -597,5 +597,201 @@ describe("NativeToolCallParser", () => {
 				expect(result).toBeNull()
 			})
 		})
+
+		describe("new_task prompt/description aliasing (Anthropic/Claude naming conventions)", () => {
+			it("should map prompt → message and description → title", () => {
+				const toolCall = {
+					id: "toolu_newtask_aliases",
+					name: "new_task" as const,
+					arguments: JSON.stringify({
+						mode: "code",
+						prompt: "Implement the feature",
+						description: "Feature implementation task",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as {
+						mode: string
+						message: string
+						title?: string
+					}
+					expect(nativeArgs.mode).toBe("code")
+					expect(nativeArgs.message).toBe("Implement the feature")
+					expect(nativeArgs.title).toBe("Feature implementation task")
+				}
+			})
+
+			it("should prefer canonical message over prompt alias (no clobber)", () => {
+				const toolCall = {
+					id: "toolu_newtask_canonical_wins",
+					name: "new_task" as const,
+					arguments: JSON.stringify({
+						mode: "code",
+						message: "Canonical instructions",
+						prompt: "Alias instructions (should not win)",
+						description: "Alias title (should not win)",
+						title: "Canonical title",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as {
+						mode: string
+						message: string
+						title?: string
+					}
+					expect(nativeArgs.message).toBe("Canonical instructions")
+					expect(nativeArgs.title).toBe("Canonical title")
+				}
+			})
+
+			it("prompt → message aliasing is harmless for generate_image (regression guard)", () => {
+				// generate_image reads args.prompt directly and never looks at args.message.
+				// The aliasing sets args.message from args.prompt but this must NOT corrupt generate_image.
+				const toolCall = {
+					id: "toolu_genimg",
+					name: "generate_image" as const,
+					arguments: JSON.stringify({
+						prompt: "a sunset over mountains",
+						path: "out/sunset.png",
+						image: null,
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					const nativeArgs = result.nativeArgs as {
+						prompt: string
+						path: string
+						image: unknown
+					}
+					expect(nativeArgs.prompt).toBe("a sunset over mountains")
+					expect(nativeArgs.path).toBe("out/sunset.png")
+				}
+			})
+
+			it("description-only without prompt still fails (description is NOT a message fallback)", () => {
+				// description → title only. Without prompt or message, the call must still be rejected.
+				const toolCall = {
+					id: "toolu_newtask_desc_only",
+					name: "new_task" as const,
+					arguments: JSON.stringify({
+						mode: "code",
+						description: "Just a short summary, no instructions",
+						todos: "[x] done",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				// Must reject: no message and no prompt, so message is genuinely missing.
+				expect(result).toBeNull()
+			})
+		})
+
+		describe("cross-assistant tool alias resolution", () => {
+			it("resolves search_content name to grep_search nativeArgs", () => {
+				const toolCall = {
+					id: "toolu_search_content",
+					name: "search_content" as const,
+					arguments: JSON.stringify({
+						path: "/src",
+						query: "test",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("grep_search")
+					expect(result.originalName).toBe("search_content")
+					expect(result.nativeArgs).toBeDefined()
+					const nativeArgs = result.nativeArgs as { path: string; query: string }
+					expect(nativeArgs.path).toBe("/src")
+					expect(nativeArgs.query).toBe("test")
+				}
+			})
+
+			it("resolves search_content + directory arg via PATH_ARG_ALIASES", () => {
+				const toolCall = {
+					id: "toolu_search_content_dir",
+					name: "search_content" as const,
+					arguments: JSON.stringify({
+						directory: "/src",
+						query: "test",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("grep_search")
+					expect(result.nativeArgs).toBeDefined()
+					const nativeArgs = result.nativeArgs as { path: string; query: string }
+					expect(nativeArgs.path).toBe("/src")
+					expect(nativeArgs.query).toBe("test")
+				}
+			})
+
+			it("resolves bash alias to execute_command", () => {
+				const toolCall = {
+					id: "toolu_bash_alias",
+					name: "bash" as const,
+					arguments: JSON.stringify({
+						command: "echo hello",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("execute_command")
+					expect(result.originalName).toBe("bash")
+					expect(result.nativeArgs).toBeDefined()
+					const nativeArgs = result.nativeArgs as { command: string }
+					expect(nativeArgs.command).toBe("echo hello")
+				}
+			})
+
+			it("resolves search_file alias to find_files", () => {
+				const toolCall = {
+					id: "toolu_search_file_alias",
+					name: "search_file" as const,
+					arguments: JSON.stringify({
+						pattern: "*.ts",
+					}),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).not.toBeNull()
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("find_files")
+					expect(result.originalName).toBe("search_file")
+					expect(result.nativeArgs).toBeDefined()
+					const nativeArgs = result.nativeArgs as { pattern: string }
+					expect(nativeArgs.pattern).toBe("*.ts")
+				}
+			})
+		})
 	})
 })

@@ -361,6 +361,7 @@ export class NativeToolCallParser {
 	 * stay as a backstop; this centralizes the snake_case variants too.
 	 */
 	private static readonly PATH_ARG_ALIASES = [
+		"directory",
 		"file_path",
 		"filePath",
 		"filepath",
@@ -386,6 +387,16 @@ export class NativeToolCallParser {
 					break
 				}
 			}
+		}
+		// Alias Anthropic/Claude naming conventions for delegation/messaging tools.
+		// `prompt` (full instructions) → `message` (Shofer canonical name).
+		// `description` (short summary) → `title` (optional display label).
+		// Only fills when the canonical key is absent, same as PATH_ARG_ALIASES above.
+		if (a.message === undefined && a.prompt !== undefined) {
+			a.message = a.prompt
+		}
+		if (a.title === undefined && a.description !== undefined) {
+			a.title = a.description
 		}
 	}
 

@@ -271,6 +271,19 @@ export const TOOL_ALIASES: Record<string, ToolName> = {
 } as const
 
 /**
+ * CROSS_ASSISTANT_ALIASES
+ * Maps foreign tool names (from other AI coding assistants' schemas) to
+ * Shofer canonical tool names. These are PARSER-ONLY — used to resolve
+ * incoming tool calls. They MUST NOT be exposed to the model in function
+ * definitions (the model should see Shofer's canonical names, not foreign ones).
+ */
+export const CROSS_ASSISTANT_ALIASES: Record<string, ToolName> = {
+	search_content: "grep_search",
+	search_file: "find_files",
+	bash: "execute_command",
+} as const
+
+/**
  * ToolUsage
  */
 
