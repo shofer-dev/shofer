@@ -1202,6 +1202,25 @@ export class WorkflowTask extends Task {
 			// fails post-hoc validation, retries out, and the flow deadlocks.
 			if (agentTask) {
 				agentTask.completionSchema = outputSchema ? contractToJsonSchema(outputSchema) : undefined
+
+				// Re-apply the agent's `.slang` meta. These fields are set on the Task
+				// at spawn time (spawnAgentTask) but are NOT part of the persisted
+				// HistoryItem, so when this agent's task was evicted and rehydrated
+				// above via createTaskWithHistoryItem, they came back undefined. Most
+				// damaging: a lost `tools:` restriction silently re-grants the agent
+				// every tool in its mode — e.g. a `tools: [questions]` orchestrator
+				// regaining read/write/mcp and investigating or editing instead of
+				// coordinating. Restore them from the in-memory AST on every resume
+				// (idempotent for still-live tasks). `role` is interpolated exactly as
+				// in spawnAgentTask.
+				const agentDecl = getAgentDecls(this.flowDecl).find((a) => a.name === agentName)
+				if (agentDecl) {
+					agentTask.agentToolGroups = agentDecl.meta?.tools
+					agentTask.agentRole = agentDecl.meta?.role
+						? interpolatePure(agentDecl.meta.role, agentState, this.flowState)
+						: undefined
+					agentTask.agentContext = agentDecl.meta?.context
+				}
 			}
 			agentTask?.messageQueueService.addMessage(prompt)
 
