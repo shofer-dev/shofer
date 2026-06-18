@@ -1,7 +1,9 @@
 import type OpenAI from "openai"
 import { DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC, DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH } from "@shofer/types"
 
-const ASK_LIVE_MEMORY_DESCRIPTION = `Ask a question to the persistent live memory agent that maintains long-term context about the codebase. The live memory agent runs on a separate, cost-optimized model and accumulates codebase knowledge over time. Use this for simple questions about the code that don't require the full task context to be loaded.
+const ASK_LIVE_MEMORY_DESCRIPTION = `Ask a question to the persistent live memory agent that maintains long-term context about the codebase. The live memory agent runs on a separate, cost-optimized model and accumulates codebase knowledge over time.
+
+Reserve this for bigger investigative questions that genuinely benefit from the live memory agent's accumulated, broad understanding of the codebase — e.g. questions that span many files, ask how a subsystem works end-to-end, or would otherwise require you to read and cross-reference a lot of code. Do NOT use it for simple questions you can answer yourself quickly with a few reads/searches (where is X defined, what does this one function do, what's in this file): handling those directly is faster and cheaper than delegating. This tool is synchronous and blocking, so a misdirected simple question stalls your task for no benefit.
 
 This tool is synchronous — the calling task will block until the answer is returned or the timeout is reached.
 
@@ -12,11 +14,11 @@ Parameters:
 - softTimeoutSec (number, optional): Soft recommendation in seconds for how long the live memory agent should spend on this question (default: ${DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC}). Embedded in the prompt as guidance — the agent will try to wrap up around that time but is NOT cancelled.
 - softResultLength (number, optional): Soft recommendation in characters for the maximum length of the live memory agent's final answer (default: ${DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH}). The agent will aim to keep its answer under that size but is NOT post-truncated.
 
-Example: Asking about a codebase structure
-{ "question": "What does the UserService class do and where is it defined?" }
+Example: Asking about how a subsystem fits together (spans many files)
+{ "question": "How does a request flow through the auth pipeline, from the router down to session validation and token refresh? Which modules are involved?" }
 
 Example: Asking with context files
-{ "question": "How does the auth middleware work?", "contextFiles": ["src/middleware/auth.ts"] }
+{ "question": "How does the auth middleware integrate with the rest of the request lifecycle?", "contextFiles": ["src/middleware/auth.ts"] }
 
 Example: Asking with soft constraints (quick + terse)
 { "question": "List the public methods of FooService.", "softTimeoutSec": 20, "softResultLength": 500 }`

@@ -17,7 +17,7 @@ const DIR = path.resolve(__dirname, "../../../media/workflows")
 describe("shipped workflow orchestrator tool scope", () => {
 	for (const [file, agentName] of [
 		["implement-feature.slang", "Architect"],
-		["debug.slang", "Architect"],
+		["debug.slang", "Orchestrator"],
 	] as const) {
 		it(`${file} parses cleanly with no error diagnostics`, () => {
 			const src = fs.readFileSync(path.join(DIR, file), "utf8")

@@ -42,9 +42,10 @@ Key facts:
 - **Serialized access** — questions are processed one at a time via a FIFO queue. If another task is already waiting, your question will be queued.
 
 Best practices:
-- Use for **simple, factual questions** about the codebase that don't need your full task context (e.g., "What does UserService do?", "Where is authentication logic?").
+- Reserve it for **bigger investigative questions** that benefit from its accumulated, broad understanding of the codebase — e.g. questions spanning many files, or asking how a subsystem works end-to-end, that would otherwise have you read and cross-reference a lot of code.
+- Do NOT use it for **simple questions you can answer yourself quickly** with a few reads/searches (e.g., "Where is UserService defined?", "What does this one function do?"). Handling those directly is faster and cheaper, and since this tool is synchronous and blocking, a misdirected simple question stalls your task for no benefit.
 - Provide **contextFiles** when the question is about specific files — the live memory agent will load them into its context window.
-- Use **softTimeoutSec** and **softResultLength** to guide response length/speed when you need a quick, terse answer.
-- Do NOT use for complex multi-step reasoning, writing code, or tasks that require executing commands.
+- Use **softTimeoutSec** and **softResultLength** to guide response length/speed when you need a terse answer.
+- Do NOT use for writing code or tasks that require executing commands — it is read-only.
 `
 }
