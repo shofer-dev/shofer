@@ -15,6 +15,7 @@ import {
 	marketplaceItemSchema,
 } from "./marketplace.js"
 import type { TodoItem } from "./todo.js"
+import type { ToolGroup } from "./tool.js"
 import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
@@ -711,6 +712,8 @@ export interface WebviewMessage {
 		| "toggleToolEnabledForPrompt"
 		| "toggleMcpServer"
 		| "updateMcpTimeout"
+		| "updateMcpServerConfig"
+		| "setMcpToolGroup"
 		| "walkthroughOpen"
 		| "enhancePrompt"
 		| "enhancedPrompt"
@@ -900,6 +903,20 @@ export interface WebviewMessage {
 	serverName?: string
 	toolName?: string
 	isEnabled?: boolean
+	/**
+	 * Target tool group (category) for `setMcpToolGroup`. One of the
+	 * {@link ToolGroup} values, or `null` to clear the per-tool override so the
+	 * tool falls back to its server-declared group / `"uncategorized"`.
+	 */
+	toolGroup?: ToolGroup | null
+	/**
+	 * Partial MCP server configuration patch sent from the Settings → MCP
+	 * Servers editor. Keys map to `mcp.json` fields (command, args, cwd, env,
+	 * url, headers, watchPaths, type, …); a value of `undefined`/`null` clears
+	 * that field. Consumed by the `updateMcpServerConfig` handler.
+	 */
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	serverConfig?: Record<string, any>
 	mode?: string
 	/**
 	 * Pre-task API configuration profile name selected in the chat dropdown,

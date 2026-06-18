@@ -936,12 +936,17 @@ export class McpHub {
 				transport.start = async () => {}
 			}
 
-			// Create a connected connection
+			// Create a connected connection.
+			// Store the *raw* (pre-injection) config so `server.config` mirrors
+			// the on-disk file: this keeps `${env:…}`/`${workspaceFolder}`
+			// placeholders intact for the settings editor (no secret leakage),
+			// avoids double-injection on restart (connectToServer re-injects),
+			// and prevents spurious change-detection diffs against the file.
 			const connection: ConnectedMcpConnection = {
 				type: "connected",
 				server: {
 					name,
-					config: JSON.stringify(configInjected),
+					config: JSON.stringify(config),
 					status: "connecting",
 					disabled: configInjected.disabled,
 					source,
@@ -1755,6 +1760,59 @@ export class McpHub {
 		}
 	}
 
+	/**
+	 * Applies a partial configuration update from the settings UI to a server's
+	 * entry in the appropriate config file, then reconnects so that
+	 * transport-affecting changes (command, args, cwd, env, url, headers,
+	 * watchPaths, …) take effect immediately.
+	 *
+	 * Fields set to `undefined` in `configUpdate` are removed from the stored
+	 * config (JSON serialization drops `undefined`). This lets the UI clear
+	 * optional fields and switch transport types cleanly — e.g. switching from
+	 * `stdio` to `sse` sends `url` while clearing `command`/`args`/`env`.
+	 *
+	 * The merged result is validated before it is persisted so user mistakes are
+	 * surfaced without leaving a broken config on disk.
+	 */
+	public async updateServerConfigFromUI(
+		serverName: string,
+		configUpdate: Record<string, any>,
+		source?: "global" | "project",
+	): Promise<void> {
+		try {
+			const connection = this.findConnection(serverName, source)
+			if (!connection) {
+				throw new Error(`Server ${serverName}${source ? ` with source ${source}` : ""} not found`)
+			}
+
+			const serverSource = connection.server.source || "global"
+
+			// Validate the merged result before writing anything to disk.
+			const current = JSON.parse(connection.server.config)
+			const merged: Record<string, any> = { ...current, ...configUpdate }
+			for (const key of Object.keys(merged)) {
+				if (merged[key] === undefined) {
+					delete merged[key]
+				}
+			}
+			this.validateServerConfig(merged, serverName)
+
+			// Persist the update. updateServerConfig merges into the file and the
+			// JSON write drops any keys whose value is `undefined`.
+			await this.updateServerConfig(serverName, configUpdate, serverSource)
+
+			// Reconnect using the freshly written config so the changes apply.
+			const updatedConfig = await this.readServerConfigFromFile(serverName, serverSource)
+			await this.deleteConnection(serverName, serverSource)
+			await this.connectToServer(serverName, updatedConfig, serverSource)
+
+			await this.notifyWebviewOfServerChanges()
+		} catch (error) {
+			this.showErrorMessage(`Failed to update configuration for server ${serverName}`, error)
+			throw error
+		}
+	}
+
 	public async deleteServer(serverName: string, source?: "global" | "project"): Promise<void> {
 		try {
 			// Find the connection to determine if it's a global or project server
@@ -2029,6 +2087,92 @@ export class McpHub {
 		} catch (error) {
 			this.showErrorMessage(`Failed to update settings for tool ${toolName}`, error)
 			throw error // Re-throw to ensure the error is properly handled
+		}
+	}
+
+	/**
+	 * Assigns an MCP tool to a tool group (category) by writing the override into
+	 * `toolGroups[toolName]` in the server's config file. This override has the
+	 * highest priority when resolving the tool's group for auto-approval (see
+	 * `fetchToolsList`). Passing `group` as `null`/`undefined` removes the
+	 * override so the tool falls back to its server-declared group (or
+	 * `"uncategorized"`).
+	 */
+	async setToolGroup(
+		serverName: string,
+		source: "global" | "project",
+		toolName: string,
+		group: z.infer<typeof toolGroupsSchema> | null | undefined,
+	): Promise<void> {
+		try {
+			const connection = this.findConnection(serverName, source)
+			if (!connection) {
+				throw new Error(`Server ${serverName} with source ${source} not found`)
+			}
+
+			// Validate the group up front (when one was provided).
+			if (group != null) {
+				toolGroupsSchema.parse(group)
+			}
+
+			// Resolve the correct config file for this server's source.
+			let configPath: string
+			if (source === "project") {
+				const projectMcpPath = await this.getProjectMcpPath()
+				if (!projectMcpPath) {
+					throw new Error("Project MCP configuration file not found")
+				}
+				configPath = projectMcpPath
+			} else {
+				configPath = await this.getMcpSettingsFilePath()
+			}
+
+			const normalizedPath = process.platform === "win32" ? configPath.replace(/\\/g, "/") : configPath
+			const content = await fs.readFile(normalizedPath, "utf-8")
+			const config = JSON.parse(content)
+
+			if (!config.mcpServers || !config.mcpServers[serverName]) {
+				throw new Error(`Server ${serverName} not found in config`)
+			}
+
+			const serverEntry = config.mcpServers[serverName]
+			const existingGroups: Record<string, string> =
+				serverEntry.toolGroups && typeof serverEntry.toolGroups === "object" ? serverEntry.toolGroups : {}
+
+			if (group == null) {
+				delete existingGroups[toolName]
+			} else {
+				existingGroups[toolName] = group
+			}
+
+			// Keep the file tidy: drop the key entirely when no overrides remain.
+			if (Object.keys(existingGroups).length > 0) {
+				serverEntry.toolGroups = existingGroups
+			} else {
+				delete serverEntry.toolGroups
+			}
+
+			// Suppress the file watcher's restart while we write programmatically.
+			if (this.flagResetTimer) {
+				clearTimeout(this.flagResetTimer)
+			}
+			this.isProgrammaticUpdate = true
+			try {
+				await safeWriteJson(normalizedPath, config, { prettyPrint: true })
+			} finally {
+				this.flagResetTimer = setTimeout(() => {
+					this.isProgrammaticUpdate = false
+					this.flagResetTimer = undefined
+				}, 600)
+			}
+
+			// Re-fetch the tool list so the resolved `group` updates in the UI
+			// without a full server reconnect.
+			connection.server.tools = await this.fetchToolsList(serverName, source)
+			await this.notifyWebviewOfServerChanges()
+		} catch (error) {
+			this.showErrorMessage(`Failed to update group for tool ${toolName}`, error)
+			throw error
 		}
 	}
 

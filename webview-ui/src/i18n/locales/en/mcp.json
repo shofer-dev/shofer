@@ -21,12 +21,36 @@
 		"alwaysAllow": "Always allow",
 		"parameters": "Parameters",
 		"noDescription": "No description",
-		"togglePromptInclusion": "Toggle inclusion in prompt"
+		"togglePromptInclusion": "Toggle inclusion in prompt",
+		"group": "Group",
+		"groupDefault": "Default (server-declared)",
+		"groupTooltip": "Auto-approval category for this tool. Tools are auto-approved only when their group is allowed."
 	},
 	"tabs": {
+		"configuration": "Configuration",
 		"tools": "Tools",
 		"resources": "Resources",
 		"logs": "Logs"
+	},
+	"configEditor": {
+		"type": "Transport Type",
+		"types": {
+			"stdio": "stdio (local process)",
+			"sse": "sse (Server-Sent Events)",
+			"streamableHttp": "streamable-http"
+		},
+		"command": "Command",
+		"args": "Arguments",
+		"argsHint": "One argument per line.",
+		"cwd": "Working Directory",
+		"env": "Environment Variables",
+		"keyValueHint": "One KEY=VALUE per line.",
+		"url": "Server URL",
+		"headers": "HTTP Headers",
+		"watchPaths": "Watch Paths",
+		"watchPathsHint": "Files or directories that restart this server when changed. One per line.",
+		"save": "Save",
+		"reset": "Reset"
 	},
 	"emptyState": {
 		"noTools": "No tools found",

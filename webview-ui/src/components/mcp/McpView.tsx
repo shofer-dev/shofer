@@ -27,6 +27,7 @@ import McpToolRow from "./McpToolRow"
 import McpResourceRow from "./McpResourceRow"
 import McpEnabledToggle from "./McpEnabledToggle"
 import { McpErrorRow } from "./McpErrorRow"
+import McpServerConfigEditor from "./McpServerConfigEditor"
 
 /**
  * A collapsible tree group used to display tools/resources/logs under each MCP server node.
@@ -40,7 +41,7 @@ const TreeGroup = ({
 }: {
 	label: string
 	icon: string
-	count: number
+	count?: number
 	defaultOpen?: boolean
 	children: React.ReactNode
 }) => {
@@ -64,18 +65,20 @@ const TreeGroup = ({
 				/>
 				<span className={`codicon ${icon}`} style={{ marginRight: "6px", opacity: 0.8, flexShrink: 0 }} />
 				<span style={{ fontWeight: 500 }}>{label}</span>
-				<span
-					style={{
-						marginLeft: "6px",
-						opacity: 0.6,
-						fontSize: "11px",
-						background: "var(--vscode-badge-background)",
-						color: "var(--vscode-badge-foreground)",
-						padding: "1px 5px",
-						borderRadius: "8px",
-					}}>
-					{count}
-				</span>
+				{count !== undefined && (
+					<span
+						style={{
+							marginLeft: "6px",
+							opacity: 0.6,
+							fontSize: "11px",
+							background: "var(--vscode-badge-background)",
+							color: "var(--vscode-badge-foreground)",
+							padding: "1px 5px",
+							borderRadius: "8px",
+						}}>
+						{count}
+					</span>
+				)}
 			</div>
 			{isOpen && (
 				<div
@@ -446,15 +449,25 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 					</div>
 				)}
 
-				{/* Tools tree group — expanded by default */}
+				{/* Configuration tree group — collapsed by default */}
+				<TreeGroup label={t("mcp:tabs.configuration")} icon="codicon-settings-gear" defaultOpen={false}>
+					<McpServerConfigEditor server={server} />
+				</TreeGroup>
+
+				{/* Tools tree group — collapsed by default */}
 				<TreeGroup
 					label={t("mcp:tabs.tools")}
 					icon="codicon-symbol-method"
 					count={server.tools?.length ?? 0}
-					defaultOpen={true}>
+					defaultOpen={false}>
 					{server.tools && server.tools.length > 0 ? (
 						server.tools.map((tool) => (
-							<McpToolRow key={`${tool.name}-${server.name}-${server.source || "global"}`} tool={tool} />
+							<McpToolRow
+								key={`${tool.name}-${server.name}-${server.source || "global"}`}
+								tool={tool}
+								serverName={server.name}
+								serverSource={server.source || "global"}
+							/>
 						))
 					) : (
 						<div

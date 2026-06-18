@@ -2436,6 +2436,41 @@ export const webviewMessageHandler = async (
 				}
 			}
 			break
+		case "setMcpToolGroup":
+			if (message.serverName && message.toolName) {
+				try {
+					await provider
+						.getMcpHub()
+						?.setToolGroup(
+							message.serverName,
+							message.source as "global" | "project",
+							message.toolName,
+							message.toolGroup ?? null,
+						)
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error)
+					provider.log(`Failed to set group for tool ${message.toolName}: ${errorMessage}`)
+					vscode.window.showErrorMessage(errorMessage)
+				}
+			}
+			break
+		case "updateMcpServerConfig":
+			if (message.serverName && message.serverConfig) {
+				try {
+					await provider
+						.getMcpHub()
+						?.updateServerConfigFromUI(
+							message.serverName,
+							message.serverConfig,
+							message.source as "global" | "project",
+						)
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error)
+					provider.log(`Failed to update config for ${message.serverName}: ${errorMessage}`)
+					vscode.window.showErrorMessage(errorMessage)
+				}
+			}
+			break
 		case "updateCustomMode":
 			if (message.modeConfig) {
 				try {
