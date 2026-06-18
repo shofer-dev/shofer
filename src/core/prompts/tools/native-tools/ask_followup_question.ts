@@ -2,14 +2,16 @@ import type OpenAI from "openai"
 
 const ASK_FOLLOWUP_QUESTION_DESCRIPTION = `Ask the user a question to gather additional information needed to complete the task. Use when you need clarification or more details to proceed effectively.
 
-There are two ways to collect the answer — provide EITHER (or both):
+There are two ways to collect the answer — provide EXACTLY ONE (never both); set the other to null:
 - follow_up: a short list of one-click suggested answers (best for simple either/or or pick-one-of-a-few choices).
 - form: a typed input form rendering rich widgets (dropdown, radio, multi-select checkboxes, slider, number, free-text, boolean toggle). Best when you need structured, validated, or multiple values at once. The user's answers are returned as a JSON object keyed by each field's name.
 
 Parameters:
 - question: (required) A clear, specific question addressing the information needed.
-- follow_up: (optional, null when unused) A list of 2-4 suggested answers. Suggestions must be complete, actionable answers without placeholders. Optionally include mode to switch modes (code/architect/etc.).
-- form: (optional, null when unused) A list of typed input fields. Each field has a name (the JSON key the answer is returned under) and a type (string/number/boolean), plus optional presentation metadata that selects the widget.
+- follow_up: (optional — provide this OR form, null when unused) A list of 2-4 suggested answers. Suggestions must be complete, actionable answers without placeholders. Optionally include mode to switch modes (code/architect/etc.).
+- form: (optional — provide this OR follow_up, null when unused) A list of typed input fields. Each field has a name (the JSON key the answer is returned under) and a type (string/number/boolean), plus optional presentation metadata that selects the widget.
+
+Providing both follow_up and form is rejected — choose one answer channel.
 
 Form widget selection (per field):
 - options present + widget "dropdown" (or omitted) → single-select dropdown

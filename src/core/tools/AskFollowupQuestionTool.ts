@@ -31,22 +31,41 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			pushToolResult(await task.sayAndCreateMissingParamError("ask_followup_question", paramName))
 		}
 
+		const recordToolValidationError = (message: string): void => {
+			task.consecutiveMistakeCount++
+			task.recordToolError("ask_followup_question")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(formatResponse.toolError(message))
+		}
+
 		try {
 			if (!question) {
 				await recordMissingParamError("question")
 				return
 			}
 
+			// `follow_up` and `form` are each OPTIONAL but MUTUALLY EXCLUSIVE — a
+			// valid call offers EXACTLY ONE answer channel:
+			//  - `form`: a non-empty typed-input form.
+			//  - `follow_up`: a suggestion-button list. An *empty* array is also a
+			//    valid follow_up channel — it asks the question with no buttons
+			//    (free-text answer).
 			const hasForm = Array.isArray(form) && form.length > 0
-			// An array `follow_up` — even empty — is a valid answer channel: an empty
-			// array asks the question with no canned buttons (free-text answer). Only
-			// a missing/non-array follow_up with no form is invalid.
-			const hasFollowUp = Array.isArray(follow_up)
+			const hasFollowUpChannel = Array.isArray(follow_up)
+			const hasSuggestions = Array.isArray(follow_up) && follow_up.length > 0
 
-			// A valid call must offer the user a way to answer: a follow_up list
-			// (possibly empty) or a typed form. Report against `follow_up` (the
-			// canonical answer channel) when neither is present.
-			if (!hasForm && !hasFollowUp) {
+			// Both a suggestion list AND a typed form is ambiguous — reject it so the
+			// model picks one rather than silently dropping the other.
+			if (hasForm && hasSuggestions) {
+				recordToolValidationError(
+					"ask_followup_question accepts EITHER `follow_up` (suggestion buttons) OR `form` (typed inputs), not both. Provide exactly one and set the other to null.",
+				)
+				return
+			}
+
+			// Neither channel present → the user has no way to answer. Report against
+			// `follow_up` (the canonical answer channel).
+			if (!hasForm && !hasFollowUpChannel) {
 				await recordMissingParamError("follow_up")
 				return
 			}

@@ -197,6 +197,60 @@ describe("askFollowupQuestionTool", () => {
 			expect(mockShofer.sayAndCreateMissingParamError).toHaveBeenCalledWith("ask_followup_question", "follow_up")
 			expect(mockShofer.ask).not.toHaveBeenCalled()
 		})
+
+		it("rejects providing BOTH follow_up suggestions and a form", async () => {
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Pick or fill?" },
+				nativeArgs: {
+					question: "Pick or fill?",
+					follow_up: [{ text: "Option A" }, { text: "Option B" }],
+					form: [{ name: "name", type: "string" }],
+				} as any,
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// Ambiguous call: no question is asked, a tool error is surfaced, and it
+			// is reported as a validation error (not a missing-param error).
+			expect(mockShofer.ask).not.toHaveBeenCalled()
+			expect(mockShofer.sayAndCreateMissingParamError).not.toHaveBeenCalled()
+			expect(mockShofer.recordToolError).toHaveBeenCalledWith("ask_followup_question")
+			expect(toolResult).toContain("not both")
+		})
+
+		it("accepts follow_up suggestions alone (form null)", async () => {
+			mockShofer.ask.mockResolvedValue({ text: "Option A" })
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Which option?" },
+				nativeArgs: {
+					question: "Which option?",
+					follow_up: [{ text: "Option A" }, { text: "Option B" }],
+					form: null,
+				} as any,
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(mockShofer, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn(),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			expect(mockShofer.sayAndCreateMissingParamError).not.toHaveBeenCalled()
+			expect(mockShofer.ask).toHaveBeenCalled()
+			const askArg = mockShofer.ask.mock.calls[0][1] as string
+			expect(askArg).toContain('"suggest"')
+		})
 	})
 
 	describe("parameter validation", () => {
