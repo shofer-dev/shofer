@@ -280,6 +280,11 @@ export const TOOL_ALIASES: Record<string, ToolName> = {
 export const CROSS_ASSISTANT_ALIASES: Record<string, ToolName> = {
 	search_content: "grep_search",
 	search_file: "find_files",
+	search_files: "find_files",
+	find_file: "find_files",
+	iterative_search: "grep_search",
+	internal_search: "grep_search",
+	codebase_search: "rag_search",
 	bash: "execute_command",
 } as const
 

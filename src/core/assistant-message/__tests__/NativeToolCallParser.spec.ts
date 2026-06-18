@@ -433,6 +433,39 @@ describe("NativeToolCallParser", () => {
 					}
 				})
 
+				it("should recover apply_diff path from box-drawing-corrupted XML-leak (U+FF5C prefix)", () => {
+					// Simulates the real-world vscode-lm / deepseek-v4-pro bug where the
+					// model corrupts the "<parameter" prefix by substituting box-drawing
+					// Unicode characters (U+FF5C = fullwidth vertical bar) for
+					// expected ASCII bytes, producing:
+					//   "<\uFF5C\uFF5CDSML\uFF5C\uFF5Cparameter name=\"path\" string=\"true\">PATH"
+					const diffContent =
+						`<<<<<<< SEARCH\n:start_line:70\n\told code\n` +
+						`=======\n\tnew code\n` +
+						`>>>>>>> REPLACE\n` +
+						`<\uFF5C\uFF5CDSML\uFF5C\uFF5Cparameter name="path" string="true">extensions/shofer/website/src/data/features.ts`
+
+					const toolCall = {
+						id: "toolu_boxdrawing_xml_leak",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({ diff: diffContent }),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).not.toBeNull()
+					expect(result?.type).toBe("tool_use")
+					if (result?.type === "tool_use") {
+						expect(result.nativeArgs).toBeDefined()
+						const nativeArgs = result.nativeArgs as { path: string; diff: string }
+						expect(nativeArgs.path).toBe("extensions/shofer/website/src/data/features.ts")
+						expect(nativeArgs.diff).not.toContain("<parameter")
+						expect(nativeArgs.diff).not.toContain("\uFF5C")
+						expect(nativeArgs.diff).toContain("<<<<<<< SEARCH")
+						expect(nativeArgs.diff).toContain(">>>>>>> REPLACE")
+					}
+				})
+
 				it("should handle apply_diff with normal args (no regression)", () => {
 					const toolCall = {
 						id: "toolu_normal_diff",
@@ -512,6 +545,30 @@ describe("NativeToolCallParser", () => {
 						id: "toolu_no_diff",
 						name: "apply_diff" as const,
 						arguments: JSON.stringify({ path: "src/test.ts" }),
+					}
+
+					const result = NativeToolCallParser.parseToolCall(toolCall)
+
+					expect(result).toBeNull()
+				})
+
+				it("should NOT false-recover path when parameter-like text appears before > REPLACE boundary", () => {
+					// The diff SEARCH block legitimately contains a line that looks
+					// like an XML-leak path suffix, but it appears BEFORE the
+					// ">>>>>>> REPLACE" boundary, so it is real diff data, not a
+					// model-side parameter leak.  The "$" end-of-string anchor in
+					// the regex must reject this.
+					const diffContent =
+						`<<<<<<< SEARCH\n` +
+						`<parameter name="path" string="true">legit/doc.md\n` +
+						`-------\n` +
+						`unchanged\n` +
+						`>>>>>>> REPLACE`
+
+					const toolCall = {
+						id: "toolu_false_positive_guard",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({ diff: diffContent }),
 					}
 
 					const result = NativeToolCallParser.parseToolCall(toolCall)
@@ -771,11 +828,14 @@ describe("NativeToolCallParser", () => {
 				}
 			})
 
-			it("resolves search_file alias to find_files", () => {
+			it("resolves search_file alias to find_files (Claude Code file search by filename pattern)", () => {
+				// Claude Code's search_file takes a directory and a filename pattern.
+				// Shofer's find_files takes a glob pattern — it has no separate path field.
 				const toolCall = {
-					id: "toolu_search_file_alias",
+					id: "toolu_search_file_find_files",
 					name: "search_file" as const,
 					arguments: JSON.stringify({
+						path: "src",
 						pattern: "*.ts",
 					}),
 				}
@@ -789,8 +849,34 @@ describe("NativeToolCallParser", () => {
 					expect(result.originalName).toBe("search_file")
 					expect(result.nativeArgs).toBeDefined()
 					const nativeArgs = result.nativeArgs as { pattern: string }
+					// find_files parser reads pattern (the glob), not path
 					expect(nativeArgs.pattern).toBe("*.ts")
 				}
+			})
+
+			it("returns null and sets lastParseError for totally unknown tool (no alias)", () => {
+				const toolCall = {
+					id: "toolu_truly_unknown",
+					name: "nonexistent_tool_xyz",
+					arguments: JSON.stringify({
+						path: "src",
+					}),
+				}
+
+				NativeToolCallParser.consumeLastParseError()
+
+				const result = NativeToolCallParser.parseToolCall(toolCall)
+
+				expect(result).toBeNull()
+				const parseError = NativeToolCallParser.consumeLastParseError()
+				expect(parseError).not.toBeNull()
+				expect(parseError).toContain("Unknown tool")
+				expect(parseError).toContain("nonexistent_tool_xyz")
+				// Levenshtein suggestion: the closest match should be included
+				expect(parseError).toMatch(/Did you mean '[a-z_]+'\?/)
+				// Available tools list should be included
+				expect(parseError).toContain("Available tools:")
+				expect(parseError).toContain("grep_search")
 			})
 		})
 	})
