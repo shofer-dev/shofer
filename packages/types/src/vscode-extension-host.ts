@@ -237,6 +237,7 @@ export interface ExtensionMessage {
 		| "tasksButtonClicked"
 		| "launcherButtonClicked"
 		| "newMenuButtonClicked"
+		| "welcomeButtonClicked"
 		| "didBecomeVisible"
 		| "focusInput"
 		| "switchTab"

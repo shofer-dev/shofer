@@ -189,6 +189,14 @@ const App = () => {
 					setWelcomeClosed(true)
 				}
 
+				// The "Show Welcome" overflow-menu entry re-opens the welcome /
+				// onboarding panel on demand, even after it was dismissed.
+				if (message.action === "welcomeButtonClicked") {
+					setWelcomeClosed(false)
+					setWelcomeSticky(true)
+					return
+				}
+
 				// The Tasks title-bar button toggles the parallel-tasks side
 				// drawer rendered inside TaskHeader / TaskSelector. We re-emit
 				// it as a window event so the (deeply nested) drawer can listen

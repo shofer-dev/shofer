@@ -130,6 +130,11 @@
 				"icon": "$(info)"
 			},
 			{
+				"command": "shofer.welcomeButtonClicked",
+				"title": "%command.welcome.title%",
+				"icon": "$(rocket)"
+			},
+			{
 				"command": "shofer.openInNewTab",
 				"title": "%command.openInNewTab.title%",
 				"category": "%configuration.title%"
@@ -323,6 +328,11 @@
 				{
 					"command": "shofer.aboutButtonClicked",
 					"group": "overflow@6",
+					"when": "view == shofer.SidebarProvider"
+				},
+				{
+					"command": "shofer.welcomeButtonClicked",
+					"group": "overflow@7",
 					"when": "view == shofer.SidebarProvider"
 				}
 			],
