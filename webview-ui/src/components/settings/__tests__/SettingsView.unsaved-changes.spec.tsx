@@ -668,12 +668,13 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 			fireEvent.click(screen.getByTestId("pick-default-other"))
 			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
 
-			// Switching the Edit Configuration makes the host push the edited profile's
-			// settings — apiConfiguration changes, but the global default is unchanged.
-			// Pre-fix, that push (via the reset dirty flag) reverted the chosen default.
+			// Switching the Edit Configuration pushes the edited profile's
+			// settings via editingApiConfiguration — NOT apiConfiguration.
+			// The global default is untouched and the chosen default must
+			// survive the host push.
 			hostPush(rerender, {
 				...twoConfigState,
-				apiConfiguration: { apiProvider: "anthropic", apiModelId: "claude" },
+				editingApiConfiguration: { apiProvider: "anthropic", apiModelId: "claude" },
 			})
 			expect(screen.getByTestId("default-config-value").textContent).toBe("other")
 		})

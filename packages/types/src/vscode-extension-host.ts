@@ -502,6 +502,11 @@ export type ExtensionState = Pick<
 	currentTaskItem?: HistoryItem
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	apiConfiguration: ProviderSettings
+	/** When the Settings → Providers "Edit Configuration" dropdown loads a
+	 *  non-default config for editing, its settings are pushed here so the
+	 *  form renders them WITHOUT corrupting the global apiConfiguration
+	 *  that running tasks and the chat UI depend on. */
+	editingApiConfiguration?: ProviderSettings
 	uriScheme?: string
 	shouldShowAnnouncement: boolean
 

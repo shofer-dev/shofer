@@ -257,19 +257,29 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
 
-	// Sync cachedState + editingConfigName when the host pushes a new
-	// apiConfiguration. The host can change apiConfiguration independently
-	// of currentApiConfigName (via loadApiConfigurationForEdit), so we
-	// track the incoming apiConfiguration shape as a fingerprint.
+	// Sync cachedState + editingConfigName when the host pushes new settings.
+	// When the user loads a different config via the Edit Configuration
+	// dropdown, loadApiConfigurationForEdit pushes it through the
+	// `editingApiConfiguration` configUpdate key — we copy it into
+	// cachedState.apiConfiguration so the form renders it WITHOUT corrupting
+	// the global apiConfiguration that running tasks and the chat UI depend on.
 	const apiConfigFingerprint = useRef<string>("")
 
 	useEffect(() => {
-		const fp = JSON.stringify(extensionState.apiConfiguration ?? {})
+		// Prefer editingApiConfiguration (loaded by the edit dropdown) over
+		// apiConfiguration (the global default) so the form always shows the
+		// config the user picked in the edit dropdown.
+		const sourceSettings = extensionState.editingApiConfiguration ?? extensionState.apiConfiguration ?? {}
+		const fp = JSON.stringify(sourceSettings)
 		if (apiConfigFingerprint.current === fp) {
 			return
 		}
 		apiConfigFingerprint.current = fp
-		setCachedState((prevCachedState) => ({ ...prevCachedState, ...extensionState }))
+		setCachedState((prevCachedState) => ({
+			...prevCachedState,
+			...extensionState,
+			apiConfiguration: sourceSettings,
+		}))
 		setChangeDetected(false)
 	}, [extensionState])
 

@@ -2779,14 +2779,20 @@ export class ShoferProvider
 	 * Load an API configuration for editing only — does NOT change the global
 	 * default profile. Used by the edit dropdown in Settings → Providers to
 	 * let the user inspect and modify any config without switching the default.
+	 *
+	 * The edit target's settings are pushed via a targeted
+	 * {@code editingApiConfiguration} configUpdate so the Settings form renders
+	 * them. The global apiConfiguration (which running tasks and the chat UI
+	 * depend on) is NEVER touched — only the Save button (which fires
+	 * upsertApiConfiguration) persists edits and refreshes the task handlers.
 	 */
 	async loadApiConfigurationForEdit(name: string) {
 		const { id, ...providerSettings } = await this.providerSettingsManager.getProfile({ name })
 
-		// Push the config's settings into the webview's apiConfiguration so the
-		// user can edit them, but do NOT change currentApiConfigName.
-		await this.contextProxy.setProviderSettings(providerSettings)
-		await this.postInitState()
+		// Push the config's settings to the webview via a targeted key so the
+		// Settings form can render them WITHOUT polluting the global
+		// apiConfiguration that running tasks and the chat UI read.
+		this.postConfigUpdate("editingApiConfiguration", providerSettings)
 	}
 
 	/**
@@ -3726,6 +3732,7 @@ export class ShoferProvider
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
+			editingApiConfiguration: undefined,
 			customInstructions,
 			alwaysAllowReadOnly: alwaysAllowReadOnly ?? false,
 			alwaysAllowReadOnlyOutsideWorkspace: alwaysAllowReadOnlyOutsideWorkspace ?? false,
