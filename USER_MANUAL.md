@@ -441,10 +441,10 @@ inspect each agent's chat, messages, and tool calls from the Task Selector tree.
 A running (or finished) workflow opens in **WorkflowView**, a tabbed panel that
 visualizes the whole agent tree live:
 
-- **Events** — the message feed for the focused task.
+- **Events** — the message feed for the focused task. Each round's headline is
+  followed by an inline **topology snapshot**: a small diagram of the current
+  round showing which agents are running and who they're sending to / waiting on.
 - **Tree** — the task hierarchy rooted at the workflow.
-- **Topology** — a directed graph of the current round: which agents are running
-  and who they're sending to / waiting on.
 - **Sequence** — the real message-passing timeline (from mailbox history),
   including `escalate @Human` arrows, with current-round sends highlighted.
 - **State** — per-agent swimlanes marking each agent's currently executing op.

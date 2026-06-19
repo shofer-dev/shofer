@@ -33,6 +33,7 @@ import {
 	type MailboxEntry,
 	deserializeFlowState,
 	serializeFlowState,
+	topologyToMermaid,
 } from "./slang-types"
 import {
 	advanceAgent as advanceAgentPure,
@@ -736,11 +737,18 @@ export class WorkflowTask extends Task {
 			}
 
 			// 5. Dispatch all staking agents in parallel, wait, collect results.
-			await this.sayProgress(this.describeRoundDispatch(stakes))
 			await this.dispatchStakes(stakes)
 			// Reflect the freshly-dispatched "running" agents in the viz before
 			// we block waiting on them, so progress is visible mid-round.
 			this.notifySlangEditor()
+			// Round headline + an inline topology snapshot of the now-running
+			// agents. Emitted here (after dispatch) rather than before it because
+			// `status="running"` and `sendingTo` — which drive the stake/await
+			// edges — are only set inside dispatchStakes(); this is the same live
+			// state the (now-removed) Topology tab rendered.
+			await this.sayProgress(
+				`${this.describeRoundDispatch(stakes)}\n\n${topologyToMermaid(this.flowState.agents)}`,
+			)
 			await this.waitForStakes(stakes)
 			await this.collectStakeResults(stakes)
 

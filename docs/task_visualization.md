@@ -1,6 +1,6 @@
 # Task Visualization
 
-This document describes four visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView` (matching the pattern used by [`WorkflowView`](../webview-ui/src/components/chat/WorkflowView.tsx) with its `[ Events ] [ Tree ] [ Topology ] [ Sequence ] [ State ]` tabs):
+This document describes four visualizations for a Shofer Task and its subtask tree, accessible via tabs in `ChatView` (matching the pattern used by [`WorkflowView`](../webview-ui/src/components/chat/WorkflowView.tsx) with its `[ Events ] [ Tree ] [ Sequence ] [ State ]` tabs; WorkflowView's per-round topology is rendered inline in Events):
 
 1. **Tree** — hierarchical view showing parent/child task relationships under a common root, like `TaskSelector` renders.
 2. **Sequence** — a lifeline-based sequence diagram showing task-to-task communication (spawn, message, await, answer, cancel, question) across the task tree, analogous to `compileSequenceSVG` in [`slang-render.js`](../src/core/webview/slang-render.js:671).

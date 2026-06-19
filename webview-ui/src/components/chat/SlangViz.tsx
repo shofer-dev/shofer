@@ -31,8 +31,10 @@ export interface SlangVizProps {
 	html: string | undefined
 	/** Serialized FlowState pushed on each round/step for in-place overlays. */
 	runState?: Record<string, unknown>
-	/** Active view tab — forwarded via postMessage so iframe updates in-place. */
-	view?: "topology" | "sequence" | "swimlane"
+	/** Active view tab — forwarded via postMessage so iframe updates in-place.
+	 *  ("topology" is no longer a WorkflowView tab; the iframe still defaults to
+	 *  it internally, so we only ever switch it to sequence/swimlane.) */
+	view?: "sequence" | "swimlane"
 }
 
 /** Read the CSP nonce the host exposed so srcdoc scripts satisfy the policy. */
@@ -118,9 +120,10 @@ const SlangViz: React.FC<SlangVizProps> = ({ html, runState, view }) => {
 
 	const onLoad = useCallback(() => {
 		loadedRef.current = true
-		// Set initial view before pushing runState
+		// Set initial view before pushing runState. The iframe defaults to its
+		// topology view internally; we only ever switch it to sequence/swimlane.
 		const win = iframeRef.current?.contentWindow
-		if (win && view && view !== "topology") {
+		if (win && view) {
 			win.postMessage({ type: "switchView", view }, "*")
 		}
 		postRunState()

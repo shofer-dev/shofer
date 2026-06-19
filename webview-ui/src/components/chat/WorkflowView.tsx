@@ -115,10 +115,9 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			: undefined
 
 	// Show a WarningRow when the user sends a message with a retired provider.
-	// Workflow viz tab: "chat" | "tree" | "topology" | "sequence" | "swimlane" | "stats" | "logs"
-	const [workflowTab, setWorkflowTab] = useState<
-		"chat" | "tree" | "topology" | "sequence" | "swimlane" | "stats" | "logs"
-	>("chat")
+	// Workflow viz tab: "chat" | "tree" | "sequence" | "swimlane" | "stats" | "logs"
+	// (Topology is no longer a tab — a per-round snapshot is rendered inline in Events.)
+	const [workflowTab, setWorkflowTab] = useState<"chat" | "tree" | "sequence" | "swimlane" | "stats" | "logs">("chat")
 
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
 
@@ -2098,35 +2097,32 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							style={{
 								borderBottom: "1px solid var(--vscode-widget-border, #3c3c3c)",
 							}}>
-							{(["chat", "tree", "topology", "sequence", "swimlane", "stats", "logs"] as const).map(
-								(tab) => (
-									<button
-										key={tab}
-										type="button"
-										className={`text-xs font-medium px-3 py-1 rounded transition-colors border-none cursor-pointer ${
-											workflowTab === tab ? "text-white" : "opacity-60 hover:opacity-100"
-										}`}
-										style={{
-											background:
-												workflowTab === tab
-													? "var(--vscode-button-background, #0e639c)"
-													: "transparent",
-										}}
-										onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
+							{(["chat", "tree", "sequence", "swimlane", "stats", "logs"] as const).map((tab) => (
+								<button
+									key={tab}
+									type="button"
+									className={`text-xs font-medium px-3 py-1 rounded transition-colors border-none cursor-pointer ${
+										workflowTab === tab ? "text-white" : "opacity-60 hover:opacity-100"
+									}`}
+									style={{
+										background:
+											workflowTab === tab
+												? "var(--vscode-button-background, #0e639c)"
+												: "transparent",
+									}}
+									onClick={() => setWorkflowTab(tab as typeof workflowTab)}>
+									{
 										{
-											{
-												chat: "Events",
-												tree: "Tree",
-												topology: "Topology",
-												sequence: "Sequence",
-												swimlane: "State",
-												stats: "Stats",
-												logs: "Logs",
-											}[tab]
-										}
-									</button>
-								),
-							)}
+											chat: "Events",
+											tree: "Tree",
+											sequence: "Sequence",
+											swimlane: "State",
+											stats: "Stats",
+											logs: "Logs",
+										}[tab]
+									}
+								</button>
+							))}
 						</div>
 					)}
 					{vizHtml &&
@@ -2137,7 +2133,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							<SlangViz
 								html={vizHtml}
 								runState={vizRunState}
-								view={workflowTab as "topology" | "sequence" | "swimlane"}
+								view={workflowTab as "sequence" | "swimlane"}
 							/>
 						)}
 					{vizHtml && workflowTab === "tree" && (
