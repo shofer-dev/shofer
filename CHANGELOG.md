@@ -1,6 +1,71 @@
 # Shofer Changelog
 
-## 1.8.24 — 2026-06-15 (Current)
+## 2.0.0 — 2026-06-19 (Current)
+
+> A maturation-and-cleanup release on top of the 1.8.24 Workflow line. Two renames drive the major bump — **`groups` → `tools`** in mode configuration (breaking) and **Assistant Agent → Live Memory** — alongside structured (no-magic-string) Slang workflows with full per-agent configuration, per-tool MCP auto-approval, a global parallel-task limit, and a deep fix pass on windowed-cold-load scroll/header behavior in long chats. Only changes since 1.8.24 are listed.
+
+### Breaking Changes
+
+- **`groups` → `tools` in mode configuration.** Mode definitions (built-in modes, `.shofer/shofermodes`, and `.slang` agent blocks) now use `tools:` instead of `groups:` for tool-group lists — renamed end to end across schema, code, and webview. Rename `groups:` to `tools:` in any custom modes.
+- **`wait` tool renamed to `wait_for_message`** to disambiguate it from the timed `sleep` tool.
+
+### Features
+
+#### Workflows & Slang
+
+- **Structured stop signals**: `debug` and `implement-feature` replaced magic-string loop/stop words with typed boolean stop fields — no more brittle text matching.
+- **Full agent-block configuration**: `.slang` agent blocks now honor `tools`, `api_configuration`, `role`, `retry`, and `context { … }`. `role:` is injected into the agent's system prompt and `tools:` actually restricts the agent's tool set.
+- **Slang language**: `${…}` string interpolation; `budget` statements accept flow-param identifiers; `implement-feature` takes a single design-path input.
+- **`debug.slang` redesign**: the Architect consolidates findings and the consensus loop was dropped for a simpler flow; orchestrator stakes are proper hand-offs rather than mis-addressed work directives.
+- **`escalate` form widgets**: mid-flow human input renders radio + textarea widgets (the full `ask_followup_question` set) instead of free text.
+- **Events-tab topology**: per-round topology now renders inline in the Events feed (the separate Topology tab was removed), with clearer edge labels and non-interactive snapshots.
+- Budget simplified to a round cap (the token budget was dropped).
+
+#### Live Memory (formerly Assistant Agent)
+
+- **Renamed Assistant Agent → Live Memory** across the feature, modes, prompts, tools, and docs.
+- **`ask_live_memory`** now steers toward bigger investigative questions rather than quick lookups you can answer directly.
+
+#### MCP & native tools
+
+- **Per-tool MCP auto-approval**: MCP tools are gated by their tool group (not just `alwaysAllowMcp`); Settings exposes full server config plus per-tool group/visibility.
+- **Tool-parser robustness**: cross-assistant tool-alias resolution (for Claude Code models), Levenshtein fuzzy tool-name matching, wider `apply_diff` XML-leak recovery, and `file_path`/`target_directory`/`filePath` → `path` argument aliases.
+
+#### Parallelism & system prompt
+
+- **Global `maxParallelTasks` limit** (with design doc).
+- **Developer behavior rules** in the system prompt: don't double-answer, set a task title early, prefer tools over CLI, no band-aids/quick-hacks, subtask discipline, and — Code mode only — never disable tests/lint/type-check gates.
+- **Workspace submodule structure** (including nested submodules) injected into the prompt; the CAPABILITIES section is gated to the agent's actual tool groups.
+
+#### App & UI
+
+- WelcomeView refresh + roadmap link; **Show Welcome** and **About Shofer** added to the `…` overflow menu; Language moved into the UI/UX settings tab.
+- **Terminal**: guaranteed command termination via Stop and Kill buttons; user-killed commands display as "terminated".
+- **Worktree**: directory basename synced to the branch name on create; the create-worktree modal renders above the TaskSelector.
+- **Migration**: Claude Code and OpenCode guides + walkthrough entries + a `/migrate-from-opencode` command; the Roo-Code migration path was removed.
+
+### Bug Fixes
+
+- **Windowed cold-load (long chats)**: fixed the "Load older messages" scroll jump (Virtuoso `firstItemIndex` prepend anchor), the flash-to-top on every streamed append (stable `components` identity, sticky `hasMoreShoferMessages`, frozen synthetic-header `ts`), and stopped cold-load from clobbering `HistoryItem.task` with the `api_req_started` blob.
+- **Workflow resume**: agent `.slang` meta (tools/role/context) is restored after task rehydration; assorted `debug`/`implement-feature` execution bugs fixed.
+- **`ask_followup_question`**: `follow_up` and `form` are now mutually exclusive (exactly one); waiting/running lifecycle transitions for the background-child path; a per-ask UUID replaces the global timestamp to prevent superseded-ask races; relayed follow-ups name the asking agent.
+- **vscode-lm** throws on an unmatched model instead of silently returning a stub.
+- **`+` launcher**: `#shofer-portal` is always mounted so the New Task / New Workflow chooser works.
+- **Cross-platform**: Windows portability for tool import and worktree command recipes.
+- Keep the UI responsive during workflow JSON export; stop `ChatTextArea` stealing focus during agent work; filter skill entries from Settings → Slash Commands; fix built-in slash-command prompts; i18n/z-index fixes in CommandExecution, LauncherMenu, and TaskSelector.
+
+### Changed
+
+- Workflow **Stats** "Active time" relabeled to **"Active time (tree total)"** to distinguish the whole-tree sum from the header's per-task active time.
+- **About** panel gains an online changelog link; a stale Announcement entry was fixed.
+
+### Documentation
+
+- Major README / User Manual / website refresh leading with Shofer's differentiators (provable, observable, controllable parallel multi-agent workflows); added Claude Code & OpenCode migration guides; documented the workflow visualization tabs, command sandboxing, and Slang `${…}` interpolation + structured stop signals.
+
+---
+
+## 1.8.24 — 2026-06-15
 
 > Consolidates the 1.1.x–1.8.x line. The headline is the new **Workflow** system — deterministic, Slang-based multi-agent orchestration — together with its three-view visualization, a CLI/headless public API, OS-level command sandboxing, and a large performance and stability pass.
 
