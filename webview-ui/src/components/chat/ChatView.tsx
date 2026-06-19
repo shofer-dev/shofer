@@ -183,12 +183,30 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// render would bust the incremental processor's prefix cache.
 	const headerTaskTs = currentTaskItem?.ts
 	const headerTaskText = currentTaskItem?.task
+	// [scroll:h24] The host updates `HistoryItem.ts` (→ currentTaskItem.ts) to
+	// last-activity time on every state push during streaming. The synthetic
+	// header used that value as its `ts`, which flows into `task.ts` — the
+	// Virtuoso `key` AND the taskTs-keyed scroll lifecycle. A mutating ts thus
+	// remounted the list and reset the scroll anchor on EVERY streamed append
+	// (the flash). Freeze the header ts to the first value seen for a given task
+	// id so the windowed task's identity is stable for its lifetime. (Non-windowed
+	// tasks are unaffected: their `task` is the real root message, whose ts is
+	// immutable.)
+	const frozenHeaderTsRef = useRef<{ id: string; ts: number } | undefined>(undefined)
+	const headerTaskId = currentTaskItem?.id
+	let stableHeaderTs = headerTaskTs
+	if (headerTaskTs !== undefined && headerTaskId) {
+		if (frozenHeaderTsRef.current?.id !== headerTaskId) {
+			frozenHeaderTsRef.current = { id: headerTaskId, ts: headerTaskTs }
+		}
+		stableHeaderTs = frozenHeaderTsRef.current.ts
+	}
 	const syntheticTaskHeader = useMemo<ShoferMessage | undefined>(() => {
-		if (!hasMoreShoferMessages || headerTaskTs === undefined) {
+		if (!hasMoreShoferMessages || stableHeaderTs === undefined) {
 			return undefined
 		}
-		return { ts: headerTaskTs, type: "say", say: "text", text: headerTaskText ?? "" }
-	}, [hasMoreShoferMessages, headerTaskTs, headerTaskText])
+		return { ts: stableHeaderTs, type: "say", say: "text", text: headerTaskText ?? "" }
+	}, [hasMoreShoferMessages, stableHeaderTs, headerTaskText])
 
 	// Messages used for the header + consolidation: prepend the synthesized
 	// header when the real first message isn't resident, restoring the
@@ -221,7 +239,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const row0Text = (row0 as { text?: string } | undefined)?.text
 		vscode.postMessage({
 			type: "webviewLog",
-			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} taskItem=${!!currentTaskItem} headerTs=${headerTaskTs ?? "<none>"} row0=${row0Desc} msgCount=${messages.length}`,
+			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} taskItem=${!!currentTaskItem} headerTs=${stableHeaderTs ?? "<none>"} rawHeaderTs=${headerTaskTs ?? "<none>"} row0=${row0Desc} msgCount=${messages.length}`,
 		})
 		// [header:content] Separate line: what the TaskHeader will actually render
 		// for this task — the synthetic header text (currentTaskItem.task) and, when

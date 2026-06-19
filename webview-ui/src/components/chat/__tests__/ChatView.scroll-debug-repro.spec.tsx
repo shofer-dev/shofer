@@ -52,6 +52,9 @@ interface VirtuosoHarnessState {
 	firstItemIndex: number | undefined
 	followOutput: FollowOutput | undefined
 	emitAtBottom: (isAtBottom: boolean) => void
+	// Increments once per MockVirtuoso mount. A change to the <Virtuoso> `key`
+	// prop remounts it, so this doubles as a remount detector (H24 scroll flash).
+	mountCount: number
 }
 
 const harness = vi.hoisted<VirtuosoHarnessState>(() => ({
@@ -64,6 +67,7 @@ const harness = vi.hoisted<VirtuosoHarnessState>(() => ({
 	firstItemIndex: undefined,
 	followOutput: undefined,
 	emitAtBottom: () => {},
+	mountCount: 0,
 }))
 
 function nullDefaultModule() {
@@ -135,6 +139,13 @@ vi.mock("react-virtuoso", () => {
 	) {
 		const atBottomRef = useRef(atBottomStateChange)
 		const timeoutIdsRef = useRef<number[]>([])
+
+		// Mount-once effect: increments when this component is freshly mounted.
+		// A change to the <Virtuoso> `key` prop forces a remount, so a jump in
+		// mountCount across a state push means the list remounted (H24 flash).
+		useEffect(() => {
+			harness.mountCount += 1
+		}, [])
 
 		harness.followOutput = followOutput
 		harness.initialTopMostItemIndex = initialTopMostItemIndex
@@ -354,6 +365,7 @@ describe("ChatView scroll behavior regression coverage", () => {
 		harness.firstItemIndex = undefined
 		harness.followOutput = undefined
 		harness.emitAtBottom = () => {}
+		harness.mountCount = 0
 	})
 
 	it("existing-task entry sets initialTopMostItemIndex to the message count", async () => {
@@ -412,6 +424,47 @@ describe("ChatView scroll behavior regression coverage", () => {
 		// Two rows prepended → anchor drops by exactly two; a plain re-render or a
 		// task-switch reset would leave it unchanged or back at START.
 		expect(harness.firstItemIndex).toBe((startIndex as number) - 2)
+	})
+
+	it("does not remount Virtuoso when currentTaskItem.ts mutates during windowed streaming (H24)", async () => {
+		// The host updates HistoryItem.ts (→ currentTaskItem.ts) to last-activity
+		// time on every push. Pre-fix that flowed into the synthetic header's ts →
+		// task.ts → the Virtuoso `key`, remounting the list (flash to top) on every
+		// streamed append. The frozen-header-ts fix must keep the key stable.
+		const taskId = "task-mut"
+		const base = Date.now() - 10_000
+		const tail: ShoferMessage[] = [
+			{ type: "say", say: "text", ts: base + 100, text: "tail-1" },
+			{ type: "say", say: "text", ts: base + 101, text: "tail-2" },
+		]
+
+		renderView()
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await act(async () => {
+			postWindowedState(tail, taskId, base)
+		})
+		await waitFor(() => {
+			const list = document.querySelector("[data-testid='virtuoso-item-list']")
+			expect(list?.getAttribute("data-count")).toBe("2")
+		})
+		const mountsAfterFirst = harness.mountCount
+		expect(mountsAfterFirst).toBeGreaterThan(0)
+
+		// A later push for the SAME task: one more message AND a mutated
+		// currentTaskItem.ts (last-activity time advanced).
+		const tail2: ShoferMessage[] = [...tail, { type: "say", say: "text", ts: base + 102, text: "tail-3" }]
+		await act(async () => {
+			postWindowedState(tail2, taskId, base + 5000)
+		})
+		await waitFor(() => {
+			const list = document.querySelector("[data-testid='virtuoso-item-list']")
+			expect(list?.getAttribute("data-count")).toBe("3")
+		})
+		// No remount: the frozen header ts keeps task.ts (the Virtuoso key) stable
+		// despite currentTaskItem.ts changing. Pre-fix mountCount would increment.
+		expect(harness.mountCount).toBe(mountsAfterFirst)
 	})
 
 	it("rehydration uses bounded bottom pinning", async () => {
