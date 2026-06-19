@@ -7,8 +7,8 @@ describe("dist assets", () => {
 	const distPath = path.join(__dirname, "../dist")
 
 	describe("tiktoken", () => {
-		it("should have tiktoken wasm file", () => {
-			expect(fs.existsSync(path.join(distPath, "tiktoken_bg.wasm"))).toBe(true)
+		it("should have tiktoken wasm file in workers dir", () => {
+			expect(fs.existsSync(path.join(distPath, "workers", "tiktoken_bg.wasm"))).toBe(true)
 		})
 	})
 

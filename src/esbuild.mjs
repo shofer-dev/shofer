@@ -16,7 +16,7 @@ async function main() {
 	const production = process.argv.includes("--production")
 	const watch = process.argv.includes("--watch")
 	const minify = production
-	const sourcemap = true // Always generate source maps for error handling.
+	const sourcemap = !production // Only in dev/watch; production VSIX doesn't ship maps.
 
 	/**
 	 * @type {import('esbuild').BuildOptions}
