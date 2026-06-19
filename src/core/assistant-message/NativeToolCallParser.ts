@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 import { parseJSON } from "partial-json"
+import { distance } from "fastest-levenshtein"
 
 import { type ToolName, toolNames, type FileEntry } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
@@ -27,6 +28,28 @@ type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs 
 
 import { isPrivateLmTool } from "../task/build-tools"
 import { webviewLog } from "../../utils/logging/subsystems"
+
+/**
+ * Find the closest matching tool name from a list of candidates using
+ * Levenshtein distance. Returns the candidate with the smallest edit
+ * distance, or undefined if the candidates list is empty.
+ */
+function findClosestToolName(haystack: string, candidates: readonly string[]): string | undefined {
+	if (candidates.length === 0) return undefined
+
+	let best = candidates[0]
+	let bestDist = distance(haystack, best)
+
+	for (let i = 1; i < candidates.length; i++) {
+		const dist = distance(haystack, candidates[i])
+		if (dist < bestDist) {
+			bestDist = dist
+			best = candidates[i]
+		}
+	}
+
+	return best
+}
 
 /**
  * Parser for native tool calls (OpenAI-style function calling).
@@ -345,7 +368,22 @@ export class NativeToolCallParser {
 		if (typeof value !== "string") return null
 		// Pattern: newline + <parameter name="path" string="true">VALUE at end of string
 		// The closing </parameter> may or may not be present.
-		const match = value.match(/\n<parameter\s+name="path"\s+string="true">([^\n<]+)\s*(?:<\/parameter>)?\s*$/)
+		// Tolerate corrupted tag prefixes: vscode-lm / deepseek-v4-pro sometimes
+		// substitute Unicode box-drawing junk (U+FF5C, U+2BFF, etc.) for the
+		// expected "<" and subsequent characters before "parameter".  The .*?
+		// quantifier lazily skips any arbitrary bytes between "<" and the
+		// literal "parameter" keyword, which is the only anchoring token.
+		//
+		// Known limitations:
+		// - A corrupted prefix that spans multiple lines is not recovered
+		//   (no dotAll flag, so "." does not match newlines).  The observed
+		//   corruption is single-line, so this is acceptable.
+		// - Theoretically, if a diff SEARCH/REPLACE block legitimately ends
+		//   with text matching "<parameter name=\"path\" string=\"true\">VALUE",
+		//   the recovery could false-match.  In practice the "$" end-of-string
+		//   anchor and the ">>>>>>> REPLACE\n" structural barrier make this
+		//   extremely unlikely.  No false positives have been observed.
+		const match = value.match(/\n<.*?parameter\s+name="path"\s+string="true">([^\n<]+)\s*(?:<\/parameter>)?\s*$/)
 		if (!match) return null
 		const extractedPath = match[1].trim()
 		if (!extractedPath) return null
@@ -1198,6 +1236,22 @@ export class NativeToolCallParser {
 			!customToolRegistry.has(resolvedName) &&
 			!isPrivateLmTool(resolvedName)
 		) {
+			// Compute the closest known tool name via simple Levenshtein
+			// distance so we can suggest a correction in the error feedback.
+			// Skip private/external tool names — suggest only native tools.
+			const suggestion = findClosestToolName(
+				resolvedName as string,
+				toolNames.filter((t) => !t.startsWith("mcp")),
+			)
+			const hint = suggestion ? ` Did you mean '${suggestion}'?` : ""
+			this.lastParseError =
+				`Unknown tool '${resolvedName}'.` +
+				hint +
+				` Available tools: ${toolNames
+					.filter((t) => !t.startsWith("mcp"))
+					.sort()
+					.join(", ")}.`
+
 			webviewLog.error(`Invalid tool name: ${toolCall.name} (resolved: ${resolvedName})`)
 			webviewLog.error(`Valid tool names:`, toolNames)
 			return null
