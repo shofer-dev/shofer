@@ -439,6 +439,30 @@ export class NativeToolCallParser {
 	}
 
 	/**
+	 * Compose a `find_files` glob from a (filename) pattern plus an optional
+	 * directory. `find_files` runs the pattern through `vscode.RelativePattern`,
+	 * where a bare glob like `*.ts` matches the workspace root **only** (not
+	 * recursively). Cross-assistant aliases such as Claude Code's `search_file`
+	 * supply a `directory` + filename `pattern` and expect a **recursive** search
+	 * scoped to that directory — so without composition the call would silently
+	 * miss everything in subdirectories. Anchoring the pattern recursively under
+	 * the directory (a globstar segment between the dir and the filename pattern)
+	 * preserves that intent. When no directory is given the pattern is returned
+	 * unchanged (native `find_files` callers keep their exact glob semantics).
+	 */
+	private static composeFindFilesPattern(pattern: string, dir: unknown): string {
+		if (typeof dir !== "string" || dir.trim() === "") return pattern
+		const cleanDir = dir.trim().replace(/[/\\]+$/, "")
+		if (!cleanDir || cleanDir === ".") return pattern
+		// Already absolute or already anchored under the directory → leave as-is.
+		if (pattern.startsWith("/") || pattern.startsWith(`${cleanDir}/`)) return pattern
+		// Strip a leading `./` and, if the pattern is already recursive (`**/…`),
+		// just prefix the directory; otherwise make it recursive under the dir.
+		const cleanPattern = pattern.replace(/^\.?[/\\]+/, "")
+		return cleanPattern.startsWith("**") ? `${cleanDir}/${cleanPattern}` : `${cleanDir}/**/${cleanPattern}`
+	}
+
+	/**
 	 * Return the list of required fields that are missing from the parsed
 	 * arguments for the given tool. Used by the generic error message in
 	 * parseToolCall to tell the model exactly what it forgot.
@@ -1043,7 +1067,7 @@ export class NativeToolCallParser {
 			case "find_files":
 				if (partialArgs.pattern !== undefined) {
 					nativeArgs = {
-						pattern: partialArgs.pattern,
+						pattern: this.composeFindFilesPattern(partialArgs.pattern, partialArgs.path),
 						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
 					}
 				}
@@ -1760,7 +1784,11 @@ export class NativeToolCallParser {
 				case "find_files":
 					if (args.pattern !== undefined) {
 						nativeArgs = {
-							pattern: args.pattern,
+							// Anchor under a supplied directory (e.g. cross-assistant
+							// `search_file` passes `path` + filename `pattern`) so the
+							// search is recursive within that scope rather than a
+							// root-only glob.
+							pattern: this.composeFindFilesPattern(args.pattern, args.path),
 							maxResults: this.coerceOptionalNumber(args.maxResults),
 						} as NativeArgsFor<TName>
 					}

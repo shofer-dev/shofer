@@ -769,7 +769,7 @@ describe("NativeToolCallParser", () => {
 					}),
 				}
 
-				const result = NativeToolCallParser.parseToolCall(toolCall)
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
 
 				expect(result).not.toBeNull()
 				expect(result?.type).toBe("tool_use")
@@ -793,7 +793,7 @@ describe("NativeToolCallParser", () => {
 					}),
 				}
 
-				const result = NativeToolCallParser.parseToolCall(toolCall)
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
 
 				expect(result).not.toBeNull()
 				expect(result?.type).toBe("tool_use")
@@ -815,7 +815,7 @@ describe("NativeToolCallParser", () => {
 					}),
 				}
 
-				const result = NativeToolCallParser.parseToolCall(toolCall)
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
 
 				expect(result).not.toBeNull()
 				expect(result?.type).toBe("tool_use")
@@ -828,9 +828,11 @@ describe("NativeToolCallParser", () => {
 				}
 			})
 
-			it("resolves search_file alias to find_files (Claude Code file search by filename pattern)", () => {
-				// Claude Code's search_file takes a directory and a filename pattern.
-				// Shofer's find_files takes a glob pattern — it has no separate path field.
+			it("resolves search_file alias to find_files, anchoring the filename pattern under the directory (recursive)", () => {
+				// Claude Code's search_file takes a directory + a filename pattern and
+				// searches recursively. find_files runs the pattern through
+				// vscode.RelativePattern, where a bare `*.ts` matches the root only —
+				// so the directory must be folded into a recursive glob to preserve intent.
 				const toolCall = {
 					id: "toolu_search_file_find_files",
 					name: "search_file" as const,
@@ -840,7 +842,7 @@ describe("NativeToolCallParser", () => {
 					}),
 				}
 
-				const result = NativeToolCallParser.parseToolCall(toolCall)
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
 
 				expect(result).not.toBeNull()
 				expect(result?.type).toBe("tool_use")
@@ -849,8 +851,41 @@ describe("NativeToolCallParser", () => {
 					expect(result.originalName).toBe("search_file")
 					expect(result.nativeArgs).toBeDefined()
 					const nativeArgs = result.nativeArgs as { pattern: string }
-					// find_files parser reads pattern (the glob), not path
-					expect(nativeArgs.pattern).toBe("*.ts")
+					// Directory `src` + filename `*.ts` → recursive glob under src.
+					expect(nativeArgs.pattern).toBe("src/**/*.ts")
+				}
+			})
+
+			it("leaves find_files pattern unchanged when no directory is supplied", () => {
+				const toolCall = {
+					id: "toolu_find_files_no_dir",
+					name: "find_files" as const,
+					arguments: JSON.stringify({ pattern: "**/*.ts" }),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
+
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("find_files")
+					expect((result.nativeArgs as { pattern: string }).pattern).toBe("**/*.ts")
+				}
+			})
+
+			it("does not double-anchor when the directory and an already-recursive pattern are combined", () => {
+				const toolCall = {
+					id: "toolu_search_file_recursive",
+					name: "search_file" as const,
+					arguments: JSON.stringify({ path: "src/", pattern: "**/*.tsx" }),
+				}
+
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
+
+				expect(result?.type).toBe("tool_use")
+				if (result?.type === "tool_use") {
+					expect(result.name).toBe("find_files")
+					// trailing slash stripped; `**/…` pattern prefixed (not `**/**`).
+					expect((result.nativeArgs as { pattern: string }).pattern).toBe("src/**/*.tsx")
 				}
 			})
 
@@ -865,7 +900,7 @@ describe("NativeToolCallParser", () => {
 
 				NativeToolCallParser.consumeLastParseError()
 
-				const result = NativeToolCallParser.parseToolCall(toolCall)
+				const result = NativeToolCallParser.parseToolCall(toolCall as any)
 
 				expect(result).toBeNull()
 				const parseError = NativeToolCallParser.consumeLastParseError()
