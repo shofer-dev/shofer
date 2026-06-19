@@ -564,9 +564,10 @@ export const webviewMessageHandler = async (
 	switch (message.type) {
 		case "webviewLog": {
 			const text = message.text ?? ""
-			// Route [scroll:*] messages to the Scroll subsystem logger so
-			// they appear under the "Scroll" category in Settings → Logging.
-			if (text.startsWith("[scroll:")) {
+			// Route [scroll:*] and [header:*] messages to the Scroll subsystem
+			// logger so they appear under the "Scroll" category in Settings →
+			// Logging (both relate to the windowed-cold-load header/scroll bugs).
+			if (text.startsWith("[scroll:") || text.startsWith("[header:")) {
 				scrollLog.info(text)
 			} else {
 				webviewLog.info(text)

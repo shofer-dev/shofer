@@ -210,9 +210,26 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const row0Desc = syntheticTaskHeader
 			? "synthetic(first-prompt)"
 			: `${row0?.type ?? "?"}/${row0?.say ?? row0?.ask ?? "?"}`
+		// [header:content] Heuristic: does a text look like the api_req_started
+		// wireRequest JSON blob rather than a human prompt? Used to confirm whether
+		// HistoryItem.task (→ currentTaskItem.task → syntheticTaskHeader) is the
+		// canonical first prompt or the corrupted wire blob.
+		const looksLikeWireBlob = (t: string | undefined) =>
+			!!t && /^\s*\{/.test(t) && /"(messages|model|stream|max_tokens|api_req|request)"/.test(t)
+		const preview = (t: string | undefined) => (t ?? "").slice(0, 60).replace(/\s+/g, " ")
+		const headerText = headerTaskText
+		const row0Text = (row0 as { text?: string } | undefined)?.text
 		vscode.postMessage({
 			type: "webviewLog",
-			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} row0=${row0Desc} msgCount=${messages.length}`,
+			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} taskItem=${!!currentTaskItem} headerTs=${headerTaskTs ?? "<none>"} row0=${row0Desc} msgCount=${messages.length}`,
+		})
+		// [header:content] Separate line: what the TaskHeader will actually render
+		// for this task — the synthetic header text (currentTaskItem.task) and, when
+		// not windowed, the displayMessages[0] fallback. wireBlob=true means the
+		// header is showing the API-request blob instead of the user's first prompt.
+		vscode.postMessage({
+			type: "webviewLog",
+			text: `[header:content] hasMore=${hasMoreShoferMessages} headerWireBlob=${looksLikeWireBlob(headerText)} header="${preview(headerText)}" row0WireBlob=${looksLikeWireBlob(row0Text)} row0="${preview(row0Text)}"`,
 		})
 		// Intentionally keyed on the toggle (flag + header identity), not on every
 		// streamed append, to avoid per-chunk spam. displayMessages/messages are

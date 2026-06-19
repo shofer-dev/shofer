@@ -3726,6 +3726,22 @@ export class ShoferProvider
 				`currentTaskId=${currentTask?.taskId ?? "<none>"} shoferMsgCount=${currentTask?.shoferMessages.length ?? 0}`,
 		)
 
+		// [header:content] Does the PERSISTED HistoryItem.task (the value the webview
+		// turns into the synthetic TaskHeader via currentTaskItem.task) hold the
+		// canonical first prompt, or a corrupted api_req_started wireRequest blob?
+		// This distinguishes on-disk corruption (pre-f2a7d5196 history) from a
+		// webview-side rendering choice. Logged only when a task is focused.
+		if (currentTask?.taskId) {
+			const storedTask = this.taskHistoryStore.get(currentTask.taskId)?.task ?? ""
+			const histWireBlob =
+				/^\s*\{/.test(storedTask) && /"(messages|model|stream|max_tokens|api_req|request)"/.test(storedTask)
+			scrollLog.info(
+				`[header:content] persisted HistoryItem taskId=${currentTask.taskId} ` +
+					`windowed=${currentTask.hasMoreShoferMessages ?? false} histWireBlob=${histWireBlob} ` +
+					`histTask="${storedTask.slice(0, 60).replace(/\s+/g, " ")}"`,
+			)
+		}
+
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
