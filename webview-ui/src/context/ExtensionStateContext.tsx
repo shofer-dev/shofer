@@ -410,6 +410,23 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 							merged.mode = prevState.mode
 							merged.currentApiConfigName = prevState.currentApiConfigName
 						}
+						// [scroll:h24] `hasMoreShoferMessages` is per-task windowing state
+						// owned by the targeted `taskStateUpdate` path: set true when a long
+						// task cold-loads only its tail, cleared by `loadOlderShoferMessages`
+						// once the head is resident. A FULL state push must never flip it
+						// true→false for the SAME task — the host emits
+						// `currentTask?.hasMoreShoferMessages ?? false`, so a push taken while
+						// `currentTask` is momentarily unresolved carries a spurious `false`.
+						// That would drop the synthetic task header and toggle the Virtuoso
+						// `components` (WITH_HEADER↔NO_HEADER), remounting the list and
+						// flashing it to the top on every appended message. Keep the sticky
+						// `true`; only a deliberate `taskStateUpdate` (not guarded here) clears
+						// it. false→true (cold-load activation) still passes through.
+						const sameTask =
+							prevState.currentTaskId !== undefined && prevState.currentTaskId === merged.currentTaskId
+						if (sameTask && prevState.hasMoreShoferMessages && !merged.hasMoreShoferMessages) {
+							merged.hasMoreShoferMessages = true
+						}
 						return merged
 					})
 					setShowWelcome(!checkExistKey(newState.apiConfiguration))

@@ -48,6 +48,59 @@ const ApiConfigTestComponent = () => {
 	)
 }
 
+const HasMoreTestComponent = () => {
+	const { hasMoreShoferMessages, currentTaskId } = useExtensionState()
+	return (
+		<div>
+			<div data-testid="has-more">{JSON.stringify(hasMoreShoferMessages)}</div>
+			<div data-testid="current-task">{JSON.stringify(currentTaskId)}</div>
+		</div>
+	)
+}
+
+const postStateInit = (state: Partial<ExtensionState>) => {
+	window.dispatchEvent(new MessageEvent("message", { data: { type: "stateInit", state } }))
+}
+
+describe("hasMoreShoferMessages windowing stickiness (H24)", () => {
+	const renderHasMore = () =>
+		render(
+			<ExtensionStateContextProvider>
+				<HasMoreTestComponent />
+			</ExtensionStateContextProvider>,
+		)
+
+	it("a full state push cannot flip the windowing flag true→false for the same task", () => {
+		renderHasMore()
+		// Cold-load: a long task enters windowed (tail only).
+		act(() => postStateInit({ currentTaskId: "t1", hasMoreShoferMessages: true }))
+		expect(screen.getByTestId("has-more").textContent).toBe("true")
+		// Routine full push for the SAME task carries a spurious false (host emits
+		// `currentTask?.hasMoreShoferMessages ?? false` when momentarily unresolved).
+		// This used to drop the synthetic header + remount Virtuoso on every append.
+		act(() => postStateInit({ currentTaskId: "t1", hasMoreShoferMessages: false }))
+		expect(screen.getByTestId("has-more").textContent).toBe("true")
+	})
+
+	it("clears windowing on a genuine task switch", () => {
+		renderHasMore()
+		act(() => postStateInit({ currentTaskId: "t1", hasMoreShoferMessages: true }))
+		expect(screen.getByTestId("has-more").textContent).toBe("true")
+		// Different task → adopt its (non-windowed) value.
+		act(() => postStateInit({ currentTaskId: "t2", hasMoreShoferMessages: false }))
+		expect(screen.getByTestId("has-more").textContent).toBe("false")
+	})
+
+	it("still allows cold-load activation false→true on the same task", () => {
+		renderHasMore()
+		act(() => postStateInit({ currentTaskId: "t1", hasMoreShoferMessages: false }))
+		expect(screen.getByTestId("has-more").textContent).toBe("false")
+		// Async cold-load completes and reports more-on-disk for the same task.
+		act(() => postStateInit({ currentTaskId: "t1", hasMoreShoferMessages: true }))
+		expect(screen.getByTestId("has-more").textContent).toBe("true")
+	})
+})
+
 describe("ExtensionStateContext", () => {
 	it("initializes with empty allowedCommands array", () => {
 		render(
