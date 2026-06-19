@@ -175,6 +175,29 @@ childrenCost, tokensIn, tokensOut }`). Cost was already aggregated; **token
 aggregation was added** so the workflow header's Tokens row reflects real
 tree-wide usage instead of the orchestrator's empty own-count.
 
+#### Cost cap on workflows
+
+The per-root cost cap **does apply to workflows**, even though the `WorkflowTask`
+orchestrator makes no LLM calls of its own: the cap lives on the workflow root,
+and the agent subtasks (which _do_ call the model) resolve it by walking
+`parentTask` to that root and aggregate their spend into it — exactly the
+root-plus-subtree model §Part 2 describes. Three pieces make this work:
+
+- **Seeding.** `createWorkflowTask()` / `createWorkflowTaskFromHistory()` build
+  the root with `new WorkflowTask(...)`, bypassing `ShoferProvider.createTask()`
+  (the usual `defaultCostLimit` seeding point), so they call
+  `seedWorkflowCostLimit()` to apply the global default to the workflow root.
+  The cap then persists with the workflow's HistoryItem via the normal
+  `this.costLimit` metadata path.
+- **Display + edit.** [`WorkflowHeader`](../webview-ui/src/components/chat/WorkflowHeader.tsx)
+  renders `$spent / $limit` and the `BudgetLimitDialog` pencil; `WorkflowView`
+  wires `onUpdateCostLimit` (→ `updateCostLimit` message) so the cap is
+  live-editable just like in `TaskHeader`.
+- **Enforcement + pause.** Enforcement fires from the agent subtasks' streaming
+  loops (`checkInFlightCostLimit` / `checkCostLimit`); the `pause`-mode
+  `budget_limit` ask is handled by `WorkflowView` with the same
+  "Continue without limit" / "Abort task" / new-amount outcomes.
+
 ### What Is NOT Counted (Known Gap)
 
 **Orphaned `api_req_started` messages** — if a request was started (`api_req_started` emitted) but the extension crashed or the task was force-closed before ANY response data arrived, the message has no `cost` and no `cancelReason`. These are removed during `saveShoferMessages()`:

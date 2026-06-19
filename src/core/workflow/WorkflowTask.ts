@@ -2037,7 +2037,7 @@ export async function createWorkflowTask(
 	const apiConfiguration = state?.apiConfiguration
 	if (!apiConfiguration) throw new Error("No API configuration available")
 
-	return new WorkflowTask({
+	const task = new WorkflowTask({
 		provider,
 		apiConfiguration,
 		slangSource,
@@ -2050,6 +2050,29 @@ export async function createWorkflowTask(
 		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
 		onCreated: provider.onTaskCreated,
 	})
+	seedWorkflowCostLimit(provider, task)
+	return task
+}
+
+/**
+ * Seed the per-root USD cost cap onto a workflow root from the `defaultCostLimit`
+ * global setting — mirroring {@link ShoferProvider.createTask}, which the
+ * `createWorkflowTask*` paths bypass (they `new WorkflowTask()` directly).
+ *
+ * Without this the workflow root's `costLimit` stays `undefined`, so the agent
+ * subtasks it spawns resolve no cap when walking `parentTask` to the root (no
+ * enforcement), and the WorkflowHeader can't show `$spent / $limit`. The cap
+ * then persists with the workflow's HistoryItem via the normal Task metadata
+ * path (`this.costLimit`), so it survives reload. A workflow is always a root
+ * task, so we only guard on it not already carrying a cap (e.g. restored from
+ * history).
+ */
+function seedWorkflowCostLimit(provider: ShoferProvider, task: WorkflowTask): void {
+	if (task.costLimit) return
+	const defaultLimit = provider.contextProxy.getValue("defaultCostLimit")
+	if (defaultLimit && defaultLimit.maxUsd > 0) {
+		task.costLimit = { maxUsd: defaultLimit.maxUsd, action: defaultLimit.action }
+	}
 }
 
 /**
@@ -2082,7 +2105,7 @@ export async function createWorkflowTaskFromHistory(
 	const apiConfiguration = state?.apiConfiguration
 	if (!apiConfiguration) throw new Error("No API configuration available")
 
-	return new WorkflowTask({
+	const task = new WorkflowTask({
 		provider,
 		apiConfiguration,
 		slangSource: historyItem.slangSource,
@@ -2093,6 +2116,10 @@ export async function createWorkflowTaskFromHistory(
 		// so the workflow root's TaskCompleted reaches the public ShoferAPI.
 		onCreated: provider.onTaskCreated,
 	})
+	// The constructor already restored historyItem.costLimit (if any); seed the
+	// global default for older workflows persisted before they carried a cap.
+	seedWorkflowCostLimit(provider, task)
+	return task
 }
 
 /** Flow statuses from which the slang loop should NOT be resumed. */

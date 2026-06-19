@@ -2040,7 +2040,9 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			{task ? (
 				<>
 					{/* WorkflowTask header: simplified — no TodoList, ContextWindow, cost
-					    breakdown, cost-limit editing, or condense. */}
+					    breakdown or condense. The per-root cost cap ($spent / $limit,
+				    editable) does apply: seeded on the workflow root and enforced
+				    across the agent subtree. */}
 					<WorkflowHeader
 						task={task}
 						isRunning={workflowRunning}
@@ -2063,7 +2065,15 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 								: undefined
 						}
 						costLimit={currentTaskItem?.costLimit}
-						onUpdateCostLimit={undefined}
+						onUpdateCostLimit={(newLimit) => {
+							if (currentTaskItem?.id) {
+								vscode.postMessage({
+									type: "updateCostLimit",
+									taskId: currentTaskItem.id,
+									costLimit: newLimit,
+								})
+							}
+						}}
 						buttonsDisabled={sendingDisabled}
 						todos={undefined}
 						activeTimeMs={
