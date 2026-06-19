@@ -42,6 +42,12 @@ describe("topologyToMermaid", () => {
 		expect(out).toContain("flowchart LR")
 	})
 
+	it("emits the non-interactive marker so MarkdownBlock hides the toolbox/click", () => {
+		const out = topologyToMermaid(agentsMap(agent("Solo")))
+		// First line of the fenced body (right after ```mermaid).
+		expect(out.split("\n")[1]).toBe("%% shofer:noninteractive")
+	})
+
 	it("emits one node per agent with the status-matched class and op detail", () => {
 		const out = topologyToMermaid(
 			agentsMap(
@@ -59,29 +65,30 @@ describe("topologyToMermaid", () => {
 		expect(out).toContain("classDef running fill:#22c55e")
 	})
 
-	it("draws a solid stake edge from a running agent to each sendingTo target", () => {
+	it("draws a solid 'sends to' edge from a running agent to each sendingTo target", () => {
 		const out = topologyToMermaid(
 			agentsMap(agent("A", { status: "running", sendingTo: "B,C" }), agent("B"), agent("C")),
 		)
-		// A=a0, B=a1, C=a2
-		expect(out).toContain("a0 -->|stake| a1")
-		expect(out).toContain("a0 -->|stake| a2")
+		// A=a0, B=a1, C=a2 — "A sends to B", "A sends to C"
+		expect(out).toContain("a0 -->|sends to| a1")
+		expect(out).toContain("a0 -->|sends to| a2")
 	})
 
-	it("draws a dashed await edge from each waitingFor source into a blocked agent", () => {
+	it("draws a dashed 'waiting for' edge from a blocked agent to each waitingFor source", () => {
 		const out = topologyToMermaid(agentsMap(agent("A"), agent("B", { status: "blocked", waitingFor: "A" })))
-		// A=a0, B=a1: edge points source → blocked agent
-		expect(out).toContain("a0 -.->|await| a1")
+		// A=a0, B=a1 — arrow points from the waiter (B) to what it waits on (A):
+		// "B waiting for A" (dependency direction, not data-flow direction).
+		expect(out).toContain("a1 -.->|waiting for| a0")
 	})
 
 	it("ignores edges to/from unknown agents (e.g. Human / @out)", () => {
 		const out = topologyToMermaid(agentsMap(agent("A", { status: "running", sendingTo: "Human,@out" })))
-		expect(out).not.toContain("-->|stake|")
+		expect(out).not.toContain("-->|sends to|")
 	})
 
 	it("dedupes identical edges", () => {
 		const out = topologyToMermaid(agentsMap(agent("A", { status: "running", sendingTo: "B,B" }), agent("B")))
-		const matches = out.match(/a0 -->\|stake\| a1/g) ?? []
+		const matches = out.match(/a0 -->\|sends to\| a1/g) ?? []
 		expect(matches.length).toBe(1)
 	})
 })

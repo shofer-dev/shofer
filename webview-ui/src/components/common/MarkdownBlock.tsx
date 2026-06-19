@@ -346,9 +346,16 @@ const MarkdownBlock = memo(({ markdown }: MarkdownBlockProps) => {
 
 				// Handle mermaid diagrams
 				if (className.includes("language-mermaid")) {
+					// A leading `%% shofer:noninteractive` marker (a Mermaid comment)
+					// opts a diagram out of the zoom/save toolbox and click-to-open —
+					// used by the inline per-round workflow topology snapshots, which
+					// are decorative rather than artifacts to export.
+					const NONINTERACTIVE = "%% shofer:noninteractive"
+					const interactive = !codeString.startsWith(NONINTERACTIVE)
+					const code = interactive ? codeString : codeString.slice(codeString.indexOf("\n") + 1)
 					return (
 						<div style={{ margin: "1em 0" }}>
-							<MermaidBlock code={codeString} />
+							<MermaidBlock code={code} interactive={interactive} />
 						</div>
 					)
 				}

@@ -85,9 +85,12 @@ mermaid.initialize({
 
 interface MermaidBlockProps {
 	code: string
+	/** When false, hide the zoom/save toolbox and disable click-to-open. Used by
+	 *  decorative diagrams (e.g. inline workflow topology snapshots). */
+	interactive?: boolean
 }
 
-const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockProps) {
+const MermaidBlock = memo(function MermaidBlock({ code, interactive = true }: MermaidBlockProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
@@ -214,10 +217,12 @@ const MermaidBlock = memo(function MermaidBlock({ code }: MermaidBlockProps) {
 						</div>
 					)}
 				</div>
-			) : (
+			) : interactive ? (
 				<MermaidButton containerRef={containerRef} code={code} isLoading={isLoading} svgToPng={svgToPng}>
 					<SvgContainer onClick={handleClick} ref={containerRef} $isLoading={isLoading}></SvgContainer>
 				</MermaidButton>
+			) : (
+				<SvgContainer ref={containerRef} $isLoading={isLoading} $interactive={false}></SvgContainer>
 			)}
 		</MermaidBlockContainer>
 	)
@@ -313,13 +318,14 @@ const CopyButton = styled.button`
 
 interface SvgContainerProps {
 	$isLoading: boolean
+	$interactive?: boolean
 }
 
 const SvgContainer = styled.div<SvgContainerProps>`
 	opacity: ${(props) => (props.$isLoading ? 0.3 : 1)};
 	min-height: 20px;
 	transition: opacity 0.2s ease;
-	cursor: pointer;
+	cursor: ${(props) => (props.$interactive === false ? "default" : "pointer")};
 	display: flex;
 	justify-content: center;
 	max-height: 400px;

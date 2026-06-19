@@ -124,14 +124,24 @@ const MERMAID_STATUS_CLASS: Record<AgentStatus, string> = {
  * round headline) instead of in a separate Topology tab.
  *
  * Mirrors the Topology view's edge logic (`topologyCurrentEdges()` in
- * slang-render.js): a `running` agent draws outbound `stake` edges to each
- * `sendingTo` target; a `blocked` agent draws inbound `await` edges from each
+ * slang-render.js): a `running` agent draws an outbound solid edge to each
+ * `sendingTo` target; a `blocked` agent draws an outbound dashed edge to each
  * `waitingFor` source. Only edges between known agent nodes are kept, deduped
  * by `from>to>kind`. Node colors match `agentStatusColor()` so the inline
  * diagram is consistent with the rest of the workflow UI.
  *
+ * Edge direction + label are chosen so that "tail → label → head" reads as a
+ * true sentence: `A -->|sends to| B` ("A sends to B") and, for a blocked agent,
+ * `B -.->|waiting for| A` ("B waiting for A") — the arrow points from the
+ * waiter to what it's waiting on, i.e. in the dependency direction.
+ *
  * Returns a fenced ```mermaid block, or "" when there are no agents.
  */
+const EDGE_STYLE: Record<"stake" | "await", { arrow: string; label: string }> = {
+	stake: { arrow: "-->", label: "sends to" },
+	await: { arrow: "-.->", label: "waiting for" },
+}
+
 export function topologyToMermaid(agents: Map<string, AgentState>): string {
 	if (agents.size === 0) return ""
 
@@ -148,12 +158,15 @@ export function topologyToMermaid(agents: Map<string, AgentState>): string {
 		const key = `${from}>${to}>${kind}`
 		if (seen.has(key)) return
 		seen.add(key)
-		const arrow = kind === "stake" ? "-->" : "-.->"
-		edges.push(`    ${id.get(from)} ${arrow}|${kind}| ${id.get(to)}`)
+		const { arrow, label } = EDGE_STYLE[kind]
+		edges.push(`    ${id.get(from)} ${arrow}|${label}| ${id.get(to)}`)
 	}
 	for (const [name, st] of agents) {
+		// "A sends to B": running agent → each recipient.
 		if (st.status === "running") for (const t of splitRefs(st.sendingTo)) addEdge(name, t, "stake")
-		else if (st.status === "blocked") for (const s of splitRefs(st.waitingFor)) addEdge(s, name, "await")
+		// "B waiting for A": blocked agent → each source it's parked on (arrow in
+		// the dependency direction, not the data-flow direction).
+		else if (st.status === "blocked") for (const s of splitRefs(st.waitingFor)) addEdge(name, s, "await")
 	}
 
 	const nodes: string[] = []
@@ -166,6 +179,10 @@ export function topologyToMermaid(agents: Map<string, AgentState>): string {
 
 	return [
 		"```mermaid",
+		// Marker (a Mermaid comment, ignored by the parser) telling MarkdownBlock
+		// to render this diagram non-interactively — no zoom/save toolbox, no
+		// click-to-open. These per-round snapshots are decorative, not artifacts.
+		"%% shofer:noninteractive",
 		"flowchart LR",
 		"    classDef running fill:#22c55e,stroke:#15803d,color:#fff",
 		"    classDef blocked fill:#a855f7,stroke:#7e22ce,color:#fff",
