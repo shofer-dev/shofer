@@ -244,6 +244,7 @@ describe("SettingsView - Change Detection Fix", () => {
 		listApiConfigMeta: [],
 		uriScheme: "vscode",
 		settingsImportedAt: undefined,
+		setEditingApiConfiguration: vi.fn(),
 		apiConfiguration: {
 			apiProvider: "openai",
 			apiModelId: "", // Empty string initially
