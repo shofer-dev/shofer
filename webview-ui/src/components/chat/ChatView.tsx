@@ -99,6 +99,13 @@ const LoadOlderMessagesHeader = () => (
 const VIRTUOSO_COMPONENTS_WITH_HEADER = { Header: LoadOlderMessagesHeader } as const
 const VIRTUOSO_COMPONENTS_NO_HEADER = {} as const
 
+/**
+ * H24: Starting value for Virtuoso's `firstItemIndex` prepend anchor. Large so
+ * it can be decremented once per prepended row across a long session without
+ * reaching zero. See the prepend-anchoring block in ChatView.
+ */
+const VIRTUOSO_FIRST_ITEM_INDEX_START = 1_000_000
+
 /** H22: Hoisted to module level to avoid new array identity per render. */
 const ALWAYS_HIDDEN_ONCE_PROCESSED_ASK: ShoferAsk[] = ["api_req_failed", "resume_task", "resume_completed_task"]
 
@@ -285,6 +292,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	const [secondaryButtonText, setSecondaryButtonText] = useState<string | undefined>(undefined)
 	const [_didClickCancel, setDidClickCancel] = useState(false)
 	const virtuosoRef = useRef<VirtuosoHandle>(null)
+	// H24 prepend anchoring (see the firstItemIndex block below groupedMessages).
+	const firstItemIndexRef = useRef(VIRTUOSO_FIRST_ITEM_INDEX_START)
+	const prevFirstRowTsRef = useRef<number | undefined>(undefined)
+	const prevFirstItemTaskTsRef = useRef<number | undefined>(undefined)
 	const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 	const prevExpandedRowsRef = useRef<Record<number, boolean>>()
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -1819,6 +1830,47 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		return result
 	}, [isCondensing, visibleMessages])
 
+	// --- Windowed prepend anchoring (H24 "Load older messages…") ---
+	// When older messages are prepended to the top (windowed cold-load), every
+	// row's index in `groupedMessages` shifts down. react-virtuoso identifies
+	// rows by index, so unless we tell it items were *prepended* (not replaced)
+	// it holds the same scrollTop while the content slides down — the visible
+	// "jump". `firstItemIndex` is Virtuoso's prepend anchor: start high and
+	// decrement by the number of rows that now precede the previously-first row.
+	//
+	// Computed synchronously during render (not in an effect) so `data` and
+	// `firstItemIndex` change in the SAME commit — deferring the decrement to an
+	// effect would leave one frame where the array grew but the anchor hadn't
+	// moved, reintroducing a flash. The ref writes are idempotent under
+	// StrictMode's double-render: the second pass sees the refs already advanced
+	// and is a no-op.
+	const currentFirstRowTs = groupedMessages[0]?.ts
+	if (taskTs !== prevFirstItemTaskTsRef.current) {
+		// Task switch (or first mount): reset. Virtuoso is also remounted via
+		// `key={task.ts}`, so its internal index space restarts at START too.
+		firstItemIndexRef.current = VIRTUOSO_FIRST_ITEM_INDEX_START
+		prevFirstItemTaskTsRef.current = taskTs
+	} else if (prevFirstRowTsRef.current !== undefined && currentFirstRowTs !== prevFirstRowTsRef.current) {
+		// First row changed identity within the same task. If the old first row
+		// is now further down, that many grouped rows were prepended at the top.
+		// (A plain append leaves row 0 unchanged, so this branch is skipped.)
+		// Edge case: if the prepended block's tail batches together with the old
+		// first row (grouping merges adjacent same-type asks at the boundary), the
+		// old ts no longer matches a row → findIndex returns -1 and we skip the
+		// adjustment, degrading to the prior behavior for that one boundary only.
+		const prependedRows = groupedMessages.findIndex((m) => m.ts === prevFirstRowTsRef.current)
+		if (prependedRows > 0) {
+			firstItemIndexRef.current -= prependedRows
+		}
+	}
+	prevFirstRowTsRef.current = currentFirstRowTs
+	const firstItemIndex = firstItemIndexRef.current
+
+	// `itemContent` receives the firstItemIndex-adjusted (absolute) index, so the
+	// last row can no longer be detected via `index === length - 1`; identify it
+	// by the last row's ts instead.
+	const lastGroupedTs = groupedMessages.at(-1)?.ts
+
 	// Scroll lifecycle is managed by a dedicated hook to keep ChatView focused
 	// on message handling and UI orchestration.
 	const {
@@ -1984,7 +2036,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	}, [])
 
 	const itemContent = useCallback(
-		(index: number, messageOrGroup: ShoferMessage) => {
+		(_index: number, messageOrGroup: ShoferMessage) => {
 			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
 
 			// regular message
@@ -1995,7 +2047,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					isExpanded={expandedRows[messageOrGroup.ts] || false}
 					onToggleExpand={toggleRowExpansion} // This was already stabilized
 					lastModifiedMessage={modifiedMessages.at(-1)} // Original direct access
-					isLast={index === groupedMessages.length - 1} // Original direct access
+					isLast={messageOrGroup.ts === lastGroupedTs}
 					onHeightChange={handleRowHeightChange}
 					isStreaming={isStreaming}
 					onSuggestionClick={handleSuggestionClickInRow} // This was already stabilized
@@ -2028,7 +2080,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			expandedRows,
 			toggleRowExpansion,
 			modifiedMessages,
-			groupedMessages.length,
+			lastGroupedTs,
 			handleRowHeightChange,
 			isStreaming,
 			handleSuggestionClickInRow,
@@ -2380,6 +2432,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									className="scrollable grow overflow-y-scroll mb-1"
 									increaseViewportBy={VIRTUOSO_VIEWPORT_INCREASE}
 									data={groupedMessages}
+									firstItemIndex={firstItemIndex}
 									initialTopMostItemIndex={
 										groupedMessages.length > 0 ? groupedMessages.length - 1 : 0
 									}

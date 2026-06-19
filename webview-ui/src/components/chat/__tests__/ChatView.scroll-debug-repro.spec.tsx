@@ -39,6 +39,7 @@ interface MockVirtuosoProps {
 	followOutput?: FollowOutput
 	className?: string
 	initialTopMostItemIndex?: number
+	firstItemIndex?: number
 }
 
 interface VirtuosoHarnessState {
@@ -48,6 +49,7 @@ interface VirtuosoHarnessState {
 	emitFalseOnDataChange: boolean
 	delayedGrowthMs: number | null
 	initialTopMostItemIndex: number | undefined
+	firstItemIndex: number | undefined
 	followOutput: FollowOutput | undefined
 	emitAtBottom: (isAtBottom: boolean) => void
 }
@@ -59,6 +61,7 @@ const harness = vi.hoisted<VirtuosoHarnessState>(() => ({
 	emitFalseOnDataChange: true,
 	delayedGrowthMs: null,
 	initialTopMostItemIndex: undefined,
+	firstItemIndex: undefined,
 	followOutput: undefined,
 	emitAtBottom: () => {},
 }))
@@ -127,7 +130,7 @@ vi.mock("../ChatRow", () => ({
 
 vi.mock("react-virtuoso", () => {
 	const MockVirtuoso = React.forwardRef<MockVirtuosoHandle, MockVirtuosoProps>(function MockVirtuoso(
-		{ data, itemContent, atBottomStateChange, followOutput, className, initialTopMostItemIndex },
+		{ data, itemContent, atBottomStateChange, followOutput, className, initialTopMostItemIndex, firstItemIndex },
 		ref,
 	) {
 		const atBottomRef = useRef(atBottomStateChange)
@@ -135,6 +138,7 @@ vi.mock("react-virtuoso", () => {
 
 		harness.followOutput = followOutput
 		harness.initialTopMostItemIndex = initialTopMostItemIndex
+		harness.firstItemIndex = firstItemIndex
 		harness.emitAtBottom = (isAtBottom: boolean) => {
 			atBottomRef.current?.(isAtBottom)
 		}
@@ -233,6 +237,40 @@ const postState = (shoferMessages: ShoferMessage[]) => {
 	)
 }
 
+// Windowed cold-load: only a tail of messages is resident and
+// `hasMoreShoferMessages` is true, so ChatView synthesizes the (stable) task
+// header from `currentTaskItem` and the Virtuoso list holds just the tail.
+const postWindowedState = (shoferMessages: ShoferMessage[], currentTaskId: string, rootTs: number) => {
+	const message = {
+		type: "stateInit",
+		state: {
+			version: "1.0.0",
+			shoferMessages,
+			taskHistory: [],
+			shouldShowAnnouncement: false,
+			allowedCommands: [],
+			alwaysAllowExecute: false,
+			cloudIsAuthenticated: false,
+			telemetrySetting: "enabled",
+			hasMoreShoferMessages: true,
+			currentTaskId,
+			currentTaskItem: { id: currentTaskId, ts: rootTs, task: "root prompt", number: 1 },
+		},
+	} as unknown as ExtensionStateMessage
+
+	window.dispatchEvent(new MessageEvent("message", { data: message }))
+}
+
+// Simulate the host delivering an older page (the "Load older messages…"
+// action), which prepends to the front of the resident array.
+const prependOlder = (older: ShoferMessage[], taskId: string) => {
+	window.dispatchEvent(
+		new MessageEvent("message", {
+			data: { type: "shoferMessagesPrepended", shoferMessages: older, taskId },
+		}),
+	)
+}
+
 const renderView = () =>
 	render(
 		<ExtensionStateContextProvider>
@@ -313,6 +351,7 @@ describe("ChatView scroll behavior regression coverage", () => {
 		harness.emitFalseOnDataChange = true
 		harness.delayedGrowthMs = null
 		harness.initialTopMostItemIndex = undefined
+		harness.firstItemIndex = undefined
 		harness.followOutput = undefined
 		harness.emitAtBottom = () => {}
 	})
@@ -322,6 +361,57 @@ describe("ChatView scroll behavior regression coverage", () => {
 		// initialTopMostItemIndex is set to groupedMessages.length - 1 so the Virtuoso
 		// renders the last message as the top-most visible item on task entry.
 		expect(harness.initialTopMostItemIndex).toBe(1)
+	})
+
+	it("decrements firstItemIndex by the rows prepended when older messages load (H24)", async () => {
+		// Regression: clicking "Load older messages…" prepends a page to the
+		// front of the list. Without Virtuoso's firstItemIndex anchor decreasing
+		// by the number of prepended rows, the viewport keeps its scrollTop while
+		// the content slides down — the visible jump. Assert the anchor tracks the
+		// prepend exactly.
+		const taskId = "task-1"
+		const base = Date.now() - 10_000
+		// Resident windowed tail (the synthetic header is rendered separately, so
+		// all three remain as list rows).
+		const tail: ShoferMessage[] = [
+			{ type: "say", say: "text", ts: base + 100, text: "tail-1" },
+			{ type: "say", say: "text", ts: base + 101, text: "tail-2" },
+			{ type: "say", say: "text", ts: base + 102, text: "tail-3" },
+		]
+
+		renderView()
+		await act(async () => {
+			await Promise.resolve()
+		})
+		await act(async () => {
+			postWindowedState(tail, taskId, base)
+		})
+
+		await waitFor(() => {
+			const list = document.querySelector("[data-testid='virtuoso-item-list']")
+			expect(list?.getAttribute("data-count")).toBe("3")
+		})
+		// First windowed render: the anchor sits at the START constant.
+		const startIndex = harness.firstItemIndex
+		expect(startIndex).toBe(1_000_000)
+
+		await act(async () => {
+			prependOlder(
+				[
+					{ type: "say", say: "text", ts: base + 1, text: "older-1" },
+					{ type: "say", say: "text", ts: base + 2, text: "older-2" },
+				],
+				taskId,
+			)
+		})
+
+		await waitFor(() => {
+			const list = document.querySelector("[data-testid='virtuoso-item-list']")
+			expect(list?.getAttribute("data-count")).toBe("5")
+		})
+		// Two rows prepended → anchor drops by exactly two; a plain re-render or a
+		// task-switch reset would leave it unchanged or back at START.
+		expect(harness.firstItemIndex).toBe((startIndex as number) - 2)
 	})
 
 	it("rehydration uses bounded bottom pinning", async () => {
