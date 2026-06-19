@@ -365,6 +365,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		shoferAskRef.current = shoferAsk
 	}, [shoferAsk])
 
+	// Per-ask identity echoed back to the host so it can validate that an
+	// askResponse targets the currently-outstanding ask.
+	const askIdRef = useRef<string | undefined>(undefined)
+
 	// Keep inputValueRef in sync with inputValue state
 	useEffect(() => {
 		inputValueRef.current = inputValue
@@ -524,6 +528,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 					// Reset user response flag when a new ask arrives to allow auto-approval
 					userRespondedRef.current = false
 					const isPartial = lastMessage.partial === true
+					// Capture the per-ask identity so the webview can echo it back
+					// in askResponse messages. Use the ref so any send-site can read
+					// the latest askId without a fresh render cycle.
+					askIdRef.current = lastMessage.askId
 					// When the backend has already auto-approved (or auto-denied) this
 					// ask, no user input is required. Suppress the action buttons and
 					// re-enable sending so the chat doesn't appear blocked.
@@ -713,7 +721,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							// images the user has pasted while the chat is in progress.
 							// Images are already cleared in the appropriate user-action
 							// handlers (handleSendMessage, handlePrimaryButtonClick, etc.).
-							setShoferAsk(undefined)
+							// Do NOT clear shoferAsk here — that would create a window
+							// where the user's typed response to a pending ask silently
+							// routes to the queue instead of as a direct askResponse.
+							// The next ask message (if any) will overwrite shoferAsk.
 							setEnableButtons(false)
 							setPrimaryButtonText(undefined)
 							setSecondaryButtonText(undefined)
@@ -1120,6 +1131,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								askResponse: "messageResponse",
 								text,
 								images,
+								askId: askIdRef.current,
+								taskId: currentTaskItem?.id,
 							})
 							break
 						// There is no other case that a textfield should be enabled.
@@ -1161,6 +1174,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				setDroppedContextFiles([])
 			}
 		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[
 			handleChatReset,
 			getDroppedMentions,
@@ -1242,12 +1256,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							askResponse: "yesButtonClicked",
 							text: trimmedInput,
 							images: images,
+							askId: askIdRef.current,
+							taskId: currentTaskItem?.id,
 						})
 						// Clear input state after sending
 						setInputValue("")
 						setSelectedImages([])
 					} else {
-						vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
+						vscode.postMessage({
+							type: "askResponse",
+							askResponse: "yesButtonClicked",
+							askId: askIdRef.current,
+							taskId: currentTaskItem?.id,
+						})
 					}
 					break
 				case "resume_task":
@@ -1268,12 +1289,19 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 								askResponse: "yesButtonClicked",
 								text: trimmedInput,
 								images: images,
+								askId: askIdRef.current,
+								taskId: currentTaskItem?.id,
 							})
 							// Clear input state after sending
 							setInputValue("")
 							setSelectedImages([])
 						} else {
-							vscode.postMessage({ type: "askResponse", askResponse: "yesButtonClicked" })
+							vscode.postMessage({
+								type: "askResponse",
+								askResponse: "yesButtonClicked",
+								askId: askIdRef.current,
+								taskId: currentTaskItem?.id,
+							})
 						}
 					}
 					break
@@ -1293,6 +1321,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
 		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[shoferAsk, startNewTask, currentTaskItem?.parentTaskId],
 	)
 
@@ -1318,7 +1347,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "budget_limit":
 					// "Abort task" — defer to the Task's askUserForBudgetDecision
 					// handler so the abort flows through root.abortTask(false).
-					vscode.postMessage({ type: "askResponse", askResponse: "noButtonClicked" })
+					vscode.postMessage({
+						type: "askResponse",
+						askResponse: "noButtonClicked",
+						askId: askIdRef.current,
+						taskId: currentTaskItem?.id,
+					})
 					break
 				case "command":
 				case "tool":
@@ -1330,13 +1364,20 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							askResponse: "noButtonClicked",
 							text: trimmedInput,
 							images: images,
+							askId: askIdRef.current,
+							taskId: currentTaskItem?.id,
 						})
 						// Clear input state after sending
 						setInputValue("")
 						setSelectedImages([])
 					} else {
 						// Responds to the API with a "This operation failed" and lets it try again
-						vscode.postMessage({ type: "askResponse", askResponse: "noButtonClicked" })
+						vscode.postMessage({
+							type: "askResponse",
+							askResponse: "noButtonClicked",
+							askId: askIdRef.current,
+							taskId: currentTaskItem?.id,
+						})
 					}
 					break
 				case "command_output":
@@ -1347,6 +1388,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			setShoferAsk(undefined)
 			setEnableButtons(false)
 		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[shoferAsk, startNewTask, isStreaming, setDidClickCancel],
 	)
 
@@ -1911,14 +1953,28 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			if (shoferAsk === "followup") {
 				markFollowUpAsAnswered()
 			}
-			vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: json })
+			vscode.postMessage({
+				type: "askResponse",
+				askResponse: "objectResponse",
+				text: json,
+				askId: askIdRef.current,
+				taskId: currentTaskItem?.id,
+			})
 		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[shoferAsk, markFollowUpAsAnswered],
 	)
 
 	const handleBatchFileResponse = useCallback((response: { [key: string]: boolean }) => {
 		// Handle batch file response, e.g., for file uploads
-		vscode.postMessage({ type: "askResponse", askResponse: "objectResponse", text: JSON.stringify(response) })
+		vscode.postMessage({
+			type: "askResponse",
+			askResponse: "objectResponse",
+			text: JSON.stringify(response),
+			askId: askIdRef.current,
+			taskId: currentTaskItem?.id,
+		})
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
 	// Cancel backend auto-approval timeout when FollowUpSuggest's countdown effect cleans up.

@@ -892,6 +892,12 @@ export interface WebviewMessage {
 	context?: string
 	dataUri?: string
 	askResponse?: ShoferAskResponse
+	/**
+	 * UUID v7 of the `ShoferMessage.askId` that the webview is responding
+	 * to. Echoed back from the ask message so the host can validate that
+	 * the response targets the currently-outstanding ask.
+	 */
+	askId?: string
 	apiConfiguration?: ProviderSettings
 	images?: string[]
 	bool?: boolean

@@ -712,6 +712,18 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private askResponseText?: string
 	private askResponseImages?: string[]
 	public lastMessageTs?: number
+	/**
+	 * UUID v7 identifying the currently-outstanding ask. Set when a
+	 * complete (non-partial) ask enters the pWaitFor loop; cleared when
+	 * the ask is resolved, superseded, or the task is disposed. A
+	 * new ask() call that generates its own askId implicitly supersedes
+	 * the previous one (no separate invalidation needed).
+	 *
+	 * Replaces the former `lastMessageTs` timestamp for ask identity so
+	 * that unrelated code paths (say(), supersedePendingAsk()) can no
+	 * longer invalidate an in-flight ask by bumping a global mutable field.
+	 */
+	private _currentAskId?: string
 	private autoApprovalTimeoutRef?: NodeJS.Timeout
 	// True while ask() is actively waiting for a response from the user/webview.
 	// Used by handleWebviewAskResponse() to detect stray messageResponse arrivals
@@ -2456,6 +2468,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		let askTs: number
+		/** UUID v7 that uniquely identifies this ask invocation. */
+		const askId = uuidv7()
 
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
@@ -2507,6 +2521,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// never altered after first setting it.
 					askTs = lastMessage.ts
 					this.lastMessageTs = askTs
+					this._currentAskId = askId
 					lastMessage.text = text
 					lastMessage.partial = false
 					lastMessage.progressStatus = progressStatus
@@ -2521,6 +2536,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					this.askResponseImages = undefined
 					askTs = Date.now()
 					this.lastMessageTs = askTs
+					this._currentAskId = askId
 
 					// Check auto-approval BEFORE sending to the webview so the
 					// `autoApproved` flag is already set on the initial message.
@@ -2538,11 +2554,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						ask: type,
 						text,
 						isProtected,
+						askId,
 						autoApproved: isAutoApproved || undefined,
 						isAnswered: isAutoApprovedTool || undefined,
 					})
 
 					if (isAutoApproved) {
+						this._currentAskId = undefined
 						this.emit(ShoferEventName.TaskAskResponded)
 						const synthesized: ShoferAskResponse =
 							quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
@@ -2557,6 +2575,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.askResponseImages = undefined
 			askTs = Date.now()
 			this.lastMessageTs = askTs
+			this._currentAskId = askId
 
 			// Check auto-approval BEFORE sending to the webview so the
 			// `autoApproved` flag is already set on the initial message.
@@ -2574,11 +2593,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				ask: type,
 				text,
 				isProtected,
+				askId,
 				autoApproved: isAutoApproved || undefined,
 				isAnswered: isAutoApprovedTool || undefined,
 			})
 
 			if (isAutoApproved) {
+				this._currentAskId = undefined
 				this.emit(ShoferEventName.TaskAskResponded)
 				const synthesized: ShoferAskResponse =
 					quickApproval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
@@ -2610,6 +2631,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				await this.saveShoferMessages()
 				this.updateShoferMessage(askMessage)
 			}
+			this._currentAskId = undefined
 			this.emit(ShoferEventName.TaskAskResponded)
 			const synthesized: ShoferAskResponse =
 				approval.decision === "approve" ? "yesButtonClicked" : "noButtonClicked"
@@ -2628,7 +2650,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// The state is mutable if the message is complete and the task will
 		// block (via the `pWaitFor`).
-		const isBlocking = !(this.askResponse !== undefined || this.lastMessageTs !== askTs)
+		const isBlocking = !(this.askResponse !== undefined || this._currentAskId !== askId)
 		const isMessageQueued = !this.messageQueueService.isEmpty()
 		// Keep queued user messages intact for asks that require explicit
 		// user input — the queued message should not be silently drained as
@@ -2745,7 +2767,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						return true
 					}
 
-					if (this.askResponse !== undefined || this.lastMessageTs !== askTs) {
+					if (this.askResponse !== undefined || this._currentAskId !== askId) {
 						return true
 					}
 
@@ -2781,14 +2803,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `_taskLoopPromise` awaiter (e.g. cancelAndProcessQueuedMessages)
 		// can proceed. We treat this the same as a superseded ask: a
 		// recoverable, expected control-flow exception.
-		if (this.abort && this.askResponse === undefined && this.lastMessageTs === askTs) {
+		if (this.abort && this.askResponse === undefined && this._currentAskId === askId) {
 			throw new AskIgnoredError("aborted while awaiting ask response")
 		}
 
-		if (this.lastMessageTs !== askTs) {
-			// Could happen if we send multiple asks in a row i.e. with
-			// command_output. It's important that when we know an ask could
-			// fail, it is handled gracefully.
+		if (this._currentAskId !== askId) {
+			// Another ask() call (or supersedePendingAsk()) cleared
+			// _currentAskId or set a new one while we were waiting in
+			// pWaitFor. The ask this promise represents is no longer
+			// the active one — surface a clean control-flow exception so
+			// the caller can unwind without corrupting state.
 			throw new AskIgnoredError("superseded")
 		}
 
@@ -2796,6 +2820,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.askResponse = undefined
 		this.askResponseText = undefined
 		this.askResponseImages = undefined
+		this._currentAskId = undefined
 
 		// Cancel the timeouts if they are still running.
 		timeouts.forEach((timeout) => clearTimeout(timeout))
@@ -2812,9 +2837,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return result
 	}
 
-	handleWebviewAskResponse(askResponse: ShoferAskResponse, text?: string, images?: string[]) {
+	handleWebviewAskResponse(askResponse: ShoferAskResponse, text?: string, images?: string[], askId?: string) {
 		this.diagLog(
-			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, abort=${this.abort}, abandoned=${this.abandoned}, isAwaitingAskResponse=${this.isAwaitingAskResponse}`,
+			`[DIAG handleWebviewAskResponse] taskId=${this.taskId}.${this.instanceId}, askResponse=${askResponse}, text=${text?.substring(0, 100)}, askId=${askId}, currentAskId=${this._currentAskId}, abort=${this.abort}, abandoned=${this.abandoned}, isAwaitingAskResponse=${this.isAwaitingAskResponse}`,
 		)
 
 		// Defensive: if no ask() is currently waiting, the askResponse* slots are not
@@ -2835,6 +2860,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// message after any messages that were queued in the same window, reversing the
 		// user-visible send order. Use `prependMessage` to put it back at the FRONT.
 		if (!this.isAwaitingAskResponse && !this.abort && !this.abandoned) {
+			if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
+				this.messageQueueService.prependMessage(text ?? "", images)
+			}
+			return
+		}
+
+		// Validate that the webview-supplied askId (if any) matches the
+		// currently-outstanding ask. A mismatch means the user responded
+		// to a stale ask (task-switch, superseded, or rapid ask churn).
+		// Route the response back into the queue so it is not lost.
+		if (askId !== undefined && this._currentAskId !== undefined && askId !== this._currentAskId) {
 			if (askResponse === "messageResponse" && (text || (images && images.length > 0))) {
 				this.messageQueueService.prependMessage(text ?? "", images)
 			}
@@ -2912,7 +2948,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	public supersedePendingAsk(): void {
-		this.lastMessageTs = Date.now()
+		// Clear only the currently-outstanding ask — do NOT mutate a
+		// global timestamp that would also invalidate unrelated asks
+		// waiting in other concurrent invocations.
+		this._currentAskId = undefined
 	}
 
 	/**

@@ -872,8 +872,20 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
-				const currentTask = provider.getCurrentTask()
-				currentTask?.handleWebviewAskResponse(message.askResponse!, messageText, resolved.images)
+				// Route to the correct task instance when the webview supplies a
+				// taskId — prevents task-switch races where a response meant for
+				// task A lands on task B and is silently dropped.
+				const targetTask = message.taskId
+					? provider.taskManager.getManagedTaskInstance(message.taskId)
+					: provider.getCurrentTask()
+
+				// If neither the webview-supplied taskId nor the current task
+				// resolves, the response has no valid target and is dropped.
+				if (!targetTask) {
+					break
+				}
+
+				targetTask.handleWebviewAskResponse(message.askResponse!, messageText, resolved.images, message.askId)
 			}
 			break
 

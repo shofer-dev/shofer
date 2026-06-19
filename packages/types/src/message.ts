@@ -307,6 +307,14 @@ export const shoferMessageSchema = z.object({
 	checkpoint: z.record(z.string(), z.unknown()).optional(),
 	progressStatus: toolProgressStatusSchema.optional(),
 	/**
+	 * Stable UUID v7 assigned to this ask when it enters the pWaitFor
+	 * loop. Set on complete (non-partial) ask messages only. The webview
+	 * echoes this back in `askResponse` so the host can validate that the
+	 * response targets the currently-outstanding ask and route mismatched
+	 * responses to the queue instead of silently accepting them.
+	 */
+	askId: z.string().optional(),
+	/**
 	 * Data for successful context condensation.
 	 * Present when `say: "condense_context"` and `partial: false`.
 	 */
