@@ -183,7 +183,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// render would bust the incremental processor's prefix cache.
 	const headerTaskTs = currentTaskItem?.ts
 	const headerTaskText = currentTaskItem?.task
-	// [scroll:h24] The host updates `HistoryItem.ts` (→ currentTaskItem.ts) to
+	// H24 scroll-flash fix: the host updates `HistoryItem.ts` (→ currentTaskItem.ts) to
 	// last-activity time on every state push during streaming. The synthetic
 	// header used that value as its `ts`, which flows into `task.ts` — the
 	// Virtuoso `key` AND the taskTs-keyed scroll lifecycle. A mutating ts thus
@@ -217,21 +217,15 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[syntheticTaskHeader, messages],
 	)
 
-	// [scroll:h24] Diagnostic: log whenever the flag flips, capturing what row 0
-	// resolves to. When hasMore is true we show the synthetic header (real first
-	// prompt); when false we fall back to displayMessages[0], which on a mid-turn
-	// window start is an `api_req_started` whose text is the wireRequest blob —
-	// exactly the bad TaskHeader render. Pairs the sentinel flicker with the
-	// header content so we can confirm they are the same toggle.
+	// [header:content] TEMPORARY diagnostic: confirm whether the TaskHeader is
+	// rendering the canonical first prompt or a corrupted `api_req_started` wire
+	// blob (pre-f2a7d5196 HistoryItem.task corruption). Logs what the header will
+	// actually show — the synthetic header text (currentTaskItem.task) and, when
+	// not windowed, the displayMessages[0] fallback. Remove once the header
+	// self-heal fix is verified. Keyed on the flag/header toggle to avoid
+	// per-chunk spam.
 	useEffect(() => {
 		const row0 = displayMessages.at(0)
-		const row0Desc = syntheticTaskHeader
-			? "synthetic(first-prompt)"
-			: `${row0?.type ?? "?"}/${row0?.say ?? row0?.ask ?? "?"}`
-		// [header:content] Heuristic: does a text look like the api_req_started
-		// wireRequest JSON blob rather than a human prompt? Used to confirm whether
-		// HistoryItem.task (→ currentTaskItem.task → syntheticTaskHeader) is the
-		// canonical first prompt or the corrupted wire blob.
 		const looksLikeWireBlob = (t: string | undefined) =>
 			!!t && /^\s*\{/.test(t) && /"(messages|model|stream|max_tokens|api_req|request)"/.test(t)
 		const preview = (t: string | undefined) => (t ?? "").slice(0, 60).replace(/\s+/g, " ")
@@ -239,19 +233,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		const row0Text = (row0 as { text?: string } | undefined)?.text
 		vscode.postMessage({
 			type: "webviewLog",
-			text: `[scroll:h24] ChatView render hasMore=${hasMoreShoferMessages} synthetic=${!!syntheticTaskHeader} taskItem=${!!currentTaskItem} headerTs=${stableHeaderTs ?? "<none>"} rawHeaderTs=${headerTaskTs ?? "<none>"} row0=${row0Desc} msgCount=${messages.length}`,
-		})
-		// [header:content] Separate line: what the TaskHeader will actually render
-		// for this task — the synthetic header text (currentTaskItem.task) and, when
-		// not windowed, the displayMessages[0] fallback. wireBlob=true means the
-		// header is showing the API-request blob instead of the user's first prompt.
-		vscode.postMessage({
-			type: "webviewLog",
 			text: `[header:content] hasMore=${hasMoreShoferMessages} headerWireBlob=${looksLikeWireBlob(headerText)} header="${preview(headerText)}" row0WireBlob=${looksLikeWireBlob(row0Text)} row0="${preview(row0Text)}"`,
 		})
-		// Intentionally keyed on the toggle (flag + header identity), not on every
-		// streamed append, to avoid per-chunk spam. displayMessages/messages are
-		// read from the same render's closure.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [hasMoreShoferMessages, syntheticTaskHeader])
 

@@ -3069,9 +3069,6 @@ export class ShoferProvider
 	async loadOlderShoferMessages(): Promise<void> {
 		const task = this.getCurrentTask()
 		if (!task || !task.hasMoreShoferMessages) {
-			scrollLog.info(
-				`[scroll:h24] loadOlderShoferMessages ignored: task=${task?.taskId ?? "<none>"} hasMore=${task?.hasMoreShoferMessages ?? false}`,
-			)
 			return
 		}
 		const taskId = task.taskId
@@ -3101,12 +3098,6 @@ export class ShoferProvider
 			...newTail,
 		]
 		task.hasMoreShoferMessages = false
-
-		scrollLog.info(
-			`[scroll:h24] loadOlderShoferMessages task=${taskId} loadedTail=${loadedCount} ` +
-				`onDisk=${allMessages.length} prepending=${olderMessages.length} newTail=${newTail.length} ` +
-				`-> hasMore=false`,
-		)
 
 		// Batch the older page in one IPC round-trip — the webview
 		// does one setState with [...olderMessages, ...prev].
@@ -3715,16 +3706,6 @@ export class ShoferProvider
 			}
 			return typeof t?.getWorkflowVizSnapshot === "function" ? t.getWorkflowVizSnapshot() : undefined
 		})()
-
-		// [scroll:h24] Diagnostic: a full state push carries hasMoreShoferMessages
-		// derived from the *current* task. If currentTask is momentarily wrong or
-		// undefined here, the flag flips false → "Load older messages" sentinel
-		// vanishes and TaskHeader falls back to messages[0] (often an
-		// api_req_started wireRequest blob). Trace which task this push reflects.
-		scrollLog.info(
-			`[scroll:h24] getStateToPostToWebview hasMore=${currentTask?.hasMoreShoferMessages ?? false} ` +
-				`currentTaskId=${currentTask?.taskId ?? "<none>"} shoferMsgCount=${currentTask?.shoferMessages.length ?? 0}`,
-		)
 
 		// [header:content] Does the PERSISTED HistoryItem.task (the value the webview
 		// turns into the synthetic TaskHeader via currentTaskItem.task) hold the

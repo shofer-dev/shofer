@@ -148,7 +148,7 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
-import { taskLog, scrollLog } from "../../utils/logging/subsystems"
+import { taskLog } from "../../utils/logging/subsystems"
 import { runWithLogTaskContext } from "../../utils/logging"
 import { time } from "../../utils/perf"
 import {
@@ -3574,15 +3574,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		let [modifiedShoferMessages, hasMoreUi] = rawShofer
 		this.hasMoreShoferMessages = hasMoreUi
-
-		// [scroll:h24] Diagnostic: this is the ONLY site that sets the flag true.
-		// If preload re-runs for an already-resident task it can re-arm hasMore
-		// after a "Load older messages" click cleared it — re-introducing the
-		// sentinel + header-blob flicker. Trace every (re)hydrate.
-		scrollLog.info(
-			`[scroll:h24] preload task=${this.taskId} tailMode=${tailMode} maxMessages=${maxMessages ?? "<none>"} ` +
-				`window=${modifiedShoferMessages.length} -> hasMore=${hasMoreUi}`,
-		)
 
 		// Remove any resume messages that may have been added before.
 		const lastRelevantMessageIndex = findLastIndex(
