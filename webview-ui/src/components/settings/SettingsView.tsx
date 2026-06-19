@@ -132,7 +132,15 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const { t } = useAppTranslation()
 
 	const extensionState = useExtensionState()
-	const { currentApiConfigName, listApiConfigMeta, uriScheme, settingsImportedAt } = extensionState
+	const { currentApiConfigName, listApiConfigMeta, uriScheme, settingsImportedAt, setEditingApiConfiguration } =
+		extensionState
+
+	// The "Edit Configuration" buffer (editingApiConfiguration) lives in the
+	// global context so the host can push the loaded config into it. Clear it
+	// when this view unmounts so a stale edit target can't shadow the live
+	// default the next time Settings opens (which would render the wrong config
+	// and risk a Save writing it under the default profile's name).
+	useEffect(() => () => setEditingApiConfiguration(undefined), [setEditingApiConfiguration])
 
 	const [isDiscardDialogShow, setDiscardDialogShow] = useState(false)
 	const [isChangeDetected, setChangeDetected] = useState(false)

@@ -259,6 +259,8 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 
 	const defaultExtensionState = {
 		currentApiConfigName: "default",
+		// Cleared by SettingsView on unmount; mocked so the cleanup effect can call it.
+		setEditingApiConfiguration: vi.fn(),
 		listApiConfigMeta: [],
 		uriScheme: "vscode",
 		settingsImportedAt: undefined,
@@ -370,6 +372,24 @@ describe("SettingsView - Unsaved Changes Detection", () => {
 
 		// Verify no dialog appeared
 		expect(screen.queryByText("settings:unsavedChangesDialog.title")).not.toBeInTheDocument()
+	})
+
+	it("clears the Edit Configuration buffer (editingApiConfiguration) on unmount", async () => {
+		const onDone = vi.fn()
+		const { unmount } = render(
+			<QueryClientProvider client={queryClient}>
+				<SettingsView onDone={onDone} />
+			</QueryClientProvider>,
+		)
+		await waitFor(() => expect(screen.getByTestId("api-options")).toBeInTheDocument())
+
+		unmount()
+
+		// Closing Settings must reset editingApiConfiguration so the next open
+		// renders the live global default — not the last-edited profile (which
+		// would mismatch the dropdown and risk Save writing it under the default's
+		// name).
+		expect(defaultExtensionState.setEditingApiConfiguration).toHaveBeenCalledWith(undefined)
 	})
 
 	// TODO: Fix underlying issue - see above

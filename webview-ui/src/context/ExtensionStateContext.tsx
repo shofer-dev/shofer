@@ -83,6 +83,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	profileThresholds: Record<string, number>
 	setProfileThresholds: (value: Record<string, number>) => void
 	setApiConfiguration: (config: ProviderSettings) => void
+	setEditingApiConfiguration: (config: ProviderSettings | undefined) => void
 	setCustomInstructions: (value?: string) => void
 	setAlwaysAllowReadOnly: (value: boolean) => void
 	setAlwaysAllowReadOnlyOutsideWorkspace: (value: boolean) => void
@@ -370,6 +371,15 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				...value,
 			},
 		}))
+	}, [])
+
+	// The Settings "Edit Configuration" buffer. Set when the edit dropdown loads
+	// a config (host `editingApiConfiguration` configUpdate) and cleared when the
+	// Settings view unmounts, so a stale edit target can't shadow the live global
+	// apiConfiguration on the next open (which would render the wrong config and
+	// risk saving its settings under the default's name).
+	const setEditingApiConfiguration = useCallback((value: ProviderSettings | undefined) => {
+		setState((prevState) => ({ ...prevState, editingApiConfiguration: value }))
 	}, [])
 
 	const handleMessage = useCallback(
@@ -740,6 +750,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setExperimentEnabled: (id, enabled) =>
 				setState((prevState) => ({ ...prevState, experiments: { ...prevState.experiments, [id]: enabled } })),
 			setApiConfiguration,
+			setEditingApiConfiguration,
 			setCustomInstructions: (value) => setState((prevState) => ({ ...prevState, customInstructions: value })),
 			setAlwaysAllowReadOnly: (value) => setState((prevState) => ({ ...prevState, alwaysAllowReadOnly: value })),
 			setAlwaysAllowReadOnlyOutsideWorkspace: (value) =>
@@ -877,6 +888,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			worktreeExplicitOptOut,
 			pendingWorkflowName,
 			setApiConfiguration,
+			setEditingApiConfiguration,
 			setListApiConfigMeta,
 		],
 	)

@@ -3732,7 +3732,11 @@ export class ShoferProvider
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			apiConfiguration,
-			editingApiConfiguration: undefined,
+			// editingApiConfiguration is intentionally NOT seeded here: it's a
+			// webview-only edit buffer set via a targeted configUpdate when the
+			// Settings edit dropdown loads a config, and cleared by SettingsView on
+			// unmount. Seeding `undefined` on every full push is a no-op anyway
+			// (JSON strips it and mergeExtensionState preserves the prior value).
 			customInstructions,
 			alwaysAllowReadOnly: alwaysAllowReadOnly ?? false,
 			alwaysAllowReadOnlyOutsideWorkspace: alwaysAllowReadOnlyOutsideWorkspace ?? false,
