@@ -7,8 +7,16 @@ describe("dist assets", () => {
 	const distPath = path.join(__dirname, "../dist")
 
 	describe("tiktoken", () => {
+		// The worker bundle loads it from workers/, and the MAIN extension bundle
+		// (src/utils/tiktoken.ts → tiktoken/lite) loads it from the dist root.
+		// BOTH must exist or the extension throws "Missing tiktoken_bg.wasm" at
+		// activation — guard against the root copy being dropped as "dead weight".
 		it("should have tiktoken wasm file in workers dir", () => {
 			expect(fs.existsSync(path.join(distPath, "workers", "tiktoken_bg.wasm"))).toBe(true)
+		})
+
+		it("should have tiktoken wasm file in dist root (main bundle loads it here)", () => {
+			expect(fs.existsSync(path.join(distPath, "tiktoken_bg.wasm"))).toBe(true)
 		})
 	})
 

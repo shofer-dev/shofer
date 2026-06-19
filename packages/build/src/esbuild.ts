@@ -116,18 +116,22 @@ export function copyWasms(srcDir: string, distDir: string): void {
 
 	fs.mkdirSync(distDir, { recursive: true })
 
-	// Tiktoken WASM is needed by the countTokens worker — copy ONLY to workers/.
-	// The root dist/ copy is never referenced; it's dead weight (~1 MB) that
-	// was being duplicated into the VSIX.
+	// Tiktoken WASM. BOTH copies are required, not just the worker one:
+	//   - dist/workers/ — loaded by the countTokens worker bundle.
+	//   - dist/ (root)  — the MAIN extension bundle imports `tiktoken/lite`
+	//     directly (src/utils/tiktoken.ts) and loads the wasm relative to the
+	//     bundle dir. This import initializes at activation, so a missing root
+	//     copy throws "Missing tiktoken_bg.wasm" and the extension fails to
+	//     activate. (Regressed in "reduce VSIX" when the root copy was dropped
+	//     as presumed dead weight — it is not.)
+	const tiktokenWasmSrc = path.join(nodeModulesDir, "tiktoken", "lite", "tiktoken_bg.wasm")
 	const workersDir = path.join(distDir, "workers")
 	fs.mkdirSync(workersDir, { recursive: true })
 
-	fs.copyFileSync(
-		path.join(nodeModulesDir, "tiktoken", "lite", "tiktoken_bg.wasm"),
-		path.join(workersDir, "tiktoken_bg.wasm"),
-	)
+	fs.copyFileSync(tiktokenWasmSrc, path.join(distDir, "tiktoken_bg.wasm"))
+	fs.copyFileSync(tiktokenWasmSrc, path.join(workersDir, "tiktoken_bg.wasm"))
 
-	console.log(`[copyWasms] Copied tiktoken WASM to ${workersDir}`)
+	console.log(`[copyWasms] Copied tiktoken WASM to ${distDir} and ${workersDir}`)
 
 	// Main tree-sitter WASM file.
 	fs.copyFileSync(
