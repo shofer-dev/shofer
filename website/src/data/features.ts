@@ -55,14 +55,14 @@ export const features: Feature[] = [
 		anchor: "live-visualization",
 		detail: "Open WorkflowView and the whole agent tree becomes legible. A topology graph shows the current round — who's running and who they're sending to or waiting on. A sequence timeline replays every message, escalations to @Human included. Per-agent swimlanes mark exactly which step each agent is on, a Stats tab breaks active time down by phase and tool across the entire tree, and a filterable Logs stream shows everything that happened. The same diagrams render for any .slang file in an editor tab.",
 		images: [
-			{ src: "workflow-topology.png", caption: "Topology — the agent graph for the current round" },
+			{ src: "images/workflow-topology.png", caption: "Topology — the agent graph for the current round" },
 			{
-				src: "task-sequence-diagram.png",
+				src: "images/task-sequence-diagram.png",
 				caption: "Sequence — message timeline, including escalations to @Human",
 			},
-			{ src: "swimlanes.png", caption: "State — per-agent swimlanes marking the executing op" },
-			{ src: "task-stats.png", caption: "Stats — active-time donut + per-tool breakdown across the tree" },
-			{ src: "logs.png", caption: "Logs — filterable by free text and severity" },
+			{ src: "images/swimlanes.png", caption: "State — per-agent swimlanes marking the executing op" },
+			{ src: "images/task-stats.png", caption: "Stats — active-time donut + per-tool breakdown across the tree" },
+			{ src: "images/logs.png", caption: "Logs — filterable by free text and severity" },
 		],
 	},
 	{
@@ -78,7 +78,7 @@ export const features: Feature[] = [
 		docsLabel: "Assistant Agent",
 		anchor: "assistant-agent",
 		detail: "A long-lived, read-only companion agent accumulates codebase knowledge as you work, backed by the local semantic index (RAG). Other sessions query it instead of re-reading and re-paying for the same context — so a warm, shared context window serves many cheap queries.",
-		images: [{ src: "live-memory.png", caption: "Sessions querying the shared Assistant Agent context" }],
+		images: [{ src: "images/live-memory.png", caption: "Sessions querying the shared Assistant Agent context" }],
 		imageLayout: "side",
 	},
 	{
@@ -96,7 +96,9 @@ export const features: Feature[] = [
 		docsLabel: "RAG Indexing",
 		anchor: "code-git-search",
 		detail: "Shofer's RAG is fast because it's incremental — it re-embeds only what changed. It indexes your code with AST-aware, tree-sitter chunking and your entire git log, so your agents can get the historical context of a change. And it runs on a backend you own: pick your embedding model (e.g. local via Ollama) and your vector store, so the index is computed and stored on infrastructure you control.",
-		images: [{ src: "rag-indexing.png", caption: "Local RAG over code and git history, indexed incrementally" }],
+		images: [
+			{ src: "images/rag-indexing.png", caption: "Local RAG over code and git history, indexed incrementally" },
+		],
 		imageLayout: "side",
 	},
 	{
@@ -115,8 +117,8 @@ export const features: Feature[] = [
 		anchor: "parallel-async",
 		detail: "Parallelism runs through the whole product. Run many independent conversations at once in a task tree — switching freely without losing state, queueing messages while an agent works, and fanning out background subtasks that report back to their parent. Both A2A and MCP tool calling are fully asynchronous, so that your agents can do more work in the same amount of time.",
 		images: [
-			{ src: "task-tree-hierarchy.png", caption: "The task tree with several tasks running at once" },
-			{ src: "parallelism.png", caption: "Parallel MCP calls tracked by call_id" },
+			{ src: "images/task-tree-hierarchy.png", caption: "The task tree with several tasks running at once" },
+			{ src: "images/parallelism.png", caption: "Parallel MCP calls tracked by call_id" },
 		],
 		imageLayout: "side",
 	},
@@ -134,7 +136,7 @@ export const features: Feature[] = [
 		docsLabel: "Cost Limits",
 		anchor: "cost-caps",
 		detail: "Give a session a hard USD budget. Shofer tracks spend live across the whole task tree and pauses or aborts soon after the moment the cap is crossed — so a runaway autonomous loop can't quietly burn your balance.",
-		images: [{ src: "cost-limits.png", caption: "A per-session USD budget with live spend tracking" }],
+		images: [{ src: "images/cost-limits.png", caption: "A per-session USD budget with live spend tracking" }],
 	},
 	{
 		title: "Excellent Git Worktree Support",
@@ -152,8 +154,11 @@ export const features: Feature[] = [
 		anchor: "git-worktrees",
 		detail: "Keep parallel sessions on separate branches in a single VS Code window — no stash dance, no extra windows. Create, switch, and delete worktrees from the UI; each session is scoped to its branch. Each worktree is a security boundary: shell commands run inside an OS-level sandbox that confines writes to the active worktree. (available in Linux only)",
 		images: [
-			{ src: "worktree1.png", caption: "Worktree selector with per-session branch isolation" },
-			{ src: "worktree2.png", caption: "A shell command blocked from writing outside the active worktree" },
+			{ src: "images/worktree1.png", caption: "Worktree selector with per-session branch isolation" },
+			{
+				src: "images/worktree2.png",
+				caption: "A shell command blocked from writing outside the active worktree",
+			},
 		],
 		imageLayout: "grid",
 	},
@@ -195,9 +200,9 @@ export const features: Feature[] = [
 			"And the auto-approval system extends to per-MCP-tool toggles and categories, so you can keep fast iteration with fine-grained control.",
 		],
 		images: [
-			{ src: "auto-approve.png", caption: "Per-MCP-tool auto-approval toggles in Settings" },
-			{ src: "changelist.png", caption: "Session changelog — every file changed, at a glance" },
-			{ src: "rating.png", caption: "Agent self-assessment and rating overlay after a task completes" },
+			{ src: "images/auto-approve.png", caption: "Per-MCP-tool auto-approval toggles in Settings" },
+			{ src: "images/changelist.png", caption: "Session changelog — every file changed, at a glance" },
+			{ src: "images/rating.png", caption: "Agent self-assessment and rating overlay after a task completes" },
 		],
 		imageLayout: "side-carousel",
 	},
