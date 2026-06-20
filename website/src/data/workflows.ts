@@ -14,7 +14,7 @@ export const workflows: Workflow[] = [
 		description:
 			"Two developers independently triage, converge on the root cause through peer review, get user sign-off, then one fixes while the other reviews — iterating until both are satisfied.",
 		agents: "Orchestrator + Developer1 + Developer2",
-		demoImage: "/images/workflows/debug.png",
+		demoImage: "/images/workflows/debug.webp",
 		docsSlug: "debug",
 	},
 	{
@@ -23,7 +23,7 @@ export const workflows: Workflow[] = [
 		description:
 			"The Architect designs, you approve, then Developer implements while Reviewer inspects — iterating until done. Full design → implementation → review pipeline.",
 		agents: "Architect + Developer + Reviewer",
-		demoImage: "/images/workflows/implement-feature.png",
+		demoImage: "/images/workflows/implement-feature.webp",
 		docsSlug: "implement-feature",
 	},
 ]
