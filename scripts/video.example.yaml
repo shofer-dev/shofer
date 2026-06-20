@@ -1,0 +1,84 @@
+# video.example.yaml - config for scripts/build-video.py
+#
+#   python3 scripts/build-video.py scripts/video.example.yaml
+#
+# Everything the build needs lives here. Paths are relative to THIS file (or to
+# clips_dir, if set). Only `clips` is required; everything else has defaults.
+
+output: out.webm                 # written relative to this file
+clips_dir: ""                    # optional base dir prepended to each clip file
+
+canvas: {width: 1280, height: 720, fps: 30}
+background: black                # pillarbox/letterbox color for off-aspect clips
+speed: 1.0                       # base speed for all clips (0.5 = half speed)
+
+# ---- adaptive pacing: vary speed by on-screen motion ------------------------
+pacing:
+  enabled: true
+  slow: 0.7                      # speed during busy/high-motion spans
+  fast: 1.6                      # speed during quiet spans w/ no title & no voice
+  motion_hi: 0.45               # >= this fraction of peak motion -> "busy"
+  motion_lo: 0.06               # <= this fraction of peak motion -> "quiet"
+  bucket: 0.5                   # analysis granularity (seconds)
+
+# ---- generated title bars (lower-third) ------------------------------------
+title:
+  enabled: true
+  seconds: null                  # fixed on-screen time; null = from reading time
+  read_wps: 2.5                  # reading speed used when seconds is null
+  read_base: 1.0
+  at: 0.0                        # default appear time (seconds into the clip)
+  bar_frac: 0.20                 # bar height (fraction of canvas height)
+  bar_color: "#000000"
+  bar_opacity: 0.78
+  text_color: "#f2c14e"
+  font: "DejaVu Sans"
+
+# ---- default transition between clips (override per clip) -------------------
+# type: cut | fade | wipeleft | wiperight | slideup | circleopen | dissolve ...
+transition: {type: fade, duration: 0.6}
+
+# ---- optional spoken intro before the first clip ---------------------------
+intro:
+  narration: "Welcome. Here is a quick tour."
+  delay: 0.5
+
+# ---- voiceover -------------------------------------------------------------
+voice:
+  enabled: true
+  engine: auto                   # kokoro | piper | flite | auto
+  tts_home: media/video          # venv + models (default: extensions/shofer/media/video)
+  kokoro_voice: af_heart         # af_heart, af_bella, am_michael, am_onyx, bm_george
+  kokoro_speed: 1.0
+
+encode: {vp9_crf: 32, audio_kbps: 96}
+
+# ---- the clips, in playback order ------------------------------------------
+clips:
+  - file: intro.mp4
+    title: "Getting started"           # explicit on-screen caption
+    narration: "Let's open the app and create our first task."
+    title_at: 0.5                       # caption appears 0.5s in
+    effects:
+      - {type: fadein, duration: 0.5}   # fade up from black
+
+  - file: feature.mp4
+    description: "Implementing a feature with the architect, developer and reviewer."
+    # no `title`/`narration`: title is derived from description, narration = description
+    trim: [2.0, 12.0]                   # CUT: use only seconds 2-12 of the source
+    speed: 0.8                          # SLOW this clip to 0.8x
+    transition: {type: wipeleft, duration: 0.5}   # transition INTO the next clip
+    overlays:
+      - image: ../media/demo_assets/title/done.svg   # any svg/png
+        x: "W-w-30"                     # ffmpeg expr: W,H=canvas, w,h=overlay
+        y: "30"
+        scale: 0.18                     # width as fraction of canvas
+        start: 1.0
+        end: 4.0
+
+  - file: outro.mp4
+    title: "That's the tour"
+    narration: "And that's the whole flow, start to finish."
+    speed: 1.4                          # SPEED UP this clip to 1.4x
+    effects:
+      - {type: fadeout, duration: 0.6}
