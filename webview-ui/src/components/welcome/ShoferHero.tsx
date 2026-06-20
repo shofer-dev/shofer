@@ -33,7 +33,7 @@ const ShoferHero = () => {
 					maskSize: "contain",
 					maskPosition: "center",
 				}}>
-				<img src={imagesBaseUri + "/shofer.svg"} alt="Shofer logo" className="h-12 opacity-0" />
+				<img src={imagesBaseUri + "/shofer.svg"} alt="Shofer logo" className="h-24 opacity-0" />
 			</div>
 		</div>
 	)
