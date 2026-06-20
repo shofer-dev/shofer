@@ -35,7 +35,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                       # extensions/shofer
+ROOT = os.path.dirname(os.path.dirname(HERE))      # extensions/shofer (../../)
 
 # ---- defaults: every knob lives here and can be overridden in the config ------
 DEFAULTS = {
@@ -68,6 +68,14 @@ DEFAULTS = {
     },
     "transition": {"type": "fade", "duration": 0.6},   # default between clips
     "intro": {"narration": "", "delay": 0.5},
+    "music": {                        # background music bed (file "" = none)
+        "file": "",
+        "volume": 0.25,               # gain relative to the source track
+        "fade_in": 1.0,
+        "fade_out": 2.0,
+        "duck": True,                 # lower music while narration plays
+        "duck_amount": 0.35,          # music gain under narration (duck=true)
+    },
     "voice": {
         "enabled": True,
         "engine": "auto",             # kokoro | piper | flite | auto
@@ -335,13 +343,28 @@ def normalize_clip(clip, idx, C, tmp):
              f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:{bg},setsar=1")
     if abs(base_speed - 1.0) > 1e-6:
         chain += f",setpts=(PTS-STARTPTS)/{base_speed}"
-    # fragment-level fade effects
-    fdur = None
+    # per-clip effects
+    fdur, src_dur = None, None
     for eff in clip.get("effects", []):
-        if eff.get("type") == "fadein":
+        et = eff.get("type")
+        if et == "fadein":
             chain += f",fade=t=in:st=0:d={eff.get('duration', 0.5)}"
-        elif eff.get("type") == "fadeout":
-            fdur = eff.get("duration", 0.5)   # applied after we know duration
+        elif et == "fadeout":
+            fdur = eff.get("duration", 0.5)        # applied once we know duration
+        elif et == "eq":                            # colour adjust
+            parts = [f"{k}={eff[k]}" for k in
+                     ("brightness", "contrast", "saturation", "gamma") if k in eff]
+            if parts:
+                chain += ",eq=" + ":".join(parts)
+        elif et == "zoom":                          # ken burns
+            if src_dur is None:
+                src_dur = probe_duration(src)
+            clen = ((trim[1] - trim[0]) if trim else src_dur) / base_speed
+            frames = max(1, int(round(clen * FPS)))
+            z0, z1 = eff.get("from", 1.0), eff.get("to", 1.1)
+            chain += (f",zoompan=z='{z0}+({z1}-{z0})*on/{frames}':d=1:"
+                      f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+                      f"s={W}x{H}:fps={FPS}")
     fc.append(chain + "[base]")
     cur = "[base]"
     n_in = 1
@@ -367,27 +390,38 @@ def normalize_clip(clip, idx, C, tmp):
         twin = (at, secs)
         n_in += 1
 
-    # image/svg overlays
+    # image/svg overlays (optional alpha fade in/out)
     base_dir = os.path.dirname(os.path.abspath(C["__path__"]))
     for j, ov in enumerate(clip.get("overlays", [])):
         img = ov["image"]
         if not os.path.isabs(img):
             img = os.path.join(C["clips_dir"] or base_dir, img)
         ow = int(W * ov.get("scale", 0.25))
-        if img.lower().endswith(".svg"):
+        s, e = ov.get("start", 0.0), ov.get("end", 1e9)
+        fade = ov.get("fade", 0.0)
+        faded = fade > 0 and e < 1e8                  # fade needs a finite window
+        need_scale = True
+        if img.lower().endswith(".svg"):              # rasterize at target width
             opng = os.path.join(tmp, f"ov{idx}_{j}.png")
-            run(["inkscape", img, "--export-type=png",   # keep aspect (width only)
+            run(["inkscape", img, "--export-type=png",
                  f"--export-filename={opng}", "-w", str(ow)])
-            inputs += ["-i", opng]                       # single frame; overlay repeats
-            scaled = f"[{n_in}:v]"
-        else:
-            inputs += ["-i", img]
-            fc.append(f"[{n_in}:v]scale={ow}:-1[ovs{j}]")
+            img, need_scale = opng, False
+        # fading needs real frames over time -> loop the still for the window
+        inputs += (["-loop", "1", "-t", f"{e - s:.3f}", "-i", img] if faded
+                   else ["-i", img])
+        ops = []
+        if need_scale:
+            ops.append(f"scale={ow}:-1")
+        if faded:
+            ops += ["format=rgba", f"fade=t=in:st=0:d={fade}:alpha=1",
+                    f"fade=t=out:st={max(0, (e - s) - fade):.3f}:d={fade}:alpha=1",
+                    f"setpts=PTS+{s}/TB"]
+        if ops:
+            fc.append(f"[{n_in}:v]" + ",".join(ops) + f"[ovs{j}]")
             scaled = f"[ovs{j}]"
-        x = ov.get("x", "20")
-        y = ov.get("y", "20")
-        s = ov.get("start", 0.0)
-        e = ov.get("end", 1e9)
+        else:
+            scaled = f"[{n_in}:v]"
+        x, y = ov.get("x", "20"), ov.get("y", "20")
         fc.append(f"{cur}{scaled}overlay={x}:{y}:"
                   f"enable='between(t,{s},{e})'[ovr{j}]")
         cur = f"[ovr{j}]"
@@ -570,29 +604,72 @@ def main():
     run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "2", webm])
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-    if voice_clips:
-        placed = sorted(
-            [(C["intro"]["delay"] if v["pos"] < 0 else warp_time(segs, v["pos"]), v)
-             for v in voice_clips], key=lambda x: x[0])
-        ain, afc, amix = [], [], []
-        for k, (start, v) in enumerate(placed):
-            nxt = placed[k + 1][0] if k + 1 < len(placed) else 1e9
-            window = nxt - start
-            flag = (f"  !! OVERRUNS by {v['dur'] - window:.1f}s"
-                    if v["dur"] > window else "")
-            print(f"   {str(v['label'])[:22]:22} {v['dur']:4.1f}s /"
-                  f" {window:5.1f}s{flag}")
-            ain += ["-i", v["wav"]]
-            ms = int(round(start * 1000))
-            afc.append(f"[{k+1}:a]adelay={ms}|{ms}[d{k}]")
-            amix.append(f"[d{k}]")
-        afc.append("".join(amix) + f"amix=inputs={len(placed)}:normalize=0:"
-                   "dropout_transition=0,alimiter=limit=0.95[aout]")
-        run(["ffmpeg", "-y", "-i", webm, *ain, "-filter_complex", ";".join(afc),
-             "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "libopus",
-             "-b:a", f"{C['encode']['audio_kbps']}k", out_path])
-    else:
+
+    # resolve background music
+    M = C["music"]
+    music_file = M["file"]
+    if music_file and not os.path.isabs(music_file):
+        music_file = os.path.join(
+            C["clips_dir"] or os.path.dirname(os.path.abspath(cfg_path)), music_file)
+    have_music = bool(M["file"]) and os.path.isfile(music_file)
+    if M["file"] and not have_music:
+        print(f"  warning: music file not found, skipping: {music_file}")
+
+    # final placement of each narration line (warped to the paced timeline)
+    placed = sorted(
+        [(C["intro"]["delay"] if v["pos"] < 0 else warp_time(segs, v["pos"]), v)
+         for v in voice_clips], key=lambda x: x[0]) if voice_clips else []
+
+    if not placed and not have_music:
         shutil.copyfile(webm, out_path)
+    else:
+        ain, afc = [], []
+        ai = 1                                    # input 0 = the video webm
+        narr_label = music_label = None
+        speech = []                               # (start,end) per line, final time
+        if placed:
+            mix = []
+            for k, (start, v) in enumerate(placed):
+                nxt = placed[k + 1][0] if k + 1 < len(placed) else 1e9
+                window = nxt - start
+                flag = (f"  !! OVERRUNS by {v['dur'] - window:.1f}s"
+                        if v["dur"] > window else "")
+                print(f"   {str(v['label'])[:22]:22} {v['dur']:4.1f}s /"
+                      f" {window:5.1f}s{flag}")
+                ain += ["-i", v["wav"]]
+                ms = int(round(start * 1000))
+                afc.append(f"[{ai}:a]adelay={ms}|{ms}[d{k}]")
+                mix.append(f"[d{k}]")
+                speech.append((start, start + v["dur"]))
+                ai += 1
+            afc.append("".join(mix) + f"amix=inputs={len(placed)}:normalize=0:"
+                       "dropout_transition=0,alimiter=limit=0.95[narr]")
+            narr_label = "[narr]"
+        if have_music:
+            ain += ["-stream_loop", "-1", "-i", music_file]   # loop to cover video
+            mf = (f"[{ai}:a]atrim=0:{total:.3f},asetpts=N/SR/TB,"
+                  f"volume={M['volume']}")
+            if M["duck"] and speech:                          # dip under narration
+                expr = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in speech)
+                mf += f",volume={M['duck_amount']}:enable='{expr}'"
+            if M["fade_in"] > 0:
+                mf += f",afade=t=in:st=0:d={M['fade_in']}"
+            if M["fade_out"] > 0:
+                mf += (f",afade=t=out:st={max(0, total - M['fade_out']):.3f}"
+                       f":d={M['fade_out']}")
+            afc.append(mf + "[music]")
+            music_label = "[music]"
+            ai += 1
+
+        if narr_label and music_label:
+            afc.append(f"{music_label}{narr_label}amix=inputs=2:normalize=0:"
+                       "dropout_transition=0[aout]")
+            out_a = "[aout]"
+        else:
+            out_a = narr_label or music_label
+        run(["ffmpeg", "-y", "-i", webm, *ain, "-filter_complex", ";".join(afc),
+             "-map", "0:v", "-map", out_a, "-c:v", "copy", "-c:a", "libopus",
+             "-b:a", f"{C['encode']['audio_kbps']}k", out_path])
 
     print(f"\nwrote {out_path} ({os.path.getsize(out_path)/1e6:.2f} MB, {total:.1f}s)")
     if keep_temp:

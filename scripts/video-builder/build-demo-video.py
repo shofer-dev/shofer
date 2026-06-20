@@ -37,7 +37,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                       # extensions/shofer
+ROOT = os.path.dirname(os.path.dirname(HERE))      # extensions/shofer (../../)
 OSP = os.path.join(ROOT, "media", "demo.osp")
 OUT = os.path.join(ROOT, "website", "public", "demo.webm")
 

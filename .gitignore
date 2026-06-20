@@ -62,9 +62,9 @@ apps/cli/.shofer/
 
 shofer-cli-*.tar.gz*
 
-# TTS build environment for scripts/build-demo-video.py (venv + neural voice
+# TTS build environment for scripts/video-builder/ (venv + neural voice
 # models, hundreds of MB). Regenerate locally; not committed.
 media/video/
 
 # Python bytecode cache
-scripts/__pycache__/
+__pycache__/

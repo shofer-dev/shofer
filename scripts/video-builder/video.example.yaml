@@ -47,9 +47,18 @@ intro:
 voice:
   enabled: true
   engine: auto                   # kokoro | piper | flite | auto
-  tts_home: media/video          # venv + models (default: extensions/shofer/media/video)
+  # tts_home defaults to extensions/shofer/media/video (venv + models)
   kokoro_voice: af_heart         # af_heart, af_bella, am_michael, am_onyx, bm_george
   kokoro_speed: 1.0
+
+# ---- optional background music bed ------------------------------------------
+music:
+  file: ""                       # path to music; empty = no music. Looped to fit.
+  volume: 0.25
+  fade_in: 1.0
+  fade_out: 2.0
+  duck: true                     # dip the music while narration plays
+  duck_amount: 0.35
 
 encode: {vp9_crf: 32, audio_kbps: 96}
 
@@ -68,17 +77,21 @@ clips:
     trim: [2.0, 12.0]                   # CUT: use only seconds 2-12 of the source
     speed: 0.8                          # SLOW this clip to 0.8x
     transition: {type: wipeleft, duration: 0.5}   # transition INTO the next clip
+    effects:
+      - {type: eq, saturation: 1.1, contrast: 1.05}  # colour adjust
     overlays:
-      - image: ../media/demo_assets/title/done.svg   # any svg/png
+      - image: ../../media/demo_assets/title/done.svg # any svg/png
         x: "W-w-30"                     # ffmpeg expr: W,H=canvas, w,h=overlay
         y: "30"
         scale: 0.18                     # width as fraction of canvas
         start: 1.0
         end: 4.0
+        fade: 0.4                       # fade the overlay in/out
 
   - file: outro.mp4
     title: "That's the tour"
     narration: "And that's the whole flow, start to finish."
     speed: 1.4                          # SPEED UP this clip to 1.4x
     effects:
+      - {type: zoom, from: 1.0, to: 1.08}   # ken burns
       - {type: fadeout, duration: 0.6}

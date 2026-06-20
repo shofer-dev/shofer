@@ -19,9 +19,9 @@ and (for `.yaml` configs) `PyYAML`. Voiceover needs a TTS environment — see
 ## build-video.py
 
 ```bash
-python3 scripts/build-video.py CONFIG.yaml            # build
-python3 scripts/build-video.py CONFIG.yaml --no-voice # skip narration
-python3 scripts/build-video.py --help
+python3 scripts/video-builder/build-video.py CONFIG.yaml            # build
+python3 scripts/video-builder/build-video.py CONFIG.yaml --no-voice # skip narration
+python3 scripts/video-builder/build-video.py --help
 ```
 
 Flags: `--no-voice`, `--no-pace` (uniform speed), `--keep-temp` (keep the scratch
@@ -56,17 +56,21 @@ What the config can express:
   text (no SVG editing); on-screen time auto-sized to reading length.
 - **Voiceover** — neural TTS narration per clip (+ an intro), auto-timed to each
   clip and kept in sync through the pacing warp.
+- **Background music** — a looped music bed with fade in/out and automatic
+  **ducking** (volume dips while narration plays).
 - **Transitions** — `xfade` styles (fade/wipe/slide/dissolve/…) or hard `cut`.
-- **Overlays** — SVG or raster images, positioned and time-windowed per clip.
-- **Effects** — clip `fadein`/`fadeout`.
+- **Overlays** — SVG or raster images, positioned and time-windowed per clip,
+  with optional fade in/out.
+- **Effects** — clip `fadein`/`fadeout`, `eq` colour adjust (brightness/
+  contrast/saturation/gamma), and `zoom` (Ken Burns).
 - **Framing** — any `canvas` size/fps; off-aspect clips are pillarboxed onto a
   configurable `background`.
 - **Output** — VP9 + Opus `.webm` at a configurable quality.
 
-Not supported (use a full editor like OpenShot for these): multi-track/PiP
-compositing, background-music/audio mixing, animated or keyframed transforms
-(moving overlays, Ken Burns), colour/chroma-key effects, and animated/3D titles.
-Several of these (background music, overlay fades, zoom) are easy to add later.
+Not supported (use a full editor like OpenShot for these): multi-track / picture-
+in-picture compositing, audio mixing beyond music+narration, keyframed motion
+paths (moving/scaling overlays along a path), chroma-key (green screen), and
+animated/3D titles.
 
 ### Config reference
 
@@ -86,6 +90,7 @@ See `video.example.yaml` for a working file. Top-level keys:
 | `transition` | `{type:fade,duration:0.6}`       | Default join between clips.                    |
 | `intro`      | `{narration:"",delay:0.5}`       | Optional spoken intro before clip 1.           |
 | `voice`      | see below                        | TTS engine + voice.                            |
+| `music`      | see below                        | Optional background-music bed.                 |
 | `encode`     | `{vp9_crf:32,audio_kbps:96}`     | Output quality.                                |
 | `clips`      | —                                | Ordered list of clips (below).                 |
 
@@ -101,6 +106,10 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 `media/video`), `kokoro_voice` (`af_heart`, `af_bella`, `am_michael`, `am_onyx`,
 `bm_george`), `kokoro_speed`.
 
+**`music`**: `file` (path; empty = none — looped to cover the video), `volume`
+(gain), `fade_in`/`fade_out` (s), `duck` (lower the music while narration plays),
+`duck_amount` (music gain under narration when ducking).
+
 **Each entry in `clips`:**
 
 | Field          | Meaning                                                           |
@@ -115,11 +124,21 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 | `narration_at` | When the line is spoken (defaults to `title_at`).                 |
 | `transition`   | `{type, duration}` for the join **into the next clip**.           |
 | `overlays`     | List of overlay graphics (see below).                             |
-| `effects`      | List of `{type, duration}` — `type` is `fadein` or `fadeout`.     |
+| `effects`      | List of effects (see below).                                      |
 
-Each **overlay** is `{image, x, y, scale, start, end}` (SVG or raster). `x`/`y`
-are ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay), `scale` is
-a fraction of canvas width, `start`/`end` are seconds within the clip.
+Each **overlay** is `{image, x, y, scale, start, end, fade}` (SVG or raster).
+`x`/`y` are ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay),
+`scale` is a fraction of canvas width, `start`/`end` are seconds within the clip,
+`fade` (optional, s) fades the overlay in/out (needs a finite `end`).
+
+Each **effect** is one of:
+
+- `{type: fadein, duration}` / `{type: fadeout, duration}` — fade the clip
+  from/to black.
+- `{type: eq, brightness, contrast, saturation, gamma}` — colour adjust (any
+  subset; `contrast`/`saturation`/`gamma` are multipliers around 1.0).
+- `{type: zoom, from, to}` — Ken Burns: smooth centred zoom from `from`× to
+  `to`× across the clip.
 
 Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 `slideup`, `circleopen`, `dissolve`, …) or `cut` for a hard cut.
@@ -160,6 +179,13 @@ voice:
     tts_home: media/video
     kokoro_voice: af_heart
     kokoro_speed: 1.0
+music:
+    file: "" # background bed; empty = none (looped to cover the video)
+    volume: 0.25
+    fade_in: 1.0
+    fade_out: 2.0
+    duck: true # lower music while narration plays
+    duck_amount: 0.35
 encode: { vp9_crf: 32, audio_kbps: 96 }
 clips:
     - file: clip1.mp4
@@ -170,9 +196,11 @@ clips:
       title_at: 0.0
       transition: { type: wipeleft, duration: 0.5 }
       overlays:
-          - { image: logo.svg, x: "W-w-30", y: "30", scale: 0.18, start: 1, end: 4 }
+          - { image: logo.svg, x: "W-w-30", y: "30", scale: 0.18, start: 1, end: 4, fade: 0.4 }
       effects:
           - { type: fadein, duration: 0.5 }
+          - { type: zoom, from: 1.0, to: 1.08 } # ken burns
+          - { type: eq, saturation: 1.1, contrast: 1.05 } # colour adjust
 ```
 
 ### Preparing source clips
