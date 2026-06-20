@@ -42,6 +42,32 @@ dir for debugging), `-h/--help`.
    time — mapped through the pacing warp.
 5. **Encode** VP9 + Opus to the configured `output`.
 
+### Capabilities
+
+What the config can express:
+
+- **Multiple clips, ordered** — assembled in list order (a single clip is fine).
+- **Cutting** — `trim: [start, end]` keeps part of a source; list the same file
+  twice with different trims to use several pieces.
+- **Speed** — per-clip `speed` (slow or fast) plus a global base `speed`.
+- **Adaptive pacing** — automatic slow-downs on busy frames and speed-ups on
+  quiet, untitled, silent stretches; never accelerates under narration.
+- **Generated titles** — lower-third bars rendered from `title`/`description`
+  text (no SVG editing); on-screen time auto-sized to reading length.
+- **Voiceover** — neural TTS narration per clip (+ an intro), auto-timed to each
+  clip and kept in sync through the pacing warp.
+- **Transitions** — `xfade` styles (fade/wipe/slide/dissolve/…) or hard `cut`.
+- **Overlays** — SVG or raster images, positioned and time-windowed per clip.
+- **Effects** — clip `fadein`/`fadeout`.
+- **Framing** — any `canvas` size/fps; off-aspect clips are pillarboxed onto a
+  configurable `background`.
+- **Output** — VP9 + Opus `.webm` at a configurable quality.
+
+Not supported (use a full editor like OpenShot for these): multi-track/PiP
+compositing, background-music/audio mixing, animated or keyframed transforms
+(moving overlays, Ken Burns), colour/chroma-key effects, and animated/3D titles.
+Several of these (background music, overlay fades, zoom) are easy to add later.
+
 ### Config reference
 
 Paths inside the config are resolved relative to the config file (or to
@@ -77,22 +103,77 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 
 **Each entry in `clips`:**
 
-| Field          | Meaning                                                                                                                                                    |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `file`         | Clip path (relative to `clips_dir`/config). **Required.**                                                                                                  |
-| `title`        | On-screen caption text. If omitted, derived from `description`.                                                                                            |
-| `description`  | Source text; fills `title` and `narration` when those are absent.                                                                                          |
-| `narration`    | Spoken line for this clip. Falls back to `description`.                                                                                                    |
-| `trim`         | `[start, end]` seconds — **cut** to this part of the source.                                                                                               |
-| `speed`        | Per-clip speed override (e.g. `0.8` slow, `1.4` fast).                                                                                                     |
-| `title_at`     | When the title appears (seconds into the clip).                                                                                                            |
-| `narration_at` | When the line is spoken (defaults to `title_at`).                                                                                                          |
-| `transition`   | `{type, duration}` for the join **into the next clip**.                                                                                                    |
-| `overlays`     | List of `{image, x, y, scale, start, end}` (SVG or raster). `x`/`y` are ffmpeg expressions; `W,H`=canvas, `w,h`=overlay; `scale`=fraction of canvas width. |
-| `effects`      | List of `{type: fadein                                                                                                                                     | fadeout, duration}`. |
+| Field          | Meaning                                                           |
+| -------------- | ----------------------------------------------------------------- |
+| `file`         | Clip path (relative to `clips_dir`/config). **Required.**         |
+| `title`        | On-screen caption text. If omitted, derived from `description`.   |
+| `description`  | Source text; fills `title` and `narration` when those are absent. |
+| `narration`    | Spoken line for this clip. Falls back to `description`.           |
+| `trim`         | `[start, end]` seconds — **cut** to this part of the source.      |
+| `speed`        | Per-clip speed override (`0.8` slower, `1.4` faster).             |
+| `title_at`     | When the title appears (seconds into the clip).                   |
+| `narration_at` | When the line is spoken (defaults to `title_at`).                 |
+| `transition`   | `{type, duration}` for the join **into the next clip**.           |
+| `overlays`     | List of overlay graphics (see below).                             |
+| `effects`      | List of `{type, duration}` — `type` is `fadein` or `fadeout`.     |
+
+Each **overlay** is `{image, x, y, scale, start, end}` (SVG or raster). `x`/`y`
+are ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay), `scale` is
+a fraction of canvas width, `start`/`end` are seconds within the clip.
 
 Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 `slideup`, `circleopen`, `dissolve`, …) or `cut` for a hard cut.
+
+### Complete config skeleton
+
+Every key with its default; override only what you need.
+
+```yaml
+output: out.webm
+clips_dir: "" # base dir for clip files (relative to this config)
+canvas: { width: 1280, height: 720, fps: 30 }
+background: black # pillarbox/letterbox fill
+speed: 1.0 # base speed for all clips
+pacing:
+    enabled: true
+    slow: 0.7 # speed in busy spans
+    fast: 1.6 # speed in quiet, untitled, silent spans
+    motion_hi: 0.45 # >= this fraction of peak motion -> busy
+    motion_lo: 0.06 # <= this fraction of peak motion -> quiet
+    bucket: 0.5 # motion analysis granularity (s)
+title:
+    enabled: true
+    seconds: null # fixed on-screen time, or null = reading-time
+    read_wps: 2.5
+    read_base: 1.0
+    at: 0.0 # default appear time (s into clip)
+    bar_frac: 0.20 # bar height / canvas height
+    bar_color: "#000000"
+    bar_opacity: 0.78
+    text_color: "#f2c14e"
+    font: "DejaVu Sans"
+transition: { type: fade, duration: 0.6 }
+intro: { narration: "", delay: 0.5 }
+voice:
+    enabled: true
+    engine: auto # auto | kokoro | piper | flite
+    tts_home: media/video
+    kokoro_voice: af_heart
+    kokoro_speed: 1.0
+encode: { vp9_crf: 32, audio_kbps: 96 }
+clips:
+    - file: clip1.mp4
+      title: "A caption" # or omit and use description
+      narration: "What the voice says here."
+      trim: [0, 10] # optional cut
+      speed: 1.0 # optional per-clip speed
+      title_at: 0.0
+      transition: { type: wipeleft, duration: 0.5 }
+      overlays:
+          - { image: logo.svg, x: "W-w-30", y: "30", scale: 0.18, start: 1, end: 4 }
+      effects:
+          - { type: fadein, duration: 0.5 }
+```
 
 ### Preparing source clips
 
