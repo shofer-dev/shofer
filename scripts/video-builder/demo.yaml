@@ -1,0 +1,84 @@
+# Generated demo config for build-video.py (see build-demo-video.py
+# for the exact OpenShot-based build). Source = the screencast; each
+# clip is a trimmed segment whose speed makes it last as long as its
+# narration -- slow near-static segments stand in for the freezes.
+output: ../../website/public/video/demo.webm
+clips_dir: /home/alsterg/Videos/Screencasts
+canvas: {width: 1280, height: 720, fps: 30}
+background: black
+pacing: {enabled: false}   # per-clip speed already times each segment
+transition: {type: cut}    # segments are continuous source
+intro: {narration: "Meet Shofer, the open-source AI coding agent for VS Code, built for unmatched parallelism, usability, and observability.", delay: 0.5}
+voice: {enabled: true, engine: auto, kokoro_voice: af_heart}
+clips:
+  - file: screencast-final.webm
+    trim: [0, 1.03]
+    speed: 0.1
+    title: "A Workflow is a reproducible A2A collaboration pattern"
+    narration: "Let's launch one of Shofer's multi-agent workflows."
+    narration_at: 8.75
+  - file: screencast-final.webm
+    trim: [1.03, 1.87]
+    speed: 0.159
+    title: "Feature implementation: Architect <> Developer <> Reviewer"
+    narration: "We'll implement a feature, with an architect, a developer, and a reviewer working as a team."
+  - file: screencast-final.webm
+    trim: [1.87, 2.57]
+    speed: 0.272
+    title: "Support for all html type input widgets (checkboxes, etc)"
+    narration: "It begins by asking what we want built."
+  - file: screencast-final.webm
+    trim: [2.57, 6.77]
+    speed: 0.682
+    title: "State transitions visualized"
+    narration: "As it runs, Shofer draws it live, a state diagram showing exactly where every agent is."
+  - file: screencast-final.webm
+    trim: [6.77, 10.5]
+    speed: 0.599
+    title: "Switch between & manage complete tree hierarchies"
+    narration: "Everything stays organized. You can manage entire trees of tasks and workflows from one place."
+  - file: screencast-final.webm
+    trim: [10.5, 14.77]
+    speed: 0.657
+    title: "Review & approve before implementation begins"
+    narration: "Notice the architect pauses for you. Nothing gets implemented until you've reviewed the plan and approved it."
+  - file: screencast-final.webm
+    trim: [14.77, 16.14]
+    speed: 0.284
+    title: "Tree hierarchy of all the tasks involved in the workflow"
+    narration: "Once approved, the work fans out across a tree of tasks, each one tracked here."
+  - file: screencast-final.webm
+    trim: [16.14, 21.0]
+    speed: 0.728
+    title: "Task execution details"
+    narration: "Open any task, and you can follow exactly what it did, every message, every tool call, every file."
+  - file: screencast-final.webm
+    trim: [21.0, 22.93]
+    speed: 0.335
+    title: "A2A sequence diagram"
+    narration: "You can also see how the agents talked to each other, laid out as a clean sequence diagram."
+  - file: screencast-final.webm
+    trim: [22.93, 24.6]
+    speed: 0.618
+    title: "Internal agent state"
+    narration: "Or drill into an agent's internal state."
+  - file: screencast-final.webm
+    trim: [24.6, 28.1]
+    speed: 0.515
+    title: "Detailed metrics & logs"
+    narration: "And because nothing is hidden, you get detailed stats and logs: active time and cost across the whole run."
+  - file: screencast-final.webm
+    trim: [37.17, 51.83]
+    speed: 1.423
+    title: "Setting $$$ caps"
+    narration: "Speaking of cost, Shofer puts hard limits on it. Set a dollar cap per task or per session, and a runaway loop simply stops, no matter which provider you're using."
+  - file: screencast-final.webm
+    trim: [51.83, 58.23]
+    speed: 0.786
+    title: "Agent self evaluates its performance"
+    narration: "As things wrap up, each agent even evaluates its own performance, so you see how well it actually did, not just that it finished."
+  - file: screencast-final.webm
+    trim: [58.23, 60.07]
+    speed: 0.588
+    title: "Workflow finished"
+    narration: "And that's a complete workflow, from start to finish."
