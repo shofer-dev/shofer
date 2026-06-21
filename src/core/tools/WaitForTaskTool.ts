@@ -185,7 +185,16 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 						provider.taskManager.off("managedTask:completed", onComplete)
 						provider.taskManager.off("managedTask:error", onError)
 						provider.taskManager.off("managedTask:needs-parent-input", onNeedsParentInput)
+						task.abortSignal?.removeEventListener("abort", onAbort)
 						clearTimeout(timer)
+					}
+
+					// The user pressing Stop aborts task.abortSignal. Resolve the wait
+					// immediately so the task tears down promptly instead of lingering
+					// until the timeout fires (the loop checks task.abort after this).
+					const onAbort = () => {
+						cleanup()
+						resolve()
 					}
 
 					const checkAndMaybeResolve = () => {
@@ -238,9 +247,29 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 					provider.taskManager.on("managedTask:completed", onComplete)
 					provider.taskManager.on("managedTask:error", onError)
 					provider.taskManager.on("managedTask:needs-parent-input", onNeedsParentInput)
+
+					// Bail immediately if the task was already aborted before we
+					// registered the listener; otherwise wake on a later abort.
+					// (abortSignal is optional in non-provider/test contexts.)
+					if (task.abortSignal?.aborted) {
+						onAbort()
+					} else {
+						task.abortSignal?.addEventListener("abort", onAbort, { once: true })
+					}
 				})
 			} finally {
-				provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+				// Only restore "running" if the task is still alive. A user Stop
+				// aborts the task; resurrecting it to "running" here would make a
+				// cancelled task reappear as active.
+				if (!task.abort && !task.abandoned) {
+					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+				}
+			}
+
+			// If the wait ended because the task was aborted, stop here — the task
+			// is being torn down; don't build or emit results on a dead task.
+			if (task.abort || task.abandoned) {
+				return
 			}
 		}
 

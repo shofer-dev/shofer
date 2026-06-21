@@ -913,11 +913,20 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		if (shoferAsk === "completion_result" || shoferAsk === "resume_task" || shoferAsk === "resume_completed_task") {
 			return false
 		}
-		// Task loop is actively executing (e.g. running an auto-approved tool
-		// such as an MCP server call, or processing a tool result between API
-		// turns). In this state there is no pending ask and no API streaming,
-		// but the user must still be able to interrupt the operation.
-		if (currentTaskRuntimeState?.lifecycle === "running") return true
+		// Task is actively executing OR blocked on a non-user external event.
+		//  - "running": running an auto-approved tool (MCP call, long shell
+		//    command) or processing a tool result between API turns.
+		//  - "waiting": blocked on an external event with no pending user ask —
+		//    e.g. wait_for_task / wait_for_mcp_call (auto-approved, so shoferAsk
+		//    is cleared) or a subtask blocked on its parent. Without this the
+		//    Stop button vanished entirely and the task became un-cancellable.
+		// Mirrors TaskManager.isActive (running || waiting). In both states there
+		// is no pending ask and no API streaming, but the user must still be able
+		// to interrupt the task. Excludes "waiting_input" (a real user ask drives
+		// shoferAsk → handled below) and "paused" (resume/terminate are the actions).
+		if (currentTaskRuntimeState?.lifecycle === "running" || currentTaskRuntimeState?.lifecycle === "waiting") {
+			return true
+		}
 		// Any other active ask (command, command_output, tool, use_mcp_server,
 		// followup, api_req_failed, mistake_limit_reached, budget_limit) is
 		// considered stoppable: the user may want to abort the task instead

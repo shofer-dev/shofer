@@ -67,6 +67,34 @@ describe("WaitForTaskTool", () => {
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task: child-1"))
 	})
 
+	// ─── Cancellation while blocked on a subtask ─────────────────────
+
+	it("unwinds promptly on abort and does not resurrect the cancelled task to running", async () => {
+		// Simulate the user pressing Stop: the task is aborted (abort flag + a
+		// fired abortSignal) while blocked waiting on a still-running child.
+		const controller = new AbortController()
+		controller.abort()
+		const task = buildTask({
+			abortSignal: controller.signal,
+			abort: true,
+			abandoned: false,
+			backgroundChildren: new Map([["child-1", { taskId: "child-1", status: "running", createdAt: 100 }]]),
+		})
+		const provider = task.providerRef.deref()
+		const cbs = buildCallbacks()
+
+		// Must resolve promptly (no hang until the 120s timeout).
+		await tool.execute({ task_ids: ["child-1"] }, task, cbs)
+
+		// It entered the waiting state...
+		expect(provider.taskManager.setState).toHaveBeenCalledWith("caller-1", { lifecycle: "waiting" })
+		// ...but an aborted task must NOT be flipped back to "running" — that would
+		// make a cancelled task reappear as active.
+		expect(provider.taskManager.setState).not.toHaveBeenCalledWith("caller-1", { lifecycle: "running" })
+		// And it returns early without emitting a tool result on the dead task.
+		expect(cbs.pushToolResult).not.toHaveBeenCalled()
+	})
+
 	// ─── Peer access — same rootTaskId, in knownPeers ────────────────
 
 	it("accepts peer with same rootTaskId and knownPeers membership", async () => {

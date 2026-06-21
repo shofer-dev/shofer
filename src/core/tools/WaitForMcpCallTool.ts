@@ -87,6 +87,21 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 				timer = setTimeout(() => resolve("timeout"), timeoutMs)
 			})
 
+			// The user pressing Stop aborts task.abortSignal. Race it alongside the
+			// settle/timeout promises so the wait unwinds immediately on cancel
+			// instead of lingering until the timeout (the loop checks task.abort
+			// after this returns).
+			// abortSignal is optional in non-provider/test contexts.
+			let onAbort: (() => void) | undefined
+			const abortPromise = new Promise<"aborted">((resolve) => {
+				if (task.abortSignal?.aborted) {
+					resolve("aborted")
+					return
+				}
+				onAbort = () => resolve("aborted")
+				task.abortSignal?.addEventListener("abort", onAbort, { once: true })
+			})
+
 			// Mark the task as `waiting` for the duration of the blocking await so
 			// the Task Selector / TaskHeader surface "this agent is blocked on an
 			// external event, not actively working". Mirrors WaitForTaskTool. The
@@ -99,13 +114,25 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 
 			try {
 				if (waitStrategy === "any") {
-					await Promise.race([Promise.race(settlePromises), timeoutPromise])
+					await Promise.race([Promise.race(settlePromises), timeoutPromise, abortPromise])
 				} else {
-					await Promise.race([Promise.all(settlePromises), timeoutPromise])
+					await Promise.race([Promise.all(settlePromises), timeoutPromise, abortPromise])
 				}
 			} finally {
 				if (timer) clearTimeout(timer)
-				taskManager?.setState(task.taskId, { lifecycle: "running" })
+				if (onAbort) task.abortSignal?.removeEventListener("abort", onAbort)
+				// Only restore "running" if the task is still alive. A user Stop
+				// aborts the task; resurrecting it to "running" here would make a
+				// cancelled task reappear as active.
+				if (!task.abort && !task.abandoned) {
+					taskManager?.setState(task.taskId, { lifecycle: "running" })
+				}
+			}
+
+			// If the wait ended because the task was aborted, stop here — the task
+			// is being torn down; don't build or emit results on a dead task.
+			if (task.abort || task.abandoned) {
+				return
 			}
 
 			// Mark any still-unsettled handles as timed out for the response. We
