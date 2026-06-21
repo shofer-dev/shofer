@@ -10,7 +10,8 @@ single config file.
 | `build-demo-video.py` | The original Shofer demo builder. Rebuilds the marketing demo from the OpenShot project (`media/demo.osp`); narration/pacing are hard-coded near the top. Kept for reproducing that specific video. |
 | `video.example.yaml`  | A fully-commented example config for `build-video.py`.                                                                                                                                              |
 
-Both write a `VP9 + Opus` `.webm`.
+`build-demo-video.py` writes a `VP9 + Opus` `.webm`; `build-video.py` defaults to
+that but the codec/container are configurable (`.webm`/`.mp4`/`.mov`).
 
 ---
 
