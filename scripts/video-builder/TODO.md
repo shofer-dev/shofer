@@ -56,13 +56,15 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 - [ ] **Chroma key / green screen** (`colorkey`/`chromakey`). _Easy._
 - [x] **Blur** (gaussian) — `effects: {type: blur}`. _(Animated blur-in titles
       still pending the keyframe engine.)_
-- [x] **Hue / color-shift / negate / pixelate** — `hue`/`negate`/`pixelate`
-      effects (plus `grayscale`/`sepia`). _(posterize still pending.)_
+- [x] **Hue / color-shift / negate / pixelate / posterize** — `hue`/`negate`/
+      `pixelate`/`posterize` effects (plus `grayscale`/`sepia`).
 - [ ] **Mask / alpha mask from an image (luma wipe).** OpenShot uses mask
       images for custom transitions and clip masks. _Medium — `alphamerge`/
       `maskedmerge`._
-- [ ] **Wave / distortion / bars / vignette.** _Easy each, low priority._
-- [ ] **Stabilizer** (`vidstab` two-pass). _Medium._
+- [x] **Vignette** done (effect). _wave / distortion / bars dropped as niche /
+      low-value for screencast demos._
+- [x] **Stabilizer** — `effects: {type: stabilize, smoothing}` (`vidstab`
+      two-pass; auto-skips if ffmpeg lacks vidstab).
 - [ ] **Object detection / tracking** (track a box to a moving object).
       _Hard — OpenShot bundles an OpenCV tracker; out of scope for now._
 - [x] **Deinterlace** — `effects: {type: deinterlace}` (`yadif`).
@@ -113,18 +115,19 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Color / grading (richer than our `eq`)
 
-- [ ] **3-way color wheels** (lift/gamma/gain over shadows-mid-highlights) and
-      **white balance**. _Medium — `colorbalance`/`curves`._
-- [ ] **Curves / levels** (per-channel tone curves). _Medium — `curves`._
+- [x] **3-way color wheels** + **white balance** — `colorbalance` (shadows/
+      mids/highs) and `white_balance` (`colortemperature`) effects.
+- [x] **Curves / levels** — `curves` (preset) and `levels` (`colorlevels`)
+      effects.
 - [x] **3D LUT (`.cube`) application** — `effects: {type: lut, file: foo.cube}`.
 - [x] **Sharpen** (`unsharp`) and **denoise** (`hqdn3d`) — `sharpen`/`denoise`
       effects.
 
 ### Stylize filters
 
-- [~] **vignette**, **sepia**, **mosaic** done (effects). **Old-film** (grain,
-  scratches, dust, flicker), **glow**, **sketch** still pending. _Easy each
-  (frei0r/ffmpeg), low priority._
+- [x] **vignette**, **sepia**, **mosaic**, **old-film** (`oldfilm`: vintage
+      curve + grain), **sketch** (`edgedetect`) done. **glow** added in the
+      compositing batch (split+blur+screen blend).
 
 ### Text / titles (richer than our lower-third bar)
 

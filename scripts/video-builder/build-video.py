@@ -117,6 +117,18 @@ def need(tool):
         raise SystemExit(f"required tool not found on PATH: {tool}")
 
 
+def filter_available(name, _cache={}):
+    """True if ffmpeg was built with the given filter (cached)."""
+    if not _cache:
+        r = subprocess.run(["ffmpeg", "-hide_banner", "-filters"],
+                            capture_output=True, text=True)
+        for line in r.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 2:
+                _cache[parts[1]] = True
+    return name in _cache
+
+
 def deep_merge(base, over):
     out = copy.deepcopy(base)
     for k, v in (over or {}).items():
@@ -346,6 +358,24 @@ def normalize_clip(clip, idx, C, tmp):
     if not os.path.isfile(src):
         raise SystemExit(f"clip {idx} file not found: {src}")
 
+    # stabilize: vidstab two-pass prepass on the source (before trim/scale)
+    if any(e.get("type") == "stabilize" for e in clip.get("effects", [])):
+        if not filter_available("vidstabdetect"):
+            print("  warning: vidstab not in this ffmpeg build, skipping stabilize")
+        else:
+            sm = next(e.get("smoothing", 15) for e in clip["effects"]
+                      if e.get("type") == "stabilize")
+            trf = os.path.join(tmp, f"vid{idx}.trf")
+            even = "scale=trunc(iw/2)*2:trunc(ih/2)*2"   # vidstab needs even dims
+            run(["ffmpeg", "-y", "-i", src, "-vf",
+                 f"{even},vidstabdetect=result={trf}", "-f", "null", os.devnull])
+            stab = os.path.join(tmp, f"stab{idx}.mp4")
+            run(["ffmpeg", "-y", "-i", src, "-vf",
+                 f"{even},vidstabtransform=input={trf}:smoothing={sm},"
+                 "unsharp=5:5:0.8", "-c:v", "libx264", "-preset", "medium",
+                 "-crf", "18", stab])
+            src = stab
+
     base_dir = os.path.dirname(os.path.abspath(C["__path__"]))
     inputs, fc = ["-i", src], []
     v = "[0:v]"
@@ -381,7 +411,7 @@ def normalize_clip(clip, idx, C, tmp):
             tp.append(f"stop_duration={fstop}:stop_mode=clone")
         chain += ",tpad=" + ":".join(tp)
     # per-clip effects
-    fdur, src_dur = None, None
+    fdur, src_dur, glow_cfg = None, None, None
     for eff in clip.get("effects", []):
         et = eff.get("type")
         if et == "fadein":
@@ -421,6 +451,36 @@ def normalize_clip(clip, idx, C, tmp):
             if not os.path.isabs(lf):
                 lf = os.path.join(C["clips_dir"] or base_dir, lf)
             chain += f",lut3d=file='{lf}'"
+        elif et == "posterize":
+            lv = max(2, eff.get("levels", 6))
+            step = max(1, int(256 / lv))
+            chain += f",lutyuv=y=round(val/{step})*{step}"
+        elif et == "sketch":
+            chain += ",edgedetect=mode=colormix:high=0.2"
+        elif et == "oldfilm":
+            chain += (",curves=preset=vintage,"
+                      f"noise=alls={eff.get('grain', 18)}:allf=t")
+        elif et == "curves":                        # tone curve preset
+            chain += f",curves=preset={eff.get('preset', 'none')}"
+        elif et == "levels":                        # per-channel in/out levels
+            keys = ("rimin", "rimax", "gimin", "gimax", "bimin", "bimax",
+                    "romin", "romax", "gomin", "gomax", "bomin", "bomax")
+            parts = [f"{k}={eff[k]}" for k in keys if k in eff]
+            if parts:
+                chain += ",colorlevels=" + ":".join(parts)
+        elif et == "colorbalance":                  # 3-way (shadows/mids/highs)
+            sh = eff.get("shadows", [0, 0, 0])
+            mi = eff.get("mids", [0, 0, 0])
+            hi = eff.get("highs", [0, 0, 0])
+            chain += (f",colorbalance=rs={sh[0]}:gs={sh[1]}:bs={sh[2]}:"
+                      f"rm={mi[0]}:gm={mi[1]}:bm={mi[2]}:"
+                      f"rh={hi[0]}:gh={hi[1]}:bh={hi[2]}")
+        elif et == "white_balance":
+            chain += f",colortemperature=temperature={eff.get('temperature', 6500)}"
+        elif et == "stabilize":                     # handled as a 2-pass prepass
+            pass
+        elif et == "glow":                          # bloom: blur + screen-blend
+            glow_cfg = eff                           # applied after the chain
         elif et == "zoom":                          # ken burns
             if src_dur is None:
                 src_dur = probe_duration(src)
@@ -431,7 +491,13 @@ def normalize_clip(clip, idx, C, tmp):
             chain += (f",zoompan=z='{z0}+({z1}-{z0})*on/{frames}':d=1:"
                       f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
                       f"s={W}x{H}:fps={FPS}")
-    fc.append(chain + "[base]")
+    if glow_cfg is not None:                         # split -> blur copy -> screen
+        sig = glow_cfg.get("sigma", 12)
+        fc.append(chain + "[pre]")
+        fc.append(f"[pre]split[g0][g1];[g1]gblur=sigma={sig}[gb];"
+                  f"[g0][gb]blend=all_mode=screen[base]")
+    else:
+        fc.append(chain + "[base]")
     cur = "[base]"
     n_in = 1
 

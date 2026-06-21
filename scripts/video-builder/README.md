@@ -225,8 +225,19 @@ Effects apply in list order. Each **effect** is one of:
 - `{type: negate}` / `{type: grayscale}` / `{type: sepia}` — colour stylize.
 - `{type: vignette, angle}` — darkened-corner vignette (`angle` optional).
 - `{type: pixelate, size}` — mosaic; larger `size` = blockier (default `16`).
+- `{type: posterize, levels}` — reduce tonal levels (default `6`).
+- `{type: glow, sigma}` — bloom (blur + screen blend; default `sigma: 12`).
+- `{type: sketch}` — edge-detect line-art look.
+- `{type: oldfilm, grain}` — vintage curve + film grain.
 - `{type: deinterlace}` — `yadif` (only for interlaced sources).
 - `{type: lut, file}` — apply a 3D LUT (`.cube`), path relative to the config.
+- `{type: curves, preset}` — tone-curve preset (`vintage`, `lighter`, …).
+- `{type: levels, rimin, rimax, …}` — per-channel in/out levels (`colorlevels`).
+- `{type: colorbalance, shadows, mids, highs}` — 3-way colour wheels; each is
+  an `[r, g, b]` triple in `-1..1`.
+- `{type: white_balance, temperature}` — colour temperature in Kelvin.
+- `{type: stabilize, smoothing}` — `vidstab` two-pass stabilization (auto-skips
+  if ffmpeg lacks vidstab).
 
 Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 `slideup`, `circleopen`, `dissolve`, …) or `cut` for a hard cut.
