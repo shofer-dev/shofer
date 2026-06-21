@@ -10,22 +10,79 @@ single config file.
 | `build-demo-video.py` | The original Shofer demo builder. Rebuilds the marketing demo from the OpenShot project (`media/demo.osp`); narration/pacing are hard-coded near the top. Kept for reproducing that specific video. |
 | `video.example.yaml`  | A fully-commented example config for `build-video.py`.                                                                                                                                              |
 
-Both write a `VP9 + Opus` `.webm`. Requirements: `ffmpeg`, `ffprobe`, `inkscape`,
-and (for `.yaml` configs) `PyYAML`. Voiceover needs a TTS environment — see
-[Voice setup](#voice-setup).
+Both write a `VP9 + Opus` `.webm`.
+
+---
+
+## Requirements & installation
+
+| Dependency             | Why                                            | Required?                                       |
+| ---------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| `python3` (3.8+)       | Runs the scripts.                              | Yes                                             |
+| `ffmpeg` + `ffprobe`   | All video/audio processing and probing.        | Yes                                             |
+| `inkscape`             | Rasterizes the title-bar/end-card SVGs to PNG. | Yes (titles & demo end-card)                    |
+| `PyYAML`               | Reading `.yaml` configs (not needed for JSON). | For `build-video.py` YAML configs               |
+| TTS env (Kokoro/Piper) | Neural voiceover. Skippable with `--no-voice`. | For narration — see [Voice setup](#voice-setup) |
+| `libflite` (flite)     | Offline robotic TTS fallback if no neural env. | Optional                                        |
+
+### System packages (Debian/Ubuntu)
+
+```bash
+sudo apt update
+sudo apt install -y ffmpeg inkscape python3 python3-pip flite
+python3 -m pip install --user PyYAML        # or: sudo apt install python3-yaml
+```
+
+macOS (Homebrew): `brew install ffmpeg inkscape python && pip3 install PyYAML`.
+
+### Verify the toolchain
+
+The scripts check for `ffmpeg`/`ffprobe`/`inkscape` on startup and exit with a
+clear message if one is missing. To check by hand:
+
+```bash
+ffmpeg -version | head -1 && ffprobe -version | head -1
+inkscape --version
+python3 -c 'import yaml; print("PyYAML", yaml.__version__)'
+```
+
+Voiceover needs the separate TTS environment in `media/video/` — see
+[Voice setup](#voice-setup). Without it (or with `--no-voice`) everything else
+still works; the build just renders silent.
 
 ---
 
 ## build-video.py
 
+### CLI usage
+
 ```bash
-python3 scripts/video-builder/build-video.py CONFIG.yaml            # build
-python3 scripts/video-builder/build-video.py CONFIG.yaml --no-voice # skip narration
+# From the repo root (paths inside the config are resolved relative to the config file):
+python3 scripts/video-builder/build-video.py scripts/video-builder/video.example.yaml
+
+# A JSON config works too (no PyYAML needed):
+python3 scripts/video-builder/build-video.py myvideo.json
+
+# Rebuild the Shofer demo from its committed config:
+python3 scripts/video-builder/build-video.py scripts/video-builder/demo.yaml
+
+# Fast iteration while editing a config — skip narration and motion analysis:
+python3 scripts/video-builder/build-video.py demo.yaml --no-voice --no-pace
+
+# Debug a bad render — keep the scratch dir of intermediate files:
+python3 scripts/video-builder/build-video.py demo.yaml --keep-temp
+
 python3 scripts/video-builder/build-video.py --help
 ```
 
-Flags: `--no-voice`, `--no-pace` (uniform speed), `--keep-temp` (keep the scratch
-dir for debugging), `-h/--help`.
+The config path is the first positional argument; flags can go in any order.
+
+| Flag           | Effect                                                            |
+| -------------- | ----------------------------------------------------------------- |
+| `--no-voice`   | Skip TTS narration — render silent (no TTS env needed). Fast.     |
+| `--no-pace`    | Disable adaptive pacing; use the configured/base speed uniformly. |
+| `--keep-temp`  | Keep the scratch directory of intermediate files for debugging.   |
+| `-h`, `--help` | Print usage and exit.                                             |
 
 ### What it does (pipeline)
 
