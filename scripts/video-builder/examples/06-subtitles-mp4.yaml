@@ -1,0 +1,12 @@
+# 06 — burned-in subtitles + H.264 MP4 output.
+#       No clips_dir: the clip path and the .srt are both relative to THIS file.
+# Run:  python3 ../build-video.py 06-subtitles-mp4.yaml
+output: 06-subtitles.mp4
+canvas: { width: 1280, height: 720, fps: 30 }
+voice: { enabled: false }
+pacing: { enabled: false }
+subtitles: captions.srt # resolved next to this config
+subtitles_style: "FontName=DejaVu Sans,FontSize=22,OutlineColour=&H80000000,BorderStyle=3"
+encode: { vcodec: libx264, crf: 23 } # .mp4 container -> AAC audio (none here)
+clips:
+    - { file: ../../../media/screencast-final.webm, trim: [0, 6], title: "Subtitled clip" }

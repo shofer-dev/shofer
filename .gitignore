@@ -68,3 +68,8 @@ media/video/
 
 # Python bytecode cache
 __pycache__/
+
+# Rendered outputs from the video-builder example configs (regenerable)
+scripts/video-builder/examples/*.webm
+scripts/video-builder/examples/*.mp4
+scripts/video-builder/examples/*.mov

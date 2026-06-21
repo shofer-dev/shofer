@@ -85,6 +85,19 @@ The config path is the first positional argument; flags can go in any order.
 | `--keep-temp`  | Keep the scratch directory of intermediate files for debugging.   |
 | `-h`, `--help` | Print usage and exit.                                             |
 
+### Examples
+
+Runnable example configs live in [`examples/`](./examples/) — each uses in-repo
+media, so they render with no TTS setup or downloads:
+
+```bash
+cd examples && python3 ../build-video.py 02-effects.yaml
+```
+
+They cover basics (cuts/titles/transitions), the effect gallery, colour grading
+& stabilization, compositing (transform / PiP video / text / motion paths),
+source-clip audio, and burned-in subtitles. See [`examples/README.md`](./examples/README.md).
+
 ### What it does (pipeline)
 
 1. **Normalize** each clip to the canvas — scale-to-fit + pillarbox/letterbox —

@@ -1,0 +1,26 @@
+# 01 — basics: cuts, titles, transitions, fade in/out
+# Run:  python3 ../build-video.py 01-basics.yaml
+# Uses the in-repo screencast; no voice/TTS or audio needed.
+output: 01-basics.webm
+clips_dir: ../../../media # -> extensions/shofer/media
+canvas: { width: 1280, height: 720, fps: 30 }
+voice: { enabled: false }
+pacing: { enabled: false }
+transition: { type: fade, duration: 0.5 } # default join between clips
+clips:
+    - file: screencast-final.webm
+      trim: [0, 4] # CUT: keep seconds 0–4
+      title: "Launch a workflow"
+      effects: [{ type: fadein, duration: 0.5 }]
+    - file: screencast-final.webm
+      trim: [10, 14]
+      title: "Watch it run live"
+      transition: { type: wipeleft, duration: 0.5 } # transition INTO next clip
+    - file: screencast-final.webm
+      trim: [30, 34]
+      title: "Review and approve"
+      transition: { type: cut } # hard cut
+    - file: screencast-final.webm
+      trim: [55, 60]
+      title: "Done"
+      effects: [{ type: fadeout, duration: 0.6 }]

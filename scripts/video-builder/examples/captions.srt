@@ -1,0 +1,7 @@
+1
+00:00:00,300 --> 00:00:02,500
+Shofer — burned-in subtitles
+
+2
+00:00:02,800 --> 00:00:05,500
+rendered straight from a .srt file

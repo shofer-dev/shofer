@@ -1,0 +1,32 @@
+# 04 — compositing: generator card, animated title, transform, PiP video,
+#       text overlays, and a keyframed (motion-path) image overlay. Outputs MP4.
+# Run:  python3 ../build-video.py 04-compositing.yaml
+output: 04-compositing.mp4
+clips_dir: ../../../media
+canvas: { width: 1280, height: 720, fps: 30 }
+voice: { enabled: false }
+pacing: { enabled: false }
+encode: { vcodec: libx264, crf: 23 }
+transition: { type: cut }
+title: { animate: slidefade }
+clips:
+    - generator: { type: color, color: "#101418", duration: 2.5 } # synthetic card
+      title: "Compositing demo"
+      overlays:
+          - { text: "Shofer", size: 96, color: white, x: "(w-text_w)/2", y: "(h-text_h)/2-60" }
+          - { text: "config-driven video", size: 40, color: "#f2c14e", x: "(w-text_w)/2", y: "(h-text_h)/2+70" }
+    - file: screencast-final.webm
+      trim: [5, 11]
+      title: "PiP + transform + motion path"
+      transform: { scale: 0.92, rotate: -2 } # shrink/rotate over the background
+      overlays:
+          # a second video, picture-in-picture, bottom-right
+          - { video: screencast-final.webm, trim: [30, 36], scale: 0.32, x: "W-w-40", y: "H-h-40" }
+          # an SVG badge that slides across the top (keyframed x)
+          - image: demo_assets/title/done.svg
+            scale: 0.18
+            start: 1.0
+            end: 5.0
+            fade: 0.4
+            y: "40"
+            x: { keyframes: [[1.0, 40], [5.0, 320]] }
