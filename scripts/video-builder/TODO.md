@@ -27,13 +27,13 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
       PiP layer) over a clip. _Layered compositing rather than a free timeline,
       but covers the practical "video over video" case._
 - [x] **Picture-in-picture (video overlay)** — `overlays: {video, trim, scale,
-  x, y, start, end}`, with optional `rotate`/`opacity`/`chromakey`/`blend`.
+x, y, start, end}`, with optional `rotate`/`opacity`/`chromakey`/`blend`.
 - [x] **Per-clip transform: position / scale / rotation** — `transform:
-  {scale, rotate, x, y}` composited onto the background. _(shear not done.)_
+{scale, rotate, x, y}` composited onto the background. _(shear not done.)_
 - [x] **Crop / region selection.** Crop a clip to a sub-rectangle.
       _Easy — ffmpeg `crop`; add `crop: {x,y,w,h}`._
 - [x] **Blend / compositing modes** — a video overlay with `blend: multiply|
-  screen|overlay|…` blends full-frame (`blend=all_mode=…`).
+screen|overlay|…` blends full-frame (`blend=all_mode=…`).
 - [x] **Scale modes** (fit / stretch / crop-to-fill). We always fit+pad.
       _Easy — `fit: contain|cover|stretch`._
 
@@ -49,7 +49,7 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 ## Missing — video effects / filters
 
 - [x] **Chroma key / green screen** — `overlays: {video, chromakey: {color,
-  similarity}}` keys a PiP layer over the clip beneath it.
+similarity}}` keys a PiP layer over the clip beneath it.
 - [x] **Blur** (gaussian) — `effects: {type: blur}`. _(Animated blur-in titles
       still pending the keyframe engine.)_
 - [x] **Hue / color-shift / negate / pixelate / posterize** — `hue`/`negate`/
@@ -168,6 +168,51 @@ captured so far, mostly via its large MLT/frei0r filter set.
 - [x] **360°/equirectangular filters** — `effects: {type: v360, in, out, …}`
       (any `v360` projection/params). 360-aware stabilize not separately done.
 
+## Second-pass gaps (OpenShot/Shotcut re-review)
+
+A fresh sweep of both editors' filter sets surfaced these — not previously
+listed. Cheap/common ones first.
+
+### Easy, worth adding
+
+- [ ] **Flip / mirror** (horizontal/vertical). _Easy — `hflip`/`vflip`; add
+      `effects: {type: flip, dir: h|v}`._ (Shotcut "Flip".)
+- [ ] **Clip opacity** — whole-clip alpha (e.g. ghosted over the background or
+      under an overlay). _Easy — `format=rgba,colorchannelmixer=aa=…`._
+- [ ] **Audio high-pass / low-pass** filters. _Easy — `highpass`/`lowpass`;
+      extend the `audio` block._
+- [ ] **Audio reverb / echo** (`aecho`). _Easy._ (OpenShot Echo, Shotcut Reverb.)
+- [ ] **Two-pass loudness normalize** (more accurate than our single-pass
+      `loudnorm`). _Easy — run `loudnorm` analysis then apply._
+- [ ] **Parametric shape mask** (rect/ellipse/rounded + feather, no image
+      needed) — also gives circular crop. _Medium — `geq`/`drawbox` alpha._
+      (Shotcut "Mask: Simple Shape", "Crop: Circle".)
+
+### Medium
+
+- [ ] **Fuller transform**: separate `scale_x`/`scale_y`, `shear`, 3D rotation
+      (X/Y/Z via `perspective`/`v360`), anchor/gravity. We have uniform scale +
+      2D rotate + position. (OpenShot clip Properties.)
+- [ ] **Audio pitch shift** independent of tempo (`rubberband`/`asetrate`).
+      (Shotcut "Pitch".)
+- [ ] **Audio expander / gate / notch** (`agate`, `anequalizer`). _(Companion to
+      the compressor already done.)_
+- [ ] **Timer / countdown generator** clip. (Shotcut "Timer".)
+- [ ] **Chroma-key spill suppression** (`despill`/key-spill) to clean edges on
+      keyed PiP layers. (Shotcut "Key Spill Mop-up".)
+
+### Niche / low-value (logged, unlikely to implement)
+
+- [ ] **Stylize zoo**: halftone, scan-lines, trails, nervous, diffusion,
+      threshold, RGB-shift. _Easy each but low value for screencast demos._
+- [ ] **Alpha-channel adjust/view**, **GPS text/graphic** (Shotcut). _Niche._
+
+### Won't do (need heavy external deps)
+
+- [x] ~~**3D / animated titles via Blender**~~ (OpenShot renders these through a
+      bundled Blender). Out of scope — would require Blender as a dependency.
+- [x] ~~**Motion tracking**~~ — already logged above (OpenCV/ML, out of scope).
+
 ## Out of scope (editor-only, no output relevance)
 
 These are interactive-editing features with no bearing on a headless,
@@ -183,18 +228,16 @@ config-driven render, listed only for completeness:
 
 ---
 
-### Suggested priority order
+### Status
 
-**Done:** crop, scale/fit modes, blur, hue/negate/pixelate/grayscale/sepia,
-vignette, deinterlace, reverse, freeze, 3D LUT, sharpen, denoise, loudness
-normalization, multi-codec/container encode (VP9/H.264/H.265/ProRes).
+The original OpenShot + Shotcut gap list is fully resolved (implemented, or
+explicitly closed as won't-do with rationale). What remains open is the
+**second-pass gaps** above — a short tail of mostly easy/niche additions.
 
-Remaining, roughly in priority order:
+Suggested order for the remaining tail:
 
-1. Source-clip audio mixing (`audio.use_source`) — most-requested for real footage.
-2. Keyframe engine — unlocks animation across the board (animated titles/blur-in,
-   mid-clip freeze, motion paths).
-3. Synthetic generator clips (color/text/transparent cards) — easy intro/outro.
-4. Hardware-accelerated encoding (NVENC/QSV/VAAPI).
-5. Per-clip transform (position/scale/rotation).
-6. Picture-in-picture video overlays (also unblocks chroma-key compositing).
+1. Flip/mirror, clip opacity, audio high-/low-pass, reverb — all cheap, common.
+2. Parametric shape mask (also unlocks circular crop) + two-pass loudnorm.
+3. Fuller transform (separate X/Y scale, shear, 3D rotation) for richer motion.
+4. Audio pitch shift, expander/gate, chroma-key spill — quality refinements.
+5. The niche stylize zoo only if a specific video needs it.
