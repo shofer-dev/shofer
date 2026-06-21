@@ -6,7 +6,7 @@ clips_dir: ../../../media
 canvas: { width: 1280, height: 720, fps: 30 }
 voice: { enabled: false }
 pacing: { enabled: false }
-encode: { vcodec: libx264, crf: 23 }
+# .mp4 output -> H.264 is auto-selected from the extension (no vcodec needed)
 transition: { type: cut }
 title: { animate: slidefade }
 clips:

@@ -66,9 +66,10 @@ audio:
   loudnorm: false                # true, or {I: -16, TP: -1.5, LRA: 11}
 
 # ---- output codec / container ----------------------------------------------
-# container comes from the `output` extension (.webm/.mp4/.mov)
+# container comes from the `output` extension (.webm/.mp4/.mov) — just change
+# the extension and it works. vcodec: auto picks VP9 for .webm, H.264 otherwise.
 encode:
-  vcodec: libvpx-vp9             # libvpx-vp9 | libx264 | libx265 | prores_ks
+  vcodec: auto                   # auto | libvpx-vp9 | libx264 | libx265 | prores_ks
   acodec: auto                   # auto -> opus(.webm) / aac(.mp4,.mov)
   crf: null                      # null -> vp9_crf for VP9, else 18
   vp9_crf: 32

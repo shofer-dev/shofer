@@ -7,6 +7,6 @@ voice: { enabled: false }
 pacing: { enabled: false }
 subtitles: captions.srt # resolved next to this config
 subtitles_style: "FontName=DejaVu Sans,FontSize=22,OutlineColour=&H80000000,BorderStyle=3"
-encode: { vcodec: libx264, crf: 23 } # .mp4 container -> AAC audio (none here)
+# .mp4 output -> H.264 video + AAC audio auto-selected from the extension
 clips:
     - { file: ../../../media/screencast-final.webm, trim: [0, 6], title: "Subtitled clip" }

@@ -107,7 +107,8 @@ DEFAULTS = {
     "encode": {
         "vp9_crf": 32,                # CRF for the default VP9 path
         "audio_kbps": 96,
-        "vcodec": "libvpx-vp9",       # libvpx-vp9 | libx264 | libx265 | prores_ks
+        "vcodec": "auto",             # auto (from container) | libvpx-vp9 |
+                                      # libx264 | libx265 | prores_ks | *_nvenc...
         "acodec": "auto",             # auto -> opus(.webm) / aac(.mp4,.mov)
         "crf": None,                  # None -> vp9_crf for VP9, else 18
         "preset": "medium",           # x264/x265 preset
@@ -1016,7 +1017,10 @@ def main():
 
     # 5) encode video (codec/container from config) + mux narration
     E = C["encode"]
-    vcodec = E.get("vcodec", "libvpx-vp9")
+    out_ext = os.path.splitext(out_path)[1].lower()
+    vcodec = E.get("vcodec", "auto")
+    if vcodec == "auto":                              # pick codec from container
+        vcodec = "libvpx-vp9" if out_ext == ".webm" else "libx264"
     pix = E.get("pix_fmt", "yuv420p")
     extra = list(E.get("extra") or [])
     # optional burn-in subtitles (applied during the encode pass)

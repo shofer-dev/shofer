@@ -217,11 +217,14 @@ audio — see clip `volume`/`audio_fade`/`mute`), `source_volume`, `source_duck`
 (dB), `balance` (−1..1), `compress`, `denoise`; `filters` (a list of raw ffmpeg
 audio filters — escape hatch); `loudnorm` (`true`, or `{I, TP, LRA}`).
 
-**`encode`**: `vcodec` (`libvpx-vp9` default, or `libx264`/`libx265`/`prores_ks`),
-`acodec` (`auto` → Opus for `.webm`, AAC otherwise), `crf` (`null` → `vp9_crf` for
-VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
-(0–5), `audio_kbps`. The container is taken from the `output` extension
-(`.webm`/`.mp4`/`.mov`); VP9 uses 2-pass, the others a single CRF pass.
+**`encode`**: the container comes from the `output` extension —
+`.webm`/`.mp4`/`.mov` all work with no other config. `vcodec` defaults to `auto`
+(VP9 for `.webm`, H.264 otherwise) and can be set to `libvpx-vp9`/`libx264`/
+`libx265`/`prores_ks` or a hardware encoder (`h264_nvenc`/`hevc_qsv`/`*_vaapi`).
+`acodec` (`auto` → Opus for `.webm`, AAC otherwise), `crf` (`null` → `vp9_crf`
+for VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
+(0–5), `audio_kbps`, `extra` (raw args). VP9 uses 2-pass; the others a single
+CRF pass.
 
 **Each entry in `clips`:**
 
