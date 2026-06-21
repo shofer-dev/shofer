@@ -118,16 +118,22 @@ What the config can express:
 - **Transitions** — `xfade` styles (fade/wipe/slide/dissolve/…) or hard `cut`.
 - **Overlays** — SVG or raster images, positioned and time-windowed per clip,
   with optional fade in/out.
-- **Effects** — clip `fadein`/`fadeout`, `eq` colour adjust (brightness/
-  contrast/saturation/gamma), and `zoom` (Ken Burns).
-- **Framing** — any `canvas` size/fps; off-aspect clips are pillarboxed onto a
-  configurable `background`.
-- **Output** — VP9 + Opus `.webm` at a configurable quality.
+- **Cropping & framing** — per-clip `crop` (source sub-rectangle), `fit`
+  (`contain` pillarbox / `cover` fill+crop / `stretch`), any `canvas` size/fps,
+  configurable pillarbox `background`.
+- **Time effects** — per-clip `reverse` and `freeze` (hold first/last frame).
+- **Effects** — `fadein`/`fadeout`, `eq` (brightness/contrast/saturation/gamma),
+  `zoom` (Ken Burns), `blur`, `sharpen`, `denoise`, `hue`, `negate`, `grayscale`,
+  `sepia`, `vignette`, `pixelate`, `deinterlace`, and 3D-`lut` (`.cube`).
+- **Audio loudness** — optional EBU R128 `loudnorm` on the final mix.
+- **Output** — configurable codec/container: VP9+Opus `.webm` (default),
+  H.264/H.265 `.mp4`, or ProRes `.mov`.
 
 Not supported (use a full editor like OpenShot for these): multi-track / picture-
-in-picture compositing, audio mixing beyond music+narration, keyframed motion
-paths (moving/scaling overlays along a path), chroma-key (green screen), and
-animated/3D titles.
+in-picture compositing, audio mixing beyond music+narration, a general keyframe
+engine (animated motion paths, animated titles), blend/compositing modes, and
+chroma-key (green screen) — chroma-key needs a layer beneath it, so it waits on
+PiP compositing. See [`TODO.md`](./TODO.md) for the full backlog.
 
 ### Config reference
 
@@ -141,6 +147,7 @@ See `video.example.yaml` for a working file. Top-level keys:
 | `clips_dir`  | `""`                             | Base dir prepended to each clip's `file`.      |
 | `canvas`     | `{width:1280,height:720,fps:30}` | Output frame geometry.                         |
 | `background` | `black`                          | Pillarbox/letterbox fill for off-aspect clips. |
+| `fit`        | `contain`                        | Default fit: `contain`/`cover`/`stretch`.      |
 | `speed`      | `1.0`                            | Base speed for all clips (`0.5` = half speed). |
 | `pacing`     | see below                        | Adaptive speed by motion.                      |
 | `title`      | see below                        | Generated title-bar style.                     |
@@ -148,7 +155,8 @@ See `video.example.yaml` for a working file. Top-level keys:
 | `intro`      | `{narration:"",delay:0.5}`       | Optional spoken intro before clip 1.           |
 | `voice`      | see below                        | TTS engine + voice.                            |
 | `music`      | see below                        | Optional background-music bed.                 |
-| `encode`     | `{vp9_crf:32,audio_kbps:96}`     | Output quality.                                |
+| `audio`      | `{loudnorm:false}`               | Final-mix loudness normalization.              |
+| `encode`     | see below                        | Output codec/container/quality.                |
 | `clips`      | —                                | Ordered list of clips (below).                 |
 
 **`pacing`**: `enabled`, `slow` (speed in busy spans), `fast` (speed in quiet,
@@ -167,6 +175,16 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 (gain), `fade_in`/`fade_out` (s), `duck` (lower the music while narration plays),
 `duck_amount` (music gain under narration when ducking).
 
+**`audio`**: `loudnorm` — `false`, `true` (EBU R128 defaults `I=-16, TP=-1.5,
+LRA=11`), or a mapping `{I, TP, LRA}` to override the targets. Applied to the
+final mixed audio.
+
+**`encode`**: `vcodec` (`libvpx-vp9` default, or `libx264`/`libx265`/`prores_ks`),
+`acodec` (`auto` → Opus for `.webm`, AAC otherwise), `crf` (`null` → `vp9_crf` for
+VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
+(0–5), `audio_kbps`. The container is taken from the `output` extension
+(`.webm`/`.mp4`/`.mov`); VP9 uses 2-pass, the others a single CRF pass.
+
 **Each entry in `clips`:**
 
 | Field          | Meaning                                                           |
@@ -177,6 +195,10 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 | `narration`    | Spoken line for this clip. Falls back to `description`.           |
 | `trim`         | `[start, end]` seconds — **cut** to this part of the source.      |
 | `speed`        | Per-clip speed override (`0.8` slower, `1.4` faster).             |
+| `crop`         | `{x, y, w, h}` — crop a source sub-rectangle before fitting.      |
+| `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).     |
+| `reverse`      | `true` to play the clip backwards.                                |
+| `freeze`       | `{start, end}` seconds — hold the first/last frame.               |
 | `title_at`     | When the title appears (seconds into the clip).                   |
 | `narration_at` | When the line is spoken (defaults to `title_at`).                 |
 | `transition`   | `{type, duration}` for the join **into the next clip**.           |
@@ -188,7 +210,7 @@ Each **overlay** is `{image, x, y, scale, start, end, fade}` (SVG or raster).
 `scale` is a fraction of canvas width, `start`/`end` are seconds within the clip,
 `fade` (optional, s) fades the overlay in/out (needs a finite `end`).
 
-Each **effect** is one of:
+Effects apply in list order. Each **effect** is one of:
 
 - `{type: fadein, duration}` / `{type: fadeout, duration}` — fade the clip
   from/to black.
@@ -196,6 +218,15 @@ Each **effect** is one of:
   subset; `contrast`/`saturation`/`gamma` are multipliers around 1.0).
 - `{type: zoom, from, to}` — Ken Burns: smooth centred zoom from `from`× to
   `to`× across the clip.
+- `{type: blur, sigma}` — Gaussian blur (default `sigma: 8`).
+- `{type: sharpen, amount}` — unsharp mask (default `amount: 1.0`).
+- `{type: denoise}` — temporal/spatial denoise (`hqdn3d`).
+- `{type: hue, h, s}` — rotate hue `h` degrees, scale saturation `s`.
+- `{type: negate}` / `{type: grayscale}` / `{type: sepia}` — colour stylize.
+- `{type: vignette, angle}` — darkened-corner vignette (`angle` optional).
+- `{type: pixelate, size}` — mosaic; larger `size` = blockier (default `16`).
+- `{type: deinterlace}` — `yadif` (only for interlaced sources).
+- `{type: lut, file}` — apply a 3D LUT (`.cube`), path relative to the config.
 
 Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 `slideup`, `circleopen`, `dissolve`, …) or `cut` for a hard cut.
@@ -205,10 +236,11 @@ Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 Every key with its default; override only what you need.
 
 ```yaml
-output: out.webm
+output: out.webm # .webm | .mp4 | .mov — container drives the muxer
 clips_dir: "" # base dir for clip files (relative to this config)
 canvas: { width: 1280, height: 720, fps: 30 }
 background: black # pillarbox/letterbox fill
+fit: contain # contain (pillarbox) | cover (fill+crop) | stretch
 speed: 1.0 # base speed for all clips
 pacing:
     enabled: true
@@ -243,13 +275,27 @@ music:
     fade_out: 2.0
     duck: true # lower music while narration plays
     duck_amount: 0.35
-encode: { vp9_crf: 32, audio_kbps: 96 }
+audio:
+    loudnorm: false # true | { I: -16, TP: -1.5, LRA: 11 } — EBU R128
+encode:
+    vcodec: libvpx-vp9 # libvpx-vp9 | libx264 | libx265 | prores_ks
+    acodec: auto # auto -> opus(.webm) / aac(.mp4,.mov)
+    crf: null # null -> vp9_crf for VP9, else 18
+    vp9_crf: 32
+    preset: medium # x264/x265 preset
+    pix_fmt: yuv420p
+    prores_profile: 3 # prores_ks 0..5 (3 = HQ)
+    audio_kbps: 96
 clips:
     - file: clip1.mp4
       title: "A caption" # or omit and use description
       narration: "What the voice says here."
       trim: [0, 10] # optional cut
+      crop: { x: 0, y: 0, w: 1280, h: 720 } # optional source crop
+      fit: contain # optional per-clip fit override
       speed: 1.0 # optional per-clip speed
+      reverse: false # optional: play backwards
+      freeze: { start: 0, end: 0 } # optional: hold first/last frame (s)
       title_at: 0.0
       transition: { type: wipeleft, duration: 0.5 }
       overlays:
@@ -258,6 +304,8 @@ clips:
           - { type: fadein, duration: 0.5 }
           - { type: zoom, from: 1.0, to: 1.08 } # ken burns
           - { type: eq, saturation: 1.1, contrast: 1.05 } # colour adjust
+          - { type: blur, sigma: 8 } # also: sharpen, denoise, hue, negate,
+          - { type: vignette } # grayscale, sepia, pixelate, deinterlace, lut
 ```
 
 ### Preparing source clips

@@ -35,11 +35,11 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
       keyframes location, scale, rotation and shear per clip. We only center +
       pillarbox. _Medium — `transform: {x,y,scale,rotation}`, static first,
       keyframed later._
-- [ ] **Crop / region selection.** Crop a clip to a sub-rectangle.
+- [x] **Crop / region selection.** Crop a clip to a sub-rectangle.
       _Easy — ffmpeg `crop`; add `crop: {x,y,w,h}`._
 - [ ] **Blend / compositing modes** (multiply, screen, overlay, add…).
       _Medium — ffmpeg `blend=all_mode=…` between layers._
-- [ ] **Scale modes** (fit / stretch / crop-to-fill). We always fit+pad.
+- [x] **Scale modes** (fit / stretch / crop-to-fill). We always fit+pad.
       _Easy — `fit: contain|cover|stretch`._
 
 ## Missing — keyframe animation
@@ -54,9 +54,10 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 ## Missing — video effects / filters
 
 - [ ] **Chroma key / green screen** (`colorkey`/`chromakey`). _Easy._
-- [ ] **Blur** (gaussian/box), incl. animated blur-in titles. _Easy._
-- [ ] **Hue / color-shift / negate / pixelate / posterize.** _Easy — direct
-      ffmpeg filters behind `effects` entries._
+- [x] **Blur** (gaussian) — `effects: {type: blur}`. _(Animated blur-in titles
+      still pending the keyframe engine.)_
+- [x] **Hue / color-shift / negate / pixelate** — `hue`/`negate`/`pixelate`
+      effects (plus `grayscale`/`sepia`). _(posterize still pending.)_
 - [ ] **Mask / alpha mask from an image (luma wipe).** OpenShot uses mask
       images for custom transitions and clip masks. _Medium — `alphamerge`/
       `maskedmerge`._
@@ -64,13 +65,14 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 - [ ] **Stabilizer** (`vidstab` two-pass). _Medium._
 - [ ] **Object detection / tracking** (track a box to a moving object).
       _Hard — OpenShot bundles an OpenCV tracker; out of scope for now._
-- [ ] **Deinterlace.** _Easy — `yadif`; only matters for interlaced sources._
+- [x] **Deinterlace** — `effects: {type: deinterlace}` (`yadif`).
 
 ## Missing — time effects
 
-- [ ] **Reverse playback.** _Easy — `reverse`/`areverse`._
-- [ ] **Explicit freeze-frame** as a first-class op (we approximate with very
-      low `speed`). _Easy — `freeze: {at, seconds}` via `tpad`/loop._
+- [x] **Reverse playback** — per-clip `reverse: true`.
+- [x] **Explicit freeze-frame** — per-clip `freeze: {start, end}` (holds the
+      first/last frame via `tpad`). _(Mid-clip freeze still needs the keyframe/
+      time-remap engine.)_
 - [ ] **Variable retiming via keyframes** (speed ramps inside one clip).
       _Medium — ties into the keyframe engine._
 
@@ -114,15 +116,15 @@ captured so far, mostly via its large MLT/frei0r filter set.
 - [ ] **3-way color wheels** (lift/gamma/gain over shadows-mid-highlights) and
       **white balance**. _Medium — `colorbalance`/`curves`._
 - [ ] **Curves / levels** (per-channel tone curves). _Medium — `curves`._
-- [ ] **3D LUT (`.cube`) application.** _Easy — ffmpeg `lut3d`; add
-      `{type: lut, file: foo.cube}`._
-- [ ] **Sharpen** (`unsharp`) and **denoise** (`hqdn3d`/`nlmeans`). _Easy._
+- [x] **3D LUT (`.cube`) application** — `effects: {type: lut, file: foo.cube}`.
+- [x] **Sharpen** (`unsharp`) and **denoise** (`hqdn3d`) — `sharpen`/`denoise`
+      effects.
 
 ### Stylize filters
 
-- [ ] **Old-film** (grain, scratches, dust, flicker), **glow**, **vignette**,
-      **sepia**, **sketch**, **mosaic**. _Easy each (frei0r/ffmpeg), low
-      priority — partially overlaps the OpenShot "wave/bars/vignette" item._
+- [~] **vignette**, **sepia**, **mosaic** done (effects). **Old-film** (grain,
+  scratches, dust, flicker), **glow**, **sketch** still pending. _Easy each
+  (frei0r/ffmpeg), low priority._
 
 ### Text / titles (richer than our lower-third bar)
 
@@ -135,8 +137,8 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Audio (Shotcut's audio filter set is large)
 
-- [ ] **Loudness normalization** (EBU R128, one- or two-pass). _Easy —
-      `loudnorm`; useful for consistent narration/music levels._
+- [x] **Loudness normalization** (EBU R128) — `audio: {loudnorm: true}` or
+      `{I, TP, LRA}` on the final mix.
 - [ ] **Compressor / limiter / expander / gate / notch.** _Medium —
       `acompressor`/`alimiter`/`agate`._
 - [ ] **Gain / pan / balance / bass & treble / channel ops.** _Easy —
@@ -159,10 +161,9 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Encode / export
 
-- [ ] **Multiple export presets & containers** (H.264/H.265 MP4, ProRes, etc.)
-      and **hardware-accelerated encoding** (NVENC/QSV/VAAPI). We hardcode
-      VP9+Opus `.webm`. _Easy — make `encode` accept codec/container/preset;
-      pass-through custom ffmpeg args._
+- [x] **Multiple codecs & containers** — `encode.vcodec` (VP9/H.264/H.265/
+      ProRes) + `acodec`; container from the `output` extension (.webm/.mp4/
+      .mov). _(Hardware-accelerated encoding NVENC/QSV/VAAPI still pending.)_
 
 ### 360° video
 
@@ -186,11 +187,16 @@ config-driven render, listed only for completeness:
 
 ### Suggested priority order
 
+**Done:** crop, scale/fit modes, blur, hue/negate/pixelate/grayscale/sepia,
+vignette, deinterlace, reverse, freeze, 3D LUT, sharpen, denoise, loudness
+normalization, multi-codec/container encode (VP9/H.264/H.265/ProRes).
+
+Remaining, roughly in priority order:
+
 1. Source-clip audio mixing (`audio.use_source`) — most-requested for real footage.
-2. Loudness normalization (`loudnorm`) — cheap, instantly improves narration/music balance.
-3. Keyframe engine — unlocks animation across the board.
-4. `crop`, chroma key, blur, reverse, freeze, LUT — cheap, high-value ffmpeg filters.
-5. Synthetic generator clips (color/text/transparent cards) — easy intro/outro.
-6. Flexible `encode` (codec/container/hardware preset) beyond hardcoded VP9+Opus.
-7. Per-clip transform (position/scale/rotation).
-8. Picture-in-picture video overlays.
+2. Keyframe engine — unlocks animation across the board (animated titles/blur-in,
+   mid-clip freeze, motion paths).
+3. Synthetic generator clips (color/text/transparent cards) — easy intro/outro.
+4. Hardware-accelerated encoding (NVENC/QSV/VAAPI).
+5. Per-clip transform (position/scale/rotation).
+6. Picture-in-picture video overlays (also unblocks chroma-key compositing).

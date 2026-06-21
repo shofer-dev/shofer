@@ -42,6 +42,7 @@ DEFAULTS = {
     "output": "out.webm",
     "canvas": {"width": 1280, "height": 720, "fps": 30},
     "background": "black",            # pillarbox / letterbox color
+    "fit": "contain",                 # contain (pillarbox) | cover (crop) | stretch
     "speed": 1.0,                     # base speed for clips (1.0 = original)
     "clips_dir": "",                  # base dir prepended to each clip "file"
     "pacing": {
@@ -84,7 +85,19 @@ DEFAULTS = {
         "kokoro_speed": 1.0,
         "narration_gap": 0.0,         # extra s before a line's window check
     },
-    "encode": {"vp9_crf": 32, "audio_kbps": 96},
+    "audio": {
+        "loudnorm": False,            # True or {I,TP,LRA} -> EBU R128 normalize
+    },
+    "encode": {
+        "vp9_crf": 32,                # CRF for the default VP9 path
+        "audio_kbps": 96,
+        "vcodec": "libvpx-vp9",       # libvpx-vp9 | libx264 | libx265 | prores_ks
+        "acodec": "auto",             # auto -> opus(.webm) / aac(.mp4,.mov)
+        "crf": None,                  # None -> vp9_crf for VP9, else 18
+        "preset": "medium",           # x264/x265 preset
+        "pix_fmt": "yuv420p",
+        "prores_profile": 3,          # prores_ks: 0..5 (3 = HQ)
+    },
     "clips": [],                      # list of clip dicts (see example)
 }
 
@@ -333,16 +346,40 @@ def normalize_clip(clip, idx, C, tmp):
     if not os.path.isfile(src):
         raise SystemExit(f"clip {idx} file not found: {src}")
 
+    base_dir = os.path.dirname(os.path.abspath(C["__path__"]))
     inputs, fc = ["-i", src], []
     v = "[0:v]"
     trim = clip.get("trim")
     if trim:
         fc.append(f"{v}trim={trim[0]}:{trim[1]},setpts=PTS-STARTPTS[t]")
         v = "[t]"
-    chain = (f"{v}fps={FPS},scale={W}:{H}:force_original_aspect_ratio=decrease,"
-             f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:{bg},setsar=1")
+    chain = f"{v}fps={FPS}"
+    crop = clip.get("crop")                          # crop a source sub-rectangle
+    if crop:
+        chain += (f",crop={crop['w']}:{crop['h']}:"
+                  f"{crop.get('x', 0)}:{crop.get('y', 0)}")
+    fit = clip.get("fit", C["fit"])                  # how to fit onto the canvas
+    if fit == "cover":                               # fill + crop overflow
+        chain += (f",scale={W}:{H}:force_original_aspect_ratio=increase,"
+                  f"crop={W}:{H},setsar=1")
+    elif fit == "stretch":                           # ignore aspect ratio
+        chain += f",scale={W}:{H},setsar=1"
+    else:                                            # contain: pillarbox/letterbox
+        chain += (f",scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                  f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:{bg},setsar=1")
     if abs(base_speed - 1.0) > 1e-6:
         chain += f",setpts=(PTS-STARTPTS)/{base_speed}"
+    if clip.get("reverse"):                          # play the clip backwards
+        chain += ",reverse"
+    fr = clip.get("freeze") or {}                    # hold first/last frame
+    fstart, fstop = float(fr.get("start", 0) or 0), float(fr.get("end", 0) or 0)
+    if fstart or fstop:
+        tp = []
+        if fstart:
+            tp.append(f"start_duration={fstart}:start_mode=clone")
+        if fstop:
+            tp.append(f"stop_duration={fstop}:stop_mode=clone")
+        chain += ",tpad=" + ":".join(tp)
     # per-clip effects
     fdur, src_dur = None, None
     for eff in clip.get("effects", []):
@@ -356,10 +393,39 @@ def normalize_clip(clip, idx, C, tmp):
                      ("brightness", "contrast", "saturation", "gamma") if k in eff]
             if parts:
                 chain += ",eq=" + ":".join(parts)
+        elif et == "blur":
+            chain += f",gblur=sigma={eff.get('sigma', 8)}"
+        elif et == "sharpen":
+            chain += f",unsharp=5:5:{eff.get('amount', 1.0)}:5:5:0.0"
+        elif et == "denoise":
+            chain += ",hqdn3d"
+        elif et == "hue":
+            chain += f",hue=h={eff.get('h', 0)}:s={eff.get('s', 1.0)}"
+        elif et == "negate":
+            chain += ",negate"
+        elif et == "grayscale":
+            chain += ",hue=s=0"
+        elif et == "sepia":
+            chain += (",colorchannelmixer=.393:.769:.189:0:.349:.686:"
+                      ".168:0:.272:.534:.131")
+        elif et == "vignette":
+            chain += ",vignette" + (f"=a={eff['angle']}" if "angle" in eff else "")
+        elif et == "deinterlace":
+            chain += ",yadif"
+        elif et == "pixelate":
+            n = eff.get("size", 16)
+            chain += (f",scale=iw/{n}:ih/{n}:flags=neighbor,"
+                      f"scale={W}:{H}:flags=neighbor")
+        elif et == "lut":                           # 3D LUT (.cube)
+            lf = eff["file"]
+            if not os.path.isabs(lf):
+                lf = os.path.join(C["clips_dir"] or base_dir, lf)
+            chain += f",lut3d=file='{lf}'"
         elif et == "zoom":                          # ken burns
             if src_dur is None:
                 src_dur = probe_duration(src)
             clen = ((trim[1] - trim[0]) if trim else src_dur) / base_speed
+            clen += fstart + fstop
             frames = max(1, int(round(clen * FPS)))
             z0, z1 = eff.get("from", 1.0), eff.get("to", 1.1)
             chain += (f",zoompan=z='{z0}+({z1}-{z0})*on/{frames}':d=1:"
@@ -378,7 +444,7 @@ def normalize_clip(clip, idx, C, tmp):
         words = len(title_text.split())
         secs = C["title"]["seconds"] or (
             words / C["title"]["read_wps"] + C["title"]["read_base"])
-        at = clip.get("title_at", C["title"]["at"])
+        at = clip.get("title_at", C["title"]["at"]) + fstart
         svg = os.path.join(tmp, f"title{idx}.svg")
         png = os.path.join(tmp, f"title{idx}.png")
         open(svg, "w").write(title_svg(title_text, W, H, C["title"]))
@@ -391,7 +457,6 @@ def normalize_clip(clip, idx, C, tmp):
         n_in += 1
 
     # image/svg overlays (optional alpha fade in/out)
-    base_dir = os.path.dirname(os.path.abspath(C["__path__"]))
     for j, ov in enumerate(clip.get("overlays", [])):
         img = ov["image"]
         if not os.path.isabs(img):
@@ -595,13 +660,29 @@ def main():
         print(f"pacing: {len(segs)} segments, {slow:.0f}s slowed / {fast:.0f}s "
               f"accelerated -> {total:.1f}s")
 
-    # 5) encode VP9 (2-pass) + mux narration
-    log = os.path.join(tmp, "vp9pass")
-    common = ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", str(C["encode"]["vp9_crf"]),
-              "-row-mt", "1", "-an", "-passlogfile", log]
-    run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "1", "-f", "null", os.devnull])
-    webm = os.path.join(tmp, "video.webm")
-    run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "2", webm])
+    # 5) encode video (codec/container from config) + mux narration
+    E = C["encode"]
+    vcodec = E.get("vcodec", "libvpx-vp9")
+    pix = E.get("pix_fmt", "yuv420p")
+    if vcodec == "libvpx-vp9":                        # default: VP9 2-pass
+        crf = E["crf"] if E.get("crf") is not None else E["vp9_crf"]
+        log = os.path.join(tmp, "vp9pass")
+        common = ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", str(crf),
+                  "-row-mt", "1", "-pix_fmt", pix, "-an", "-passlogfile", log]
+        run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "1",
+             "-f", "null", os.devnull])
+        venc = os.path.join(tmp, "video.webm")
+        run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "2", venc])
+    else:                                             # x264/x265/ProRes single pass
+        crf = E["crf"] if E.get("crf") is not None else 18
+        ext = ".mov" if vcodec == "prores_ks" else ".mp4"
+        venc = os.path.join(tmp, "video" + ext)
+        cmd = ["ffmpeg", "-y", "-i", paced, "-c:v", vcodec, "-pix_fmt", pix, "-an"]
+        if vcodec in ("libx264", "libx265"):
+            cmd += ["-preset", E.get("preset", "medium"), "-crf", str(crf)]
+        elif vcodec == "prores_ks":
+            cmd += ["-profile:v", str(E.get("prores_profile", 3))]
+        run([*cmd, venc])
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
@@ -620,11 +701,16 @@ def main():
         [(C["intro"]["delay"] if v["pos"] < 0 else warp_time(segs, v["pos"]), v)
          for v in voice_clips], key=lambda x: x[0]) if voice_clips else []
 
+    # output audio codec (auto from container, or explicit)
+    acodec = E.get("acodec", "auto")
+    if acodec == "auto":
+        acodec = "libopus" if out_path.lower().endswith(".webm") else "aac"
+
     if not placed and not have_music:
-        shutil.copyfile(webm, out_path)
+        run(["ffmpeg", "-y", "-i", venc, "-c", "copy", out_path])   # remux container
     else:
         ain, afc = [], []
-        ai = 1                                    # input 0 = the video webm
+        ai = 1                                    # input 0 = the encoded video
         narr_label = music_label = None
         speech = []                               # (start,end) per line, final time
         if placed:
@@ -667,8 +753,16 @@ def main():
             out_a = "[aout]"
         else:
             out_a = narr_label or music_label
-        run(["ffmpeg", "-y", "-i", webm, *ain, "-filter_complex", ";".join(afc),
-             "-map", "0:v", "-map", out_a, "-c:v", "copy", "-c:a", "libopus",
+        A = C["audio"]                                 # EBU R128 loudness normalize
+        if out_a and A.get("loudnorm"):
+            ln = A["loudnorm"]
+            d = ln if isinstance(ln, dict) else {}
+            pars = (f"I={d.get('I', -16)}:TP={d.get('TP', -1.5)}:"
+                    f"LRA={d.get('LRA', 11)}")
+            afc.append(f"{out_a}loudnorm={pars}[aout_ln]")
+            out_a = "[aout_ln]"
+        run(["ffmpeg", "-y", "-i", venc, *ain, "-filter_complex", ";".join(afc),
+             "-map", "0:v", "-map", out_a, "-c:v", "copy", "-c:a", acodec,
              "-b:a", f"{C['encode']['audio_kbps']}k", out_path])
 
     print(f"\nwrote {out_path} ({os.path.getsize(out_path)/1e6:.2f} MB, {total:.1f}s)")

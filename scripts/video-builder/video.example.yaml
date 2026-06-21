@@ -10,6 +10,7 @@ clips_dir: ""                    # optional base dir prepended to each clip file
 
 canvas: {width: 1280, height: 720, fps: 30}
 background: black                # pillarbox/letterbox color for off-aspect clips
+fit: contain                     # contain (pillarbox) | cover (fill+crop) | stretch
 speed: 1.0                       # base speed for all clips (0.5 = half speed)
 
 # ---- adaptive pacing: vary speed by on-screen motion ------------------------
@@ -60,7 +61,21 @@ music:
   duck: true                     # dip the music while narration plays
   duck_amount: 0.35
 
-encode: {vp9_crf: 32, audio_kbps: 96}
+# ---- optional EBU R128 loudness normalization on the final mix --------------
+audio:
+  loudnorm: false                # true, or {I: -16, TP: -1.5, LRA: 11}
+
+# ---- output codec / container ----------------------------------------------
+# container comes from the `output` extension (.webm/.mp4/.mov)
+encode:
+  vcodec: libvpx-vp9             # libvpx-vp9 | libx264 | libx265 | prores_ks
+  acodec: auto                   # auto -> opus(.webm) / aac(.mp4,.mov)
+  crf: null                      # null -> vp9_crf for VP9, else 18
+  vp9_crf: 32
+  preset: medium                 # x264/x265 preset
+  pix_fmt: yuv420p
+  prores_profile: 3              # prores_ks 0..5 (3 = HQ)
+  audio_kbps: 96
 
 # ---- the clips, in playback order ------------------------------------------
 clips:
@@ -68,6 +83,7 @@ clips:
     title: "Getting started"           # explicit on-screen caption
     narration: "Let's open the app and create our first task."
     title_at: 0.5                       # caption appears 0.5s in
+    freeze: {start: 0.0, end: 1.0}      # hold the last frame for 1s
     effects:
       - {type: fadein, duration: 0.5}   # fade up from black
 
@@ -76,9 +92,14 @@ clips:
     # no `title`/`narration`: title is derived from description, narration = description
     trim: [2.0, 12.0]                   # CUT: use only seconds 2-12 of the source
     speed: 0.8                          # SLOW this clip to 0.8x
+    crop: {x: 40, y: 40, w: 1200, h: 640}  # crop a source sub-rectangle
+    fit: cover                          # fill the canvas (crop overflow)
     transition: {type: wipeleft, duration: 0.5}   # transition INTO the next clip
     effects:
       - {type: eq, saturation: 1.1, contrast: 1.05}  # colour adjust
+      - {type: blur, sigma: 6}          # also: sharpen, denoise, hue, negate,
+      - {type: vignette}                # grayscale, sepia, pixelate, deinterlace
+      - {type: lut, file: grade.cube}   # 3D LUT (.cube), path relative to config
     overlays:
       - image: ../../media/demo_assets/title/done.svg # any svg/png
         x: "W-w-30"                     # ffmpeg expr: W,H=canvas, w,h=overlay
@@ -92,6 +113,7 @@ clips:
     title: "That's the tour"
     narration: "And that's the whole flow, start to finish."
     speed: 1.4                          # SPEED UP this clip to 1.4x
+    reverse: false                      # set true to play backwards
     effects:
       - {type: zoom, from: 1.0, to: 1.08}   # ken burns
       - {type: fadeout, duration: 0.6}
