@@ -85,8 +85,19 @@ DEFAULTS = {
         "kokoro_speed": 1.0,
         "narration_gap": 0.0,         # extra s before a line's window check
     },
-    "audio": {
+    "audio": {                        # filters on the final mixed track
+        "use_source": False,          # mix each clip's own audio into the track
+        "source_volume": 1.0,         # gain for the source-audio bed
+        "source_duck": False,         # dip source audio under narration
+        "source_duck_amount": 0.4,
         "loudnorm": False,            # True or {I,TP,LRA} -> EBU R128 normalize
+        "gain": 0.0,                  # dB
+        "bass": 0.0,                  # dB shelf ~100 Hz
+        "treble": 0.0,                # dB shelf ~3 kHz
+        "balance": 0.0,               # -1 (L) .. +1 (R)
+        "denoise": False,             # afftdn noise reduction
+        "compress": False,            # acompressor (gentle bus compression)
+        "filters": [],                # extra raw ffmpeg audio filters (escape hatch)
     },
     "encode": {
         "vp9_crf": 32,                # CRF for the default VP9 path
@@ -155,6 +166,27 @@ def probe_duration(path):
     r = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=nw=1:nk=1", path])
     return float(r.stdout.strip())
+
+
+def has_audio_stream(path):
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a",
+                        "-show_entries", "stream=index", "-of", "csv=p=0", path],
+                       capture_output=True, text=True)
+    return bool(r.stdout.strip())
+
+
+def atempo_chain(f):
+    """ffmpeg atempo chain for an arbitrary speed factor (each stage 0.5..2)."""
+    f = float(f)
+    parts = []
+    while f > 2.0:
+        parts.append(2.0)
+        f /= 2.0
+    while f < 0.5:
+        parts.append(0.5)
+        f /= 0.5
+    parts.append(f)
+    return ",".join(f"atempo={p:.6f}" for p in parts)
 
 
 def xml_escape(s):
@@ -338,6 +370,53 @@ def warp_time(segs, t):
             break
         ft += (min(t, e) - s) / f
     return ft
+
+
+def warp_audio(in_wav, segs, out_wav):
+    """Apply the video speed map to an audio bed (pitch-preserving atempo)."""
+    if len(segs) == 1 and abs(segs[0][2] - 1.0) < 1e-6:
+        shutil.copyfile(in_wav, out_wav)
+        return
+    n = len(segs)
+    fc = ["[0:a]asplit=%d%s" % (n, "".join(f"[a{i}]" for i in range(n)))]
+    for i, (s, e, f) in enumerate(segs):
+        fc.append(f"[a{i}]atrim={s:.3f}:{e:.3f},asetpts=PTS-STARTPTS,"
+                  f"{atempo_chain(f)}[b{i}]")
+    fc.append("".join(f"[b{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[out]")
+    run(["ffmpeg", "-y", "-i", in_wav, "-filter_complex", ";".join(fc),
+         "-map", "[out]", out_wav])
+
+
+def render_clip_audio(clip, idx, src, dur, base_speed, trim, C, tmp):
+    """Render a clip's own audio to a wav of exactly `dur` seconds, or None."""
+    if clip.get("mute") or not has_audio_stream(src):
+        return None
+    fr = clip.get("freeze") or {}
+    fstart, fstop = float(fr.get("start", 0) or 0), float(fr.get("end", 0) or 0)
+    af = []
+    if trim:
+        af.append(f"atrim={trim[0]}:{trim[1]},asetpts=PTS-STARTPTS")
+    if clip.get("reverse"):
+        af.append("areverse")
+    if abs(base_speed - 1.0) > 1e-6:
+        af.append(atempo_chain(base_speed))
+    if fstart:                                       # freeze = silence pad
+        ms = int(round(fstart * 1000))
+        af.append(f"adelay={ms}|{ms}")
+    vol = clip.get("volume", 1.0)
+    if abs(vol - 1.0) > 1e-6:
+        af.append(f"volume={vol}")
+    afade = clip.get("audio_fade") or {}
+    if afade.get("in"):
+        af.append(f"afade=t=in:st=0:d={afade['in']}")
+    if afade.get("out"):
+        af.append(f"afade=t=out:st={max(0, dur - afade['out']):.3f}:"
+                  f"d={afade['out']}")
+    af.append(f"apad,atrim=0:{dur:.3f},asetpts=PTS-STARTPTS")   # exact length
+    out = os.path.join(tmp, f"clipa{idx}.wav")
+    run(["ffmpeg", "-y", "-i", src, "-filter_complex",
+         "[0:a]" + ",".join(af) + "[a]", "-map", "[a]", out])
+    return out
 
 
 # ============================ clip normalization =============================
@@ -570,7 +649,10 @@ def normalize_clip(clip, idx, C, tmp):
              "-c:v", "libx264", "-preset", "medium", "-crf", "18",
              "-pix_fmt", "yuv420p", "-r", str(int(FPS)), out2])
         out, dur = out2, probe_duration(out2)
-    return out, dur, twin
+    apath = None
+    if C["audio"].get("use_source"):
+        apath = render_clip_audio(clip, idx, src, dur, base_speed, trim, C, tmp)
+    return out, dur, twin, apath
 
 
 def derive_title(description):
@@ -655,11 +737,11 @@ def main():
 
     # 1) normalize each clip (title + overlays baked in)
     print(f"normalizing {len(C['clips'])} clip(s)...")
-    clips_info = []                       # (path, dur, transition, title_window)
+    clips_info = []                  # (path, dur, transition, title_window, audio)
     for idx, clip in enumerate(C["clips"]):
-        path, dur, twin = normalize_clip(clip, idx, C, tmp)
+        path, dur, twin, apath = normalize_clip(clip, idx, C, tmp)
         tr = deep_merge(C["transition"], clip.get("transition", {}))
-        clips_info.append((path, dur, tr, twin))
+        clips_info.append((path, dur, tr, twin, apath))
 
     # 2) assemble with transitions
     assembled, starts = assemble(clips_info, C, tmp)
@@ -726,6 +808,27 @@ def main():
         print(f"pacing: {len(segs)} segments, {slow:.0f}s slowed / {fast:.0f}s "
               f"accelerated -> {total:.1f}s")
 
+    # source-clip audio bed: place each clip's audio (pre-pace), then warp to pace
+    source_wav = None
+    clip_auds = [ci[4] for ci in clips_info]
+    if C["audio"].get("use_source") and any(clip_auds):
+        ain2, afc2, lbls = [], [], []
+        for idx, a in enumerate(clip_auds):
+            if not a:
+                continue
+            j = len(lbls)
+            ain2 += ["-i", a]
+            ms = int(round(starts[idx] * 1000))
+            afc2.append(f"[{j}:a]adelay={ms}|{ms}[s{j}]")
+            lbls.append(f"[s{j}]")
+        afc2.append("".join(lbls) + f"amix=inputs={len(lbls)}:normalize=0:"
+                    f"dropout_transition=0,atrim=0:{total_orig:.3f}[bed]")
+        bed = os.path.join(tmp, "srcbed.wav")
+        run(["ffmpeg", "-y", *ain2, "-filter_complex", ";".join(afc2),
+             "-map", "[bed]", bed])
+        source_wav = os.path.join(tmp, "srcwarp.wav")
+        warp_audio(bed, segs, source_wav)
+
     # 5) encode video (codec/container from config) + mux narration
     E = C["encode"]
     vcodec = E.get("vcodec", "libvpx-vp9")
@@ -752,15 +855,24 @@ def main():
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
-    # resolve background music
-    M = C["music"]
-    music_file = M["file"]
-    if music_file and not os.path.isabs(music_file):
-        music_file = os.path.join(
-            C["clips_dir"] or os.path.dirname(os.path.abspath(cfg_path)), music_file)
-    have_music = bool(M["file"]) and os.path.isfile(music_file)
-    if M["file"] and not have_music:
-        print(f"  warning: music file not found, skipping: {music_file}")
+    # resolve background music bed(s) — `music` may be a dict or list of dicts
+    raw_music = C["music"]
+    beds = raw_music if isinstance(raw_music, list) else [raw_music]
+    music_beds = []
+    for b in beds:
+        bed = deep_merge(DEFAULTS["music"], b)
+        if not bed["file"]:
+            continue
+        bf = bed["file"]
+        if not os.path.isabs(bf):
+            bf = os.path.join(C["clips_dir"]
+                              or os.path.dirname(os.path.abspath(cfg_path)), bf)
+        if not os.path.isfile(bf):
+            print(f"  warning: music file not found, skipping: {bf}")
+            continue
+        bed["_path"] = bf
+        music_beds.append(bed)
+    have_music = bool(music_beds)
 
     # final placement of each narration line (warped to the paced timeline)
     placed = sorted(
@@ -772,12 +884,13 @@ def main():
     if acodec == "auto":
         acodec = "libopus" if out_path.lower().endswith(".webm") else "aac"
 
-    if not placed and not have_music:
+    A = C["audio"]
+    if not placed and not have_music and not source_wav:
         run(["ffmpeg", "-y", "-i", venc, "-c", "copy", out_path])   # remux container
     else:
         ain, afc = [], []
         ai = 1                                    # input 0 = the encoded video
-        narr_label = music_label = None
+        narr_label = music_label = source_label = None
         speech = []                               # (start,end) per line, final time
         if placed:
             mix = []
@@ -798,35 +911,69 @@ def main():
                        "dropout_transition=0,alimiter=limit=0.95[narr]")
             narr_label = "[narr]"
         if have_music:
-            ain += ["-stream_loop", "-1", "-i", music_file]   # loop to cover video
-            mf = (f"[{ai}:a]atrim=0:{total:.3f},asetpts=N/SR/TB,"
-                  f"volume={M['volume']}")
-            if M["duck"] and speech:                          # dip under narration
+            mlabels = []
+            for bi, bed in enumerate(music_beds):
+                ain += ["-stream_loop", "-1", "-i", bed["_path"]]   # loop to cover
+                mf = (f"[{ai}:a]atrim=0:{total:.3f},asetpts=N/SR/TB,"
+                      f"volume={bed['volume']}")
+                if bed["duck"] and speech:                    # dip under narration
+                    expr = "+".join(f"between(t,{a:.3f},{b:.3f})"
+                                    for a, b in speech)
+                    mf += f",volume={bed['duck_amount']}:enable='{expr}'"
+                if bed["fade_in"] > 0:
+                    mf += f",afade=t=in:st=0:d={bed['fade_in']}"
+                if bed["fade_out"] > 0:
+                    mf += (f",afade=t=out:st={max(0, total - bed['fade_out']):.3f}"
+                           f":d={bed['fade_out']}")
+                afc.append(mf + f"[m{bi}]")
+                mlabels.append(f"[m{bi}]")
+                ai += 1
+            if len(mlabels) == 1:
+                music_label = mlabels[0]
+            else:
+                afc.append("".join(mlabels) + f"amix=inputs={len(mlabels)}:"
+                           "normalize=0:dropout_transition=0[music]")
+                music_label = "[music]"
+        if source_wav:                                # source-clip audio bed
+            ain += ["-i", source_wav]
+            sf = f"[{ai}:a]volume={A['source_volume']}"
+            if A.get("source_duck") and speech:       # dip under narration
                 expr = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in speech)
-                mf += f",volume={M['duck_amount']}:enable='{expr}'"
-            if M["fade_in"] > 0:
-                mf += f",afade=t=in:st=0:d={M['fade_in']}"
-            if M["fade_out"] > 0:
-                mf += (f",afade=t=out:st={max(0, total - M['fade_out']):.3f}"
-                       f":d={M['fade_out']}")
-            afc.append(mf + "[music]")
-            music_label = "[music]"
+                sf += f",volume={A['source_duck_amount']}:enable='{expr}'"
+            afc.append(sf + "[src]")
+            source_label = "[src]"
             ai += 1
 
-        if narr_label and music_label:
-            afc.append(f"{music_label}{narr_label}amix=inputs=2:normalize=0:"
+        labels = [x for x in (narr_label, music_label, source_label) if x]
+        if len(labels) > 1:
+            afc.append("".join(labels) + f"amix=inputs={len(labels)}:normalize=0:"
                        "dropout_transition=0[aout]")
             out_a = "[aout]"
         else:
-            out_a = narr_label or music_label
-        A = C["audio"]                                 # EBU R128 loudness normalize
-        if out_a and A.get("loudnorm"):
-            ln = A["loudnorm"]
-            d = ln if isinstance(ln, dict) else {}
-            pars = (f"I={d.get('I', -16)}:TP={d.get('TP', -1.5)}:"
-                    f"LRA={d.get('LRA', 11)}")
-            afc.append(f"{out_a}loudnorm={pars}[aout_ln]")
-            out_a = "[aout_ln]"
+            out_a = labels[0]
+        if out_a:                                      # final-mix audio filters
+            afl = []
+            if A.get("compress"):
+                afl.append("acompressor")
+            if A.get("denoise"):
+                afl.append("afftdn=nr=12")
+            if A.get("bass"):
+                afl.append(f"bass=g={A['bass']}")
+            if A.get("treble"):
+                afl.append(f"treble=g={A['treble']}")
+            if A.get("balance"):
+                afl.append(f"stereotools=balance_out={A['balance']}")
+            if A.get("gain"):
+                afl.append(f"volume={A['gain']}dB")
+            afl += list(A.get("filters") or [])
+            if A.get("loudnorm"):
+                ln = A["loudnorm"]
+                d = ln if isinstance(ln, dict) else {}
+                afl.append(f"loudnorm=I={d.get('I', -16)}:TP={d.get('TP', -1.5)}:"
+                           f"LRA={d.get('LRA', 11)}")
+            if afl:
+                afc.append(f"{out_a}" + ",".join(afl) + "[aout_f]")
+                out_a = "[aout_f]"
         run(["ffmpeg", "-y", "-i", venc, *ain, "-filter_complex", ";".join(afc),
              "-map", "0:v", "-map", out_a, "-c:v", "copy", "-c:a", acodec,
              "-b:a", f"{C['encode']['audio_kbps']}k", out_path])

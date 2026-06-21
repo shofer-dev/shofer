@@ -171,13 +171,15 @@ appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
 `media/video`), `kokoro_voice` (`af_heart`, `af_bella`, `am_michael`, `am_onyx`,
 `bm_george`), `kokoro_speed`.
 
-**`music`**: `file` (path; empty = none — looped to cover the video), `volume`
-(gain), `fade_in`/`fade_out` (s), `duck` (lower the music while narration plays),
-`duck_amount` (music gain under narration when ducking).
+**`music`**: a single bed `{file, volume, fade_in, fade_out, duck, duck_amount}`
+**or a list** of such beds (all looped to cover the video and mixed). `file`
+empty = none. `duck` lowers that bed while narration plays.
 
-**`audio`**: `loudnorm` — `false`, `true` (EBU R128 defaults `I=-16, TP=-1.5,
-LRA=11`), or a mapping `{I, TP, LRA}` to override the targets. Applied to the
-final mixed audio.
+**`audio`** (filters on the final mixed track): `use_source` (mix each clip's own
+audio — see clip `volume`/`audio_fade`/`mute`), `source_volume`, `source_duck`/
+`source_duck_amount` (dip source audio under narration); `gain`/`bass`/`treble`
+(dB), `balance` (−1..1), `compress`, `denoise`; `filters` (a list of raw ffmpeg
+audio filters — escape hatch); `loudnorm` (`true`, or `{I, TP, LRA}`).
 
 **`encode`**: `vcodec` (`libvpx-vp9` default, or `libx264`/`libx265`/`prores_ks`),
 `acodec` (`auto` → Opus for `.webm`, AAC otherwise), `crf` (`null` → `vp9_crf` for
@@ -199,6 +201,9 @@ VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
 | `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).     |
 | `reverse`      | `true` to play the clip backwards.                                |
 | `freeze`       | `{start, end}` seconds — hold the first/last frame.               |
+| `volume`       | Gain for this clip's source audio (with `audio.use_source`).      |
+| `audio_fade`   | `{in, out}` seconds — fade this clip's source audio.              |
+| `mute`         | `true` to drop this clip's source audio.                          |
 | `title_at`     | When the title appears (seconds into the clip).                   |
 | `narration_at` | When the line is spoken (defaults to `title_at`).                 |
 | `transition`   | `{type, duration}` for the join **into the next clip**.           |

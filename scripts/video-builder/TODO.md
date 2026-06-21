@@ -80,14 +80,15 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 ## Missing — audio
 
-- [ ] **Use the source clip's own audio.** We currently build the soundtrack
-      from TTS + music only; clip audio is dropped. _Medium — mix `a` streams,
-      add `audio: {use_source, volume}` per clip._
-- [ ] **Per-clip volume keyframes / audio fades.** _Easy once source audio is
-      mixed in._
-- [ ] **Audio effects** (EQ, compressor, noise reduction, pitch). _Medium._
-- [ ] **Multiple music/SFX beds** (we support exactly one music file).
-      _Easy — accept a list._
+- [x] **Use the source clip's own audio** — `audio: {use_source: true}`; each
+      clip's audio is trimmed/sped/reversed/frozen to match its video, placed,
+      and warped through the pacing map.
+- [x] **Per-clip volume / audio fades** — clip `volume`, `audio_fade: {in,out}`,
+      `mute`. _(Keyframed volume still needs the keyframe engine.)_
+- [x] **Audio effects** — final-mix `bass`/`treble` (EQ), `compress`, `denoise`,
+      and pitch-preserving speed (atempo).
+- [x] **Multiple music/SFX beds** — `music` accepts a list of beds (each with
+      its own volume/fades/duck).
 
 ## Missing — titles / text
 
@@ -142,12 +143,11 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 - [x] **Loudness normalization** (EBU R128) — `audio: {loudnorm: true}` or
       `{I, TP, LRA}` on the final mix.
-- [ ] **Compressor / limiter / expander / gate / notch.** _Medium —
-      `acompressor`/`alimiter`/`agate`._
-- [ ] **Gain / pan / balance / bass & treble / channel ops.** _Easy —
-      `volume`/`pan`/`bass`/`treble`. Extends the existing audio backlog._
-- [ ] **Clip audio crossfade** at transitions (`acrossfade`). _Easy once
-      source-clip audio is mixed in._
+- [x] **Compressor / limiter** — `audio: {compress: true}` (`acompressor`) plus
+      the existing narration `alimiter`. _(expander/gate/notch still pending.)_
+- [x] **Gain / balance / bass & treble** — `audio: {gain, balance, bass, treble}`.
+- [x] **Clip audio crossfade** at transitions — overlapping source-audio beds
+      with per-clip `audio_fade` crossfade across the transition window.
 
 ### Source generators (clips with no input file)
 
@@ -158,9 +158,8 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Speed / time
 
-- [ ] **Pitch-preserving speed change.** Shotcut keeps audio pitch when you
-      retime; we change `setpts` only and drop clip audio anyway.
-      _Medium — `atempo` chain, relevant once source audio is mixed in._
+- [x] **Pitch-preserving speed change** — source-clip audio is retimed with an
+      `atempo` chain (pitch-preserving) to match the video speed and pacing map.
 
 ### Encode / export
 
