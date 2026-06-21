@@ -3,7 +3,7 @@
 # clip is a trimmed segment whose speed makes it last as long as its
 # narration -- slow near-static segments stand in for the freezes.
 output: ../../website/public/video/demo.webm
-clips_dir: /home/alsterg/Videos/Screencasts
+clips_dir: ../../media   # screencast-final.webm lives in extensions/shofer/media
 canvas: {width: 1280, height: 720, fps: 30}
 background: black
 pacing: {enabled: false}   # per-clip speed already times each segment
