@@ -606,13 +606,27 @@ def normalize_clip(clip, idx, C, tmp):
             chain += (f",zoompan=z='{z0}+({z1}-{z0})*on/{frames}':d=1:"
                       f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
                       f"s={W}x{H}:fps={FPS}")
+    tf = clip.get("transform")                       # position/scale/rotate
+    content = "[c0]" if tf else "[base]"
     if glow_cfg is not None:                         # split -> blur copy -> screen
         sig = glow_cfg.get("sigma", 12)
         fc.append(chain + "[pre]")
         fc.append(f"[pre]split[g0][g1];[g1]gblur=sigma={sig}[gb];"
-                  f"[g0][gb]blend=all_mode=screen[base]")
+                  f"[g0][gb]blend=all_mode=screen{content}")
     else:
-        fc.append(chain + "[base]")
+        fc.append(chain + content)
+    if tf:                                           # composite onto a bg canvas
+        ops = ["format=rgba"]
+        if tf.get("scale", 1) != 1:
+            ops.append(f"scale=iw*{tf['scale']}:-1")
+        if tf.get("rotate"):
+            r = tf["rotate"]
+            ops.append(f"rotate={r}*PI/180:c=none:ow=rotw({r}*PI/180):"
+                       f"oh=roth({r}*PI/180)")
+        fc.append(f"{content}" + ",".join(ops) + "[tc]")
+        x, y = tf.get("x", "(W-w)/2"), tf.get("y", "(H-h)/2")
+        fc.append(f"color=c={bg}:s={W}x{H}:r={FPS}[tbg];"
+                  f"[tbg][tc]overlay={x}:{y}:shortest=1[base]")
     cur = "[base]"
     n_in = 1
 
@@ -638,8 +652,48 @@ def normalize_clip(clip, idx, C, tmp):
         twin = (at, secs)
         n_in += 1
 
-    # image/svg/text overlays (optional alpha fade in/out)
+    # image/svg/text/video overlays (optional alpha fade in/out)
     for j, ov in enumerate(clip.get("overlays", [])):
+        if ov.get("video"):                           # picture-in-picture video
+            vsrc = ov["video"]
+            if not os.path.isabs(vsrc):
+                vsrc = os.path.join(C["clips_dir"] or base_dir, vsrc)
+            s, e = ov.get("start", 0.0), ov.get("end", 1e9)
+            inputs += ["-i", vsrc]
+            ops, blend = [], ov.get("blend")
+            ot = ov.get("trim")
+            if ot:
+                ops.append(f"trim={ot[0]}:{ot[1]},setpts=PTS-STARTPTS")
+            if blend:                                 # full-frame blend mode
+                ops.append(f"scale={W}:{H}")
+            elif ov.get("scale"):
+                ops.append(f"scale={int(W * ov['scale'])}:-1")
+            ck = ov.get("chromakey")
+            op = ov.get("opacity")
+            if ck or ov.get("rotate") or (op is not None and op < 1):
+                ops.append("format=rgba")
+            if ck:                                    # green-screen key
+                color = ck.get("color", "0x00FF00") if isinstance(ck, dict) else ck
+                sim = ck.get("similarity", 0.30) if isinstance(ck, dict) else 0.30
+                ops.append(f"chromakey={color}:{sim}:0.1")
+            if ov.get("rotate"):
+                r = ov["rotate"]
+                ops.append(f"rotate={r}*PI/180:c=none:ow=rotw({r}*PI/180):"
+                           f"oh=roth({r}*PI/180)")
+            if op is not None and op < 1:
+                ops.append(f"colorchannelmixer=aa={op}")
+            ops.append(f"setpts=PTS+{s}/TB")
+            fc.append(f"[{n_in}:v]" + ",".join(ops) + f"[ovv{j}]")
+            if blend:
+                fc.append(f"{cur}[ovv{j}]blend=all_mode={blend}:"
+                          f"enable='between(t,{s},{e})'[ovr{j}]")
+            else:
+                x, y = ov.get("x", "(W-w)/2"), ov.get("y", "(H-h)/2")
+                fc.append(f"{cur}[ovv{j}]overlay={x}:{y}:"
+                          f"enable='between(t,{s},{e})'[ovr{j}]")
+            cur = f"[ovr{j}]"
+            n_in += 1
+            continue
         if ov.get("text"):                            # rich text via drawtext
             s, e = ov.get("start", 0.0), ov.get("end", 1e9)
             size = ov.get("size", int(H * 0.05))
@@ -686,11 +740,23 @@ def normalize_clip(clip, idx, C, tmp):
             scaled = f"[ovs{j}]"
         else:
             scaled = f"[{n_in}:v]"
+        used = 1
+        mask = ov.get("mask")                         # alpha mask from an image
+        if mask:
+            mimg = mask if os.path.isabs(mask) else os.path.join(
+                C["clips_dir"] or base_dir, mask)
+            inputs += ["-i", mimg]
+            fc.append(f"{scaled}format=rgba[oa{j}]")
+            fc.append(f"[{n_in + 1}:v]format=gray[mg{j}]")
+            fc.append(f"[mg{j}][oa{j}]scale2ref[mks{j}][oar{j}]")  # mask -> ref size
+            fc.append(f"[oar{j}][mks{j}]alphamerge[am{j}]")
+            scaled = f"[am{j}]"
+            used = 2
         x, y = ov.get("x", "20"), ov.get("y", "20")
         fc.append(f"{cur}{scaled}overlay={x}:{y}:"
                   f"enable='between(t,{s},{e})'[ovr{j}]")
         cur = f"[ovr{j}]"
-        n_in += 1
+        n_in += used
 
     out = os.path.join(tmp, f"clip{idx}.mp4")
     run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(fc),

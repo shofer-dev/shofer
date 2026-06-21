@@ -209,6 +209,7 @@ VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
 | `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).                         |
 | `reverse`      | `true` to play the clip backwards.                                                    |
 | `freeze`       | `{start, end}` seconds — hold the first/last frame.                                   |
+| `transform`    | `{scale, rotate, x, y}` — position/scale/rotate the clip over the background.         |
 | `volume`       | Gain for this clip's source audio (with `audio.use_source`).                          |
 | `audio_fade`   | `{in, out}` seconds — fade this clip's source audio.                                  |
 | `mute`         | `true` to drop this clip's source audio.                                              |
@@ -218,13 +219,20 @@ VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
 | `overlays`     | List of overlay graphics (see below).                                                 |
 | `effects`      | List of effects (see below).                                                          |
 
-Each **overlay** is either an image `{image, x, y, scale, start, end, fade}` (SVG
-or raster) or **text** `{text, x, y, size, color, font, box, boxcolor, border,
-bordercolor, start, end}` (rendered with `drawtext`). For images, `x`/`y` are
-ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay), `scale` is a
-fraction of canvas width, and `fade` (optional, s) fades it in/out (needs a
-finite `end`). For text, `x`/`y` accept `drawtext` expressions (`w`,`h`,
-`text_w`, `text_h`).
+Each **overlay** is one of:
+
+- **image** `{image, x, y, scale, start, end, fade, mask}` (SVG or raster).
+  `scale` is a fraction of canvas width; `fade` (s) fades it in/out (needs a
+  finite `end`); `mask` is a grayscale image that shapes the overlay's alpha.
+- **text** `{text, x, y, size, color, font, box, boxcolor, border, bordercolor,
+start, end}` (rendered with `drawtext`; `x`/`y` accept `drawtext` exprs).
+- **video** `{video, trim, x, y, scale, start, end, rotate, opacity, chromakey,
+blend}` — a picture-in-picture layer. `chromakey` is a colour string or
+  `{color, similarity}`; `blend` (e.g. `screen`, `multiply`) composites
+  full-frame instead of positioning. Stack several for multi-layer compositing.
+
+For image/video, `x`/`y` are ffmpeg overlay expressions (`W`,`H` = canvas;
+`w`,`h` = overlay).
 
 The `v360` effect (`{type: v360, in, out, …}`) remaps 360/equirectangular
 footage; any extra keys pass straight to the `v360` filter.

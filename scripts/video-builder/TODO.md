@@ -23,22 +23,17 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 ## Missing — compositing / layout
 
-- [ ] **Multiple simultaneous video tracks.** OpenShot composites N stacked
-      tracks; we only play clips sequentially (+ static image overlays). A
-      real "track" model would let a video clip play _over_ another.
-      _Hard — needs a timeline/track abstraction in the config and a layered
-      `overlay` graph._
-- [ ] **Picture-in-picture (video overlay).** Overlay a _second video_ (not
-      just an image) at an arbitrary position/scale/time window.
-      _Medium — extend `overlays` to accept video files with their own trim._
-- [ ] **Per-clip transform: position / scale / rotation / shear.** OpenShot
-      keyframes location, scale, rotation and shear per clip. We only center +
-      pillarbox. _Medium — `transform: {x,y,scale,rotation}`, static first,
-      keyframed later._
+- [x] **Multiple simultaneous video tracks** — stack N video `overlays` (each a
+      PiP layer) over a clip. _Layered compositing rather than a free timeline,
+      but covers the practical "video over video" case._
+- [x] **Picture-in-picture (video overlay)** — `overlays: {video, trim, scale,
+    x, y, start, end}`, with optional `rotate`/`opacity`/`chromakey`/`blend`.
+- [x] **Per-clip transform: position / scale / rotation** — `transform:
+    {scale, rotate, x, y}` composited onto the background. _(shear not done.)_
 - [x] **Crop / region selection.** Crop a clip to a sub-rectangle.
       _Easy — ffmpeg `crop`; add `crop: {x,y,w,h}`._
-- [ ] **Blend / compositing modes** (multiply, screen, overlay, add…).
-      _Medium — ffmpeg `blend=all_mode=…` between layers._
+- [x] **Blend / compositing modes** — a video overlay with `blend: multiply|
+    screen|overlay|…` blends full-frame (`blend=all_mode=…`).
 - [x] **Scale modes** (fit / stretch / crop-to-fill). We always fit+pad.
       _Easy — `fit: contain|cover|stretch`._
 
@@ -53,20 +48,21 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 ## Missing — video effects / filters
 
-- [ ] **Chroma key / green screen** (`colorkey`/`chromakey`). _Easy._
+- [x] **Chroma key / green screen** — `overlays: {video, chromakey: {color,
+    similarity}}` keys a PiP layer over the clip beneath it.
 - [x] **Blur** (gaussian) — `effects: {type: blur}`. _(Animated blur-in titles
       still pending the keyframe engine.)_
 - [x] **Hue / color-shift / negate / pixelate / posterize** — `hue`/`negate`/
       `pixelate`/`posterize` effects (plus `grayscale`/`sepia`).
-- [ ] **Mask / alpha mask from an image (luma wipe).** OpenShot uses mask
-      images for custom transitions and clip masks. _Medium — `alphamerge`/
-      `maskedmerge`._
+- [x] **Mask / alpha mask from an image** — image `overlays: {image, mask}`
+      shapes the overlay's alpha from a grayscale image (`alphamerge`).
 - [x] **Vignette** done (effect). _wave / distortion / bars dropped as niche /
       low-value for screencast demos._
 - [x] **Stabilizer** — `effects: {type: stabilize, smoothing}` (`vidstab`
       two-pass; auto-skips if ffmpeg lacks vidstab).
-- [ ] **Object detection / tracking** (track a box to a moving object).
-      _Hard — OpenShot bundles an OpenCV tracker; out of scope for now._
+- [x] ~~**Object detection / tracking**~~ — won't do: needs a bundled OpenCV
+      tracker / ML model, which is far outside an ffmpeg-orchestration tool. Use
+      a real NLE (OpenShot/Shotcut/Resolve) for motion tracking.
 - [x] **Deinterlace** — `effects: {type: deinterlace}` (`yadif`).
 
 ## Missing — time effects
