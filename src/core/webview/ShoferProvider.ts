@@ -2459,6 +2459,38 @@ export class ShoferProvider
 	}
 
 	/**
+	 * Resolve the API-config profile NAME associated with `mode`, mirroring the
+	 * per-mode resolution in {@link handleUserModeSwitch} (the mode's YAML
+	 * `provider:` field first, then the saved `modeApiConfigs` id). Returns
+	 * `undefined` when no mode-specific profile applies — either because API
+	 * config is locked across modes, or the mode has no association — so callers
+	 * fall back to the global/parent default.
+	 *
+	 * Used to seed subtasks (and other mode-seeded tasks) with their OWN mode's
+	 * API config instead of silently inheriting the parent's active profile.
+	 */
+	public async resolveModeApiConfigName(mode: Mode): Promise<string | undefined> {
+		const lockApiConfigAcrossModes = this.context.workspaceState.get("lockApiConfigAcrossModes", false)
+		if (lockApiConfigAcrossModes) {
+			return undefined
+		}
+
+		const savedConfigId = await this.providerSettingsManager.getModeConfigId(mode)
+		const listApiConfig = await this.providerSettingsManager.listConfig()
+		const customModes = await this.customModesManager.getCustomModes()
+		const modeConfig = getModeBySlug(mode, customModes)
+
+		let profileName: string | undefined
+		if (modeConfig?.provider) {
+			profileName = listApiConfig.find((c) => c.name === modeConfig.provider)?.name
+		}
+		if (!profileName && savedConfigId) {
+			profileName = listApiConfig.find(({ id }) => id === savedConfigId)?.name
+		}
+		return profileName
+	}
+
+	/**
 	 * Set the PER-MODE API-config association for `mode` (Settings → Modes),
 	 * WITHOUT activating the profile or changing the global default (that is
 	 * Settings → Providers). Keeps all three sources of truth 1:1:
@@ -4686,6 +4718,17 @@ export class ShoferProvider
 
 		const { apiConfiguration, organizationAllowList, enableCheckpoints, checkpointTimeout, experiments } =
 			await this.getState()
+
+		// Subtasks (and other mode-seeded tasks) arrive with `initialMode` but no
+		// explicit `initialApiConfigName` — e.g. new_task only knows the child's
+		// mode. Without this, the child would silently inherit the parent/global
+		// active profile instead of its OWN mode's API config. Resolve the mode's
+		// associated profile name here so both the API handler built below AND the
+		// task's displayed config name (via the Task constructor seeding) reflect
+		// the new mode.
+		if (!options.initialApiConfigName && options.initialMode) {
+			options.initialApiConfigName = await this.resolveModeApiConfigName(options.initialMode)
+		}
 
 		// Per-task API profile seed: when the caller passed an explicit
 		// `initialApiConfigName`, load that profile's full settings and use them to
