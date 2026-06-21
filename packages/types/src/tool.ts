@@ -206,14 +206,17 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"write_to_file",
 			"generate_image",
 			// New native tools
-			"insert_edit",
 			"rename_symbol",
 			"create_directory",
 			"create_new_workspace",
 			"file",
-			"sed",
 		],
-		customTools: ["edit", "search_replace", "edit_file", "apply_patch"],
+		// Opt-in only: `sed` and `insert_edit` overlap `apply_diff` for the large
+		// majority of edits, so they're demoted out of the default write surface to
+		// cut the per-turn "which editor?" choice. They remain allowed in write
+		// modes when a model opts in via `includedTools`. (Audit: tool-call-recovery
+		// Phase 1.)
+		customTools: ["sed", "insert_edit", "edit", "search_replace", "edit_file", "apply_patch"],
 	},
 	execute: {
 		tools: ["execute_command", "read_command_output", "sleep"],

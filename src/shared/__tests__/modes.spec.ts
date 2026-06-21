@@ -504,28 +504,54 @@ describe("isToolAllowedForMode", () => {
 				),
 			).toThrow(FileRestrictionError)
 		})
+		// `sed` is now an opt-in customTool (audit Phase 1), so it must be passed via
+		// includedTools to be reachable; fileRegex enforcement then still applies.
 		it("enforces fileRegex for sed (previously bypassed)", () => {
 			expect(
-				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
-					path: "test.md",
-					pattern: "foo",
-					replacement: "bar",
-				}),
+				isToolAllowedForMode(
+					"sed",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						path: "test.md",
+						pattern: "foo",
+						replacement: "bar",
+					},
+					undefined,
+					["sed"],
+				),
 			).toBe(true)
 
 			expect(() =>
-				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
-					path: "test.js",
-					pattern: "foo",
-					replacement: "bar",
-				}),
+				isToolAllowedForMode(
+					"sed",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						path: "test.js",
+						pattern: "foo",
+						replacement: "bar",
+					},
+					undefined,
+					["sed"],
+				),
 			).toThrow(FileRestrictionError)
 			expect(() =>
-				isToolAllowedForMode("sed", "markdown-editor", customModes, undefined, {
-					path: "test.js",
-					pattern: "foo",
-					replacement: "bar",
-				}),
+				isToolAllowedForMode(
+					"sed",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						path: "test.js",
+						pattern: "foo",
+						replacement: "bar",
+					},
+					undefined,
+					["sed"],
+				),
 			).toThrow(/\\.md\$/)
 		})
 
@@ -615,35 +641,69 @@ describe("isToolAllowedForMode", () => {
 			).toThrow(FileRestrictionError)
 		})
 
+		// `insert_edit` is now an opt-in customTool (audit Phase 1): pass via
+		// includedTools, then fileRegex enforcement still applies (path + filePath alias).
 		it("enforces fileRegex for insert_edit (path and filePath alias)", () => {
 			expect(
-				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
-					path: "test.md",
-					line: 3,
-					text: "hello",
-				}),
+				isToolAllowedForMode(
+					"insert_edit",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						path: "test.md",
+						line: 3,
+						text: "hello",
+					},
+					undefined,
+					["insert_edit"],
+				),
 			).toBe(true)
 			expect(
-				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
-					filePath: "test.md",
-					line: 3,
-					text: "hello",
-				}),
+				isToolAllowedForMode(
+					"insert_edit",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						filePath: "test.md",
+						line: 3,
+						text: "hello",
+					},
+					undefined,
+					["insert_edit"],
+				),
 			).toBe(true)
 
 			expect(() =>
-				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
-					path: "test.js",
-					line: 3,
-					text: "hello",
-				}),
+				isToolAllowedForMode(
+					"insert_edit",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						path: "test.js",
+						line: 3,
+						text: "hello",
+					},
+					undefined,
+					["insert_edit"],
+				),
 			).toThrow(FileRestrictionError)
 			expect(() =>
-				isToolAllowedForMode("insert_edit", "markdown-editor", customModes, undefined, {
-					filePath: "test.js",
-					line: 3,
-					text: "hello",
-				}),
+				isToolAllowedForMode(
+					"insert_edit",
+					"markdown-editor",
+					customModes,
+					undefined,
+					{
+						filePath: "test.js",
+						line: 3,
+						text: "hello",
+					},
+					undefined,
+					["insert_edit"],
+				),
 			).toThrow(FileRestrictionError)
 		})
 
