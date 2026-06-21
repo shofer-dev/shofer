@@ -88,6 +88,49 @@ Multi-view capture + FLAME/3DGS animatable head avatars (e.g. GaussianAvatars)
 for a re-posable, relightable 3D head. Much heavier capture + pipeline; overkill
 for a corner-of-screen narrator. Documented only so the boundary is explicit.
 
+### Route D — full-body / "podcast at a desk" — _stretch, research-grade, NOT near-term_
+
+A different, much harder problem than the head-only routes above (A/B/C are all
+head-and-shoulders). "Full-body, seated at a desk, gesturing, for a whole
+podcast" needs **three new sub-problems** stacked on top of each other:
+
+1. **Full-body drivable avatar of you** — body + clothing + hands + face.
+   Animatable-human territory: 3DGS humans like **ExAvatar** (whole-body from a
+   short monocular video), Animatable Gaussians, GART, rigged on **SMPL-X**.
+   Capture is heavier: full-body video, varied poses, good lighting.
+2. **Audio-driven body + hand + face motion** (co-speech gesture synthesis):
+   Meta **Audio2Photoreal**, **EMAGE**, **TalkSHOW**, DiffSHEG. This is the part
+   that most often looks "off" — **hands and gesture timing are the weak spots.**
+3. **A scene** — desk/room as a real background plate or generated environment,
+   plus lighting/composite consistency.
+
+Each exists in research in isolation; assembling them into a reliable generator
+is a major build with research-grade output (uncanny hands, drift over time).
+
+**Extra realities for _whole_ podcasts:**
+
+- **Length hurts.** 30–60 min multiplies compute and exposes long-duration
+  drift/consistency. A single static desk avatar for that long also isn't very
+  watchable — real podcasts rely on multi-cam, cutaways and b-roll, which an
+  avatar gives you none of.
+- **Multi-person.** "Podcast" often implies 2+ speakers → multiple avatars,
+  turn-taking, a shared scene. More complexity again.
+
+**Pragmatic path:**
+
+- **Commercial SaaS already does this** — HeyGen / Synthesia "studio" / full-body
+  avatars (seated or standing, some gestures) from a short video of you. Good
+  quality, available today, but cloud/paid/closed and weaker gesture fidelity
+  than a real shoot.
+- **Self-hosted open-source full-body is bleeding-edge** (ExAvatar + an
+  audio-driven gesture model) — possible but rough, brittle, and far larger than
+  the 2D / Route-B plan.
+
+**Recommendation:** keep this as a **phase-2 stretch** — revisit via SaaS, or when
+open full-body models mature. The near-term target stays a 2D (Route A) or
+head (Route B) presenter as a **PiP narrator** over the screencast. Do not scope
+Route D into the avatar work.
+
 ### Input requirements summary
 
 - **Loose photos → not a 3D avatar.** They feed Route A (which uses one anyway).
