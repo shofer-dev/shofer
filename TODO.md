@@ -1,10 +1,3 @@
-Announce:
-
-- https://gemini.google.com/app/bc25f481142e4161
-- https://www.reddit.com/r/opensource/comments/1rqryee/slang_a_declarative_language_for_multiagent/#:~:text=The%20syntax%20is%20simple%20enough,%2C%20OpenRouter%2C%20MCP%20Sampling
-
-=== P2
-
 - Parallel Live Memory
 
 - "Global Settings (JSON-only, no settings UI)" expose these settings on the Settings UI. Move these out of settings.json:
