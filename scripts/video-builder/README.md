@@ -119,21 +119,32 @@ What the config can express:
 - **Overlays** — SVG or raster images, positioned and time-windowed per clip,
   with optional fade in/out.
 - **Cropping & framing** — per-clip `crop` (source sub-rectangle), `fit`
-  (`contain` pillarbox / `cover` fill+crop / `stretch`), any `canvas` size/fps,
-  configurable pillarbox `background`.
-- **Time effects** — per-clip `reverse` and `freeze` (hold first/last frame).
-- **Effects** — `fadein`/`fadeout`, `eq` (brightness/contrast/saturation/gamma),
-  `zoom` (Ken Burns), `blur`, `sharpen`, `denoise`, `hue`, `negate`, `grayscale`,
-  `sepia`, `vignette`, `pixelate`, `deinterlace`, and 3D-`lut` (`.cube`).
-- **Audio loudness** — optional EBU R128 `loudnorm` on the final mix.
+  (`contain` pillarbox / `cover` fill+crop / `stretch`), `transform`
+  (scale/rotate/position over the background), any `canvas` size/fps.
+- **Compositing** — stack video/image/text `overlays` (picture-in-picture) with
+  `chromakey`, `blend` modes, alpha `mask`s, `opacity`, `rotate`; `generator`
+  clips (color/testsrc/…) for cards.
+- **Time effects** — `reverse`, `freeze` (hold first/last frame), and per-clip
+  `retime` speed ramps.
+- **Effects** — `fadein`/`fadeout`, `eq`, `zoom` (Ken Burns), `blur`, `sharpen`,
+  `denoise`, `hue`, `negate`, `grayscale`, `sepia`, `vignette`, `pixelate`,
+  `posterize`, `glow`, `sketch`, `oldfilm`, `deinterlace`, `lut` (`.cube`),
+  `curves`, `levels`, `colorbalance` (3-way), `white_balance`, `stabilize`,
+  `v360`.
+- **Motion paths** — animate overlay `x`/`y` with `{keyframes: [[t, v], …]}`.
+- **Animated titles** — `title.animate` (`fade`/`slide`/`slidefade`) and
+  positions (`lower`/`upper`/`center`).
+- **Audio** — per-clip source audio (`use_source`, `volume`, `audio_fade`,
+  `mute`), multiple music beds, final-mix `loudnorm`/`gain`/`bass`/`treble`/
+  `compress`/`denoise`, pitch-preserving retiming.
+- **Subtitles** — burn-in `.srt`/`.ass`.
 - **Output** — configurable codec/container: VP9+Opus `.webm` (default),
-  H.264/H.265 `.mp4`, or ProRes `.mov`.
+  H.264/H.265 `.mp4`, ProRes `.mov`, plus hardware encoders via `encode.extra`.
 
-Not supported (use a full editor like OpenShot for these): multi-track / picture-
-in-picture compositing, audio mixing beyond music+narration, a general keyframe
-engine (animated motion paths, animated titles), blend/compositing modes, and
-chroma-key (green screen) — chroma-key needs a layer beneath it, so it waits on
-PiP compositing. See [`TODO.md`](./TODO.md) for the full backlog.
+Still out of scope (use a full NLE): a free-form multi-track timeline (we do
+layered overlays, not arbitrary track stacking), arbitrary per-filter-parameter
+keyframing, motion **tracking**, and custom luma-mask transitions. See
+[`TODO.md`](./TODO.md) for the full status.
 
 ### Config reference
 
@@ -164,10 +175,15 @@ See `video.example.yaml` for a working file. Top-level keys:
 untitled, silent spans), `motion_hi`/`motion_lo` (fractions of peak motion that
 count as busy/quiet), `bucket` (analysis granularity, s).
 
-**`title`**: `enabled`, `position` (`lower`/`upper`/`center`), `seconds` (fixed
-on-screen time, or `null` to derive from reading time), `read_wps`/`read_base`
-(reading-time formula), `at` (default appear time), `bar_frac`, `bar_color`,
-`bar_opacity`, `text_color`, `font`.
+**`title`**: `enabled`, `position` (`lower`/`upper`/`center`), `animate`
+(`none`/`fade`/`slide`/`slidefade`), `animate_dur`, `seconds` (fixed on-screen
+time, or `null` to derive from reading time), `read_wps`/`read_base` (reading-time
+formula), `at` (default appear time), `bar_frac`, `bar_color`, `bar_opacity`,
+`text_color`, `font`.
+
+Overlay `x`/`y` accept either an ffmpeg expression or a keyframe spec
+`{keyframes: [[t, value], …], interp: linear|hold}` to animate position (motion
+paths).
 
 **`encode`** also takes `extra` — a list of raw ffmpeg args appended to the
 encode (e.g. `["-cq", "23"]` for hardware encoders like `h264_nvenc`). And
@@ -195,29 +211,31 @@ VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
 
 **Each entry in `clips`:**
 
-| Field          | Meaning                                                                               |
-| -------------- | ------------------------------------------------------------------------------------- |
-| `file`         | Clip path (relative to `clips_dir`/config). Required unless `generator`.              |
-| `generator`    | `{type, color, duration}` synthetic clip (no `file`): `color`/`testsrc`/`smptebars`/… |
-| `title_pos`    | Per-clip title position (`lower`/`upper`/`center`).                                   |
-| `title`        | On-screen caption text. If omitted, derived from `description`.                       |
-| `description`  | Source text; fills `title` and `narration` when those are absent.                     |
-| `narration`    | Spoken line for this clip. Falls back to `description`.                               |
-| `trim`         | `[start, end]` seconds — **cut** to this part of the source.                          |
-| `speed`        | Per-clip speed override (`0.8` slower, `1.4` faster).                                 |
-| `crop`         | `{x, y, w, h}` — crop a source sub-rectangle before fitting.                          |
-| `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).                         |
-| `reverse`      | `true` to play the clip backwards.                                                    |
-| `freeze`       | `{start, end}` seconds — hold the first/last frame.                                   |
-| `transform`    | `{scale, rotate, x, y}` — position/scale/rotate the clip over the background.         |
-| `volume`       | Gain for this clip's source audio (with `audio.use_source`).                          |
-| `audio_fade`   | `{in, out}` seconds — fade this clip's source audio.                                  |
-| `mute`         | `true` to drop this clip's source audio.                                              |
-| `title_at`     | When the title appears (seconds into the clip).                                       |
-| `narration_at` | When the line is spoken (defaults to `title_at`).                                     |
-| `transition`   | `{type, duration}` for the join **into the next clip**.                               |
-| `overlays`     | List of overlay graphics (see below).                                                 |
-| `effects`      | List of effects (see below).                                                          |
+| Field           | Meaning                                                                               |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `file`          | Clip path (relative to `clips_dir`/config). Required unless `generator`.              |
+| `generator`     | `{type, color, duration}` synthetic clip (no `file`): `color`/`testsrc`/`smptebars`/… |
+| `title_pos`     | Per-clip title position (`lower`/`upper`/`center`).                                   |
+| `title`         | On-screen caption text. If omitted, derived from `description`.                       |
+| `description`   | Source text; fills `title` and `narration` when those are absent.                     |
+| `narration`     | Spoken line for this clip. Falls back to `description`.                               |
+| `trim`          | `[start, end]` seconds — **cut** to this part of the source.                          |
+| `speed`         | Per-clip speed override (`0.8` slower, `1.4` faster).                                 |
+| `crop`          | `{x, y, w, h}` — crop a source sub-rectangle before fitting.                          |
+| `fit`           | `contain`/`cover`/`stretch` for this clip (overrides global).                         |
+| `reverse`       | `true` to play the clip backwards.                                                    |
+| `freeze`        | `{start, end}` seconds — hold the first/last frame.                                   |
+| `transform`     | `{scale, rotate, x, y}` — position/scale/rotate the clip over the background.         |
+| `retime`        | `[[t, speed], …]` — piecewise per-clip speed ramps.                                   |
+| `title_animate` | Per-clip title animation (`fade`/`slide`/`slidefade`).                                |
+| `volume`        | Gain for this clip's source audio (with `audio.use_source`).                          |
+| `audio_fade`    | `{in, out}` seconds — fade this clip's source audio.                                  |
+| `mute`          | `true` to drop this clip's source audio.                                              |
+| `title_at`      | When the title appears (seconds into the clip).                                       |
+| `narration_at`  | When the line is spoken (defaults to `title_at`).                                     |
+| `transition`    | `{type, duration}` for the join **into the next clip**.                               |
+| `overlays`      | List of overlay graphics (see below).                                                 |
+| `effects`       | List of effects (see below).                                                          |
 
 Each **overlay** is one of:
 

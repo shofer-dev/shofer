@@ -27,29 +27,29 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
       PiP layer) over a clip. _Layered compositing rather than a free timeline,
       but covers the practical "video over video" case._
 - [x] **Picture-in-picture (video overlay)** — `overlays: {video, trim, scale,
-    x, y, start, end}`, with optional `rotate`/`opacity`/`chromakey`/`blend`.
+  x, y, start, end}`, with optional `rotate`/`opacity`/`chromakey`/`blend`.
 - [x] **Per-clip transform: position / scale / rotation** — `transform:
-    {scale, rotate, x, y}` composited onto the background. _(shear not done.)_
+  {scale, rotate, x, y}` composited onto the background. _(shear not done.)_
 - [x] **Crop / region selection.** Crop a clip to a sub-rectangle.
       _Easy — ffmpeg `crop`; add `crop: {x,y,w,h}`._
 - [x] **Blend / compositing modes** — a video overlay with `blend: multiply|
-    screen|overlay|…` blends full-frame (`blend=all_mode=…`).
+  screen|overlay|…` blends full-frame (`blend=all_mode=…`).
 - [x] **Scale modes** (fit / stretch / crop-to-fill). We always fit+pad.
       _Easy — `fit: contain|cover|stretch`._
 
 ## Missing — keyframe animation
 
-- [ ] **General keyframe engine** with linear / bezier / constant
-      interpolation for _any_ property (opacity, scale, position, volume,
-      effect params). This is OpenShot's core differentiator. Our effects are
-      mostly start→end ramps (zoom) or simple fades.
-      _Hard — a shared keyframe representation + per-property `sendcmd`/expr
-      generation. The single biggest gap._
+- [x] **Keyframe engine (bounded)** — `kf_expr` compiles
+      `{keyframes: [[t, v], …], interp: linear|hold}` into an ffmpeg `t`-
+      expression. Wired to overlay `x`/`y` (motion paths). Also: animated titles
+      and per-clip variable retiming (below). _Arbitrary per-filter-param
+      keyframing (e.g. animated `eq`/blur) is bounded by which ffmpeg filters
+      accept time expressions — full coverage would need a `sendcmd` layer._
 
 ## Missing — video effects / filters
 
 - [x] **Chroma key / green screen** — `overlays: {video, chromakey: {color,
-    similarity}}` keys a PiP layer over the clip beneath it.
+  similarity}}` keys a PiP layer over the clip beneath it.
 - [x] **Blur** (gaussian) — `effects: {type: blur}`. _(Animated blur-in titles
       still pending the keyframe engine.)_
 - [x] **Hue / color-shift / negate / pixelate / posterize** — `hue`/`negate`/
@@ -71,8 +71,8 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 - [x] **Explicit freeze-frame** — per-clip `freeze: {start, end}` (holds the
       first/last frame via `tpad`). _(Mid-clip freeze still needs the keyframe/
       time-remap engine.)_
-- [ ] **Variable retiming via keyframes** (speed ramps inside one clip).
-      _Medium — ties into the keyframe engine._
+- [x] **Variable retiming** — per-clip `retime: [[t, speed], …]` (piecewise
+      speed ramps), in addition to the global motion-based adaptive pacing.
 
 ## Missing — audio
 
@@ -88,8 +88,8 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 ## Missing — titles / text
 
-- [ ] **Animated titles** (slide-in, fade-in, typewriter, blur-in). Ours are
-      static lower-thirds. _Medium — animate the overlay via keyframes._
+- [x] **Animated titles** — `title.animate`: `fade` / `slide` / `slidefade`
+      (per-clip `title_animate`). _(typewriter/blur-in not done.)_
 - [x] **Title templates / positions** — `title.position` / per-clip `title_pos`
       (`lower`/`upper`/`center`); full-screen cards via `generator` clips.
 - [x] **Rich SVG/HTML title import** — SVG/PNG via `overlays`, and styled text
@@ -97,8 +97,10 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 ## Missing — transitions
 
-- [ ] **Custom mask-image (luma) transitions.** OpenShot ships dozens of mask
-      wipes; we expose ffmpeg `xfade` presets only. _Medium._
+- [x] ~~**Custom mask-image (luma) transitions**~~ — won't do: we already expose
+      all ~50 built-in `xfade` transitions (fade/wipes/slides/circles/dissolve/
+      pixelize/…). Arbitrary user luma-image wipes need a bespoke per-frame
+      blend graph in the assembler for marginal benefit over the built-ins.
 - [x] ~~**Per-transition easing**~~ — won't do: ffmpeg `xfade` exposes no easing
       curve (only `transition`/`duration`/`offset`, and offset is already
       computed). Would require a custom blend graph; not worth it.

@@ -58,6 +58,8 @@ DEFAULTS = {
     "title": {
         "enabled": True,
         "position": "lower",          # lower | upper | center (third)
+        "animate": "none",            # none | fade | slide | slidefade
+        "animate_dur": 0.4,           # in/out animation length (s)
         "seconds": None,              # fixed on-screen time; None = reading-time
         "read_wps": 2.5,              # reading speed (words/sec)
         "read_base": 1.0,             # +seconds for the eye to land
@@ -202,6 +204,24 @@ def xml_escape(s):
 def drawtext_escape(s):
     return (s.replace("\\", "\\\\").replace(":", "\\:")
             .replace("'", "’").replace("%", "\\%"))
+
+
+def kf_expr(spec):
+    """Compile a value into an ffmpeg expression. A scalar/string passes
+    through; a {keyframes: [[t, v], ...], interp: linear|hold} becomes a
+    piecewise expression in `t` (for overlay x/y motion paths)."""
+    if not isinstance(spec, dict) or "keyframes" not in spec:
+        return str(spec)
+    kfs = sorted(spec["keyframes"], key=lambda p: p[0])
+    hold = spec.get("interp", "linear") == "hold"
+    expr = str(kfs[-1][1])                            # value after last key
+    for i in range(len(kfs) - 1, 0, -1):
+        t0, v0 = kfs[i - 1]
+        t1, v1 = kfs[i]
+        seg = (f"{v0}" if hold else
+               f"({v0}+({v1}-{v0})*(t-{t0})/{(t1 - t0)})")
+        expr = f"if(lt(t,{t1}),{seg},{expr})"
+    return f"if(lt(t,{kfs[0][0]}),{kfs[0][1]},{expr})"
 
 
 # ============================ text-to-speech =================================
@@ -402,6 +422,32 @@ def warp_audio(in_wav, segs, out_wav):
     fc.append("".join(f"[b{i}]" for i in range(n)) + f"concat=n={n}:v=0:a=1[out]")
     run(["ffmpeg", "-y", "-i", in_wav, "-filter_complex", ";".join(fc),
          "-map", "[out]", out_wav])
+
+
+def warp_video(in_mp4, segs, out_mp4, FPS):
+    """Re-time a video by piecewise speed segments [(start, end, speed), ...]."""
+    n = len(segs)
+    fc = ["[0:v]split=%d%s" % (n, "".join(f"[p{i}]" for i in range(n)))]
+    for i, (s, e, f) in enumerate(segs):
+        fc.append(f"[p{i}]trim={s:.3f}:{e:.3f},setpts=(PTS-STARTPTS)/{f:.4f},"
+                  f"fps={FPS:g}[q{i}]")
+    fc.append("".join(f"[q{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[v]")
+    run(["ffmpeg", "-y", "-i", in_mp4, "-filter_complex", ";".join(fc),
+         "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+         "-pix_fmt", "yuv420p", "-r", str(int(FPS)), out_mp4])
+
+
+def retime_segments(spec, dur):
+    """[[t, speed], ...] breakpoints -> piecewise-constant [(s, e, speed)]."""
+    pts = sorted(spec, key=lambda p: p[0])
+    segs = []
+    for i, (t, sp) in enumerate(pts):
+        end = pts[i + 1][0] if i + 1 < len(pts) else dur
+        if end > t:
+            segs.append((max(0.0, t), min(dur, end), float(sp)))
+    if segs and segs[0][0] > 0:                      # cover the head at 1x
+        segs.insert(0, (0.0, segs[0][0], 1.0))
+    return segs or [(0.0, dur, 1.0)]
 
 
 def render_clip_audio(clip, idx, src, dur, base_speed, trim, C, tmp):
@@ -645,9 +691,21 @@ def normalize_clip(clip, idx, C, tmp):
         tpos = clip.get("title_pos", C["title"]["position"])
         open(svg, "w").write(title_svg(title_text, W, H, C["title"], tpos))
         rasterize_svg(svg, png, W, H)
-        inputs += ["-i", png]
-        fc.append(f"{cur}[{n_in}:v]overlay=0:0:"
-                  f"enable='between(t,{at:.3f},{at+secs:.3f})'[tt]")
+        anim = clip.get("title_animate", C["title"]["animate"])
+        adur = C["title"]["animate_dur"]
+        win = f"enable='between(t,{at:.3f},{at + secs:.3f})'"
+        xexpr = "0"
+        if anim in ("slide", "slidefade"):           # slide in from the left
+            xexpr = f"'min(0,-w+w*(t-{at:.3f})/{adur})'"
+        if anim in ("fade", "slidefade"):            # alpha fade in/out
+            inputs += ["-loop", "1", "-t", f"{secs:.3f}", "-i", png]
+            fc.append(f"[{n_in}:v]format=rgba,fade=t=in:st=0:d={adur}:alpha=1,"
+                      f"fade=t=out:st={max(0, secs - adur):.3f}:d={adur}:alpha=1,"
+                      f"setpts=PTS+{at}/TB[ttl]")
+            fc.append(f"{cur}[ttl]overlay={xexpr}:0:{win}[tt]")
+        else:
+            inputs += ["-i", png]
+            fc.append(f"{cur}[{n_in}:v]overlay={xexpr}:0:{win}[tt]")
         cur = "[tt]"
         twin = (at, secs)
         n_in += 1
@@ -688,8 +746,9 @@ def normalize_clip(clip, idx, C, tmp):
                 fc.append(f"{cur}[ovv{j}]blend=all_mode={blend}:"
                           f"enable='between(t,{s},{e})'[ovr{j}]")
             else:
-                x, y = ov.get("x", "(W-w)/2"), ov.get("y", "(H-h)/2")
-                fc.append(f"{cur}[ovv{j}]overlay={x}:{y}:"
+                x = kf_expr(ov.get("x", "(W-w)/2"))
+                y = kf_expr(ov.get("y", "(H-h)/2"))
+                fc.append(f"{cur}[ovv{j}]overlay=x='{x}':y='{y}':"
                           f"enable='between(t,{s},{e})'[ovr{j}]")
             cur = f"[ovr{j}]"
             n_in += 1
@@ -752,8 +811,8 @@ def normalize_clip(clip, idx, C, tmp):
             fc.append(f"[oar{j}][mks{j}]alphamerge[am{j}]")
             scaled = f"[am{j}]"
             used = 2
-        x, y = ov.get("x", "20"), ov.get("y", "20")
-        fc.append(f"{cur}{scaled}overlay={x}:{y}:"
+        x, y = kf_expr(ov.get("x", "20")), kf_expr(ov.get("y", "20"))
+        fc.append(f"{cur}{scaled}overlay=x='{x}':y='{y}':"
                   f"enable='between(t,{s},{e})'[ovr{j}]")
         cur = f"[ovr{j}]"
         n_in += used
@@ -769,6 +828,11 @@ def normalize_clip(clip, idx, C, tmp):
              f"fade=t=out:st={max(0,dur-fdur):.3f}:d={fdur}",
              "-c:v", "libx264", "-preset", "medium", "-crf", "18",
              "-pix_fmt", "yuv420p", "-r", str(int(FPS)), out2])
+        out, dur = out2, probe_duration(out2)
+    if clip.get("retime"):                           # per-clip variable speed ramp
+        segs = retime_segments(clip["retime"], dur)
+        out2 = os.path.join(tmp, f"clip{idx}_rt.mp4")
+        warp_video(out, segs, out2, FPS)
         out, dur = out2, probe_duration(out2)
     apath = None
     if src and C["audio"].get("use_source"):
