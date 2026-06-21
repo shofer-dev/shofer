@@ -37,6 +37,7 @@ export const toolNames = [
 	"execute_command",
 	"read_file",
 	"read_command_output",
+	"read_output_channel",
 	"write_to_file",
 	"apply_diff",
 	"edit",
@@ -119,6 +120,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	execute_command: "run commands",
 	read_file: "read files",
 	read_command_output: "read command output",
+	read_output_channel: "read output channels",
 	write_to_file: "write files",
 	apply_diff: "apply changes",
 	edit: "edit files",
@@ -182,6 +184,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	read: {
 		tools: [
 			"read_file",
+			"read_output_channel",
 			"grep_search",
 			"list_files",
 			"rag_search",

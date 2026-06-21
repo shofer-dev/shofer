@@ -18,6 +18,7 @@ import { Task } from "../task/Task"
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"
 import { readCommandOutputTool } from "../tools/ReadCommandOutputTool"
+import { readOutputChannelTool } from "../tools/ReadOutputChannelTool"
 import { writeToFileTool } from "../tools/WriteToFileTool"
 import { editTool } from "../tools/EditTool"
 import { searchReplaceTool } from "../tools/SearchReplaceTool"
@@ -505,6 +506,10 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} for '${block.params.query}']`
 					case "read_command_output":
 						return `[${block.name} for '${block.params.artifact_id}']`
+					case "read_output_channel":
+						return block.params.channel
+							? `[${block.name} for '${block.params.channel}']`
+							: `[${block.name} (list)]`
 					case "update_todo_list":
 						return `[${block.name}]`
 					case "new_task": {
@@ -1103,6 +1108,13 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "read_command_output":
 					await readCommandOutputTool.handle(shofer, block as ToolUse<"read_command_output">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "read_output_channel":
+					await readOutputChannelTool.handle(shofer, block as ToolUse<"read_output_channel">, {
 						askApproval,
 						handleError,
 						pushToolResult,

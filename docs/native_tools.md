@@ -344,12 +344,13 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 > **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`worktrees.md §3a`](worktrees.md#3a-path-isolation-mutating-tool-guard).
 
-| Tool                  | Origin | Group   | Always Available | Status | Description                            |
-| --------------------- | :----: | ------- | :--------------: | :----: | -------------------------------------- |
-| `execute_command`     | 🔵 RC  | execute |        –         |   ✅   | Execute a CLI command                  |
-| `read_command_output` | 🔵 RC  | execute |        –         |   ✅   | Get full output of a truncated command |
-| `sleep`               | 🟣 AW  | execute |        –         |   ✅   | Pause execution for N seconds          |
-| `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content     |
+| Tool                  | Origin | Group   | Always Available | Status | Description                                 |
+| --------------------- | :----: | ------- | :--------------: | :----: | ------------------------------------------- |
+| `execute_command`     | 🔵 RC  | execute |        –         |   ✅   | Execute a CLI command                       |
+| `read_command_output` | 🔵 RC  | execute |        –         |   ✅   | Get full output of a truncated command      |
+| `sleep`               | 🟣 AW  | execute |        –         |   ✅   | Pause execution for N seconds               |
+| `fetch_web_page`      | 🆕 WS  | read    |        –         |   ✅   | Fetch and extract web page content          |
+| `read_output_channel` | 🟣 AW  | read    |        –         |   ✅   | List/read VS Code Output panel log channels |
 
 ### `execute_command`
 
@@ -380,6 +381,28 @@ Fetches web pages, strips HTML, and returns extracted text content. Supports que
 | ------- | -------------- | :------: | ---------------------------------- |
 | `urls`  | string[]       |    ✅    | URLs to fetch                      |
 | `query` | string \| null |    ✅    | Filter query for extracted content |
+
+### `read_output_channel`
+
+Lists and reads VS Code **Output panel** channels (extension logs, language servers, Git, Tasks, Shofer, etc.). The VS Code `OutputChannel` API is **write-only** with no enumeration or read access, so this tool instead reads the per-session `*.log` files VS Code persists on disk — resolved from the extension's `context.logUri`. It covers both log-type channels (`<exthost>/<pub.ext>/<Name>.log`) and plain channels (`<exthost>/output_logging_<ts>/<n>-<Name>.log`).
+
+**Scope:** the current VS Code session only (a window reload starts a new session directory). Content is flushed asynchronously, so the last few lines may lag. Under the headless `vscode-shim` host there are no real logs and the tool reports none.
+
+Two modes:
+
+- **List mode** (omit `channel`): enumerate the session's channels with tier (`core` / `window` / `extension` / `output`) and size.
+- **Read mode** (`channel` set): read that channel's log. Defaults to tailing the most-recent bytes. Supports a regex line filter, a minimum-severity filter, and pagination, all bounded by a hard byte cap.
+
+| Param      | Type            | Required | Description                                                                                                       |
+| ---------- | --------------- | :------: | ----------------------------------------------------------------------------------------------------------------- |
+| `channel`  | string \| null  |    –     | Channel name to read (as shown in list mode). Omit entirely to list channels.                                     |
+| `search`   | string \| null  |    –     | Case-insensitive regex line filter (read mode). Invalid regex falls back to literal matching.                     |
+| `severity` | string \| null  |    –     | Minimum severity to include: `trace`/`debug`/`info`/`warning`/`error`. Only meaningful for `[level]`-tagged logs. |
+| `tail`     | boolean \| null |    –     | Read the most-recent bytes first (default `true`). Ignored when `offset` is set.                                  |
+| `offset`   | number \| null  |    –     | Byte offset to start reading from (pagination); reads forward from there.                                         |
+| `limit`    | number \| null  |    –     | Maximum bytes to return. Default 40KB, **hard-capped at 256KB** — output is never unlimited.                      |
+
+Severity filtering is best-effort: it parses the first `[level]` token VS Code's `LogOutputChannel` emits per line; continuation lines (stack traces) inherit the previous line's level. Plain channels with no level tokens return nothing under a severity filter. When `search`/`severity` are active, the byte `limit` keeps the most-recent matches (or the first matches when `tail=false`).
 
 ### `sleep`
 

@@ -1168,6 +1168,7 @@ export interface ShoferSayTool {
 		| "lspSearch"
 		| "readFile"
 		| "readCommandOutput"
+		| "readOutputChannel"
 		| "listFilesTopLevel"
 		| "listFilesRecursive"
 		| "grepSearch"

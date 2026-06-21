@@ -68,6 +68,7 @@ import listFiles from "./list_files"
 import newTask from "./new_task"
 import askLiveMemory from "./ask_live_memory"
 import readCommandOutput from "./read_command_output"
+import readOutputChannel from "./read_output_channel"
 import { createReadFileTool, type ReadFileToolOptions } from "./read_file"
 import readProjectStructure from "./read_project_structure"
 import renameSymbol from "./rename_symbol"
@@ -162,6 +163,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		listFiles,
 		newTask,
 		readCommandOutput,
+		readOutputChannel,
 		createReadFileTool(readFileOptions),
 		readProjectStructure,
 		renameSymbol,

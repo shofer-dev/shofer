@@ -97,6 +97,9 @@ export const toolParamNames = [
 	"search", // read_command_output parameter for grep-like search
 	"offset", // read_command_output and read_file parameter
 	"limit", // read_command_output and read_file parameter
+	"channel", // read_output_channel parameter — channel name to read
+	"severity", // read_output_channel parameter — min severity filter
+	"tail", // read_output_channel parameter — read most-recent bytes first
 	// read_file indentation mode parameters
 	"indentation",
 	"anchor_line",
@@ -186,6 +189,14 @@ export type NativeToolArgs = {
 	access_mcp_resource: { server_name: string; uri: string }
 	read_file: import("@shofer/types").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
+	read_output_channel: {
+		channel?: string
+		search?: string
+		severity?: string
+		tail?: boolean
+		offset?: number
+		limit?: number
+	}
 	attempt_completion: { result: string | Record<string, unknown>; rating?: string | number; feedback?: string }
 	execute_command: { command: string; cwd?: string; timeout?: number | null }
 	apply_diff: { path: string; diff: string }

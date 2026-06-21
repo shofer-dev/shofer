@@ -1195,6 +1195,18 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "read_output_channel":
+				// All params optional (list mode takes no args) — emit unconditionally.
+				nativeArgs = {
+					channel: partialArgs.channel,
+					search: partialArgs.search,
+					severity: partialArgs.severity,
+					tail: this.coerceOptionalBoolean(partialArgs.tail),
+					offset: this.coerceOptionalNumber(partialArgs.offset),
+					limit: this.coerceOptionalNumber(partialArgs.limit),
+				}
+				break
+
 			case "sed":
 				if (partialArgs.path !== undefined || partialArgs.filePath !== undefined) {
 					nativeArgs = {
@@ -1621,6 +1633,18 @@ export class NativeToolCallParser {
 							limit: args.limit,
 						} as NativeArgsFor<TName>
 					}
+					break
+
+				case "read_output_channel":
+					// All params optional (list mode takes no args) — emit unconditionally.
+					nativeArgs = {
+						channel: args.channel,
+						search: args.search,
+						severity: args.severity,
+						tail: this.coerceOptionalBoolean(args.tail),
+						offset: this.coerceOptionalNumber(args.offset),
+						limit: this.coerceOptionalNumber(args.limit),
+					} as NativeArgsFor<TName>
 					break
 
 				case "write_to_file":
