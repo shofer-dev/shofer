@@ -78,7 +78,7 @@ import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "../../shared/getApiMetrics"
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import { DiffStrategy, type ToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
+import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
 import { getModelMaxOutputTokens } from "../../shared/api"
 
 // services
@@ -5164,6 +5164,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 										// Finalize the streaming tool call
 										const finalToolUse = NativeToolCallParser.finalizeStreamingToolCall(event.id)
 
+										this.captureToolCallTelemetry(undefined, finalToolUse)
+
 										// Get the index for this tool call
 										const toolUseIndex = this.streamingToolCallIndices.get(event.id)
 
@@ -5222,6 +5224,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									name: chunk.name as ToolName,
 									arguments: chunk.arguments,
 								})
+
+								this.captureToolCallTelemetry(chunk.name, toolUse)
 
 								if (!toolUse) {
 									const parseError = NativeToolCallParser.consumeLastParseError()
@@ -5652,6 +5656,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					if (event.type === "tool_call_end") {
 						// Finalize the streaming tool call
 						const finalToolUse = NativeToolCallParser.finalizeStreamingToolCall(event.id)
+
+						this.captureToolCallTelemetry(undefined, finalToolUse)
 
 						// Get the index for this tool call
 						const toolUseIndex = this.streamingToolCallIndices.get(event.id)
@@ -6136,6 +6142,46 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// If we exit the while loop normally (stack is empty), return false
 		return false
+	}
+
+	/**
+	 * Emit tool-call instrumentation for a single parsed native tool call (audit:
+	 * tool-call-recovery, Phases 2–3). Fires on every parse — canonical, aliased,
+	 * or unknown — so per-model dialect distribution and alias hit-rates become
+	 * measurable, and drains any silent recovery-layer firings the parser recorded
+	 * for this call. `emittedName` is the pre-resolution name the model produced.
+	 * Best-effort: telemetry must never break the parse/dispatch path.
+	 */
+	private captureToolCallTelemetry(emittedName: string | undefined, toolUse: ToolUse | McpToolUse | null): void {
+		try {
+			const modelId = this.api.getModel().id
+			if (toolUse) {
+				const tu = toolUse as { name: string; originalName?: string; params?: Record<string, unknown> }
+				const resolvedName = tu.name
+				const emitted = emittedName ?? tu.originalName ?? resolvedName
+				TelemetryService.instance.captureToolCallResolved(this.taskId, {
+					modelId,
+					emittedName: emitted,
+					resolvedName,
+					wasAliased: emitted !== resolvedName,
+					wasUnknown: false,
+					argKeys: tu.params ? Object.keys(tu.params) : [],
+				})
+			} else {
+				TelemetryService.instance.captureToolCallResolved(this.taskId, {
+					modelId,
+					emittedName: emittedName ?? "(unknown)",
+					wasAliased: false,
+					wasUnknown: true,
+				})
+			}
+			// Drain recovery-layer firings recorded during this (synchronous) parse.
+			for (const recovery of NativeToolCallParser.consumeRecoveries()) {
+				TelemetryService.instance.captureToolRecovery(this.taskId, { modelId, ...recovery })
+			}
+		} catch {
+			// Instrumentation is best-effort; never let it break tool dispatch.
+		}
 	}
 
 	// `injectPeerNotifications` MUST be true only on the real agent-request path

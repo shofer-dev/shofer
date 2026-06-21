@@ -81,6 +81,16 @@ export enum TelemetryEventName {
 	SUBTASK_SPAWNED = "Subtask Spawned",
 	TASK_CANCELLED = "Task Cancelled",
 	TOOL_REJECTED = "Tool Rejected",
+
+	// Tool-call instrumentation (audit: tool-call-recovery).
+	// TOOL_CALL_RESOLVED fires on every native tool-call parse — including silent
+	// alias/dialect resolutions and unknown-tool failures — so per-model dialect
+	// distribution and alias hit-rates become measurable instead of invisible.
+	// TOOL_RECOVERY_FIRED fires whenever a silent recovery layer (e.g. apply_diff
+	// XML-leak path recovery) transforms a corrupted payload; each carries a
+	// `layerId` so zero-hit / low-correctness layers can be retired (removal loop).
+	TOOL_CALL_RESOLVED = "Tool Call Resolved",
+	TOOL_RECOVERY_FIRED = "Tool Recovery Fired",
 }
 
 /**

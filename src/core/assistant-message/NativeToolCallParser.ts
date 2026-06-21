@@ -77,6 +77,17 @@ export type ToolCallStreamEvent = ApiStreamToolCallStartChunk | ApiStreamToolCal
  * This class also handles raw tool call chunk processing, converting
  * provider-level raw chunks into start/delta/end events.
  */
+/**
+ * A single firing of a silent recovery layer (alias coercion, path recovery,
+ * etc.). `layerId` names the layer so its hit-rate/correctness can be tracked
+ * and the layer retired if it stops earning its keep (audit: tool-call-recovery).
+ */
+export interface ToolRecoveryRecord {
+	layerId: string
+	tool: string
+	[key: string]: unknown
+}
+
 export class NativeToolCallParser {
 	/** Stores the last parse error so callers can include specifics in error messages. */
 	public static lastParseError: string | null = null
@@ -86,6 +97,26 @@ export class NativeToolCallParser {
 		const err = this.lastParseError
 		this.lastParseError = null
 		return err
+	}
+
+	/**
+	 * Silent recovery-layer firings recorded during the most recent parse, so the
+	 * caller (which has model/task context) can emit telemetry for them. The parser
+	 * is static and model-agnostic, so it records facts here rather than capturing
+	 * telemetry directly — mirroring the {@link lastParseError} pattern. Drained per
+	 * parse via {@link consumeRecoveries}.
+	 */
+	public static lastRecoveries: ToolRecoveryRecord[] = []
+
+	/** Read and clear the recovery-layer firings recorded since the last drain. */
+	public static consumeRecoveries(): ToolRecoveryRecord[] {
+		const recoveries = this.lastRecoveries
+		this.lastRecoveries = []
+		return recoveries
+	}
+
+	private static recordRecovery(record: ToolRecoveryRecord): void {
+		this.lastRecoveries.push(record)
 	}
 
 	// Streaming state management for argument accumulation (keyed by tool call id)
@@ -1416,6 +1447,16 @@ export class NativeToolCallParser {
 								webviewLog.warn(
 									`[NativeToolCallParser] Recovered apply_diff path "${path}" from malformed diff suffix (vscode-lm XML leak).`,
 								)
+								// Instrument this silent path *guess* (audit Phase 2): a wrong
+								// guess applies a diff to the wrong file. Surfacing recoveredPath
+								// + appliedToFile lets us measure the false-recovery rate and
+								// decide keep-vs-convert-to-reject from data, not vibes.
+								this.recordRecovery({
+									layerId: "apply_diff_xml_leak",
+									tool: "apply_diff",
+									recoveredPath: path,
+									appliedToFile: true,
+								})
 							}
 						}
 

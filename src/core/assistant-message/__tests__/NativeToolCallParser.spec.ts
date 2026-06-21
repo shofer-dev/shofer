@@ -433,6 +433,43 @@ describe("NativeToolCallParser", () => {
 					}
 				})
 
+				it("records the XML-leak recovery for telemetry (audit removal loop)", () => {
+					// The recovery is a silent path *guess*; it must leave a measurable
+					// trace so its false-recovery rate can be tracked and the layer
+					// retired if it stops earning its keep.
+					NativeToolCallParser.consumeRecoveries() // clear any prior state
+
+					const diffContent =
+						`<<<<<<< SEARCH\n:start_line:1\n\told\n=======\n\tnew\n>>>>>>> REPLACE\n` +
+						`<parameter name="path" string="true">src/foo.ts`
+
+					NativeToolCallParser.parseToolCall({
+						id: "toolu_recovery_telemetry",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({ diff: diffContent }),
+					})
+
+					const recoveries = NativeToolCallParser.consumeRecoveries()
+					expect(recoveries).toHaveLength(1)
+					expect(recoveries[0]).toMatchObject({
+						layerId: "apply_diff_xml_leak",
+						tool: "apply_diff",
+						recoveredPath: "src/foo.ts",
+						appliedToFile: true,
+					})
+
+					// Draining is idempotent — a clean apply_diff records nothing.
+					NativeToolCallParser.parseToolCall({
+						id: "toolu_clean",
+						name: "apply_diff" as const,
+						arguments: JSON.stringify({
+							path: "src/bar.ts",
+							diff: "<<<<<<< SEARCH\na\n=======\nb\n>>>>>>> REPLACE",
+						}),
+					})
+					expect(NativeToolCallParser.consumeRecoveries()).toHaveLength(0)
+				})
+
 				it("should recover apply_diff path from box-drawing-corrupted XML-leak (U+FF5C prefix)", () => {
 					// Simulates the real-world vscode-lm / deepseek-v4-pro bug where the
 					// model corrupts the "<parameter" prefix by substituting box-drawing

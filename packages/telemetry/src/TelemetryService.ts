@@ -126,6 +126,47 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.MODE_SWITCH, { taskId, newMode })
 	}
 
+	/**
+	 * Records the outcome of parsing a single native tool call. Fires on EVERY
+	 * call — successful canonical names, silent alias/dialect resolutions, and
+	 * unknown-tool failures alike — so the actual per-model dialect distribution
+	 * and alias hit-rates are measurable. Logging successes (not just failures) is
+	 * essential: once an alias exists, the foreign form succeeds silently and
+	 * failure-only metrics go blind to a real model preference.
+	 */
+	public captureToolCallResolved(
+		taskId: string,
+		properties: {
+			modelId: string
+			emittedName: string
+			resolvedName?: string
+			wasAliased: boolean
+			wasUnknown: boolean
+			argKeys?: string[]
+		},
+	): void {
+		this.captureEvent(TelemetryEventName.TOOL_CALL_RESOLVED, { taskId, ...properties })
+	}
+
+	/**
+	 * Records that a silent recovery layer fired (e.g. apply_diff XML-leak path
+	 * recovery). `layerId` identifies the layer so its hit-rate and correctness can
+	 * be tracked and zero-hit / low-correctness layers retired — the removal loop
+	 * that lets the next defensive patch be safe to add because it can be removed.
+	 */
+	public captureToolRecovery(
+		taskId: string,
+		properties: {
+			modelId: string
+			layerId: string
+			tool: string
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			[key: string]: any
+		},
+	): void {
+		this.captureEvent(TelemetryEventName.TOOL_RECOVERY_FIRED, { taskId, ...properties })
+	}
+
 	public captureToolUsage(taskId: string, tool: string): void {
 		this.captureEvent(TelemetryEventName.TOOL_USED, { taskId, tool })
 	}
