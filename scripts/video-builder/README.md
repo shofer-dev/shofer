@@ -141,31 +141,37 @@ Paths inside the config are resolved relative to the config file (or to
 `clips_dir`, if set). Only `clips` is required; everything else has a default.
 See `video.example.yaml` for a working file. Top-level keys:
 
-| Key          | Default                          | Meaning                                        |
-| ------------ | -------------------------------- | ---------------------------------------------- |
-| `output`     | `out.webm`                       | Output path (relative to the config file).     |
-| `clips_dir`  | `""`                             | Base dir prepended to each clip's `file`.      |
-| `canvas`     | `{width:1280,height:720,fps:30}` | Output frame geometry.                         |
-| `background` | `black`                          | Pillarbox/letterbox fill for off-aspect clips. |
-| `fit`        | `contain`                        | Default fit: `contain`/`cover`/`stretch`.      |
-| `speed`      | `1.0`                            | Base speed for all clips (`0.5` = half speed). |
-| `pacing`     | see below                        | Adaptive speed by motion.                      |
-| `title`      | see below                        | Generated title-bar style.                     |
-| `transition` | `{type:fade,duration:0.6}`       | Default join between clips.                    |
-| `intro`      | `{narration:"",delay:0.5}`       | Optional spoken intro before clip 1.           |
-| `voice`      | see below                        | TTS engine + voice.                            |
-| `music`      | see below                        | Optional background-music bed.                 |
-| `audio`      | `{loudnorm:false}`               | Final-mix loudness normalization.              |
-| `encode`     | see below                        | Output codec/container/quality.                |
-| `clips`      | —                                | Ordered list of clips (below).                 |
+| Key          | Default                          | Meaning                                          |
+| ------------ | -------------------------------- | ------------------------------------------------ |
+| `output`     | `out.webm`                       | Output path (relative to the config file).       |
+| `clips_dir`  | `""`                             | Base dir prepended to each clip's `file`.        |
+| `canvas`     | `{width:1280,height:720,fps:30}` | Output frame geometry.                           |
+| `background` | `black`                          | Pillarbox/letterbox fill for off-aspect clips.   |
+| `fit`        | `contain`                        | Default fit: `contain`/`cover`/`stretch`.        |
+| `subtitles`  | `""`                             | Path to a `.srt`/`.ass` to burn into the output. |
+| `speed`      | `1.0`                            | Base speed for all clips (`0.5` = half speed).   |
+| `pacing`     | see below                        | Adaptive speed by motion.                        |
+| `title`      | see below                        | Generated title-bar style.                       |
+| `transition` | `{type:fade,duration:0.6}`       | Default join between clips.                      |
+| `intro`      | `{narration:"",delay:0.5}`       | Optional spoken intro before clip 1.             |
+| `voice`      | see below                        | TTS engine + voice.                              |
+| `music`      | see below                        | Optional background-music bed.                   |
+| `audio`      | `{loudnorm:false}`               | Final-mix loudness normalization.                |
+| `encode`     | see below                        | Output codec/container/quality.                  |
+| `clips`      | —                                | Ordered list of clips (below).                   |
 
 **`pacing`**: `enabled`, `slow` (speed in busy spans), `fast` (speed in quiet,
 untitled, silent spans), `motion_hi`/`motion_lo` (fractions of peak motion that
 count as busy/quiet), `bucket` (analysis granularity, s).
 
-**`title`**: `enabled`, `seconds` (fixed on-screen time, or `null` to derive from
-reading time), `read_wps`/`read_base` (reading-time formula), `at` (default
-appear time), `bar_frac`, `bar_color`, `bar_opacity`, `text_color`, `font`.
+**`title`**: `enabled`, `position` (`lower`/`upper`/`center`), `seconds` (fixed
+on-screen time, or `null` to derive from reading time), `read_wps`/`read_base`
+(reading-time formula), `at` (default appear time), `bar_frac`, `bar_color`,
+`bar_opacity`, `text_color`, `font`.
+
+**`encode`** also takes `extra` — a list of raw ffmpeg args appended to the
+encode (e.g. `["-cq", "23"]` for hardware encoders like `h264_nvenc`). And
+`subtitles_style` — an ffmpeg `force_style` string for burned-in `.srt`.
 
 **`voice`**: `enabled`, `engine` (`auto|kokoro|piper|flite`), `tts_home` (default
 `media/video`), `kokoro_voice` (`af_heart`, `af_bella`, `am_michael`, `am_onyx`,
@@ -189,31 +195,39 @@ VP9, else `18`), `vp9_crf`, `preset` (x264/x265), `pix_fmt`, `prores_profile`
 
 **Each entry in `clips`:**
 
-| Field          | Meaning                                                           |
-| -------------- | ----------------------------------------------------------------- |
-| `file`         | Clip path (relative to `clips_dir`/config). **Required.**         |
-| `title`        | On-screen caption text. If omitted, derived from `description`.   |
-| `description`  | Source text; fills `title` and `narration` when those are absent. |
-| `narration`    | Spoken line for this clip. Falls back to `description`.           |
-| `trim`         | `[start, end]` seconds — **cut** to this part of the source.      |
-| `speed`        | Per-clip speed override (`0.8` slower, `1.4` faster).             |
-| `crop`         | `{x, y, w, h}` — crop a source sub-rectangle before fitting.      |
-| `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).     |
-| `reverse`      | `true` to play the clip backwards.                                |
-| `freeze`       | `{start, end}` seconds — hold the first/last frame.               |
-| `volume`       | Gain for this clip's source audio (with `audio.use_source`).      |
-| `audio_fade`   | `{in, out}` seconds — fade this clip's source audio.              |
-| `mute`         | `true` to drop this clip's source audio.                          |
-| `title_at`     | When the title appears (seconds into the clip).                   |
-| `narration_at` | When the line is spoken (defaults to `title_at`).                 |
-| `transition`   | `{type, duration}` for the join **into the next clip**.           |
-| `overlays`     | List of overlay graphics (see below).                             |
-| `effects`      | List of effects (see below).                                      |
+| Field          | Meaning                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `file`         | Clip path (relative to `clips_dir`/config). Required unless `generator`.              |
+| `generator`    | `{type, color, duration}` synthetic clip (no `file`): `color`/`testsrc`/`smptebars`/… |
+| `title_pos`    | Per-clip title position (`lower`/`upper`/`center`).                                   |
+| `title`        | On-screen caption text. If omitted, derived from `description`.                       |
+| `description`  | Source text; fills `title` and `narration` when those are absent.                     |
+| `narration`    | Spoken line for this clip. Falls back to `description`.                               |
+| `trim`         | `[start, end]` seconds — **cut** to this part of the source.                          |
+| `speed`        | Per-clip speed override (`0.8` slower, `1.4` faster).                                 |
+| `crop`         | `{x, y, w, h}` — crop a source sub-rectangle before fitting.                          |
+| `fit`          | `contain`/`cover`/`stretch` for this clip (overrides global).                         |
+| `reverse`      | `true` to play the clip backwards.                                                    |
+| `freeze`       | `{start, end}` seconds — hold the first/last frame.                                   |
+| `volume`       | Gain for this clip's source audio (with `audio.use_source`).                          |
+| `audio_fade`   | `{in, out}` seconds — fade this clip's source audio.                                  |
+| `mute`         | `true` to drop this clip's source audio.                                              |
+| `title_at`     | When the title appears (seconds into the clip).                                       |
+| `narration_at` | When the line is spoken (defaults to `title_at`).                                     |
+| `transition`   | `{type, duration}` for the join **into the next clip**.                               |
+| `overlays`     | List of overlay graphics (see below).                                                 |
+| `effects`      | List of effects (see below).                                                          |
 
-Each **overlay** is `{image, x, y, scale, start, end, fade}` (SVG or raster).
-`x`/`y` are ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay),
-`scale` is a fraction of canvas width, `start`/`end` are seconds within the clip,
-`fade` (optional, s) fades the overlay in/out (needs a finite `end`).
+Each **overlay** is either an image `{image, x, y, scale, start, end, fade}` (SVG
+or raster) or **text** `{text, x, y, size, color, font, box, boxcolor, border,
+bordercolor, start, end}` (rendered with `drawtext`). For images, `x`/`y` are
+ffmpeg overlay expressions (`W`,`H` = canvas; `w`,`h` = overlay), `scale` is a
+fraction of canvas width, and `fade` (optional, s) fades it in/out (needs a
+finite `end`). For text, `x`/`y` accept `drawtext` expressions (`w`,`h`,
+`text_w`, `text_h`).
+
+The `v360` effect (`{type: v360, in, out, …}`) remaps 360/equirectangular
+footage; any extra keys pass straight to the `v360` filter.
 
 Effects apply in list order. Each **effect** is one of:
 
@@ -243,6 +257,7 @@ Effects apply in list order. Each **effect** is one of:
 - `{type: white_balance, temperature}` — colour temperature in Kelvin.
 - `{type: stabilize, smoothing}` — `vidstab` two-pass stabilization (auto-skips
   if ffmpeg lacks vidstab).
+- `{type: v360, in, out, …}` — 360/equirectangular projection remap.
 
 Transition `type` is any ffmpeg `xfade` transition (`fade`, `wipeleft`,
 `slideup`, `circleopen`, `dissolve`, …) or `cut` for a hard cut.

@@ -43,6 +43,8 @@ DEFAULTS = {
     "canvas": {"width": 1280, "height": 720, "fps": 30},
     "background": "black",            # pillarbox / letterbox color
     "fit": "contain",                 # contain (pillarbox) | cover (crop) | stretch
+    "subtitles": "",                  # path to a .srt/.ass to burn into the output
+    "subtitles_style": "",            # ffmpeg force_style string (.srt only)
     "speed": 1.0,                     # base speed for clips (1.0 = original)
     "clips_dir": "",                  # base dir prepended to each clip "file"
     "pacing": {
@@ -55,6 +57,7 @@ DEFAULTS = {
     },
     "title": {
         "enabled": True,
+        "position": "lower",          # lower | upper | center (third)
         "seconds": None,              # fixed on-screen time; None = reading-time
         "read_wps": 2.5,              # reading speed (words/sec)
         "read_base": 1.0,             # +seconds for the eye to land
@@ -108,6 +111,8 @@ DEFAULTS = {
         "preset": "medium",           # x264/x265 preset
         "pix_fmt": "yuv420p",
         "prores_profile": 3,          # prores_ks: 0..5 (3 = HQ)
+        "extra": [],                  # extra raw ffmpeg encode args (e.g. -cq for
+                                      # hardware encoders: h264_nvenc/qsv/vaapi)
     },
     "clips": [],                      # list of clip dicts (see example)
 }
@@ -192,6 +197,11 @@ def atempo_chain(f):
 def xml_escape(s):
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace('"', "&quot;"))
+
+
+def drawtext_escape(s):
+    return (s.replace("\\", "\\\\").replace(":", "\\:")
+            .replace("'", "’").replace("%", "\\%"))
 
 
 # ============================ text-to-speech =================================
@@ -282,8 +292,8 @@ def synth_line(V, text, out_wav, _helper=[None]):
 
 
 # ============================ titles (generated) =============================
-def title_svg(text, W, H, t):
-    """Generate a lower-third title-bar SVG (gradient bar + centered text)."""
+def title_svg(text, W, H, t, position="lower"):
+    """Generate a title-bar SVG (gradient/solid bar + centered text)."""
     bar_h = int(H * t["bar_frac"])
     margin = int(W * t["margin_frac"])
     avail = W - 2 * margin
@@ -291,18 +301,25 @@ def title_svg(text, W, H, t):
     # shrink-to-fit: rough advance width ~0.55*fontsize per glyph for DejaVu
     fs = min(max_fs, avail / max(1, 0.55 * len(text)))
     fs = max(fs, max_fs * 0.45)        # don't go absurdly small
-    baseline = H - bar_h / 2 + fs * 0.35
     op = t["bar_opacity"]
+    if position == "upper":
+        bar_y, baseline = 0, bar_h / 2 + fs * 0.35
+        g0, g1 = op, 0.0               # opaque at top -> transparent downward
+    elif position == "center":
+        bar_y, baseline = (H - bar_h) / 2, H / 2 + fs * 0.35
+        g0 = g1 = op                   # flat band
+    else:                              # lower (default)
+        bar_y, baseline = H - bar_h, H - bar_h / 2 + fs * 0.35
+        g0, g1 = 0.0, op               # transparent at top -> opaque downward
     return f"""<?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}">
   <defs>
     <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="{t['bar_color']}" stop-opacity="0"/>
-      <stop offset="0.4" stop-color="{t['bar_color']}" stop-opacity="{op*0.55:.3f}"/>
-      <stop offset="1" stop-color="{t['bar_color']}" stop-opacity="{op:.3f}"/>
+      <stop offset="0" stop-color="{t['bar_color']}" stop-opacity="{g0:.3f}"/>
+      <stop offset="1" stop-color="{t['bar_color']}" stop-opacity="{g1:.3f}"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="{H-bar_h}" width="{W}" height="{bar_h}" fill="url(#bar)"/>
+  <rect x="0" y="{bar_y:.0f}" width="{W}" height="{bar_h}" fill="url(#bar)"/>
   <text x="{W/2:.0f}" y="{baseline:.0f}" text-anchor="middle"
         font-family="{t['font']}" font-weight="bold" font-size="{fs:.1f}"
         fill="{t['text_color']}">{xml_escape(text)}</text>
@@ -429,16 +446,29 @@ def normalize_clip(clip, idx, C, tmp):
     bg = C["background"]
     base_speed = clip.get("speed", C["speed"])
 
-    src = clip["file"]
-    if C["clips_dir"]:
-        src = os.path.join(C["clips_dir"], src)
-    if not os.path.isabs(src):
-        src = os.path.join(os.path.dirname(os.path.abspath(C["__path__"])), src)
-    if not os.path.isfile(src):
-        raise SystemExit(f"clip {idx} file not found: {src}")
+    gen = clip.get("generator")       # synthetic clip (no source file)
+    gen_lavfi = gen_dur = None
+    if gen:
+        gen_dur = gen.get("duration", clip.get("duration", 3))
+        gt = gen.get("type", "color")
+        if gt in ("testsrc", "testsrc2", "smptebars", "smptehdbars",
+                  "rgbtestsrc"):
+            gen_lavfi = f"{gt}=s={W}x{H}:r={FPS}:d={gen_dur}"
+        else:                          # solid colour
+            gen_lavfi = (f"color=c={gen.get('color', 'black')}:"
+                         f"s={W}x{H}:r={FPS}:d={gen_dur}")
+        src = None
+    else:
+        src = clip["file"]
+        if C["clips_dir"]:
+            src = os.path.join(C["clips_dir"], src)
+        if not os.path.isabs(src):
+            src = os.path.join(os.path.dirname(os.path.abspath(C["__path__"])), src)
+        if not os.path.isfile(src):
+            raise SystemExit(f"clip {idx} file not found: {src}")
 
     # stabilize: vidstab two-pass prepass on the source (before trim/scale)
-    if any(e.get("type") == "stabilize" for e in clip.get("effects", [])):
+    if src and any(e.get("type") == "stabilize" for e in clip.get("effects", [])):
         if not filter_available("vidstabdetect"):
             print("  warning: vidstab not in this ffmpeg build, skipping stabilize")
         else:
@@ -456,9 +486,10 @@ def normalize_clip(clip, idx, C, tmp):
             src = stab
 
     base_dir = os.path.dirname(os.path.abspath(C["__path__"]))
-    inputs, fc = ["-i", src], []
+    inputs = ["-f", "lavfi", "-i", gen_lavfi] if gen else ["-i", src]
+    fc = []
     v = "[0:v]"
-    trim = clip.get("trim")
+    trim = None if gen else clip.get("trim")
     if trim:
         fc.append(f"{v}trim={trim[0]}:{trim[1]},setpts=PTS-STARTPTS[t]")
         v = "[t]"
@@ -560,9 +591,14 @@ def normalize_clip(clip, idx, C, tmp):
             pass
         elif et == "glow":                          # bloom: blur + screen-blend
             glow_cfg = eff                           # applied after the chain
+        elif et == "v360":                          # 360 / equirectangular remap
+            extra = "".join(f":{k}={eff[k]}" for k in eff
+                            if k not in ("type", "in", "out"))
+            chain += (f",v360={eff.get('in', 'e')}:{eff.get('out', 'flat')}"
+                      f"{extra}")
         elif et == "zoom":                          # ken burns
             if src_dur is None:
-                src_dur = probe_duration(src)
+                src_dur = gen_dur if gen else probe_duration(src)
             clen = ((trim[1] - trim[0]) if trim else src_dur) / base_speed
             clen += fstart + fstop
             frames = max(1, int(round(clen * FPS)))
@@ -592,7 +628,8 @@ def normalize_clip(clip, idx, C, tmp):
         at = clip.get("title_at", C["title"]["at"]) + fstart
         svg = os.path.join(tmp, f"title{idx}.svg")
         png = os.path.join(tmp, f"title{idx}.png")
-        open(svg, "w").write(title_svg(title_text, W, H, C["title"]))
+        tpos = clip.get("title_pos", C["title"]["position"])
+        open(svg, "w").write(title_svg(title_text, W, H, C["title"], tpos))
         rasterize_svg(svg, png, W, H)
         inputs += ["-i", png]
         fc.append(f"{cur}[{n_in}:v]overlay=0:0:"
@@ -601,8 +638,26 @@ def normalize_clip(clip, idx, C, tmp):
         twin = (at, secs)
         n_in += 1
 
-    # image/svg overlays (optional alpha fade in/out)
+    # image/svg/text overlays (optional alpha fade in/out)
     for j, ov in enumerate(clip.get("overlays", [])):
+        if ov.get("text"):                            # rich text via drawtext
+            s, e = ov.get("start", 0.0), ov.get("end", 1e9)
+            size = ov.get("size", int(H * 0.05))
+            x = ov.get("x", "(w-text_w)/2")
+            y = ov.get("y", "h-text_h-40")
+            dt = (f"drawtext=text='{drawtext_escape(ov['text'])}':fontsize={size}:"
+                  f"fontcolor={ov.get('color', 'white')}:x={x}:y={y}:"
+                  f"font='{ov.get('font', C['title']['font'])}'")
+            if ov.get("box"):
+                dt += (f":box=1:boxcolor={ov.get('boxcolor', 'black@0.5')}:"
+                       f"boxborderw={ov.get('boxborderw', 10)}")
+            if ov.get("border"):
+                dt += (f":borderw={ov['border']}:"
+                       f"bordercolor={ov.get('bordercolor', 'black')}")
+            dt += f":enable='between(t,{s},{e})'"
+            fc.append(f"{cur}{dt}[ovr{j}]")
+            cur = f"[ovr{j}]"
+            continue
         img = ov["image"]
         if not os.path.isabs(img):
             img = os.path.join(C["clips_dir"] or base_dir, img)
@@ -650,7 +705,7 @@ def normalize_clip(clip, idx, C, tmp):
              "-pix_fmt", "yuv420p", "-r", str(int(FPS)), out2])
         out, dur = out2, probe_duration(out2)
     apath = None
-    if C["audio"].get("use_source"):
+    if src and C["audio"].get("use_source"):
         apath = render_clip_audio(clip, idx, src, dur, base_speed, trim, C, tmp)
     return out, dur, twin, apath
 
@@ -833,25 +888,38 @@ def main():
     E = C["encode"]
     vcodec = E.get("vcodec", "libvpx-vp9")
     pix = E.get("pix_fmt", "yuv420p")
+    extra = list(E.get("extra") or [])
+    # optional burn-in subtitles (applied during the encode pass)
+    vf = []
+    if C["subtitles"]:
+        sp = C["subtitles"]
+        if not os.path.isabs(sp):
+            sp = os.path.join(C["clips_dir"]
+                              or os.path.dirname(os.path.abspath(cfg_path)), sp)
+        spe = sp.replace("\\", "\\\\").replace("'", "\\'")
+        st = f":force_style='{C['subtitles_style']}'" if C["subtitles_style"] else ""
+        vf = ["-vf", f"subtitles='{spe}'{st}"]
     if vcodec == "libvpx-vp9":                        # default: VP9 2-pass
         crf = E["crf"] if E.get("crf") is not None else E["vp9_crf"]
         log = os.path.join(tmp, "vp9pass")
         common = ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", str(crf),
                   "-row-mt", "1", "-pix_fmt", pix, "-an", "-passlogfile", log]
-        run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "1",
+        run(["ffmpeg", "-y", "-i", paced, *vf, *common, "-pass", "1",
              "-f", "null", os.devnull])
         venc = os.path.join(tmp, "video.webm")
-        run(["ffmpeg", "-y", "-i", paced, *common, "-pass", "2", venc])
-    else:                                             # x264/x265/ProRes single pass
-        crf = E["crf"] if E.get("crf") is not None else 18
+        run(["ffmpeg", "-y", "-i", paced, *vf, *common, "-pass", "2",
+             *extra, venc])
+    else:                                             # single-pass (x264/x265/
+        crf = E["crf"] if E.get("crf") is not None else 18   # ProRes/hardware)
         ext = ".mov" if vcodec == "prores_ks" else ".mp4"
         venc = os.path.join(tmp, "video" + ext)
-        cmd = ["ffmpeg", "-y", "-i", paced, "-c:v", vcodec, "-pix_fmt", pix, "-an"]
+        cmd = ["ffmpeg", "-y", "-i", paced, *vf, "-c:v", vcodec,
+               "-pix_fmt", pix, "-an"]
         if vcodec in ("libx264", "libx265"):
             cmd += ["-preset", E.get("preset", "medium"), "-crf", str(crf)]
         elif vcodec == "prores_ks":
             cmd += ["-profile:v", str(E.get("prores_profile", 3))]
-        run([*cmd, venc])
+        run([*cmd, *extra, venc])
 
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 

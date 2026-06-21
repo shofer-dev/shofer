@@ -94,18 +94,18 @@ narration, a ducked background-music bed, pillarbox/letterbox, VP9+Opus encode.
 
 - [ ] **Animated titles** (slide-in, fade-in, typewriter, blur-in). Ours are
       static lower-thirds. _Medium — animate the overlay via keyframes._
-- [ ] **Title templates / positions** (upper-third, centered, full-screen
-      cards, multi-line with subtitle). _Easy — `title_style`/`title_pos`._
-- [ ] **Rich SVG/HTML title import** (OpenShot's title editor). We render our
-      own bar; importing arbitrary SVG titles with their own layout is partly
-      covered by `overlays`. _Low priority._
+- [x] **Title templates / positions** — `title.position` / per-clip `title_pos`
+      (`lower`/`upper`/`center`); full-screen cards via `generator` clips.
+- [x] **Rich SVG/HTML title import** — SVG/PNG via `overlays`, and styled text
+      via text `overlays` (`drawtext`). _(text-on-path / 3D text not done.)_
 
 ## Missing — transitions
 
 - [ ] **Custom mask-image (luma) transitions.** OpenShot ships dozens of mask
       wipes; we expose ffmpeg `xfade` presets only. _Medium._
-- [ ] **Per-transition easing / offset control** beyond `type`+`duration`.
-      _Easy._
+- [x] ~~**Per-transition easing**~~ — won't do: ffmpeg `xfade` exposes no easing
+      curve (only `transition`/`duration`/`offset`, and offset is already
+      computed). Would require a custom blend graph; not worth it.
 
 ## Missing — Shotcut features
 
@@ -132,12 +132,10 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Text / titles (richer than our lower-third bar)
 
-- [ ] **Rich text filter** — HTML/styled text with outline, background box,
-      drop shadow, and **text-on-path / 3D text**. _Medium — `drawtext` covers
-      the basics; full rich text needs SVG rendering._
-- [ ] **Subtitles** — import/burn-in **SRT/VTT**, or export a sidecar track.
-      We have titles but no subtitle concept. _Easy (burn-in) — `subtitles`
-      filter; add `subtitles: file.srt`._
+- [x] **Rich text filter** — text `overlays` via `drawtext` (size, colour, box,
+      border, position, time window). _(text-on-path / 3D text not done.)_
+- [x] **Subtitles** — burn-in `.srt`/`.ass` via top-level `subtitles` (+
+      `subtitles_style`). _(Sidecar/soft-sub export not done.)_
 
 ### Audio (Shotcut's audio filter set is large)
 
@@ -151,10 +149,9 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Source generators (clips with no input file)
 
-- [ ] **Synthetic source clips** — solid **color**, **text card**, **noise**,
-      **transparent**, **count/timer**. We require a real `file` per clip.
-      _Easy — `color=`/`testsrc`/`drawtext` virtual inputs; add a `generator`
-      clip type. Good for intro/outro cards without prerendered assets._
+- [x] **Synthetic source clips** — `generator: {type, color, duration}`
+      (`color`/`testsrc`/`smptebars`/…); combine with a text `overlay` for a
+      title card. _(count/timer not done.)_
 
 ### Speed / time
 
@@ -163,14 +160,15 @@ captured so far, mostly via its large MLT/frei0r filter set.
 
 ### Encode / export
 
-- [x] **Multiple codecs & containers** — `encode.vcodec` (VP9/H.264/H.265/
-      ProRes) + `acodec`; container from the `output` extension (.webm/.mp4/
-      .mov). _(Hardware-accelerated encoding NVENC/QSV/VAAPI still pending.)_
+- [x] **Multiple codecs & containers + hardware encode** — `encode.vcodec`
+      (VP9/H.264/H.265/ProRes, or `h264_nvenc`/`hevc_qsv`/`*_vaapi`) + `acodec`;
+      container from the `output` extension; `encode.extra` passes raw args
+      (e.g. `-cq`) to hardware encoders.
 
 ### 360° video
 
-- [ ] **360°/equirectangular filters** (projection, rectilinear view, 360
-      stabilize). _Medium, niche — `v360`. Only if we ever target VR footage._
+- [x] **360°/equirectangular filters** — `effects: {type: v360, in, out, …}`
+      (any `v360` projection/params). 360-aware stabilize not separately done.
 
 ## Out of scope (editor-only, no output relevance)
 
