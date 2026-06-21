@@ -73,3 +73,7 @@ __pycache__/
 scripts/video-builder/examples/*.webm
 scripts/video-builder/examples/*.mp4
 scripts/video-builder/examples/*.mov
+
+# Local format-test renders of the demo backup (regenerable)
+media/demo-orig.mov
+media/demo-orig.mp4
