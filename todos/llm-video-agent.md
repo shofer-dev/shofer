@@ -79,7 +79,9 @@ Proposed tools:
 
 ### B. Read-only config viewer (custom editor)
 
-A `CustomTextEditorProvider` for `*.video.yaml` (package.json `customEditors`),
+A `CustomTextEditorProvider` for `*.video` files (a dedicated suffix, like
+`.slang`; the `.video` extension is associated with the YAML language so the
+raw text view keeps YAML highlighting) (package.json `customEditors`),
 modeled directly on **`src/core/webview/SlangEditorProvider.ts`**: webview with
 enableScripts, build HTML once, **debounced `onDidChangeTextDocument` → postMessage**
 to re-render in place, preserve zoom/pan. It renders a **timeline + swimlanes
@@ -137,7 +139,7 @@ flow make_video(intent, clips_dir) {     // `intent` optional; intake fills gaps
   supports trim/effects/overlays/transitions/keyframed motion+scale/audio/multi-
   codec). `render_video` shells out to it. Add a **`--dump-json`** resolved model
   to the script so the viewer renders an accurate timeline without re-parsing.
-- **Artifacts in the workspace:** `*.video.yaml` (the config / IR), an
+- **Artifacts in the workspace:** `*.video` (the config / IR, YAML syntax), an
   `assets.json` catalog (perception output), `*/snapshots/*.jpg` (transient
   frames), and the rendered `*.webm`/`.mp4`/`.mov`. The intent/brief is **not** a
   file — it lives in the workflow input + `ask_followup_question` answers.
@@ -170,7 +172,7 @@ flow make_video(intent, clips_dir) {     // `intent` optional; intake fills gaps
 ## 8. Open questions
 
 - Companion extension name + scaffold (clone `vscode-tools`): `video-tools`?
-- File glob for the viewer/config (`*.video.yaml`) and where artifacts live per
+- Where artifacts live per
   project.
 - Do intake/review share one vision mode/config, or separate?
 - Should `render_video` run renders in a worker/queue to avoid blocking, and stream

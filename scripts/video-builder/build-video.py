@@ -160,12 +160,13 @@ def deep_merge(base, over):
 
 
 def load_config(path):
+    # `.json` is parsed as JSON; everything else (.yaml/.yml/.video/…) as YAML.
     with open(path) as f:
-        if path.lower().endswith((".yaml", ".yml")):
+        if path.lower().endswith(".json"):
+            data = json.load(f)
+        else:
             import yaml
             data = yaml.safe_load(f)
-        else:
-            data = json.load(f)
     if not isinstance(data, dict):
         raise SystemExit("config must be a mapping at the top level")
     return deep_merge(DEFAULTS, data)
