@@ -2,8 +2,9 @@
 
 **Status:** design / not started. Build the LLM video-editing product **inside
 Shofer**, reusing what Shofer already has — the **Slang workflow** engine, **vision-
-capable apiConfiguration**, and the **native tools** (file read/write, `view_image`)
-— and adding only what's missing as a **standalone companion VS Code extension**:
+capable apiConfiguration**, and the **native tools** (file read/write, `view_image`,
+`ask_followup_question` for human-in-the-loop) — and adding only what's missing as
+a **standalone companion VS Code extension**:
 (a) a small set of **specialized tools** registered with Shofer, and (b) a
 friendly **read-only viewer** for the video config (the in-IDE equivalent of the
 web app's visual editor).
@@ -17,19 +18,30 @@ is the source of truth and the agents' editing surface.
 ## 1. Concept → mapped onto existing Shofer
 
 ```
-brief.md + dropped clips
-  → [workflow] perception agent(s): probe / transcribe / snapshot inputs, build an asset catalog
-  → [workflow] director agent: write/patch the video config YAML
-  → [tool] render_video (proxy or segment) → frame snapshots on disk
-  → [workflow] reviewer agent: view_image the snapshots, critique, request changes
-  → loop (Slang mailbox + converge) until the brief is met
+workflow input (intent) + dropped clips
+  → intake: collect/clarify requirements (ask_followup_question) + build asset catalog
+  ┌── INTERNAL loop (fast, no human in the loop) ───────────────────────────┐
+  │  director: write/patch config → render_video (proxy/segment) → snapshots │
+  │  reviewer: view_image snapshots, critique → director patches             │
+  │  repeat until the reviewer is satisfied (automated quality gate)         │
+  └─────────────────────────────────────────────────────────────────────────┘
+  → intake: ask_followup_question → collect the user's feedback on the result
+  ↑ EXTERNAL loop (gated on the human): feed the feedback back into the internal
+    loop and re-spin; converge only when the USER signs off.
 ```
+
+Two nested loops: the **internal** director↔reviewer loop is an automated check
+that spins fast (no human latency) and only surfaces a candidate once the reviewer
+is happy; the **external** loop asks the user (`ask_followup_question`) and repeats
+the whole internal loop until the user is satisfied. The reviewer catches the
+obvious problems cheaply before spending the user's attention.
 
 | Need                                      | Use the existing Shofer mechanism                                                                                                       |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Multi-stage, multi-agent pipeline         | **Slang workflow** (`.slang` in `.claude/workflows/`) — `flow`/`agent`/mailbox/`converge` (`src/core/workflow/`)                        |
+| Collect intent & per-iteration feedback   | **Native `ask_followup_question`** (`src/core/tools/AskFollowupQuestionTool.ts`) — surfaces questions to the user at the workflow level |
 | Per-stage model (incl. vision)            | **Modes + per-mode apiConfiguration** (`ProviderSettingsManager.modeApiConfigs`); point review/intake modes at a `supportsImages` model |
-| Read/write the config & brief             | **Native file tools** (read_file / write_to_file / apply_diff)                                                                          |
+| Read/write the config                     | **Native file tools** (read_file / write_to_file / apply_diff)                                                                          |
 | "See" images                              | **Native `view_image` tool** (`src/core/tools/ViewImageTool.ts`) — returns `ImageBlockParam` to the model                               |
 | Render + extract frames; probe/transcribe | **NEW specialized tools** (companion extension — below)                                                                                 |
 | Friendly visualization of the config      | **NEW custom editor** (companion extension — below), modeled on `SlangEditorProvider`                                                   |
@@ -93,20 +105,30 @@ contract to let external tools return image blocks directly (removes the extra
 ## 4. The workflow (Slang sketch)
 
 ```
-flow make_video(brief, clips_dir) {
-  agent intake   { mode: "video-intake";   tools: [probe_media, video_snapshot, view_image, write_to_file] }
+flow make_video(intent, clips_dir) {     // `intent` optional; intake fills gaps via ask_followup_question
+  agent intake   { mode: "video-intake";   tools: [ask_followup_question, probe_media, video_snapshot, view_image, write_to_file] }
   agent director { mode: "video-director"; tools: [read_file, write_to_file, apply_diff, render_video] }
   agent reviewer { mode: "video-review";   tools: [render_video, view_image, read_file] }   // vision model
-  // intake builds the asset catalog; director writes the config;
-  // reviewer renders a proxy, views snapshots, posts notes to the mailbox;
-  // director patches the config; converge when reviewer signs off.
+
+  // 1. intake: ensure required input is collected (input var + ask_followup_question),
+  //    build the asset catalog.
+  // 2. INTERNAL loop — director patches config, reviewer renders a proxy + views
+  //    snapshots + critiques via the mailbox; converge_inner = reviewer satisfied.
+  // 3. EXTERNAL loop — intake asks the user (ask_followup_question) for feedback;
+  //    converge_outer = user signs off, else feed feedback back to step 2.
 }
 ```
 
 - **Modes** (`video-intake`/`video-director`/`video-review`) are mode configs with
   appropriate tool groups and role/instructions; the review (and intake) modes are
   pointed at a **vision-capable apiConfiguration**.
-- Iteration, hand-offs and stop condition use the Slang **mailbox + `converge`**.
+- **Two convergence conditions**: the inner Slang `converge` is the reviewer's
+  automated sign-off (fast); the outer `converge` is the user's sign-off (via
+  `ask_followup_question`). Hand-offs/critiques flow through the **mailbox**.
+- **No `brief.md`.** The intent comes from the workflow **input variable**, the
+  user's **`ask_followup_question`** answers, or both (input variable first;
+  ask only for what's missing). The intake agent owns "do we have enough to
+  proceed?" and, each external iteration, "what does the user want changed?".
 
 ## 5. Engine & artifacts
 
@@ -114,9 +136,10 @@ flow make_video(brief, clips_dir) {
   supports trim/effects/overlays/transitions/keyframed motion+scale/audio/multi-
   codec). `render_video` shells out to it. Add a **`--dump-json`** resolved model
   to the script so the viewer renders an accurate timeline without re-parsing.
-- **Artifacts in the workspace:** `brief.md` (input), `*.video.yaml` (the config /
-  IR), an `assets.json` catalog (perception output), `*/snapshots/*.jpg` (transient
-  frames), and the rendered `*.webm`/`.mp4`/`.mov`.
+- **Artifacts in the workspace:** `*.video.yaml` (the config / IR), an
+  `assets.json` catalog (perception output), `*/snapshots/*.jpg` (transient
+  frames), and the rendered `*.webm`/`.mp4`/`.mov`. The intent/brief is **not** a
+  file — it lives in the workflow input + `ask_followup_question` answers.
 
 ## 6. Constraints / risks
 
@@ -136,7 +159,9 @@ flow make_video(brief, clips_dir) {
 1. **`render_video` + `video_snapshot` + `probe_media`** tools in a new companion
    extension (wrapping `build-video.py`); add `--dump-json` to the script.
 2. **Modes** (`video-intake`/`director`/`review`) + a `make_video.slang` workflow;
-   wire the proxy→`view_image`→critique→patch loop. (Vision via existing apiConfig.)
+   wire the **internal** loop (director↔reviewer: proxy→`view_image`→critique→patch)
+   and the **external** loop (intake→`ask_followup_question`→user sign-off). Start
+   with the internal loop; add the user loop once it produces decent candidates.
 3. **Config viewer** custom editor (timeline/swimlanes/waypoints + playback).
 4. **Perception depth**: transcription, scene detection, richer asset catalog.
 5. Folder/Drive ingest niceties; optional private-tool image-return enhancement.
