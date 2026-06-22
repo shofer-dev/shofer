@@ -9,9 +9,9 @@ a **standalone companion VS Code extension**:
 friendly **read-only viewer** for the video config (the in-IDE equivalent of the
 web app's visual editor).
 
-The video **config** (the YAML that `scripts/video-builder/build-video.py`
-consumes; schema captured in
-[`video-config-schema.md`](../scripts/video-builder/video-config-schema.md))
+The video **config** (the YAML/`.video` that the engine consumes; the engine and
+its self-documenting JSON Schema now live in the **companion extension** at
+`extensions/video-tools/engine/` — `build-video.py` + `video-config.schema.json`)
 is the source of truth and the agents' editing surface.
 
 ---
@@ -135,7 +135,7 @@ flow make_video(intent, clips_dir) {     // `intent` optional; intake fills gaps
 
 ## 5. Engine & artifacts
 
-- **Renderer:** the existing `scripts/video-builder/build-video.py` (already
+- **Renderer:** the bundled `extensions/video-tools/engine/build-video.py` (already
   supports trim/effects/overlays/transitions/keyframed motion+scale/audio/multi-
   codec). `render_video` shells out to it. Add a **`--dump-json`** resolved model
   to the script so the viewer renders an accurate timeline without re-parsing.
