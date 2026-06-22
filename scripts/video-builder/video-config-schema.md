@@ -1,9 +1,8 @@
 # Video config schema (the agent's IR)
 
-Reference for the YAML/JSON config consumed by
-`scripts/video-builder/build-video.py` — the **intermediate representation** the
-LLM agents read and write, the viewer renders, and the engine executes. Prose
-docs live in [`scripts/video-builder/README.md`](../scripts/video-builder/README.md);
+Reference for the YAML/JSON config consumed by `build-video.py` (this directory) —
+the **intermediate representation** the LLM agents read and write, the viewer
+renders, and the engine executes. Prose docs live in [`README.md`](./README.md);
 this file is the **field-level contract**, intended to be promoted to a published
 **JSON Schema** (`video-config.schema.json`) that tools validate against before
 rendering.

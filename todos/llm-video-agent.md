@@ -10,7 +10,8 @@ friendly **read-only viewer** for the video config (the in-IDE equivalent of the
 web app's visual editor).
 
 The video **config** (the YAML that `scripts/video-builder/build-video.py`
-consumes; schema captured in [`video-config-schema.md`](./video-config-schema.md))
+consumes; schema captured in
+[`video-config-schema.md`](../scripts/video-builder/video-config-schema.md))
 is the source of truth and the agents' editing surface.
 
 ---
