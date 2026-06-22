@@ -9,7 +9,7 @@ background: black
 pacing: {enabled: false}   # per-clip speed already times each segment
 transition: {type: cut}    # segments are continuous source
 intro: {narration: "Meet Shofer, the open-source AI coding agent for VS Code, built for unmatched parallelism, usability, and observability.", delay: 0.5}
-voice: {enabled: true, engine: auto, kokoro_voice: af_heart}
+voice: {enabled: true, kokoro_voice: af_heart}
 clips:
   - file: screencast-final.webm
     trim: [0, 1.03]
