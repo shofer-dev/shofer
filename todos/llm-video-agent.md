@@ -1,6 +1,13 @@
 # LLM-driven video agent — Shofer-native (design)
 
-**Status:** design / not started. Build the LLM video-editing product **inside
+**Status:** implemented (phases 1–3) in the **`extensions/video-tools`** companion
+extension — tools (`render_video`/`video_snapshot`/`probe_media`), the read-only
+`.video` viewer, the bundled engine + `--dump-json` + JSON-Schema validation, and
+the `make-video` Slang workflow + `video-intake`/`video-director`/`video-review`
+modes (scaffold via the "Video Tools: Scaffold…" command). Remaining: perception
+depth (transcription/scene-detection) and folder/Drive ingest (phases 4–5).
+
+Build the LLM video-editing product **inside
 Shofer**, reusing what Shofer already has — the **Slang workflow** engine, **vision-
 capable apiConfiguration**, and the **native tools** (file read/write, `view_image`,
 `ask_followup_question` for human-in-the-loop) — and adding only what's missing as
