@@ -19,6 +19,7 @@ Pipeline:
 
 Usage:
   python3 scripts/build-video.py CONFIG.yaml [--no-voice] [--no-pace] [--keep-temp]
+  python3 scripts/build-video.py CONFIG.yaml --dump-json   # render-free timeline model
   python3 scripts/build-video.py --help
 
 See video.example.yaml for a fully documented config.
@@ -862,6 +863,83 @@ def derive_title(description):
     return " ".join(words[:8])
 
 
+def _safe_dur(path):
+    """ffprobe duration, or None on any failure (for --dump-json)."""
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nw=1:nk=1", path], capture_output=True, text=True)
+        return round(float(r.stdout.strip()), 3)
+    except Exception:
+        return None
+
+
+def _resolve_src(clip, C):
+    src = clip.get("file", "")
+    if C["clips_dir"]:
+        src = os.path.join(C["clips_dir"], src)
+    if not os.path.isabs(src):
+        src = os.path.join(os.path.dirname(os.path.abspath(C["__path__"])), src)
+    return src
+
+
+def resolve_model(C):
+    """A render-free summary of the timeline for editors/agents (--dump-json).
+
+    Durations come from ffprobe (best-effort); adaptive pacing is NOT applied,
+    so this is the nominal pre-pacing timeline."""
+    W, H, FPS = (C["canvas"]["width"], C["canvas"]["height"], C["canvas"]["fps"])
+    out_path = C["output"]
+    if not os.path.isabs(out_path):
+        out_path = os.path.join(os.path.dirname(os.path.abspath(C["__path__"])),
+                                out_path)
+    clips, start, prev_dur = [], 0.0, 0.0
+    for i, clip in enumerate(C["clips"]):
+        base_speed = clip.get("speed", C["speed"])
+        trim = clip.get("trim")
+        gen = clip.get("generator")
+        if gen:
+            span, source = gen.get("duration", clip.get("duration", 3)), \
+                f"generator:{gen.get('type', 'color')}"
+        else:
+            span = (float(trim[1]) - float(trim[0])) if trim \
+                else _safe_dur(_resolve_src(clip, C))
+            source = clip.get("file", "")
+        dur = (span / base_speed) if span is not None else None
+        if dur is not None:
+            fr = clip.get("freeze") or {}
+            dur += float(fr.get("start", 0) or 0) + float(fr.get("end", 0) or 0)
+        if i > 0:                                    # overlap with previous clip
+            ptr = deep_merge(C["transition"], C["clips"][i - 1].get("transition", {}))
+            d = 0.0 if ptr["type"] == "cut" else float(ptr["duration"])
+            start = round(start + prev_dur - d, 3)
+        title = clip.get("title")
+        if title is None and clip.get("description"):
+            title = derive_title(clip["description"])
+        overlays = [("video" if o.get("video") else "text" if o.get("text")
+                     else "image") for o in clip.get("overlays", [])]
+        clips.append({
+            "index": i, "source": source, "start": start,
+            "dur": round(dur, 3) if dur is not None else None,
+            "title": title,
+            "effects": [e.get("type") for e in clip.get("effects", [])],
+            "overlays": overlays,
+            "transition": deep_merge(C["transition"],
+                                     clip.get("transition", {}))["type"],
+            "narration": bool(clip.get("narration") or clip.get("description")),
+        })
+        prev_dur = dur if dur is not None else 0.0
+    return {
+        "canvas": {"width": W, "height": H, "fps": FPS},
+        "output": out_path,
+        "output_exists": os.path.isfile(out_path),
+        "total": round(start + prev_dur, 3),
+        "pacing": bool(C["pacing"]["enabled"]),
+        "clip_count": len(clips),
+        "clips": clips,
+    }
+
+
 # ============================ assembly ======================================
 def assemble(clips_info, C, tmp):
     """Join normalized clips with transitions. Returns (path, [clip_start_abs])."""
@@ -910,6 +988,9 @@ def main():
     flags = set(args[1:])
     C = load_config(cfg_path)
     C["__path__"] = cfg_path
+    if "--dump-json" in flags:                       # render-free timeline model
+        print(json.dumps(resolve_model(C), indent=2))
+        return
     if "--no-voice" in flags:
         C["voice"]["enabled"] = False
     if "--no-pace" in flags:

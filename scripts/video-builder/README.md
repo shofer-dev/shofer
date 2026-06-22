@@ -78,12 +78,13 @@ python3 scripts/video-builder/build-video.py --help
 
 The config path is the first positional argument; flags can go in any order.
 
-| Flag           | Effect                                                            |
-| -------------- | ----------------------------------------------------------------- |
-| `--no-voice`   | Skip TTS narration — render silent (no TTS env needed). Fast.     |
-| `--no-pace`    | Disable adaptive pacing; use the configured/base speed uniformly. |
-| `--keep-temp`  | Keep the scratch directory of intermediate files for debugging.   |
-| `-h`, `--help` | Print usage and exit.                                             |
+| Flag           | Effect                                                                                             |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `--no-voice`   | Skip TTS narration — render silent (no TTS env needed). Fast.                                      |
+| `--no-pace`    | Disable adaptive pacing; use the configured/base speed uniformly.                                  |
+| `--keep-temp`  | Keep the scratch directory of intermediate files for debugging.                                    |
+| `--dump-json`  | Print a render-free timeline model (clips/durations/layers) as JSON and exit — for editors/agents. |
+| `-h`, `--help` | Print usage and exit.                                                                              |
 
 ### Examples
 
