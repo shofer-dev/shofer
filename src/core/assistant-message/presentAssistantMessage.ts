@@ -1,6 +1,8 @@
 import * as vscode from "vscode"
 import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
+import * as fsp from "fs/promises"
+import * as nodePath from "path"
 
 import type { ToolName, ShoferAsk, ToolProgressStatus, TaskInteractionPayload } from "@shofer/types"
 import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
@@ -1521,11 +1523,46 @@ export async function presentAssistantMessage(shofer: Task) {
 								const result = await vscode.commands.executeCommand<{
 									content: string
 									is_error?: boolean
+									// Optional absolute image paths a provider can return so a
+									// vision model "sees" them (read + attached as image blocks here).
+									images?: string[]
 								}>(invokeCommand, block.name, toolInput)
 
 								const resultText = result?.content ?? "(tool returned empty result)"
 								await shofer.say("mcp_server_response", resultText)
-								pushToolResult(result.is_error ? formatResponse.toolError(resultText) : resultText)
+								if (result?.is_error) {
+									pushToolResult(formatResponse.toolError(resultText))
+								} else if (result?.images?.length) {
+									const blocks: Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> = [
+										{ type: "text", text: resultText },
+									]
+									const mime: Record<
+										string,
+										"image/jpeg" | "image/png" | "image/webp" | "image/gif"
+									> = {
+										".jpg": "image/jpeg",
+										".jpeg": "image/jpeg",
+										".png": "image/png",
+										".webp": "image/webp",
+										".gif": "image/gif",
+									}
+									for (const imgPath of result.images.slice(0, 20)) {
+										const media = mime[nodePath.extname(imgPath).toLowerCase()]
+										if (!media) continue
+										try {
+											const data = (await fsp.readFile(imgPath)).toString("base64")
+											blocks.push({
+												type: "image",
+												source: { type: "base64", media_type: media, data },
+											})
+										} catch {
+											// Skip unreadable images; the text result still lists the paths.
+										}
+									}
+									pushToolResult(blocks as ToolResponse)
+								} else {
+									pushToolResult(resultText)
+								}
 							} catch (execError: any) {
 								shofer.consecutiveMistakeCount++
 								await handleError(

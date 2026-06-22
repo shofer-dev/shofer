@@ -97,20 +97,20 @@ render. Read-only — the user changes things by **prompting the agent**, not
 dragging (matches the product thesis). This is the in-IDE version of "the web app
 visualizer."
 
-## 3. The vision workaround (key integration detail)
+## 3. How agents "see" video (frames as images)
 
-The API has no video input, and **private tools can't return images** (the
-provider contract is text-only; only native tools return `ImageBlockParam`). So:
+The API has no video input, so the frame-returning tools (`render_video`,
+`video_snapshot`) extract frames to disk and **return their paths**; the Shofer
+host reads those paths and attaches them as **image blocks** to the (vision)
+model. This was enabled by a small, backward-compatible extension to the
+private-tool contract: a provider's `invokeTool` result may include
+`images: string[]`, which `presentAssistantMessage` reads + sends as
+`ImageBlockParam`s. (Originally private tools were text-only, requiring a
+separate native `view_image` hop — that hop is no longer needed, though
+`view_image` still works.)
 
-> specialized tool **renders/extracts frames to disk and returns their paths** →
-> the agent calls the **native `view_image`** tool on each path → the vision model
-> sees them.
-
-This needs **zero changes to Shofer** and covers both directions — seeing input
-clips (`video_snapshot` on a source file) and reviewing output (`render_video`
-proxy + snapshots). _Optional later enhancement:_ extend Shofer's private-tool
-contract to let external tools return image blocks directly (removes the extra
-`view_image` hop) — but it's not required for v1.
+Covers both directions: seeing input clips (`video_snapshot` on a source file)
+and reviewing output (`render_video` proxy + snapshots).
 
 ## 4. The workflow (Slang sketch)
 
