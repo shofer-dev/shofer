@@ -195,9 +195,16 @@ time, or `null` to derive from reading time), `read_wps`/`read_base` (reading-ti
 formula), `at` (default appear time), `bar_frac`, `bar_color`, `bar_opacity`,
 `text_color`, `font`.
 
-Overlay `x`/`y` accept either an ffmpeg expression or a keyframe spec
-`{keyframes: [[t, value], …], interp: linear|hold}` to animate position (motion
-paths).
+Overlay `x`/`y` and a video overlay's `scale` accept either an ffmpeg expression
+or a keyframe spec `{keyframes: [[t, value], …], interp: linear|hold}`:
+
+- **Motion path** — keyframe `x`/`y` through waypoints (e.g. corner → corner →
+  centre), or use a `t`-expression for a curve (`x: "40+120*t"`, `y:
+"180+80*sin(2*t)"`). `x`/`y` are in canvas pixels.
+- **Grow/shrink** — keyframe a video overlay's `scale` (fraction of canvas
+  width, `0`–`1`); e.g. `scale: {keyframes: [[0, 0], [3, 1]]}` grows a layer
+  from nothing to full screen. Pair with `x: "(W-w)/2"`, `y: "(H-h)/2"` to keep
+  it centred as it grows.
 
 **`encode`** also takes `extra` — a list of raw ffmpeg args appended to the
 encode (e.g. `["-cq", "23"]` for hardware encoders like `h264_nvenc`). And

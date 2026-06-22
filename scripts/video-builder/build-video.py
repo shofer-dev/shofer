@@ -225,6 +225,16 @@ def kf_expr(spec):
     return f"if(lt(t,{kfs[0][0]}),{kfs[0][1]},{expr})"
 
 
+def is_kf(spec):
+    return isinstance(spec, dict) and "keyframes" in spec
+
+
+def anim_scale_op(spec, W, H):
+    """Per-frame scale filter from a keyframed size fraction (0..1 of canvas)."""
+    e = kf_expr(spec)
+    return f"scale=w='max(2,{W}*({e}))':h='max(2,{H}*({e}))':eval=frame"
+
+
 # ============================ text-to-speech =================================
 KOKORO_HELPER = r"""
 import sys, soundfile as sf
@@ -720,13 +730,15 @@ def normalize_clip(clip, idx, C, tmp):
             s, e = ov.get("start", 0.0), ov.get("end", 1e9)
             inputs += ["-i", vsrc]
             ops, blend = [], ov.get("blend")
+            sc = ov.get("scale")
+            anim_sc = is_kf(sc)                        # scale animated over time
             ot = ov.get("trim")
             if ot:
                 ops.append(f"trim={ot[0]}:{ot[1]},setpts=PTS-STARTPTS")
             if blend:                                 # full-frame blend mode
                 ops.append(f"scale={W}:{H}")
-            elif ov.get("scale"):
-                ops.append(f"scale={int(W * ov['scale'])}:-1")
+            elif sc is not None and not anim_sc:
+                ops.append(f"scale={int(W * sc)}:-1")
             ck = ov.get("chromakey")
             op = ov.get("opacity")
             if ck or ov.get("rotate") or (op is not None and op < 1):
@@ -741,7 +753,9 @@ def normalize_clip(clip, idx, C, tmp):
                            f"oh=roth({r}*PI/180)")
             if op is not None and op < 1:
                 ops.append(f"colorchannelmixer=aa={op}")
-            ops.append(f"setpts=PTS+{s}/TB")
+            ops.append(f"setpts=PTS+{s}/TB")          # shift to clip timeline
+            if anim_sc:                               # grow/shrink over time
+                ops.append(anim_scale_op(sc, W, H))
             fc.append(f"[{n_in}:v]" + ",".join(ops) + f"[ovv{j}]")
             if blend:
                 fc.append(f"{cur}[ovv{j}]blend=all_mode={blend}:"

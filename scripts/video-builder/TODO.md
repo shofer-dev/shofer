@@ -41,8 +41,9 @@ screen|overlay|…` blends full-frame (`blend=all_mode=…`).
 
 - [x] **Keyframe engine (bounded)** — `kf_expr` compiles
       `{keyframes: [[t, v], …], interp: linear|hold}` into an ffmpeg `t`-
-      expression. Wired to overlay `x`/`y` (motion paths). Also: animated titles
-      and per-clip variable retiming (below). _Arbitrary per-filter-param
+      expression. Wired to overlay `x`/`y` (motion paths) and a video overlay's
+      `scale` (grow/shrink via `eval=frame`). Also: animated titles and per-clip
+      variable retiming (below). _Arbitrary per-filter-param
       keyframing (e.g. animated `eq`/blur) is bounded by which ffmpeg filters
       accept time expressions — full coverage would need a `sendcmd` layer._
 
