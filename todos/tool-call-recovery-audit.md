@@ -57,8 +57,7 @@ wasUnknown, argKeys }`) and `TOOL_RECOVERY_FIRED` (`{ modelId, layerId, tool, �
 >   `{ layerId: "apply_diff_xml_leak", recoveredPath, appliedToFile }`. `Task` emits both
 >   at all three parse sites where `modelId`/`taskId` exist. **Instrumentation only —
 >   no behavior change.**
-> - **Still deferred (data-gated, unchanged from below):** converting the `apply_diff`
->   recovery from silent → reject-with-feedback (Phase 2 step 2); pruning zero-hit
+> - **Still deferred (data-gated, unchanged from below):** pruning zero-hit
 >   aliases / coercions (Phase 4); collapsing the 25 per-tool `?? filePath` fallbacks
 >   into `normalizeArgAliases` (Phase 4 — verified behavior-preserving since
 >   `normalizeArgAliases` already runs before the switch, but held until telemetry
