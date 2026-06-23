@@ -755,17 +755,12 @@ export class NativeToolCallParser {
 					partialArgs.filePath !== undefined ||
 					partialArgs.diff !== undefined
 				) {
-					let path = (partialArgs.path ?? partialArgs.filePath) as string | undefined
-					let diff = partialArgs.diff as string | undefined
-
-					// Recovery: same XML-leak pattern can occur during streaming too.
-					if (path === undefined && diff !== undefined) {
-						const recovered = this.extractPathFromXMLLeak(diff)
-						if (recovered) {
-							path = recovered.path
-							diff = recovered.sanitized
-						}
-					}
+					// No XML-leak path recovery here: we never silently guess the
+					// target file from a leaked `<parameter name="path">` suffix. If
+					// `path` is genuinely missing, the final parse rejects with
+					// actionable feedback (see the apply_diff case in createToolUse).
+					const path = (partialArgs.path ?? partialArgs.filePath) as string | undefined
+					const diff = partialArgs.diff as string | undefined
 
 					nativeArgs = {
 						path,
@@ -1444,32 +1439,23 @@ export class NativeToolCallParser {
 
 				case "apply_diff":
 					if (args.diff !== undefined) {
-						let path = args.path ?? (args.filePath as string | undefined)
-						let diff = args.diff as string
+						const path = args.path ?? (args.filePath as string | undefined)
+						const diff = args.diff as string
 
-						// Recovery: some vscode-lm models leak <parameter name="path"> XML tags
-						// into the `diff` string value instead of emitting `path` as a
-						// separate JSON key.  If `path` is missing, attempt to extract it
-						// from the `diff` suffix before failing.
-						if (path === undefined) {
-							const recovered = this.extractPathFromXMLLeak(diff)
-							if (recovered) {
-								path = recovered.path
-								diff = recovered.sanitized
-								webviewLog.warn(
-									`[NativeToolCallParser] Recovered apply_diff path "${path}" from malformed diff suffix (vscode-lm XML leak).`,
-								)
-								// Instrument this silent path *guess* (audit Phase 2): a wrong
-								// guess applies a diff to the wrong file. Surfacing recoveredPath
-								// + appliedToFile lets us measure the false-recovery rate and
-								// decide keep-vs-convert-to-reject from data, not vibes.
-								this.recordRecovery({
-									layerId: "apply_diff_xml_leak",
-									tool: "apply_diff",
-									recoveredPath: path,
-									appliedToFile: true,
-								})
-							}
+						// Some models leak a <parameter name="path"> tag into the `diff`
+						// value instead of emitting `path` as a separate key. We do NOT
+						// silently guess the target file from that leaked suffix and apply
+						// a diff to the guessed path — a wrong guess is a confidently-wrong
+						// edit to the wrong file. Reject loudly with actionable feedback so
+						// the model re-sends a clean call; a retry beats a guessed mutation.
+						if (path === undefined && this.extractPathFromXMLLeak(diff)) {
+							this.recordRecovery({ layerId: "apply_diff_xml_leak", tool: "apply_diff", rejected: true })
+							throw new Error(
+								`[NativeToolCallParser] apply_diff is missing the required \`path\` parameter, and a ` +
+									`\`<parameter name="path">\` tag appears to have leaked into the \`diff\` value. ` +
+									`Re-send apply_diff with \`path\` as a separate parameter and a clean \`diff\` ` +
+									`(SEARCH/REPLACE blocks only, no XML parameter tags).`,
+							)
 						}
 
 						if (path !== undefined) {

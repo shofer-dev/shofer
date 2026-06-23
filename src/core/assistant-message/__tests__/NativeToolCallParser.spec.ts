@@ -401,61 +401,52 @@ describe("NativeToolCallParser", () => {
 				})
 			})
 
-			describe("vscode-lm XML leak recovery", () => {
-				it("should recover apply_diff path from XML-leaked parameter suffix in diff string", () => {
-					// Simulates the real-world vscode-lm bug where the model emits:
-					//   { "diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">PATH" }
+			describe("vscode-lm XML leak rejection", () => {
+				it("rejects apply_diff that leaked its path into the diff (no silent guess + mutate)", () => {
+					// Real-world vscode-lm bug: the model emits the path as a leaked
+					//   <parameter name="path" string="true">PATH
+					// suffix inside `diff` instead of a separate key. We must NOT extract
+					// the guessed path and apply the diff to it — reject with feedback.
 					const diffContent =
 						`<<<<<<< SEARCH\n:start_line:1532\n\told code\n` +
 						`=======\n\tnew code\n` +
 						`>>>>>>> REPLACE\n` +
 						`<parameter name="path" string="true">extensions/shofer/src/core/workflow/WorkflowTask.ts`
 
-					const toolCall = {
+					const result = NativeToolCallParser.parseToolCall({
 						id: "toolu_xml_leak",
 						name: "apply_diff" as const,
 						arguments: JSON.stringify({ diff: diffContent }),
-					}
+					})
 
-					const result = NativeToolCallParser.parseToolCall(toolCall)
-
-					expect(result).not.toBeNull()
-					expect(result?.type).toBe("tool_use")
-					if (result?.type === "tool_use") {
-						expect(result.nativeArgs).toBeDefined()
-						const nativeArgs = result.nativeArgs as { path: string; diff: string }
-						expect(nativeArgs.path).toBe("extensions/shofer/src/core/workflow/WorkflowTask.ts")
-						// The diff must NOT contain the leaked suffix
-						expect(nativeArgs.diff).not.toContain("<parameter")
-						// The diff must still contain the SEARCH/REPLACE content
-						expect(nativeArgs.diff).toContain("<<<<<<< SEARCH")
-						expect(nativeArgs.diff).toContain(">>>>>>> REPLACE")
-					}
+					expect(result).toBeNull()
+					const err = NativeToolCallParser.consumeLastParseError()
+					expect(err).toMatch(/apply_diff/)
+					expect(err).toMatch(/path/i)
+					expect(err).toMatch(/diff/i)
 				})
 
-				it("records the XML-leak recovery for telemetry (audit removal loop)", () => {
-					// The recovery is a silent path *guess*; it must leave a measurable
-					// trace so its false-recovery rate can be tracked and the layer
-					// retired if it stops earning its keep.
+				it("records the XML-leak rejection for telemetry (audit removal loop)", () => {
+					// Detection still leaves a measurable trace — now rejected, not applied.
 					NativeToolCallParser.consumeRecoveries() // clear any prior state
 
 					const diffContent =
 						`<<<<<<< SEARCH\n:start_line:1\n\told\n=======\n\tnew\n>>>>>>> REPLACE\n` +
 						`<parameter name="path" string="true">src/foo.ts`
 
-					NativeToolCallParser.parseToolCall({
+					const result = NativeToolCallParser.parseToolCall({
 						id: "toolu_recovery_telemetry",
 						name: "apply_diff" as const,
 						arguments: JSON.stringify({ diff: diffContent }),
 					})
+					expect(result).toBeNull()
 
 					const recoveries = NativeToolCallParser.consumeRecoveries()
 					expect(recoveries).toHaveLength(1)
 					expect(recoveries[0]).toMatchObject({
 						layerId: "apply_diff_xml_leak",
 						tool: "apply_diff",
-						recoveredPath: "src/foo.ts",
-						appliedToFile: true,
+						rejected: true,
 					})
 
 					// Draining is idempotent — a clean apply_diff records nothing.
@@ -470,37 +461,24 @@ describe("NativeToolCallParser", () => {
 					expect(NativeToolCallParser.consumeRecoveries()).toHaveLength(0)
 				})
 
-				it("should recover apply_diff path from box-drawing-corrupted XML-leak (U+FF5C prefix)", () => {
-					// Simulates the real-world vscode-lm / deepseek-v4-pro bug where the
-					// model corrupts the "<parameter" prefix by substituting box-drawing
-					// Unicode characters (U+FF5C = fullwidth vertical bar) for
-					// expected ASCII bytes, producing:
-					//   "<\uFF5C\uFF5CDSML\uFF5C\uFF5Cparameter name=\"path\" string=\"true\">PATH"
+				it("rejects a box-drawing-corrupted XML-leak (U+FF5C prefix) instead of guessing", () => {
+					// vscode-lm / deepseek-v4-pro corrupts the "<parameter" prefix by
+					// substituting box-drawing Unicode (U+FF5C). Still detected as a leak,
+					// so it is rejected rather than silently applied to the guessed path.
 					const diffContent =
 						`<<<<<<< SEARCH\n:start_line:70\n\told code\n` +
 						`=======\n\tnew code\n` +
 						`>>>>>>> REPLACE\n` +
 						`<\uFF5C\uFF5CDSML\uFF5C\uFF5Cparameter name="path" string="true">extensions/shofer/website/src/data/features.ts`
 
-					const toolCall = {
+					const result = NativeToolCallParser.parseToolCall({
 						id: "toolu_boxdrawing_xml_leak",
 						name: "apply_diff" as const,
 						arguments: JSON.stringify({ diff: diffContent }),
-					}
+					})
 
-					const result = NativeToolCallParser.parseToolCall(toolCall)
-
-					expect(result).not.toBeNull()
-					expect(result?.type).toBe("tool_use")
-					if (result?.type === "tool_use") {
-						expect(result.nativeArgs).toBeDefined()
-						const nativeArgs = result.nativeArgs as { path: string; diff: string }
-						expect(nativeArgs.path).toBe("extensions/shofer/website/src/data/features.ts")
-						expect(nativeArgs.diff).not.toContain("<parameter")
-						expect(nativeArgs.diff).not.toContain("\uFF5C")
-						expect(nativeArgs.diff).toContain("<<<<<<< SEARCH")
-						expect(nativeArgs.diff).toContain(">>>>>>> REPLACE")
-					}
+					expect(result).toBeNull()
+					expect(NativeToolCallParser.consumeLastParseError()).toMatch(/path/i)
 				})
 
 				it("should handle apply_diff with normal args (no regression)", () => {
