@@ -16,5 +16,3 @@
 - preemptive summarization (in the background)
 
 - test the migration commands
-
-- test pasting images
