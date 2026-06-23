@@ -224,6 +224,8 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.TASK_PEER_MESSAGE_SENT,
 			TelemetryEventName.TASK_PEER_MESSAGE_RECEIVED,
 			TelemetryEventName.TASK_PEER_DISCOVERY,
+			TelemetryEventName.TOOL_CALL_RESOLVED,
+			TelemetryEventName.TOOL_RECOVERY_FIRED,
 		]),
 		properties: telemetryPropertiesSchema,
 	}),
