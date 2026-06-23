@@ -290,6 +290,44 @@ describe("OpenRouter API", () => {
 			expect(result.contextWindow).toBe(200000)
 		})
 
+		it("maps included_tools/excluded_tools from the catalog onto ModelInfo (llm-router path)", () => {
+			const result = parseOpenRouterModel({
+				id: "openai/gpt-5.5",
+				model: {
+					name: "GPT-5.5",
+					description: "Test model",
+					context_length: 200000,
+					pricing: { prompt: "0.000005", completion: "0.00003" },
+					included_tools: ["apply_patch"],
+					excluded_tools: ["apply_diff", "write_to_file"],
+				},
+				inputModality: ["text"],
+				outputModality: ["text"],
+				maxTokens: 8192,
+			})
+
+			expect(result.includedTools).toEqual(["apply_patch"])
+			expect(result.excludedTools).toEqual(["apply_diff", "write_to_file"])
+		})
+
+		it("leaves includedTools/excludedTools unset when the catalog omits them", () => {
+			const result = parseOpenRouterModel({
+				id: "anthropic/claude-sonnet-4.6",
+				model: {
+					name: "Claude Sonnet 4.6",
+					description: "Test model",
+					context_length: 200000,
+					pricing: { prompt: "0.000003", completion: "0.000015" },
+				},
+				inputModality: ["text"],
+				outputModality: ["text"],
+				maxTokens: 8192,
+			})
+
+			expect(result.includedTools).toBeUndefined()
+			expect(result.excludedTools).toBeUndefined()
+		})
+
 		it("sets horizon-alpha model to 32k max tokens", () => {
 			const mockModel = {
 				name: "Horizon Alpha",

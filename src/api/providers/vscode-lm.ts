@@ -126,13 +126,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 * for model capabilities across the stack. Stays `undefined` until the
 	 * async refresh completes or for non-shofer vendors.
 	 */
-	private shoferCapabilities:
-		| {
-				imageInput: boolean
-				toolCalling: boolean
-				promptCache: boolean
-		  }
-		| undefined
+	private shoferCapabilities: shoferLmCapabilities | undefined
 
 	constructor(options: ApiHandlerOptions) {
 		super()
@@ -247,9 +241,10 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		)
 		for (const candidate of candidates) {
 			try {
-				const caps = await vscode.commands.executeCommand<
-					{ imageInput: boolean; toolCalling: boolean; promptCache: boolean } | undefined
-				>("shofer.router.getModelCapabilities", candidate)
+				const caps = await vscode.commands.executeCommand<shoferLmCapabilities | undefined>(
+					"shofer.router.getModelCapabilities",
+					candidate,
+				)
 				if (caps) {
 					this.shoferCapabilities = caps
 					return
@@ -904,6 +899,14 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				...(this.shoferPricing?.cacheWritesPrice !== undefined && {
 					cacheWritesPrice: this.shoferPricing.cacheWritesPrice,
 				}),
+				// Per-model native-tool preferences (integrator-owned), sourced from
+				// shofer-router's registry via the capabilities side-channel.
+				...(this.shoferCapabilities?.includedTools?.length && {
+					includedTools: this.shoferCapabilities.includedTools,
+				}),
+				...(this.shoferCapabilities?.excludedTools?.length && {
+					excludedTools: this.shoferCapabilities.excludedTools,
+				}),
 				description: `VSCode Language Model: ${modelId}`,
 			}
 
@@ -970,6 +973,11 @@ export interface shoferLmCapabilities {
 	imageInput: boolean
 	toolCalling: boolean
 	promptCache: boolean
+	// Per-model native-tool preferences (integrator-owned) carried over the
+	// side-channel from shofer-router's model registry. Mapped onto
+	// ModelInfo.includedTools / excludedTools in getModel().
+	includedTools?: string[]
+	excludedTools?: string[]
 }
 
 /**

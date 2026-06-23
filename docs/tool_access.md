@@ -8,6 +8,11 @@ mode-level fields that govern tool access:
 - `tools_allowed`
 - `tools_denied`
 
+> **See also:** [`tool_preferences.md`](./tool_preferences.md) — how a specific
+> **model** opts into/out of tools (`includedTools`/`excludedTools`, dialect &
+> naming) across the three model-access paths, and where that metadata lives.
+> Mode access (this doc) and per-model preferences are composed at runtime.
+
 ## Schema
 
 Defined in [`packages/types/src/mode.ts`](../packages/types/src/mode.ts):

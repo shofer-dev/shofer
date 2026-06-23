@@ -36,6 +36,11 @@ const modelRouterBaseModelSchema = z.object({
 	context_length: z.number(),
 	max_completion_tokens: z.number().nullish(),
 	pricing: openRouterPricingSchema.optional(),
+	// Per-model native-tool preferences. Standard OpenRouter omits these; the
+	// Shofer provider's llm-router catalog (the integrator-owned source of truth)
+	// emits them and they map onto ModelInfo.includedTools / excludedTools.
+	included_tools: z.array(z.string()).optional(),
+	excluded_tools: z.array(z.string()).optional(),
 })
 
 export type OpenRouterBaseModel = z.infer<typeof modelRouterBaseModelSchema>
@@ -218,6 +223,16 @@ export const parseOpenRouterModel = ({
 		description: model.description,
 		supportsReasoningEffort: supportedParameters ? supportedParameters.includes("reasoning") : undefined,
 		supportedParameters: supportedParameters ? supportedParameters.filter(isModelParameter) : undefined,
+	}
+
+	// Per-model native-tool preferences supplied by the catalog (e.g. llm-router
+	// for the Shofer provider). These are integrator-owned and flow straight to
+	// ModelInfo; applyRouterToolPreferences may later union family defaults on top.
+	if (model.included_tools?.length) {
+		modelInfo.includedTools = model.included_tools
+	}
+	if (model.excluded_tools?.length) {
+		modelInfo.excludedTools = model.excluded_tools
 	}
 
 	if (OPEN_ROUTER_REASONING_BUDGET_MODELS.has(id)) {

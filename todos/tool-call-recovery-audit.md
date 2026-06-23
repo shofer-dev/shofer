@@ -1,6 +1,6 @@
 # Audit: Tool-Call Defensive Layers ("did our fixes make it worse?")
 
-> **Status:** Partially implemented — 2026-06-21 (audit drafted 2026-06-19)
+> **Status:** Partially implemented — 2026-06-23 (audit drafted 2026-06-19)
 > **Purpose:** Inventory every _silent_ recovery / alias / coercion / default-fill
 > in the native tool-calling path, ranked by **blast radius**, so we can
 > instrument-then-ablate the risky ones instead of trusting or fearing them
@@ -12,11 +12,24 @@
 > Landed the by-construction-safe, non-data-gated work; the deletions stay
 > deferred until the new telemetry accrues (exactly as the phases below gate them).
 >
-> - **Phase 1 — done.** `sed` and `insert_edit` demoted from `TOOL_GROUPS.write.tools`
->   to `.customTools` ([`tool.ts`](../extensions/shofer/packages/types/src/tool.ts)).
->   Default edit surface is now `apply_diff` + `write_to_file`; both demoted tools
->   remain allowed in write modes via a model's `includedTools`. (The audit's "stays
->   green" claim was stale — two `modes.spec` cases asserted them allowed _without_ > `includedTools`; those were updated to opt in.)
+> - **Phase 1 — done, then REVERTED (2026-06-23).** `sed` and `insert_edit` were
+>   demoted from `TOOL_GROUPS.write.tools` to `.customTools`, then restored to the
+>   default write set on 2026-06-23 ([`tool.ts`](packages/types/src/tool.ts)). They
+>   are again available by default in write modes (no `includedTools` opt-in);
+>   `customTools` is back to `[edit, search_replace, edit_file, apply_patch]` and the
+>   two `modes.spec` cases are back to their original form. **Net change to the
+>   default surface: none.** Rationale: per-turn "which editor?" cost is better
+>   handled via per-model tool preferences (next bullet) than by shrinking the
+>   global default.
+> - **Per-model tool preferences plumbed end-to-end (2026-06-23).** The
+>   integrator-owned `includedTools`/`excludedTools` mechanism (availability +
+>   dialect/naming) now flows through ALL three model-access paths: (a) llm-router
+>   emits `included_tools`/`excluded_tools` on `/v1/models` → OpenRouter fetcher; (c)
+>   shofer-router carries them in its registry → capabilities side-channel →
+>   `vscode-lm.ts`; (b) the curated provider files already did. Both new paths seed
+>   the known `openai → apply_patch` family default. See
+>   [`../docs/tool_preferences.md`](../docs/tool_preferences.md) — this is the proper
+>   home for the model-specific tuning Phase 1 was a blunt proxy for.
 > - **Phases 2–3 instrumentation + cross-cutting removal loop — done (the keystone).**
 >   Two telemetry events: `TOOL_CALL_RESOLVED` (fires on _every_ parse — canonical,
 >   aliased, unknown — carrying `{ modelId, emittedName, resolvedName, wasAliased,
