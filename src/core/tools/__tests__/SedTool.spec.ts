@@ -254,14 +254,31 @@ describe("sedTool", () => {
 		})
 	})
 
-	describe("literal fallback", () => {
-		it("falls back to literal via zero-matches path when regex compiles but doesn't match", async () => {
-			// "a+b" as regex means "one or more 'a' then 'b'" → matches "ab", "aab" etc.
-			// In text "Math: a+b" it produces 0 matches → literal fallback.
-			await executeSedTool({ pattern: "a+b", replacement: "sum", global: true }, { fileContent: "Math: a+b" })
+	describe("no silent literal fallback", () => {
+		it("does NOT silently retry a zero-match regex as a literal — reports no matches with a hint", async () => {
+			// "a+b" as regex means "one or more 'a' then 'b'" → 0 matches in "Math: a+b".
+			// We must NOT silently escape it to a literal and edit the file.
+			const result = await executeSedTool(
+				{ pattern: "a+b", replacement: "sum", global: true },
+				{ fileContent: "Math: a+b" },
+			)
 
-			expect(mockAskApproval).toHaveBeenCalled()
-			expect(toolResult).toContain("literal match")
+			expect(mockAskApproval).not.toHaveBeenCalled()
+			expect(result).toContain("No matches found")
+			expect(result).toContain("isRegex: false")
+		})
+
+		it("rejects an invalid regex with a helpful hint instead of silently treating it as literal", async () => {
+			// Unbalanced "(" is an invalid regex; previously it was silently escaped
+			// to a literal and applied. Now it fails loudly with an actionable hint.
+			const result = await executeSedTool(
+				{ pattern: "a(b", replacement: "x", global: true },
+				{ fileContent: "a(b literal" },
+			)
+
+			expect(mockAskApproval).not.toHaveBeenCalled()
+			expect(result).toContain("Invalid regex pattern")
+			expect(result).toContain("isRegex: false")
 		})
 
 		it("uses regex normally when pattern with backslash matches as regex", async () => {

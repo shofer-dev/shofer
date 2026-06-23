@@ -125,56 +125,36 @@ export class SedTool extends BaseTool<"sed"> {
 					const flags = global ? "g" : ""
 					regex = new RegExp(pattern, flags)
 				} catch (compileErr) {
-					if (METACHAR_REGEX.test(pattern)) {
-						try {
-							const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
-							regex = new RegExp(escapedPattern, global ? "g" : "")
-							matchSource = "literal"
-						} catch {
-							// Literal also failed — report original compile error.
-							task.consecutiveMistakeCount++
-							task.recordToolError("sed")
-							const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
-							await task.say("error", formattedError)
-							task.didToolFailInCurrentTurn = true
-							pushToolResult(formattedError)
-							return
-						}
-					} else {
-						task.consecutiveMistakeCount++
-						task.recordToolError("sed")
-						const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}\n</error_details>`
-						await task.say("error", formattedError)
-						task.didToolFailInCurrentTurn = true
-						pushToolResult(formattedError)
-						return
-					}
+					// Do NOT silently re-interpret an invalid regex as an escaped
+					// literal — that guesses the model's intent and can match the
+					// wrong text. Fail with actionable feedback so the model either
+					// escapes the metacharacters or opts into literal mode explicitly.
+					task.consecutiveMistakeCount++
+					task.recordToolError("sed")
+					const literalHint = METACHAR_REGEX.test(pattern)
+						? ` If you intended a literal search, set \`isRegex: false\`, or escape the regex metacharacters (| . * + ? ( ) [ ] { } ^ $ \\) with a backslash.`
+						: ""
+					const formattedError = `Invalid regex pattern: ${pattern}\n\n<error_details>\n${compileErr instanceof Error ? compileErr.message : String(compileErr)}.${literalHint}\n</error_details>`
+					await task.say("error", formattedError)
+					task.didToolFailInCurrentTurn = true
+					pushToolResult(formattedError)
+					return
 				}
 			}
 
-			// Apply the substitution — try regex first; if zero matches and the
-			// pattern contains regex metacharacters, retry as a literal string.
-			// This handles cases where the model intended a literal search but
-			// used characters like * . + ? ( ) [ ] { } ^ $ | \ without escaping.
-			let newContent = originalContent.replace(regex, replacement)
-
-			if (newContent === originalContent && matchSource !== "literal" && METACHAR_REGEX.test(pattern)) {
-				try {
-					const escapedPattern = pattern.replace(METACHAR_REGEX, "\\$&")
-					const literalRegex = new RegExp(escapedPattern, global ? "g" : "")
-					const literalContent = originalContent.replace(literalRegex, replacement)
-					if (literalContent !== originalContent) {
-						newContent = literalContent
-						matchSource = "literal"
-					}
-				} catch {
-					// Literal regex compilation failed — fall through to the no-match message.
-				}
-			}
+			// Apply the substitution. We do NOT silently retry a zero-match regex as
+			// an escaped literal — that guesses intent and can match the wrong text.
+			// If the regex matched nothing, say so and let the model re-issue with
+			// `isRegex: false` (or escaped metacharacters) if it meant a literal.
+			const newContent = originalContent.replace(regex, replacement)
 
 			// Check if anything changed
 			if (newContent === originalContent) {
-				pushToolResult(`No matches found for pattern "${pattern}" in ${relPath}`)
+				const literalHint =
+					matchSource !== "literal" && METACHAR_REGEX.test(pattern)
+						? ` The pattern contains regex metacharacters — if you intended a literal search, set \`isRegex: false\` or escape them.`
+						: ""
+				pushToolResult(`No matches found for pattern "${pattern}" in ${relPath}.${literalHint}`)
 				return
 			}
 
