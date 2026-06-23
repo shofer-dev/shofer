@@ -80,56 +80,6 @@ function restoreLineEnding(contentLF: string, eol: LineEnding): string {
 	return contentLF.replace(/\n/g, "\r\n")
 }
 
-function escapeRegExp(input: string): string {
-	return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
-
-function buildWhitespaceTolerantRegex(oldLF: string): RegExp {
-	if (oldLF === "") {
-		// Never match empty string
-		return new RegExp("(?!)", "g")
-	}
-
-	const parts = oldLF.match(/(\s+|\S+)/g) ?? []
-	const whitespacePatternForRun = (run: string): string => {
-		// If the whitespace run includes a newline, allow matching any whitespace (including newlines)
-		// to tolerate wrapping changes across lines.
-		if (run.includes("\n")) {
-			return "\\s+"
-		}
-
-		// Otherwise, limit matching to horizontal whitespace so we don't accidentally consume
-		// line breaks that precede indentation.
-		return "[\\t ]+"
-	}
-
-	const pattern = parts
-		.map((part) => {
-			if (/^\s+$/.test(part)) {
-				return whitespacePatternForRun(part)
-			}
-			return escapeRegExp(part)
-		})
-		.join("")
-
-	return new RegExp(pattern, "g")
-}
-
-function buildTokenRegex(oldLF: string): RegExp {
-	const tokens = oldLF.split(/\s+/).filter(Boolean)
-	if (tokens.length === 0) {
-		return new RegExp("(?!)", "g")
-	}
-
-	const pattern = tokens.map(escapeRegExp).join("\\s+")
-	return new RegExp(pattern, "g")
-}
-
-function countRegexMatches(content: string, regex: RegExp): number {
-	const stable = new RegExp(regex.source, regex.flags)
-	return Array.from(content.matchAll(stable)).length
-}
-
 export class EditFileTool extends BaseTool<"edit_file"> {
 	readonly name = "edit_file" as const
 
@@ -296,60 +246,33 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 					return
 				}
 
-				const wsRegex = buildWhitespaceTolerantRegex(oldLF)
-				const tokenRegex = buildTokenRegex(oldLF)
-
-				// Strategy 1: exact literal match
+				// Exact literal match only. We deliberately do NOT silently repair
+				// whitespace/indentation differences with looser regex matching: a
+				// loose match can edit the wrong span (a confidently-wrong edit).
+				// Require an exact old_string; on any mismatch, fail with actionable
+				// feedback so the model re-reads and retries with exact text.
 				const exactOccurrences = countOccurrences(currentContentLF, oldLF)
 				if (exactOccurrences === expectedReplacements) {
 					// Apply literal replacement on LF-normalized content
 					currentContentLF = safeLiteralReplace(currentContentLF, oldLF, newLF)
+				} else if (exactOccurrences === 0) {
+					task.consecutiveMistakeCount++
+					task.didToolFailInCurrentTurn = true
+					const formattedError = `No match found in file: ${absolutePath}\n\n<error_details>\nThe provided old_string was not found by exact match.\n\nRecovery suggestions:\n1. Use read_file to confirm the file's current contents\n2. Ensure old_string matches EXACTLY — including whitespace, indentation, and line endings (whitespace is NOT auto-corrected)\n3. Provide more surrounding context in old_string to make the match unique\n4. If the file has changed since you constructed old_string, re-read and retry\n</error_details>`
+					await finalizePartialToolAskIfNeeded(relPath)
+					await recordFailureForPathAndMaybeEscalate(relPath, formattedError)
+					task.recordToolError("edit_file", formattedError)
+					pushToolResult(formattedError)
+					return
 				} else {
-					// Strategy 2: whitespace-tolerant regex
-					const wsOccurrences = countRegexMatches(currentContentLF, wsRegex)
-					if (wsOccurrences === expectedReplacements) {
-						currentContentLF = currentContentLF.replace(wsRegex, () => newLF)
-					} else {
-						// Strategy 3: token-based regex
-						const tokenOccurrences = countRegexMatches(currentContentLF, tokenRegex)
-						if (tokenOccurrences === expectedReplacements) {
-							currentContentLF = currentContentLF.replace(tokenRegex, () => newLF)
-						} else {
-							// Error reporting
-							const anyMatches = exactOccurrences > 0 || wsOccurrences > 0 || tokenOccurrences > 0
-							if (!anyMatches) {
-								task.consecutiveMistakeCount++
-								task.didToolFailInCurrentTurn = true
-								const formattedError = `No match found in file: ${absolutePath}\n\n<error_details>\nThe provided old_string could not be found using exact, whitespace-tolerant, or token-based matching.\n\nRecovery suggestions:\n1. Use read_file to confirm the file's current contents\n2. Ensure old_string matches exactly (including whitespace/indentation and line endings)\n3. Provide more surrounding context in old_string to make the match unique\n4. If the file has changed since you constructed old_string, re-read and retry\n</error_details>`
-								await finalizePartialToolAskIfNeeded(relPath)
-								await recordFailureForPathAndMaybeEscalate(relPath, formattedError)
-								task.recordToolError("edit_file", formattedError)
-								pushToolResult(formattedError)
-								return
-							}
-
-							// If exact matching finds occurrences but doesn't match expected, keep the existing message
-							if (exactOccurrences > 0) {
-								task.consecutiveMistakeCount++
-								task.didToolFailInCurrentTurn = true
-								const formattedError = `Occurrence count mismatch in file: ${absolutePath}\n\n<error_details>\nExpected ${expectedReplacements} occurrence(s) but found ${exactOccurrences} exact match(es).\n\nRecovery suggestions:\n1. Provide a more specific old_string so it matches exactly once\n2. If you intend to replace all occurrences, set expected_replacements to ${exactOccurrences}\n3. Use read_file to confirm the exact text and counts\n</error_details>`
-								await finalizePartialToolAskIfNeeded(relPath)
-								await recordFailureForPathAndMaybeEscalate(relPath, formattedError)
-								task.recordToolError("edit_file", formattedError)
-								pushToolResult(formattedError)
-								return
-							}
-
-							task.consecutiveMistakeCount++
-							task.didToolFailInCurrentTurn = true
-							const formattedError = `Occurrence count mismatch in file: ${absolutePath}\n\n<error_details>\nExpected ${expectedReplacements} occurrence(s), but matching found ${wsOccurrences} (whitespace-tolerant) and ${tokenOccurrences} (token-based).\n\nRecovery suggestions:\n1. Provide more surrounding context in old_string to make the match unique\n2. If multiple replacements are intended, adjust expected_replacements to the intended count\n3. Use read_file to confirm the current file contents and refine the match\n</error_details>`
-							await finalizePartialToolAskIfNeeded(relPath)
-							await recordFailureForPathAndMaybeEscalate(relPath, formattedError)
-							task.recordToolError("edit_file", formattedError)
-							pushToolResult(formattedError)
-							return
-						}
-					}
+					task.consecutiveMistakeCount++
+					task.didToolFailInCurrentTurn = true
+					const formattedError = `Occurrence count mismatch in file: ${absolutePath}\n\n<error_details>\nExpected ${expectedReplacements} occurrence(s) but found ${exactOccurrences} exact match(es).\n\nRecovery suggestions:\n1. Provide a more specific old_string so it matches exactly once\n2. If you intend to replace all occurrences, set expected_replacements to ${exactOccurrences}\n3. Use read_file to confirm the exact text and counts\n</error_details>`
+					await finalizePartialToolAskIfNeeded(relPath)
+					await recordFailureForPathAndMaybeEscalate(relPath, formattedError)
+					task.recordToolError("edit_file", formattedError)
+					pushToolResult(formattedError)
+					return
 				}
 			}
 

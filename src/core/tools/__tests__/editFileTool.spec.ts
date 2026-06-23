@@ -605,23 +605,25 @@ describe("editFileTool", () => {
 			expect(hasFinalToolAsk).toBe(true)
 		})
 
-		it("finalizes a partial tool preview row on no-op success (no changes needed)", async () => {
-			// Path stabilization requires two consecutive calls with the same path
+		it("finalizes a partial tool preview row on an identical-strings no-op", async () => {
+			// Path stabilization requires two consecutive calls with the same path.
+			// Exact-match no-op (old_string === new_string) so it resolves to
+			// "No changes needed" without relying on fuzzy whitespace matching.
 			await executeEditFileTool(
-				{ old_string: " Line 2", new_string: "Line 2" },
+				{ old_string: "Line 2", new_string: "Line 2" },
 				{ isPartial: true, fileContent: "Line 1\nLine 2\nLine 3" },
 			)
 			await executeEditFileTool(
-				{ old_string: " Line 2", new_string: "Line 2" },
+				{ old_string: "Line 2", new_string: "Line 2" },
 				{ isPartial: true, fileContent: "Line 1\nLine 2\nLine 3" },
 			)
 
 			const result = await executeEditFileTool(
-				{ old_string: " Line 2", new_string: "Line 2" },
+				{ old_string: "Line 2", new_string: "Line 2" },
 				{ isPartial: false, fileContent: "Line 1\nLine 2\nLine 3" },
 			)
 
-			expect(result).toContain("No changes needed")
+			expect(result).toContain("No changes to apply")
 			const askCalls = mockTask.ask.mock.calls
 			const hasFinalToolAsk = askCalls.some((call: any[]) => call[0] === "tool" && call[2] === false)
 			expect(hasFinalToolAsk).toBe(true)
@@ -712,9 +714,10 @@ describe("editFileTool", () => {
 		})
 	})
 
-	describe("deterministic fallback matching", () => {
-		it("recovers from whitespace/indentation mismatch (whitespace-tolerant regex)", async () => {
-			await executeEditFileTool(
+	describe("exact-match-only (no silent whitespace repair)", () => {
+		it("rejects a whitespace/indentation mismatch instead of silently repairing it", async () => {
+			// old_string uses spaces where the file uses a tab — no exact match.
+			const result = await executeEditFileTool(
 				{
 					old_string: "start\nif (true) {\n    return 1\n}\nend",
 					new_string: "start\nif (true) {\n    return 2\n}\nend",
@@ -722,30 +725,13 @@ describe("editFileTool", () => {
 				{ fileContent: "start\nif (true) {\n\treturn 1\n}\nend" },
 			)
 
-			expect(mockTask.consecutiveMistakeCount).toBe(0)
-			expect(mockAskApproval).toHaveBeenCalled()
-			expect(mockTask.diffViewProvider.update).toHaveBeenCalledWith(
-				"start\nif (true) {\n    return 2\n}\nend",
-				true,
-			)
+			expect(result).toContain("No match found")
+			expect(mockTask.consecutiveMistakeCount).toBe(1)
+			expect(mockTask.diffViewProvider.update).not.toHaveBeenCalled()
 		})
 
-		it("keeps $ literal under regex fallback replacement", async () => {
-			await executeEditFileTool(
-				{
-					old_string: "Line 1\n    Line 2\nLine 3",
-					new_string: "Line 1\n    Cost: $100\nLine 3",
-				},
-				{ fileContent: "Line 1\n\tLine 2\nLine 3" },
-			)
-
-			expect(mockTask.consecutiveMistakeCount).toBe(0)
-			expect(mockAskApproval).toHaveBeenCalled()
-			expect(mockTask.diffViewProvider.update).toHaveBeenCalledWith("Line 1\n    Cost: $100\nLine 3", true)
-		})
-
-		it("falls back to token-based regex when whitespace-tolerant regex cannot match", async () => {
-			await executeEditFileTool(
+		it("rejects a leading-whitespace-only mismatch instead of guessing the span", async () => {
+			const result = await executeEditFileTool(
 				{
 					old_string: " Line 2",
 					new_string: "Row 2",
@@ -753,9 +739,9 @@ describe("editFileTool", () => {
 				{ fileContent: "Line 1\nLine 2\nLine 3" },
 			)
 
-			expect(mockTask.consecutiveMistakeCount).toBe(0)
-			expect(mockAskApproval).toHaveBeenCalled()
-			expect(mockTask.diffViewProvider.update).toHaveBeenCalledWith("Line 1\nRow 2\nLine 3", true)
+			expect(result).toContain("No match found")
+			expect(mockTask.consecutiveMistakeCount).toBe(1)
+			expect(mockTask.diffViewProvider.update).not.toHaveBeenCalled()
 		})
 	})
 
