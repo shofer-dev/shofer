@@ -7726,7 +7726,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Wrap in <user_message> so that processUserContentMentions /
 		// parseMentions can resolve slash-style skill mentions and track
 		// them in Task.loadedSkills for the SkillsButton popover.
-		this._runTaskLoop([{ type: "text", text: `<user_message>\n${queued.text}\n</user_message>` }]).catch((err) => {
+		// Append the queued images as image blocks — otherwise a pasted/dropped
+		// image on a "Send Now" (queued/interrupt) message is shown in the chat
+		// UI (via the say() above) but silently dropped from the LLM payload, so
+		// a vision model never sees it. Mirrors startTask() and the ask-response
+		// path, which both append formatResponse.imageBlocks(...).
+		this._runTaskLoop([
+			{ type: "text", text: `<user_message>\n${queued.text}\n</user_message>` },
+			...formatResponse.imageBlocks(queued.images),
+		]).catch((err) => {
 			taskLog.error(`[Task] Failed to restart task loop:`, err)
 		})
 	}

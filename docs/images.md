@@ -329,6 +329,20 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 
 ## Gaps, Issues & Improvement Areas
 
+- **Fixed: Pasted/dropped images silently dropped from queued ("Send Now") messages** —
+  When an image was attached and sent while the model was busy or had just finished, the
+  message was queued and later drained by
+  [`cancelAndProcessQueuedMessages`](../src/core/task/Task.ts) (the "Send Now"/interrupt
+  path). It added the message to the chat UI **with** the image (via
+  `say("user_feedback", text, images)`) but rebuilt the LLM payload from `queued.text`
+  **only** — the image block was never appended, so a vision model received text but no
+  image. (`view_image` still worked, since it injects its own image block via a different
+  path.) This is why the symptom was intermittent: it bit only when the message was
+  _queued_, not when sent directly (which goes through the ask-response path that already
+  appends images). Now appends `...formatResponse.imageBlocks(queued.images)` to the
+  task-loop content, matching `startTask` and the ask-response paths. Regression test:
+  [`cancel-queued-message-images.spec.ts`](../src/core/task/__tests__/cancel-queued-message-images.spec.ts).
+
 - **Fixed: Phantom setting name `maxReadFileImageSize`** (line 207) — The actual settings are
   [`maxImageFileSize`](../packages/types/src/global-settings.ts:170) (per-file MB limit, default 5) and
   [`maxTotalImageSize`](../packages/types/src/global-settings.ts:171) (per-operation total MB limit, default 20).
