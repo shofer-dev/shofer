@@ -110,6 +110,32 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				.replace(/&#39;/g, "'")
 
 			const originalContent = await fs.readFile(absolutePath, "utf-8")
+
+			// Validate the insertion position rather than silently clamping an
+			// out-of-range line/column to the nearest valid spot — a clamp inserts
+			// at the wrong place (e.g. a too-large line silently lands at EOF). Fail
+			// loudly so the model re-reads and corrects the position.
+			const sourceLines = originalContent.split("\n")
+			if (line < 1 || line > sourceLines.length) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("insert_edit")
+				const formattedError = `Line ${line} is out of range in ${filePath}\n\n<error_details>\nThe file has ${sourceLines.length} line(s); valid line numbers are 1–${sourceLines.length}. Use read_file to confirm the current line numbers, then retry with an in-range line.\n</error_details>`
+				await task.say("error", formattedError)
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(formattedError)
+				return
+			}
+			const targetLineLength = sourceLines[line - 1].length
+			if (resolvedColumn < 1 || resolvedColumn > targetLineLength + 1) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("insert_edit")
+				const formattedError = `Column ${resolvedColumn} is out of range on line ${line} of ${filePath}\n\n<error_details>\nLine ${line} has ${targetLineLength} character(s); valid columns are 1–${targetLineLength + 1}. Retry with an in-range column.\n</error_details>`
+				await task.say("error", formattedError)
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(formattedError)
+				return
+			}
+
 			const newContent = insertAtPosition(originalContent, line, resolvedColumn, safeText)
 
 			if (newContent === originalContent) {
@@ -219,9 +245,9 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 /**
  * Insert `text` at the given 1-based line and column in `source`.
  *
- * Lines beyond the file's end are clamped to a trailing insertion point; columns
- * beyond a line's length are clamped to that line's end. This matches the
- * behaviour of VS Code's WorkspaceEdit.insert when given out-of-range positions.
+ * Positions are validated by the caller before this runs (out-of-range line/column
+ * is rejected, not clamped). The Math.min/Math.max below is a harmless defensive
+ * backstop that never triggers in practice.
  */
 function insertAtPosition(source: string, line: number, column: number, text: string): string {
 	const lines = source.split("\n")
