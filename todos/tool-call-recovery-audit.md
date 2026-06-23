@@ -12,6 +12,24 @@
 > Landed the by-construction-safe, non-data-gated work; the deletions stay
 > deferred until the new telemetry accrues (exactly as the phases below gate them).
 >
+> - **Silent self-healing on mutating paths → loud reject-with-feedback (2026-06-23).**
+>   The investigation found the real risk is in the tool HANDLERS, not the §2.1/§2.2
+>   parser aliases. Converted the heuristic _guesses that mutate files_: (1) the
+>   `apply_diff` XML-leak path recovery now rejects instead of applying to a guessed
+>   file; (2) `edit_file` is exact-match-only (dropped whitespace-tolerant + token
+>   regex fallbacks); (3) `sed` no longer silently reinterprets a regex as a literal
+>   (compile-fail or zero-match) — fails with a hint to set `isRegex:false`;
+>   (4) `insert_edit` rejects out-of-range line/column instead of clamping to EOF.
+>   **KEPT (designed/high-value, not wild guesses):** `apply_patch` fuzzy matching
+>   (`seek-sequence.ts` — part of the Codex apply_patch contract) and
+>   `write_to_file` fence-stripping (correct ~always). The `insert_edit` HTML-entity
+>   decode is left in place (borderline, legacy-protocol safety net).
+> - **DEFERRED — alias/coercion → loud (separate effort, scope TBD).** Decision: the
+>   deterministic name/arg aliases (`bash→execute_command`, `filePath→path`,
+>   `"True"→true`, `search_and_replace→edit`) and coercions should become loud
+>   reject+hint, BUT the right long-term fix is `includedTools` so models see their
+>   familiar tools from the start (see [`../docs/tool_preferences.md`]). Tackle as its
+>   own change after agreeing exactly which tables to remove vs gate.
 > - **Phase 1 — done, then REVERTED (2026-06-23).** `sed` and `insert_edit` were
 >   demoted from `TOOL_GROUPS.write.tools` to `.customTools`, then restored to the
 >   default write set on 2026-06-23 ([`tool.ts`](packages/types/src/tool.ts)). They
