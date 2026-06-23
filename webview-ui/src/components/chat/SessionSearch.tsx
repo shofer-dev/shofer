@@ -52,6 +52,25 @@ const getHighlightRegistry = (): HighlightRegistry | null => {
 const getHighlightCtor = (): HighlightCtor | null =>
 	(globalThis as unknown as { Highlight?: HighlightCtor }).Highlight ?? null
 
+/**
+ * Message `say` types whose `text` field carries machine-readable data
+ * (JSON blobs, serialized wire requests, commit hashes, …) rather than
+ * user-visible prose. These rows either render nothing or show only a
+ * minimal icon/tooltip, so their raw `text` must be excluded from the
+ * substring search — otherwise queries match against hidden payloads the
+ * user never sees (e.g. the `wireRequest` JSON inside an
+ * `api_req_started` message).
+ */
+const MACHINE_DATA_SAY_TYPES = new Set<string>([
+	"api_req_started",
+	"api_req_finished",
+	"api_req_retried",
+	"api_req_retry_delayed",
+	"api_req_rate_limit_wait",
+	"api_req_deleted",
+	"checkpoint_saved",
+])
+
 const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose, onNavigate }) => {
 	const [query, setQuery] = useState("")
 	const [currentIndex, setCurrentIndex] = useState(0)
@@ -60,6 +79,10 @@ const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose
 	// Compute matching message timestamps for the current query. We dedupe by
 	// `ts` so that a single message containing multiple occurrences is still
 	// navigated to once (the `ChatRow` is the smallest scroll unit).
+	//
+	// Messages whose `text` is machine-readable data (see
+	// `MACHINE_DATA_SAY_TYPES`) are skipped so the search only matches
+	// content the user can actually read in the chat.
 	const matchTimestamps = useMemo<number[]>(() => {
 		const trimmed = query.trim()
 		if (!trimmed) return []
@@ -67,6 +90,8 @@ const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose
 		const seen = new Set<number>()
 		const result: number[] = []
 		for (const msg of messages) {
+			// Skip machine-data messages — their `text` is not user-visible prose.
+			if (msg.type === "say" && msg.say && MACHINE_DATA_SAY_TYPES.has(msg.say)) continue
 			const text = msg.text
 			if (!text) continue
 			if (text.toLowerCase().includes(needle) && !seen.has(msg.ts)) {
