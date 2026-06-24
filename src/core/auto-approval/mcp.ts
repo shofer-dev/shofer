@@ -13,13 +13,15 @@ export function getMcpToolGroup(mcpServerUse: McpServerUse, mcpServers: McpServe
 	if (mcpServerUse.type === "use_mcp_tool" && mcpServerUse.toolName) {
 		const server = mcpServers?.find((s: McpServer) => s.name === mcpServerUse.serverName)
 		const tool = server?.tools?.find((t: McpTool) => t.name === mcpServerUse.toolName)
-		// Default to "mcp" (the gateway group) so ungrouped tools are gated by
-		// alwaysAllowMcp alone — consistent with the visibility default in
-		// filterMcpToolsForMode where ungrouped tools default to "mcp" too.
-		return tool?.group ?? "mcp"
+		// Default to "uncategorized" (matching McpHub.fetchToolsList's discovery
+		// default) so ungrouped MCP tools require `alwaysAllowUncategorized` ON TOP
+		// of `alwaysAllowMcp` to auto-approve. The `mcp` gateway grants visibility,
+		// not auto-execution. Visibility is handled separately in
+		// filterMcpToolsForMode, which implies `uncategorized` whenever `mcp` is set.
+		return tool?.group ?? "uncategorized"
 	}
 
-	return "mcp"
+	return "uncategorized"
 }
 
 /**

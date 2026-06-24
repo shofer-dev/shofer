@@ -122,13 +122,13 @@ These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TO
 
 ### MCP tools without group
 
-Tools without an explicit `group` field default to `"mcp"` — the gateway group itself. This means they remain visible in any mode that has the `mcp` gateway (backward compatible). Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
+Tools without an explicit `group` field default to `"uncategorized"` (see `McpHub.fetchToolsList`). The `mcp` gateway **implies** the `uncategorized` group for visibility, so ungrouped MCP tools remain visible in any mode that has the `mcp` gateway (backward compatible). Their _auto-approval_ is still gated by `alwaysAllowUncategorized` — visibility does not loosen the approval requirement. Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
 
 For example, a mode with `tools: ["read", "mcp"]` exposes:
 
 - All MCP tools classified as `read` (explicitly assigned)
-- All MCP tools without a group (default `mcp`)
-- But NOT tools classified as `write`, `execute`, `browser`, or `uncategorized`
+- All ungrouped MCP tools (default `uncategorized`, made visible by the `mcp` gateway)
+- But NOT tools classified as `write`, `execute`, or `browser`
 
 ## Adding a New Extension's Tools
 

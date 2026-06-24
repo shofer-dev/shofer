@@ -258,7 +258,7 @@ The **master gate** for auto-approving MCP tool calls and resource access — if
 off, every MCP call prompts. When it is on, `use_mcp_tool` calls go through a second,
 **per-group** gate that mirrors the per-group control applied to native tools:
 [`getMcpToolGroup()`](../src/core/auto-approval/mcp.ts) resolves the tool's group (user
-override in `mcp.json` → server-declared → default `"mcp"`) and `MCP_GROUP_APPROVAL_GATE`
+override in `mcp.json` → server-declared → default `"uncategorized"`) and `MCP_GROUP_APPROVAL_GATE`
 in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts) maps it to the toggle that
 must **also** be enabled:
 
@@ -273,11 +273,13 @@ must **also** be enabled:
 | `questions`     | `alwaysAllowFollowupQuestions`                    |
 | `uncategorized` | `alwaysAllowUncategorized`                        |
 
-Groups not in the map (e.g. the generic `mcp` protocol group, which is also the default for
-ungrouped MCP tools) are approved by `alwaysAllowMcp` alone. So a browser tool served over
-MCP honors `alwaysAllowBrowser` exactly like a native browser tool, rather than being approved
-by `alwaysAllowMcp` on its own. For `access_mcp_resource`, the `alwaysAllowMcp` toggle alone
-is sufficient (no per-group stage).
+Ungrouped MCP tools default to `"uncategorized"`, so they require `alwaysAllowUncategorized`
+**in addition to** `alwaysAllowMcp` to auto-approve — the `mcp` gateway grants _visibility_, not
+auto-execution. A browser tool served over MCP honors `alwaysAllowBrowser` exactly like a native
+browser tool. Groups genuinely absent from the map (e.g. the bare `mcp` protocol group itself)
+are approved by `alwaysAllowMcp` alone, but `getMcpToolGroup()` never returns `mcp` for a
+`use_mcp_tool` call — it returns the tool's resolved group or `uncategorized`. For
+`access_mcp_resource`, the `alwaysAllowMcp` toggle alone is sufficient (no per-group stage).
 
 ### `alwaysAllowFollowupQuestions`
 

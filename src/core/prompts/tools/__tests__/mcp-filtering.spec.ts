@@ -56,14 +56,19 @@ describe("filterMcpToolsForMode", () => {
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "read-only", customModes, {})
 
 		const names = result.map((t) => ("function" in t ? t.function.name : "")).sort()
-		// Only get_pull_request (read) and list_channels (read) are visible;
-		// create_issue (write), run_workflow (execute), post_message (uncategorized) are hidden.
+		// read tools (get_pull_request, list_channels) PLUS post_message
+		// (uncategorized, implied by the mcp gateway). Hidden: create_issue (write),
+		// run_workflow (execute).
 		expect(names).toEqual(
-			[buildMcpToolName("github", "get_pull_request"), buildMcpToolName("slack", "list_channels")].sort(),
+			[
+				buildMcpToolName("github", "get_pull_request"),
+				buildMcpToolName("slack", "list_channels"),
+				buildMcpToolName("slack", "post_message"),
+			].sort(),
 		)
 	})
 
-	it("exposes only write-grouped MCP tools when the mode has write + mcp", () => {
+	it("exposes write-grouped + uncategorized MCP tools when the mode has write + mcp", () => {
 		const customModes: ModeConfig[] = [
 			{
 				slug: "edit-only",
@@ -75,8 +80,11 @@ describe("filterMcpToolsForMode", () => {
 
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "edit-only", customModes, {})
 
-		const names = result.map((t) => ("function" in t ? t.function.name : ""))
-		expect(names).toEqual([buildMcpToolName("github", "create_issue")])
+		const names = result.map((t) => ("function" in t ? t.function.name : "")).sort()
+		// create_issue (write) + post_message (uncategorized, implied by mcp).
+		expect(names).toEqual(
+			[buildMcpToolName("github", "create_issue"), buildMcpToolName("slack", "post_message")].sort(),
+		)
 	})
 
 	it("exposes only uncategorized MCP tools when the mode has uncategorized + mcp", () => {
@@ -110,10 +118,10 @@ describe("filterMcpToolsForMode", () => {
 		expect(result).toHaveLength(5)
 	})
 
-	it("exposes no MCP tools when the mode has mcp but no other groups", () => {
-		// The mcp group on its own only provides the gateway tools
-		// (use_mcp_tool, access_mcp_resource, etc.) — it does not expose any
-		// individual MCP tools because none of their groups are declared.
+	it("exposes only uncategorized MCP tools when the mode has mcp but no other groups", () => {
+		// The mcp gateway implies the uncategorized group, so ungrouped MCP tools
+		// (post_message) are visible. Grouped tools (read/write/execute) are hidden
+		// because the mode declares none of those groups.
 		const customModes: ModeConfig[] = [
 			{
 				slug: "gateway-only",
@@ -125,7 +133,8 @@ describe("filterMcpToolsForMode", () => {
 
 		const result = filterMcpToolsForMode(mcpTools, mcpToolMeta, "gateway-only", customModes, {})
 
-		expect(result).toHaveLength(0)
+		const names = result.map((t) => ("function" in t ? t.function.name : ""))
+		expect(names).toEqual([buildMcpToolName("slack", "post_message")])
 	})
 
 	it("exposes browser-grouped MCP tools when the mode has browser + mcp", () => {
@@ -178,7 +187,7 @@ describe("filterMcpToolsForMode", () => {
 		expect(result).toHaveLength(0)
 	})
 
-	it("defaults missing group metadata to 'mcp' (visible in any mode with the mcp gateway)", () => {
+	it("defaults missing group metadata to 'uncategorized' (visible via the mcp gateway)", () => {
 		const tools = [...mcpTools, makeMcpTool("misc", "weird_tool")]
 		const meta: Meta[] = [...mcpToolMeta, { serverName: "misc", name: "weird_tool", enabledForPrompt: true }]
 
@@ -193,14 +202,14 @@ describe("filterMcpToolsForMode", () => {
 
 		const result = filterMcpToolsForMode(tools, meta, "read-only", customModes, {})
 		const names = result.map((t) => ("function" in t ? t.function.name : ""))
-		// weird_tool has no group → defaults to "mcp" → visible (mode has mcp gateway)
+		// weird_tool has no group → defaults to "uncategorized" → visible (mcp implies uncategorized)
 		expect(names).toContain(buildMcpToolName("misc", "weird_tool"))
 		// read-grouped tools are visible (mode has read)
 		expect(names).toContain(buildMcpToolName("github", "get_pull_request"))
 		// write-grouped tools are hidden (mode lacks write)
 		expect(names).not.toContain(buildMcpToolName("github", "create_issue"))
-		// uncategorized tools are hidden (mode lacks uncategorized)
-		expect(names).not.toContain(buildMcpToolName("slack", "post_message"))
+		// uncategorized tools are visible (mcp gateway implies uncategorized)
+		expect(names).toContain(buildMcpToolName("slack", "post_message"))
 	})
 
 	it("excludes tools with enabledForPrompt=false even when the group matches", () => {

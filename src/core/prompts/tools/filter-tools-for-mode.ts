@@ -445,17 +445,18 @@ export function getAvailableToolsInGroup(
  *
  * The `mcp` group is a **gateway**: if the mode does not include `mcp`, no MCP
  * tools are exposed. Once the gateway is open, each MCP tool's resolved group
- * (user override in `mcp.json` → server-declared → default `"mcp"`) is checked
- * against the mode's declared groups — a tool is only visible when the mode
- * carries both `mcp` AND the tool's own group. This mirrors the per-group
+ * (user override in `mcp.json` → server-declared → default `"uncategorized"`) is
+ * checked against the mode's declared groups — a tool is only visible when the
+ * mode carries both `mcp` AND the tool's own group. This mirrors the per-group
  * control applied to native tools, so a mode with `tools: ["read", "mcp"]`
- * exposes the `mcp` gateway tools plus only the MCP tools classified as `read`.
+ * exposes only the MCP tools classified as `read` (plus the ungrouped ones).
  *
- * Tools without an explicit group assignment default to `"mcp"` — the gateway
- * group itself — so they remain visible in any mode that has the `mcp` gateway
- * (backward compatible). Only tools explicitly reassigned to a different group
- * (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion
- * in the mode.
+ * Ungrouped tools resolve to `"uncategorized"`, and the `mcp` gateway implies
+ * `"uncategorized"` for visibility — so ungrouped MCP tools remain visible in
+ * any mode that has the gateway (backward compatible). Their *auto-approval* is
+ * still gated by `alwaysAllowUncategorized` (visibility ≠ auto-execution). Only
+ * tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`,
+ * `"write"`) are gated by that group's inclusion in the mode.
  *
  * Tools whose metadata has `enabledForPrompt === false` (the user-facing
  * "include in prompt" toggle) are filtered out regardless of mode.
@@ -490,6 +491,14 @@ export function filterMcpToolsForMode(
 		return []
 	}
 
+	// `uncategorized` is implied whenever `mcp` is present: an ungrouped MCP tool
+	// resolves to the `uncategorized` group (see McpHub.fetchToolsList), and we
+	// want those tools to stay VISIBLE in any mode that opens the mcp gateway
+	// (backward compatible). Their *auto-approval* is still gated separately by
+	// `alwaysAllowUncategorized` (see getMcpToolGroup / MCP_GROUP_APPROVAL_GATE),
+	// so visibility here does not loosen the approval requirement.
+	allowedGroups.add("uncategorized")
+
 	// Build a per-tool lookup keyed by the canonical OpenAI function name
 	// (`buildMcpToolName(serverName, name)`) so that name sanitization/
 	// truncation matches exactly and tools sharing a name across different
@@ -514,13 +523,12 @@ export function filterMcpToolsForMode(
 		}
 
 		// Per-group visibility: a tool is only visible when the mode carries
-		// the tool's resolved group (user override → server-declared → default).
-		// Tools without an explicit group assignment default to "mcp" — the
-		// gateway group itself — so they remain visible in any mode that has the
-		// `mcp` gateway (backward compatible). Only tools explicitly reassigned
-		// to a different group (e.g. "browser", "read", "write") are gated by
-		// that group's inclusion in the mode.
-		const toolGroup: ToolGroup = meta?.group ?? "mcp"
+		// the tool's resolved group (user override → server-declared → default
+		// "uncategorized"). Ungrouped tools resolve to "uncategorized", which is
+		// implied by the `mcp` gateway above, so they stay visible in any mode
+		// with mcp. Tools explicitly reassigned to another group (e.g. "browser",
+		// "read", "write") are gated by that group's inclusion in the mode.
+		const toolGroup: ToolGroup = meta?.group ?? "uncategorized"
 		return allowedGroups.has(toolGroup)
 	})
 }

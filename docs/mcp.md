@@ -157,7 +157,7 @@ When `use_mcp_tool` appears in the tool list, it serves as an explicit wrapper. 
 [`fetchToolsList()`](../src/services/mcp/McpHub.ts) (line 1057) sends the MCP `tools/list` request and annotates each tool with:
 
 - `enabledForPrompt`: `false` if the tool name is in `disabledTools`.
-- `group`: resolved from user override → server-declared → default `"mcp"`.
+- `group`: resolved from user override → server-declared → default `"uncategorized"`.
 
 ### Per-Group Visibility Filtering
 
@@ -165,18 +165,18 @@ MCP tool visibility is controlled by **two layers** that must both pass:
 
 1. **`mcp` gateway** — the mode must include the `mcp` group in its `tools[]` array. If it doesn't, no MCP tools are exposed at all (the gateway tools `use_mcp_tool`, `access_mcp_resource`, etc. are also hidden).
 
-2. **Per-tool group** — once the gateway is open, each MCP tool's resolved group (user override in `mcp.json` → server-declared → default `"mcp"`) must also be in the mode's declared groups. A tool is only visible when the mode carries both `mcp` AND the tool's own group.
+2. **Per-tool group** — once the gateway is open, each MCP tool's resolved group (user override in `mcp.json` → server-declared → default `"uncategorized"`) must also be in the mode's declared groups. The `mcp` gateway **implies** the `uncategorized` group, so ungrouped tools always pass; explicitly-grouped tools need their group declared too.
 
 This mirrors the per-group control applied to native tools. For example:
 
-| Mode `tools[]`                                         | Visible MCP tools                                                     |
-| ------------------------------------------------------ | --------------------------------------------------------------------- |
-| `["read", "mcp"]`                                      | Only MCP tools classified as `read` + ungrouped tools (default `mcp`) |
-| `["browser", "mcp"]`                                   | Only MCP tools classified as `browser` + ungrouped tools              |
-| `["mcp"]`                                              | Only ungrouped tools (default `mcp`); no explicitly-grouped tools     |
-| `["read", "write", "browser", "uncategorized", "mcp"]` | All MCP tools                                                         |
+| Mode `tools[]`                                         | Visible MCP tools                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `["read", "mcp"]`                                      | MCP tools classified as `read` + ungrouped tools (default `uncategorized`) |
+| `["browser", "mcp"]`                                   | MCP tools classified as `browser` + ungrouped tools                        |
+| `["mcp"]`                                              | Only ungrouped tools (`uncategorized`, implied by the gateway)             |
+| `["read", "write", "browser", "uncategorized", "mcp"]` | All MCP tools                                                              |
 
-**Default group:** Tools without an explicit group assignment default to `"mcp"` — the gateway group itself — so they remain visible in any mode that has the `mcp` gateway (backward compatible). Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
+**Default group:** Tools without an explicit group assignment default to `"uncategorized"`. The `mcp` gateway implies `uncategorized` for **visibility**, so ungrouped MCP tools remain visible in any mode that has the gateway (backward compatible). However their **auto-approval** is still gated by `alwaysAllowUncategorized` (on top of `alwaysAllowMcp`) — visibility is not auto-execution. Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
 
 The filtering is performed by [`filterMcpToolsForMode()`](../src/core/prompts/tools/filter-tools-for-mode.ts) at catalog-assembly time. See [`tool-categories.md`](tool-categories.md) §"Mode-Based Filtering" for the full mode × group matrix.
 
