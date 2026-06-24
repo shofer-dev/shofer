@@ -19,6 +19,8 @@ VITEST_OPTS="--maxConcurrency=2"
 run_suite() {
     local label="$1" dir="$2" extra="${3:-}" max_retries="${4:-1}" ts0 ts1 elapsed rc attempt
     local tmpfile="/tmp/shofer-suite-${label//\//-}.log"
+    # Globals written for the caller: SUITE_TEST_COUNT (test count on success).
+    SUITE_TEST_COUNT=0
     printf '%-12s ' "${label}:" >&2
     rc=1
     for ((attempt=1; attempt <= max_retries + 1; attempt++)); do
@@ -32,7 +34,16 @@ run_suite() {
         if [[ $rc -eq 0 ]]; then
             local retry_note=""
             [[ $attempt -gt 1 ]] && retry_note=" (retry ${attempt})"
-            printf '%3ds  OK%s\n' "${elapsed}" "${retry_note}" >&2
+            # Extract total test count from the vitest summary line
+            # (e.g. "Tests  172 passed (172)" → 172).
+            local test_count
+            test_count=$(sed -nE 's/^[[:space:]]*Tests[[:space:]]+.*\(([0-9]+)\).*/\1/p' "${tmpfile}" | tail -1)
+            SUITE_TEST_COUNT="${test_count:-0}"
+            if [[ -n "${test_count}" ]]; then
+                printf '%3ds  OK%s  (%s tests)\n' "${elapsed}" "${retry_note}" "${test_count}" >&2
+            else
+                printf '%3ds  OK%s\n' "${elapsed}" "${retry_note}" >&2
+            fi
             rm -f "${tmpfile}"
             return 0
         fi
@@ -55,19 +66,21 @@ total_start=$(date +%s)
 (cd "${WS}/src" && npx vitest run ${VITEST_OPTS} --exclude '**/e2e/**') > /dev/null 2>&1 || true
 
 FAILURES=0
+TOTAL_TESTS=0
 set +e
 # src is flaky under load — allow one retry.
-run_suite "types"       "packages/types"     || ((FAILURES++))
-run_suite "src"         "src"                "--exclude **/e2e/**" 1 || ((FAILURES++))
-run_suite "cli"         "apps/cli"           || ((FAILURES++))
-run_suite "core"        "packages/core"      || ((FAILURES++))
-run_suite "telemetry"   "packages/telemetry" || ((FAILURES++))
-run_suite "webview-ui"  "webview-ui"         || ((FAILURES++))
+# Each run_suite sets SUITE_TEST_COUNT on success; accumulate into TOTAL_TESTS.
+run_suite "types"       "packages/types"     || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "src"         "src"                "--exclude **/e2e/**" 1 || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "cli"         "apps/cli"           || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "core"        "packages/core"      || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "telemetry"   "packages/telemetry" || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "webview-ui"  "webview-ui"         || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
 set -e
 
 total_end=$(date +%s)
 total_elapsed=$((total_end - total_start))
-printf '\n%-12s %3ds\n' "TOTAL:" "${total_elapsed}" >&2
+printf '\n%-12s %3ds  (%d tests)\n' "TOTAL:" "${total_elapsed}" "${TOTAL_TESTS}" >&2
 
 if [[ $FAILURES -gt 0 ]]; then
     printf '%d suite(s) FAILED\n' "$FAILURES" >&2
