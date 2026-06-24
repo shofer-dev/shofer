@@ -4842,6 +4842,19 @@ export class ShoferProvider
 			return
 		}
 
+		// Skip cancellation if the task is already in a terminal state. Cancelling
+		// a finished task is a no-op, but `task.abortTask()` below can HANG on it —
+		// it awaits stream/dispose state that has already settled — which leaves
+		// `_cancelling` stuck true and stalls every caller awaiting `cancelTask()`
+		// (e.g. the external control API's `cancelCurrentTask()`).
+		if (task.abort || task.abandoned || task.didExecuteAttemptCompletion) {
+			webviewLog.info(
+				`[cancelTask] task ${task.taskId}.${task.instanceId} already terminal ` +
+					`(abort=${task.abort}, abandoned=${task.abandoned}, completed=${task.didExecuteAttemptCompletion}); skipping`,
+			)
+			return
+		}
+
 		webviewLog.info(`[cancelTask] cancelling task ${task.taskId}.${task.instanceId}`)
 
 		let historyItem: HistoryItem | undefined
