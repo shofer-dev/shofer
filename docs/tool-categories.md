@@ -105,14 +105,14 @@ MCP tools are classified via a three-tier priority system (highest first):
 
 When a mode requests tools, each tool's group is checked against the mode's allowed groups. The `mcp` group itself is a **gateway** — the `use_mcp_tool` and `access_mcp_resource` gateway tools live in the `mcp` group, but individual MCP tools use their own assigned groups. This means a mode with `tools: ["read", "mcp"]` gets `use_mcp_tool` + all MCP tools classified as `read`.
 
-| Built-in mode | Allowed groups                                                                      |
-| ------------- | ----------------------------------------------------------------------------------- |
-| code          | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` |
-| architect     | `read`, `write` (`.md` only), `mcp`, `subtasks`, `questions`                        |
-| debug         | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         |
-| code-search   | `read`, `execute`, `mcp`, `questions`                                               |
-| web-search    | `browser`, `questions`, `mcp`                                                       |
-| reviewer      | `read`, `execute`, `mcp`, `subtasks`, `questions`                                   |
+| Built-in mode | Allowed groups                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| code          | `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` |
+| architect     | `read`, `write` (`.md` only), `browser`, `mcp`, `subtasks`, `questions`                        |
+| debug         | `read`, `write`, `execute`, `browser`, `mcp`, `subtasks`, `questions`, `uncategorized`         |
+| code-search   | `read`, `execute`, `browser`, `mcp`, `questions`                                               |
+| web-search    | `browser`, `questions`, `mcp`                                                                  |
+| reviewer      | `read`, `execute`, `browser`, `mcp`, `subtasks`, `questions`                                   |
 
 ### Always-available tools
 
@@ -122,7 +122,13 @@ These tools bypass mode filtering entirely, defined in the [`ALWAYS_AVAILABLE_TO
 
 ### MCP tools without group
 
-Tools without an explicit `group` field continue to work — they default to `uncategorized` and are subject to each mode's `uncategorized` inclusion.
+Tools without an explicit `group` field default to `"mcp"` — the gateway group itself. This means they remain visible in any mode that has the `mcp` gateway (backward compatible). Only tools explicitly reassigned to a different group (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion in the mode.
+
+For example, a mode with `tools: ["read", "mcp"]` exposes:
+
+- All MCP tools classified as `read` (explicitly assigned)
+- All MCP tools without a group (default `mcp`)
+- But NOT tools classified as `write`, `execute`, `browser`, or `uncategorized`
 
 ## Adding a New Extension's Tools
 

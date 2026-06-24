@@ -242,14 +242,14 @@ The six built-in modes are defined in [`DEFAULT_MODES`](../packages/types/src/mo
 This section summarizes their key structural properties; for the full
 definitions (role, group assignments, custom instructions) see the source.
 
-| #   | Slug          | Name           | Groups                                                                              | Default |
-| --- | ------------- | -------------- | ----------------------------------------------------------------------------------- | ------- |
-| 1   | `code`        | 💻 Code        | `read`, `write`, `execute`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` | Yes     |
-| 2   | `architect`   | 🏗️ Architect   | `read`, `["write", { fileRegex: "\\.md$" }]`, `mcp`, `subtasks`, `questions`        | —       |
-| 3   | `debug`       | 🪲 Debug       | `read`, `write`, `execute`, `mcp`, `subtasks`, `questions`, `uncategorized`         | —       |
-| 4   | `code-search` | 🔎 Code Search | `read`, `execute`, `mcp`, `questions`                                               | —       |
-| 5   | `web-search`  | 🌐 Web Search  | `browser`, `questions`, `mcp`                                                       | —       |
-| 6   | `reviewer`    | 👀 Reviewer    | `read`, `execute`, `mcp`, `subtasks`, `questions`                                   | —       |
+| #   | Slug          | Name           | Groups                                                                                         | Default |
+| --- | ------------- | -------------- | ---------------------------------------------------------------------------------------------- | ------- |
+| 1   | `code`        | 💻 Code        | `read`, `write`, `execute`, `browser`, `mcp`, `mode`, `subtasks`, `questions`, `uncategorized` | Yes     |
+| 2   | `architect`   | 🏗️ Architect   | `read`, `["write", { fileRegex: "\\.md$" }]`, `browser`, `mcp`, `subtasks`, `questions`        | —       |
+| 3   | `debug`       | 🪲 Debug       | `read`, `write`, `execute`, `browser`, `mcp`, `subtasks`, `questions`, `uncategorized`         | —       |
+| 4   | `code-search` | 🔎 Code Search | `read`, `execute`, `browser`, `mcp`, `questions`                                               | —       |
+| 5   | `web-search`  | 🌐 Web Search  | `browser`, `questions`, `mcp`                                                                  | —       |
+| 6   | `reviewer`    | 👀 Reviewer    | `read`, `execute`, `browser`, `mcp`, `subtasks`, `questions`                                   | —       |
 
 **Key structural notes:**
 
