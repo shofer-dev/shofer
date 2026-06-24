@@ -205,7 +205,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to write, modify, or refactor code. Ideal for implementing features, fixing bugs, creating new files, or making code improvements across any programming language or framework.",
 		description: "Write, modify, and refactor code",
-		tools: ["read", "write", "execute", "mcp", "mode", "subtasks", "questions", "uncategorized"],
+		tools: ["read", "write", "execute", "browser", "mcp", "mode", "subtasks", "questions", "uncategorized"],
 		customInstructions:
 			"Never disable, skip, weaken, or comment out unit tests, lint checks, type checks, or any other quality gate in order to commit code or accomplish a goal. If such a check fails, fix the underlying cause — quality gates exist to catch real problems, so work with them, not around them.",
 	},
@@ -220,6 +220,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		tools: [
 			"read",
 			["write", { fileRegex: "\\.md$", description: "Markdown files only" }],
+			"browser",
 			"mcp",
 			"subtasks",
 			"questions",
@@ -235,7 +236,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you're troubleshooting issues, investigating errors, or diagnosing problems. Specialized in systematic debugging, adding logging, analyzing stack traces, and identifying root causes before applying fixes.",
 		description: "Diagnose and fix software issues",
-		tools: ["read", "write", "execute", "mcp", "subtasks", "questions", "uncategorized"],
+		tools: ["read", "write", "execute", "browser", "mcp", "subtasks", "questions", "uncategorized"],
 		customInstructions:
 			"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",
 	},
@@ -247,7 +248,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need to quickly search the codebase for specific information - find where a function is defined, locate all usages of a symbol, discover patterns, or gather context about how something works. Ideal for use as a sub-task via new_task to parallelize codebase exploration.",
 		description: "Search and explore the codebase",
-		tools: ["read", "execute", "mcp", "questions"],
+		tools: ["read", "execute", "browser", "mcp", "questions"],
 		customInstructions:
 			"When searching:\n1. Use codebase_search for semantic/meaning-based searches first.\n2. Use search_files or get_search_results for regex/text pattern matching.\n3. Use list_files or read_project_structure to explore directory layouts.\n4. Use execute_command with grep, sed, awk, find, rg, fd, or similar tools for fast CLI searches.\n5. Use list_code_usages to find all references to a symbol.\n6. Be thorough but fast - prioritize breadth over depth.\n7. Return results in a clear, structured summary with file paths and line numbers.\n8. Do NOT edit any files. Do NOT use write_to_file, apply_diff, or insert_edit. Your role is search and retrieval only.\n9. Signal completion with attempt_completion, providing a concise summary of findings.",
 	},
@@ -271,7 +272,7 @@ export const DEFAULT_MODES: readonly ModeConfig[] = [
 		whenToUse:
 			"Use this mode when you need a thorough code review, want to identify potential issues, or need recommendations for improvements without making changes to the codebase.",
 		description: "Review code and identify issues",
-		tools: ["read", "execute", "mcp", "subtasks", "questions"],
+		tools: ["read", "execute", "browser", "mcp", "subtasks", "questions"],
 		customInstructions:
 			"When reviewing code:\n1. Read the relevant files thoroughly using read_file.\n2. Run static analysis or linting tools via execute_command when helpful.\n3. Query logs, metrics, or traces via MCP tools (Loki, Mimir, Tempo) if runtime behavior is relevant.\n4. Present findings clearly: what the issue is, why it matters, where it occurs (file:line), and a specific proposed fix.\n5. Do NOT edit any files. Do NOT use write_to_file, apply_diff, or insert_edit. Your role stops at proposing fixes.",
 	},

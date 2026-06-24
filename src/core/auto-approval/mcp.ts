@@ -13,10 +13,13 @@ export function getMcpToolGroup(mcpServerUse: McpServerUse, mcpServers: McpServe
 	if (mcpServerUse.type === "use_mcp_tool" && mcpServerUse.toolName) {
 		const server = mcpServers?.find((s: McpServer) => s.name === mcpServerUse.serverName)
 		const tool = server?.tools?.find((t: McpTool) => t.name === mcpServerUse.toolName)
-		return tool?.group ?? "uncategorized"
+		// Default to "mcp" (the gateway group) so ungrouped tools are gated by
+		// alwaysAllowMcp alone — consistent with the visibility default in
+		// filterMcpToolsForMode where ungrouped tools default to "mcp" too.
+		return tool?.group ?? "mcp"
 	}
 
-	return "uncategorized"
+	return "mcp"
 }
 
 /**

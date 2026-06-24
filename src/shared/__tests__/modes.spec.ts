@@ -822,7 +822,7 @@ describe("FileRestrictionError", () => {
 				name: "🪲 Debug",
 				roleDefinition:
 					"You are Shofer, an expert software debugger specializing in systematic problem diagnosis and resolution.",
-				tools: ["read", "write", "execute", "mcp", "subtasks", "questions", "uncategorized"],
+				tools: ["read", "write", "execute", "browser", "mcp", "subtasks", "questions", "uncategorized"],
 			})
 			expect(debugMode?.customInstructions).toContain(
 				"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",

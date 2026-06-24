@@ -441,20 +441,28 @@ export function getAvailableToolsInGroup(
 }
 
 /**
- * Filters MCP tools based on mode-level MCP visibility.
+ * Filters MCP tools for a given mode using per-group visibility.
  *
- * Visibility is all-or-nothing per mode: a mode either includes the broad
- * `"mcp"` group (in which case every enabled MCP tool is exposed) or it does
- * not (in which case no MCP tools are exposed). The per-tool `group` field is
- * orthogonal — it categorises tools for *auto-approval* purposes only and
- * never restricts what the model can see.
+ * The `mcp` group is a **gateway**: if the mode does not include `mcp`, no MCP
+ * tools are exposed. Once the gateway is open, each MCP tool's resolved group
+ * (user override in `mcp.json` → server-declared → default `"mcp"`) is checked
+ * against the mode's declared groups — a tool is only visible when the mode
+ * carries both `mcp` AND the tool's own group. This mirrors the per-group
+ * control applied to native tools, so a mode with `tools: ["read", "mcp"]`
+ * exposes the `mcp` gateway tools plus only the MCP tools classified as `read`.
+ *
+ * Tools without an explicit group assignment default to `"mcp"` — the gateway
+ * group itself — so they remain visible in any mode that has the `mcp` gateway
+ * (backward compatible). Only tools explicitly reassigned to a different group
+ * (e.g. `"browser"`, `"read"`, `"write"`) are gated by that group's inclusion
+ * in the mode.
  *
  * Tools whose metadata has `enabledForPrompt === false` (the user-facing
  * "include in prompt" toggle) are filtered out regardless of mode.
  *
  * @param mcpTools - Array of MCP tools (ChatCompletionTool definitions whose
  *   function names follow the `mcp--<server>--<tool>` convention)
- * @param mcpToolMeta - Per-tool metadata including server name and
+ * @param mcpToolMeta - Per-tool metadata including server name, group, and
  *   `enabledForPrompt`
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
@@ -475,31 +483,44 @@ export function filterMcpToolsForMode(
 		return []
 	}
 
-	// Mode-level MCP visibility: a mode entry is either a slug or a tuple
-	// `[slug, options]`. If the mode does not include the `mcp` group, hide all
-	// MCP tools.
+	// The `mcp` group is a gateway: if the mode does not include it, no MCP
+	// tools are exposed at all.
 	const allowedGroups = new Set<string>((modeConfig.tools ?? []).map((g) => getGroupName(g)))
 	if (!allowedGroups.has("mcp")) {
 		return []
 	}
 
-	// Per-tool prompt inclusion is independent of mode and is the user-facing
-	// kill switch for individual tools. Build the lookup using the canonical
-	// OpenAI function name (`buildMcpToolName(serverName, name)`) so that name
-	// sanitization/truncation matches exactly and tools sharing a name across
-	// different servers are not conflated.
-	const enabledByFunctionName = new Map<string, boolean>()
+	// Build a per-tool lookup keyed by the canonical OpenAI function name
+	// (`buildMcpToolName(serverName, name)`) so that name sanitization/
+	// truncation matches exactly and tools sharing a name across different
+	// servers are not conflated.
+	const metaByFunctionName = new Map<string, McpTool & { serverName: string }>()
 	for (const meta of mcpToolMeta) {
 		const functionName = buildMcpToolName(meta.serverName, meta.name)
-		enabledByFunctionName.set(functionName, meta.enabledForPrompt !== false)
+		metaByFunctionName.set(functionName, meta)
 	}
 
 	return mcpTools.filter((tool) => {
 		if (!("function" in tool)) {
 			return false
 		}
-		// Default to enabled when no metadata exists (e.g. server registered
-		// the tool but the per-tool config map hasn't been seeded yet).
-		return enabledByFunctionName.get(tool.function.name) ?? true
+
+		const meta = metaByFunctionName.get(tool.function.name)
+
+		// Per-tool prompt inclusion is the user-facing kill switch for
+		// individual tools — independent of mode/group filtering.
+		if (meta?.enabledForPrompt === false) {
+			return false
+		}
+
+		// Per-group visibility: a tool is only visible when the mode carries
+		// the tool's resolved group (user override → server-declared → default).
+		// Tools without an explicit group assignment default to "mcp" — the
+		// gateway group itself — so they remain visible in any mode that has the
+		// `mcp` gateway (backward compatible). Only tools explicitly reassigned
+		// to a different group (e.g. "browser", "read", "write") are gated by
+		// that group's inclusion in the mode.
+		const toolGroup: ToolGroup = meta?.group ?? "mcp"
+		return allowedGroups.has(toolGroup)
 	})
 }
