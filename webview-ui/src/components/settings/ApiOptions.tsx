@@ -20,6 +20,7 @@ import {
 	geminiDefaultModelId,
 	deepSeekDefaultModelId,
 	moonshotDefaultModelId,
+	dashScopeDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
 	basetenDefaultModelId,
@@ -77,6 +78,7 @@ import {
 	LiteLLM,
 	Mistral,
 	Moonshot,
+	Dashscope,
 	Ollama,
 	OpenAI,
 	OpenAICompatible,
@@ -346,6 +348,7 @@ const ApiOptions = ({
 				gemini: { field: "apiModelId", default: geminiDefaultModelId },
 				deepseek: { field: "apiModelId", default: deepSeekDefaultModelId },
 				moonshot: { field: "apiModelId", default: moonshotDefaultModelId },
+				dashscope: { field: "apiModelId", default: dashScopeDefaultModelId },
 				minimax: { field: "apiModelId", default: minimaxDefaultModelId },
 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
 				xai: { field: "apiModelId", default: xaiDefaultModelId },
@@ -623,6 +626,14 @@ const ApiOptions = ({
 
 					{selectedProvider === "moonshot" && (
 						<Moonshot
+							apiConfiguration={apiConfiguration}
+							setApiConfigurationField={setApiConfigurationField}
+							simplifySettings={fromWelcomeView}
+						/>
+					)}
+
+					{selectedProvider === "dashscope" && (
+						<Dashscope
 							apiConfiguration={apiConfiguration}
 							setApiConfigurationField={setApiConfigurationField}
 							simplifySettings={fromWelcomeView}

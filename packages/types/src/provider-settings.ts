@@ -11,6 +11,7 @@ import {
 	geminiModels,
 	mistralModels,
 	moonshotModels,
+	dashScopeModels,
 	openAiCodexModels,
 	openAiNativeModels,
 	qwenCodeModels,
@@ -119,6 +120,7 @@ export const providerNames = [
 	"gemini-cli",
 	"mistral",
 	"moonshot",
+	"dashscope",
 	"minimax",
 	"openai-codex",
 	"openai-native",
@@ -337,6 +339,14 @@ const moonshotSchema = apiModelIdProviderModelSchema.extend({
 	moonshotApiKey: z.string().optional(),
 })
 
+const dashScopeSchema = apiModelIdProviderModelSchema.extend({
+	// Free-form so the international, Beijing, or US-Virginia endpoint (or any
+	// custom/proxy host) can be entered manually. Defaults to the international
+	// endpoint in the handler when unset.
+	dashScopeBaseUrl: z.string().optional(),
+	dashScopeApiKey: z.string().optional(),
+})
+
 const minimaxSchema = apiModelIdProviderModelSchema.extend({
 	minimaxBaseUrl: z
 		.union([z.literal("https://api.minimax.io/v1"), z.literal("https://api.minimaxi.com/v1")])
@@ -435,6 +445,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	deepSeekSchema.merge(z.object({ apiProvider: z.literal("deepseek") })),
 	poeSchema.merge(z.object({ apiProvider: z.literal("poe") })),
 	moonshotSchema.merge(z.object({ apiProvider: z.literal("moonshot") })),
+	dashScopeSchema.merge(z.object({ apiProvider: z.literal("dashscope") })),
 	minimaxSchema.merge(z.object({ apiProvider: z.literal("minimax") })),
 	requestySchema.merge(z.object({ apiProvider: z.literal("requesty") })),
 	unboundSchema.merge(z.object({ apiProvider: z.literal("unbound") })),
@@ -471,6 +482,7 @@ export const providerSettingsSchema = z.object({
 	...deepSeekSchema.shape,
 	...poeSchema.shape,
 	...moonshotSchema.shape,
+	...dashScopeSchema.shape,
 	...minimaxSchema.shape,
 	...requestySchema.shape,
 	...unboundSchema.shape,
@@ -547,6 +559,7 @@ export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	"gemini-cli": "apiModelId",
 	mistral: "apiModelId",
 	moonshot: "apiModelId",
+	dashscope: "apiModelId",
 	minimax: "apiModelId",
 	deepseek: "apiModelId",
 	poe: "apiModelId",
@@ -634,6 +647,11 @@ export const MODELS_BY_PROVIDER: Record<
 		id: "moonshot",
 		label: "Moonshot",
 		models: Object.keys(moonshotModels),
+	},
+	dashscope: {
+		id: "dashscope",
+		label: "DashScope (Qwen)",
+		models: Object.keys(dashScopeModels),
 	},
 	minimax: {
 		id: "minimax",

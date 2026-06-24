@@ -9,6 +9,7 @@ import {
 	bedrockModels,
 	deepSeekModels,
 	moonshotModels,
+	dashScopeModels,
 	minimaxModels,
 	geminiModels,
 	mistralModels,
@@ -245,6 +246,11 @@ function getSelectedModel({
 		case "moonshot": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = moonshotModels[id as keyof typeof moonshotModels]
+			return { id, info }
+		}
+		case "dashscope": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = dashScopeModels[id as keyof typeof dashScopeModels]
 			return { id, info }
 		}
 		case "minimax": {

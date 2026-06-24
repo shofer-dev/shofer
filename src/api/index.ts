@@ -20,6 +20,7 @@ import {
 	OpenAiNativeHandler,
 	DeepSeekHandler,
 	MoonshotHandler,
+	DashScopeHandler,
 	MistralHandler,
 	VsCodeLmHandler,
 	RequestyHandler,
@@ -154,6 +155,8 @@ export function buildApiHandler(
 				return new QwenCodeHandler(options)
 			case "moonshot":
 				return new MoonshotHandler(options)
+			case "dashscope":
+				return new DashScopeHandler(options)
 			case "vscode-lm":
 				return new VsCodeLmHandler(handlerOptions)
 			case "mistral":

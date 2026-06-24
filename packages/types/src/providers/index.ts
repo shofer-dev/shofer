@@ -8,6 +8,7 @@ export * from "./lite-llm.js"
 export * from "./lm-studio.js"
 export * from "./mistral.js"
 export * from "./moonshot.js"
+export * from "./dashscope.js"
 export * from "./ollama.js"
 export * from "./openai.js"
 export * from "./openai-codex.js"
@@ -35,6 +36,7 @@ import { geminiDefaultModelId } from "./gemini.js"
 import { litellmDefaultModelId } from "./lite-llm.js"
 import { mistralDefaultModelId } from "./mistral.js"
 import { moonshotDefaultModelId } from "./moonshot.js"
+import { dashScopeDefaultModelId } from "./dashscope.js"
 import { openAiCodexDefaultModelId } from "./openai-codex.js"
 import { openRouterDefaultModelId } from "./openrouter.js"
 import { poeDefaultModelId } from "./poe.js"
@@ -82,6 +84,8 @@ export function getProviderDefaultModelId(
 			return deepSeekDefaultModelId
 		case "moonshot":
 			return moonshotDefaultModelId
+		case "dashscope":
+			return dashScopeDefaultModelId
 		case "minimax":
 			return minimaxDefaultModelId
 		case "zai":

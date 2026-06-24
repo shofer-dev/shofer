@@ -41,6 +41,12 @@ export interface OpenAICompatibleConfig {
 	modelMaxTokens?: number
 	/** Temperature setting */
 	temperature?: number
+	/**
+	 * Extra provider options forwarded to streamText/generateText. For
+	 * openai-compatible providers, fields under the provider's own key are merged
+	 * into the request body (e.g. `{ dashscope: { enable_thinking: true } }`).
+	 */
+	providerOptions?: Parameters<typeof streamText>[0]["providerOptions"]
 }
 
 /**
@@ -174,6 +180,7 @@ export abstract class OpenAICompatibleHandler extends BaseProvider implements Si
 			maxOutputTokens: this.getMaxOutputTokens(),
 			tools: aiSdkTools,
 			toolChoice: this.mapToolChoice(metadata?.tool_choice),
+			...(this.config.providerOptions && { providerOptions: this.config.providerOptions }),
 		}
 
 		// Use streamText for streaming responses
