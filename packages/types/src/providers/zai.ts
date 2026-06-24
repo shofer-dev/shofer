@@ -81,6 +81,16 @@ export const internationalZAiModels = {
 		description:
 			"GLM-4.5V is Z.AI's multimodal visual reasoning model (image/video/text/file input), optimized for GUI tasks, grounding, and document/video understanding.",
 	},
+	"glm-5v-turbo": {
+		maxTokens: 131_072,
+		contextWindow: 202_752,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 1.2,
+		outputPrice: 4.0,
+		description:
+			"GLM-5V-Turbo is a next-gen native multimodal vision model (image + video) with multimodal tool use and GUI task execution.",
+	},
 	"glm-4.6v": {
 		maxTokens: 16_384,
 		contextWindow: 131_072,
@@ -334,6 +344,16 @@ export const mainlandZAiModels = {
 		cacheReadsPrice: 0.005,
 		description:
 			"GLM-4.7-FlashX is an ultra-fast variant of GLM-4.7 with exceptional speed and cost-effectiveness for high-throughput applications.",
+	},
+	"glm-5v-turbo": {
+		maxTokens: 131_072,
+		contextWindow: 202_752,
+		supportsImages: true,
+		supportsPromptCache: false,
+		inputPrice: 0.6,
+		outputPrice: 2.0,
+		description:
+			"GLM-5V-Turbo is a next-gen native multimodal vision model (image + video) with multimodal tool use and GUI task execution.",
 	},
 	"glm-4.6v": {
 		maxTokens: 16_384,
