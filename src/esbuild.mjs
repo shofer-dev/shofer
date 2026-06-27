@@ -159,6 +159,10 @@ async function main() {
 		plugins,
 		entryPoints: ["extension.ts"],
 		outfile: "dist/extension.js",
+		// Prepend the navigator shim so it runs before any bundled module evaluates
+		// (neutralizes VS Code's throwing `navigator` proxy in the Node ext host;
+		// see navigator-shim.js).
+		banner: { js: fs.readFileSync(path.join(__dirname, "navigator-shim.js"), "utf8") },
 		// global-agent must be external because it dynamically patches Node.js http/https modules
 		// which breaks when bundled. It needs access to the actual Node.js module instances.
 		// undici must be bundled because our VSIX is packaged with `--no-dependencies`.
