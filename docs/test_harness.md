@@ -1,13 +1,44 @@
 # Test Harness
 
-Reference for the Shofer headless runtime test harness. It has **three parts**,
-all sharing the same `ExtensionHost` / `ShoferAPI` infrastructure:
+Reference for the Shofer headless runtime test harness. This doc covers the
+**L1 CLI harness** in detail and points to the **L2 code-server E2E harness**,
+which lives in a separate package with its own docs.
+
+## Where this fits — the test pyramid
+
+The test suite is a three-layer pyramid; each layer is faster and more
+deterministic than the one above, so you only pay the slow layer for what it
+uniquely covers:
+
+| Layer                    | What                                                                                                                                                                                               | Runtime                                            | Doc                                                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **L0 — Unit**            | `*.spec.ts` / `*.test.ts` via vitest                                                                                                                                                               | in-process                                         | (co-located with source)                                                                                                             |
+| **L1 — CLI harness**     | **the subject of this doc** — drives Shofer core headlessly via the CLI `ExtensionHost`. Three parts (below).                                                                                      | headless CLI, no code-server, no browser           | this file + [`../TESTING.md`](../TESTING.md)                                                                                         |
+| **L2 — code-server E2E** | Python/pytest runner driving Shofer **inside a real code-server** (orchestrator control endpoint + Playwright webview checks). Covers what L1 structurally can't: the web runtime + React webview. | code-server (Docker/native/k3s) + headless browser | **separate package** → [`extensions/integration/README.md`](../../integration/README.md), [`DESIGN.md`](../../integration/DESIGN.md) |
+
+L0 and L1 are the fast inner loop and run hermetically by default. **Only L2
+touches the k3s-deployed code-server / Shofer** (or a local-Docker code-server) —
+see [L2 — code-server E2E harness](#l2--code-server-e2e-harness) at the end of
+this doc.
+
+---
+
+## L1 — CLI harness
+
+The L1 harness has **three parts**, all sharing the same `ExtensionHost` /
+`ShoferAPI` infrastructure:
 
 | Part                                     | What                                                                                      | Driver                                         | Default provider   |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
 | **1 — CLI smoke tests** (scenarios 1–25) | CLI surface + `ShoferAPI`-as-library behaviour                                            | shell (`harness.sh`) + `api_test_runner.ts`    | mock               |
 | **2 — Integration protocol cases**       | stdin NDJSON stream protocol: cancellation, follow-ups, queue ordering, process lifecycle | `cases/*.ts` via `stream-harness.ts`           | real provider only |
 | **3 — Workflow conformance**             | Slang interpreter — `_`-prefixed `.slang` fixtures                                        | `workflow-conformance.ts` via `api-harness.ts` | mock               |
+
+> **Provider note.** L1 never touches a deployed Shofer or code-server — it runs
+> the CLI from your working tree (`tsx src/index.ts`). Its only external
+> dependency is the LLM endpoint, and only under the `ds` preset: that hits the
+> k3s-deployed **llm-router** NodePort (`localhost:30081`), not Shofer itself.
+> The default `mock` preset is fully hermetic.
 
 ### One command to run everything
 
@@ -745,3 +776,72 @@ await host.dispose()
 - **Human-in-the-loop flows** (`_await-human`, `_escalate-only`, `_escalate-if` with `limit > 5`, `_question-relay`) surface `followup` asks; the harness auto-answers via `client.respond(reply)`. Pass `limit ≤ 5` to `_escalate-if` to take the no-escalation branch.
 - **Mock provider.** The hermetic `PROVIDER=mock` path uses `~110` tokens per LLM turn. `_budget-tokens` uses `tokens(50)` to guarantee exhaustion after the first stake; adjust if the mock token accounting changes.
 - **Model dependence (real provider).** `_output-schema` needs a model that emits strict JSON. `_peer-messaging` and `_question-relay` need reliable multi-agent tool calls. A weak model may push these into `error`/`budget_exceeded`.
+
+---
+
+## L2 — code-server E2E harness
+
+Everything above (Parts 1–3) is **L1**: it drives Shofer core headlessly via the
+CLI, with no code-server and no browser. **L2** is the layer above — it drives
+the **real Shofer extension running inside a code-server instance** and verifies
+both outcomes and the React **webview UI**. It is a separate package with its own
+runner and docs:
+
+- Package: [`extensions/integration/`](../../integration/)
+- How to run + env: [`README.md`](../../integration/README.md)
+- Architecture + pyramid rationale: [`DESIGN.md`](../../integration/DESIGN.md)
+
+It is **not** part of `harness.sh` and shares none of the TypeScript drivers
+documented above — it is a **Python/pytest** runner. It is summarized here only
+so the full picture lives in one place; the L2 docs are the source of truth.
+
+### What it covers (and why L1 can't)
+
+L1 owns task lifecycle, cancellation, follow-up/queue races, process lifecycle,
+and workflow conformance — deterministically and fast. L2 exists only for what
+L1 **structurally cannot** reach: the code-server web runtime, extension
+activation in that runtime, and the webview DOM.
+
+### How it reaches the SUT (URLs only — no `kubectl`/k8s)
+
+The runner talks to the system-under-test purely over HTTP/CDP URLs, so the
+**same suite runs against a local-Docker, native, or k3s code-server** — the
+deployment is just a set of URLs:
+
+| Env var             | Default                                    | Role                                                                                                        |
+| ------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `ORCH_ENDPOINT_URL` | `http://localhost:8079`                    | orchestrator control endpoint — drive Shofer + `ide_*` tools (JSON-RPC)                                     |
+| `CODE_SERVER_URL`   | `http://localhost:8080`                    | Playwright CDP target for webview DOM + screenshots                                                         |
+| `MOCK_LLM_URL`      | `http://localhost:19999`                   | how the **harness** controls the mock-LLM (load fixtures, read request log); in-cluster NodePort is `30099` |
+| `MOCK_LLM_POD_URL`  | `mock-llm.arkware.svc.cluster.local:19999` | how **Shofer in the pod** reaches the mock — stable cluster-DNS Service address                             |
+| `LLM_ROUTER_URL`    | `…:3000` (NodePort `30081`)                | vision lane only (real vision model, e.g. `moonshot/kimi-k2.5`)                                             |
+
+This is the harness that **does depend on the k3s deployment**: the
+`code_server` and (for the gate lane) the in-cluster scripted **mock-LLM** are
+deployed by `infra/` (`services.mock_llm.enabled`, development only; manifest
+`infra/kapitan/templates/manifests/31-mock-llm.yaml.j2`). The orchestrator
+control endpoint is enabled in development via
+`infra/kapitan/inventory/targets/development.yml` (`code_server.orch_endpoint_enabled: true`).
+
+### Two lanes
+
+- `@pytest.mark.gate` — deterministic, **mock LLM**, CI-gating: `pytest -m gate` (the default `addopts`).
+- `@pytest.mark.vision` — real + vision LLM, **on-demand, non-gating**, needs Playwright: `pytest -m vision`.
+
+### Run it
+
+```bash
+cd extensions/integration
+./scripts/setup.sh          # bring up code-server + extensions + workspace (Docker, no k8s)
+./scripts/run.sh mock       # deterministic gate (auto-starts a local mock-LLM)
+./scripts/run.sh vision     # vision lane (needs Playwright + a vision model)
+
+# Against the dedicated k3s test code-server (NodePorts; mock-LLM in-cluster):
+CODE_SERVER_URL=http://localhost:30092 ORCH_ENDPOINT_URL=http://localhost:30079 \
+LLM_ROUTER_URL=http://localhost:30081 MOCK_LLM_URL=http://localhost:30099 \
+  ./scripts/run.sh all
+```
+
+> **Status (per the L2 README, 2026-06):** verified live against k3s code-server —
+> **gate 7/7** and **vision 3/3**. See the L2 README test catalog for the exact
+> per-test assertions.
