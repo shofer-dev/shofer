@@ -1,12 +1,12 @@
 /**
- * Unit tests for navigator-shim.js — the esbuild banner that neutralizes VS
- * Code's throwing `navigator` migration proxy in the Node extension host (see
- * navigator-shim.js / docs reference). The shim runs as an IIFE against
- * `globalThis`, so each test installs a simulated host `navigator`, evals the
- * shim, and asserts the outcome.
+ * Unit tests for navigator-shim.js — the esbuild banner that shadows VS Code's
+ * throwing, non-configurable `navigator` global in the Node extension host.
  *
- * Tests are ordered so the non-configurable case (which leaves an unrestorable
- * global) runs last; pollution is contained to this file (vitest isolates files).
+ * The shim works by *lexical shadowing*: declared at the top of the CJS bundle,
+ * its module-scoped `navigator` binding is what every bundled dependency's bare
+ * `navigator` reference resolves to. We reproduce that by evaluating
+ * `shim + dependency-access` inside a single function scope (via `new Function`)
+ * while a throwing `navigator` sits on the global — exactly the runtime shape.
  */
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
@@ -14,39 +14,38 @@ import path from "node:path"
 
 const shimSrc = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "navigator-shim.js"), "utf8")
 
-const setNavigator = (descriptor: PropertyDescriptor) =>
-	Object.defineProperty(globalThis, "navigator", { configurable: true, ...descriptor })
-
-const runShim = () => {
-	;(0, eval)(shimSrc)
-}
+const installThrowingGlobalNavigator = () =>
+	Object.defineProperty(globalThis, "navigator", {
+		configurable: true,
+		get() {
+			throw new Error("PendingMigrationError: navigator is now a global in nodejs")
+		},
+	})
 
 describe("navigator-shim", () => {
-	it("replaces a throwing (configurable) navigator so property reads succeed", () => {
-		setNavigator({
-			get() {
-				throw new Error("PendingMigrationError: navigator is now a global in nodejs")
-			},
-		})
-		// Reproduce the dependency pattern that crashed before the shim.
-		expect(() => (typeof navigator !== "undefined" ? navigator.userAgent : "")).toThrow()
-		runShim()
-		expect(typeof navigator !== "undefined" && navigator.userAgent).toBe("Shofer/node")
+	it("shadows a throwing global navigator so bundled deps read a benign value", () => {
+		installThrowingGlobalNavigator()
+		// Sanity: the global getter throws, like VS Code's migration proxy.
+		expect(() => (globalThis as { navigator: { userAgent: string } }).navigator.userAgent).toThrow()
+
+		// Simulate the bundle: shim banner + a dependency's feature-detect, all in
+		// one lexical scope (mirrors esbuild's CJS module scope).
+		const depAccess = '\n;return (typeof navigator !== "undefined" && navigator.userAgent);'
+		const ua = new Function(shimSrc + depAccess)()
+		expect(ua).toBe("Shofer/node")
 	})
 
-	it("leaves a real, working navigator untouched", () => {
-		setNavigator({ value: { userAgent: "Mozilla/5.0 real" } })
-		runShim()
-		expect(navigator.userAgent).toBe("Mozilla/5.0 real")
+	it("never touches the throwing global (no error even when access throws)", () => {
+		installThrowingGlobalNavigator()
+		// Running the shim alone must not throw or access the global getter.
+		expect(() => new Function(shimSrc)()).not.toThrow()
 	})
 
-	it("does not throw when navigator is non-configurable (degrades gracefully)", () => {
-		Object.defineProperty(globalThis, "navigator", {
-			configurable: false,
-			get() {
-				throw new Error("PendingMigrationError")
-			},
-		})
-		expect(() => runShim()).not.toThrow()
+	it("exposes the common UA-sniffing fields deps expect", () => {
+		const nav = new Function(shimSrc + "\n;return navigator;")()
+		expect(typeof nav.userAgent).toBe("string")
+		expect(typeof nav.platform).toBe("string")
+		expect(nav.language).toBe("en-US")
+		expect(typeof nav.hardwareConcurrency).toBe("number")
 	})
 })
