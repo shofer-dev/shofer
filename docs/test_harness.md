@@ -1,8 +1,44 @@
 # Test Harness
 
-Reference for the Shofer headless runtime test harness: CLI smoke tests
-(scenarios 1–25) and the workflow conformance suite (`_`-prefixed `.slang`
-flows). Both share the same `ExtensionHost` / `ShoferAPI` infrastructure.
+Reference for the Shofer headless runtime test harness. It has **three parts**,
+all sharing the same `ExtensionHost` / `ShoferAPI` infrastructure:
+
+| Part                                     | What                                                                                      | Driver                                         | Default provider   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------ |
+| **1 — CLI smoke tests** (scenarios 1–25) | CLI surface + `ShoferAPI`-as-library behaviour                                            | shell (`harness.sh`) + `api_test_runner.ts`    | mock               |
+| **2 — Integration protocol cases**       | stdin NDJSON stream protocol: cancellation, follow-ups, queue ordering, process lifecycle | `cases/*.ts` via `stream-harness.ts`           | real provider only |
+| **3 — Workflow conformance**             | Slang interpreter — `_`-prefixed `.slang` fixtures                                        | `workflow-conformance.ts` via `api-harness.ts` | mock               |
+
+### One command to run everything
+
+[`scripts/smoke/harness.sh`](../scripts/smoke/harness.sh) is the single entry
+point — it runs all three parts in order against a chosen **preset** and prints
+a per-part and overall PASS/FAIL summary (exit 0 iff everything passes):
+
+```bash
+cd /home/alsterg/Projects/arkware.ai/extensions/shofer
+pnpm --filter @shofer/cli test:harness          # = scripts/smoke/harness.sh mock
+pnpm --filter @shofer/cli test:harness ds       # DeepSeek via local llm-router
+pnpm --filter @shofer/cli test:integration      # SKIP_CLI=1 harness.sh ds (Parts 2+3 only)
+```
+
+Two presets ship in-box; any other provider works via the `PROVIDER`/`MODEL`
+env overrides:
+
+| Preset           | Provider                                                                              | Notes                                                                                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mock` (default) | hermetic mock                                                                         | no network/credentials/GPU. **Skips Part 2** (those cases need a provider that actually executes slow multi-turn tool flows) and the real-provider-only Part 1 scenarios (2, 14, 21). |
+| `ds`             | `shofer` → local llm-router (`http://localhost:30081/v1`, `deepseek/deepseek-v4-pro`) | runs all three parts end-to-end.                                                                                                                                                      |
+
+Key `harness.sh` knobs (env): `SKIP_CLI` / `SKIP_INTEGRATION` / `SKIP_WORKFLOW`
+to skip a part; `MATCH=<substring>` to filter Part 2 case names / Part 3 fixture
+names; `TIMEOUT` / `TIMEOUT_INT` / `TIMEOUT_WF` per-part timeouts;
+`INT_PARALLEL` / `WF_PARALLEL` concurrency (Parts 2 and 3 run process-per-case
+via `xargs`; Part 1 is sequential by design — scenarios share session/FS state).
+Failure logs for Parts 2/3 persist under a `mktemp -d` dir (path printed inline).
+
+The sections below document each part's scenarios and how to run them
+standalone (outside `harness.sh`) for focused debugging.
 
 ---
 
@@ -79,10 +115,35 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer && pnpm --filter shofer b
 
 Run these against the mock (default) or any real provider configured in
 [Setup](#setup). With a real provider the llm-router (or equivalent) must be
-reachable; under the mock no network is needed. Only scenarios 2 and 14 require
-a real provider — see the [Provider modes](#provider-modes) table. Scenarios
-15–25 use `ExtensionHost` as a library; run them with
-`pnpm --filter @shofer/cli exec tsx <file>` from `extensions/shofer/apps/cli`.
+reachable; under the mock no network is needed. Only scenarios 2, 14 (and 21,
+SIGINT) require a real provider — see the [Provider modes](#provider-modes)
+table.
+
+**Two execution surfaces.** The scenarios split into two groups by how they are
+driven:
+
+- **CLI scenarios (1–14, 20, 21, 22)** drive the `shofer` CLI as a subprocess.
+  `harness.sh` Part 1 runs exactly these, sequentially. Each snippet below is
+  also copy-pasteable standalone via the `shofer-local` alias from
+  [Setup](#setup).
+- **`ShoferAPI`-library scenarios (15–19, 23, 24, 25)** use `ExtensionHost`
+  in-process. Scenarios **15–19** are automated by
+  [`scripts/api_test_runner.ts`](../apps/cli/scripts/api_test_runner.ts), which
+  emits one `Test NN: PASS|FAIL` line per scenario against the hermetic mock:
+
+    ```bash
+    cd extensions/shofer/apps/cli
+    pnpm --filter @shofer/cli exec tsx scripts/api_test_runner.ts
+    ```
+
+    Scenarios 23–25 are documented as runnable snippets (paste into a `/tmp/*.ts`
+    and run with `pnpm --filter @shofer/cli exec tsx <file>` from
+    `extensions/shofer/apps/cli`); they are not yet wired into a runner.
+
+> **Note on `console.*`.** `ExtensionHost.activate()` monkey-patches `console.*`
+> and only restores it at `dispose()`. Any library scenario that needs to print
+> assertions must write to `process.stdout.write` directly, not `console.log`
+> (which the host swallows). The harness libraries already do this.
 
 ### 1. Basic print — roundtrip sanity
 
@@ -499,13 +560,81 @@ console.log("workflow transcript length:", md.length, md.length > 0 ? "OK" : "FA
 
 ---
 
-## Part 2 — Workflow conformance suite
+## Part 2 — Integration protocol cases
+
+Stream-protocol conformance for the stdin NDJSON control channel
+(`--stdin-prompt-stream`): cancellation, follow-ups, queue ordering, and process
+lifecycle. Each case in
+[`apps/cli/scripts/integration/cases/`](../apps/cli/scripts/integration/cases/)
+(every file **except** `workflow-conformance.ts`) is a standalone script that
+drives the CLI as a subprocess via the shared
+[`stream-harness.ts`](../apps/cli/scripts/integration/lib/stream-harness.ts)
+driver and exits non-zero on assertion failure.
+
+These cases drive genuinely slow multi-turn tool flows (e.g. `start-while-busy`
+needs the first task to still be running when a second `start` arrives), so they
+**require a real provider** — `harness.sh` skips Part 2 entirely under the
+`mock` preset.
+
+### How a case runs
+
+`runStreamCase({ onEvent })` spawns `pnpm dev --print --stdin-prompt-stream
+--provider $PROVIDER --output-format stream-json` as a child process, parses
+each NDJSON line into a `StreamEvent`, and invokes your `onEvent(event,
+context)` handler. The handler is a small state machine: it watches for events
+(`system/init`, `control/ack`, `assistant`, `result`, …) and uses
+`context.sendCommand({command, requestId, prompt, images})` to issue the next
+`start` / `message` / `cancel` / `shutdown` command. Throwing inside `onEvent`
+(or hitting `timeoutMs`) fails the case and `SIGTERM`s the child. Provider is
+env-driven (`PROVIDER`, `MODEL`, `API_KEY`, `BASE_URL`) so the same cases run
+under any preset.
+
+### Run the cases
+
+```bash
+cd extensions/shofer/apps/cli
+# all cases via the top-level runner (real provider, parallel):
+SKIP_CLI=1 SKIP_WORKFLOW=1 bash ../../scripts/smoke/harness.sh ds
+# or one case standalone:
+PROVIDER=shofer API_KEY=shofer MODEL=deepseek/deepseek-v4-pro \
+  BASE_URL=http://localhost:30081/v1 TIMEOUT_MS=180000 \
+  pnpm --filter @shofer/cli exec tsx scripts/integration/cases/start-while-busy.ts
+```
+
+### Case matrix
+
+| Case                                                  | Verifies                                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `start-while-busy`                                    | a second `start` while a task is running is rejected with a task-busy error (not silently dropped or interleaved). |
+| `multi-message-queue-order`                           | queued `message` commands are delivered to the active task in FIFO order.                                          |
+| `mixed-command-ordering`                              | interleaved `start`/`message`/`cancel`/`shutdown` are processed in protocol order.                                 |
+| `message-without-active-task`                         | a `message` with no active task is handled gracefully (no crash).                                                  |
+| `message-images-queue-metadata`                       | `images` payloads on `message` carry through with correct queue metadata.                                          |
+| `followup-during-streaming`                           | an `ask_followup_question` raised mid-stream surfaces and can be answered.                                         |
+| `followup-after-completion`                           | a follow-up ask after the task completed is handled.                                                               |
+| `followup-completion-ask-response`                    | the completion ask/response handshake round-trips.                                                                 |
+| `followup-completion-ask-response-images`             | …same, with image attachments in the response.                                                                     |
+| `cancel-active-task`                                  | `cancel` stops the running task cleanly.                                                                           |
+| `cancel-immediately-after-start-ack`                  | `cancel` right after the `start` ack (before streaming) is handled without a race.                                 |
+| `cancel-without-active-task`                          | `cancel` with nothing running is a no-op, not an error.                                                            |
+| `cancel-message-recovery-race`                        | a `cancel` racing a queued `message` recovers to a consistent state.                                               |
+| `shutdown-while-running`                              | `shutdown` mid-task drains/terminates cleanly with no zombie.                                                      |
+| `create-with-session-id-resume-loads-correct-session` | `--create-with-session-id` then resume loads the right session from disk.                                          |
+
+---
+
+## Part 3 — Workflow conformance suite
 
 Automated conformance tests for the Slang interpreter. Each `_`-prefixed
 fixture in [`apps/cli/scripts/integration/fixtures/`](../apps/cli/scripts/integration/fixtures/)
-exercises one language or runtime feature. The harness discovers all fixtures
-locally, runs each via `ShoferAPI`, auto-answers human escalations, and asserts
-the expected terminal `flowState.status`.
+exercises one language or runtime feature. The runner
+([`workflow-conformance.ts`](../apps/cli/scripts/integration/cases/workflow-conformance.ts))
+discovers all fixtures locally, runs each via `ShoferAPI` through the shared
+[`api-harness.ts`](../apps/cli/scripts/integration/lib/api-harness.ts) driver,
+auto-answers human escalations, and asserts the expected terminal
+`flowState.status`. A fresh `ExtensionHost` is created per fixture to isolate
+memory (the earlier shared-host design OOM-killed on real providers after ~23
+flows).
 
 ### How a workflow runs
 
