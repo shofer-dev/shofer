@@ -782,66 +782,19 @@ await host.dispose()
 ## L2 — code-server E2E harness
 
 Everything above (Parts 1–3) is **L1**: it drives Shofer core headlessly via the
-CLI, with no code-server and no browser. **L2** is the layer above — it drives
-the **real Shofer extension running inside a code-server instance** and verifies
-both outcomes and the React **webview UI**. It is a separate package with its own
-runner and docs:
+CLI, with no code-server and no browser. **L2** is the layer above — a separate
+**Python/pytest** package that drives the real Shofer extension **inside a
+code-server instance** and checks both outcomes and the React webview. It is
+**not** part of `harness.sh` and shares none of the TypeScript drivers above.
+
+L2 is also the **only** layer that touches the k3s deployment: it reaches
+code-server, the orchestrator control endpoint, and (gate lane) the in-cluster
+mock-LLM over URLs/NodePorts deployed by `infra/`. L1 never does (see the
+provider note under [L1](#l1--cli-harness)).
+
+Full reference — run instructions, env matrix, lanes, and the test catalog —
+lives in its own docs (the source of truth; not duplicated here):
 
 - Package: [`extensions/integration/`](../../integration/)
-- How to run + env: [`README.md`](../../integration/README.md)
+- How to run + env + test catalog: [`README.md`](../../integration/README.md)
 - Architecture + pyramid rationale: [`DESIGN.md`](../../integration/DESIGN.md)
-
-It is **not** part of `harness.sh` and shares none of the TypeScript drivers
-documented above — it is a **Python/pytest** runner. It is summarized here only
-so the full picture lives in one place; the L2 docs are the source of truth.
-
-### What it covers (and why L1 can't)
-
-L1 owns task lifecycle, cancellation, follow-up/queue races, process lifecycle,
-and workflow conformance — deterministically and fast. L2 exists only for what
-L1 **structurally cannot** reach: the code-server web runtime, extension
-activation in that runtime, and the webview DOM.
-
-### How it reaches the SUT (URLs only — no `kubectl`/k8s)
-
-The runner talks to the system-under-test purely over HTTP/CDP URLs, so the
-**same suite runs against a local-Docker, native, or k3s code-server** — the
-deployment is just a set of URLs:
-
-| Env var             | Default                                    | Role                                                                                                        |
-| ------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `ORCH_ENDPOINT_URL` | `http://localhost:8079`                    | orchestrator control endpoint — drive Shofer + `ide_*` tools (JSON-RPC)                                     |
-| `CODE_SERVER_URL`   | `http://localhost:8080`                    | Playwright CDP target for webview DOM + screenshots                                                         |
-| `MOCK_LLM_URL`      | `http://localhost:19999`                   | how the **harness** controls the mock-LLM (load fixtures, read request log); in-cluster NodePort is `30099` |
-| `MOCK_LLM_POD_URL`  | `mock-llm.arkware.svc.cluster.local:19999` | how **Shofer in the pod** reaches the mock — stable cluster-DNS Service address                             |
-| `LLM_ROUTER_URL`    | `…:3000` (NodePort `30081`)                | vision lane only (real vision model, e.g. `moonshot/kimi-k2.5`)                                             |
-
-This is the harness that **does depend on the k3s deployment**: the
-`code_server` and (for the gate lane) the in-cluster scripted **mock-LLM** are
-deployed by `infra/` (`services.mock_llm.enabled`, development only; manifest
-`infra/kapitan/templates/manifests/31-mock-llm.yaml.j2`). The orchestrator
-control endpoint is enabled in development via
-`infra/kapitan/inventory/targets/development.yml` (`code_server.orch_endpoint_enabled: true`).
-
-### Two lanes
-
-- `@pytest.mark.gate` — deterministic, **mock LLM**, CI-gating: `pytest -m gate` (the default `addopts`).
-- `@pytest.mark.vision` — real + vision LLM, **on-demand, non-gating**, needs Playwright: `pytest -m vision`.
-
-### Run it
-
-```bash
-cd extensions/integration
-./scripts/setup.sh          # bring up code-server + extensions + workspace (Docker, no k8s)
-./scripts/run.sh mock       # deterministic gate (auto-starts a local mock-LLM)
-./scripts/run.sh vision     # vision lane (needs Playwright + a vision model)
-
-# Against the dedicated k3s test code-server (NodePorts; mock-LLM in-cluster):
-CODE_SERVER_URL=http://localhost:30092 ORCH_ENDPOINT_URL=http://localhost:30079 \
-LLM_ROUTER_URL=http://localhost:30081 MOCK_LLM_URL=http://localhost:30099 \
-  ./scripts/run.sh all
-```
-
-> **Status (per the L2 README, 2026-06):** verified live against k3s code-server —
-> **gate 7/7** and **vision 3/3**. See the L2 README test catalog for the exact
-> per-test assertions.
