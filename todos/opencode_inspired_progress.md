@@ -40,11 +40,21 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       a contract guard (accidental prompt/param changes become reviewable diffs) and
       the equivalence gate for migrations (a migration is safe iff the snapshot stays
       green). Regenerate with `UPDATE_TOOL_SCHEMAS=1`.
-    - ⬜ Migrate the remaining ~49 tools (each with an equivalence check), then
-      single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
-      NOTE: deriving them in `shared/tools.ts` needs a layering fix (low-level
-      module can't import the native-tools graph without a cycle) — likely relocate
-      tool defs to a shared package, dovetailing with §9.
+    - ✅ Migrated 46 of ~52 tools to `defineNativeTool` (waves 1–2), each gated by the
+      golden snapshot. `defineNativeTool` pre-bakes the OpenAI-strict +
+      nullable-for-optional convention so the RAW schema stays byte-compatible with
+      the hand-written originals for ALL providers (not just the OpenAI path).
+      `strict` is now part of the snapshot.
+    - ⬜ 6 tools left hand-written (snapshot still guards them), each needs bespoke
+      handling: `call_mcp_tool_async` (free-form object arg), `send_message_to_task`
+      (deliberately `strict:false`), `read_output_channel` (originals inconsistent
+      about `null` in optional enums), `attempt_completion` (dynamic completion
+      schema via `applyCompletionSchema`), `ask_followup_question` (nested
+      array-of-object optionals), `read_file` (factory `createReadFileTool`).
+    - ⬜ Single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
+      BLOCKED on a layering fix: `shared/tools.ts` (low-level) can't import the
+      native-tools graph without a cycle — relocate tool defs to a shared package,
+      dovetailing with §9. The drift guard already makes the current mirrors safe.
 - 🚧 **§4 Unify permissions**
     - ✅ Drift guard `auto-approval/__tests__/say-tool-mapping-drift.test.ts`.
     - ⬜ Collapse tool-access + categories + per-model prefs + auto-approval into one
