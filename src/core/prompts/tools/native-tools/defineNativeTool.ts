@@ -59,6 +59,24 @@ type JsonSchemaProp = {
  * the pre-migration definitions for ALL providers (not only the OpenAI-strict
  * path, which would normalize it anyway).
  */
+// Zod v4's `z.int()` annotates the JSON Schema with the JS safe-integer range.
+// These bounds are an implementation artifact (not an intentional constraint), so
+// strip them to keep the emitted schema clean and matching the hand-written
+// `type: "integer"` definitions. Real bounds (`z.int().min(1)`) are preserved.
+const SAFE_INT_MAX = 9007199254740991
+const SAFE_INT_MIN = -9007199254740991
+
+function stripIntSentinels(node: unknown): void {
+	if (!node || typeof node !== "object") return
+	const obj = node as Record<string, unknown>
+	if (obj.minimum === SAFE_INT_MIN) delete obj.minimum
+	if (obj.maximum === SAFE_INT_MAX) delete obj.maximum
+	for (const value of Object.values(obj)) {
+		if (Array.isArray(value)) value.forEach(stripIntSentinels)
+		else if (value && typeof value === "object") stripIntSentinels(value)
+	}
+}
+
 function makeNullable(prop: JsonSchemaProp): JsonSchemaProp {
 	const next: JsonSchemaProp = { ...prop }
 	if (Array.isArray(next.enum) && !next.enum.includes(null)) {
@@ -86,6 +104,7 @@ export function defineNativeTool<S extends ZodType>(spec: NativeToolSpec<S>): De
 	const strict = spec.strict ?? true
 	const json = z.toJSONSchema(spec.schema, { io: "input" }) as Record<string, unknown>
 	delete json.$schema
+	stripIntSentinels(json)
 
 	if (json.type === "object") {
 		json.additionalProperties = false
