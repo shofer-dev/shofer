@@ -1,5 +1,7 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
 import { MAX_SUBTASK_RESULT_LENGTH } from "../../../tools/NewTaskTool"
+import { defineNativeTool } from "./defineNativeTool"
 
 const ATTEMPT_COMPLETION_DESCRIPTION = `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
 
@@ -17,32 +19,22 @@ Example: Completing after updating CSS
 
 const RESULT_PARAMETER_DESCRIPTION = `Final result message to deliver to the user once the task is complete. If running as a subtask, aim to keep within the character budget suggested in your SUBTASK CONSTRAINTS (hard safety cap: ${MAX_SUBTASK_RESULT_LENGTH} characters).`
 
-export default {
-	type: "function",
-	function: {
-		name: "attempt_completion",
-		description: ATTEMPT_COMPLETION_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				result: {
-					type: "string",
-					description: RESULT_PARAMETER_DESCRIPTION,
-				},
-				rating: {
-					type: "string",
-					description: "Self-assessment rating: 'poor', 'well', or 'excellent'",
-					enum: ["poor", "well", "excellent"],
-				},
-				feedback: {
-					type: "string",
-					description:
-						"Optional feedback for Shofer.Dev engineers to improve tooling, system prompt, etc. Only provide if you detected something that didn't work as expected or have a concrete improvement idea.",
-				},
-			},
-			required: ["result", "rating"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+// `feedback` is optional; `result`/`rating` are required. The output-contract
+// variant (see `applyCompletionSchema` in ./index) replaces `result` with a
+// per-task schema and keeps `feedback` optional.
+export default defineNativeTool({
+	name: "attempt_completion",
+	description: ATTEMPT_COMPLETION_DESCRIPTION,
+	schema: z.object({
+		result: z.string().describe(RESULT_PARAMETER_DESCRIPTION),
+		rating: z
+			.enum(["poor", "well", "excellent"])
+			.describe("Self-assessment rating: 'poor', 'well', or 'excellent'"),
+		feedback: z
+			.string()
+			.describe(
+				"Optional feedback for Shofer.Dev engineers to improve tooling, system prompt, etc. Only provide if you detected something that didn't work as expected or have a concrete improvement idea.",
+			)
+			.optional(),
+	}),
+})

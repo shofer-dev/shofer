@@ -39,9 +39,15 @@ function applyCompletionSchema(
 					...(baseProps.rating ? { rating: baseProps.rating } : {}),
 					...(baseProps.feedback ? { feedback: baseProps.feedback } : {}),
 				},
+				// Keep `feedback` optional in the contract variant. The base tool is
+				// defined via `defineNativeTool`, whose strict pre-bake lists every
+				// property (incl. the optional `feedback`) in `required`; filter it
+				// out here so the output-contract variant requires only result+rating.
 				required: [
 					"result",
-					...((base.function.parameters as any)?.required?.filter((k: string) => k !== "result") ?? []),
+					...((base.function.parameters as any)?.required?.filter(
+						(k: string) => k !== "result" && k !== "feedback",
+					) ?? []),
 				],
 				additionalProperties: (base.function.parameters as any)?.additionalProperties ?? false,
 			},
