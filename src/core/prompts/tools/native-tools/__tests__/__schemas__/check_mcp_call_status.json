@@ -1,0 +1,15 @@
+{
+	"name": "check_mcp_call_status",
+	"description": "Check the status of an async MCP tool call previously started with call_mcp_tool_async. Non-blocking — returns immediately with the current status (running, completed, error, cancelled). When the call has finished, the response also includes the tool's result or error message.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"call_id": {
+				"type": "string",
+				"description": "The call ID returned when the async MCP tool call was started."
+			}
+		},
+		"required": ["call_id"],
+		"additionalProperties": false
+	}
+}

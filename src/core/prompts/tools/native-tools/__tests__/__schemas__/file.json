@@ -1,0 +1,28 @@
+{
+	"name": "file",
+	"description": "Filesystem operations on workspace files. Use this instead of `execute_command` with `rm`/`mv` so the operation is captured in the file-changes panel and is reversible.\n\nSubcommands:\n- `rm`: Delete a file (or directory when `recursive=true`).\n- `mv`: Move/rename a file or directory. Requires `destination`.\n\nBoth subcommands operate relative to the workspace root and refuse paths that escape it.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"destination": {
+				"type": "string",
+				"description": "Destination path for 'mv'. Required for 'mv'; ignored for 'rm'."
+			},
+			"path": {
+				"type": "string",
+				"description": "Source path relative to the workspace."
+			},
+			"recursive": {
+				"type": "boolean",
+				"description": "For 'rm' only: when true, recursively delete a directory. Default false."
+			},
+			"subcommand": {
+				"type": "string",
+				"enum": ["rm", "mv"],
+				"description": "Operation to perform: 'rm' to delete, 'mv' to move/rename."
+			}
+		},
+		"required": ["destination", "path", "recursive", "subcommand"],
+		"additionalProperties": false
+	}
+}

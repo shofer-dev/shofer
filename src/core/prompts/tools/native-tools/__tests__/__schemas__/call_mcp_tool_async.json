@@ -1,0 +1,29 @@
+{
+	"name": "call_mcp_tool_async",
+	"description": "Call an MCP server tool asynchronously (fire-and-forget). Returns immediately with a call_id; use check_mcp_call_status to poll or wait_for_mcp_call to block. Prefer this over use_mcp_tool / mcp--<server>--<tool> for long-running calls or when fanning out multiple independent MCP calls in parallel.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"arguments": {
+				"type": "object",
+				"description": "A JSON object containing the tool's input parameters, following the tool's input schema. Pass null if the tool takes no arguments.",
+				"additionalProperties": false
+			},
+			"server_name": {
+				"type": "string",
+				"description": "The name of the MCP server providing the tool."
+			},
+			"source": {
+				"type": "string",
+				"enum": ["global", "project", null],
+				"description": "Optional disambiguator when multiple MCP servers share the same name. \"global\" selects the user-level server, \"project\" the workspace-level one. Omit or pass null to use the default resolution."
+			},
+			"tool_name": {
+				"type": "string",
+				"description": "The name of the tool to execute on the MCP server."
+			}
+		},
+		"required": ["arguments", "server_name", "source", "tool_name"],
+		"additionalProperties": false
+	}
+}

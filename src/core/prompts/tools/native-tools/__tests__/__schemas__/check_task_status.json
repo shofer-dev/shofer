@@ -1,0 +1,19 @@
+{
+	"name": "check_task_status",
+	"description": "Check the current status of a background child task that was previously started with new_task using is_background=true, or a peer task sharing your root task. Returns the task's status and, if it has completed/errored/cancelled, its result or error message. If the task is blocked waiting for clarification from you (it called ask_followup_question), the pending question is surfaced here so you can answer it via answer_subtask_question. Set include_activity to true to also see what the task is currently doing (last few tool calls or messages).",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"include_activity": {
+				"type": "boolean",
+				"description": "When true, include the child's most recent tool calls and messages in the response so you can see what it is currently working on."
+			},
+			"task_id": {
+				"type": "string",
+				"description": "The task ID returned when the background task was started."
+			}
+		},
+		"required": ["include_activity", "task_id"],
+		"additionalProperties": false
+	}
+}

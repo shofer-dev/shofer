@@ -1,0 +1,27 @@
+{
+	"name": "git_search",
+	"description": "Search git commit history (commit messages only — not diffs, not file contents) using semantic search. This allows discovering relevant commit context — who changed what, when, and why — by searching by meaning rather than exact keywords.\n\nSearch results include: commit hash, short hash, author, author date, commit subject (first line), and commit body.\n\nParameters:\n- query: (required) The search query describing what you're looking for in commit history\n- maxResults: (optional) Maximum number of results (default 20, max 50).\n- since: (optional) ISO 8601 date string (e.g., \"2024-01-01T00:00:00Z\"). Only include commits with author_date >= since.\n- until: (optional) ISO 8601 date string (e.g., \"2024-12-31T23:59:59Z\"). Only include commits with author_date <= until.\n\nExample: Searching for commit history about a specific feature\n{ \"query\": \"Added authentication middleware to the API gateway\" }\n\nExample: Searching with result limit\n{ \"query\": \"database migration changes\", \"maxResults\": 10 }\n\nExample: Searching with time range\n{ \"query\": \"refactoring\", \"since\": \"2025-01-01T00:00:00Z\", \"until\": \"2025-06-01T00:00:00Z\" }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"maxResults": {
+				"type": "number",
+				"description": "Maximum number of results (default 20, silently clamped to 50). Pass null to use the default."
+			},
+			"query": {
+				"type": "string",
+				"description": "Meaning-based search query describing what you want to find in git commit history"
+			},
+			"since": {
+				"type": "string",
+				"description": "Optional ISO 8601 date string (e.g., '2024-01-01T00:00:00Z'). Only include commits where author_date >= since. Pass null to skip."
+			},
+			"until": {
+				"type": "string",
+				"description": "Optional ISO 8601 date string (e.g., '2024-12-31T23:59:59Z'). Only include commits where author_date <= until. Pass null to skip."
+			}
+		},
+		"required": ["maxResults", "query", "since", "until"],
+		"additionalProperties": false
+	}
+}

@@ -35,6 +35,11 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       after the provider's OpenAI-strict normalization — deep-equals the
       pre-migration schema, so the model sees no change. This equivalence pattern
       lets the rest migrate without provider access.
+    - ✅ Migration engine: `__tests__/tool-schema-snapshot.test.ts` + `__schemas__/*.json`
+      golden snapshots lock every tool's _normalized_ schema+description. Doubles as
+      a contract guard (accidental prompt/param changes become reviewable diffs) and
+      the equivalence gate for migrations (a migration is safe iff the snapshot stays
+      green). Regenerate with `UPDATE_TOOL_SCHEMAS=1`.
     - ⬜ Migrate the remaining ~49 tools (each with an equivalence check), then
       single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
       NOTE: deriving them in `shared/tools.ts` needs a layering fix (low-level

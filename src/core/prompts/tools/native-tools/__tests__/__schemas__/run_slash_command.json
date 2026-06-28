@@ -1,0 +1,19 @@
+{
+	"name": "run_slash_command",
+	"description": "Execute a slash command to get specific instructions or content. Slash commands are predefined templates that provide detailed guidance for common tasks.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"args": {
+				"type": "string",
+				"description": "Optional additional context or arguments for the command"
+			},
+			"command": {
+				"type": "string",
+				"description": "Name of the slash command to run (e.g., init, test, deploy)"
+			}
+		},
+		"required": ["args", "command"],
+		"additionalProperties": false
+	}
+}

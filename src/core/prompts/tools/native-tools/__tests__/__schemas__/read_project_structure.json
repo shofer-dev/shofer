@@ -1,0 +1,19 @@
+{
+	"name": "read_project_structure",
+	"description": "Request to read the project structure as a tree view. This tool provides an overview of the workspace directory structure, useful for understanding project organization.\n\nParameters:\n- maxDepth: (optional) Maximum depth to traverse. Defaults to 3.\n- includeHidden: (optional) Whether to include hidden files/directories (starting with '.'). Defaults to false.\n\nExample: Read project structure with default settings\n{ }\n\nExample: Read project structure with deeper traversal\n{ \"maxDepth\": 5 }\n\nExample: Include hidden files\n{ \"includeHidden\": true }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"includeHidden": {
+				"type": "boolean",
+				"description": "Whether to include hidden files/directories (default: false)"
+			},
+			"maxDepth": {
+				"type": "number",
+				"description": "Maximum depth to traverse (default: 3)"
+			}
+		},
+		"required": ["includeHidden", "maxDepth"],
+		"additionalProperties": false
+	}
+}

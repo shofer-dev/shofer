@@ -1,0 +1,15 @@
+{
+	"name": "set_task_title",
+	"description": "Set a short, descriptive title for the current task/conversation. Use this early in a conversation to replace the auto-generated title with something meaningful. Keep titles concise (under 60 characters).",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"title": {
+				"type": "string",
+				"description": "Short descriptive title for this task (max 60 characters)"
+			}
+		},
+		"required": ["title"],
+		"additionalProperties": false
+	}
+}

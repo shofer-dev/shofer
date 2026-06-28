@@ -1,0 +1,15 @@
+{
+	"name": "give_feedback",
+	"description": "Send feedback to the Shofer.Dev developers. Use this tool to report issues, suggest improvements, or provide any other feedback about the Shofer platform and its tools. The feedback is appended to the Shofer output channel.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"feedback": {
+				"type": "string",
+				"description": "The feedback message to send to the Shofer.Dev developers."
+			}
+		},
+		"required": ["feedback"],
+		"additionalProperties": false
+	}
+}

@@ -1,0 +1,19 @@
+{
+	"name": "skills",
+	"description": "Load and execute a skill by name. Skills provide specialized instructions for common tasks like creating MCP servers or custom modes.\n\nUse this tool when you need to follow specific procedures documented in a skill. Available skills are listed in the AVAILABLE SKILLS section of the system prompt.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"args": {
+				"type": "string",
+				"description": "Optional context or arguments to pass to the skill"
+			},
+			"skill": {
+				"type": "string",
+				"description": "Name of the skill to load (e.g., create-mcp-server, create-mode). Must match a skill name from the available skills list."
+			}
+		},
+		"required": ["args", "skill"],
+		"additionalProperties": false
+	}
+}

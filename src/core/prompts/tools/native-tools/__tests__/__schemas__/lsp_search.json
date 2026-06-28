@@ -1,0 +1,19 @@
+{
+	"name": "lsp_search",
+	"description": "Search the codebase for symbols (functions, classes, variables, interfaces, etc.) using the Language Server Protocol workspace symbol provider. This is a structural/symbol-aware search that finds declarations and definitions matching the query.\n\nFalls back to word-level text search across source files when no language server is available or no symbols match.\n\nUnlike rag_search (semantic/embedding-based), this tool requires no external infrastructure and works with VS Code's built-in language services.\n\nParameters:\n- query: (required) The symbol or text to search for. Can be a function name, class name, variable name, or a natural-language description that will be matched against file contents as a fallback.\n- maxResults: (optional) Maximum number of results to return. Defaults to 20.\n\nExample: Searching for a function\n{ \"query\": \"handleUserLogin\", \"maxResults\": 10 }\n\nExample: Broader search\n{ \"query\": \"database connection\", \"maxResults\": 30 }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"maxResults": {
+				"type": "number",
+				"description": "Maximum number of results to return (default: 20)"
+			},
+			"query": {
+				"type": "string",
+				"description": "The symbol name or text to search for in the codebase"
+			}
+		},
+		"required": ["maxResults", "query"],
+		"additionalProperties": false
+	}
+}

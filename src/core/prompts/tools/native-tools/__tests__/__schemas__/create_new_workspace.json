@@ -1,0 +1,30 @@
+{
+	"name": "create_new_workspace",
+	"description": "Request to create a new workspace/project directory structure. This tool creates a new directory with optional subdirectories.\n\nParameters:\n- path: (required) Parent directory path where the workspace will be created\n- name: (required) Name of the workspace/project\n- folders: (optional) Array of subdirectory names to create within the workspace\n- openInNewWindow: (optional) Whether to open the workspace in a new window. Defaults to false.\n\nExample: Create a new project\n{ \"path\": \"/home/user/projects\", \"name\": \"my-app\" }\n\nExample: Create project with subdirectories\n{ \"path\": \"/home/user/projects\", \"name\": \"my-app\", \"folders\": [\"src\", \"tests\", \"docs\"] }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"folders": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				},
+				"description": "Array of subdirectory names to create within the workspace"
+			},
+			"name": {
+				"type": "string",
+				"description": "Name of the workspace/project"
+			},
+			"openInNewWindow": {
+				"type": "boolean",
+				"description": "Whether to open the workspace in a new window (default: false)"
+			},
+			"path": {
+				"type": "string",
+				"description": "Parent directory path where the workspace will be created"
+			}
+		},
+		"required": ["folders", "name", "openInNewWindow", "path"],
+		"additionalProperties": false
+	}
+}

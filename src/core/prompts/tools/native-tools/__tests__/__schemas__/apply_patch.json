@@ -1,0 +1,15 @@
+{
+	"name": "apply_patch",
+	"description": "Apply patches to files using a stripped-down, file-oriented diff format. This tool supports creating new files, deleting files, and updating existing files with precise changes.\n\nThe patch format uses a simple, human-readable structure:\n\n*** Begin Patch\n[ one or more file sections ]\n*** End Patch\n\nEach file section starts with one of three headers:\n- *** Add File: <path> - Create a new file. Every following line is a + line (the initial contents).\n- *** Delete File: <path> - Remove an existing file. Nothing follows.\n- *** Update File: <path> - Patch an existing file in place.\n\nFor Update File operations:\n- May be immediately followed by *** Move to: <new path> if you want to rename the file.\n- Then one or more \"hunks\", each introduced by @@ (optionally followed by context like a class or function name).\n- Within a hunk each line starts with:\n  - ' ' (space) for context lines (unchanged)\n  - '-' for lines to remove\n  - '+' for lines to add\n\nContext guidelines:\n- Show 3 lines of code above and below each change.\n- Use @@ with a class/function name if 3 lines of context is insufficient to uniquely identify the location.\n- Multiple @@ statements can be used for deeply nested code.\n\nExample patch:\n*** Begin Patch\n*** Add File: hello.txt\n+Hello world\n*** Update File: src/app.py\n*** Move to: src/main.py\n@@ def greet():\n-print(\"Hi\")\n+print(\"Hello, world!\")\n*** Delete File: obsolete.txt\n*** End Patch",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"patch": {
+				"type": "string",
+				"description": "The complete patch text in the apply_patch format, starting with '*** Begin Patch' and ending with '*** End Patch'."
+			}
+		},
+		"required": ["patch"],
+		"additionalProperties": false
+	}
+}

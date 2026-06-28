@@ -1,0 +1,19 @@
+{
+	"name": "find_files",
+	"description": "Request to find files matching a glob pattern. This tool searches for files by name pattern across the workspace, useful for locating specific file types or files in specific directories.\n\nParameters:\n- pattern: (required) The glob pattern to match files (e.g., '*.ts', '**/*.json', 'src/**/*.test.js'). Patterns are resolved relative to the workspace root — if you are unsure of the exact directory prefix, prepend \"**/\" to search the entire workspace (e.g., \"**/browser.ts\" instead of \"packages/core/src/browser.ts\").\n- maxResults: (optional) Maximum number of results to return. Defaults to 100.\n\nExample: Find all TypeScript files\n{ \"pattern\": \"**/*.ts\" }\n\nExample: Find all JSON files in config directory\n{ \"pattern\": \"config/**/*.json\" }\n\nExample: Find test files with limit\n{ \"pattern\": \"**/*.test.ts\", \"maxResults\": 50 }\n\nExample: Find a file when you don't know the full path prefix\n{ \"pattern\": \"**/browser.ts\" }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"maxResults": {
+				"description": "Maximum number of results to return (default: 100)",
+				"type": "number"
+			},
+			"pattern": {
+				"description": "Glob pattern to match files (e.g., '*.ts', '**/*.json')",
+				"type": "string"
+			}
+		},
+		"required": ["maxResults", "pattern"],
+		"additionalProperties": false
+	}
+}

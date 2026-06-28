@@ -1,0 +1,19 @@
+{
+	"name": "access_mcp_resource",
+	"description": "Request to access a resource provided by a connected MCP server. Resources represent data sources that can be used as context, such as files, API responses, or system information.\n\nParameters:\n- server_name: (required) The name of the MCP server providing the resource\n- uri: (required) The URI identifying the specific resource to access\n\nExample: Accessing a weather resource\n{ \"server_name\": \"weather-server\", \"uri\": \"weather://san-francisco/current\" }\n\nExample: Accessing a file resource from an MCP server\n{ \"server_name\": \"filesystem-server\", \"uri\": \"file:///path/to/data.json\" }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"server_name": {
+				"type": "string",
+				"description": "The name of the MCP server providing the resource"
+			},
+			"uri": {
+				"type": "string",
+				"description": "The URI identifying the specific resource to access"
+			}
+		},
+		"required": ["server_name", "uri"],
+		"additionalProperties": false
+	}
+}

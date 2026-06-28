@@ -1,0 +1,31 @@
+{
+	"name": "sed",
+	"description": "Request to perform regex find-and-replace on a workspace file using JavaScript's String.replace() with a RegExp pattern. IMPORTANT: The '.' character in regex matches ANY character (letter, slash, punctuation, etc.), not just a literal period. To match a literal dot/period, use \\. or [.]. This is the most common source of unexpected matches.\n\nCRITICAL: Characters with special regex meaning — | . * + ? ( ) [ ] { } ^ $ \\ — MUST be escaped with a backslash when you intend to match them literally. The | character is the alternation (OR) operator: a pattern like \"| column |\" is parsed as (empty) OR \" column \" OR (empty), which matches every single character boundary in the file (catastrophic!). To match a literal pipe, use \\| or [|]. Likewise, to match a literal period use \\., to match literal parentheses use \\( and \\), etc. If you are searching for markdown table rows or any text containing pipes, ALWAYS escape them.\n\nParameters:\n- path: (required) The path of the file to modify, relative to the workspace\n- pattern: (required) The regex pattern to search for (JavaScript RegExp syntax). IMPORTANT: Characters like | . * + ? ( ) [ ] { } ^ $ \\ are regex metacharacters. Escape them with \\ to match literally: \\| for pipe, \\. for dot, \\* for asterisk, etc.\n- replacement: (required) The replacement string. Supports capture group backreferences ($1, $2, etc.). For a multiline replacement, send a JSON string containing a \\n escape — it is decoded to a real newline before the substitution runs.\n- isRegex: (optional) Whether the pattern is a regular expression. When false, the pattern is matched as a literal string (no escaping needed). Defaults to true.\n- global: (optional) Whether to replace all occurrences (default: true)\n\nExample: Replace all occurrences of \"foo\" with \"bar\" in a file\n{ \"path\": \"src/app.ts\", \"pattern\": \"foo\", \"replacement\": \"bar\" }\n\nExample: Replace with capture groups\n{ \"path\": \"src/app.ts\", \"pattern\": \"import (.+) from '(.+)'\", \"replacement\": \"import $1 from '$2'\" }\n\nExample: Single (non-global) replacement\n{ \"path\": \"src/app.ts\", \"pattern\": \"TODO\", \"replacement\": \"DONE\", \"global\": false }\n\nExample: Literal replacement (no escaping needed)\n{ \"path\": \"README.md\", \"pattern\": \"**Bold text**\", \"replacement\": \"__Bold text__\", \"isRegex\": false }\n\nExample: Escape pipes in a markdown table row (\\| escapes the literal pipe character)\n{ \"path\": \"README.md\", \"pattern\": \"\\| Resized to 128×128 \\| — consider resizing \\|\", \"replacement\": \"\\| Resized to 128×128 \\|\" }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"global": {
+				"type": "boolean",
+				"description": "Whether to replace all occurrences (default: true)"
+			},
+			"isRegex": {
+				"type": "boolean",
+				"description": "Whether the pattern is a regular expression (default: true). When false, the pattern is matched as a literal string with no escaping needed."
+			},
+			"path": {
+				"type": "string",
+				"description": "The path of the file to modify, relative to the workspace"
+			},
+			"pattern": {
+				"type": "string",
+				"description": "The regex pattern to search for (JavaScript RegExp syntax). Escape regex metacharacters (| . * + ? ( ) [ ] { } ^ $ \\) with backslash to match them literally: \\| for pipe, \\. for dot, \\* for asterisk, etc. The | character is the alternation (OR) operator — \"| text |\" matches every character boundary! Always escape pipes in markdown table content."
+			},
+			"replacement": {
+				"type": "string",
+				"description": "The replacement string. Supports capture group backreferences ($1, $2, etc.)."
+			}
+		},
+		"required": ["global", "isRegex", "path", "pattern", "replacement"],
+		"additionalProperties": false
+	}
+}

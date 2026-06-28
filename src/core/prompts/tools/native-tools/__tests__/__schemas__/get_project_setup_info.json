@@ -1,0 +1,10 @@
+{
+	"name": "get_project_setup_info",
+	"description": "Request to get information about the project setup, including detected languages, frameworks, build systems, and package managers. This tool analyzes the workspace to determine the project configuration.\n\nParameters: None\n\nExample: Get project setup info\n{ }",
+	"parameters": {
+		"type": "object",
+		"properties": {},
+		"required": [],
+		"additionalProperties": false
+	}
+}

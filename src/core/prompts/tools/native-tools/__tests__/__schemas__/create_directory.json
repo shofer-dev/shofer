@@ -1,0 +1,15 @@
+{
+	"name": "create_directory",
+	"description": "Request to create a new directory. This tool creates a directory at the specified path, including any necessary parent directories.\n\nParameters:\n- path: (required) Path of the directory to create, relative to the workspace\n\nExample: Create a new directory\n{ \"path\": \"src/components\" }",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"path": {
+				"type": "string",
+				"description": "Path of the directory to create, relative to the workspace"
+			}
+		},
+		"required": ["path"],
+		"additionalProperties": false
+	}
+}

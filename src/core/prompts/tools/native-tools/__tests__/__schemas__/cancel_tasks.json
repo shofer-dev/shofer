@@ -1,0 +1,18 @@
+{
+	"name": "cancel_tasks",
+	"description": "Stop one or more background child tasks. Already-completed or errored tasks are unaffected. Use this to terminate redundant parallel work — for example, when one search subtask found the answer and the others are no longer needed.",
+	"parameters": {
+		"type": "object",
+		"properties": {
+			"task_ids": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				},
+				"description": "One or more task IDs of background child tasks to stop."
+			}
+		},
+		"required": ["task_ids"],
+		"additionalProperties": false
+	}
+}
