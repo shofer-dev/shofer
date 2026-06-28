@@ -40,17 +40,19 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       a contract guard (accidental prompt/param changes become reviewable diffs) and
       the equivalence gate for migrations (a migration is safe iff the snapshot stays
       green). Regenerate with `UPDATE_TOOL_SCHEMAS=1`.
-    - ✅ Migrated 46 of ~52 tools to `defineNativeTool` (waves 1–2), each gated by the
-      golden snapshot. `defineNativeTool` pre-bakes the OpenAI-strict +
-      nullable-for-optional convention so the RAW schema stays byte-compatible with
-      the hand-written originals for ALL providers (not just the OpenAI path).
-      `strict` is now part of the snapshot.
-    - ⬜ 6 tools left hand-written (snapshot still guards them), each needs bespoke
-      handling: `call_mcp_tool_async` (free-form object arg), `send_message_to_task`
-      (deliberately `strict:false`), `read_output_channel` (originals inconsistent
-      about `null` in optional enums), `attempt_completion` (dynamic completion
-      schema via `applyCompletionSchema`), `ask_followup_question` (nested
-      array-of-object optionals), `read_file` (factory `createReadFileTool`).
+    - ✅ Migrated **48 of 52** tools to `defineNativeTool`. It pre-bakes the
+      OpenAI-strict + nullable-for-optional convention so the RAW schema stays
+      byte-compatible with the hand-written originals for ALL providers; `strict`
+      (incl. a `strict:false` option) is part of the snapshot.
+    - ✅ 4 tools intentionally hand-written (snapshot still guards them) — each
+      would change model-visible behavior or carry Zod-output artifacts:
+      `attempt_completion` (`applyCompletionSchema` reads its source `required`;
+      strict widening would make `feedback` required in the contract variant);
+      `call_mcp_tool_async` (free-form object arg — no clean Zod equivalent);
+      `ask_followup_question` (deeply-nested per-field nullable unions incl. a
+      4-type `default`); `read_file` (factory; `z.int()` injects ±9e15
+      min/max sentinels + the optional `mode` enum gains `null` — not worth it on
+      the most-used tool).
     - ⬜ Single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
       BLOCKED on a layering fix: `shared/tools.ts` (low-level) can't import the
       native-tools graph without a cycle — relocate tool defs to a shared package,
