@@ -111,7 +111,21 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
 
 ## Phase 2 — Catalog & observability
 
-- ⬜ **§7 Data-driven model/provider catalog**.
+- 🚧 **§7 Data-driven model/provider catalog**
+    - ✅ Catalog abstraction: `packages/types/src/providers/catalog.ts` —
+      `STATIC_MODEL_CATALOG` collects every statically-known provider into one
+      queryable surface (`lookupStaticModel`, `getStaticModelsForProvider`,
+      `hasStaticCatalog`) instead of importing each `*Models` record + switching on
+      provider name. Adds a normalized `getModelCapabilities` view (vision,
+      prompt-cache, context/limits, pricing, tool include/exclude dialect) — the
+      inspectable per-model data §7 wants. Tested (incl. an invariant that each
+      default model exists in its record). This is the seam a models.dev backing
+      slots into.
+    - ⬜ Data-driven backing + config overrides (models.dev snapshot + live refresh
+        - local overrides) — DECISION-GATED on Part E #4 (vendor snapshot vs live
+          fetch vs both). Then route `getProviderDefaultModelId` / the API handlers'
+          per-provider record lookups through the catalog and make "add a provider"
+          config-only.
 - ⬜ **§8 OTel transport + catalog-driven cost/limits**.
 
 ## Phase 3 — Host-agnostic core
