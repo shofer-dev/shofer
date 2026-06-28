@@ -86,19 +86,28 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       lazy `this.persistence` getter), replacing the ~10 direct
       append/save/read/dispose call sites. Behavior-preserving (270 task/persistence
       tests pass; the two persistence specs updated to mock the port backend).
-    - ⬜ Step 3: `SqliteMessagePersistence` (event-sourced) + one-time importer +
-      retire the flat-file perf machinery. NEEDS the Part E #5 decision (one-time
-      importer vs dual-read) and real-data testing before it touches user data.
+    - ⬜ Step 3: `SqliteMessagePersistence` + one-time importer + retire the
+      flat-file perf machinery. DECISION-GATED — the port (steps 1–2) makes this a
+      drop-in once decided, but it needs: (a) the SQLite runtime choice —
+      `node:sqlite` is experimental and may not load in the VS Code **extension
+      host** (Electron Node), so it likely means bundling `better-sqlite3` (native
+      module); (b) the Part E #5 migration strategy (one-time importer vs dual-read);
+      (c) real-data testing before touching user data. Not built autonomously.
 - 🚧 **§6 Structured cancellation**
     - ✅ `utils/process-termination.ts` — reusable `terminateProcessTree` with a
       SIGTERM→grace→SIGKILL escalation over a process tree (injectable
       kill/enumerate/delay → deterministic unit tests). Wired into
       `ExecaTerminalProcess.abort()`, replacing the previous immediate, PID-by-PID
       SIGKILL. Terminal suite green; docs updated (`command-termination-design.md`).
-    - ⬜ Run-scoped cancellation: bind all spawned processes/tools to a single
-      cancellation scope so cancelling a run deterministically tears down
-      everything (the broader fiber/scope abstraction); reconcile tool state on
-      interrupt (`failInterruptedTools`).
+    - ✅ Tool-state reconciliation: `abortStream` now finalizes ANY still-partial
+      message (not just the trailing one) so no chat row is left with a perpetual
+      spinner after an interrupt. (shofer already finalized the trailing partial +
+      `dismissToolPreparingRow` + gave interrupted tool calls an "interrupted"
+      result; this closes the multi-partial gap.)
+    - Run scope: shofer's `_taskAbortController` + `abortTask` (tears down terminal
+      via the §6 escalation, MCP async calls, background children) already provide
+      the run-scoped teardown opencode gets from fibers. A full fiber/scope
+      abstraction is low marginal value over this; not pursued.
 
 ## Phase 2 — Catalog & observability
 

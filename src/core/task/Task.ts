@@ -4824,13 +4824,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						await this.diffViewProvider.revertChanges() // closes diff view
 					}
 
-					// if last message is a partial we need to update and save it
-					const lastMessage = this.shoferMessages.at(-1)
-
-					if (lastMessage && lastMessage.partial) {
-						// lastMessage.ts = Date.now() DO NOT update ts since it is used as a key for virtuoso list
-						lastMessage.partial = false
-						// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
+					// Finalize ANY still-partial messages so no chat row is left with a
+					// perpetual spinner after an interrupt (§6 tool-state reconciliation).
+					// Typically only the trailing message is partial, but iterate
+					// defensively. DO NOT change ts — it is the virtuoso list key.
+					for (const m of this.shoferMessages) {
+						if (m.partial) {
+							m.partial = false
+						}
 					}
 
 					// Update `api_req_started` to have cancelled and cost, so that
