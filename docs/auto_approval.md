@@ -258,9 +258,9 @@ The **master gate** for auto-approving MCP tool calls and resource access — if
 off, every MCP call prompts. When it is on, `use_mcp_tool` calls go through a second,
 **per-group** gate that mirrors the per-group control applied to native tools:
 [`getMcpToolGroup()`](../src/core/auto-approval/mcp.ts) resolves the tool's group (user
-override in `mcp.json` → server-declared → default `"uncategorized"`) and `MCP_GROUP_APPROVAL_GATE`
-in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts) maps it to the toggle that
-must **also** be enabled:
+override in `mcp.json` → server-declared → default `"uncategorized"`) and the shared
+`GROUP_GATE` table in [`auto-approval/group-gates.ts`](../src/core/auto-approval/group-gates.ts)
+maps it to the toggle that must **also** be enabled:
 
 | Resolved group  | Required toggle (in addition to `alwaysAllowMcp`) |
 | --------------- | ------------------------------------------------- |
@@ -272,6 +272,13 @@ must **also** be enabled:
 | `subtasks`      | `alwaysAllowSubtasks`                             |
 | `questions`     | `alwaysAllowFollowupQuestions`                    |
 | `uncategorized` | `alwaysAllowUncategorized`                        |
+
+> **One source of truth (§4).** `GROUP_GATE` is the single per-group gating table,
+> evaluated via `isGroupAutoApproved()` by **both** the MCP path (above) and the
+> native-tool path (`read`/`write`/`browser`). The native path additionally enforces
+> the outside-workspace / protected-file modifier toggles (`applyModifiers: true`);
+> the MCP path does not. Previously these were two separate declarations
+> (`MCP_GROUP_APPROVAL_GATE` plus inline `if` branches) that could drift.
 
 Ungrouped MCP tools default to `"uncategorized"`, so they require `alwaysAllowUncategorized`
 **in addition to** `alwaysAllowMcp` to auto-approve — the `mcp` gateway grants _visibility_, not
@@ -325,7 +332,8 @@ When either limit is exceeded, the user is prompted regardless of per-tool toggl
 | File                                                                                                | Purpose                                                                 |
 | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                                                     |
-| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `isReadOnlyToolAction` / `isWriteToolAction`                            |
+| [`src/core/auto-approval/group-gates.ts`](../src/core/auto-approval/group-gates.ts)                 | `GROUP_GATE` single-source per-group gating + `isGroupAutoApproved`     |
+| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `getToolGroupForSayTool` (+ deprecated `isReadOnlyToolAction` etc.)     |
 | [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | MCP tool group resolution (`getMcpToolGroup`, `isMcpToolUncategorized`) |
 | [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                                   |
 | [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                                           |

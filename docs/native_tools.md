@@ -2,6 +2,12 @@
 
 Complete reference for all native tools available in Shofer, their mode availability, and current status.
 
+> **Defining a tool.** Native tools are defined once as a Zod schema via
+> `defineNativeTool` (`src/core/prompts/tools/native-tools/defineNativeTool.ts`),
+> from which the OpenAI function definition and the static argument type are
+> derived (schema-as-contract). A golden-snapshot test locks each tool's schema.
+> See [`adding-new-tools.md`](adding-new-tools.md) for the full procedure.
+
 ## Mode Availability
 
 The six built-in modes (`DEFAULT_MODES` in [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)). See [`built-in-modes.md`](built-in-modes.md) for the authoritative source.

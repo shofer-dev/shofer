@@ -61,9 +61,14 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       (45 tests) locks the security-critical `ask === "tool"` + `command` decision
       paths that the pre-existing suite didn't cover — the prerequisite for safely
       collapsing the systems into one rule engine (characterize-then-refactor).
-    - ⬜ Collapse tool-access + categories + per-model prefs + auto-approval into one
-      ordered allow/ask/deny rule evaluator; migrate call sites; delete old paths.
-      (Now safe to attempt: characterization net guards behavior.)
+    - ✅ Auto-approval slice: unified per-group gating into one `GROUP_GATE` table
+      (`auto-approval/group-gates.ts`), evaluated via `isGroupAutoApproved` by BOTH
+      the MCP and native-tool paths — replacing the duplicate `MCP_GROUP_APPROVAL_GATE`
+        - inline browser/read/write branches. Behavior-preserving (104 tests). Docs
+          updated (`auto_approval.md`).
+    - ⬜ Materialization-time unification: collapse tool-access + categories +
+      per-model prefs (`filter-tools-for-mode.ts`, `validateToolUse.ts`) into the
+      same rule model. Larger; evaluate at materialization AND invocation.
 - ⬜ **§5 SQLite/event-sourced persistence**.
 - ⬜ **§6 Structured cancellation**.
 

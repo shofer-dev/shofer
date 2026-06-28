@@ -32,35 +32,42 @@ Shofer supports three tool integration patterns. Choose the one that fits your u
 
 ## Step 1: Tool Schema
 
-Create a schema file in `src/core/prompts/tools/native-tools/`:
+Create a schema file in `src/core/prompts/tools/native-tools/`. Define the tool
+**once** as a Zod schema via the `defineNativeTool` helper (schema-as-contract —
+see [`tool-registration-interface.md`](tool-registration-interface.md)). The
+OpenAI function definition and the static argument type are both derived from the
+one schema:
 
 ```typescript
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
 
-const myTool: OpenAI.Chat.ChatCompletionTool = {
-	type: "function",
-	function: {
-		name: "my_tool",
-		description: "Description shown to LLM",
-		// Omit strict: true unless every property in `properties` also appears in
-		// `required`. With OpenAI Structured Outputs, strict: true means there is
-		// no way to mark a field as genuinely optional — the model MUST emit every
-		// property. For tools with optional/advisory parameters, leave strict
-		// disabled (the default) so the model can omit them and fall back to
-		// handler-side defaults. See `grep_search.ts` and `new_task.ts`.
-		parameters: {
-			type: "object",
-			properties: {
-				param1: { type: "string", description: "..." },
-				param2: { type: "number", description: "..." },
-			},
-			required: ["param1"],
-			additionalProperties: false,
-		},
-	},
-}
+import { defineNativeTool } from "./defineNativeTool"
+
+const myTool = defineNativeTool({
+	name: "my_tool",
+	description: "Description shown to LLM",
+	schema: z.object({
+		param1: z.string().describe("..."),
+		// Optional/advisory params: just add `.optional()`. defineNativeTool
+		// pre-bakes the OpenAI-strict + nullable-for-optional convention (every
+		// property in `required`, optionals widened to accept null), so the model
+		// can omit them and the handler falls back to defaults.
+		param2: z.number().describe("...").optional(),
+	}),
+})
 export default myTool
 ```
+
+A golden-snapshot test (`__tests__/tool-schema-snapshot.test.ts`) locks every
+tool's normalized schema + description; after adding a tool, run it with
+`UPDATE_TOOL_SCHEMAS=1` once to record the golden, then it guards against
+accidental contract changes.
+
+> Most native tools have been migrated to `defineNativeTool`. A few are still
+> hand-written `OpenAI.Chat.ChatCompletionTool` objects where the schema needs
+> shapes the helper doesn't yet model (free-form object args, `strict: false`,
+> dynamic/factory schemas, deeply-nested optionals) — see the §3 notes in
+> `todos/opencode_inspired_progress.md`. New tools should use `defineNativeTool`.
 
 Add to `native-tools/index.ts` — import it and append to the `tools` array that `getNativeTools()` builds and returns:
 
