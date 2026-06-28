@@ -137,7 +137,18 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           fetch vs both). Then route `getProviderDefaultModelId` / the API handlers'
           per-provider record lookups through the catalog and make "add a provider"
           config-only.
-- ⬜ **§8 OTel transport + catalog-driven cost/limits**.
+- 🚧 **§8 OTel transport + catalog-driven cost/limits**
+    - ✅ Catalog-driven cost/limits: cost (`shared/cost.ts` `calculateApiCost*`) and
+      context limits already consume `ModelInfo` rather than per-provider constants;
+      with §7 the lookup is unified. `shared/__tests__/cost-catalog.spec.ts` pins
+      the end-to-end flow (catalog `lookupStaticModel` → cost + context window;
+      unpriced model → zero cost, no scattered fallbacks).
+    - ⬜ OTel transport: emit the existing typed telemetry catalog through
+      OpenTelemetry spans/metrics (OTLP), retiring the bespoke Prometheus exporter.
+      DECISION-GATED — needs an `@opentelemetry/*` dependency choice (api + SDK +
+      OTLP exporter), the OTLP endpoint/opt-in config, and extension bundling. Like
+      §5's SQLite-runtime call, this is a maintainer/infra decision, not made
+      autonomously. Spend caps stay (a shofer advantage — Part E #6).
 
 ## Phase 3 — Host-agnostic core
 
