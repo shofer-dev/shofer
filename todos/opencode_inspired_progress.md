@@ -91,13 +91,19 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       lazy `this.persistence` getter), replacing the ~10 direct
       append/save/read/dispose call sites. Behavior-preserving (270 task/persistence
       tests pass; the two persistence specs updated to mock the port backend).
-    - ⬜ Step 3: `SqliteMessagePersistence` + one-time importer + retire the
-      flat-file perf machinery. DECISION-GATED — the port (steps 1–2) makes this a
-      drop-in once decided, but it needs: (a) the SQLite runtime choice —
-      `node:sqlite` is experimental and may not load in the VS Code **extension
-      host** (Electron Node), so it likely means bundling `better-sqlite3` (native
-      module); (b) the Part E #5 migration strategy (one-time importer vs dual-read);
-      (c) real-data testing before touching user data. Not built autonomously.
+    - ✅ Step 3 (backend): `SqliteMessagePersistence` (`node:sqlite`, no native dep)
+      implements the port — rows keyed by (task_id, kind, ts) with ts-dedupe
+      matching the flat-file read path; tail/compaction supported. Includes the
+      Part E #5 **one-time importer** (lazy per-task: first read of an empty DB
+      imports existing flat-file history). `createMessagePersistence(path, backend)`
+      feature-detects `node:sqlite` and **falls back to flat-file**, so opting in
+      can't break a host that lacks it. 7 tests (round-trip/dedupe/tail/compact/
+      import/factory) run on Node 22; skip where node:sqlite is absent.
+    - ⬜ Step 3 (rollout): flip the default to SQLite + retire the flat-file perf
+      machinery (debounced saves / append logs / tail reads). DELIBERATELY not
+      flipped — needs extension-host runtime verification (Electron Node may lack
+      `node:sqlite` → may require bundling `better-sqlite3`) before it's the default
+      on user data. Default remains flat-file; the SQLite backend is ready + tested.
 - 🚧 **§6 Structured cancellation**
     - ✅ `utils/process-termination.ts` — reusable `terminateProcessTree` with a
       SIGTERM→grace→SIGKILL escalation over a process tree (injectable

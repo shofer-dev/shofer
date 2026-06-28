@@ -3,3 +3,5 @@ export { appendTaskMessage, readTaskMessages, readTaskMessagesTail, saveTaskMess
 export { taskMetadata } from "./taskMetadata"
 export { TaskHistoryStore } from "./TaskHistoryStore"
 export { type MessagePersistencePort, FileSystemMessagePersistence } from "./PersistencePort"
+export { SqliteMessagePersistence, isSqliteAvailable } from "./SqliteMessagePersistence"
+export { createMessagePersistence, type MessageBackend } from "./createMessagePersistence"
