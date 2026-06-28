@@ -4,57 +4,20 @@ import {
 	type McpServerUse,
 	type FollowUpData,
 	type ExtensionState,
-	type ToolGroup,
 	isAutoApprovableAsk,
 } from "@shofer/types"
 
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
 
-import { isWriteToolAction, isReadOnlyToolAction, getToolGroupForSayTool } from "./tools"
+import { getToolGroupForSayTool } from "./tools"
 import { getMcpToolGroup } from "./mcp"
 import { getCommandDecision } from "./commands"
+import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates"
 import { webviewLog } from "../../utils/logging/subsystems"
 
-// We have auto-approval actions for different categories.
-export type AutoApprovalState =
-	| "alwaysAllowReadOnly"
-	| "alwaysAllowWrite"
-	| "alwaysAllowBrowser"
-	| "alwaysAllowMcp"
-	| "alwaysAllowUncategorized"
-	| "alwaysAllowModeSwitch"
-	| "alwaysAllowSubtasks"
-	| "alwaysAllowExecute"
-	| "alwaysAllowFollowupQuestions"
-
-// Some of these actions have additional settings associated with them.
-export type AutoApprovalStateOptions =
-	| "autoApprovalEnabled"
-	| "alwaysAllowReadOnlyOutsideWorkspace" // For `alwaysAllowReadOnly`.
-	| "alwaysAllowWriteOutsideWorkspace" // For `alwaysAllowWrite`.
-	| "alwaysAllowWriteProtected"
-	| "followupAutoApproveTimeoutMs" // For `alwaysAllowFollowupQuestions`.
-	| "mcpServers" // For `alwaysAllowMcp`.
-	| "allowedCommands" // For `alwaysAllowExecute`.
-	| "deniedCommands"
-
-// Maps a resolved MCP tool group to the per-group auto-approval toggle that must
-// ALSO be enabled — on top of the master `alwaysAllowMcp` gate — before a tool
-// in that group is auto-approved. This mirrors the per-group gating applied to
-// native tools (the `ask === "tool"` path) so that, e.g., browser tools served
-// over MCP honor `alwaysAllowBrowser` instead of being approved by
-// `alwaysAllowMcp` alone. Groups absent from this map (e.g. the generic "mcp"
-// protocol group) are gated by `alwaysAllowMcp` by itself.
-const MCP_GROUP_APPROVAL_GATE: Partial<Record<ToolGroup, AutoApprovalState>> = {
-	read: "alwaysAllowReadOnly",
-	write: "alwaysAllowWrite",
-	execute: "alwaysAllowExecute",
-	browser: "alwaysAllowBrowser",
-	mode: "alwaysAllowModeSwitch",
-	subtasks: "alwaysAllowSubtasks",
-	questions: "alwaysAllowFollowupQuestions",
-	uncategorized: "alwaysAllowUncategorized",
-}
+// Per-group gating is centralized in ./group-gates (the §4 single source of
+// truth, used by both the MCP and native-tool paths below).
+export type { AutoApprovalState, AutoApprovalStateOptions } from "./group-gates"
 
 export type CheckAutoApprovalResult =
 	| { decision: "approve" }
@@ -138,13 +101,12 @@ export async function checkAutoApproval({
 				// auto-approved if its group's dedicated toggle is also enabled
 				// (e.g. "browser" → `alwaysAllowBrowser`, "uncategorized" →
 				// `alwaysAllowUncategorized`). This keeps MCP-served tools aligned
-				// with the same per-group control that mode filtering and native
-				// tools already respect. Groups without a dedicated toggle are
-				// approved by `alwaysAllowMcp` alone.
+				// with the same per-group control that native tools respect, via the
+				// shared GROUP_GATE table. The MCP path does not apply the
+				// outside-workspace / protected-file modifiers (applyModifiers:false).
 				const group = getMcpToolGroup(mcpServerUse, state.mcpServers)
-				const groupGate = MCP_GROUP_APPROVAL_GATE[group]
 
-				if (groupGate && state[groupGate] !== true) {
+				if (!isGroupAutoApproved(group, state, {}, { applyModifiers: false })) {
 					return { decision: "ask" }
 				}
 
@@ -294,24 +256,14 @@ export async function checkAutoApproval({
 
 		const toolGroup = getToolGroupForSayTool(tool)
 
-		// Browser tools — controlled by the alwaysAllowBrowser toggle.
-		// Automatically available for any tool whose group resolves to "browser"
-		// (browser-tools extension tools, browser_* prefixed tools).
-		if (toolGroup === "browser") {
-			return state.alwaysAllowBrowser === true ? { decision: "approve" } : { decision: "ask" }
-		}
-
-		if (isReadOnlyToolAction(tool)) {
-			return state.alwaysAllowReadOnly === true &&
-				(!isOutsideWorkspace || state.alwaysAllowReadOnlyOutsideWorkspace === true)
-				? { decision: "approve" }
-				: { decision: "ask" }
-		}
-
-		if (isWriteToolAction(tool)) {
-			return state.alwaysAllowWrite === true &&
-				(!isOutsideWorkspace || state.alwaysAllowWriteOutsideWorkspace === true) &&
-				(!isProtected || state.alwaysAllowWriteProtected === true)
+		// Native-tool group gating via the shared GROUP_GATE table (§4). Only the
+		// browser / read / write groups are auto-approvable on this path — the
+		// other groups are either handled by the tool-specific branches above
+		// (mode → switchMode, subtasks → newTask/…) or intentionally fall through
+		// to a user prompt. The native path applies the outside-workspace /
+		// protected-file modifiers (applyModifiers:true).
+		if (toolGroup === "browser" || toolGroup === "read" || toolGroup === "write") {
+			return isGroupAutoApproved(toolGroup, state, { isOutsideWorkspace, isProtected }, { applyModifiers: true })
 				? { decision: "approve" }
 				: { decision: "ask" }
 		}
