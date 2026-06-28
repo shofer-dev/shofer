@@ -57,8 +57,13 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       dovetailing with §9. The drift guard already makes the current mirrors safe.
 - 🚧 **§4 Unify permissions**
     - ✅ Drift guard `auto-approval/__tests__/say-tool-mapping-drift.test.ts`.
+    - ✅ Characterization net `auto-approval/__tests__/index.characterization.spec.ts`
+      (45 tests) locks the security-critical `ask === "tool"` + `command` decision
+      paths that the pre-existing suite didn't cover — the prerequisite for safely
+      collapsing the systems into one rule engine (characterize-then-refactor).
     - ⬜ Collapse tool-access + categories + per-model prefs + auto-approval into one
       ordered allow/ask/deny rule evaluator; migrate call sites; delete old paths.
+      (Now safe to attempt: characterization net guards behavior.)
 - ⬜ **§5 SQLite/event-sourced persistence**.
 - ⬜ **§6 Structured cancellation**.
 
