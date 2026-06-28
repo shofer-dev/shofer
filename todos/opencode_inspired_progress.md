@@ -75,7 +75,17 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       green. Docs updated (`tool_access.md`).
     - §4 high-value core complete. (Remaining: a fully-abstract allow/ask/deny rule
       object model + per-agent rulesets — purity polish, low marginal value.)
-- ⬜ **§5 SQLite/event-sourced persistence**.
+- 🚧 **§5 SQLite/event-sourced persistence** (XL; live user-data path — staged)
+    - ✅ Step 1: `MessagePersistencePort` interface + `FileSystemMessagePersistence`
+      adapter (`task-persistence/PersistencePort.ts`) — the swap seam over the
+      existing JSONL functions, behavior-preserving (round-trip test). Also the
+      seam §9's host-agnostic core needs.
+    - ⬜ Step 2: route Task.ts's ~23 persistence call sites through an injected port
+      (deferred — Task.ts is a concurrent-edit collision hotspot; do when the tree
+      is quiet).
+    - ⬜ Step 3: `SqliteMessagePersistence` (event-sourced) + one-time importer +
+      retire the flat-file perf machinery. NEEDS the Part E #5 decision (one-time
+      importer vs dual-read) and real-data testing before it touches user data.
 - ⬜ **§6 Structured cancellation**.
 
 ## Phase 2 — Catalog & observability
