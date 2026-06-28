@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 /**
  * Tool schema for setting the task/conversation title.
@@ -12,22 +14,10 @@ const SET_TASK_TITLE_DESCRIPTION = `Set a short, descriptive title for the curre
 
 const TITLE_PARAMETER_DESCRIPTION = `Short descriptive title for this task (max 60 characters)`
 
-export default {
-	type: "function",
-	function: {
-		name: "set_task_title",
-		description: SET_TASK_TITLE_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				title: {
-					type: "string",
-					description: TITLE_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["title"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "set_task_title",
+	description: SET_TASK_TITLE_DESCRIPTION,
+	schema: z.object({
+		title: z.string().describe(TITLE_PARAMETER_DESCRIPTION),
+	}),
+})

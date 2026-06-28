@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const LIST_FILES_DESCRIPTION = `Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.
 
@@ -16,26 +18,11 @@ const PATH_PARAMETER_DESCRIPTION = `Directory path to inspect, relative to the w
 
 const RECURSIVE_PARAMETER_DESCRIPTION = `Set true to list contents recursively; false to show only the top level`
 
-export default {
-	type: "function",
-	function: {
-		name: "list_files",
-		description: LIST_FILES_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				recursive: {
-					type: "boolean",
-					description: RECURSIVE_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "recursive"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "list_files",
+	description: LIST_FILES_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION),
+		recursive: z.boolean().describe(RECURSIVE_PARAMETER_DESCRIPTION),
+	}),
+})

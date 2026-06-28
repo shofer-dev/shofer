@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const APPLY_DIFF_DESCRIPTION = `Apply precise, targeted modifications to an existing file using one or more search/replace blocks. This tool is for surgical edits only; the SEARCH content is matched via normalized Levenshtein distance (default threshold: 100%, meaning exact match). Use read_file to get the current file content before crafting SEARCH blocks — stale line numbers are the #1 cause of failures. Include all independent changes in ONE apply_diff call with multiple SEARCH/REPLACE blocks. Each block is matched independently — the engine searches around :start_line: and adjusts for prior diffs within the call. Use the ORIGINAL line numbers from before any edits.
 
@@ -13,25 +15,11 @@ const DIFF_PARAMETER_DESCRIPTION = `A string containing one or more search/repla
 [new content to replace with]
 >>>>>>> REPLACE`
 
-export const apply_diff = {
-	type: "function",
-	function: {
-		name: "apply_diff",
-		description: APPLY_DIFF_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: "The path of the file to modify, relative to the current workspace directory.",
-				},
-				diff: {
-					type: "string",
-					description: DIFF_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "diff"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export const apply_diff = defineNativeTool({
+	name: "apply_diff",
+	description: APPLY_DIFF_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe("The path of the file to modify, relative to the current workspace directory."),
+		diff: z.string().describe(DIFF_PARAMETER_DESCRIPTION),
+	}),
+})

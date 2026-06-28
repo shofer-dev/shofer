@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const VIEW_IMAGE_DESCRIPTION = `Request to view an image file. This tool reads an image file and returns it for visual analysis. Supports common image formats (PNG, JPG, JPEG, GIF, BMP, SVG, WEBP).
 
@@ -10,25 +12,14 @@ Example: View an image
 
 const FILE_PATH_PARAMETER_DESCRIPTION = `Path to the image file, relative to the workspace`
 
-export default {
-	type: "function",
-	function: {
-		name: "view_image",
-		description: VIEW_IMAGE_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				filePath: {
-					type: "string",
-					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "view_image",
+	description: VIEW_IMAGE_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(FILE_PATH_PARAMETER_DESCRIPTION),
+		filePath: z
+			.string()
+			.describe("Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION)
+			.optional(),
+	}),
+})

@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const SKILL_DESCRIPTION = `Load and execute a skill by name. Skills provide specialized instructions for common tasks like creating MCP servers or custom modes.
 
@@ -8,26 +10,11 @@ const SKILL_PARAMETER_DESCRIPTION = `Name of the skill to load (e.g., create-mcp
 
 const ARGS_PARAMETER_DESCRIPTION = `Optional context or arguments to pass to the skill`
 
-export default {
-	type: "function",
-	function: {
-		name: "skills",
-		description: SKILL_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				skill: {
-					type: "string",
-					description: SKILL_PARAMETER_DESCRIPTION,
-				},
-				args: {
-					type: ["string", "null"],
-					description: ARGS_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["skill", "args"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "skills",
+	description: SKILL_DESCRIPTION,
+	schema: z.object({
+		skill: z.string().describe(SKILL_PARAMETER_DESCRIPTION),
+		args: z.string().describe(ARGS_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

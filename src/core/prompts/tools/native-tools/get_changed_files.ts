@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const GET_CHANGED_FILES_DESCRIPTION = `Request the list of files that Shofer has changed during the current task, along with the number of inserted and deleted lines per file.
 
@@ -11,17 +13,8 @@ Files known only to the tracker are reported with unknown line counts. The tool 
 Example:
 { }`
 
-export default {
-	type: "function",
-	function: {
-		name: "get_changed_files",
-		description: GET_CHANGED_FILES_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {},
-			required: [],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "get_changed_files",
+	description: GET_CHANGED_FILES_DESCRIPTION,
+	schema: z.object({}),
+})

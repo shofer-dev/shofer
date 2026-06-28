@@ -36,21 +36,62 @@ export type DefinedNativeTool<S extends ZodType> = OpenAI.Chat.ChatCompletionFun
 /** Static argument type inferred from a defined tool's Zod schema. */
 export type NativeToolArgsOf<T> = T extends DefinedNativeTool<infer S> ? zt.infer<S> : never
 
+type JsonSchemaProp = {
+	type?: string | string[]
+	enum?: unknown[]
+	[k: string]: unknown
+}
+
+/**
+ * Make an optional property nullable-required, reproducing the OpenAI-strict
+ * convention the hand-written native tools used: every property appears in
+ * `required`, and a property that was *optional* in the Zod schema is widened to
+ * accept `null` (`type: ["x","null"]`, and `null` appended to any `enum`) so the
+ * model can signal "not provided". This keeps the raw schema byte-compatible with
+ * the pre-migration definitions for ALL providers (not only the OpenAI-strict
+ * path, which would normalize it anyway).
+ */
+function makeNullable(prop: JsonSchemaProp): JsonSchemaProp {
+	const next: JsonSchemaProp = { ...prop }
+	if (Array.isArray(next.enum) && !next.enum.includes(null)) {
+		next.enum = [...next.enum, null]
+	}
+	if (typeof next.type === "string") {
+		next.type = [next.type, "null"]
+	} else if (Array.isArray(next.type) && !next.type.includes("null")) {
+		next.type = [...next.type, "null"]
+	}
+	return next
+}
+
 /**
  * Build a `ChatCompletionFunctionTool` from a single Zod schema.
  *
- * The emitted JSON Schema is cleaned of the `$schema` annotation and given
- * `additionalProperties: false`; `strict: true` is set so the provider layer
- * (`convertToolSchemaForOpenAI`) applies the OpenAI-strict normalization
- * (all-properties-required, null-stripped) at request time — exactly as it does
- * for the hand-written tools.
+ * The emitted JSON Schema is pre-baked into OpenAI strict form — `$schema`
+ * stripped, `additionalProperties: false`, every property in `required`, and
+ * optional properties widened to nullable — so it matches the hand-written tool
+ * schemas this helper replaces (verified by the golden-snapshot test). `strict:
+ * true` is set; the provider layer's `convertToolSchemaForOpenAI` is then a
+ * no-op for these tools.
  */
 export function defineNativeTool<S extends ZodType>(spec: NativeToolSpec<S>): DefinedNativeTool<S> {
 	const json = z.toJSONSchema(spec.schema, { io: "input" }) as Record<string, unknown>
 	delete json.$schema
-	if (json.type === "object" && json.additionalProperties === undefined) {
+
+	if (json.type === "object") {
 		json.additionalProperties = false
+		const properties = (json.properties as Record<string, JsonSchemaProp> | undefined) ?? {}
+		const allKeys = Object.keys(properties)
+		const required = new Set((json.required as string[] | undefined) ?? [])
+		for (const key of allKeys) {
+			if (!required.has(key)) {
+				properties[key] = makeNullable(properties[key])
+			}
+		}
+		// OpenAI strict mode: every property must be in `required`.
+		json.required = allKeys
 	}
+
 	return {
 		type: "function",
 		function: {

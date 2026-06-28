@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const READ_PROJECT_STRUCTURE_DESCRIPTION = `Request to read the project structure as a tree view. This tool provides an overview of the workspace directory structure, useful for understanding project organization.
 
@@ -19,26 +21,11 @@ const MAX_DEPTH_PARAMETER_DESCRIPTION = `Maximum depth to traverse (default: 3)`
 
 const INCLUDE_HIDDEN_PARAMETER_DESCRIPTION = `Whether to include hidden files/directories (default: false)`
 
-export default {
-	type: "function",
-	function: {
-		name: "read_project_structure",
-		description: READ_PROJECT_STRUCTURE_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				maxDepth: {
-					type: ["number", "null"],
-					description: MAX_DEPTH_PARAMETER_DESCRIPTION,
-				},
-				includeHidden: {
-					type: ["boolean", "null"],
-					description: INCLUDE_HIDDEN_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["maxDepth", "includeHidden"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "read_project_structure",
+	description: READ_PROJECT_STRUCTURE_DESCRIPTION,
+	schema: z.object({
+		maxDepth: z.number().describe(MAX_DEPTH_PARAMETER_DESCRIPTION).optional(),
+		includeHidden: z.boolean().describe(INCLUDE_HIDDEN_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

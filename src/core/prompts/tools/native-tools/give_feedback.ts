@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 /**
  * Tool schema for sending feedback to the Shofer.Dev developers.
@@ -12,22 +14,10 @@ const GIVE_FEEDBACK_DESCRIPTION = `Send feedback to the Shofer.Dev developers. U
 
 const FEEDBACK_PARAMETER_DESCRIPTION = `The feedback message to send to the Shofer.Dev developers.`
 
-export default {
-	type: "function",
-	function: {
-		name: "give_feedback",
-		description: GIVE_FEEDBACK_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				feedback: {
-					type: "string",
-					description: FEEDBACK_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["feedback"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "give_feedback",
+	description: GIVE_FEEDBACK_DESCRIPTION,
+	schema: z.object({
+		feedback: z.string().describe(FEEDBACK_PARAMETER_DESCRIPTION),
+	}),
+})
