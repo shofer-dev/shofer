@@ -130,43 +130,39 @@ After Ctrl+C is sent, the VS Code terminal shell integration catches the shell e
 ### 4.2 Execa Terminal (Fallback / Worktree Tasks)
 
 ```typescript
-// ExecaTerminalProcess.ts:163-221
+// ExecaTerminalProcess.ts — abort()
 public override abort() {
     this.aborted = true
 
     const performKill = () => {
-        // 1. Kill the Node.js subprocess object
+        // Politely ask the execa subprocess wrapper to stop; it exits once its
+        // command does. The command + descendants are escalated below.
         if (this.subprocess) {
-            try { this.subprocess.kill("SIGKILL") } catch (e) { ... }
+            try { this.subprocess.kill("SIGTERM") } catch (e) { ... }
         }
-
-        // 2. Kill the stored PID (shell process)
+        // Structured termination over the whole tree: SIGTERM → grace → SIGKILL.
         if (this.pid) {
-            try { process.kill(this.pid, "SIGKILL") } catch (e) { ... }
+            void terminateProcessTree(this.pid, { onError: (m) => webviewLog.warn(m) })
         }
     }
 
-    // If PID update is in progress, wait for it before killing
+    // If PID update is in progress, wait for it before killing.
     if (this.pidUpdatePromise) {
         this.pidUpdatePromise.then(performKill).catch(() => performKill())
     } else {
         performKill()
     }
-
-    // 3. Kill the entire process tree to catch orphans
-    if (this.pid) {
-        psTree(this.pid, async (err, children) => {
-            if (!err) {
-                for (const child of children) {
-                    try { process.kill(parseInt(child.PID), "SIGKILL") } catch (e) { ... }
-                }
-            }
-        })
-    }
 }
 ```
 
-The execa backend uses `SIGKILL` (which cannot be caught, blocked, or ignored by the process) and walks the process tree via `psTree` to kill all child processes. The `pidUpdatePromise` guard ensures the PID is resolved before attempting to kill (the execa process initially reports the wrapper shell PID, then updates to the child command's PID).
+The execa backend now uses a **SIGTERM → grace → SIGKILL** escalation
+([`terminateProcessTree`](src/utils/process-termination.ts), §6) over the process
+and all descendants, instead of an immediate per-PID SIGKILL. Well-behaved
+processes get a chance to flush/clean up on SIGTERM; only survivors after the
+grace window are force-killed, and the tree is enumerated + escalated together
+rather than racing a `psTree` snapshot. The `pidUpdatePromise` guard ensures the
+PID is resolved before terminating (the execa process initially reports the
+wrapper shell PID, then updates to the child command's PID).
 
 ### 4.3 Global Stop Button (Task-Level Abort)
 
