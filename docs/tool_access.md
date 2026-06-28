@@ -199,10 +199,16 @@ short-circuits.
 - **Runtime enforcement (per tool call):**
   [`src/core/tools/validateToolUse.ts`](../src/core/tools/validateToolUse.ts)
   — the source of truth for the decision rule above.
-- **System-prompt tool listing:**
+- **System-prompt tool listing (materialization):**
   [`src/core/prompts/tools/filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts)
-  — uses the same union/difference logic to compute the tool list rendered
-  into the model's system prompt, so the model only sees tools it can call.
+  — `computeToolAccess()` is the single source of truth for which tools are
+  _available_ (§4). It composes, as one ordered decision, the three historically
+  separate systems: (1) mode → groups → tools (gated by the `validateToolUse`
+  rule above), (2) per-model preferences (`applyModelToolCustomization`), and
+  (3) feature gates (the `FEATURE_GATED_TOOLS` table — `rag_search`, `git_search`,
+  `ask_live_memory`, `generate_image`, `run_slash_command`, `access_mcp_resource`,
+  `update_todo_list`) plus user-disabled tools. It is pure (callers resolve the
+  gate booleans from the runtime managers), so the model only sees tools it can call.
 - **Schema validation:**
   [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) and the
   exported JSON schema in

@@ -210,6 +210,81 @@ export function applyModelToolCustomization(
 }
 
 /**
+ * Feature-gated tools (todos/opencode_inspired_work.md §4): each tool here is
+ * available only when its gate is on. Declaring them in one table replaces the
+ * row of hand-written `allowedToolNames.delete(...)` branches that previously
+ * lived inline in `filterNativeToolsForMode` — a single place to see which tools
+ * are conditional and why.
+ */
+export const FEATURE_GATED_TOOLS = {
+	rag_search: "ragSearch",
+	git_search: "gitSearch",
+	ask_live_memory: "askLiveMemory",
+	generate_image: "generateImage",
+	run_slash_command: "runSlashCommand",
+	access_mcp_resource: "accessMcpResource",
+	update_todo_list: "todoList",
+} as const
+
+export type ToolAccessGate = (typeof FEATURE_GATED_TOOLS)[keyof typeof FEATURE_GATED_TOOLS]
+export type ToolAccessGates = Record<ToolAccessGate, boolean>
+
+export interface ToolAccessParams {
+	modeSlug: string
+	modeConfig: ModeConfig
+	customModes: ModeConfig[]
+	experiments: Record<string, boolean>
+	modelInfo?: ModelInfo
+	/** Resolved availability of each feature-gated tool (see FEATURE_GATED_TOOLS). */
+	gates: ToolAccessGates
+	disabledTools?: string[]
+}
+
+/**
+ * Compute the set of native tool names available for a (mode, model, feature)
+ * combination — the single source of truth for tool *access* (§4). It composes
+ * the three historically-separate systems as one ordered decision:
+ *   1. mode → enabled groups → tools (+ always-available), gated by `isToolAllowedForMode`;
+ *   2. per-model preferences (`applyModelToolCustomization`: exclude/include);
+ *   3. feature gates (`FEATURE_GATED_TOOLS`) and user-disabled tools — removals.
+ *
+ * Pure and manager-free (callers resolve the `gates` booleans), so it is unit
+ * testable without VS Code services.
+ */
+export function computeToolAccess(params: ToolAccessParams): {
+	allowedTools: Set<string>
+	aliasRenames: Map<string, string>
+} {
+	const { modeSlug, modeConfig, customModes, experiments, modelInfo, gates, disabledTools } = params
+
+	// 1. Mode → allowed tools (includes always-available), gated per-tool.
+	const allToolsForMode = getToolsForMode(modeConfig.tools, modeConfig.tools_allowed, modeConfig.tools_denied)
+	const modeAllowed = new Set(
+		allToolsForMode.filter((tool) =>
+			isToolAllowedForMode(tool as ToolName, modeSlug, customModes, undefined, undefined, experiments),
+		),
+	)
+
+	// 2. Per-model preferences (exclude/include + alias renames).
+	const { allowedTools, aliasRenames } = applyModelToolCustomization(modeAllowed, modeConfig, modelInfo)
+
+	// 3a. Feature gates — remove tools whose gate is off.
+	for (const [tool, gate] of Object.entries(FEATURE_GATED_TOOLS)) {
+		if (!gates[gate]) allowedTools.delete(tool)
+	}
+
+	// 3b. User-disabled tools (normalize aliases so disabling a legacy alias also
+	// disables the canonical tool).
+	if (disabledTools?.length) {
+		for (const toolName of disabledTools) {
+			allowedTools.delete(resolveToolAlias(toolName))
+		}
+	}
+
+	return { allowedTools, aliasRenames }
+}
+
+/**
  * Filters native tools based on mode restrictions and model customization.
  * This ensures native tools are filtered consistently with mode/tool permissions.
  *
@@ -244,82 +319,39 @@ export function filterNativeToolsForMode(
 		modeConfig = getModeBySlug(defaultModeSlug, customModes)!
 	}
 
-	// Get all tools for this mode (including always-available tools)
-	const allToolsForMode = getToolsForMode(modeConfig.tools, modeConfig.tools_allowed, modeConfig.tools_denied)
-
-	// Filter to only tools that pass permission checks
-	let allowedToolNames = new Set(
-		allToolsForMode.filter((tool) =>
-			isToolAllowedForMode(
-				tool as ToolName,
-				modeSlug,
-				customModes ?? [],
-				undefined,
-				undefined,
-				experiments ?? {},
-			),
-		),
+	// Resolve the feature-gate booleans from the runtime managers/flags, then
+	// delegate the access decision to the single computeToolAccess source of truth.
+	const isCodeIndexReady = !!(
+		codeIndexManager &&
+		codeIndexManager.isFeatureEnabled &&
+		codeIndexManager.isFeatureConfigured &&
+		codeIndexManager.isInitialized
 	)
+	const isGitIndexReady = !!(
+		gitIndexManager &&
+		gitIndexManager.isFeatureEnabled &&
+		gitIndexManager.isFeatureConfigured &&
+		gitIndexManager.isInitialized
+	)
+	const gates: ToolAccessGates = {
+		ragSearch: isCodeIndexReady,
+		gitSearch: isGitIndexReady,
+		askLiveMemory: !!liveMemoryManager?.isLiveMemoryAvailable,
+		generateImage: !!experiments?.imageGeneration,
+		runSlashCommand: !!experiments?.runSlashCommand,
+		accessMcpResource: !!mcpHub && hasAnyMcpResources(mcpHub),
+		todoList: settings?.todoListEnabled !== false,
+	}
 
-	// Apply model-specific tool customization
-	const modelInfo = settings?.modelInfo as ModelInfo | undefined
-	const { allowedTools: customizedTools, aliasRenames } = applyModelToolCustomization(
-		allowedToolNames,
+	const { allowedTools: allowedToolNames, aliasRenames } = computeToolAccess({
+		modeSlug,
 		modeConfig,
-		modelInfo,
-	)
-	allowedToolNames = customizedTools
-
-	// Conditionally exclude rag_search if feature is disabled or not configured
-	if (
-		!codeIndexManager ||
-		!(codeIndexManager.isFeatureEnabled && codeIndexManager.isFeatureConfigured && codeIndexManager.isInitialized)
-	) {
-		allowedToolNames.delete("rag_search")
-	}
-
-	// Conditionally exclude git_search if feature is disabled or not configured
-	if (
-		!gitIndexManager ||
-		!(gitIndexManager.isFeatureEnabled && gitIndexManager.isFeatureConfigured && gitIndexManager.isInitialized)
-	) {
-		allowedToolNames.delete("git_search")
-	}
-
-	// Conditionally exclude ask_live_memory if live memory is not available
-	if (!liveMemoryManager || !liveMemoryManager.isLiveMemoryAvailable) {
-		allowedToolNames.delete("ask_live_memory")
-	}
-
-	// Conditionally exclude update_todo_list if disabled in settings
-	if (settings?.todoListEnabled === false) {
-		allowedToolNames.delete("update_todo_list")
-	}
-
-	// Conditionally exclude generate_image if experiment is not enabled
-	if (!experiments?.imageGeneration) {
-		allowedToolNames.delete("generate_image")
-	}
-
-	// Conditionally exclude run_slash_command if experiment is not enabled
-	if (!experiments?.runSlashCommand) {
-		allowedToolNames.delete("run_slash_command")
-	}
-
-	// Remove tools that are explicitly disabled via the disabledTools setting
-	if (settings?.disabledTools?.length) {
-		for (const toolName of settings.disabledTools) {
-			// Normalize aliases so disabling a legacy alias (e.g. "search_and_replace")
-			// also disables the canonical tool (e.g. "edit").
-			const resolvedToolName = resolveToolAlias(toolName)
-			allowedToolNames.delete(resolvedToolName)
-		}
-	}
-
-	// Conditionally exclude access_mcp_resource if MCP is not enabled or there are no resources
-	if (!mcpHub || !hasAnyMcpResources(mcpHub)) {
-		allowedToolNames.delete("access_mcp_resource")
-	}
+		customModes: customModes ?? [],
+		experiments: experiments ?? {},
+		modelInfo: settings?.modelInfo as ModelInfo | undefined,
+		gates,
+		disabledTools: settings?.disabledTools,
+	})
 
 	// Filter native tools based on allowed tool names and apply alias renames
 	const filteredTools: OpenAI.Chat.ChatCompletionTool[] = []

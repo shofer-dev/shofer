@@ -66,9 +66,15 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       the MCP and native-tool paths — replacing the duplicate `MCP_GROUP_APPROVAL_GATE`
         - inline browser/read/write branches. Behavior-preserving (104 tests). Docs
           updated (`auto_approval.md`).
-    - ⬜ Materialization-time unification: collapse tool-access + categories +
-      per-model prefs (`filter-tools-for-mode.ts`, `validateToolUse.ts`) into the
-      same rule model. Larger; evaluate at materialization AND invocation.
+    - ✅ Materialization unification: `computeToolAccess()` in `filter-tools-for-mode.ts`
+      is the single source of truth for tool _availability_ — composes mode→groups,
+      per-model prefs, feature gates (`FEATURE_GATED_TOOLS` table, replacing 6 inline
+      `if`-blocks), and user-disabled tools as one ordered, pure (manager-free)
+      decision. Characterized (`computeToolAccess.spec.ts`,
+      `applyModelToolCustomization.characterization.spec.ts`); existing filter spec
+      green. Docs updated (`tool_access.md`).
+    - §4 high-value core complete. (Remaining: a fully-abstract allow/ask/deny rule
+      object model + per-agent rulesets — purity polish, low marginal value.)
 - ⬜ **§5 SQLite/event-sourced persistence**.
 - ⬜ **§6 Structured cancellation**.
 
