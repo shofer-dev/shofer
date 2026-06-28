@@ -6,6 +6,7 @@ import type { ShoferTerminal } from "./types"
 import { BaseTerminal } from "./BaseTerminal"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { webviewLog } from "../../utils/logging/subsystems"
+import { terminateProcessTree } from "../../utils/process-termination"
 
 export class ExecaTerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<ShoferTerminal>
@@ -163,60 +164,35 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 	public override abort() {
 		this.aborted = true
 
-		// Function to perform the kill operations
+		// Structured termination (§6): SIGTERM the whole process tree, then SIGKILL
+		// any survivors after a grace window — well-behaved processes get to clean
+		// up, and `terminateProcessTree` enumerates + escalates the tree atomically
+		// instead of the previous immediate, PID-by-PID SIGKILL.
 		const performKill = () => {
-			// Try to kill using the subprocess object
+			// Politely ask the execa subprocess wrapper to stop; it exits once its
+			// command does. The command + descendants are escalated below.
 			if (this.subprocess) {
 				try {
-					this.subprocess.kill("SIGKILL")
+					this.subprocess.kill("SIGTERM")
 				} catch (e) {
 					webviewLog.warn(
-						`[ExecaTerminalProcess#abort] Failed to kill subprocess: ${e instanceof Error ? e.message : String(e)}`,
+						`[ExecaTerminalProcess#abort] Failed to signal subprocess: ${e instanceof Error ? e.message : String(e)}`,
 					)
 				}
 			}
 
-			// Kill the stored PID (which should be the actual command after our update)
 			if (this.pid) {
-				try {
-					process.kill(this.pid, "SIGKILL")
-				} catch (e) {
-					webviewLog.warn(
-						`[ExecaTerminalProcess#abort] Failed to kill process ${this.pid}: ${e instanceof Error ? e.message : String(e)}`,
-					)
-				}
+				void terminateProcessTree(this.pid, {
+					onError: (message) => webviewLog.warn(`[ExecaTerminalProcess#abort] ${message}`),
+				})
 			}
 		}
 
-		// If PID update is in progress, wait for it before killing
+		// If PID update is in progress, wait for it before killing.
 		if (this.pidUpdatePromise) {
 			this.pidUpdatePromise.then(performKill).catch(() => performKill())
 		} else {
 			performKill()
-		}
-
-		// Continue with the rest of the abort logic
-		if (this.pid) {
-			// Also check for any child processes
-			psTree(this.pid, async (err, children) => {
-				if (!err) {
-					const pids = children.map((p) => parseInt(p.PID))
-
-					for (const pid of pids) {
-						try {
-							process.kill(pid, "SIGKILL")
-						} catch (e) {
-							webviewLog.warn(
-								`[ExecaTerminalProcess#abort] Failed to send SIGKILL to child PID ${pid}: ${e instanceof Error ? e.message : String(e)}`,
-							)
-						}
-					}
-				} else {
-					webviewLog.error(
-						`[ExecaTerminalProcess#abort] Failed to get process tree for PID ${this.pid}: ${err.message}`,
-					)
-				}
-			})
 		}
 	}
 

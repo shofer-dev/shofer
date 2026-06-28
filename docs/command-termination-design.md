@@ -60,9 +60,9 @@ sequenceDiagram
         TerminalProcess->>OS: sendText("\x03") — SIGINT via Ctrl+C
     else Execa Terminal (fallback or worktree)
         Task->>ExecaProcess: abort()
-        ExecaProcess->>OS: subprocess.kill("SIGKILL")
-        ExecaProcess->>OS: process.kill(pid, "SIGKILL")
-        ExecaProcess->>OS: psTree → kill child PIDs
+        ExecaProcess->>OS: subprocess.kill("SIGTERM")
+        ExecaProcess->>OS: terminateProcessTree(pid) — SIGTERM tree
+        ExecaProcess->>OS: (after grace) SIGKILL survivors
     end
 
     Note over User, OS: === Path B: ChatView Kill Command Button (command_output ask) ===
@@ -97,14 +97,15 @@ The `"abort"` operation kills the running command. The `"continue"` operation (u
 
 ### 3.2 Routing
 
-| Step                 | File                                                                           | Lines                       | Role                                                   |
-| -------------------- | ------------------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------ |
-| Button click         | [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx)  | 170-186                     | Posts `terminalOperation: "abort"`                     |
-| ChatView Kill button | [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx)                  | 1304-1305                   | Posts `terminalOperation: "abort"` on secondary button |
-| IPC handler          | [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)        | 1008-1011                   | Routes to `task.handleTerminalOperation()`             |
-| Task dispatch        | [`Task.ts`](src/core/task/Task.ts)                                             | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                       |
-| VS Code kill         | [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts)           | 259-263                     | Sends `\x03` (Ctrl+C) via `terminal.sendText()`        |
-| Execa kill           | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts) | 163-221                     | `SIGKILL` on subprocess + stored PID + `psTree`        |
+| Step                 | File                                                                           | Lines                       | Role                                                                         |
+| -------------------- | ------------------------------------------------------------------------------ | --------------------------- | ---------------------------------------------------------------------------- |
+| Button click         | [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx)  | 170-186                     | Posts `terminalOperation: "abort"`                                           |
+| ChatView Kill button | [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx)                  | 1304-1305                   | Posts `terminalOperation: "abort"` on secondary button                       |
+| IPC handler          | [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)        | 1008-1011                   | Routes to `task.handleTerminalOperation()`                                   |
+| Task dispatch        | [`Task.ts`](src/core/task/Task.ts)                                             | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                                             |
+| VS Code kill         | [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts)           | 259-263                     | Sends `\x03` (Ctrl+C) via `terminal.sendText()`                              |
+| Execa kill           | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts) | `abort()`                   | `terminateProcessTree(pid)` — SIGTERM→grace→SIGKILL over the tree (§6)       |
+| Process termination  | [`utils/process-termination.ts`](src/utils/process-termination.ts)             | `terminateProcessTree`      | Reusable SIGTERM→SIGKILL escalation over a process tree (injectable, tested) |
 
 ---
 

@@ -86,7 +86,16 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
     - ⬜ Step 3: `SqliteMessagePersistence` (event-sourced) + one-time importer +
       retire the flat-file perf machinery. NEEDS the Part E #5 decision (one-time
       importer vs dual-read) and real-data testing before it touches user data.
-- ⬜ **§6 Structured cancellation**.
+- 🚧 **§6 Structured cancellation**
+    - ✅ `utils/process-termination.ts` — reusable `terminateProcessTree` with a
+      SIGTERM→grace→SIGKILL escalation over a process tree (injectable
+      kill/enumerate/delay → deterministic unit tests). Wired into
+      `ExecaTerminalProcess.abort()`, replacing the previous immediate, PID-by-PID
+      SIGKILL. Terminal suite green; docs updated (`command-termination-design.md`).
+    - ⬜ Run-scoped cancellation: bind all spawned processes/tools to a single
+      cancellation scope so cancelling a run deterministically tears down
+      everything (the broader fiber/scope abstraction); reconcile tool state on
+      interrupt (`failInterruptedTools`).
 
 ## Phase 2 — Catalog & observability
 
