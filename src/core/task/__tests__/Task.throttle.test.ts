@@ -42,33 +42,68 @@ vi.mock("@shofer/telemetry", () => ({
 }))
 
 // Mock task persistence to avoid disk writes
-vi.mock("../../task-persistence", () => ({
-	readApiMessages: vi.fn().mockResolvedValue([]),
-	saveApiMessages: vi.fn().mockResolvedValue(undefined),
-	appendApiMessage: vi.fn().mockResolvedValue(undefined),
-	readTaskMessages: vi.fn().mockResolvedValue([]),
-	saveTaskMessages: vi.fn().mockResolvedValue(undefined),
-	appendTaskMessage: vi.fn().mockResolvedValue(undefined),
-	taskMetadata: vi.fn().mockResolvedValue({
-		historyItem: {
-			id: "test-task-id",
-			number: 1,
-			task: "Test task",
-			ts: Date.now(),
-			totalCost: 0.01,
-			tokensIn: 100,
-			tokensOut: 50,
+vi.mock("../../task-persistence", () => {
+	// §5: Task persists through the MessagePersistencePort. The H29 throttling test
+	// spies on the module's `appendTaskMessage`, so the mock backend delegates to
+	// the same fn (other methods are no-ops here).
+	const appendTaskMessage = vi.fn().mockResolvedValue(undefined)
+	return {
+		readApiMessages: vi.fn().mockResolvedValue([]),
+		saveApiMessages: vi.fn().mockResolvedValue(undefined),
+		appendApiMessage: vi.fn().mockResolvedValue(undefined),
+		readTaskMessages: vi.fn().mockResolvedValue([]),
+		saveTaskMessages: vi.fn().mockResolvedValue(undefined),
+		appendTaskMessage,
+		FileSystemMessagePersistence: class {
+			appendApiMessage() {
+				return Promise.resolve()
+			}
+			readApiMessages() {
+				return Promise.resolve([])
+			}
+			readApiMessagesTail() {
+				return Promise.resolve([[], false])
+			}
+			saveApiMessages() {
+				return Promise.resolve()
+			}
+			appendTaskMessage(taskId: string, message: unknown) {
+				return appendTaskMessage({ message, taskId, globalStoragePath: "" })
+			}
+			readTaskMessages() {
+				return Promise.resolve([])
+			}
+			readTaskMessagesTail() {
+				return Promise.resolve([[], false])
+			}
+			saveTaskMessages() {
+				return Promise.resolve()
+			}
+			disposeAppendHandleForTask() {
+				return Promise.resolve()
+			}
 		},
-		tokenUsage: {
-			totalTokensIn: 100,
-			totalTokensOut: 50,
-			totalCost: 0.01,
-			contextTokens: 150,
-			totalCacheWrites: 0,
-			totalCacheReads: 0,
-		},
-	}),
-}))
+		taskMetadata: vi.fn().mockResolvedValue({
+			historyItem: {
+				id: "test-task-id",
+				number: 1,
+				task: "Test task",
+				ts: Date.now(),
+				totalCost: 0.01,
+				tokensIn: 100,
+				tokensOut: 50,
+			},
+			tokenUsage: {
+				totalTokensIn: 100,
+				totalTokensOut: 50,
+				totalCost: 0.01,
+				contextTokens: 150,
+				totalCacheWrites: 0,
+				totalCacheReads: 0,
+			},
+		}),
+	}
+})
 
 describe("Task token usage throttling", () => {
 	let mockProvider: any

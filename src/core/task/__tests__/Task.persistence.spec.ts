@@ -89,6 +89,38 @@ vi.mock("../../task-persistence", () => ({
 	readApiMessages: mockReadApiMessages,
 	readTaskMessages: mockReadTaskMessages,
 	taskMetadata: mockTaskMetadata,
+	// §5: Task now reads/writes through the MessagePersistencePort. This mock
+	// backend delegates to the same mock functions (with the original arg shape)
+	// so existing call assertions on mockSaveApiMessages/etc. still hold.
+	FileSystemMessagePersistence: class {
+		appendApiMessage(taskId: string, message: unknown) {
+			return mockAppendApiMessage({ message, taskId, globalStoragePath: "" })
+		}
+		readApiMessages(taskId: string) {
+			return mockReadApiMessages({ taskId, globalStoragePath: "" })
+		}
+		readApiMessagesTail() {
+			return Promise.resolve([[], false])
+		}
+		saveApiMessages(taskId: string, messages: unknown, serialized?: string) {
+			return mockSaveApiMessages({ messages, taskId, globalStoragePath: "", serialized })
+		}
+		appendTaskMessage(taskId: string, message: unknown) {
+			return mockAppendTaskMessage({ message, taskId, globalStoragePath: "" })
+		}
+		readTaskMessages(taskId: string) {
+			return mockReadTaskMessages({ taskId, globalStoragePath: "" })
+		}
+		readTaskMessagesTail() {
+			return Promise.resolve([[], false])
+		}
+		saveTaskMessages(taskId: string, messages: unknown, serialized?: string) {
+			return mockSaveTaskMessages({ messages, taskId, globalStoragePath: "", serialized })
+		}
+		disposeAppendHandleForTask() {
+			return Promise.resolve()
+		}
+	},
 	TaskHistoryStore: vi.fn().mockImplementation(() => ({
 		initialize: vi.fn().mockResolvedValue(undefined),
 		dispose: vi.fn(),

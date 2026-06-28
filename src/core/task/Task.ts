@@ -120,14 +120,8 @@ import { ShoferProvider } from "../webview/ShoferProvider"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import {
 	type ApiMessage,
-	appendApiMessage,
-	appendTaskMessage,
-	readApiMessages,
-	readApiMessagesTail,
-	saveApiMessages,
-	readTaskMessages,
-	readTaskMessagesTail,
-	saveTaskMessages,
+	type MessagePersistencePort,
+	FileSystemMessagePersistence,
 	taskMetadata,
 } from "../task-persistence"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
@@ -1514,8 +1508,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	// API Messages
 
+	/**
+	 * Message persistence backend (§5). All api/UI message reads/writes go through
+	 * this port so the storage layer (currently flat JSONL) can be swapped without
+	 * touching these call sites. Lazily created to avoid constructor ordering.
+	 */
+	private _persistence?: MessagePersistencePort
+	private get persistence(): MessagePersistencePort {
+		if (!this._persistence) {
+			this._persistence = new FileSystemMessagePersistence(this.globalStoragePath)
+		}
+		return this._persistence
+	}
+
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
-		return readApiMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+		return this.persistence.readApiMessages(this.taskId)
 	}
 
 	/**
@@ -1760,11 +1767,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `overwriteApiConversationHistory` / `retrySaveApiConversationHistory`.
 		try {
 			const last = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-			await appendApiMessage({
-				message: last,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
+			await this.persistence.appendApiMessage(this.taskId, last)
 		} catch (error) {
 			taskLog.error("Failed to append API message:", error)
 		}
@@ -1852,11 +1855,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `retrySaveApiConversationHistory()` (which does a full rewrite).
 		let saved = true
 		try {
-			await appendApiMessage({
-				message: userMessageWithTs as ApiMessage,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
+			await this.persistence.appendApiMessage(this.taskId, userMessageWithTs as ApiMessage)
 		} catch (error) {
 			saved = false
 			taskLog.error("Failed to append pending tool-result message:", error)
@@ -1883,12 +1882,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// injection, etc.) cannot race with the write.
 			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
 			const serialized = serializeJsonLines(this.apiConversationHistory)
-			await saveApiMessages({
-				messages: this.apiConversationHistory,
-				serialized,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
+			await this.persistence.saveApiMessages(this.taskId, this.apiConversationHistory, serialized)
 			return true
 		} catch (error) {
 			taskLog.error("Failed to save API conversation history:", error)
@@ -1923,17 +1917,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Shofer Messages
 
 	public async getSavedShoferMessages(): Promise<ShoferMessage[]> {
-		return readTaskMessages({ taskId: this.taskId, globalStoragePath: this.globalStoragePath })
+		return this.persistence.readTaskMessages(this.taskId)
 	}
 
 	// T1.B: tail-read helpers for cold task-switch optimisation.
 	// Read only the last N messages from disk instead of the full history.
 	private async getSavedShoferMessagesTail(maxMessages: number): Promise<[ShoferMessage[], boolean]> {
-		return readTaskMessagesTail({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+		return this.persistence.readTaskMessagesTail(this.taskId, maxMessages)
 	}
 
 	private async getSavedApiConversationHistoryTail(maxMessages: number): Promise<[ApiMessage[], boolean]> {
-		return readApiMessagesTail({ taskId: this.taskId, globalStoragePath: this.globalStoragePath, maxMessages })
+		return this.persistence.readApiMessagesTail(this.taskId, maxMessages)
 	}
 
 	/**
@@ -2114,11 +2108,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// refresh so a crash between the in-memory push and the next compaction
 		// does not lose the message.
 		try {
-			await appendTaskMessage({
-				message,
-				taskId: this.taskId,
-				globalStoragePath: this.globalStoragePath,
-			})
+			await this.persistence.appendTaskMessage(this.taskId, message)
 			// H12: track appended lines for threshold-triggered compaction.
 			this._appendedSinceCompaction++
 		} catch (error) {
@@ -2202,11 +2192,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
 		if (shouldAppend) {
 			try {
-				await appendTaskMessage({
-					message,
-					taskId: this.taskId,
-					globalStoragePath: this.globalStoragePath,
-				})
+				await this.persistence.appendTaskMessage(this.taskId, message)
 				// H12: re-appending a mutated message counts as an append.
 				this._appendedSinceCompaction++
 				if (isPartial) {
@@ -2272,12 +2258,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (shouldCompact) {
 				const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
 				const serialized = serializeJsonLines(this.shoferMessages)
-				await saveTaskMessages({
-					messages: this.shoferMessages,
-					serialized,
-					taskId: this.taskId,
-					globalStoragePath: this.globalStoragePath,
-				})
+				await this.persistence.saveTaskMessages(this.taskId, this.shoferMessages, serialized)
 				this._appendedSinceCompaction = 0
 			}
 
@@ -4451,16 +4432,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// H13(b): release the long-lived append file handle for this task's
 		// JSONL log. Best-effort — the fd will be reclaimed by the kernel on
 		// process exit anyway.
-		void import("../task-persistence/taskMessages")
-			.then(({ disposeAppendHandleForTask }) =>
-				disposeAppendHandleForTask({
-					taskId: this.taskId,
-					globalStoragePath: this.globalStoragePath,
-				}),
-			)
-			.catch(() => {
-				// EACCES in test envs, missing task dir, etc. — harmless.
-			})
+		void this.persistence.disposeAppendHandleForTask(this.taskId).catch(() => {
+			// EACCES in test envs, missing task dir, etc. — harmless.
+		})
 	}
 
 	// Task Loop

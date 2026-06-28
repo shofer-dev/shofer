@@ -82,9 +82,10 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       adapter (`task-persistence/PersistencePort.ts`) — the swap seam over the
       existing JSONL functions, behavior-preserving (round-trip test). Also the
       seam §9's host-agnostic core needs.
-    - ⬜ Step 2: route Task.ts's ~23 persistence call sites through an injected port
-      (deferred — Task.ts is a concurrent-edit collision hotspot; do when the tree
-      is quiet).
+    - ✅ Step 2: Task.ts now reads/writes all api/UI messages through the port (a
+      lazy `this.persistence` getter), replacing the ~10 direct
+      append/save/read/dispose call sites. Behavior-preserving (270 task/persistence
+      tests pass; the two persistence specs updated to mock the port backend).
     - ⬜ Step 3: `SqliteMessagePersistence` (event-sourced) + one-time importer +
       retire the flat-file perf machinery. NEEDS the Part E #5 decision (one-time
       importer vs dual-read) and real-data testing before it touches user data.
