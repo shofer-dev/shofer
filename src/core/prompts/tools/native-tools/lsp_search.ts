@@ -10,7 +10,9 @@
  * requires no external infrastructure — it works entirely with VS Code's
  * built-in language services.
  */
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const DESCRIPTION = `Search the codebase for symbols (functions, classes, variables, interfaces, etc.) using the Language Server Protocol workspace symbol provider. This is a structural/symbol-aware search that finds declarations and definitions matching the query.
 
@@ -28,26 +30,11 @@ Example: Searching for a function
 Example: Broader search
 { "query": "database connection", "maxResults": 30 }`
 
-export default {
-	type: "function",
-	function: {
-		name: "lsp_search",
-		description: DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				query: {
-					type: "string",
-					description: "The symbol name or text to search for in the codebase",
-				},
-				maxResults: {
-					type: ["number", "null"],
-					description: "Maximum number of results to return (default: 20)",
-				},
-			},
-			required: ["query", "maxResults"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "lsp_search",
+	description: DESCRIPTION,
+	schema: z.object({
+		query: z.string().describe("The symbol name or text to search for in the codebase"),
+		maxResults: z.number().describe("Maximum number of results to return (default: 20)").optional(),
+	}),
+})

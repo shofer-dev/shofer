@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const apply_patch_DESCRIPTION = `Apply patches to files using a stripped-down, file-oriented diff format. This tool supports creating new files, deleting files, and updating existing files with precise changes.
 
@@ -38,24 +40,16 @@ Example patch:
 *** Delete File: obsolete.txt
 *** End Patch`
 
-const apply_patch = {
-	type: "function",
-	function: {
-		name: "apply_patch",
-		description: apply_patch_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				patch: {
-					type: "string",
-					description:
-						"The complete patch text in the apply_patch format, starting with '*** Begin Patch' and ending with '*** End Patch'.",
-				},
-			},
-			required: ["patch"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+const apply_patch = defineNativeTool({
+	name: "apply_patch",
+	description: apply_patch_DESCRIPTION,
+	schema: z.object({
+		patch: z
+			.string()
+			.describe(
+				"The complete patch text in the apply_patch format, starting with '*** Begin Patch' and ending with '*** End Patch'.",
+			),
+	}),
+})
 
 export default apply_patch

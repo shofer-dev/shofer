@@ -57,6 +57,10 @@ const SCHEMA_DIR = join(__dirname, "__schemas__")
 function snapshotOf(tool: OpenAI.Chat.ChatCompletionFunctionTool) {
 	return {
 		name: tool.function.name,
+		// `strict` is part of the contract: a tool that disables strict mode does so
+		// deliberately (e.g. to let the model omit advisory params). Capture it so a
+		// migration can't silently flip it.
+		strict: tool.function.strict ?? false,
 		description: tool.function.description ?? "",
 		parameters: normalize(tool.function.parameters as JsonSchema) ?? null,
 	}

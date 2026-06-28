@@ -1,20 +1,21 @@
 {
 	"name": "execute_command",
+	"strict": true,
 	"description": "Request to execute a CLI command on the system. Use this when you need to perform system operations or run specific commands to accomplish any step in the user's task. You must tailor your command to the user's system and provide a clear explanation of what the command does. For command chaining, use the appropriate chaining syntax for the user's shell. Prefer to execute complex CLI commands over creating executable scripts, as they are more flexible and easier to run. Prefer relative commands and paths that avoid location sensitivity for terminal consistency.\n\nParameters:\n- command: (required) The CLI command to execute. This should be valid for the current operating system. Ensure the command is properly formatted and does not contain any harmful instructions.\n- cwd: (optional) The working directory to execute the command in\n- timeout: (optional) Timeout in seconds. When exceeded, the command continues running in the background and you receive the output so far. This allows you to proceed with your turn without waiting for the command to exit. You can monitor the process output by calling execute_command again (with no timeout) to get the latest output.\n\nExample: Executing npm run dev\n{ \"command\": \"npm run dev\", \"cwd\": null, \"timeout\": null }\n\nExample: Executing ls in a specific directory if directed\n{ \"command\": \"ls -la\", \"cwd\": \"/home/user/projects\", \"timeout\": null }\n\nExample: Using relative paths\n{ \"command\": \"touch ./testdata/example.file\", \"cwd\": null, \"timeout\": null }\n\nExample: Running a build with a timeout (command continues in background after 30s)\n{ \"command\": \"npm run build\", \"cwd\": null, \"timeout\": 30 }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"command": {
-				"type": "string",
-				"description": "Shell command to execute"
+				"description": "Shell command to execute",
+				"type": "string"
 			},
 			"cwd": {
-				"type": "string",
-				"description": "Optional working directory for the command, relative or absolute"
+				"description": "Optional working directory for the command, relative or absolute",
+				"type": "string"
 			},
 			"timeout": {
-				"type": "number",
-				"description": "Timeout in seconds. When exceeded, the command continues running in the background and output collected so far is returned. Use this for long-running processes like dev servers, file watchers, or any command that may not exit on its own. You can monitor the process by calling execute_command again without a timeout."
+				"description": "Timeout in seconds. When exceeded, the command continues running in the background and output collected so far is returned. Use this for long-running processes like dev servers, file watchers, or any command that may not exit on its own. You can monitor the process by calling execute_command again without a timeout.",
+				"type": "number"
 			}
 		},
 		"required": ["command", "cwd", "timeout"],

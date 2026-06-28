@@ -1,25 +1,26 @@
 {
 	"name": "edit",
+	"strict": true,
 	"description": "Performs exact string replacements in files.\n\nUsage:\n- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.\n- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that tab is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.\n- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.\n- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.\n- The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance.",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"file_path": {
-				"type": "string",
-				"description": "The path of the file to edit (relative to the working directory)"
+				"description": "The path of the file to edit (relative to the working directory)",
+				"type": "string"
 			},
 			"new_string": {
-				"type": "string",
-				"description": "The replacement text that will replace old_string. Must include all necessary whitespace and indentation."
+				"description": "The replacement text that will replace old_string. Must include all necessary whitespace and indentation.",
+				"type": "string"
 			},
 			"old_string": {
-				"type": "string",
-				"description": "The exact text to find in the file. Must match exactly, including all whitespace, indentation, and line endings."
+				"description": "The exact text to find in the file. Must match exactly, including all whitespace, indentation, and line endings.",
+				"type": "string"
 			},
 			"replace_all": {
-				"type": "boolean",
+				"default": false,
 				"description": "When true, replaces ALL occurrences of old_string in the file. When false (default), only replaces the first occurrence and errors if multiple matches exist.",
-				"default": false
+				"type": "boolean"
 			}
 		},
 		"required": ["file_path", "new_string", "old_string", "replace_all"],

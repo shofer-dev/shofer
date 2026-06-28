@@ -1,16 +1,17 @@
 {
 	"name": "list_files",
+	"strict": true,
 	"description": "Request to list files and directories within the specified directory. If recursive is true, it will list all files and directories recursively. If recursive is false or not provided, it will only list the top-level contents. Do not use this tool to confirm the existence of files you may have created, as the user will let you know if the files were created successfully or not.\n\nParameters:\n- path: (required) The path of the directory to list contents for (relative to the current workspace directory)\n- recursive: (required) Whether to list files recursively. Use true for recursive listing, false for top-level only.\n\nExample: Listing all files in the current directory (top-level only)\n{ \"path\": \".\", \"recursive\": false }\n\nExample: Listing all files recursively in src directory\n{ \"path\": \"src\", \"recursive\": true }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"path": {
-				"type": "string",
-				"description": "Directory path to inspect, relative to the workspace"
+				"description": "Directory path to inspect, relative to the workspace",
+				"type": "string"
 			},
 			"recursive": {
-				"type": "boolean",
-				"description": "Set true to list contents recursively; false to show only the top level"
+				"description": "Set true to list contents recursively; false to show only the top level",
+				"type": "boolean"
 			}
 		},
 		"required": ["path", "recursive"],

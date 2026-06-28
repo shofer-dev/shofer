@@ -1,24 +1,25 @@
 {
 	"name": "list_code_usages",
+	"strict": true,
 	"description": "Request to find all references/usages of a symbol at a specific position. This tool uses the language server to find all references to the symbol at the given location.\n\nParameters:\n- path: (required) Path to the file containing the symbol (also accepts filePath as alias), relative to the workspace\n- line: (required) 1-based line number of the symbol\n- column: (required) 1-based column number of the symbol\n\nExample: Find all references to a function\n{ \"path\": \"src/utils.ts\", \"line\": 15, \"column\": 10 }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"column": {
-				"type": "number",
-				"description": "1-based column number of the symbol"
+				"description": "1-based column number of the symbol",
+				"type": "number"
 			},
 			"filePath": {
-				"type": "string",
-				"description": "Alias for 'path'. Path to the file containing the symbol, relative to the workspace"
+				"description": "Alias for 'path'. Path to the file containing the symbol, relative to the workspace",
+				"type": "string"
 			},
 			"line": {
-				"type": "number",
-				"description": "1-based line number of the symbol"
+				"description": "1-based line number of the symbol",
+				"type": "number"
 			},
 			"path": {
-				"type": "string",
-				"description": "Path to the file containing the symbol, relative to the workspace"
+				"description": "Path to the file containing the symbol, relative to the workspace",
+				"type": "string"
 			}
 		},
 		"required": ["column", "filePath", "line", "path"],

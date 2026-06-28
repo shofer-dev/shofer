@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const RENAME_SYMBOL_DESCRIPTION = `Request to rename a symbol at a specific position. This tool uses the language server to rename the symbol and all its references across the codebase.
 
@@ -19,37 +21,17 @@ const COLUMN_PARAMETER_DESCRIPTION = `1-based column number of the symbol`
 
 const NEW_NAME_PARAMETER_DESCRIPTION = `New name for the symbol`
 
-export default {
-	type: "function",
-	function: {
-		name: "rename_symbol",
-		description: RENAME_SYMBOL_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				filePath: {
-					type: "string",
-					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				line: {
-					type: "number",
-					description: LINE_PARAMETER_DESCRIPTION,
-				},
-				column: {
-					type: "number",
-					description: COLUMN_PARAMETER_DESCRIPTION,
-				},
-				newName: {
-					type: "string",
-					description: NEW_NAME_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "line", "column", "newName"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "rename_symbol",
+	description: RENAME_SYMBOL_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(FILE_PATH_PARAMETER_DESCRIPTION),
+		filePath: z
+			.string()
+			.describe("Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION)
+			.optional(),
+		line: z.number().describe(LINE_PARAMETER_DESCRIPTION),
+		column: z.number().describe(COLUMN_PARAMETER_DESCRIPTION),
+		newName: z.string().describe(NEW_NAME_PARAMETER_DESCRIPTION),
+	}),
+})

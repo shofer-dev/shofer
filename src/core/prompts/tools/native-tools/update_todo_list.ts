@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const UPDATE_TODO_LIST_DESCRIPTION = `Replace the entire TODO list with an updated checklist reflecting the current state. Always provide the full list; the system will overwrite the previous one. This tool is designed for step-by-step task tracking, allowing you to confirm completion of each step before updating, update multiple task statuses at once (e.g., mark one as completed and start the next), and dynamically add new todos discovered during long or complex tasks.
 
@@ -33,22 +35,10 @@ When NOT to Use:
 
 const TODOS_PARAMETER_DESCRIPTION = `Full markdown checklist in execution order, using [ ] for pending, [x] for completed, and [-] for in progress`
 
-export default {
-	type: "function",
-	function: {
-		name: "update_todo_list",
-		description: UPDATE_TODO_LIST_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				todos: {
-					type: "string",
-					description: TODOS_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["todos"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "update_todo_list",
+	description: UPDATE_TODO_LIST_DESCRIPTION,
+	schema: z.object({
+		todos: z.string().describe(TODOS_PARAMETER_DESCRIPTION),
+	}),
+})

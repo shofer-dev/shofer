@@ -1,28 +1,29 @@
 {
 	"name": "insert_edit",
+	"strict": true,
 	"description": "Request to insert text at a specific position in a file. This tool inserts text at the specified line and column position.\n\nParameters:\n- path: (required) Path to the file (also accepts filePath as alias), relative to the workspace\n- line: (required) 1-based line number to insert at\n- column: (optional) 1-based column number to insert at. Defaults to 1 (start of line).\n- text: (required) Text to insert\n\nExample: Insert at beginning of line 10\n{ \"path\": \"src/app.ts\", \"line\": 10, \"text\": \"// New comment\\n\" }\n\nExample: Insert at specific position\n{ \"path\": \"src/app.ts\", \"line\": 10, \"column\": 5, \"text\": \"newCode\" }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"column": {
-				"type": "number",
-				"description": "1-based column number to insert at (default: 1)"
+				"description": "1-based column number to insert at (default: 1)",
+				"type": "number"
 			},
 			"filePath": {
-				"type": "string",
-				"description": "Alias for 'path'. Path to the file, relative to the workspace"
+				"description": "Alias for 'path'. Path to the file, relative to the workspace",
+				"type": "string"
 			},
 			"line": {
-				"type": "number",
-				"description": "1-based line number to insert at"
+				"description": "1-based line number to insert at",
+				"type": "number"
 			},
 			"path": {
-				"type": "string",
-				"description": "Path to the file, relative to the workspace"
+				"description": "Path to the file, relative to the workspace",
+				"type": "string"
 			},
 			"text": {
-				"type": "string",
-				"description": "Text to insert"
+				"description": "Text to insert",
+				"type": "string"
 			}
 		},
 		"required": ["column", "filePath", "line", "path", "text"],

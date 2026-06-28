@@ -1,48 +1,49 @@
 {
 	"name": "grep_search",
+	"strict": true,
 	"description": "Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.\n\nCraft your regex patterns carefully to balance specificity and flexibility. Use this tool to find code patterns, TODO comments, function definitions, or any text-based information across the project. The results include surrounding context, so analyze the surrounding code to better understand the matches. Leverage this tool in combination with other tools for more comprehensive analysis.\n\nParameters:\n- path: (required) The path of the directory to search in (relative to the current workspace directory). This directory will be recursively searched.\n- query: (required) The search pattern (regex or literal text)\n- fileTypes: (optional) Glob pattern to filter files (e.g., '*.ts', '**/*.go'). If not provided, it will search all files.\n- excludePattern: (optional) Glob pattern to exclude files from search.\n- isRegex: (optional) Whether the query is a regular expression. When false, query is matched literally. Defaults to true.\n- caseSensitive: (optional) Case-sensitive matching. Defaults to false.\n- wholeWord: (optional) Match whole words only (wraps query in \\b boundaries). Works with both literal and regex queries. Defaults to false.\n- maxResults: (optional) Maximum total results across all files. Defaults to 100; silently capped at 1000.\n- contextBefore: (optional) Lines of context to show before each match. Defaults to 1.\n- contextAfter: (optional) Lines of context to show after each match. Defaults to 1.\n\nExample: Searching for all .ts files in the current directory\n{ \"path\": \".\", \"query\": \".*\", \"fileTypes\": \"*.ts\" }\n\nExample: Searching for function definitions in JavaScript files\n{ \"path\": \"src\", \"query\": \"function\\s+\\w+\", \"fileTypes\": \"*.js\" }\n\nExample: Literal search for TODO with whole-word matching\n{ \"path\": \"src\", \"query\": \"TODO\", \"fileTypes\": \"*.ts\", \"isRegex\": false, \"caseSensitive\": true, \"wholeWord\": true }\n\nExample: Literal search with excludes\n{ \"path\": \"src\", \"query\": \"outputLog\", \"isRegex\": false, \"excludePattern\": \"**/*.test.ts\" }\n\nExample: Minimal search (all defaults)\n{ \"path\": \"src\", \"query\": \"authService\" }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"caseSensitive": {
-				"type": "boolean",
-				"description": "Case-sensitive matching (default: false)"
+				"description": "Case-sensitive matching (default: false)",
+				"type": "boolean"
 			},
 			"contextAfter": {
-				"type": "number",
-				"description": "Lines of context to show after each match (default: 1)"
+				"description": "Lines of context to show after each match (default: 1)",
+				"type": "number"
 			},
 			"contextBefore": {
-				"type": "number",
-				"description": "Lines of context to show before each match (default: 1)"
+				"description": "Lines of context to show before each match (default: 1)",
+				"type": "number"
 			},
 			"excludePattern": {
-				"type": "string",
-				"description": "Glob pattern to exclude files (e.g., '**/node_modules/**'). null = no exclusions."
+				"description": "Glob pattern to exclude files (e.g., '**/node_modules/**'). null = no exclusions.",
+				"type": "string"
 			},
 			"fileTypes": {
-				"type": "string",
-				"description": "Glob pattern to filter files (e.g., '*.ts', '**/*.go'). null = all files."
+				"description": "Glob pattern to filter files (e.g., '*.ts', '**/*.go'). null = all files.",
+				"type": "string"
 			},
 			"isRegex": {
-				"type": "boolean",
-				"description": "Whether query is a regular expression (default: true). When false, query is matched as a literal string."
+				"description": "Whether query is a regular expression (default: true). When false, query is matched as a literal string.",
+				"type": "boolean"
 			},
 			"maxResults": {
-				"type": "number",
-				"description": "Maximum total results across all files (default 100, silently clamped to 1000). Raise only when you need exhaustive coverage — narrowing the query is usually cheaper."
+				"description": "Maximum total results across all files (default 100, silently clamped to 1000). Raise only when you need exhaustive coverage — narrowing the query is usually cheaper.",
+				"type": "number"
 			},
 			"path": {
-				"type": "string",
-				"description": "Directory to search recursively, relative to the workspace"
+				"description": "Directory to search recursively, relative to the workspace",
+				"type": "string"
 			},
 			"query": {
-				"type": "string",
-				"description": "The search pattern (regex or literal text)"
+				"description": "The search pattern (regex or literal text)",
+				"type": "string"
 			},
 			"wholeWord": {
-				"type": "boolean",
-				"description": "Match whole words only by wrapping the query in \\b word boundary anchors (default: false). Works with both literal and regex queries."
+				"description": "Match whole words only by wrapping the query in \\b word boundary anchors (default: false). Works with both literal and regex queries.",
+				"type": "boolean"
 			}
 		},
 		"required": [

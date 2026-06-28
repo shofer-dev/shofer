@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const INSERT_EDIT_DESCRIPTION = `Request to insert text at a specific position in a file. This tool inserts text at the specified line and column position.
 
@@ -22,37 +24,17 @@ const COLUMN_PARAMETER_DESCRIPTION = `1-based column number to insert at (defaul
 
 const TEXT_PARAMETER_DESCRIPTION = `Text to insert`
 
-export default {
-	type: "function",
-	function: {
-		name: "insert_edit",
-		description: INSERT_EDIT_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				filePath: {
-					type: "string",
-					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				line: {
-					type: "number",
-					description: LINE_PARAMETER_DESCRIPTION,
-				},
-				column: {
-					type: ["number", "null"],
-					description: COLUMN_PARAMETER_DESCRIPTION,
-				},
-				text: {
-					type: "string",
-					description: TEXT_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "line", "text"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "insert_edit",
+	description: INSERT_EDIT_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(FILE_PATH_PARAMETER_DESCRIPTION),
+		filePath: z
+			.string()
+			.describe("Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION)
+			.optional(),
+		line: z.number().describe(LINE_PARAMETER_DESCRIPTION),
+		column: z.number().describe(COLUMN_PARAMETER_DESCRIPTION).optional(),
+		text: z.string().describe(TEXT_PARAMETER_DESCRIPTION),
+	}),
+})

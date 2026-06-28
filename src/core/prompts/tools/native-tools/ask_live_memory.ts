@@ -1,5 +1,7 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
 import { DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC, DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const ASK_LIVE_MEMORY_DESCRIPTION = `Ask a question to the persistent live memory agent that maintains long-term context about the codebase. The live memory agent runs on a separate, cost-optimized model and accumulates codebase knowledge over time.
 
@@ -33,43 +35,14 @@ const SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION = `Soft recommendation in seconds f
 
 const SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION = `Soft recommendation in characters for the maximum length of the live memory agent's final answer (default: ${DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH}). Embedded in the prompt as guidance; not enforced via truncation.`
 
-export default {
-	type: "function",
-	function: {
-		name: "ask_live_memory",
-		description: ASK_LIVE_MEMORY_DESCRIPTION,
-		// `strict: true` is intentionally omitted: it would force every listed
-		// property into `required`, which defeats the point of having truly
-		// optional `contextFiles` / `timeoutMs` / `softTimeoutSec` /
-		// `softResultLength` parameters that the model can simply leave out
-		// of the call.
-		parameters: {
-			type: "object",
-			properties: {
-				question: {
-					type: "string",
-					description: QUESTION_PARAMETER_DESCRIPTION,
-				},
-				contextFiles: {
-					type: "array",
-					items: { type: "string" },
-					description: CONTEXT_FILES_PARAMETER_DESCRIPTION,
-				},
-				timeoutMs: {
-					type: "number",
-					description: TIMEOUT_MS_PARAMETER_DESCRIPTION,
-				},
-				softTimeoutSec: {
-					type: "number",
-					description: SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION,
-				},
-				softResultLength: {
-					type: "number",
-					description: SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["question"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "ask_live_memory",
+	description: ASK_LIVE_MEMORY_DESCRIPTION,
+	schema: z.object({
+		question: z.string().describe(QUESTION_PARAMETER_DESCRIPTION),
+		contextFiles: z.array(z.string()).describe(CONTEXT_FILES_PARAMETER_DESCRIPTION).optional(),
+		timeoutMs: z.number().describe(TIMEOUT_MS_PARAMETER_DESCRIPTION).optional(),
+		softTimeoutSec: z.number().describe(SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION).optional(),
+		softResultLength: z.number().describe(SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

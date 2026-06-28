@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const GENERATE_IMAGE_DESCRIPTION = `Request to generate or edit an image using AI models through OpenRouter API. This tool can create new images from text prompts or modify existing images based on your instructions. When an input image is provided, the AI will apply the requested edits, transformations, or enhancements to that image.
 
@@ -22,30 +24,12 @@ const PATH_PARAMETER_DESCRIPTION = `Filesystem path (relative to the workspace) 
 
 const IMAGE_PARAMETER_DESCRIPTION = `Optional path (relative to the workspace) to an existing image to edit; supports PNG, JPG, JPEG, GIF, and WEBP`
 
-export default {
-	type: "function",
-	function: {
-		name: "generate_image",
-		description: GENERATE_IMAGE_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				prompt: {
-					type: "string",
-					description: PROMPT_PARAMETER_DESCRIPTION,
-				},
-				path: {
-					type: "string",
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				image: {
-					type: ["string", "null"],
-					description: IMAGE_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["prompt", "path", "image"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "generate_image",
+	description: GENERATE_IMAGE_DESCRIPTION,
+	schema: z.object({
+		prompt: z.string().describe(PROMPT_PARAMETER_DESCRIPTION),
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION),
+		image: z.string().describe(IMAGE_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

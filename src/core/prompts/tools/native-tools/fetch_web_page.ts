@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const FETCH_WEB_PAGE_DESCRIPTION = `Request to fetch and extract content from web pages. This tool downloads web pages and extracts their text content, removing HTML markup.
 
@@ -16,29 +18,11 @@ const URLS_PARAMETER_DESCRIPTION = `Array of URLs to fetch`
 
 const QUERY_PARAMETER_DESCRIPTION = `Query to filter the extracted content`
 
-export default {
-	type: "function",
-	function: {
-		name: "fetch_web_page",
-		description: FETCH_WEB_PAGE_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				urls: {
-					type: "array",
-					items: {
-						type: "string",
-					},
-					description: URLS_PARAMETER_DESCRIPTION,
-				},
-				query: {
-					type: ["string", "null"],
-					description: QUERY_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["urls", "query"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "fetch_web_page",
+	description: FETCH_WEB_PAGE_DESCRIPTION,
+	schema: z.object({
+		urls: z.array(z.string()).describe(URLS_PARAMETER_DESCRIPTION),
+		query: z.string().describe(QUERY_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

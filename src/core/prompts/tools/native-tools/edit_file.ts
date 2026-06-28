@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const EDIT_FILE_DESCRIPTION = `Use this tool to replace text in an existing file, or create a new file.
 
@@ -33,40 +35,33 @@ CRITICAL REQUIREMENTS:
 
 4. NO ESCAPING: Provide the literal text - do not escape special characters.`
 
-const edit_file = {
-	type: "function",
-	function: {
-		name: "edit_file",
-		description: EDIT_FILE_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				file_path: {
-					type: "string",
-					description:
-						"The path to the file to modify or create. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.",
-				},
-				old_string: {
-					type: "string",
-					description:
-						"The exact literal text to replace (must match the file contents exactly, including all whitespace and indentation). For single replacements (default), include at least 3 lines of context BEFORE and AFTER the target text. Use empty string to create a new file.",
-				},
-				new_string: {
-					type: "string",
-					description:
-						"The exact literal text to replace old_string with. When creating a new file (old_string is empty), this becomes the file content.",
-				},
-				expected_replacements: {
-					type: "number",
-					description:
-						"Number of replacements expected. Defaults to 1 if not specified. Use when you want to replace multiple occurrences of the same text.",
-					minimum: 1,
-				},
-			},
-			required: ["file_path", "old_string", "new_string"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+const edit_file = defineNativeTool({
+	name: "edit_file",
+	description: EDIT_FILE_DESCRIPTION,
+	schema: z.object({
+		file_path: z
+			.string()
+			.describe(
+				"The path to the file to modify or create. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.",
+			),
+		old_string: z
+			.string()
+			.describe(
+				"The exact literal text to replace (must match the file contents exactly, including all whitespace and indentation). For single replacements (default), include at least 3 lines of context BEFORE and AFTER the target text. Use empty string to create a new file.",
+			),
+		new_string: z
+			.string()
+			.describe(
+				"The exact literal text to replace old_string with. When creating a new file (old_string is empty), this becomes the file content.",
+			),
+		expected_replacements: z
+			.number()
+			.min(1)
+			.describe(
+				"Number of replacements expected. Defaults to 1 if not specified. Use when you want to replace multiple occurrences of the same text.",
+			)
+			.optional(),
+	}),
+})
 
 export default edit_file

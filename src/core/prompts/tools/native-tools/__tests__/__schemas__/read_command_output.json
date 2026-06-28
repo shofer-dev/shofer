@@ -1,24 +1,25 @@
 {
 	"name": "read_command_output",
+	"strict": true,
 	"description": "Retrieve the full output from a command that was truncated in execute_command. Use this tool when:\n1. The execute_command result shows \"[OUTPUT TRUNCATED - Full output saved to artifact: cmd-XXXX.txt]\"\n2. You need to see more of the command output beyond the preview\n3. You want to search for specific content in large command output\n\nThe tool supports two modes:\n- **Read mode**: Read output starting from a byte offset with optional limit\n- **Search mode**: Filter lines matching a regex or literal pattern (like grep)\n\nParameters:\n- artifact_id: (required) The artifact filename from the truncated output message (e.g., \"cmd-1706119234567.txt\")\n- search: (optional) Pattern to filter lines. Supports regex or literal strings. Case-insensitive. **Omit this parameter entirely if you don't need to filter - do not pass null or empty string.**\n- offset: (optional) Byte offset to start reading from. Default: 0. Use for pagination.\n- limit: (optional) Maximum bytes to return. Default: 40KB.\n\nExample: Reading truncated command output\n{ \"artifact_id\": \"cmd-1706119234567.txt\" }\n\nExample: Reading with pagination (after first 40KB)\n{ \"artifact_id\": \"cmd-1706119234567.txt\", \"offset\": 40960 }\n\nExample: Searching for errors in build output\n{ \"artifact_id\": \"cmd-1706119234567.txt\", \"search\": \"error|failed|Error\" }\n\nExample: Finding specific test failures\n{ \"artifact_id\": \"cmd-1706119234567.txt\", \"search\": \"FAIL\" }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"artifact_id": {
-				"type": "string",
-				"description": "The artifact filename from the truncated command output (e.g., \"cmd-1706119234567.txt\")"
+				"description": "The artifact filename from the truncated command output (e.g., \"cmd-1706119234567.txt\")",
+				"type": "string"
 			},
 			"limit": {
-				"type": "number",
-				"description": "Maximum bytes to return (default: 40KB)"
+				"description": "Maximum bytes to return (default: 40KB)",
+				"type": "number"
 			},
 			"offset": {
-				"type": "number",
-				"description": "Byte offset to start reading from (default: 0, for pagination)"
+				"description": "Byte offset to start reading from (default: 0, for pagination)",
+				"type": "number"
 			},
 			"search": {
-				"type": "string",
-				"description": "Optional regex or literal pattern to filter lines (case-insensitive, like grep). Omit this parameter if not searching - do not pass null or empty string."
+				"description": "Optional regex or literal pattern to filter lines (case-insensitive, like grep). Omit this parameter if not searching - do not pass null or empty string.",
+				"type": "string"
 			}
 		},
 		"required": ["artifact_id", "limit", "offset", "search"],

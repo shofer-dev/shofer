@@ -1,18 +1,19 @@
 {
 	"name": "get_errors",
+	"strict": true,
 	"description": "Request to get errors and warnings from the workspace or specific files. This tool retrieves diagnostics from the language server.\n\nParameters:\n- filePaths: (optional) Array of file paths to check. If not provided, checks all files in the workspace.\n\nExample: Get all errors in workspace\n{ }\n\nExample: Get errors in specific files\n{ \"filePaths\": [\"src/app.ts\", \"src/utils.ts\"] }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"filePaths": {
+				"description": "Array of file paths to check (optional, checks all files if not provided)",
 				"type": "array",
 				"items": {
 					"type": "string"
-				},
-				"description": "Array of file paths to check (optional, checks all files if not provided)"
+				}
 			}
 		},
-		"required": ["filePaths"],
-		"additionalProperties": false
+		"additionalProperties": false,
+		"required": ["filePaths"]
 	}
 }

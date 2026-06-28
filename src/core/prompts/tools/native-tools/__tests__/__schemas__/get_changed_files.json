@@ -1,10 +1,11 @@
 {
 	"name": "get_changed_files",
+	"strict": true,
 	"description": "Request the list of files that Shofer has changed during the current task, along with the number of inserted and deleted lines per file.\n\nSource of truth is Shofer's internal tracking for the current session:\n- The shadow-git checkpoint repository (when checkpoints are enabled), which provides authoritative line-level insertion/deletion counts versus the task's base commit.\n- The internal file context tracker, which records every file Shofer has edited even when checkpoints are disabled.\n\nFiles known only to the tracker are reported with unknown line counts. The tool takes no parameters.\n\nExample:\n{ }",
 	"parameters": {
 		"type": "object",
 		"properties": {},
-		"required": [],
-		"additionalProperties": false
+		"additionalProperties": false,
+		"required": []
 	}
 }

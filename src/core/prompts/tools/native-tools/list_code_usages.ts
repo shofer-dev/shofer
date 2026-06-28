@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const LIST_CODE_USAGES_DESCRIPTION = `Request to find all references/usages of a symbol at a specific position. This tool uses the language server to find all references to the symbol at the given location.
 
@@ -16,33 +18,16 @@ const LINE_PARAMETER_DESCRIPTION = `1-based line number of the symbol`
 
 const COLUMN_PARAMETER_DESCRIPTION = `1-based column number of the symbol`
 
-export default {
-	type: "function",
-	function: {
-		name: "list_code_usages",
-		description: LIST_CODE_USAGES_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				filePath: {
-					type: "string",
-					description: "Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION,
-				},
-				line: {
-					type: "number",
-					description: LINE_PARAMETER_DESCRIPTION,
-				},
-				column: {
-					type: "number",
-					description: COLUMN_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "line", "column"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "list_code_usages",
+	description: LIST_CODE_USAGES_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(FILE_PATH_PARAMETER_DESCRIPTION),
+		filePath: z
+			.string()
+			.describe("Alias for 'path'. " + FILE_PATH_PARAMETER_DESCRIPTION)
+			.optional(),
+		line: z.number().describe(LINE_PARAMETER_DESCRIPTION),
+		column: z.number().describe(COLUMN_PARAMETER_DESCRIPTION),
+	}),
+})

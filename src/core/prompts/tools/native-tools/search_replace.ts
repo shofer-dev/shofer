@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const SEARCH_REPLACE_DESCRIPTION = `Use this tool to propose a search and replace operation on an existing file.
 
@@ -19,33 +21,24 @@ CRITICAL REQUIREMENTS FOR USING THIS TOOL:
    - If multiple instances exist, gather enough context to uniquely identify each one
    - Plan separate tool calls for each instance`
 
-const search_replace = {
-	type: "function",
-	function: {
-		name: "search_replace",
-		description: SEARCH_REPLACE_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				file_path: {
-					type: "string",
-					description:
-						"The path to the file you want to search and replace in. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.",
-				},
-				old_string: {
-					type: "string",
-					description:
-						"The text to replace (must be unique within the file, and must match the file contents exactly, including all whitespace and indentation)",
-				},
-				new_string: {
-					type: "string",
-					description: "The edited text to replace the old_string (must be different from the old_string)",
-				},
-			},
-			required: ["file_path", "old_string", "new_string"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+const search_replace = defineNativeTool({
+	name: "search_replace",
+	description: SEARCH_REPLACE_DESCRIPTION,
+	schema: z.object({
+		file_path: z
+			.string()
+			.describe(
+				"The path to the file you want to search and replace in. You can use either a relative path in the workspace or an absolute path. If an absolute path is provided, it will be preserved as is.",
+			),
+		old_string: z
+			.string()
+			.describe(
+				"The text to replace (must be unique within the file, and must match the file contents exactly, including all whitespace and indentation)",
+			),
+		new_string: z
+			.string()
+			.describe("The edited text to replace the old_string (must be different from the old_string)"),
+	}),
+})
 
 export default search_replace

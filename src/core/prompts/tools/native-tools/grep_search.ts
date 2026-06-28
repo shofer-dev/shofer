@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const SEARCH_FILES_DESCRIPTION = `Request to perform a regex search across files in a specified directory, providing context-rich results. This tool searches for patterns or specific content across multiple files, displaying each match with encapsulating context.
 
@@ -51,66 +53,19 @@ const CONTEXT_BEFORE_PARAMETER_DESCRIPTION = `Lines of context to show before ea
 
 const CONTEXT_AFTER_PARAMETER_DESCRIPTION = `Lines of context to show after each match (default: 1)`
 
-export default {
-	type: "function",
-	function: {
-		name: "grep_search",
-		description: SEARCH_FILES_DESCRIPTION,
-		// Note: strict mode is intentionally disabled for this tool.
-		// With strict: true, OpenAI Structured Outputs requires ALL properties in
-		// `properties` to appear in `required` — there is no way to mark a field as
-		// genuinely optional. That forces the model to emit every optional param
-		// (`isRegex`, `caseSensitive`, `wholeWord`, `maxResults`, `contextBefore`,
-		// `contextAfter`) on every call, which bloats tool calls and triggers
-		// 'Missing required parameter' errors when a model omits one. Disabling
-		// strict lets the model omit optional params entirely and fall back to the
-		// defaults documented above. Mirrors the pattern used by `read_command_output`.
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				query: {
-					type: "string",
-					description: QUERY_PARAMETER_DESCRIPTION,
-				},
-				fileTypes: {
-					type: ["string", "null"],
-					description: FILE_TYPES_PARAMETER_DESCRIPTION,
-				},
-				excludePattern: {
-					type: ["string", "null"],
-					description: EXCLUDE_PATTERN_PARAMETER_DESCRIPTION,
-				},
-				isRegex: {
-					type: ["boolean", "null"],
-					description: IS_REGEX_PARAMETER_DESCRIPTION,
-				},
-				caseSensitive: {
-					type: ["boolean", "null"],
-					description: CASE_SENSITIVE_PARAMETER_DESCRIPTION,
-				},
-				wholeWord: {
-					type: ["boolean", "null"],
-					description: WHOLE_WORD_PARAMETER_DESCRIPTION,
-				},
-				maxResults: {
-					type: ["number", "null"],
-					description: MAX_RESULTS_PARAMETER_DESCRIPTION,
-				},
-				contextBefore: {
-					type: ["number", "null"],
-					description: CONTEXT_BEFORE_PARAMETER_DESCRIPTION,
-				},
-				contextAfter: {
-					type: ["number", "null"],
-					description: CONTEXT_AFTER_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "query"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "grep_search",
+	description: SEARCH_FILES_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION),
+		query: z.string().describe(QUERY_PARAMETER_DESCRIPTION),
+		fileTypes: z.string().describe(FILE_TYPES_PARAMETER_DESCRIPTION).optional(),
+		excludePattern: z.string().describe(EXCLUDE_PATTERN_PARAMETER_DESCRIPTION).optional(),
+		isRegex: z.boolean().describe(IS_REGEX_PARAMETER_DESCRIPTION).optional(),
+		caseSensitive: z.boolean().describe(CASE_SENSITIVE_PARAMETER_DESCRIPTION).optional(),
+		wholeWord: z.boolean().describe(WHOLE_WORD_PARAMETER_DESCRIPTION).optional(),
+		maxResults: z.number().describe(MAX_RESULTS_PARAMETER_DESCRIPTION).optional(),
+		contextBefore: z.number().describe(CONTEXT_BEFORE_PARAMETER_DESCRIPTION).optional(),
+		contextAfter: z.number().describe(CONTEXT_AFTER_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

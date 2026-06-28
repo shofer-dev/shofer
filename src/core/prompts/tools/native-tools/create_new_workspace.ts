@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const CREATE_NEW_WORKSPACE_DESCRIPTION = `Request to create a new workspace/project directory structure. This tool creates a new directory with optional subdirectories.
 
@@ -22,37 +24,13 @@ const FOLDERS_PARAMETER_DESCRIPTION = `Array of subdirectory names to create wit
 
 const OPEN_IN_NEW_WINDOW_PARAMETER_DESCRIPTION = `Whether to open the workspace in a new window (default: false)`
 
-export default {
-	type: "function",
-	function: {
-		name: "create_new_workspace",
-		description: CREATE_NEW_WORKSPACE_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				name: {
-					type: "string",
-					description: NAME_PARAMETER_DESCRIPTION,
-				},
-				folders: {
-					type: ["array", "null"],
-					items: {
-						type: "string",
-					},
-					description: FOLDERS_PARAMETER_DESCRIPTION,
-				},
-				openInNewWindow: {
-					type: ["boolean", "null"],
-					description: OPEN_IN_NEW_WINDOW_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "name", "folders", "openInNewWindow"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "create_new_workspace",
+	description: CREATE_NEW_WORKSPACE_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION),
+		name: z.string().describe(NAME_PARAMETER_DESCRIPTION),
+		folders: z.array(z.string()).describe(FOLDERS_PARAMETER_DESCRIPTION).optional(),
+		openInNewWindow: z.boolean().describe(OPEN_IN_NEW_WINDOW_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

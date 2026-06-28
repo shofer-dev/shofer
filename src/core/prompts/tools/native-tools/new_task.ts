@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const NEW_TASK_DESCRIPTION = `Create a new task instance in the chosen mode using your provided message and initial todo list (if required).
 
@@ -24,57 +26,17 @@ const PEER_TASK_IDS_PARAMETER_DESCRIPTION = `Least-privilege peer scope: the spa
 
 const TITLE_PARAMETER_DESCRIPTION = `Optional short, descriptive display title for the child task (max 60 characters; longer is truncated). When set, this becomes the child's title AND locks it — the child cannot rename itself via set_task_title. Omit to let the child name itself.`
 
-export default {
-	type: "function",
-	function: {
-		name: "new_task",
-		description: NEW_TASK_DESCRIPTION,
-		// Note: strict mode is intentionally disabled for this tool.
-		// Several parameters (softResultLength, softTimeoutSec, peer_task_ids) are
-		// advisory hints — the model MAY omit them and the handler applies defaults.
-		// With strict: true, OpenAI Structured Outputs requires ALL properties in
-		// `properties` to appear in `required`, forcing the model to emit every
-		// optional param on every call. Disabling strict lets the model omit
-		// advisory params entirely and fall back to the defaults documented above.
-		parameters: {
-			type: "object",
-			properties: {
-				mode: {
-					type: "string",
-					description: MODE_PARAMETER_DESCRIPTION,
-				},
-				message: {
-					type: "string",
-					description: MESSAGE_PARAMETER_DESCRIPTION,
-				},
-				todos: {
-					type: ["string", "null"],
-					description: TODOS_PARAMETER_DESCRIPTION,
-				},
-				is_background: {
-					type: ["boolean", "null"],
-					description: IS_BACKGROUND_PARAMETER_DESCRIPTION,
-				},
-				softResultLength: {
-					type: "number",
-					description: SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION,
-				},
-				softTimeoutSec: {
-					type: "number",
-					description: SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION,
-				},
-				peer_task_ids: {
-					type: ["array", "null"],
-					items: { type: "string" },
-					description: PEER_TASK_IDS_PARAMETER_DESCRIPTION,
-				},
-				title: {
-					type: "string",
-					description: TITLE_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["mode", "message", "todos", "is_background"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "new_task",
+	description: NEW_TASK_DESCRIPTION,
+	schema: z.object({
+		mode: z.string().describe(MODE_PARAMETER_DESCRIPTION),
+		message: z.string().describe(MESSAGE_PARAMETER_DESCRIPTION),
+		todos: z.string().describe(TODOS_PARAMETER_DESCRIPTION).optional(),
+		is_background: z.boolean().describe(IS_BACKGROUND_PARAMETER_DESCRIPTION).optional(),
+		softResultLength: z.number().describe(SOFT_RESULT_LENGTH_PARAMETER_DESCRIPTION).optional(),
+		softTimeoutSec: z.number().describe(SOFT_TIMEOUT_SEC_PARAMETER_DESCRIPTION).optional(),
+		peer_task_ids: z.array(z.string()).describe(PEER_TASK_IDS_PARAMETER_DESCRIPTION).optional(),
+		title: z.string().describe(TITLE_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

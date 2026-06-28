@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 /**
  * Native tool definition for read_command_output.
@@ -44,38 +46,13 @@ const OFFSET_DESCRIPTION = `Byte offset to start reading from (default: 0, for p
 
 const LIMIT_DESCRIPTION = `Maximum bytes to return (default: 40KB)`
 
-export default {
-	type: "function",
-	function: {
-		name: "read_command_output",
-		description: READ_COMMAND_OUTPUT_DESCRIPTION,
-		// Note: strict mode is intentionally disabled for this tool.
-		// With strict: true, OpenAI requires ALL properties to be in the 'required' array,
-		// which forces the LLM to always provide explicit values (even null) for optional params.
-		// This creates verbose tool calls and poor UX. By disabling strict mode, the LLM can
-		// omit optional parameters entirely, making the tool easier to use.
-		parameters: {
-			type: "object",
-			properties: {
-				artifact_id: {
-					type: "string",
-					description: ARTIFACT_ID_DESCRIPTION,
-				},
-				search: {
-					type: "string",
-					description: SEARCH_DESCRIPTION,
-				},
-				offset: {
-					type: "number",
-					description: OFFSET_DESCRIPTION,
-				},
-				limit: {
-					type: "number",
-					description: LIMIT_DESCRIPTION,
-				},
-			},
-			required: ["artifact_id"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "read_command_output",
+	description: READ_COMMAND_OUTPUT_DESCRIPTION,
+	schema: z.object({
+		artifact_id: z.string().describe(ARTIFACT_ID_DESCRIPTION),
+		search: z.string().describe(SEARCH_DESCRIPTION).optional(),
+		offset: z.number().describe(OFFSET_DESCRIPTION).optional(),
+		limit: z.number().describe(LIMIT_DESCRIPTION).optional(),
+	}),
+})

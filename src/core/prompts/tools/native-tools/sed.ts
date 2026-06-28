@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const SED_DESCRIPTION = `Request to perform regex find-and-replace on a workspace file using JavaScript's String.replace() with a RegExp pattern. IMPORTANT: The '.' character in regex matches ANY character (letter, slash, punctuation, etc.), not just a literal period. To match a literal dot/period, use \\. or [.]. This is the most common source of unexpected matches.
 
@@ -32,37 +34,14 @@ const IS_REGEX_PARAMETER_DESCRIPTION = `Whether the pattern is a regular express
 const REPLACEMENT_PARAMETER_DESCRIPTION = `The replacement string. Supports capture group backreferences ($1, $2, etc.).`
 const GLOBAL_PARAMETER_DESCRIPTION = `Whether to replace all occurrences (default: true)`
 
-export default {
-	type: "function",
-	function: {
-		name: "sed",
-		description: SED_DESCRIPTION,
-		parameters: {
-			type: "object",
-			properties: {
-				path: {
-					type: "string",
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				pattern: {
-					type: "string",
-					description: PATTERN_PARAMETER_DESCRIPTION,
-				},
-				replacement: {
-					type: "string",
-					description: REPLACEMENT_PARAMETER_DESCRIPTION,
-				},
-				isRegex: {
-					type: ["boolean", "null"],
-					description: IS_REGEX_PARAMETER_DESCRIPTION,
-				},
-				global: {
-					type: ["boolean", "null"],
-					description: GLOBAL_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["path", "pattern", "replacement", "global"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "sed",
+	description: SED_DESCRIPTION,
+	schema: z.object({
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION),
+		pattern: z.string().describe(PATTERN_PARAMETER_DESCRIPTION),
+		replacement: z.string().describe(REPLACEMENT_PARAMETER_DESCRIPTION),
+		isRegex: z.boolean().describe(IS_REGEX_PARAMETER_DESCRIPTION).optional(),
+		global: z.boolean().describe(GLOBAL_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

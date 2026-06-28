@@ -1,19 +1,20 @@
 {
 	"name": "fetch_web_page",
+	"strict": true,
 	"description": "Request to fetch and extract content from web pages. This tool downloads web pages and extracts their text content, removing HTML markup.\n\nParameters:\n- urls: (required) Array of URLs to fetch\n- query: (optional) Query to filter the extracted content. If provided, only content matching the query terms is returned.\n\nExample: Fetch a single page\n{ \"urls\": [\"https://example.com/docs\"] }\n\nExample: Fetch multiple pages with content filtering\n{ \"urls\": [\"https://example.com/api\", \"https://example.com/guide\"], \"query\": \"authentication\" }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"query": {
-				"type": "string",
-				"description": "Query to filter the extracted content"
+				"description": "Query to filter the extracted content",
+				"type": "string"
 			},
 			"urls": {
+				"description": "Array of URLs to fetch",
 				"type": "array",
 				"items": {
 					"type": "string"
-				},
-				"description": "Array of URLs to fetch"
+				}
 			}
 		},
 		"required": ["query", "urls"],

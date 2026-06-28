@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const CODEBASE_SEARCH_DESCRIPTION = `Find files most relevant to the search query using semantic search. Searches by meaning rather than exact text matches, but in practice the embedding model heavily weights word-level token overlap — results often match on shared keywords rather than architectural or structural relevance. By default searches entire workspace. Reuse the user's exact wording unless there's a clear reason not to — their phrasing often helps semantic search. Queries MUST be in English (translate if needed).
 
@@ -29,30 +31,12 @@ const PATH_PARAMETER_DESCRIPTION = `Optional subdirectory (relative to the works
 
 const MAX_RESULTS_PARAMETER_DESCRIPTION = `Optional cap on returned snippets (default 10, silently clamped to 50). Pass null to use the default.`
 
-export default {
-	type: "function",
-	function: {
-		name: "rag_search",
-		description: CODEBASE_SEARCH_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				query: {
-					type: "string",
-					description: QUERY_PARAMETER_DESCRIPTION,
-				},
-				path: {
-					type: ["string", "null"],
-					description: PATH_PARAMETER_DESCRIPTION,
-				},
-				maxResults: {
-					type: ["number", "null"],
-					description: MAX_RESULTS_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["query", "path", "maxResults"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "rag_search",
+	description: CODEBASE_SEARCH_DESCRIPTION,
+	schema: z.object({
+		query: z.string().describe(QUERY_PARAMETER_DESCRIPTION),
+		path: z.string().describe(PATH_PARAMETER_DESCRIPTION).optional(),
+		maxResults: z.number().describe(MAX_RESULTS_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

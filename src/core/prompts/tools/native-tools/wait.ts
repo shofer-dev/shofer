@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const WAIT_DESCRIPTION = `Wait for an incoming MESSAGE from another task. Call this tool WHENEVER you have nothing to do right now except wait for a message, reply, or signal to arrive from another task, a peer, or the orchestrator.
 
@@ -22,32 +24,16 @@ Example: { "rating": "well", "reason": "waiting for a reply from the research ta
 
 (To wait for a fixed amount of time rather than a message, use \`sleep\` instead.)`
 
-export default {
-	type: "function",
-	function: {
-		name: "wait_for_message",
-		description: WAIT_DESCRIPTION,
-		// `rating` is required, but `reason` is optional/advisory with a host-side
-		// default, so this schema is intentionally NOT strict (OpenAI Structured
-		// Outputs with strict: true would force the model to emit every property,
-		// including `reason`). See the Advisory Parameter Defaults Rule in
-		// docs/adding-new-tools.md.
-		parameters: {
-			type: "object",
-			properties: {
-				rating: {
-					type: "string",
-					description:
-						"Self-assessment of the work you have completed so far: 'poor', 'well', or 'excellent'.",
-					enum: ["poor", "well", "excellent"],
-				},
-				reason: {
-					type: "string",
-					description: "Short reason for waiting / what you are waiting on. Defaults to 'waiting'.",
-				},
-			},
-			required: ["rating"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "wait_for_message",
+	description: WAIT_DESCRIPTION,
+	schema: z.object({
+		rating: z
+			.enum(["poor", "well", "excellent"])
+			.describe("Self-assessment of the work you have completed so far: 'poor', 'well', or 'excellent'."),
+		reason: z
+			.string()
+			.describe("Short reason for waiting / what you are waiting on. Defaults to 'waiting'.")
+			.optional(),
+	}),
+})

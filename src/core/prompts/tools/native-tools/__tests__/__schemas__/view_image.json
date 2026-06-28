@@ -1,16 +1,17 @@
 {
 	"name": "view_image",
+	"strict": true,
 	"description": "Request to view an image file. This tool reads an image file and returns it for visual analysis. Supports common image formats (PNG, JPG, JPEG, GIF, BMP, SVG, WEBP).\n\nParameters:\n- path: (required) Path to the image file (also accepts filePath as alias), relative to the workspace\n\nExample: View an image\n{ \"path\": \"assets/screenshot.png\" }",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"filePath": {
-				"type": "string",
-				"description": "Alias for 'path'. Path to the image file, relative to the workspace"
+				"description": "Alias for 'path'. Path to the image file, relative to the workspace",
+				"type": "string"
 			},
 			"path": {
-				"type": "string",
-				"description": "Path to the image file, relative to the workspace"
+				"description": "Path to the image file, relative to the workspace",
+				"type": "string"
 			}
 		},
 		"required": ["filePath", "path"],

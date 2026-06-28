@@ -1,16 +1,17 @@
 {
 	"name": "answer_subtask_question",
+	"strict": true,
 	"description": "Answer a question that a background child task asked via ask_followup_question. When a background child needs clarification, its question is routed to you (the parent) instead of the user. Use this tool to provide the answer and unblock the child.",
 	"parameters": {
 		"type": "object",
 		"properties": {
 			"answer": {
-				"type": "string",
-				"description": "Your answer to the child's question. Be specific and actionable so the child can continue its work without further clarification."
+				"description": "Your answer to the child's question. Be specific and actionable so the child can continue its work without further clarification.",
+				"type": "string"
 			},
 			"task_id": {
-				"type": "string",
-				"description": "The task ID of the background child that asked the question."
+				"description": "The task ID of the background child that asked the question.",
+				"type": "string"
 			}
 		},
 		"required": ["answer", "task_id"],
