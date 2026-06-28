@@ -26,8 +26,20 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
 - 🚧 **§3 Schema-as-contract for tools**
     - ✅ Drift guard `native-tools/__tests__/schema-contract-drift.test.ts` (locks
       tool shape across toolNames / TOOL_GROUPS / TOOL_DISPLAY_NAMES / toolParamNames).
-    - ⬜ Define each tool as a single typed schema object; derive LLM def, arg
-      validation, UI label, approval surface; delete the hand-maintained mirrors.
+    - ✅ Foundation `native-tools/defineNativeTool.ts` — define a tool ONCE as a Zod
+      schema; derive the OpenAI function def (`z.toJSONSchema`) + static arg type
+      (`NativeToolArgsOf`). Emits a normal `ChatCompletionFunctionTool` so it slots
+      into `getNativeTools()` unchanged (strangler).
+    - ✅ Pilot: `find_files` migrated. Safety net
+      `__tests__/find_files.schema-contract.test.ts` proves the migrated schema —
+      after the provider's OpenAI-strict normalization — deep-equals the
+      pre-migration schema, so the model sees no change. This equivalence pattern
+      lets the rest migrate without provider access.
+    - ⬜ Migrate the remaining ~49 tools (each with an equivalence check), then
+      single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
+      NOTE: deriving them in `shared/tools.ts` needs a layering fix (low-level
+      module can't import the native-tools graph without a cycle) — likely relocate
+      tool defs to a shared package, dovetailing with §9.
 - 🚧 **§4 Unify permissions**
     - ✅ Drift guard `auto-approval/__tests__/say-tool-mapping-drift.test.ts`.
     - ⬜ Collapse tool-access + categories + per-model prefs + auto-approval into one
