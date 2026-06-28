@@ -1,5 +1,14 @@
 # Multi-Threaded Architecture for Shofer
 
+> **🚧 Partial (status as of 2026-06-28).** The Phase 0–1 worker _infrastructure_
+> exists and is unit-tested — `src/workers/{agent-worker,server-worker,worker-extension-host}.ts`
+> and the `vscode-shim` IPC layer — but it is **not wired into production**: no
+> task currently runs in a worker thread (`agent-worker.ts` leaves the server port
+> `null`, "transferred at spawn time (Phase 2)"; nothing in `ShoferProvider`/
+> `TaskManager` spawns workers). The four-runtime model below is the **desired**
+> architecture; treat everything past the Phase 0–1 scaffolding as design, not
+> shipped behavior. See `docs/README.md` for the status-banner convention.
+
 ## 1. Overview
 
 This document captures the gap between Shofer's **current** single-threaded
