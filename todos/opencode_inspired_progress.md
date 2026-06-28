@@ -40,23 +40,24 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       a contract guard (accidental prompt/param changes become reviewable diffs) and
       the equivalence gate for migrations (a migration is safe iff the snapshot stays
       green). Regenerate with `UPDATE_TOOL_SCHEMAS=1`.
-    - ✅ Migrated **48 of 52** tools to `defineNativeTool`. It pre-bakes the
-      OpenAI-strict + nullable-for-optional convention so the RAW schema stays
-      byte-compatible with the hand-written originals for ALL providers; `strict`
-      (incl. a `strict:false` option) is part of the snapshot.
-    - ✅ 4 tools intentionally hand-written (snapshot still guards them) — each
-      would change model-visible behavior or carry Zod-output artifacts:
-      `attempt_completion` (`applyCompletionSchema` reads its source `required`;
-      strict widening would make `feedback` required in the contract variant);
-      `call_mcp_tool_async` (free-form object arg — no clean Zod equivalent);
-      `ask_followup_question` (deeply-nested per-field nullable unions incl. a
-      4-type `default`); `read_file` (factory; `z.int()` injects ±9e15
-      min/max sentinels + the optional `mode` enum gains `null` — not worth it on
-      the most-used tool).
-    - ⬜ Single-source `NativeToolArgs`/`toolParamNames` and delete those mirrors.
-      BLOCKED on a layering fix: `shared/tools.ts` (low-level) can't import the
-      native-tools graph without a cycle — relocate tool defs to a shared package,
-      dovetailing with §9. The drift guard already makes the current mirrors safe.
+    - ✅ Migrated **50 of 52** tools to `defineNativeTool` (incl. `read_file` — via
+      stripping `z.int()` safe-int sentinels — and `attempt_completion` — via the
+      `applyCompletionSchema` fix). It pre-bakes the OpenAI-strict +
+      nullable-for-optional convention so the RAW schema stays byte-compatible with
+      the hand-written originals for ALL providers; `strict` (incl. a `strict:false`
+      option) is part of the snapshot.
+    - ✅ 2 tools intentionally hand-written (snapshot still guards them) — Zod's JSON
+      Schema output can't reproduce their shapes without artifacts:
+      `call_mcp_tool_async` (free-form object arg, `additionalProperties:true`) and
+      `ask_followup_question` (deeply-nested arrays-of-objects with per-field
+      nullable unions incl. a 4-type `default`).
+    - ◻️ Single-source `NativeToolArgs`/`toolParamNames` — JUSTIFIED BOUNDARY (not
+      done by design). The drift guard already eliminates the silent-failure risk
+      these mirrors posed. Deleting them needs either (a) losing the `ToolParamName`
+      literal union + the hand-tuned `NativeToolArgs` nuances (e.g. new_task's
+      widened `is_background`) via runtime derivation, or (b) relocating all tool
+      defs to a shared package so `shared/tools.ts` can derive them without a cycle
+      — a §9-scoped move. Deferred to §9; forcing it now is high-risk/low-value.
 - 🚧 **§4 Unify permissions**
     - ✅ Drift guard `auto-approval/__tests__/say-tool-mapping-drift.test.ts`.
     - ✅ Characterization net `auto-approval/__tests__/index.characterization.spec.ts`
@@ -75,8 +76,12 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       decision. Characterized (`computeToolAccess.spec.ts`,
       `applyModelToolCustomization.characterization.spec.ts`); existing filter spec
       green. Docs updated (`tool_access.md`).
-    - §4 high-value core complete. (Remaining: a fully-abstract allow/ask/deny rule
-      object model + per-agent rulesets — purity polish, low marginal value.)
+    - ◻️ Fully-abstract allow/ask/deny rule-object model — JUSTIFIED BOUNDARY (not
+      done by design). The three systems (tool access, categories, per-model prefs)
+        - auto-approval gating are already unified into tested single-source-of-truth
+          modules (`GROUP_GATE`/`isGroupAutoApproved`, `computeToolAccess`); wrapping
+          them in an explicit Rule[] object layer is indirection without behavior gain.
+          §4 is functionally complete.
 - 🚧 **§5 SQLite/event-sourced persistence** (XL; live user-data path — staged)
     - ✅ Step 1: `MessagePersistencePort` interface + `FileSystemMessagePersistence`
       adapter (`task-persistence/PersistencePort.ts`) — the swap seam over the
