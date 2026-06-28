@@ -25,6 +25,14 @@ export interface NativeToolSpec<S extends ZodType> {
 	description: string
 	/** Zod object schema describing the tool's parameters. */
 	schema: S
+	/**
+	 * Whether to emit OpenAI strict mode (default `true`). When `true`, the schema
+	 * is pre-baked into strict form (every property required, optionals widened to
+	 * nullable). Set `false` for tools that deliberately let the model omit
+	 * advisory parameters (e.g. `send_message_to_task`): `strict: false` is set and
+	 * optional properties stay omitted from `required` and are NOT widened.
+	 */
+	strict?: boolean
 }
 
 /** A native tool carrying its Zod schema alongside the OpenAI definition. */
@@ -75,21 +83,27 @@ function makeNullable(prop: JsonSchemaProp): JsonSchemaProp {
  * no-op for these tools.
  */
 export function defineNativeTool<S extends ZodType>(spec: NativeToolSpec<S>): DefinedNativeTool<S> {
+	const strict = spec.strict ?? true
 	const json = z.toJSONSchema(spec.schema, { io: "input" }) as Record<string, unknown>
 	delete json.$schema
 
 	if (json.type === "object") {
 		json.additionalProperties = false
-		const properties = (json.properties as Record<string, JsonSchemaProp> | undefined) ?? {}
-		const allKeys = Object.keys(properties)
-		const required = new Set((json.required as string[] | undefined) ?? [])
-		for (const key of allKeys) {
-			if (!required.has(key)) {
-				properties[key] = makeNullable(properties[key])
+		// In strict mode every property must appear in `required`; optionals are
+		// widened to nullable so the model can still signal "not provided". When
+		// strict is off, optionals stay omitted from `required` and are not widened
+		// (the model may omit them entirely).
+		if (strict) {
+			const properties = (json.properties as Record<string, JsonSchemaProp> | undefined) ?? {}
+			const allKeys = Object.keys(properties)
+			const required = new Set((json.required as string[] | undefined) ?? [])
+			for (const key of allKeys) {
+				if (!required.has(key)) {
+					properties[key] = makeNullable(properties[key])
+				}
 			}
+			json.required = allKeys
 		}
-		// OpenAI strict mode: every property must be in `required`.
-		json.required = allKeys
 	}
 
 	return {
@@ -97,7 +111,7 @@ export function defineNativeTool<S extends ZodType>(spec: NativeToolSpec<S>): De
 		function: {
 			name: spec.name,
 			description: spec.description,
-			strict: true,
+			strict,
 			parameters: json as OpenAI.FunctionParameters,
 		},
 		schema: spec.schema,

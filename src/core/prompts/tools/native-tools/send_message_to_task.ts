@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). The caller and the target must share a root task (the root/parent task can message any task in its tree; sub-tasks require knownPeers). Discover the target's task ID via list_background_tasks(scope="peers").
 
@@ -26,39 +28,18 @@ const WAIT_PARAMETER_DESCRIPTION = `When true, block until the recipient calls a
 
 const TIMEOUT_SEC_PARAMETER_DESCRIPTION = `Maximum seconds to wait when wait=true. Default: 120. If the recipient does not respond in time, the sender receives a timeout error and the queued message is retracted.`
 
-export default {
-	type: "function",
-	function: {
-		name: "send_message_to_task",
-		description: SEND_MESSAGE_TO_TASK_DESCRIPTION,
-		// Note: strict mode is intentionally disabled for this tool.
-		// The `wait` and `timeout_sec` parameters are advisory hints — the model
-		// MAY omit them and the handler applies defaults. With strict: true, OpenAI
-		// Structured Outputs requires ALL properties in `properties` to appear in
-		// `required`, forcing the model to emit every optional param on every call.
-		// Disabling strict lets the model omit advisory params entirely.
-		parameters: {
-			type: "object",
-			properties: {
-				task_id: {
-					type: "string",
-					description: TASK_ID_PARAMETER_DESCRIPTION,
-				},
-				message: {
-					type: "string",
-					description: MESSAGE_PARAMETER_DESCRIPTION,
-				},
-				wait: {
-					type: ["boolean", "null"],
-					description: WAIT_PARAMETER_DESCRIPTION,
-				},
-				timeout_sec: {
-					type: ["number", "null"],
-					description: TIMEOUT_SEC_PARAMETER_DESCRIPTION,
-				},
-			},
-			required: ["task_id", "message"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+// strict: false is intentional — `wait` and `timeout_sec` are advisory hints the
+// model MAY omit (the handler applies defaults). In strict mode OpenAI Structured
+// Outputs would force every property into `required`; disabling strict lets the
+// model omit the advisory params entirely.
+export default defineNativeTool({
+	name: "send_message_to_task",
+	description: SEND_MESSAGE_TO_TASK_DESCRIPTION,
+	strict: false,
+	schema: z.object({
+		task_id: z.string().describe(TASK_ID_PARAMETER_DESCRIPTION),
+		message: z.string().describe(MESSAGE_PARAMETER_DESCRIPTION),
+		wait: z.boolean().describe(WAIT_PARAMETER_DESCRIPTION).optional(),
+		timeout_sec: z.number().describe(TIMEOUT_SEC_PARAMETER_DESCRIPTION).optional(),
+	}),
+})

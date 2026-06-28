@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 /**
  * Native tool definition for read_output_channel.
@@ -31,45 +33,28 @@ Read latest Git log: { "channel": "Git" }
 Errors only in an extension channel: { "channel": "ESLint", "severity": "error" }
 Grep a channel: { "channel": "Shofer", "search": "task .* failed" }`
 
-export default {
-	type: "function",
-	function: {
-		name: "read_output_channel",
-		description: DESCRIPTION,
-		// strict mode intentionally disabled: every parameter is optional (list
-		// mode takes no args), and strict mode would force the model to emit
-		// explicit nulls for all of them.
-		parameters: {
-			type: "object",
-			properties: {
-				channel: {
-					type: "string",
-					description: "Channel name to read (from list mode). Omit to list channels.",
-				},
-				search: {
-					type: "string",
-					description: "Case-insensitive regex line filter (read mode). Omit if not filtering.",
-				},
-				severity: {
-					type: "string",
-					enum: ["trace", "debug", "info", "warning", "error"],
-					description: "Minimum severity to include (read mode, log-formatted channels only).",
-				},
-				tail: {
-					type: "boolean",
-					description: "Read most-recent bytes first (default true). Ignored when offset is set.",
-				},
-				offset: {
-					type: "number",
-					description: "Byte offset to start reading from (pagination).",
-				},
-				limit: {
-					type: "number",
-					description: "Maximum bytes to return (default 40KB, hard cap 256KB).",
-				},
-			},
-			required: [],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+// strict mode intentionally disabled: every parameter is optional (list mode
+// takes no args), and strict mode would force the model to emit explicit nulls
+// for all of them.
+export default defineNativeTool({
+	name: "read_output_channel",
+	description: DESCRIPTION,
+	strict: false,
+	schema: z.object({
+		channel: z.string().describe("Channel name to read (from list mode). Omit to list channels.").optional(),
+		search: z
+			.string()
+			.describe("Case-insensitive regex line filter (read mode). Omit if not filtering.")
+			.optional(),
+		severity: z
+			.enum(["trace", "debug", "info", "warning", "error"])
+			.describe("Minimum severity to include (read mode, log-formatted channels only).")
+			.optional(),
+		tail: z
+			.boolean()
+			.describe("Read most-recent bytes first (default true). Ignored when offset is set.")
+			.optional(),
+		offset: z.number().describe("Byte offset to start reading from (pagination).").optional(),
+		limit: z.number().describe("Maximum bytes to return (default 40KB, hard cap 256KB).").optional(),
+	}),
+})
