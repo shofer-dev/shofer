@@ -183,8 +183,12 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       (tool collection, ordered prompt-transform threading, event dispatch) with
       failure isolation. Generalizes the tool-only `CustomToolRegistry`. 5 tests;
       docs (`marketplace.md`).
-    - ⬜ Wire the registry into live system-prompt assembly / tool set / event
-      dispatch; make the marketplace install/curate plugins (strangler step 2).
+    - ✅ Wired (step 2a): `SYSTEM_PROMPT` now threads the assembled prompt through
+      `pluginRegistry.applySystemPromptTransforms` (no-op while no plugins
+      registered → behavior-preserving; 11 system-prompt tests green). The
+      `transformSystemPrompt` hook is now load-bearing.
+    - ⬜ Wire `collectTools` into tool assembly + `dispatchEvent` into the telemetry
+      path; make the marketplace install/curate plugins (strangler step 2b).
 
 ## Phase 4 — Externalize the boundary
 

@@ -7,6 +7,7 @@ import {
 	type TodoItem,
 	type ToolGroup,
 } from "@shofer/types"
+import { pluginRegistry } from "@shofer/core"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
 import { DiffStrategy } from "../../shared/tools"
@@ -182,7 +183,7 @@ export const SYSTEM_PROMPT = async (
 	// Get full mode config from custom modes or fall back to built-in modes
 	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
 
-	return generatePrompt(
+	const prompt = await generatePrompt(
 		context,
 		cwd,
 		supportsComputerUse,
@@ -200,4 +201,8 @@ export const SYSTEM_PROMPT = async (
 		modelId,
 		skillsManager,
 	)
+
+	// §10: let registered plugins transform the assembled prompt (no-op when no
+	// plugins are registered — threaded in registration order).
+	return pluginRegistry.applySystemPromptTransforms(prompt, { workspacePath: cwd, mode: currentMode.slug })
 }
