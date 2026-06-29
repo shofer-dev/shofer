@@ -159,12 +159,22 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       at `activate()`; defaults to the in-memory host pre-activation/tests. Migrated
       `integrations/misc/image-handler.ts`'s notifications off `vscode.window.*` onto
       `getHost().notifier` as the proof. 2 host tests; suite green.
-    - ✅ Boundary extended: `Notifier.showChoice(message, options)` (the
-      return-value/button-dialog shape many notification sites need) + adapters
-      (VS Code → `showInformationMessage(msg, ...items)`; in-memory configurable).
-    - ⬜ The XL remainder (bulk-mechanical, multi-session): migrate the other ~165
-      notification sites + editor selection + diff onto `HostBridge`, shrink the
-      shim, extract the `vscode`-free core package. Gates §11 (API/SDK) and §12 (ACP).
+    - ✅ Boundary extended: `Notifier.showChoice(message, options, opts?)` now takes
+      `NotifyChoiceOptions` (severity info/warn/error, modal, detail) so it faithfully
+      covers the rich vscode dialog sites; VS Code + in-memory adapters updated.
+    - ✅ Notification migration — batch 1 (core/util files): `storage.ts`,
+      `autoImportSettings.ts`, `open-file.ts`, `importExport.ts`,
+      `CustomModesManager.ts`, `checkpoints/index.ts` (+ the earlier `image-handler.ts`)
+      now route notifications through `getHost().notifier`. Added the
+      `installVsCodeForwardingHost()` test helper (routes the host notifier to the
+      mocked `vscode.window.show*` so migrated-code tests keep their spy assertions).
+      Full suite green.
+    - ⬜ The XL remainder (bulk-mechanical, multi-session): migrate the remaining
+      ~135 notification sites — mostly the extension-host/UI adapter layer
+      (`webviewMessageHandler` ~81, `McpHub` 15, `registerCommands` 13,
+      `ShoferProvider` 9, `MarketplaceManager` 6, …) — plus editor selection + diff
+      onto `HostBridge`, shrink the shim, and extract the `vscode`-free core package
+      (the structural heavy lift). Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
