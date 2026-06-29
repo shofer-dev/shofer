@@ -157,8 +157,17 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
 
 ## Phase 3 — Host-agnostic core
 
-- ⬜ **§9 vscode-free core behind an in-process adapter**.
-- ⬜ **§10 Typed plugin API**.
+- ⬜ **§9 vscode-free core behind an in-process adapter** (XL).
+- 🚧 **§10 Typed plugin API**
+    - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
+      host-agnostic typed object with optional hooks (`registerTools`,
+      `transformSystemPrompt`, `onEvent`, `initialize`) — and `PluginRegistry`
+      (`packages/core/src/plugins/plugin-registry.ts`) that runs the hooks
+      (tool collection, ordered prompt-transform threading, event dispatch) with
+      failure isolation. Generalizes the tool-only `CustomToolRegistry`. 5 tests;
+      docs (`marketplace.md`).
+    - ⬜ Wire the registry into live system-prompt assembly / tool set / event
+      dispatch; make the marketplace install/curate plugins (strangler step 2).
 
 ## Phase 4 — Externalize the boundary
 

@@ -15,6 +15,24 @@
 
 The Shofer Marketplace is an in-IDE catalog that lets users discover, browse, and install **Custom Modes** (`.shofer/shofermodes` entries) and **MCP Servers** (`mcp.json` entries) directly from the Shofer extension. It is backed by a remote API, caches results locally, and integrates deeply with VS Code's configuration files for both project-level and global installation scopes.
 
+## Plugin substrate (§10)
+
+The marketplace is a **distribution/curation** layer. The behavior-extension
+substrate beneath it is the typed **plugin API**:
+[`ShoferPlugin`](../packages/types/src/plugin.ts) + the
+[`PluginRegistry`](../packages/core/src/plugins/plugin-registry.ts) in
+`@shofer/core`. A plugin is a host-agnostic object with optional hooks —
+`registerTools` (extend the toolset), `transformSystemPrompt` (mutate the prompt,
+threaded in registration order), `onEvent` (observe) — so third parties can
+extend _behavior_, not just add data items. The registry runs the hooks at the
+right points and isolates failures (a throwing transform/observer is skipped).
+
+This generalizes the existing tool-only `CustomToolRegistry`
+([`packages/core/src/custom-tools/`](../packages/core/src/custom-tools/)): tools
+become one kind of plugin contribution. Wiring the registry into the live
+system-prompt assembly / tool set / event dispatch — and making the marketplace
+install/curate plugins — is the strangler follow-on (§10 step 2).
+
 The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appears as a dedicated tab in the Shofer panel alongside Settings, History, Chat, and Cloud.
 
 ### Key capabilities
