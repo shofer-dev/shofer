@@ -49,6 +49,14 @@ export interface HostConfig {
 	get<T>(section: string, key: string, defaultValue: T): T
 }
 
+/** Host environment facts the core needs (maps to `vscode.env`). */
+export interface HostEnv {
+	/** UI display language / locale (maps to `vscode.env.language`, e.g. "en"). */
+	readonly language: string
+	/** Application install root, used to locate bundled binaries (maps to `vscode.env.appRoot`). */
+	readonly appRoot: string
+}
+
 /** Minimal filesystem the core needs, independent of `vscode.workspace.fs` or `node:fs`. */
 export interface HostFileSystem {
 	readFile(path: string): Promise<string>
@@ -63,4 +71,5 @@ export interface HostBridge {
 	readonly notifier: Notifier
 	readonly fs: HostFileSystem
 	readonly config: HostConfig
+	readonly env: HostEnv
 }

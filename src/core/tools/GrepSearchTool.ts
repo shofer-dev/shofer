@@ -22,7 +22,7 @@
 import * as path from "path"
 import * as childProcess from "child_process"
 import * as readline from "readline"
-import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import { type ShoferSayTool } from "@shofer/types"
 
@@ -322,7 +322,7 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			// the post-filter below share the same reference.
 			const ignoreController: ShoferIgnoreController | undefined = task.shoferIgnoreController
 
-			const vscodeAppRoot = vscode.env.appRoot
+			const vscodeAppRoot = getHost().env.appRoot
 			const rgPath = await getBinPath(vscodeAppRoot)
 
 			if (!rgPath) {

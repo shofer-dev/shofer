@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises"
 
 import * as vscode from "vscode"
-import type { HostBridge, HostConfig, HostFileSystem, Notifier, NotifyChoiceOptions } from "@shofer/types"
+import type { HostBridge, HostConfig, HostEnv, HostFileSystem, Notifier, NotifyChoiceOptions } from "@shofer/types"
 import { createInMemoryHost } from "@shofer/types"
 
 /**
@@ -63,9 +63,18 @@ class VsCodeConfig implements HostConfig {
 	}
 }
 
+const vsCodeEnv: HostEnv = {
+	get language() {
+		return vscode.env.language
+	},
+	get appRoot() {
+		return vscode.env.appRoot
+	},
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
-	return { notifier: new VsCodeNotifier(), fs: new NodeFileSystem(), config: new VsCodeConfig() }
+	return { notifier: new VsCodeNotifier(), fs: new NodeFileSystem(), config: new VsCodeConfig(), env: vsCodeEnv }
 }
 
 // Module-level host accessor. Defaults to an in-memory host so call sites work in

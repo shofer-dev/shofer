@@ -1,4 +1,6 @@
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
+
+import { getHost } from "../../host/host-bridge"
 
 import {
 	type ModeConfig,
@@ -147,7 +149,7 @@ ${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}` : ""}
 ${getObjectiveSection()}${liveMemorySection ? `\n\n${liveMemorySection}` : ""}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
-	language: language ?? formatLanguage(vscode.env.language),
+	language: language ?? formatLanguage(getHost().env.language),
 	shoferIgnoreInstructions,
 	settings,
 })}`

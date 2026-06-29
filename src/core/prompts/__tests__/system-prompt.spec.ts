@@ -45,6 +45,8 @@ vi.mock("fs/promises")
 
 import * as vscode from "vscode"
 
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+
 import { ModeConfig } from "@shofer/types"
 
 import { SYSTEM_PROMPT } from "../system"
@@ -204,6 +206,7 @@ describe("SYSTEM_PROMPT", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		installVsCodeForwardingHost()
 	})
 
 	afterEach(async () => {

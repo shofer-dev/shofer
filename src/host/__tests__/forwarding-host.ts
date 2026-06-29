@@ -14,6 +14,14 @@ export function installVsCodeForwardingHost(): void {
 	const base = createInMemoryHost()
 	setHost({
 		...base,
+		env: {
+			get language() {
+				return vscode.env.language
+			},
+			get appRoot() {
+				return vscode.env.appRoot
+			},
+		},
 		config: {
 			get: <T>(section: string, key: string, defaultValue: T): T =>
 				vscode.workspace.getConfiguration(section).get<T>(key, defaultValue) as T,
