@@ -203,13 +203,30 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           carries zero runtime `vscode` import.
           **17 core files vscode-free** across 5 seams (notifier, fs+findFiles, config, env,
           lsp). `installVsCodeForwardingHost()` forwards notifier + config + env.
-    - ⬜ Remainder (structural, multi-session) — the still-VS-Code-coupled files,
-      each genuinely a VS Code operation (no headless equivalent yet): the VS Code LM
-      provider/format (`api/providers/vscode-lm.ts`, `api/transform/vscode-lm-format.ts`),
-      `CreateNewWorkspaceTool` + `presentAssistantMessage`'s private-tools
-      `commands.executeCommand`, `NativeToolCallParser` (`vscode.lm`), and
-      `integrations/*` (editor/diff). Then shrink the shim and carve out the
-      `vscode`-free core package. Gates §11 (API/SDK) and §12 (ACP).
+    - ✅ Core extraction — workspace + dispatch seams (23 core files vscode-free):
+        - `HostWorkspace` seam: `openFolder` (→ `vscode.openFolder`; headless no-op) +
+          `executeCommand<T>` (→ `commands.executeCommand`; headless throws). Migrated
+          `CreateNewWorkspaceTool` (open folder) and `presentAssistantMessage`'s
+          private-tools invoke.
+        - Dropped unused/type-only vscode imports: `NativeToolCallParser`,
+          `validateToolUse`, `AskLiveMemoryTool`, `ProviderSettingsManager`.
+          **23 core files vscode-free** across 6 seams (notifier, fs+findFiles, config, env,
+          lsp, workspace).
+    - ⬜ Remainder — two buckets:
+        1. **Needs a dedicated seam** (each its own small project): file watchers
+           (`ShoferIgnoreController`, `FileContextTracker` — `createFileSystemWatcher`),
+           file dialogs (`importExport`, `process-images` — `showSave/OpenDialog`),
+           editor/tab state (`getEnvironmentDetails` — visible tabs), an event-emitter
+           swap (`ContextProxy` — `vscode.EventEmitter`), and `mentions`/`checkpoints`
+           (`commands` + diagnostics). `build-tools` mixes config + the private-tools
+           `commands` + intrinsic `vscode.lm`.
+        2. **Intrinsic VS Code / legitimate adapter** (should stay coupled, not
+           abstracted): the VS Code LM provider/format (`api/providers/vscode-lm.ts`,
+           `api/transform/vscode-lm-format.ts`) is the VS Code Language Model API by
+           definition; and `integrations/*` (editor decorations, diff view, terminal,
+           theme) IS the VS Code adapter/UI layer — the correct home for vscode
+           coupling, like `host/host-bridge.ts`. Carving the headless core package out
+           draws the line _around_ these, not through them.
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
