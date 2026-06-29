@@ -1,32 +1,15 @@
 /**
- * apiMessages.ts — JSONL persistence for per-task `apiConversationHistory`.
+ * apiMessages.ts — per-task `apiConversationHistory` persistence (§5).
  *
- * Mirrors `taskMessages.ts`: one `ApiMessage` JSON record per line in
- * `api_conversation_history.jsonl`. `appendApiMessage` is the O(1) hot path
- * (`addToApiConversationHistory`, `flushPendingToolResultsToHistory`);
- * `saveApiMessages` is the atomic compaction used by
- * `overwriteApiConversationHistory` and `retrySaveApiConversationHistory`.
- *
- * Hard cutover: both `api_conversation_history.json` and the pre-rename
- * `claude_messages.json` are unlinked on first read and treated as missing.
+ * SQLite-backed via the shared message store. The function signatures are
+ * unchanged so all callers (`Task`, `condense`, `context-management`,
+ * `WaitForTaskTool`, etc.) are unaffected; the prior JSONL implementation and its
+ * flat-file performance machinery have been removed.
  */
-
-import * as path from "path"
-import * as fs from "fs/promises"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { GlobalFileNames } from "../../shared/globalFileNames"
-import { getTaskDirectoryPath } from "../../utils/storage"
-import { taskLog } from "../../utils/logging/subsystems"
-import {
-	appendJsonLine,
-	dedupeByKey,
-	readJsonLines,
-	readJsonLinesTail,
-	serializeJsonLines,
-	writeJsonLines,
-} from "./jsonlLog"
+import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store"
 
 export type ApiMessage = Anthropic.MessageParam & {
 	ts?: number
@@ -56,27 +39,6 @@ export type ApiMessage = Anthropic.MessageParam & {
 	isTruncationMarker?: boolean
 }
 
-const LEGACY_API_FILES = ["api_conversation_history.json", "claude_messages.json"]
-
-async function apiHistoryPath(taskId: string, globalStoragePath: string): Promise<string> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
-	return path.join(taskDir, GlobalFileNames.apiConversationHistory)
-}
-
-async function unlinkLegacyIfPresent(taskDir: string): Promise<void> {
-	for (const name of LEGACY_API_FILES) {
-		const legacy = path.join(taskDir, name)
-		try {
-			await fs.unlink(legacy)
-			taskLog.warn(`[readApiMessages] unlinked legacy ${name} (hard cutover to JSONL)`)
-		} catch (e: any) {
-			if (e && e.code !== "ENOENT") {
-				taskLog.warn(`[readApiMessages] failed to unlink ${legacy}: ${e.message}`)
-			}
-		}
-	}
-}
-
 export async function readApiMessages({
 	taskId,
 	globalStoragePath,
@@ -84,47 +46,27 @@ export async function readApiMessages({
 	taskId: string
 	globalStoragePath: string
 }): Promise<ApiMessage[]> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
-	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
-	const parsed = await readJsonLines<ApiMessage>(filePath)
-	if (parsed === null) {
-		await unlinkLegacyIfPresent(taskDir)
-		return []
-	}
-	return dedupeByKey(parsed, (m) => m.ts)
+	return storeReadAll<ApiMessage>(globalStoragePath, taskId, "api")
 }
 
 export type ReadApiMessagesTailOptions = {
 	taskId: string
 	globalStoragePath: string
-	/** Maximum number of records to read from the tail of the JSONL log. */
+	/** Maximum number of records to read from the tail of the log. */
 	maxMessages: number
 }
 
 /**
- * Read the last `maxMessages` records from the task's API conversation
- * history JSONL log.
- *
- * Returns `[messages, hasMore]` — `hasMore` is `true` when there are
- * older messages not included in the returned window.
- *
- * Falls back to `readApiMessages` when the file is empty or `maxMessages`
- * is zero/negative.
+ * Read the last `maxMessages` records of the task's API conversation history.
+ * Returns `[messages, hasMore]` — `hasMore` is `true` when older messages exist
+ * outside the returned window.
  */
 export async function readApiMessagesTail({
 	taskId,
 	globalStoragePath,
 	maxMessages,
 }: ReadApiMessagesTailOptions): Promise<[ApiMessage[], boolean]> {
-	const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
-	const filePath = path.join(taskDir, GlobalFileNames.apiConversationHistory)
-	const tailResult = await readJsonLinesTail<ApiMessage>(filePath, maxMessages)
-	if (tailResult === null) {
-		await unlinkLegacyIfPresent(taskDir)
-		return [[], false]
-	}
-	const [records, hasMore] = tailResult
-	return [dedupeByKey(records, (m) => m.ts), hasMore]
+	return storeReadTail<ApiMessage>(globalStoragePath, taskId, "api", maxMessages)
 }
 
 export type AppendApiMessageOptions = {
@@ -134,36 +76,22 @@ export type AppendApiMessageOptions = {
 }
 
 /**
- * Append a single `ApiMessage` to the JSONL log. O(1) per call.
- * The read path dedupes by `ts`, so callers may safely re-append a mutated
- * message in place (same `ts`).
+ * Append a single `ApiMessage`. Reads dedupe by `ts`, so callers may safely
+ * re-append a mutated message in place (same `ts`).
  */
 export async function appendApiMessage({ message, taskId, globalStoragePath }: AppendApiMessageOptions): Promise<void> {
-	const filePath = await apiHistoryPath(taskId, globalStoragePath)
-	await appendJsonLine(filePath, message)
+	await storeAppend(globalStoragePath, taskId, "api", message)
 }
 
 export type SaveApiMessagesOptions = {
 	messages: ApiMessage[]
 	taskId: string
 	globalStoragePath: string
-	/**
-	 * Optional pre-serialized JSONL payload. See `taskMessages.ts` for H6
-	 * snapshot semantics.
-	 */
+	/** Accepted for signature compatibility; unused (SQLite needs no pre-serialized payload). */
 	serialized?: string
 }
 
-/**
- * Compaction: atomic full rewrite of the JSONL log.
- */
-export async function saveApiMessages({
-	messages,
-	taskId,
-	globalStoragePath,
-	serialized,
-}: SaveApiMessagesOptions): Promise<void> {
-	const filePath = await apiHistoryPath(taskId, globalStoragePath)
-	const content = serialized ?? serializeJsonLines(messages)
-	await writeJsonLines(filePath, content)
+/** Replace the full API conversation history (overwrite / recovery). */
+export async function saveApiMessages({ messages, taskId, globalStoragePath }: SaveApiMessagesOptions): Promise<void> {
+	await storeSaveAll(globalStoragePath, taskId, "api", messages)
 }
