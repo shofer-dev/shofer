@@ -188,4 +188,12 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
 
 ## Phase 4 — Externalize the boundary
 
-- ⬜ **§9 server adapter (HTTP + SSE)** · **§11 Public API + SDK** · **§12 ACP adapter**.
+- 🚧 **§11 Public API (HTTP + SSE) + SDK**
+    - ✅ Transport boundary: `src/server/http-server.ts` — dependency-free
+      `node:http` HTTP+SSE server (`createHttpServer`/`createRequestHandler`)
+      exposing task control (`POST /api/v1/task`, `/message`, `/cancel`) + an SSE
+      event stream (`GET /api/v1/event`), driven by an injected `AgentApi`. 6 tests;
+      docs (`public_api.md`).
+    - ⬜ Wire `AgentApi` to the live `ShoferAPI` / headless CLI agent (needs §9 so it
+      runs headless); generate a typed SDK from the route set so clients can't drift.
+- 🚧 **§12 ACP agent adapter** — see below.
