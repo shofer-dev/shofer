@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import * as path from "path"
 
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 import type { ProviderName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
@@ -102,6 +103,7 @@ describe("importExport", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		installVsCodeForwardingHost()
 
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])

@@ -4,6 +4,7 @@ import * as path from "path"
 import fs from "fs/promises"
 
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import { z, ZodError } from "zod"
 
 import {
@@ -335,13 +336,13 @@ export const importSettingsWithFeedback = async (
 			const count = result.warnings.length
 			const summary =
 				count === 1 ? `1 profile had issues during import.` : `${count} profiles had issues during import.`
-			await vscode.window.showWarningMessage(
+			getHost().notifier.warn(
 				`${t("common:info.settings_imported")} ${summary} See Developer Tools console for details.`,
 			)
 		} else {
-			await vscode.window.showInformationMessage(t("common:info.settings_imported"))
+			getHost().notifier.info(t("common:info.settings_imported"))
 		}
 	} else if (result.error) {
-		await vscode.window.showErrorMessage(t("common:errors.settings_import_failed", { error: result.error }))
+		getHost().notifier.error(t("common:errors.settings_import_failed", { error: result.error }))
 	}
 }

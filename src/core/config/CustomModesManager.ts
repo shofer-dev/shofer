@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import * as path from "path"
 import * as fs from "fs/promises"
 import * as os from "os"
@@ -167,7 +168,7 @@ export class CustomModesManager {
 
 					const lineMatch = errorMsg.match(/at line (\d+)/)
 					const line = lineMatch ? lineMatch[1] : "unknown"
-					vscode.window.showErrorMessage(t("common:customModes.errors.yamlParseError", { line }))
+					getHost().notifier.error(t("common:customModes.errors.yamlParseError", { line }))
 
 					// Return empty object to prevent duplicate error handling
 					return {}
@@ -183,7 +184,7 @@ export class CustomModesManager {
 			configLog.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
 			const lineMatch = errorMsg.match(/at line (\d+)/)
 			const line = lineMatch ? lineMatch[1] : "unknown"
-			vscode.window.showErrorMessage(t("common:customModes.errors.yamlParseError", { line }))
+			getHost().notifier.error(t("common:customModes.errors.yamlParseError", { line }))
 			return {}
 		}
 	}
@@ -210,7 +211,7 @@ export class CustomModesManager {
 					.map((issue) => `• ${issue.path.join(".")}: ${issue.message}`)
 					.join("\n")
 
-				vscode.window.showErrorMessage(t("common:customModes.errors.schemaValidationError", { issues }))
+				getHost().notifier.error(t("common:customModes.errors.schemaValidationError", { issues }))
 
 				return []
 			}
@@ -291,14 +292,14 @@ export class CustomModesManager {
 					config = this.parseYamlSafely(content, settingsPath)
 				} catch (error) {
 					configLog.error(error instanceof Error ? error : String(error))
-					vscode.window.showErrorMessage(errorMessage)
+					getHost().notifier.error(errorMessage)
 					return
 				}
 
 				const result = customModesSettingsSchema.safeParse(config)
 
 				if (!result.success) {
-					vscode.window.showErrorMessage(errorMessage)
+					getHost().notifier.error(errorMessage)
 					return
 				}
 
@@ -412,7 +413,7 @@ export class CustomModesManager {
 					.join(", ")
 				const errorMessage = `Invalid mode configuration: ${errorMessages}`
 				logger.error("Mode validation failed", { slug, errors: validationResult.error.errors })
-				vscode.window.showErrorMessage(t("common:customModes.errors.updateFailed", { error: errorMessage }))
+				getHost().notifier.error(t("common:customModes.errors.updateFailed", { error: errorMessage }))
 				throw new Error(errorMessage)
 			}
 
@@ -458,7 +459,7 @@ export class CustomModesManager {
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
 			logger.error("Failed to update custom mode", { slug, error: errorMessage })
-			vscode.window.showErrorMessage(t("common:customModes.errors.updateFailed", { error: errorMessage }))
+			getHost().notifier.error(t("common:customModes.errors.updateFailed", { error: errorMessage }))
 			throw error
 		}
 	}
@@ -550,7 +551,7 @@ export class CustomModesManager {
 			})
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			vscode.window.showErrorMessage(t("common:customModes.errors.deleteFailed", { error: errorMessage }))
+			getHost().notifier.error(t("common:customModes.errors.deleteFailed", { error: errorMessage }))
 		}
 	}
 
@@ -591,7 +592,7 @@ export class CustomModesManager {
 					const messageKey = fromMarketplace
 						? "common:marketplace.mode.rulesCleanupFailed"
 						: "common:customModes.errors.rulesCleanupFailed"
-					vscode.window.showWarningMessage(t(messageKey, { rulesFolderPath }))
+					getHost().notifier.warn(t(messageKey, { rulesFolderPath }))
 					// Continue even if folder deletion fails
 				}
 			}
@@ -611,7 +612,7 @@ export class CustomModesManager {
 			await this.onUpdate()
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			vscode.window.showErrorMessage(t("common:customModes.errors.resetFailed", { error: errorMessage }))
+			getHost().notifier.error(t("common:customModes.errors.resetFailed", { error: errorMessage }))
 		}
 	}
 

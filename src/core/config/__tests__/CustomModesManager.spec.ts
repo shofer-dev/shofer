@@ -7,6 +7,7 @@ import * as fs from "fs/promises"
 
 import * as yaml from "yaml"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 import type { ModeConfig } from "@shofer/types"
 
@@ -52,6 +53,7 @@ describe("CustomModesManager", () => {
 	const mockRoomodes = path.join(mockWorkspacePath, ".shofer/shofermodes")
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		mockOnUpdate = vi.fn()
 		mockContext = {
 			globalState: {

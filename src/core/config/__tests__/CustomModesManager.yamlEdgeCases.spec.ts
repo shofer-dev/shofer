@@ -7,6 +7,7 @@ import * as fs from "fs/promises"
 
 import * as yaml from "yaml"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 import type { ModeConfig } from "@shofer/types"
 
@@ -51,6 +52,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 	}
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		mockOnUpdate = vi.fn()
 		mockContext = {
 			globalState: {

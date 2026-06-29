@@ -1,5 +1,6 @@
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import type { ShoferApiReqInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
@@ -145,9 +146,10 @@ async function checkGitInstallation(
 			task.checkpointServiceInitializing = false
 
 			// Show user-friendly notification
-			const selection = await vscode.window.showWarningMessage(
+			const selection = await getHost().notifier.showChoice(
 				t("common:errors.git_not_installed"),
-				t("common:buttons.learn_more"),
+				[t("common:buttons.learn_more")],
+				{ severity: "warn" },
 			)
 
 			if (selection === t("common:buttons.learn_more")) {
@@ -330,7 +332,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	const checkpoints = task.shoferMessages.filter(({ say }) => say === "checkpoint_saved").map(({ text }) => text!)
 
 	if (["from-init", "full"].includes(mode) && checkpoints.length < 1) {
-		vscode.window.showInformationMessage(t("common:errors.checkpoint_no_first"))
+		getHost().notifier.info(t("common:errors.checkpoint_no_first"))
 		return
 	}
 
@@ -359,7 +361,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	}
 
 	if (!fromHash) {
-		vscode.window.showInformationMessage(t("common:errors.checkpoint_no_previous"))
+		getHost().notifier.info(t("common:errors.checkpoint_no_previous"))
 		return
 	}
 
@@ -367,7 +369,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 		const changes = await service.getDiff({ from: fromHash, to: toHash })
 
 		if (!changes?.length) {
-			vscode.window.showInformationMessage(t("common:errors.checkpoint_no_changes"))
+			getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
 			return
 		}
 

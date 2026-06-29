@@ -4,6 +4,7 @@ import { ShoferProvider } from "../../webview/ShoferProvider"
 import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "../index"
 import { MessageManager } from "../../message-manager"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 // Mock vscode
 vi.mock("vscode", () => ({
@@ -65,6 +66,7 @@ describe("Checkpoint functionality", () => {
 	let mockCheckpointService: any
 
 	beforeEach(async () => {
+		installVsCodeForwardingHost()
 		// Create mock checkpoint service
 		mockCheckpointService = {
 			isInitialized: true,
