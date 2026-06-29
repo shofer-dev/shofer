@@ -157,7 +157,19 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
 
 ## Phase 3 — Host-agnostic core
 
-- ⬜ **§9 vscode-free core behind an in-process adapter** (XL).
+- 🚧 **§9 vscode-free core behind an in-process adapter** (XL)
+    - Context: a vscode-free path already exists (CLI + `@shofer/vscode-shim`, which
+      mocks the whole `vscode` API) and `MessagePersistencePort` (§5) is one clean
+      host seam.
+    - ✅ Host boundary defined: `HostBridge` (`packages/types/src/host.ts`) — the
+      narrow, host-agnostic interfaces the core needs (`Notifier`, `HostFileSystem`
+      so far), with in-memory reference impls (`host-memory.ts`,
+      `createInMemoryHost`) for CLI/tests. 3 tests; docs (`headless.md`). This is
+      the cleaner-interface target the shim's broad mock evolves toward.
+    - ⬜ The XL remainder: add a VS Code-backed `HostBridge` adapter, migrate
+      `vscode.*` call sites (notifications, editor selection, diff) onto it one at a
+      time, shrink the shim, and extract the `vscode`-free core package. Gates §11
+      (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
