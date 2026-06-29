@@ -11,6 +11,7 @@
 		"clean": "rimraf .turbo"
 	},
 	"dependencies": {
+		"@opentelemetry/api": "^1.9.1",
 		"@shofer/types": "workspace:^",
 		"posthog-node": "^5.0.0",
 		"zod": "^3.25.61"

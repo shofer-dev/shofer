@@ -147,12 +147,13 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       with §7 the lookup is unified. `shared/__tests__/cost-catalog.spec.ts` pins
       the end-to-end flow (catalog `lookupStaticModel` → cost + context window;
       unpriced model → zero cost, no scattered fallbacks).
-    - ⬜ OTel transport: emit the existing typed telemetry catalog through
-      OpenTelemetry spans/metrics (OTLP), retiring the bespoke Prometheus exporter.
-      DECISION-GATED — needs an `@opentelemetry/*` dependency choice (api + SDK +
-      OTLP exporter), the OTLP endpoint/opt-in config, and extension bundling. Like
-      §5's SQLite-runtime call, this is a maintainer/infra decision, not made
-      autonomously. Spend caps stay (a shofer advantage — Part E #6).
+    - ✅ OTel transport: `OtelTelemetryClient` (`@opentelemetry/api`) emits each
+      typed catalog event as an OTel span (taxonomy = data, OTel = transport). It's
+      a no-op until an OTel SDK is registered by the host, so it's zero-overhead +
+      opt-in (register alongside PostHog via `TelemetryService.register`). Added the
+      `@opentelemetry/api` dep; 3 tests; docs (`telemetry.md`). Spend caps kept
+      (Part E #6). Retiring the bespoke Prometheus exporter is a follow-on once an
+      OTel SDK/exporter is wired by the operator.
 
 ## Phase 3 — Host-agnostic core
 

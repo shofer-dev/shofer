@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-  <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
@@ -54,10 +54,26 @@ Shofer uses a **multi-client telemetry architecture** with a singleton [`Telemet
 └─────────────────────────────────────────────────────────┘
 ```
 
-| Component                                                                       | Runtime                  | Library        | Endpoint                |
-| ------------------------------------------------------------------------------- | ------------------------ | -------------- | ----------------------- |
-| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:30) | Node.js (extension host) | `posthog-node` | `https://ph.shofer.dev` |
-| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`   | `https://ph.shofer.dev` |
+| Component                                                                       | Runtime                  | Library              | Endpoint                   |
+| ------------------------------------------------------------------------------- | ------------------------ | -------------------- | -------------------------- |
+| [`PostHogTelemetryClient`](packages/telemetry/src/PostHogTelemetryClient.ts:30) | Node.js (extension host) | `posthog-node`       | `https://ph.shofer.dev`    |
+| [`OtelTelemetryClient`](packages/telemetry/src/OtelTelemetryClient.ts)          | Node.js (extension host) | `@opentelemetry/api` | OTLP (operator-configured) |
+| [`TelemetryClient`](webview-ui/src/utils/TelemetryClient.ts:5)                  | Browser (webview)        | `posthog-js`         | `https://ph.shofer.dev`    |
+
+### OpenTelemetry transport (§8)
+
+[`OtelTelemetryClient`](packages/telemetry/src/OtelTelemetryClient.ts) is an
+additional `TelemetryClient` that emits each captured event from the typed event
+catalog as an **OpenTelemetry span** (`@opentelemetry/api`). The taxonomy stays
+the data; OTel is the transport, so any standards-based backend (incl. Prometheus
+via the OTel collector) can consume it without a bespoke exporter.
+
+`@opentelemetry/api` is a **no-op until an OTel SDK is registered** by the host
+(e.g. `NodeSDK` + an OTLP exporter), so the client is zero-overhead and inert
+unless telemetry is opted in _and_ an SDK is wired up — OTel adoption is an
+operator choice. Register it alongside `PostHogTelemetryClient` via
+`TelemetryService.register(new OtelTelemetryClient())`. Spend caps are kept (a
+shofer advantage; Part E #6).
 
 ---
 
