@@ -22,6 +22,9 @@ class VsCodeNotifier implements Notifier {
 	error(message: string): void {
 		void vscode.window.showErrorMessage(message)
 	}
+	showChoice(message: string, options: string[]): Promise<string | undefined> {
+		return Promise.resolve(vscode.window.showInformationMessage(message, ...options))
+	}
 }
 
 class NodeFileSystem implements HostFileSystem {

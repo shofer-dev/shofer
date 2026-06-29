@@ -20,6 +20,12 @@ export interface Notifier {
 	info(message: string): void
 	warn(message: string): void
 	error(message: string): void
+	/**
+	 * Show a message with action buttons and resolve to the chosen label, or
+	 * `undefined` if dismissed (maps to `vscode.window.showInformationMessage(msg,
+	 * ...items)`). Covers the choice-dialog call sites that need a return value.
+	 */
+	showChoice(message: string, options: string[]): Promise<string | undefined>
 }
 
 /** Minimal filesystem the core needs, independent of `vscode.workspace.fs` or `node:fs`. */

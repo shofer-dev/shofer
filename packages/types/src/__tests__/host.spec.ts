@@ -30,6 +30,14 @@ describe("in-memory HostBridge (§9)", () => {
 		await expect(fs.readFile("/a.txt")).rejects.toThrow(/ENOENT/)
 	})
 
+	it("RecordingNotifier.showChoice records the prompt and returns the configured choice", async () => {
+		const n = new RecordingNotifier()
+		expect(await n.showChoice("Proceed?", ["Yes", "No"])).toBeUndefined() // dismissed by default
+		n.choiceResponse = "Yes"
+		expect(await n.showChoice("Proceed?", ["Yes", "No"])).toBe("Yes")
+		expect(n.messages.filter((m) => m.message === "Proceed?")).toHaveLength(2)
+	})
+
 	it("createInMemoryHost wires a notifier + fs with zero vscode deps", async () => {
 		const host = createInMemoryHost()
 		host.notifier.info("ready")

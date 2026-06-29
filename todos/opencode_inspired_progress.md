@@ -171,10 +171,12 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       at `activate()`; defaults to the in-memory host pre-activation/tests. Migrated
       `integrations/misc/image-handler.ts`'s notifications off `vscode.window.*` onto
       `getHost().notifier` as the proof. 2 host tests; suite green.
-    - ⬜ The XL remainder: migrate the other ~165 notification sites + editor
-      selection + diff onto `HostBridge` (note: choice-dialogs need a richer
-      `showChoice` method), shrink the shim, extract the `vscode`-free core package.
-      Gates §11 (API/SDK) and §12 (ACP).
+    - ✅ Boundary extended: `Notifier.showChoice(message, options)` (the
+      return-value/button-dialog shape many notification sites need) + adapters
+      (VS Code → `showInformationMessage(msg, ...items)`; in-memory configurable).
+    - ⬜ The XL remainder (bulk-mechanical, multi-session): migrate the other ~165
+      notification sites + editor selection + diff onto `HostBridge`, shrink the
+      shim, extract the `vscode`-free core package. Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,

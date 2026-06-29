@@ -8,6 +8,8 @@ import type { HostBridge, HostFileSystem, Notifier } from "./host.js"
 /** A `Notifier` that records messages instead of showing UI. */
 export class RecordingNotifier implements Notifier {
 	readonly messages: Array<{ level: "info" | "warn" | "error"; message: string }> = []
+	/** Choice returned by `showChoice` (default: dismissed). Set in tests to simulate a click. */
+	choiceResponse: string | undefined = undefined
 	info(message: string): void {
 		this.messages.push({ level: "info", message })
 	}
@@ -16,6 +18,10 @@ export class RecordingNotifier implements Notifier {
 	}
 	error(message: string): void {
 		this.messages.push({ level: "error", message })
+	}
+	async showChoice(message: string, _options: string[]): Promise<string | undefined> {
+		this.messages.push({ level: "info", message })
+		return this.choiceResponse
 	}
 }
 
