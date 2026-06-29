@@ -169,12 +169,26 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       `installVsCodeForwardingHost()` test helper (routes the host notifier to the
       mocked `vscode.window.show*` so migrated-code tests keep their spy assertions).
       Full suite green.
-    - ⬜ The XL remainder (bulk-mechanical, multi-session): migrate the remaining
-      ~135 notification sites — mostly the extension-host/UI adapter layer
-      (`webviewMessageHandler` ~81, `McpHub` 15, `registerCommands` 13,
-      `ShoferProvider` 9, `MarketplaceManager` 6, …) — plus editor selection + diff
-      onto `HostBridge`, shrink the shim, and extract the `vscode`-free core package
-      (the structural heavy lift). Gates §11 (API/SDK) and §12 (ACP).
+    - ✅ Notification sweep COMPLETE: all remaining ~135 sites migrated onto
+      `getHost().notifier` (`webviewMessageHandler`, `McpHub`, `registerCommands`,
+      `ShoferProvider`, `MarketplaceManager`, `skillsMessageHandler`,
+      `diagnosticsHandler`, `checkpointRestoreHandler`, `registerTerminalActions`).
+      Button/confirm dialogs use `notifier.showChoice` (severity/modal). **Zero
+      direct `vscode.window.show*Message` calls remain outside the host adapter.**
+    - ✅ Core extraction — config seam + first vscode-free core files: added
+      `HostConfig` (`get<T>(section, key, default)`; VS Code + `InMemoryConfig`
+      adapters). Made **`Task.ts` (the core's heart) fully vscode-free**, plus
+      `ExecuteCommandTool`, `AttemptCompletionTool`, `NewTaskTool`, `timeout-config`
+      (config seam) and `modes.ts` (type-only `import type`). 7 core files now carry
+      zero `vscode` import.
+    - ⬜ Remainder (structural, multi-session): the editor/LSP/VS-Code-LM-coupled
+      core files need richer host seams before they can be decoupled — editor +
+      diff + selection, file/symbol search (`FindFilesTool`, `LspSearchTool`,
+      `ListCodeUsagesTool`, `RenameSymbolTool`), diagnostics (`GetErrorsTool`),
+      workspace FS (`ReadProjectStructureTool`), the VS Code LM provider/format +
+      `build-tools` private-tools command, and `system.ts`'s `vscode.env.language`.
+      Then shrink the shim and carve out the `vscode`-free core package. Gates §11
+      (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
