@@ -1,5 +1,19 @@
 # Prometheus / Observability for Shofer VS Code Extension
 
+> **⚠️ Transport migrated to OpenTelemetry (§8, June 2026).** The metrics layer no
+> longer uses `prom-client` or a bespoke in-process `/metrics` HTTP server — both,
+> along with `src/metrics/server.ts`, `src/metrics/identity.ts`, and the
+> `prometheusMetrics` experiment, have been **removed**. `src/metrics/registry.ts`
+> now emits through the OpenTelemetry metrics API (`@opentelemetry/api`): counters,
+> histograms, synchronous gauges, and `registerObservableGauge` for scrape-time
+> snapshots. **The metric catalog below (names, labels, semantics) is unchanged and
+> still accurate** — only the transport changed. To export (including to
+> Prometheus), the host registers an OTel SDK with a metric reader/exporter (e.g.
+> the OTLP exporter, or `@opentelemetry/exporter-prometheus` for a `/metrics`
+> endpoint) and histogram-bucket Views using the `*_BUCKETS_MS` presets. Until an
+> SDK is registered the API is a zero-overhead no-op. Sections referring to the
+> `prom-client` registry or the HTTP server lifecycle below are historical.
+
 > **Status (verified May 2026):** Phases 1–2 fully implemented, and **most of Phase 3 has shipped** — the doc previously listed it as "pending," which is stale. Implemented today: prom-client registry + `/metrics` HTTP server, `time()` latency histograms, **LLM/tool/MCP latency + error counters wired at their real call sites** (`Task.ts`, `BaseTool.execute()`, `McpHub`), memory/process gauges, `shofer_event_listeners_total`, the `metrics_self_*` family, and the `arkware.heapSnapshot` command. LLM **cost/token** counters (`shofer_llm_cost_usd_total`, `shofer_llm_tokens_total`) were added alongside the duration/call metrics. `shofer_embedder_queue_depth` is now wired to the real per-provider concurrency-lane depth (no longer stubbed to `0`), and GC pause visibility is provided by `collectDefaultMetrics`' `nodejs_gc_duration_seconds` (a bespoke `shofer_gc_*` family is intentionally not implemented — redundant). **Genuinely still missing:** only the **webview-side metrics sender** (Phase 4 — the host-side ingestion, Zod schema, and `/metrics` exposure are all already built; only the webview emitter is missing). Phase 5 (Grafana dashboard) is pending.
 >
 > **Gating:** the entire `/metrics` server only starts when the `PROMETHEUS_METRICS` experiment is enabled (`extension.ts` checks `EXPERIMENT_IDS.PROMETHEUS_METRICS` before `startMetricsServer`). When the experiment is off, no server binds and no metrics are exposed.

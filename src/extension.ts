@@ -59,16 +59,8 @@ import { LiveMemoryManager } from "./services/live-memory/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
-import { startMetricsServer, stopMetricsServer } from "./metrics/server"
-import { experiments, EXPERIMENT_IDS } from "./shared/experiments"
 import { syncExperimentContextKeys } from "./activate/experimentContextKeys"
-import {
-	updateMemoryMetrics,
-	updateEventListenerMetrics,
-	updateTaskMetrics,
-	updateFocusedTaskMetrics,
-	registry,
-} from "./metrics/registry"
+import { registry } from "./metrics/registry"
 
 import {
 	handleUri,
@@ -178,48 +170,54 @@ export async function activate(context: vscode.ExtensionContext) {
 		setLogCategories(savedLogCategories.length > 0 ? savedLogCategories : undefined)
 	}
 
-	// Start the Prometheus metrics server only when the 'prometheusMetrics'
-	// experimental flag is enabled (default: off).  Port is the constant 30099
-	// (overridable via SHOFER_METRICS_PORT env var).  If the port is already
-	// bound this will throw.
-	const _workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
 	const _experimentsConfig = contextProxy.getValue("experiments") ?? {}
 	// Drive `when`-clause visibility for experiment-gated UI (Refresh
 	// Webview / Reload Window toolbar buttons today). Re-fired by the
 	// webview message handler on every experiments mutation.
 	syncExperimentContextKeys(_experimentsConfig)
-	if (experiments.isEnabled(_experimentsConfig, EXPERIMENT_IDS.PROMETHEUS_METRICS)) {
-		await startMetricsServer(context.globalStoragePath, _workspace)
-	} else {
-		outputChannel.appendLine(
-			"[metrics] Prometheus exporter disabled (enable via Settings → Experimental → Prometheus Metrics).",
-		)
+
+	const focusedTask = () => {
+		const provider = ShoferProvider.getVisibleInstance()
+		const id = provider?.taskManager.getFocusedTaskId()
+		return id ? provider!.taskManager.getManagedTaskInstance(id) : undefined
 	}
 
-	// Register on-scrape collectors so /metrics returns up-to-date values
-	// without an event-loop-waking timer.  process.memoryUsage() is O(1).
-	registry.registerCollector(() => {
-		updateMemoryMetrics()
+	// §8: process / task gauges as OTel observable gauges. The SDK (when the
+	// host registers one) polls these callbacks at export time, so values are
+	// always current without an event-loop-waking timer. No-op until an SDK is
+	// registered. process.memoryUsage() is O(1).
+	registry.registerObservableGauge("shofer_heap_used_bytes", "process.memoryUsage().heapUsed.", (r) =>
+		r.observe(process.memoryUsage().heapUsed),
+	)
+	registry.registerObservableGauge("shofer_heap_total_bytes", "process.memoryUsage().heapTotal.", (r) =>
+		r.observe(process.memoryUsage().heapTotal),
+	)
+	registry.registerObservableGauge("shofer_rss_bytes", "process.memoryUsage().rss.", (r) =>
+		r.observe(process.memoryUsage().rss),
+	)
+	registry.registerObservableGauge(
+		"shofer_event_listeners_total",
+		"Number of listeners attached to ShoferProvider.",
+		(r) => {
+			const provider = ShoferProvider.getVisibleInstance()
+			if (provider) r.observe(provider.listenerCount("ShoferEvent"))
+		},
+	)
+	registry.registerObservableGauge("shofer_tasks_total", "Total tasks in history store.", (r) => {
 		const provider = ShoferProvider.getVisibleInstance()
-		if (provider) {
-			updateEventListenerMetrics(provider.listenerCount("ShoferEvent"))
-
-			// Task-count gauges: history total and live active count.
-			const historyCount = provider.taskHistoryStore.getAll().length
-			const activeCount = provider.taskManager.getActiveManagedTasks().length
-			updateTaskMetrics(historyCount, activeCount)
-
-			// Focused-task message gauges: message count and serialized byte size.
-			const focusedId = provider.taskManager.getFocusedTaskId()
-			if (focusedId) {
-				const task = provider.taskManager.getManagedTaskInstance(focusedId)
-				if (task) {
-					const msgs = task.shoferMessages
-					const bytes = Buffer.byteLength(JSON.stringify(msgs), "utf8")
-					updateFocusedTaskMetrics(msgs.length, bytes)
-				}
-			}
-		}
+		if (provider) r.observe(provider.taskHistoryStore.getAll().length)
+	})
+	registry.registerObservableGauge("shofer_active_tasks", "Active managed tasks (abort === false).", (r) => {
+		const provider = ShoferProvider.getVisibleInstance()
+		if (provider) r.observe(provider.taskManager.getActiveManagedTasks().length)
+	})
+	registry.registerObservableGauge("shofer_messages_total", "Messages on focused task.", (r) => {
+		const task = focusedTask()
+		if (task) r.observe(task.shoferMessages.length)
+	})
+	registry.registerObservableGauge("shofer_messages_bytes", "Serialized byte size of focused task messages.", (r) => {
+		const task = focusedTask()
+		if (task) r.observe(Buffer.byteLength(JSON.stringify(task.shoferMessages), "utf8"))
 	})
 
 	// Initialize code index managers for all workspace folders.
@@ -489,5 +487,4 @@ export async function deactivate() {
 	CodeIndexManager.disposeAll()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
-	await stopMetricsServer()
 }

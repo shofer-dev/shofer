@@ -12,7 +12,6 @@ export const experimentIds = [
 	"runSlashCommand",
 	"customTools",
 	"showToolInputOutput",
-	"prometheusMetrics",
 	"webviewLivenessMonitor",
 	"disableMistakeLimitChecks",
 ] as const
@@ -31,7 +30,6 @@ export const experimentsSchema = z.object({
 	runSlashCommand: z.boolean().optional(),
 	customTools: z.boolean().optional(),
 	showToolInputOutput: z.boolean().optional(),
-	prometheusMetrics: z.boolean().optional(),
 	webviewLivenessMonitor: z.boolean().optional(),
 	disableMistakeLimitChecks: z.boolean().optional(),
 })

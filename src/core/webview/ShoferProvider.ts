@@ -114,8 +114,6 @@ import { ipcLog, webviewLog, scrollLog } from "../../utils/logging/subsystems"
 import { addTaskLogListener } from "../../utils/logging"
 import { time } from "../../utils/perf"
 
-import { setProviderReady } from "../../metrics/server"
-
 /**
  * https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
  * https://github.com/KumarVariable/vscode-extension-sidebar-html/blob/master/src/customSidebarViewProvider.ts
@@ -550,7 +548,6 @@ export class ShoferProvider
 			}
 
 			this.taskHistoryStoreInitialized = true
-			setProviderReady()
 
 			// Seed the TaskManager with persisted task states so the TaskSelector
 			// shows correct state icons on startup without waiting for a re-focus.

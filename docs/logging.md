@@ -129,7 +129,7 @@ The `ctx` is the tag shown in the output channel.
 | `Config`      | `configLog`      | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
 | `Skills`      | `skillsLog`      | Skill discovery, loading, and invocation.                                                                                                                     |
 | `Marketplace` | `marketplaceLog` | Marketplace browsing and the item installer.                                                                                                                  |
-| `Metrics`     | `metricsLog`     | Metrics collection and the Prometheus exporter.                                                                                                               |
+| `Metrics`     | `metricsLog`     | Metrics collection via the OpenTelemetry metrics API (§8).                                                                                                    |
 | `Workflow`    | `workflowLog`    | The `.slang` workflow engine — parsing, execution, and stake resolution.                                                                                      |
 | `Tools`       | `toolsLog`       | Native tool execution — one line per call (start / finish / failure) from `BaseTool.handle`, covering `read_file`, `use_mcp_tool`, `attempt_completion`, etc. |
 | `I18n`        | `i18nLog`        | Translation loading and locale resolution.                                                                                                                    |

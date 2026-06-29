@@ -31,7 +31,6 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
-				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
 				disableMistakeLimitChecks: false,
 			}
@@ -45,7 +44,6 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
-				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
 				disableMistakeLimitChecks: false,
 			}
@@ -59,7 +57,6 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				showToolInputOutput: false,
-				prometheusMetrics: false,
 				webviewLivenessMonitor: false,
 				disableMistakeLimitChecks: false,
 			}

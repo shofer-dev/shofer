@@ -121,7 +121,7 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           fetch vs both). Then route `getProviderDefaultModelId` / the API handlers'
           per-provider record lookups through the catalog and make "add a provider"
           config-only.
-- 🚧 **§8 OTel transport + catalog-driven cost/limits**
+- ✅ **§8 OTel transport + catalog-driven cost/limits — DONE**
     - ✅ Catalog-driven cost/limits: cost (`shared/cost.ts` `calculateApiCost*`) and
       context limits already consume `ModelInfo` rather than per-provider constants;
       with §7 the lookup is unified. `shared/__tests__/cost-catalog.spec.ts` pins
@@ -132,10 +132,16 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       **registered by default** in `extension.ts` alongside PostHog. No-op until an
       OTel SDK is registered by the host (zero-overhead). 3 tests; docs
       (`telemetry.md`). Spend caps kept (Part E #6).
-    - ⬜ Metrics: bridge the `src/metrics` registry (counters/gauges/histograms) to
-      OTel metrics, then drop the bespoke Prometheus exporter (`metrics/server.ts`,
-      opt-in/experimental). Deferred only because removing the server before the
-      bridge would lose metric export — the one remaining §8 piece.
+    - ✅ Metrics (DONE — Prometheus fully removed): `src/metrics/registry.ts` is
+      rewritten on the OTel metrics API (`meter` counters/histograms/synchronous
+      gauges; scrape-time gauges → `registerObservableGauge` callbacks polled by the
+      SDK). Deleted the bespoke Prometheus exporter (`metrics/server.ts`),
+      `metrics/identity.ts`, the `prom-client` dep, the `/metrics` exposition +
+      `registerCollector`, and the `prometheusMetrics` experiment (across
+      `shared/experiments.ts` + `@shofer/types`). The registry facade
+      (`incCounter`/`observeHistogram`/`setGauge` + all typed helpers) is unchanged,
+      so the ~13 call sites (incl. the webview `pushMetrics` path) are untouched.
+      No-op until the host registers an OTel SDK. Full suite green (6200 + 184).
 
 ## Phase 3 — Host-agnostic core
 

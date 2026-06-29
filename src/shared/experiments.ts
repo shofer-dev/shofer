@@ -6,7 +6,6 @@ export const EXPERIMENT_IDS = {
 	RUN_SLASH_COMMAND: "runSlashCommand",
 	CUSTOM_TOOLS: "customTools",
 	SHOW_TOOL_INPUT_OUTPUT: "showToolInputOutput",
-	PROMETHEUS_METRICS: "prometheusMetrics",
 	WEBVIEW_LIVENESS_MONITOR: "webviewLivenessMonitor",
 	DISABLE_MISTAKE_LIMIT_CHECKS: "disableMistakeLimitChecks",
 } as const satisfies Record<string, ExperimentId>
@@ -25,7 +24,6 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	RUN_SLASH_COMMAND: { enabled: false },
 	CUSTOM_TOOLS: { enabled: false },
 	SHOW_TOOL_INPUT_OUTPUT: { enabled: false },
-	PROMETHEUS_METRICS: { enabled: false },
 	WEBVIEW_LIVENESS_MONITOR: { enabled: false },
 	DISABLE_MISTAKE_LIMIT_CHECKS: { enabled: false },
 }
