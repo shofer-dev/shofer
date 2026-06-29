@@ -40,17 +40,13 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       a contract guard (accidental prompt/param changes become reviewable diffs) and
       the equivalence gate for migrations (a migration is safe iff the snapshot stays
       green). Regenerate with `UPDATE_TOOL_SCHEMAS=1`.
-    - ✅ Migrated **50 of 52** tools to `defineNativeTool` (incl. `read_file` — via
-      stripping `z.int()` safe-int sentinels — and `attempt_completion` — via the
-      `applyCompletionSchema` fix). It pre-bakes the OpenAI-strict +
-      nullable-for-optional convention so the RAW schema stays byte-compatible with
-      the hand-written originals for ALL providers; `strict` (incl. a `strict:false`
-      option) is part of the snapshot.
-    - ✅ 2 tools intentionally hand-written (snapshot still guards them) — Zod's JSON
-      Schema output can't reproduce their shapes without artifacts:
-      `call_mcp_tool_async` (free-form object arg, `additionalProperties:true`) and
-      `ask_followup_question` (deeply-nested arrays-of-objects with per-field
-      nullable unions incl. a 4-type `default`).
+    - ✅ Migrated **all 52 tools** to `defineNativeTool` (Zod schema-as-contract).
+      `defineNativeTool` pre-bakes the OpenAI-strict + nullable-for-optional
+      convention; `strict` (incl. a `strict:false` option) is part of the snapshot.
+      The last 2 (`call_mcp_tool_async` free-form arg, `ask_followup_question`
+      nested arrays-of-objects) were migrated with their Zod-derived schemas
+      (goldens regenerated — behavior change accepted). No hand-written tool defs
+      remain.
     - ◻️ Single-source `NativeToolArgs`/`toolParamNames` — JUSTIFIED BOUNDARY (not
       done by design). The drift guard already eliminates the silent-failure risk
       these mirrors posed. Deleting them needs either (a) losing the `ToolParamName`
