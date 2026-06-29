@@ -861,15 +861,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private static readonly SAVE_DEBOUNCE_INTERVAL_MS = 250
 	private _debouncedSaveShoferMessages: ReturnType<typeof debounce>
 
-	// H12 — Threshold-triggered JSONL compaction.
-	// Track how many messages have been appended (or updated, which
-	// re-appends) since the last full compaction. The debounced save path
-	// skips the O(n) serialize+write when the counter is below the
-	// threshold — appends already made the log durable; compaction is
-	// only a log-size bound, not a correctness requirement.
-	static readonly COMPACTION_APPEND_THRESHOLD = 100
-	private _appendedSinceCompaction = 0
-
 	// H29 — Throttle per-chunk partial-message appends. A streamed message is
 	// re-appended to the JSONL log on every chunk via `updateShoferMessage`
 	// purely for crash durability; each line is superseded almost immediately
@@ -1879,14 +1870,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async saveApiConversationHistory(): Promise<boolean> {
 		try {
-			// §4.1: serialize synchronously into a JSONL string so the async
-			// write captures an H6-style snapshot (no `structuredClone` of the
-			// entire array). Per-message JSON.stringify runs single-tick before
-			// yielding, so concurrent in-place mutations (reasoning-block
-			// injection, etc.) cannot race with the write.
-			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
-			const serialized = serializeJsonLines(this.apiConversationHistory)
-			await (await this.getPersistence()).saveApiMessages(this.taskId, this.apiConversationHistory, serialized)
+			// §5: SQLite write — cheap and incremental, so no pre-serialized JSONL
+			// snapshot is needed.
+			await (await this.getPersistence()).saveApiMessages(this.taskId, this.apiConversationHistory)
 			return true
 		} catch (error) {
 			taskLog.error("Failed to save API conversation history:", error)
@@ -2113,8 +2099,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// does not lose the message.
 		try {
 			await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
-			// H12: track appended lines for threshold-triggered compaction.
-			this._appendedSinceCompaction++
 		} catch (error) {
 			taskLog.error("Failed to append Shofer message:", error)
 		}
@@ -2197,8 +2181,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (shouldAppend) {
 			try {
 				await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
-				// H12: re-appending a mutated message counts as an append.
-				this._appendedSinceCompaction++
 				if (isPartial) {
 					this._lastPartialAppendTs = now
 				}
@@ -2252,20 +2234,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	private async _saveShoferMessagesImpl(): Promise<boolean> {
 		try {
-			// §4.1 + H12: serialize synchronously (H6 snapshot) and atomically
-			// replace the JSONL log. The append log is already durable; full
-			// rewrites are only a log-size bound. Skip compaction when the
-			// append count is below threshold — the metadata refresh is still
-			// needed (debounced save fires for token-usage updates), but the
-			// O(n) serialize+write can be deferred.
-			const shouldCompact = this._appendedSinceCompaction >= Task.COMPACTION_APPEND_THRESHOLD
-			if (shouldCompact) {
-				const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
-				const serialized = serializeJsonLines(this.shoferMessages)
-				await (await this.getPersistence()).saveTaskMessages(this.taskId, this.shoferMessages, serialized)
-				this._appendedSinceCompaction = 0
-			}
-
+			// §5: individual messages are already persisted incrementally via
+			// appendTaskMessage (SQLite, dedupe-by-ts), so no JSONL-style compaction
+			// rewrite is needed here — just refresh the derived task metadata.
 			return await this._refreshTaskMetadata()
 		} catch (error) {
 			taskLog.error("Failed to save Shofer messages:", error)
@@ -2413,10 +2384,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private async _flushSaveShoferMessages(): Promise<void> {
 		this._debouncedSaveShoferMessages.cancel()
-		// H12: at turn boundaries, always compact regardless of threshold.
-		// Force a full rewrite so on-disk state settles to compact form at
-		// every observable checkpoint.
-		this._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
 		await this.saveShoferMessages()
 	}
 

@@ -373,7 +373,7 @@ describe("Task persistence", () => {
 			vi.useRealTimers()
 		})
 
-		it("passes a synchronous serialized snapshot to saveApiMessages", async () => {
+		it("persists the full conversation history to saveApiMessages", async () => {
 			mockSaveApiMessages.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
@@ -392,41 +392,30 @@ describe("Task persistence", () => {
 			await task.retrySaveApiConversationHistory()
 
 			expect(mockSaveApiMessages).toHaveBeenCalledTimes(1)
-
+			// §5: SQLite write — the live message array is passed (no JSONL snapshot).
 			const callArgs = mockSaveApiMessages.mock.calls[0][0]
-			// §4.1 / H6: the snapshot is captured synchronously as a JSONL string
-			// (one record per line) in `serialized`; the `messages` field is the
-			// live reference, intentionally NOT cloned (saves the structuredClone).
-			expect(typeof callArgs.serialized).toBe("string")
-			const parsed = callArgs.serialized
-				.split("\n")
-				.filter((l: string) => l.length > 0)
-				.map((l: string) => JSON.parse(l))
-			expect(parsed).toEqual(task.apiConversationHistory)
+			expect(callArgs.messages).toEqual(task.apiConversationHistory)
 		})
 	})
 
 	// ── saveShoferMessages ────────────────────────────────────────────────
 
 	describe("saveShoferMessages", () => {
+		// §5: messages persist incrementally via appendTaskMessage (SQLite), so
+		// saveShoferMessages no longer compacts — it just refreshes task metadata.
 		it("returns true on success", async () => {
-			mockSaveTaskMessages.mockResolvedValueOnce(undefined)
-
 			const task = new Task({
 				provider: mockProvider,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
 			})
-			// H12: force compaction so saveTaskMessages fires below threshold.
-			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
-
 			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(true)
 		})
 
-		it("returns false on failure", async () => {
-			mockSaveTaskMessages.mockRejectedValueOnce(new Error("write error"))
+		it("returns false when the metadata refresh fails", async () => {
+			mockTaskMetadata.mockRejectedValueOnce(new Error("metadata error"))
 
 			const task = new Task({
 				provider: mockProvider,
@@ -434,48 +423,8 @@ describe("Task persistence", () => {
 				task: "test task",
 				startTask: false,
 			})
-			// H12: force compaction so saveTaskMessages fires below threshold.
-			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
-
 			const result = await (task as Record<string, any>).saveShoferMessages()
 			expect(result).toBe(false)
-		})
-
-		it("snapshots the array before passing to saveTaskMessages", async () => {
-			mockSaveTaskMessages.mockResolvedValueOnce(undefined)
-
-			const task = new Task({
-				provider: mockProvider,
-				apiConfiguration: mockApiConfig,
-				task: "test task",
-				startTask: false,
-			})
-			// H12: force compaction so saveTaskMessages fires below threshold.
-			;(task as any)._appendedSinceCompaction = Task.COMPACTION_APPEND_THRESHOLD
-
-			task.shoferMessages.push({
-				type: "say",
-				say: "text",
-				text: "snapshot test",
-				ts: Date.now(),
-			})
-
-			await (task as Record<string, any>).saveShoferMessages()
-
-			expect(mockSaveTaskMessages).toHaveBeenCalledTimes(1)
-
-			const callArgs = mockSaveTaskMessages.mock.calls[0][0]
-			// The snapshot is captured via JSON.stringify (the `serialized` field),
-			// not by cloning `messages`. The live reference is passed as `messages`
-			// so that callers without a `serialized` string can still fall back to
-			// serializing it themselves. Verify the pre-serialized JSONL snapshot
-			// (one record per line) reproduces the current array content.
-			expect(typeof callArgs.serialized).toBe("string")
-			const parsed = (callArgs.serialized as string)
-				.split("\n")
-				.filter((l) => l.length > 0)
-				.map((l) => JSON.parse(l))
-			expect(parsed).toEqual(task.shoferMessages)
 		})
 	})
 
