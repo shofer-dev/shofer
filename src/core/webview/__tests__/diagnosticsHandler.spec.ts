@@ -40,6 +40,7 @@ vi.mock("../../task-persistence/apiMessages", () => ({
 }))
 
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import * as fs from "fs/promises"
 import { generateErrorDiagnostics } from "../diagnosticsHandler"
 
@@ -47,6 +48,7 @@ describe("generateErrorDiagnostics", () => {
 	const mockLog = vi.fn()
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 		readApiMessagesMock.mockReset()
 	})

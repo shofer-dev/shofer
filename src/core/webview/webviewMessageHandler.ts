@@ -6,6 +6,7 @@ import * as fs from "fs/promises"
 import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import {
 	type Language,
@@ -257,7 +258,7 @@ export const webviewMessageHandler = async (
 		let hasCheckpoint = false
 
 		if (!currentShofer) {
-			await vscode.window.showErrorMessage(t("common:errors.message.no_active_task_to_delete"))
+			await getHost().notifier.error(t("common:errors.message.no_active_task_to_delete"))
 			return
 		}
 
@@ -298,7 +299,7 @@ export const webviewMessageHandler = async (
 		}
 
 		if (messageIndex === -1) {
-			await vscode.window.showErrorMessage(t("common:errors.message.message_not_found", { messageTs }))
+			await getHost().notifier.error(t("common:errors.message.message_not_found", { messageTs }))
 			return
 		}
 
@@ -326,7 +327,7 @@ export const webviewMessageHandler = async (
 				} else {
 					// No checkpoint found before this message
 					webviewLog.info("[handleDeleteMessageConfirm] No checkpoint found before message")
-					vscode.window.showWarningMessage("No checkpoint found before this message")
+					getHost().notifier.warn("No checkpoint found before this message")
 				}
 			} else {
 				// For non-checkpoint deletes, preserve checkpoint associations for remaining messages
@@ -362,7 +363,7 @@ export const webviewMessageHandler = async (
 			}
 		} catch (error) {
 			webviewLog.error("Error in delete message:", error)
-			vscode.window.showErrorMessage(
+			getHost().notifier.error(
 				t("common:errors.message.error_deleting_message", {
 					error: error instanceof Error ? error.message : String(error),
 				}),
@@ -424,7 +425,7 @@ export const webviewMessageHandler = async (
 		if (messageIndex === -1) {
 			const errorMessage = t("common:errors.message.message_not_found", { messageTs })
 			webviewLog.error("[handleEditMessageConfirm]", errorMessage)
-			await vscode.window.showErrorMessage(errorMessage)
+			await getHost().notifier.error(errorMessage)
 			return
 		}
 
@@ -460,7 +461,7 @@ export const webviewMessageHandler = async (
 				} else {
 					// No checkpoint found before this message
 					webviewLog.info("[handleEditMessageConfirm] No checkpoint found before message")
-					vscode.window.showWarningMessage("No checkpoint found before this message")
+					getHost().notifier.warn("No checkpoint found before this message")
 					// Continue with non-checkpoint edit
 				}
 			}
@@ -533,7 +534,7 @@ export const webviewMessageHandler = async (
 			await currentShofer.submitUserMessage(editedContent, images)
 		} catch (error) {
 			webviewLog.error("Error in edit message:", error)
-			vscode.window.showErrorMessage(
+			getHost().notifier.error(
 				t("common:errors.message.error_editing_message", {
 					error: error instanceof Error ? error.message : String(error),
 				}),
@@ -841,7 +842,7 @@ export const webviewMessageHandler = async (
 						// Worktree creation (or its required submodule init) failed.
 						// Abort — don't start a task with a broken/missing worktree.
 						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-						vscode.window.showErrorMessage(`Failed to create worktree: ${createResult.message}`)
+						getHost().notifier.error(`Failed to create worktree: ${createResult.message}`)
 						return
 					}
 				}
@@ -858,7 +859,7 @@ export const webviewMessageHandler = async (
 				// For all errors, reset the UI and show error
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 				// Show error to user
-				vscode.window.showErrorMessage(
+				getHost().notifier.error(
 					`Failed to create task: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
@@ -1542,13 +1543,13 @@ export const webviewMessageHandler = async (
 				try {
 					await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, { timeout: 3_000 })
 				} catch (error) {
-					vscode.window.showErrorMessage(t("common:errors.checkpoint_timeout"))
+					getHost().notifier.error(t("common:errors.checkpoint_timeout"))
 				}
 
 				try {
 					await provider.getCurrentTask()?.checkpointRestore(result.data)
 				} catch (error) {
-					vscode.window.showErrorMessage(t("common:errors.checkpoint_failed"))
+					getHost().notifier.error(t("common:errors.checkpoint_failed"))
 				}
 			}
 
@@ -1592,7 +1593,7 @@ export const webviewMessageHandler = async (
 				await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title)
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Failed to open Shofer diff: ${errorMsg}`)
+				getHost().notifier.error(`Failed to open Shofer diff: ${errorMsg}`)
 			}
 			break
 		}
@@ -1602,7 +1603,7 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
+				getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
 				break
 			}
 			try {
@@ -1622,10 +1623,10 @@ export const webviewMessageHandler = async (
 					userEdited = finalContent !== null
 				}
 				if (userEdited) {
-					const choice = await vscode.window.showWarningMessage(
+					const choice = await getHost().notifier.showChoice(
 						t("common:fileChanges.revertConfirmUserEdits", { path: relPath }),
-						{ modal: true },
-						t("common:fileChanges.revertConfirmYes"),
+						[t("common:fileChanges.revertConfirmYes")],
+						{ severity: "warn", modal: true },
 					)
 					if (choice !== t("common:fileChanges.revertConfirmYes")) break
 				}
@@ -1633,7 +1634,7 @@ export const webviewMessageHandler = async (
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Revert failed: ${errorMsg}`)
+				getHost().notifier.error(`Revert failed: ${errorMsg}`)
 			}
 			break
 		}
@@ -1641,13 +1642,13 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
-				vscode.window.showWarningMessage(t("common:fileChanges.blockedTaskRunning"))
+				getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
 				break
 			}
-			const choice = await vscode.window.showWarningMessage(
+			const choice = await getHost().notifier.showChoice(
 				t("common:fileChanges.revertAllConfirm"),
-				{ modal: true },
-				t("common:fileChanges.revertConfirmYes"),
+				[t("common:fileChanges.revertConfirmYes")],
+				{ severity: "warn", modal: true },
 			)
 			if (choice !== t("common:fileChanges.revertConfirmYes")) break
 			try {
@@ -1656,7 +1657,7 @@ export const webviewMessageHandler = async (
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Revert all failed: ${errorMsg}`)
+				getHost().notifier.error(`Revert all failed: ${errorMsg}`)
 			}
 			break
 		}
@@ -1674,7 +1675,7 @@ export const webviewMessageHandler = async (
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Accept failed: ${errorMsg}`)
+				getHost().notifier.error(`Accept failed: ${errorMsg}`)
 			}
 			break
 		}
@@ -1689,7 +1690,7 @@ export const webviewMessageHandler = async (
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
-				vscode.window.showErrorMessage(`Accept all failed: ${errorMsg}`)
+				getHost().notifier.error(`Accept all failed: ${errorMsg}`)
 			}
 			break
 		}
@@ -1761,7 +1762,7 @@ export const webviewMessageHandler = async (
 		}
 		case "openProjectMcpSettings": {
 			if (!vscode.workspace.workspaceFolders?.length) {
-				vscode.window.showErrorMessage(t("common:errors.no_workspace"))
+				getHost().notifier.error(t("common:errors.no_workspace"))
 				return
 			}
 
@@ -1779,7 +1780,7 @@ export const webviewMessageHandler = async (
 
 				await openFile(mcpPath)
 			} catch (error) {
-				vscode.window.showErrorMessage(t("mcp:errors.create_json", { error: `${error}` }))
+				getHost().notifier.error(t("mcp:errors.create_json", { error: `${error}` }))
 			}
 
 			break
@@ -1890,7 +1891,7 @@ export const webviewMessageHandler = async (
 				if (ALLOWED_VSCODE_SETTINGS.has(setting)) {
 					await vscode.workspace.getConfiguration().update(setting, value, true)
 				} else {
-					vscode.window.showErrorMessage(`Cannot update restricted VSCode setting: ${setting}`)
+					getHost().notifier.error(`Cannot update restricted VSCode setting: ${setting}`)
 				}
 			}
 
@@ -1948,12 +1949,12 @@ export const webviewMessageHandler = async (
 			break
 		case "deleteMessage": {
 			if (!provider.getCurrentTask()) {
-				await vscode.window.showErrorMessage(t("common:errors.message.no_active_task_to_delete"))
+				await getHost().notifier.error(t("common:errors.message.no_active_task_to_delete"))
 				break
 			}
 
 			if (typeof message.value !== "number" || !message.value) {
-				await vscode.window.showErrorMessage(t("common:errors.message.invalid_timestamp_for_deletion"))
+				await getHost().notifier.error(t("common:errors.message.invalid_timestamp_for_deletion"))
 				break
 			}
 
@@ -2051,7 +2052,7 @@ export const webviewMessageHandler = async (
 						`Error enhancing prompt: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
 
-					vscode.window.showErrorMessage(t("common:errors.enhance_prompt"))
+					getHost().notifier.error(t("common:errors.enhance_prompt"))
 					await provider.postMessageToWebview({ type: "enhancedPrompt" })
 				}
 			}
@@ -2069,7 +2070,7 @@ export const webviewMessageHandler = async (
 				provider.log(
 					`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 				)
-				vscode.window.showErrorMessage(t("common:errors.get_system_prompt"))
+				getHost().notifier.error(t("common:errors.get_system_prompt"))
 			}
 			break
 		case "copySystemPrompt":
@@ -2077,12 +2078,12 @@ export const webviewMessageHandler = async (
 				const systemPrompt = await generateSystemPrompt(provider, message)
 
 				await vscode.env.clipboard.writeText(systemPrompt)
-				await vscode.window.showInformationMessage(t("common:info.clipboard_copy"))
+				await getHost().notifier.info(t("common:info.clipboard_copy"))
 			} catch (error) {
 				provider.log(
 					`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 				)
-				vscode.window.showErrorMessage(t("common:errors.get_system_prompt"))
+				getHost().notifier.error(t("common:errors.get_system_prompt"))
 			}
 			break
 		case "searchCommits": {
@@ -2098,7 +2099,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error searching commits: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.search_commits"))
+					getHost().notifier.error(t("common:errors.search_commits"))
 				}
 			}
 			break
@@ -2214,7 +2215,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error save api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.save_api_config"))
+					getHost().notifier.error(t("common:errors.save_api_config"))
 				}
 			}
 			break
@@ -2256,7 +2257,7 @@ export const webviewMessageHandler = async (
 						`Error rename api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
 
-					vscode.window.showErrorMessage(t("common:errors.rename_api_config"))
+					getHost().notifier.error(t("common:errors.rename_api_config"))
 				}
 			}
 			break
@@ -2274,7 +2275,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error load api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					getHost().notifier.error(t("common:errors.load_api_config"))
 				}
 			}
 			break
@@ -2292,7 +2293,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error load api configuration for edit: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					getHost().notifier.error(t("common:errors.load_api_config"))
 				}
 			}
 			break
@@ -2305,7 +2306,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error load api configuration by ID: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					getHost().notifier.error(t("common:errors.load_api_config"))
 				}
 			}
 			break
@@ -2338,7 +2339,7 @@ export const webviewMessageHandler = async (
 						provider.log(
 							`Error setting task API configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 						)
-						vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+						getHost().notifier.error(t("common:errors.load_api_config"))
 					}
 				}
 			}
@@ -2354,16 +2355,16 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Error setting mode API configuration: ${error instanceof Error ? error.message : String(error)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					getHost().notifier.error(t("common:errors.load_api_config"))
 				}
 			}
 			break
 		case "deleteApiConfiguration":
 			if (message.text) {
-				const answer = await vscode.window.showInformationMessage(
+				const answer = await getHost().notifier.showChoice(
 					t("common:confirmation.delete_config_profile"),
+					[t("common:answers.yes")],
 					{ modal: true },
-					t("common:answers.yes"),
 				)
 
 				if (answer !== t("common:answers.yes")) {
@@ -2377,7 +2378,7 @@ export const webviewMessageHandler = async (
 				)[0]?.name
 
 				if (!newName) {
-					vscode.window.showErrorMessage(t("common:errors.delete_api_config"))
+					getHost().notifier.error(t("common:errors.delete_api_config"))
 					return
 				}
 
@@ -2390,18 +2391,18 @@ export const webviewMessageHandler = async (
 						`Error delete api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
 
-					vscode.window.showErrorMessage(t("common:errors.delete_api_config"))
+					getHost().notifier.error(t("common:errors.delete_api_config"))
 				}
 			}
 			break
 		case "deleteMessageConfirm":
 			if (!message.messageTs) {
-				await vscode.window.showErrorMessage(t("common:errors.message.cannot_delete_missing_timestamp"))
+				await getHost().notifier.error(t("common:errors.message.cannot_delete_missing_timestamp"))
 				break
 			}
 
 			if (typeof message.messageTs !== "number") {
-				await vscode.window.showErrorMessage(t("common:errors.message.cannot_delete_invalid_timestamp"))
+				await getHost().notifier.error(t("common:errors.message.cannot_delete_invalid_timestamp"))
 				break
 			}
 
@@ -2427,7 +2428,7 @@ export const webviewMessageHandler = async (
 				provider.log(
 					`Error get list api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 				)
-				vscode.window.showErrorMessage(t("common:errors.list_api_config"))
+				getHost().notifier.error(t("common:errors.list_api_config"))
 			}
 			break
 
@@ -2445,7 +2446,7 @@ export const webviewMessageHandler = async (
 					provider.log(
 						`Failed to update timeout for ${message.serverName}: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 					)
-					vscode.window.showErrorMessage(t("common:errors.update_server_timeout"))
+					getHost().notifier.error(t("common:errors.update_server_timeout"))
 				}
 			}
 			break
@@ -2463,7 +2464,7 @@ export const webviewMessageHandler = async (
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error)
 					provider.log(`Failed to set group for tool ${message.toolName}: ${errorMessage}`)
-					vscode.window.showErrorMessage(errorMessage)
+					getHost().notifier.error(errorMessage)
 				}
 			}
 			break
@@ -2480,7 +2481,7 @@ export const webviewMessageHandler = async (
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error)
 					provider.log(`Failed to update config for ${message.serverName}: ${errorMessage}`)
-					vscode.window.showErrorMessage(errorMessage)
+					getHost().notifier.error(errorMessage)
 				}
 			}
 			break
@@ -2579,7 +2580,7 @@ export const webviewMessageHandler = async (
 					} catch (error) {
 						provider.debug?.(`Failed to delete rules folder for mode ${message.slug}: ${error}`)
 						// Notify the user about the failure
-						vscode.window.showErrorMessage(
+						getHost().notifier.error(
 							t("common:errors.delete_rules_folder_failed", {
 								rulesFolderPath,
 								error: error instanceof Error ? error.message : String(error),
@@ -2638,7 +2639,7 @@ export const webviewMessageHandler = async (
 							})
 
 							// Show info message
-							vscode.window.showInformationMessage(t("common:info.mode_exported", { mode: message.slug }))
+							getHost().notifier.info(t("common:info.mode_exported", { mode: message.slug }))
 						} else {
 							// User cancelled the save dialog
 							provider.postMessageToWebview({
@@ -2728,7 +2729,7 @@ export const webviewMessageHandler = async (
 						})
 
 						// Show success message
-						vscode.window.showInformationMessage(t("common:info.mode_imported"))
+						getHost().notifier.info(t("common:info.mode_imported"))
 					} else {
 						// Send error message to webview
 						provider.postMessageToWebview({
@@ -2738,7 +2739,7 @@ export const webviewMessageHandler = async (
 						})
 
 						// Show error message
-						vscode.window.showErrorMessage(t("common:errors.mode_import_failed", { error: result.error }))
+						getHost().notifier.error(t("common:errors.mode_import_failed", { error: result.error }))
 					}
 				} else {
 					// User cancelled the file dialog - reset the importing state
@@ -2760,7 +2761,7 @@ export const webviewMessageHandler = async (
 				})
 
 				// Show error message
-				vscode.window.showErrorMessage(t("common:errors.mode_import_failed", { error: errorMessage }))
+				getHost().notifier.error(t("common:errors.mode_import_failed", { error: errorMessage }))
 			}
 			break
 		case "checkRulesDirectory":
@@ -2808,11 +2809,11 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "shoferCloudSignIn": {
-			vscode.window.showErrorMessage("Cloud services have been removed.")
+			getHost().notifier.error("Cloud services have been removed.")
 			break
 		}
 		case "cloudLandingPageSignIn": {
-			vscode.window.showErrorMessage("Cloud services have been removed.")
+			getHost().notifier.error("Cloud services have been removed.")
 			break
 		}
 		case "shoferCloudSignOut": {
@@ -2830,18 +2831,18 @@ export const webviewMessageHandler = async (
 				openAiCodexOAuthManager
 					.waitForCallback()
 					.then(async () => {
-						vscode.window.showInformationMessage("Successfully signed in to OpenAI Codex")
+						getHost().notifier.info("Successfully signed in to OpenAI Codex")
 						await provider.postInitState()
 					})
 					.catch((error) => {
 						provider.log(`OpenAI Codex OAuth callback failed: ${error}`)
 						if (!String(error).includes("timed out")) {
-							vscode.window.showErrorMessage(`OpenAI Codex sign in failed: ${error.message || error}`)
+							getHost().notifier.error(`OpenAI Codex sign in failed: ${error.message || error}`)
 						}
 					})
 			} catch (error) {
 				provider.log(`OpenAI Codex OAuth failed: ${error}`)
-				vscode.window.showErrorMessage("OpenAI Codex sign in failed.")
+				getHost().notifier.error("OpenAI Codex sign in failed.")
 			}
 			break
 		}
@@ -2849,11 +2850,11 @@ export const webviewMessageHandler = async (
 			try {
 				const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
 				await openAiCodexOAuthManager.clearCredentials()
-				vscode.window.showInformationMessage("Signed out from OpenAI Codex")
+				getHost().notifier.info("Signed out from OpenAI Codex")
 				await provider.postInitState()
 			} catch (error) {
 				provider.log(`OpenAI Codex sign out failed: ${error}`)
-				vscode.window.showErrorMessage("OpenAI Codex sign out failed.")
+				getHost().notifier.error("OpenAI Codex sign out failed.")
 			}
 			break
 		}
@@ -2868,7 +2869,7 @@ export const webviewMessageHandler = async (
 		case "shoferCloudManualUrl": {
 			try {
 				if (!message.text) {
-					vscode.window.showErrorMessage(t("common:errors.manual_url_empty"))
+					getHost().notifier.error(t("common:errors.manual_url_empty"))
 					break
 				}
 
@@ -2890,7 +2891,7 @@ export const webviewMessageHandler = async (
 				}
 
 				// Cloud auth callback no longer supported
-				vscode.window.showErrorMessage("Cloud services have been removed.")
+				getHost().notifier.error("Cloud services have been removed.")
 
 				await provider.postInitState()
 			} catch (error) {
@@ -2898,7 +2899,7 @@ export const webviewMessageHandler = async (
 				const errorMessage = error instanceof Error ? error.message : t("common:errors.manual_url_auth_failed")
 
 				// Show error message through VS Code UI
-				vscode.window.showErrorMessage(`${t("common:errors.manual_url_auth_error")}: ${errorMessage}`)
+				getHost().notifier.error(`${t("common:errors.manual_url_auth_error")}: ${errorMessage}`)
 			}
 
 			break
@@ -3453,7 +3454,7 @@ export const webviewMessageHandler = async (
 					await provider.postInitState()
 				} catch (error) {
 					webviewLog.error("Marketplace: Error filtering items:", error)
-					vscode.window.showErrorMessage("Failed to filter marketplace items")
+					getHost().notifier.error("Failed to filter marketplace items")
 				}
 			}
 			break
@@ -3511,7 +3512,7 @@ export const webviewMessageHandler = async (
 					webviewLog.error(`Error removing marketplace item: ${error}`)
 
 					// Show error message to user
-					vscode.window.showErrorMessage(
+					getHost().notifier.error(
 						`Failed to remove marketplace item: ${error instanceof Error ? error.message : String(error)}`,
 					)
 
@@ -3530,7 +3531,7 @@ export const webviewMessageHandler = async (
 					: "Missing required parameters for marketplace item removal"
 				webviewLog.error(errorMessage)
 
-				vscode.window.showErrorMessage(errorMessage)
+				getHost().notifier.error(errorMessage)
 
 				if (message.mpItem?.id) {
 					provider.postMessageToWebview({
@@ -3556,7 +3557,7 @@ export const webviewMessageHandler = async (
 					)
 				} catch (error) {
 					webviewLog.error(`Error installing marketplace item with parameters: ${error}`)
-					vscode.window.showErrorMessage(
+					getHost().notifier.error(
 						`Failed to install marketplace item: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				}
@@ -3633,14 +3634,14 @@ export const webviewMessageHandler = async (
 					if (command && command.filePath) {
 						openFile(command.filePath)
 					} else {
-						vscode.window.showErrorMessage(t("common:errors.command_not_found", { name: message.text }))
+						getHost().notifier.error(t("common:errors.command_not_found", { name: message.text }))
 					}
 				}
 			} catch (error) {
 				provider.log(
 					`Error opening command file: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 				)
-				vscode.window.showErrorMessage(t("common:errors.open_command_file"))
+				getHost().notifier.error(t("common:errors.open_command_file"))
 			}
 			break
 		}
@@ -3655,12 +3656,12 @@ export const webviewMessageHandler = async (
 						await fs.unlink(command.filePath)
 						provider.log(`Deleted command file: ${command.filePath}`)
 					} else {
-						vscode.window.showErrorMessage(t("common:errors.command_not_found", { name: message.text }))
+						getHost().notifier.error(t("common:errors.command_not_found", { name: message.text }))
 					}
 				}
 			} catch (error) {
 				provider.log(`Error deleting command: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
-				vscode.window.showErrorMessage(t("common:errors.delete_command"))
+				getHost().notifier.error(t("common:errors.delete_command"))
 			}
 			break
 		}
@@ -3681,13 +3682,13 @@ export const webviewMessageHandler = async (
 					commandsDir = path.join(globalConfigDir, "commands")
 				} else {
 					if (!vscode.workspace.workspaceFolders?.length) {
-						vscode.window.showErrorMessage(t("common:errors.no_workspace"))
+						getHost().notifier.error(t("common:errors.no_workspace"))
 						return
 					}
 					// Project commands
 					const workspaceRoot = getCurrentCwd()
 					if (!workspaceRoot) {
-						vscode.window.showErrorMessage(t("common:errors.no_workspace_for_project_command"))
+						getHost().notifier.error(t("common:errors.no_workspace_for_project_command"))
 						break
 					}
 					commandsDir = path.join(workspaceRoot, ".shofer", "commands")
@@ -3750,7 +3751,7 @@ export const webviewMessageHandler = async (
 						.then(() => true)
 						.catch(() => false)
 				) {
-					vscode.window.showErrorMessage(t("common:errors.command_already_exists", { commandName }))
+					getHost().notifier.error(t("common:errors.command_already_exists", { commandName }))
 					break
 				}
 
@@ -3779,7 +3780,7 @@ export const webviewMessageHandler = async (
 				})
 			} catch (error) {
 				provider.log(`Error creating command: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`)
-				vscode.window.showErrorMessage(t("common:errors.create_command_failed"))
+				getHost().notifier.error(t("common:errors.create_command_failed"))
 			}
 			break
 		}
@@ -3797,7 +3798,7 @@ export const webviewMessageHandler = async (
 		}
 		case "showMdmAuthRequiredNotification": {
 			// Show notification that organization requires authentication
-			vscode.window.showWarningMessage(t("common:mdm.info.organization_requires_auth"))
+			getHost().notifier.warn(t("common:mdm.info.organization_requires_auth"))
 			break
 		}
 
@@ -3895,7 +3896,7 @@ export const webviewMessageHandler = async (
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error)
 					provider.log(`Error opening markdown preview: ${errorMessage}`)
-					vscode.window.showErrorMessage(`Failed to open markdown preview: ${errorMessage}`)
+					getHost().notifier.error(`Failed to open markdown preview: ${errorMessage}`)
 				}
 			}
 			break
@@ -3937,7 +3938,7 @@ export const webviewMessageHandler = async (
 		case "openDebugUiHistory": {
 			const currentTask = provider.getCurrentTask()
 			if (!currentTask) {
-				vscode.window.showErrorMessage("No active task to view history for")
+				getHost().notifier.error("No active task to view history for")
 				break
 			}
 
@@ -3952,7 +3953,7 @@ export const webviewMessageHandler = async (
 
 				// Check if file exists
 				if (!(await fileExistsAtPath(sourceFilePath))) {
-					vscode.window.showErrorMessage(`File not found: ${fileName}`)
+					getHost().notifier.error(`File not found: ${fileName}`)
 					break
 				}
 
@@ -3974,7 +3975,7 @@ export const webviewMessageHandler = async (
 					}
 				}
 				if (parseError) {
-					vscode.window.showErrorMessage(`Failed to parse ${fileName}`)
+					getHost().notifier.error(`Failed to parse ${fileName}`)
 					break
 				}
 
@@ -3995,7 +3996,7 @@ export const webviewMessageHandler = async (
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
 				provider.log(`Error opening debug history: ${errorMessage}`)
-				vscode.window.showErrorMessage(`Failed to open debug history: ${errorMessage}`)
+				getHost().notifier.error(`Failed to open debug history: ${errorMessage}`)
 			}
 			break
 		}
@@ -4003,7 +4004,7 @@ export const webviewMessageHandler = async (
 		case "downloadErrorDiagnostics": {
 			const currentTask = provider.getCurrentTask()
 			if (!currentTask) {
-				vscode.window.showErrorMessage("No active task to generate diagnostics for")
+				getHost().notifier.error("No active task to generate diagnostics for")
 				break
 			}
 
@@ -4567,7 +4568,7 @@ export const webviewMessageHandler = async (
 						worktreeDir = createResult.worktree.path
 					} else {
 						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-						vscode.window.showErrorMessage(`Failed to create worktree: ${createResult.message}`)
+						getHost().notifier.error(`Failed to create worktree: ${createResult.message}`)
 						break
 					}
 				}

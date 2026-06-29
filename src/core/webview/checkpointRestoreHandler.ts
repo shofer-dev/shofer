@@ -2,6 +2,7 @@ import { Task } from "../task/Task"
 import { ShoferProvider } from "./ShoferProvider"
 import { saveTaskMessages } from "../task-persistence"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import pWaitFor from "p-wait-for"
 import { t } from "../../i18n"
 import { webviewLog } from "../../utils/logging/subsystems"
@@ -81,7 +82,7 @@ export async function handleCheckpointRestoreOperation(config: CheckpointRestore
 		// will trigger reinitialization, which will process pendingEditAfterRestore
 	} catch (error) {
 		webviewLog.error(`Error in checkpoint restore (${operation}):`, error)
-		vscode.window.showErrorMessage(
+		getHost().notifier.error(
 			`Error during checkpoint restore: ${error instanceof Error ? error.message : String(error)}`,
 		)
 		throw error
@@ -102,7 +103,7 @@ export async function waitForShoferInitialization(
 		})
 		return true
 	} catch (error) {
-		vscode.window.showErrorMessage(t("common:errors.checkpoint_timeout"))
+		getHost().notifier.error(t("common:errors.checkpoint_timeout"))
 		return false
 	}
 }

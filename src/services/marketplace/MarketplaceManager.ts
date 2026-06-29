@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import * as yaml from "yaml"
 
 import type { MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"
@@ -135,11 +136,11 @@ export class MarketplaceManager {
 	): Promise<string> {
 		const { target = "project", parameters } = options || {}
 
-		vscode.window.showInformationMessage(t("marketplace:installation.installing", { itemName: item.name }))
+		getHost().notifier.info(t("marketplace:installation.installing", { itemName: item.name }))
 
 		try {
 			const result = await this.installer.installItem(item, { target, parameters })
-			vscode.window.showInformationMessage(t("marketplace:installation.installSuccess", { itemName: item.name }))
+			getHost().notifier.info(t("marketplace:installation.installSuccess", { itemName: item.name }))
 
 			// Capture telemetry for successful installation
 			const telemetryProperties: Record<string, any> = {}
@@ -176,9 +177,7 @@ export class MarketplaceManager {
 			return result.filePath
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			vscode.window.showErrorMessage(
-				t("marketplace:installation.installError", { itemName: item.name, errorMessage }),
-			)
+			getHost().notifier.error(t("marketplace:installation.installError", { itemName: item.name, errorMessage }))
 			throw error
 		}
 	}
@@ -189,19 +188,17 @@ export class MarketplaceManager {
 	): Promise<void> {
 		const { target = "project" } = options || {}
 
-		vscode.window.showInformationMessage(t("marketplace:installation.removing", { itemName: item.name }))
+		getHost().notifier.info(t("marketplace:installation.removing", { itemName: item.name }))
 
 		try {
 			await this.installer.removeItem(item, { target })
-			vscode.window.showInformationMessage(t("marketplace:installation.removeSuccess", { itemName: item.name }))
+			getHost().notifier.info(t("marketplace:installation.removeSuccess", { itemName: item.name }))
 
 			// Capture telemetry for successful removal
 			TelemetryService.instance.captureMarketplaceItemRemoved(item.id, item.type, item.name, target)
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error)
-			vscode.window.showErrorMessage(
-				t("marketplace:installation.removeError", { itemName: item.name, errorMessage }),
-			)
+			getHost().notifier.error(t("marketplace:installation.removeError", { itemName: item.name, errorMessage }))
 			throw error
 		}
 	}

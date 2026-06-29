@@ -148,6 +148,7 @@ vi.mock("fs/promises", () => {
 })
 
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
@@ -172,6 +173,7 @@ import { resolveImageMentions } from "../../mentions/resolveImageMentions"
 
 describe("webviewMessageHandler - requestLmStudioModels", () => {
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 		mockShoferProvider.getState = vi.fn().mockResolvedValue({
 			apiConfiguration: {

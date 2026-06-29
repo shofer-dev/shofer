@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../host/host-bridge"
 import * as v8 from "v8"
 import * as path from "path"
 import fs from "fs/promises"
@@ -249,15 +250,15 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		const failed = managers.filter((mgr) => mgr.state === "Error")
 		if (failed.length > 0) {
 			const detail = failed[0].stateMessage || "Unknown error"
-			vscode.window.showErrorMessage(`Live Memory failed to start: ${detail}`)
+			getHost().notifier.error(`Live Memory failed to start: ${detail}`)
 			return
 		}
 		const standby = managers.filter((mgr) => mgr.state === "Standby")
 		if (standby.length === managers.length && managers.length > 0) {
-			vscode.window.showWarningMessage(`Live Memory is on standby: ${standby[0].stateMessage}`)
+			getHost().notifier.warn(`Live Memory is on standby: ${standby[0].stateMessage}`)
 			return
 		}
-		vscode.window.showInformationMessage("Live Memory started.")
+		getHost().notifier.info("Live Memory started.")
 	},
 	"liveMemory.stop": () => {
 		// Cancel pending work, then dispose every instance. disposeAll() calls
@@ -268,12 +269,12 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 			mgr.cancelAllQuestions()
 		}
 		LiveMemoryManager.disposeAll()
-		vscode.window.showInformationMessage("Live Memory stopped.")
+		getHost().notifier.info("Live Memory stopped.")
 	},
 	"liveMemory.clearContext": async () => {
 		const managers = LiveMemoryManager.getAllInstances()
 		await Promise.all(managers.map((mgr) => mgr.clearContext()))
-		vscode.window.showInformationMessage("Live Memory context cleared.")
+		getHost().notifier.info("Live Memory context cleared.")
 	},
 	"liveMemory.openSettings": () => {
 		// Live Memory settings live in ContextProxy (Typed Settings Rule), not
@@ -296,24 +297,22 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 	startGitIndexing: async () => {
 		const manager = GitIndexManager.getInstance(context)
 		if (!manager) {
-			vscode.window.showErrorMessage("Cannot start git indexing: No workspace folder open.")
+			getHost().notifier.error("Cannot start git indexing: No workspace folder open.")
 			return
 		}
 		if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
 			await manager.initialize(provider.contextProxy)
 			manager.startIndexing()
-			vscode.window.showInformationMessage("Git history indexing started.")
+			getHost().notifier.info("Git history indexing started.")
 		} else {
-			vscode.window.showWarningMessage(
-				"Git indexing is not enabled or not configured. Check Settings → RAG Indexer.",
-			)
+			getHost().notifier.warn("Git indexing is not enabled or not configured. Check Settings → RAG Indexer.")
 		}
 	},
 	stopGitIndexing: () => {
 		const manager = GitIndexManager.getInstance(context)
 		if (manager) {
 			manager.stopIndexing()
-			vscode.window.showInformationMessage("Git history indexing stopped.")
+			getHost().notifier.info("Git history indexing stopped.")
 		}
 	},
 	heapSnapshot: async () => {
@@ -329,17 +328,17 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		const targetPath = path.join(snapshotDir, `heap-${timestamp}.heapsnapshot`)
 		const filePath = writeHeapSnapshot(targetPath)
 		outputChannel.appendLine(`[heapSnapshot] Heap snapshot written to: ${filePath}`)
-		vscode.window.showInformationMessage(`Heap snapshot written to ${filePath}`)
+		getHost().notifier.info(`Heap snapshot written to ${filePath}`)
 	},
 
 	clearGitIndexData: async () => {
 		const manager = GitIndexManager.getInstance(context)
 		if (!manager) {
-			vscode.window.showErrorMessage("Cannot clear git index: No workspace folder open.")
+			getHost().notifier.error("Cannot clear git index: No workspace folder open.")
 			return
 		}
 		await manager.clearIndexData()
-		vscode.window.showInformationMessage("Git history index cleared.")
+		getHost().notifier.info("Git history index cleared.")
 	},
 
 	// ─── Webview ──────────────────────────────────────────────────────────
@@ -373,10 +372,10 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		// Show a confirmation dialog before nuking the VS Code window.
 		// This is a last-resort recovery for when the webview iframe is
 		// stuck at the workbench level and refreshWebview() didn't help.
-		const answer = await vscode.window.showWarningMessage(
+		const answer = await getHost().notifier.showChoice(
 			"Reload the entire VS Code window? All unsaved editor changes will be lost.",
-			{ modal: true },
-			"Reload Window",
+			["Reload Window"],
+			{ severity: "warn", modal: true },
 		)
 		if (answer === "Reload Window") {
 			await vscode.commands.executeCommand("workbench.action.reloadWindow")

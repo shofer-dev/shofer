@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import { ShoferProvider } from "../ShoferProvider"
 import { MessageManager } from "../../message-manager"
 
@@ -70,6 +71,7 @@ describe("webviewMessageHandler delete functionality", () => {
 	let getCurrentTaskMock: any
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		// Reset all mocks
 		vi.clearAllMocks()
 

@@ -2,6 +2,7 @@ import * as path from "path"
 import * as os from "os"
 import * as fs from "fs/promises"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import { getTaskDirectoryPath } from "../../utils/storage"
 
@@ -43,7 +44,7 @@ export async function generateErrorDiagnostics(params: GenerateDiagnosticsParams
 		try {
 			history = await readApiMessages({ taskId, globalStoragePath })
 		} catch (e) {
-			vscode.window.showErrorMessage("Failed to read api_conversation_history.jsonl")
+			getHost().notifier.error("Failed to read api_conversation_history.jsonl")
 			log(`Failed to read api_conversation_history.jsonl: ${e instanceof Error ? e.message : String(e)}`)
 		}
 
@@ -81,7 +82,7 @@ export async function generateErrorDiagnostics(params: GenerateDiagnosticsParams
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		log(`Error generating diagnostics: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to generate diagnostics: ${errorMessage}`)
+		getHost().notifier.error(`Failed to generate diagnostics: ${errorMessage}`)
 		return { success: false, error: errorMessage }
 	}
 }

@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
@@ -354,7 +355,7 @@ export class McpHub {
 			} catch (parseError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
 				mcpSysLog.error(errorMessage, parseError)
-				vscode.window.showErrorMessage(errorMessage)
+				getHost().notifier.error(errorMessage)
 				return
 			}
 
@@ -364,7 +365,7 @@ export class McpHub {
 				const errorMessages = result.error.errors
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
-				vscode.window.showErrorMessage(t("mcp:errors.invalid_settings_validation", { errorMessages }))
+				getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
 				return
 			}
 
@@ -375,7 +376,7 @@ export class McpHub {
 				// File was deleted, clean up project MCP servers
 				await this.cleanupProjectMcpServers()
 				await this.notifyWebviewOfServerChanges()
-				vscode.window.showInformationMessage(t("mcp:info.project_config_deleted"))
+				getHost().notifier.info(t("mcp:info.project_config_deleted"))
 			} else {
 				this.showErrorMessage(t("mcp:errors.failed_update_project"), error)
 			}
@@ -419,7 +420,7 @@ export class McpHub {
 			// Clean up all project MCP servers when the file is deleted
 			await this.cleanupProjectMcpServers()
 			await this.notifyWebviewOfServerChanges()
-			vscode.window.showInformationMessage(t("mcp:info.project_config_deleted"))
+			getHost().notifier.info(t("mcp:info.project_config_deleted"))
 		})
 
 		this.disposables.push(
@@ -440,7 +441,7 @@ export class McpHub {
 			} catch (parseError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
 				mcpSysLog.error(errorMessage, parseError)
-				vscode.window.showErrorMessage(errorMessage)
+				getHost().notifier.error(errorMessage)
 				return
 			}
 
@@ -454,7 +455,7 @@ export class McpHub {
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
 				mcpSysLog.error("Invalid project MCP settings format:", errorMessages)
-				vscode.window.showErrorMessage(t("mcp:errors.invalid_settings_validation", { errorMessages }))
+				getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
 			}
 		} catch (error) {
 			this.showErrorMessage(t("mcp:errors.failed_update_project"), error)
@@ -619,7 +620,7 @@ export class McpHub {
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
 				mcpSysLog.error(`Invalid ${source} MCP settings format:`, errorMessages)
-				vscode.window.showErrorMessage(t("mcp:errors.invalid_settings_validation", { errorMessages }))
+				getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
 
 				if (source === "global") {
 					// Still try to connect with the raw config, but show warnings
@@ -634,7 +635,7 @@ export class McpHub {
 			if (error instanceof SyntaxError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
 				mcpSysLog.error(errorMessage, error)
-				vscode.window.showErrorMessage(errorMessage)
+				getHost().notifier.error(errorMessage)
 			} else {
 				this.showErrorMessage(`Failed to initialize ${source} MCP servers`, error)
 			}
@@ -1388,7 +1389,7 @@ export class McpHub {
 		const connection = this.findConnection(serverName, source)
 		const config = connection?.server.config
 		if (config) {
-			vscode.window.showInformationMessage(t("mcp:info.server_restarting", { serverName }))
+			getHost().notifier.info(t("mcp:info.server_restarting", { serverName }))
 			connection.server.status = "connecting"
 			connection.server.error = ""
 			await this.notifyWebviewOfServerChanges()
@@ -1403,7 +1404,7 @@ export class McpHub {
 
 					// Try to connect again using validated config
 					await this.connectToServer(serverName, validatedConfig, connection.server.source || "global")
-					vscode.window.showInformationMessage(t("mcp:info.server_connected", { serverName }))
+					getHost().notifier.info(t("mcp:info.server_connected", { serverName }))
 				} catch (validationError) {
 					this.showErrorMessage(`Invalid configuration for MCP server "${serverName}"`, validationError)
 				}
@@ -1871,9 +1872,9 @@ export class McpHub {
 				// Update server connections with the correct source
 				await this.updateServerConnections(config.mcpServers, serverSource)
 
-				vscode.window.showInformationMessage(t("mcp:info.server_deleted", { serverName }))
+				getHost().notifier.info(t("mcp:info.server_deleted", { serverName }))
 			} else {
-				vscode.window.showWarningMessage(t("mcp:info.server_not_found", { serverName }))
+				getHost().notifier.warn(t("mcp:info.server_not_found", { serverName }))
 			}
 		} catch (error) {
 			this.showErrorMessage(`Failed to delete MCP server ${serverName}`, error)
@@ -2203,7 +2204,7 @@ export class McpHub {
 			// If there were errors, notify the user
 			if (disconnectionErrors.length > 0) {
 				const errorSummary = disconnectionErrors.map((e) => `${e.serverName}: ${e.error}`).join("\n")
-				vscode.window.showWarningMessage(
+				getHost().notifier.warn(
 					t("mcp:errors.disconnect_servers_partial", {
 						count: disconnectionErrors.length,
 						errors: errorSummary,
@@ -2216,7 +2217,7 @@ export class McpHub {
 				await this.refreshAllConnections()
 			} catch (error) {
 				mcpSysLog.error(`Failed to refresh MCP connections after disabling: ${error}`)
-				vscode.window.showErrorMessage(t("mcp:errors.refresh_after_disable"))
+				getHost().notifier.error(t("mcp:errors.refresh_after_disable"))
 			}
 		} else {
 			// If MCP is being enabled, reconnect all servers
@@ -2224,7 +2225,7 @@ export class McpHub {
 				await this.refreshAllConnections()
 			} catch (error) {
 				mcpSysLog.error(`Failed to refresh MCP connections after enabling: ${error}`)
-				vscode.window.showErrorMessage(t("mcp:errors.refresh_after_enable"))
+				getHost().notifier.error(t("mcp:errors.refresh_after_enable"))
 			}
 		}
 	}

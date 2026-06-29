@@ -3,6 +3,7 @@ import { handleCheckpointRestoreOperation } from "../checkpointRestoreHandler"
 import { saveTaskMessages } from "../../task-persistence"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 // Mock dependencies
 vi.mock("../../task-persistence", () => ({
@@ -20,6 +21,7 @@ describe("checkpointRestoreHandler", () => {
 	let mockShofer: any
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 
 		// Setup mock Shofer instance

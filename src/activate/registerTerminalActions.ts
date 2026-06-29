@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../host/host-bridge"
 
 import { TerminalActionId, TerminalActionPromptType } from "@shofer/types"
 
@@ -27,7 +28,7 @@ const registerTerminalAction = (
 			}
 
 			if (!content) {
-				vscode.window.showWarningMessage(t("common:warnings.no_terminal_content"))
+				getHost().notifier.warn(t("common:warnings.no_terminal_content"))
 				return
 			}
 

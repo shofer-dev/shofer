@@ -8,6 +8,7 @@ import delay from "delay"
 import axios from "axios"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import {
 	type TaskProviderLike,
@@ -666,7 +667,7 @@ export class ShoferProvider
 				}
 			} catch (error) {
 				this.log(`Failed to load full model details for LM Studio: ${error}`)
-				vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error))
+				getHost().notifier.error(error instanceof Error ? error.message : String(error))
 			}
 		}
 	}
@@ -1291,7 +1292,7 @@ export class ShoferProvider
 		} catch (error) {
 			if (error instanceof OrganizationAllowListViolationError) {
 				// Errors from terminal commands seem to get swallowed / ignored.
-				vscode.window.showErrorMessage(error.message)
+				getHost().notifier.error(error.message)
 			}
 
 			throw error
@@ -2140,7 +2141,7 @@ export class ShoferProvider
 		try {
 			await axios.get(`http://${localServerUrl}`)
 		} catch (error) {
-			vscode.window.showErrorMessage(t("common:errors.hmr_not_running"))
+			getHost().notifier.error(t("common:errors.hmr_not_running"))
 			return this.getHtmlContent(webview)
 		}
 
@@ -2700,7 +2701,7 @@ export class ShoferProvider
 				`Error create new api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
 			)
 
-			vscode.window.showErrorMessage(t("common:errors.create_api_config"))
+			getHost().notifier.error(t("common:errors.create_api_config"))
 			return undefined
 		}
 	}
@@ -3230,7 +3231,7 @@ export class ShoferProvider
 		// The user cancelled mid-walk: `trace` is a partial tree — abandon it
 		// rather than prompting to save an incomplete export.
 		if (cancelled) {
-			vscode.window.showInformationMessage(t("common:info.export_task_json_cancelled"))
+			getHost().notifier.info(t("common:info.export_task_json_cancelled"))
 			return
 		}
 
@@ -3551,7 +3552,7 @@ export class ShoferProvider
 
 			// Show user-friendly error notification for network issues
 			if (error instanceof Error && error.message.includes("timeout")) {
-				vscode.window.showWarningMessage(
+				getHost().notifier.warn(
 					"Marketplace data could not be loaded due to network restrictions. Core functionality remains available.",
 				)
 			}
@@ -4316,10 +4317,10 @@ export class ShoferProvider
 	// dev
 
 	async resetState() {
-		const answer = await vscode.window.showInformationMessage(
+		const answer = await getHost().notifier.showChoice(
 			t("common:confirmation.reset_state"),
+			[t("common:answers.yes")],
 			{ modal: true },
-			t("common:answers.yes"),
 		)
 
 		if (answer !== t("common:answers.yes")) {
@@ -5401,7 +5402,7 @@ export class ShoferProvider
 				this.log(`[createManagedTask] Restored previous task ${poppedTask.taskId} after creation failure`)
 			}
 			this.log(`Failed to create managed task: ${error}`)
-			vscode.window.showErrorMessage(
+			getHost().notifier.error(
 				`Failed to create managed task: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
@@ -5490,7 +5491,7 @@ export class ShoferProvider
 			await this.taskManager.startManagedTask(taskId)
 		} catch (error) {
 			this.log(`Failed to start managed task: ${error}`)
-			vscode.window.showErrorMessage(
+			getHost().notifier.error(
 				`Failed to start managed task: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}

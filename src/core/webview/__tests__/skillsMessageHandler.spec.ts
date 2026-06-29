@@ -34,6 +34,7 @@ vi.mock("../../../i18n", () => ({
 }))
 
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import { openFile } from "../../../integrations/misc/open-file"
 import {
 	handleRequestSkills,
@@ -93,6 +94,7 @@ describe("skillsMessageHandler", () => {
 	]
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 	})
 

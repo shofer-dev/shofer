@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 
 import type { SkillMetadata, WebviewMessage } from "@shofer/types"
 
@@ -80,7 +81,7 @@ export async function handleCreateSkill(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		provider.log(`Error creating skill: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to create skill: ${errorMessage}`)
+		getHost().notifier.error(`Failed to create skill: ${errorMessage}`)
 		return undefined
 	}
 }
@@ -116,7 +117,7 @@ export async function handleDeleteSkill(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		provider.log(`Error deleting skill: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to delete skill: ${errorMessage}`)
+		getHost().notifier.error(`Failed to delete skill: ${errorMessage}`)
 		return undefined
 	}
 }
@@ -152,7 +153,7 @@ export async function handleMoveSkill(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		provider.log(`Error moving skill: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to move skill: ${errorMessage}`)
+		getHost().notifier.error(`Failed to move skill: ${errorMessage}`)
 		return undefined
 	}
 }
@@ -187,7 +188,7 @@ export async function handleUpdateSkillModes(
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		provider.log(`Error updating skill modes: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to update skill modes: ${errorMessage}`)
+		getHost().notifier.error(`Failed to update skill modes: ${errorMessage}`)
 		return undefined
 	}
 }
@@ -219,6 +220,6 @@ export async function handleOpenSkillFile(provider: ShoferProvider, message: Web
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		provider.log(`Error opening skill file: ${errorMessage}`)
-		vscode.window.showErrorMessage(`Failed to open skill file: ${errorMessage}`)
+		getHost().notifier.error(`Failed to open skill file: ${errorMessage}`)
 	}
 }
