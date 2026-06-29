@@ -82,32 +82,16 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           modules (`GROUP_GATE`/`isGroupAutoApproved`, `computeToolAccess`); wrapping
           them in an explicit Rule[] object layer is indirection without behavior gain.
           §4 is functionally complete.
-- 🚧 **§5 SQLite/event-sourced persistence** (XL; live user-data path — staged)
-    - ✅ Step 1: `MessagePersistencePort` interface + `FileSystemMessagePersistence`
-      adapter (`task-persistence/PersistencePort.ts`) — the swap seam over the
-      existing JSONL functions, behavior-preserving (round-trip test). Also the
-      seam §9's host-agnostic core needs.
-    - ✅ Step 2: Task.ts now reads/writes all api/UI messages through the port (a
-      lazy `this.persistence` getter), replacing the ~10 direct
-      append/save/read/dispose call sites. Behavior-preserving (270 task/persistence
-      tests pass; the two persistence specs updated to mock the port backend).
-    - ✅ Step 3 (backend): `SqliteMessagePersistence` (`node:sqlite`, no native dep)
-      implements the port — rows keyed by (task_id, kind, ts) with ts-dedupe
-      matching the flat-file read path; tail/compaction supported. Includes the
-      Part E #5 **one-time importer** (lazy per-task: first read of an empty DB
-      imports existing flat-file history). `createMessagePersistence(path, backend)`
-      feature-detects `node:sqlite` and **falls back to flat-file**, so opting in
-      can't break a host that lacks it. 7 tests (round-trip/dedupe/tail/compact/
-      import/factory) run on Node 22; skip where node:sqlite is absent.
-    - ✅ Step 3 (wired, opt-in): Task resolves its backend via
-      `createMessagePersistence` (async, cached). `SHOFER_MESSAGE_BACKEND=sqlite`
-      opts in (feature-detect + flat-file fallback + lazy import); default stays
-      flat-file. Docs: `configuration.md`. 277 task/persistence tests pass.
-    - ⬜ Step 3 (rollout): make SQLite the default + retire the flat-file perf
-      machinery (debounced saves / append logs / tail reads). DELIBERATELY not
-      flipped — needs extension-host runtime verification (Electron Node may lack
-      `node:sqlite` → may require bundling `better-sqlite3`) before it's the default
-      on user data. A user-facing setting (vs the env var) is the thin follow-on.
+- ✅ **§5 SQLite persistence — DONE (flat-file fully removed)**
+    - SQLite (`node:sqlite`) is the **sole** message backend: `message-store.ts`
+      (rows by task_id/kind/ts, last-write-wins per ts) + `apiMessages`/`taskMessages`
+      free functions delegating to it (so all ~13 callers switched transparently) +
+      a single `SqliteMessagePersistence` port adapter (the §9/§11 seam).
+    - Removed prior architecture: `jsonlLog.ts`, the JSONL append-log/atomic-rewrite/
+      tail-window/legacy-file logic, Task's debounced compaction
+      (`COMPACTION_APPEND_THRESHOLD`/`serializeJsonLines`), and the migration
+      scaffolding (FileSystemMessagePersistence, createMessagePersistence, the
+      env-var gate, the importer). Docs: `configuration.md`. Full suite green.
 - 🚧 **§6 Structured cancellation**
     - ✅ `utils/process-termination.ts` — reusable `terminateProcessTree` with a
       SIGTERM→grace→SIGKILL escalation over a process tree (injectable
