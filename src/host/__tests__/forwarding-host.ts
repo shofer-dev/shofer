@@ -14,6 +14,10 @@ export function installVsCodeForwardingHost(): void {
 	const base = createInMemoryHost()
 	setHost({
 		...base,
+		config: {
+			get: <T>(section: string, key: string, defaultValue: T): T =>
+				vscode.workspace.getConfiguration(section).get<T>(key, defaultValue) as T,
+		},
 		notifier: {
 			info: (m: string) => void vscode.window.showInformationMessage(m),
 			warn: (m: string) => void vscode.window.showWarningMessage(m),

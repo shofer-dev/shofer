@@ -124,6 +124,7 @@ const mockShofer = {
 import { newTaskTool } from "../NewTaskTool"
 import { getModeBySlug } from "../../../shared/modes"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 /**
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
@@ -156,6 +157,7 @@ const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 
 describe("newTaskTool", () => {
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 		mockAskApproval.mockResolvedValue(true)
 		vi.mocked(getModeBySlug).mockReturnValue({
@@ -681,6 +683,7 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 	 */
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vi.clearAllMocks()
 		mockAskApproval.mockResolvedValue(true)
 		vi.mocked(getModeBySlug).mockReturnValue({

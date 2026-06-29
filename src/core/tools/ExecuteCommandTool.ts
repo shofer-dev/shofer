@@ -1,6 +1,6 @@
 import fs from "fs/promises"
+import { getHost } from "../../host/host-bridge"
 import * as path from "path"
-import * as vscode from "vscode"
 
 import delay from "delay"
 
@@ -125,14 +125,14 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 				: (providerState?.terminalShellIntegrationDisabled ?? true)
 
 			// Get command execution timeout from VSCode configuration (in seconds)
-			const commandExecutionTimeoutSeconds = vscode.workspace
-				.getConfiguration(Package.name)
-				.get<number>("commandExecutionTimeout", 0)
+			const commandExecutionTimeoutSeconds = getHost().config.get<number>(
+				Package.name,
+				"commandExecutionTimeout",
+				0,
+			)
 
 			// Get command timeout allowlist from VSCode configuration
-			const commandTimeoutAllowlist = vscode.workspace
-				.getConfiguration(Package.name)
-				.get<string[]>("commandTimeoutAllowlist", [])
+			const commandTimeoutAllowlist = getHost().config.get<string[]>(Package.name, "commandTimeoutAllowlist", [])
 
 			// Check if command matches any prefix in the allowlist
 			const isCommandAllowlisted = commandTimeoutAllowlist.some((prefix) => command.startsWith(prefix.trim()))

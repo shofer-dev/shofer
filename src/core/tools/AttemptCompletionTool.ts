@@ -1,6 +1,5 @@
-import * as vscode from "vscode"
-
 import { ShoferEventName, type HistoryItem, type CompletionRating } from "@shofer/types"
+import { getHost } from "../../host/host-bridge"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
@@ -113,9 +112,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			return
 		}
 
-		const preventCompletionWithOpenTodos = vscode.workspace
-			.getConfiguration(Package.name)
-			.get<boolean>("preventCompletionWithOpenTodos", false)
+		const preventCompletionWithOpenTodos = getHost().config.get<boolean>(
+			Package.name,
+			"preventCompletionWithOpenTodos",
+			false,
+		)
 
 		const hasIncompleteTodos = task.todoList && task.todoList.some((todo) => todo.status !== "completed")
 

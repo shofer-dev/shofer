@@ -53,6 +53,7 @@ vi.mock("../../../shared/package", () => ({
 import { attemptCompletionTool, AttemptCompletionCallbacks } from "../AttemptCompletionTool"
 import { Task } from "../../task/Task"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 describe("attemptCompletionTool", () => {
 	let mockTask: Partial<Task>
@@ -64,6 +65,7 @@ describe("attemptCompletionTool", () => {
 	let mockGetConfiguration: ReturnType<typeof vi.fn>
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		mockCaptureTaskCompleted.mockReset()
 		mockOutputChannel.appendLine.mockClear()
 		mockPushToolResult = vi.fn()

@@ -2,6 +2,7 @@
 
 import { getApiRequestTimeout } from "../timeout-config"
 import * as vscode from "vscode"
+import { installVsCodeForwardingHost } from "../../../../host/__tests__/forwarding-host"
 
 // Mock vscode
 vitest.mock("vscode", () => ({
@@ -16,6 +17,7 @@ describe("getApiRequestTimeout", () => {
 	let mockGetConfig: any
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vitest.clearAllMocks()
 		mockGetConfig = vitest.fn()
 		;(vscode.workspace.getConfiguration as any).mockReturnValue({

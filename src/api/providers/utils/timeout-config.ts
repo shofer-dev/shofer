@@ -1,5 +1,5 @@
-import * as vscode from "vscode"
 import { Package } from "../../../shared/package"
+import { getHost } from "../../../host/host-bridge"
 
 /**
  * Gets the API request timeout from VSCode configuration with validation.
@@ -9,7 +9,7 @@ import { Package } from "../../../shared/package"
  */
 export function getApiRequestTimeout(): number | undefined {
 	// Get timeout with validation to ensure it's a valid non-negative number
-	const configTimeout = vscode.workspace.getConfiguration(Package.name).get<number>("apiRequestTimeout", 600)
+	const configTimeout = getHost().config.get<number>(Package.name, "apiRequestTimeout", 600)
 
 	// Validate that it's actually a number and not NaN
 	if (typeof configTimeout !== "number" || isNaN(configTimeout)) {

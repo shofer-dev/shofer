@@ -1,6 +1,5 @@
-import * as vscode from "vscode"
-
 import { TodoItem } from "@shofer/types"
+import { getHost } from "../../host/host-bridge"
 import type { HistoryItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
@@ -114,7 +113,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 			// global setting for that agent (undefined ⇒ inherit the global default).
 			const requireTodos =
 				task.agentContext?.require_todos ??
-				vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false)
+				getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false)
 
 			// Check if todos are required based on VSCode setting.
 			// Note: `undefined` means not provided, empty string is valid.
