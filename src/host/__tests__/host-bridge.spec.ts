@@ -18,7 +18,7 @@ describe("host-bridge accessor", () => {
 	it("returns the installed host and routes notifications through it", () => {
 		const notifier = new RecordingNotifier()
 		const base = createInMemoryHost()
-		const host: HostBridge = { notifier, fs: base.fs, config: base.config, env: base.env }
+		const host: HostBridge = { notifier, fs: base.fs, config: base.config, env: base.env, lsp: base.lsp }
 		setHost(host)
 		getHost().notifier.info("hello")
 		getHost().notifier.error("oops")

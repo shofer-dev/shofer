@@ -49,6 +49,49 @@ export interface HostConfig {
 	get<T>(section: string, key: string, defaultValue: T): T
 }
 
+/** Diagnostic severity, mirroring `vscode.DiagnosticSeverity` as a string. */
+export type HostDiagnosticSeverity = "error" | "warning" | "info" | "hint"
+
+/** A single diagnostic (maps to one `vscode.Diagnostic`). Positions are 1-based. */
+export interface HostDiagnostic {
+	filePath: string
+	line: number
+	column: number
+	severity: HostDiagnosticSeverity
+	message: string
+	source?: string
+}
+
+/** A symbol reference / usage (maps to one `vscode.Location`). Positions are 1-based. */
+export interface HostReference {
+	filePath: string
+	line: number
+	column: number
+	/** Trimmed source line at the reference (for display). */
+	preview: string
+}
+
+/** Result of a reference query: the windowed `references` plus the unsliced `total`. */
+export interface HostReferencesResult {
+	total: number
+	references: HostReference[]
+}
+
+/**
+ * Language-service queries the core needs (maps to `vscode.languages` +
+ * `vscode.executeXProvider` commands). Read-only; a headless host returns empty
+ * results (the feature degrades rather than failing).
+ */
+export interface HostLsp {
+	/** All current workspace diagnostics (maps to `vscode.languages.getDiagnostics`). */
+	getDiagnostics(): HostDiagnostic[]
+	/**
+	 * References to the symbol at a 1-based `line`/`column` in `filePath`, windowed
+	 * to `maxResults` (maps to `vscode.executeReferenceProvider`).
+	 */
+	findReferences(filePath: string, line: number, column: number, maxResults: number): Promise<HostReferencesResult>
+}
+
 /** Host environment facts the core needs (maps to `vscode.env`). */
 export interface HostEnv {
 	/** UI display language / locale (maps to `vscode.env.language`, e.g. "en"). */
@@ -72,4 +115,5 @@ export interface HostBridge {
 	readonly fs: HostFileSystem
 	readonly config: HostConfig
 	readonly env: HostEnv
+	readonly lsp: HostLsp
 }

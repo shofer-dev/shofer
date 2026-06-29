@@ -1,4 +1,13 @@
-import type { HostBridge, HostConfig, HostEnv, HostFileSystem, Notifier, NotifyChoiceOptions } from "./host.js"
+import type {
+	HostBridge,
+	HostConfig,
+	HostEnv,
+	HostFileSystem,
+	HostLsp,
+	HostReferencesResult,
+	Notifier,
+	NotifyChoiceOptions,
+} from "./host.js"
 
 /**
  * In-memory / no-op host implementations (§9) for the CLI, tests, and as a
@@ -68,6 +77,12 @@ export class InMemoryConfig implements HostConfig {
 /** A default in-memory `HostEnv` (English, no app root). */
 export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
 
+/** A no-op `HostLsp` (no language service): empty diagnostics/references. */
+export const noopLsp: HostLsp = {
+	getDiagnostics: () => [],
+	findReferences: async (): Promise<HostReferencesResult> => ({ total: 0, references: [] }),
+}
+
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
 export function createInMemoryHost(): HostBridge {
 	return {
@@ -75,5 +90,6 @@ export function createInMemoryHost(): HostBridge {
 		fs: new InMemoryFileSystem(),
 		config: new InMemoryConfig(),
 		env: inMemoryEnv,
+		lsp: noopLsp,
 	}
 }

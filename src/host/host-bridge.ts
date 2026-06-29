@@ -1,7 +1,18 @@
 import * as fs from "node:fs/promises"
 
 import * as vscode from "vscode"
-import type { HostBridge, HostConfig, HostEnv, HostFileSystem, Notifier, NotifyChoiceOptions } from "@shofer/types"
+import type {
+	HostBridge,
+	HostConfig,
+	HostDiagnostic,
+	HostDiagnosticSeverity,
+	HostEnv,
+	HostFileSystem,
+	HostLsp,
+	HostReferencesResult,
+	Notifier,
+	NotifyChoiceOptions,
+} from "@shofer/types"
 import { createInMemoryHost } from "@shofer/types"
 
 /**
@@ -72,9 +83,88 @@ const vsCodeEnv: HostEnv = {
 	},
 }
 
+function mapSeverity(severity: vscode.DiagnosticSeverity): HostDiagnosticSeverity {
+	switch (severity) {
+		case vscode.DiagnosticSeverity.Error:
+			return "error"
+		case vscode.DiagnosticSeverity.Warning:
+			return "warning"
+		case vscode.DiagnosticSeverity.Information:
+			return "info"
+		case vscode.DiagnosticSeverity.Hint:
+			return "hint"
+		default:
+			return "info"
+	}
+}
+
+class VsCodeLsp implements HostLsp {
+	getDiagnostics(): HostDiagnostic[] {
+		const out: HostDiagnostic[] = []
+		for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
+			for (const d of diagnostics) {
+				out.push({
+					filePath: uri.fsPath,
+					line: d.range.start.line + 1,
+					column: d.range.start.character + 1,
+					severity: mapSeverity(d.severity),
+					message: d.message,
+					source: d.source,
+				})
+			}
+		}
+		return out
+	}
+
+	async findReferences(
+		filePath: string,
+		line: number,
+		column: number,
+		maxResults: number,
+	): Promise<HostReferencesResult> {
+		const uri = vscode.Uri.file(filePath)
+		// LSP needs the document open to provide references; give it a moment to analyze.
+		const doc = await vscode.workspace.openTextDocument(uri)
+		await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true })
+		await new Promise<void>((resolve) => setTimeout(resolve, 500))
+
+		const position = new vscode.Position(line - 1, column - 1)
+		const locations =
+			(await vscode.commands.executeCommand<vscode.Location[]>(
+				"vscode.executeReferenceProvider",
+				uri,
+				position,
+			)) ?? []
+
+		const references = []
+		for (const loc of locations.slice(0, maxResults)) {
+			let preview = ""
+			try {
+				const locDoc = await vscode.workspace.openTextDocument(loc.uri)
+				preview = locDoc.lineAt(loc.range.start.line).text.trim().slice(0, 150)
+			} catch {
+				preview = "(unable to read)"
+			}
+			references.push({
+				filePath: loc.uri.fsPath,
+				line: loc.range.start.line + 1,
+				column: loc.range.start.character + 1,
+				preview,
+			})
+		}
+		return { total: locations.length, references }
+	}
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
-	return { notifier: new VsCodeNotifier(), fs: new NodeFileSystem(), config: new VsCodeConfig(), env: vsCodeEnv }
+	return {
+		notifier: new VsCodeNotifier(),
+		fs: new NodeFileSystem(),
+		config: new VsCodeConfig(),
+		env: vsCodeEnv,
+		lsp: new VsCodeLsp(),
+	}
 }
 
 // Module-level host accessor. Defaults to an in-memory host so call sites work in

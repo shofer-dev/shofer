@@ -6,11 +6,11 @@
  */
 
 import * as path from "path"
-import * as vscode from "vscode"
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
+import { getHost } from "../../host/host-bridge"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -27,21 +27,6 @@ interface DiagnosticEntry {
 	severity: Severity
 	message: string
 	source?: string
-}
-
-function mapSeverity(severity: vscode.DiagnosticSeverity): Severity {
-	switch (severity) {
-		case vscode.DiagnosticSeverity.Error:
-			return "error"
-		case vscode.DiagnosticSeverity.Warning:
-			return "warning"
-		case vscode.DiagnosticSeverity.Information:
-			return "info"
-		case vscode.DiagnosticSeverity.Hint:
-			return "hint"
-		default:
-			return "info"
-	}
 }
 
 export class GetErrorsTool extends BaseTool<"get_errors"> {
@@ -65,31 +50,28 @@ export class GetErrorsTool extends BaseTool<"get_errors"> {
 				return
 			}
 
-			const allDiagnostics = vscode.languages.getDiagnostics()
+			const allDiagnostics = getHost().lsp.getDiagnostics()
 			const entries: DiagnosticEntry[] = []
 
 			// Build set of absolute paths to filter by
 			const targetPaths = filePaths?.map((p) => (path.isAbsolute(p) ? p : path.resolve(task.cwd, p)))
 
-			for (const [uri, diagnostics] of allDiagnostics) {
-				if (targetPaths && !targetPaths.some((t) => t === uri.fsPath)) {
+			for (const diag of allDiagnostics) {
+				if (targetPaths && !targetPaths.some((t) => t === diag.filePath)) {
 					continue
 				}
-
-				for (const diag of diagnostics) {
-					// Only include errors and warnings
-					if (diag.severity > vscode.DiagnosticSeverity.Warning) {
-						continue
-					}
-					entries.push({
-						filePath: uri.fsPath,
-						line: diag.range.start.line + 1,
-						column: diag.range.start.character + 1,
-						severity: mapSeverity(diag.severity),
-						message: diag.message,
-						source: diag.source,
-					})
+				// Only include errors and warnings
+				if (diag.severity !== "error" && diag.severity !== "warning") {
+					continue
 				}
+				entries.push({
+					filePath: diag.filePath,
+					line: diag.line,
+					column: diag.column,
+					severity: diag.severity,
+					message: diag.message,
+					source: diag.source,
+				})
 			}
 
 			if (entries.length === 0) {

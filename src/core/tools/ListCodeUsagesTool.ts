@@ -5,10 +5,11 @@
  * all usages of a symbol in the codebase. Ported from workspace-tools `workspace_listCodeUsages`.
  */
 
-import * as vscode from "vscode"
+import * as path from "path"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
+import { getHost } from "../../host/host-bridge"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 
@@ -17,13 +18,6 @@ interface ListCodeUsagesParams {
 	filePath?: string
 	line: number
 	column: number
-}
-
-interface CodeUsage {
-	filePath: string
-	line: number
-	column: number
-	preview: string
 }
 
 const MAX_USAGES = 50
@@ -70,25 +64,10 @@ export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 				return
 			}
 
-			const absolutePath = require("path").resolve(task.cwd, filePath)
-			const uri = vscode.Uri.file(absolutePath)
+			const absolutePath = path.resolve(task.cwd, filePath)
+			const { total, references } = await getHost().lsp.findReferences(absolutePath, line, column, MAX_USAGES)
 
-			// Open the document first — LSP needs it open to provide references
-			const doc = await vscode.workspace.openTextDocument(uri)
-			await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true })
-			// Give the language server a moment to analyze the document
-			await new Promise<void>((resolve) => setTimeout(resolve, 500))
-
-			// Convert 1-indexed to 0-indexed
-			const position = new vscode.Position(line - 1, column - 1)
-
-			const locations = await vscode.commands.executeCommand<vscode.Location[]>(
-				"vscode.executeReferenceProvider",
-				uri,
-				position,
-			)
-
-			if (!locations || locations.length === 0) {
+			if (total === 0) {
 				pushToolResult(
 					`No references found at ${getReadablePath(task.cwd, filePath)}:${line}:${column}. ` +
 						`Ensure the language server is active and the position is on a symbol.`,
@@ -96,30 +75,13 @@ export class ListCodeUsagesTool extends BaseTool<"list_code_usages"> {
 				return
 			}
 
-			const usages: CodeUsage[] = []
-			for (const location of locations.slice(0, MAX_USAGES)) {
-				let preview = ""
-				try {
-					const locDoc = await vscode.workspace.openTextDocument(location.uri)
-					preview = locDoc.lineAt(location.range.start.line).text.trim().slice(0, 150)
-				} catch {
-					preview = "(unable to read)"
-				}
-				usages.push({
-					filePath: location.uri.fsPath,
-					line: location.range.start.line + 1,
-					column: location.range.start.character + 1,
-					preview,
-				})
-			}
-
-			const formatted = usages.map(
+			const formatted = references.map(
 				(u) => `${getReadablePath(task.cwd, u.filePath)}:${u.line}:${u.column}: ${u.preview}`,
 			)
 
-			let output = `Found ${locations.length} reference(s):\n\n${formatted.join("\n")}`
-			if (locations.length > MAX_USAGES) {
-				output += `\n\n... (showing first ${MAX_USAGES} of ${locations.length})`
+			let output = `Found ${total} reference(s):\n\n${formatted.join("\n")}`
+			if (total > MAX_USAGES) {
+				output += `\n\n... (showing first ${MAX_USAGES} of ${total})`
 			}
 
 			pushToolResult(output)
