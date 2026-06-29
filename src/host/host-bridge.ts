@@ -8,10 +8,12 @@ import type {
 	HostDiagnostic,
 	HostDiagnosticSeverity,
 	HostEnv,
+	HostFileEdit,
 	HostFileSystem,
 	HostLsp,
 	HostReferencesResult,
 	HostSymbol,
+	HostWorkspaceEdit,
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
@@ -178,6 +180,54 @@ class VsCodeLsp implements HostLsp {
 			filePath: s.location.uri.fsPath,
 			line: s.location.range.start.line + 1,
 		}))
+	}
+
+	async computeRename(
+		filePath: string,
+		line: number,
+		column: number,
+		newName: string,
+	): Promise<HostWorkspaceEdit | null> {
+		const uri = vscode.Uri.file(filePath)
+		// LSP needs the document open to provide a rename; give it a moment to analyze.
+		const doc = await vscode.workspace.openTextDocument(uri)
+		await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true })
+		await new Promise<void>((resolve) => setTimeout(resolve, 500))
+
+		const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+			"vscode.executeDocumentRenameProvider",
+			uri,
+			new vscode.Position(line - 1, column - 1),
+			newName,
+		)
+		if (!edit) {
+			return null
+		}
+		const changes: HostFileEdit[] = []
+		for (const [fileUri, edits] of edit.entries()) {
+			changes.push({
+				filePath: fileUri.fsPath,
+				edits: edits.map((e) => ({
+					startLine: e.range.start.line,
+					startColumn: e.range.start.character,
+					endLine: e.range.end.line,
+					endColumn: e.range.end.character,
+					newText: e.newText,
+				})),
+			})
+		}
+		return { changes }
+	}
+
+	async applyWorkspaceEdit(edit: HostWorkspaceEdit): Promise<boolean> {
+		const wsEdit = new vscode.WorkspaceEdit()
+		for (const fileEdit of edit.changes) {
+			const uri = vscode.Uri.file(fileEdit.filePath)
+			for (const e of fileEdit.edits) {
+				wsEdit.replace(uri, new vscode.Range(e.startLine, e.startColumn, e.endLine, e.endColumn), e.newText)
+			}
+		}
+		return vscode.workspace.applyEdit(wsEdit)
 	}
 }
 

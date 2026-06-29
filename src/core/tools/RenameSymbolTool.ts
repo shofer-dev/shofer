@@ -8,11 +8,11 @@
 
 import * as path from "path"
 import * as fs from "fs/promises"
-import * as vscode from "vscode"
 
 import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
+import { getHost } from "../../host/host-bridge"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
@@ -97,22 +97,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				return
 			}
 
-			const uri = vscode.Uri.file(absolutePath)
-
-			// Open the document first — LSP needs it open to provide rename provider
-			const doc = await vscode.workspace.openTextDocument(uri)
-			await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true })
-			// Give the language server a moment to analyze the document
-			await new Promise<void>((resolve) => setTimeout(resolve, 500))
-
-			const position = new vscode.Position(line - 1, column - 1)
-
-			const workspaceEdit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
-				"vscode.executeDocumentRenameProvider",
-				uri,
-				position,
-				newName,
-			)
+			const workspaceEdit = await getHost().lsp.computeRename(absolutePath, line, column, newName)
 
 			if (!workspaceEdit) {
 				throw new Error(
@@ -124,11 +109,11 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 			let editCount = 0
 			const affectedRelPaths: string[] = []
 			const affectedDisplayPaths = new Set<string>()
-			for (const [fileUri, edits] of workspaceEdit.entries()) {
-				editCount += edits.length
-				const relPath = path.relative(task.cwd, fileUri.fsPath).split(path.sep).join("/")
+			for (const fileEdit of workspaceEdit.changes) {
+				editCount += fileEdit.edits.length
+				const relPath = path.relative(task.cwd, fileEdit.filePath).split(path.sep).join("/")
 				affectedRelPaths.push(relPath)
-				affectedDisplayPaths.add(getReadablePath(task.cwd, fileUri.fsPath))
+				affectedDisplayPaths.add(getReadablePath(task.cwd, fileEdit.filePath))
 			}
 
 			if (editCount === 0) {
@@ -165,7 +150,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				}
 			}
 
-			const success = await vscode.workspace.applyEdit(workspaceEdit)
+			const success = await getHost().lsp.applyWorkspaceEdit(workspaceEdit)
 			if (!success) {
 				throw new Error("Failed to apply rename edit")
 			}

@@ -86,6 +86,26 @@ export interface HostSymbol {
 	line: number
 }
 
+/** A single text edit. Positions are 0-based (mirroring `vscode.Range`) for round-trip fidelity. */
+export interface HostTextEdit {
+	startLine: number
+	startColumn: number
+	endLine: number
+	endColumn: number
+	newText: string
+}
+
+/** Edits to a single file. */
+export interface HostFileEdit {
+	filePath: string
+	edits: HostTextEdit[]
+}
+
+/** A multi-file edit (maps to `vscode.WorkspaceEdit`). */
+export interface HostWorkspaceEdit {
+	changes: HostFileEdit[]
+}
+
 /**
  * Language-service queries the core needs (maps to `vscode.languages` +
  * `vscode.executeXProvider` commands). Read-only; a headless host returns empty
@@ -101,6 +121,14 @@ export interface HostLsp {
 	findReferences(filePath: string, line: number, column: number, maxResults: number): Promise<HostReferencesResult>
 	/** Workspace symbols matching `query` (maps to `vscode.executeWorkspaceSymbolProvider`). */
 	workspaceSymbols(query: string): Promise<HostSymbol[]>
+	/**
+	 * Compute (but do not apply) the rename of the symbol at a 1-based `line`/`column`
+	 * to `newName` (maps to `vscode.executeDocumentRenameProvider`). Returns `null`
+	 * when no rename provider is available or the symbol can't be renamed.
+	 */
+	computeRename(filePath: string, line: number, column: number, newName: string): Promise<HostWorkspaceEdit | null>
+	/** Apply a multi-file edit (maps to `vscode.workspace.applyEdit`). Returns success. */
+	applyWorkspaceEdit(edit: HostWorkspaceEdit): Promise<boolean>
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */

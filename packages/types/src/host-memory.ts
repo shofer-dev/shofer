@@ -86,6 +86,8 @@ export const noopLsp: HostLsp = {
 	getDiagnostics: () => [],
 	findReferences: async (): Promise<HostReferencesResult> => ({ total: 0, references: [] }),
 	workspaceSymbols: async () => [],
+	computeRename: async () => null,
+	applyWorkspaceEdit: async () => false,
 }
 
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
