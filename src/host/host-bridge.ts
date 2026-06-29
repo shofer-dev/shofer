@@ -13,6 +13,7 @@ import type {
 	HostLsp,
 	HostReferencesResult,
 	HostSymbol,
+	HostWorkspace,
 	HostWorkspaceEdit,
 	Notifier,
 	NotifyChoiceOptions,
@@ -231,6 +232,14 @@ class VsCodeLsp implements HostLsp {
 	}
 }
 
+class VsCodeWorkspace implements HostWorkspace {
+	async openFolder(path: string, options?: { newWindow?: boolean }): Promise<void> {
+		await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(path), {
+			forceNewWindow: options?.newWindow ?? false,
+		})
+	}
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
 	return {
@@ -239,6 +248,7 @@ export function createVsCodeHost(): HostBridge {
 		config: new VsCodeConfig(),
 		env: vsCodeEnv,
 		lsp: new VsCodeLsp(),
+		workspace: new VsCodeWorkspace(),
 	}
 }
 

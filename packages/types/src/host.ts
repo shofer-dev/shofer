@@ -131,6 +131,15 @@ export interface HostLsp {
 	applyWorkspaceEdit(edit: HostWorkspaceEdit): Promise<boolean>
 }
 
+/** Workspace-level host actions (maps to `vscode.commands` workspace operations). */
+export interface HostWorkspace {
+	/**
+	 * Open a folder as the active workspace (maps to the `vscode.openFolder`
+	 * command). A headless host has no IDE window and may no-op.
+	 */
+	openFolder(path: string, options?: { newWindow?: boolean }): Promise<void>
+}
+
 /** Host environment facts the core needs (maps to `vscode.env`). */
 export interface HostEnv {
 	/** UI display language / locale (maps to `vscode.env.language`, e.g. "en"). */
@@ -171,4 +180,5 @@ export interface HostBridge {
 	readonly config: HostConfig
 	readonly env: HostEnv
 	readonly lsp: HostLsp
+	readonly workspace: HostWorkspace
 }

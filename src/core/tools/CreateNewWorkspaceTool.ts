@@ -9,9 +9,9 @@ import * as path from "path"
 import * as fs from "fs/promises"
 
 import { type ShoferSayTool } from "@shofer/types"
-import * as vscode from "vscode"
 
 import { Task } from "../task/Task"
+import { getHost } from "../../host/host-bridge"
 import { getReadablePath } from "../../utils/path"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
@@ -91,9 +91,8 @@ export class CreateNewWorkspaceTool extends BaseTool<"create_new_workspace"> {
 				createdDirs.push(`${name}/${folder}/`)
 			}
 
-			// Open the new workspace folder in VS Code
-			const projectUri = vscode.Uri.file(projectRoot)
-			await vscode.commands.executeCommand("vscode.openFolder", projectUri, { forceNewWindow })
+			// Open the new workspace folder in the host (IDE).
+			await getHost().workspace.openFolder(projectRoot, { newWindow: forceNewWindow })
 
 			pushToolResult(
 				`Created workspace "${name}" at ${projectRoot}\n` +

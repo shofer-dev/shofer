@@ -5,6 +5,7 @@ import type {
 	HostFileSystem,
 	HostLsp,
 	HostReferencesResult,
+	HostWorkspace,
 	Notifier,
 	NotifyChoiceOptions,
 } from "./host.js"
@@ -81,6 +82,11 @@ export class InMemoryConfig implements HostConfig {
 /** A default in-memory `HostEnv` (English, no app root). */
 export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
 
+/** A no-op `HostWorkspace` (no IDE window). */
+export const noopWorkspace: HostWorkspace = {
+	openFolder: async () => {},
+}
+
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */
 export const noopLsp: HostLsp = {
 	getDiagnostics: () => [],
@@ -98,5 +104,6 @@ export function createInMemoryHost(): HostBridge {
 		config: new InMemoryConfig(),
 		env: inMemoryEnv,
 		lsp: noopLsp,
+		workspace: noopWorkspace,
 	}
 }
