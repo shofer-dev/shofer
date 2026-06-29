@@ -6,18 +6,18 @@
 		"type": "object",
 		"properties": {
 			"follow_up": {
-				"type": "array",
 				"description": "Optional list of 2-4 one-click suggested responses; each suggestion must be a complete, actionable answer and may include a mode switch. Pass null when using a form instead.",
+				"type": "array",
 				"items": {
 					"type": "object",
 					"properties": {
 						"mode": {
-							"type": "string",
-							"description": "Optional mode slug to switch to if this suggestion is chosen (e.g., code, architect). Use null for no switch."
+							"description": "Optional mode slug to switch to if this suggestion is chosen (e.g., code, architect). Use null for no switch.",
+							"type": "string"
 						},
 						"text": {
-							"type": "string",
-							"description": "Suggested answer the user can pick"
+							"description": "Suggested answer the user can pick",
+							"type": "string"
 						}
 					},
 					"required": ["mode", "text"],
@@ -25,51 +25,61 @@
 				}
 			},
 			"form": {
-				"type": "array",
 				"description": "Optional list of typed input fields rendered as a form (dropdown/radio/checkbox/slider/number/text/boolean). Answers are returned as a JSON object keyed by each field's name. Pass null when using follow_up suggestions instead.",
+				"type": "array",
 				"items": {
 					"type": "object",
 					"properties": {
 						"default": {
-							"type": ["string", "number", "boolean"],
-							"description": "Optional default value used when the field is left blank (null for none)"
+							"description": "Optional default value used when the field is left blank (null for none)",
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "number"
+								},
+								{
+									"type": "boolean"
+								}
+							]
 						},
 						"description": {
-							"type": "string",
-							"description": "Optional markdown description shown beneath the field label (null for none)"
+							"description": "Optional markdown description shown beneath the field label (null for none)",
+							"type": "string"
 						},
 						"max": {
-							"type": "number",
-							"description": "Slider/number upper bound (null when unused)"
+							"description": "Slider/number upper bound (null when unused)",
+							"type": "number"
 						},
 						"min": {
-							"type": "number",
-							"description": "Slider/number lower bound (null when unused)"
+							"description": "Slider/number lower bound (null when unused)",
+							"type": "number"
 						},
 						"name": {
-							"type": "string",
-							"description": "Field name — the JSON key the user's answer is returned under"
+							"description": "Field name — the JSON key the user's answer is returned under",
+							"type": "string"
 						},
 						"options": {
+							"description": "Allowed values for dropdown/radio/checkbox widgets (null when not a choice field)",
 							"type": "array",
 							"items": {
 								"type": "string"
-							},
-							"description": "Allowed values for dropdown/radio/checkbox widgets (null when not a choice field)"
+							}
 						},
 						"step": {
-							"type": "number",
-							"description": "Slider step increment (null when unused)"
+							"description": "Slider step increment (null when unused)",
+							"type": "number"
 						},
 						"type": {
+							"description": "Base data type, drives answer coercion: \"string\", \"number\", or \"boolean\"",
 							"type": "string",
-							"enum": ["string", "number", "boolean"],
-							"description": "Base data type, drives answer coercion: \"string\", \"number\", or \"boolean\""
+							"enum": ["string", "number", "boolean"]
 						},
 						"widget": {
+							"description": "Optional presentation widget: \"dropdown\", \"radio\", \"checkbox\" (multi-select), or \"slider\". null = infer from type/options",
 							"type": "string",
-							"enum": ["dropdown", "radio", "checkbox", "slider", null],
-							"description": "Optional presentation widget: \"dropdown\", \"radio\", \"checkbox\" (multi-select), or \"slider\". null = infer from type/options"
+							"enum": ["dropdown", "radio", "checkbox", "slider"]
 						}
 					},
 					"required": ["default", "description", "max", "min", "name", "options", "step", "type", "widget"],
@@ -77,8 +87,8 @@
 				}
 			},
 			"question": {
-				"type": "string",
-				"description": "Clear, specific question that captures the missing information you need"
+				"description": "Clear, specific question that captures the missing information you need",
+				"type": "string"
 			}
 		},
 		"required": ["follow_up", "form", "question"],

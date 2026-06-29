@@ -1,4 +1,6 @@
-import type OpenAI from "openai"
+import { parametersSchema as z } from "@shofer/types"
+
+import { defineNativeTool } from "./defineNativeTool"
 
 const ASK_FOLLOWUP_QUESTION_DESCRIPTION = `Ask the user a question to gather additional information needed to complete the task. Use when you need clarification or more details to proceed effectively.
 
@@ -57,91 +59,41 @@ const FORM_MAX_DESCRIPTION = `Slider/number upper bound (null when unused)`
 const FORM_STEP_DESCRIPTION = `Slider step increment (null when unused)`
 const FORM_DEFAULT_DESCRIPTION = `Optional default value used when the field is left blank (null for none)`
 
-export default {
-	type: "function",
-	function: {
-		name: "ask_followup_question",
-		description: ASK_FOLLOWUP_QUESTION_DESCRIPTION,
-		strict: true,
-		parameters: {
-			type: "object",
-			properties: {
-				question: {
-					type: "string",
-					description: QUESTION_PARAMETER_DESCRIPTION,
-				},
-				follow_up: {
-					type: ["array", "null"],
-					description: FOLLOW_UP_PARAMETER_DESCRIPTION,
-					items: {
-						type: "object",
-						properties: {
-							text: {
-								type: "string",
-								description: FOLLOW_UP_TEXT_DESCRIPTION,
-							},
-							mode: {
-								type: ["string", "null"],
-								description: FOLLOW_UP_MODE_DESCRIPTION,
-							},
-						},
-						required: ["text", "mode"],
-						additionalProperties: false,
-					},
-				},
-				form: {
-					type: ["array", "null"],
-					description: FORM_PARAMETER_DESCRIPTION,
-					items: {
-						type: "object",
-						properties: {
-							name: {
-								type: "string",
-								description: FORM_NAME_DESCRIPTION,
-							},
-							type: {
-								type: "string",
-								enum: ["string", "number", "boolean"],
-								description: FORM_TYPE_DESCRIPTION,
-							},
-							description: {
-								type: ["string", "null"],
-								description: FORM_DESCRIPTION_DESCRIPTION,
-							},
-							widget: {
-								type: ["string", "null"],
-								enum: ["dropdown", "radio", "checkbox", "slider", null],
-								description: FORM_WIDGET_DESCRIPTION,
-							},
-							options: {
-								type: ["array", "null"],
-								items: { type: "string" },
-								description: FORM_OPTIONS_DESCRIPTION,
-							},
-							min: {
-								type: ["number", "null"],
-								description: FORM_MIN_DESCRIPTION,
-							},
-							max: {
-								type: ["number", "null"],
-								description: FORM_MAX_DESCRIPTION,
-							},
-							step: {
-								type: ["number", "null"],
-								description: FORM_STEP_DESCRIPTION,
-							},
-							default: {
-								type: ["string", "number", "boolean", "null"],
-								description: FORM_DEFAULT_DESCRIPTION,
-							},
-						},
-						required: ["name", "type", "description", "widget", "options", "min", "max", "step", "default"],
-						additionalProperties: false,
-					},
-				},
-			},
-			required: ["question", "follow_up", "form"],
-			additionalProperties: false,
-		},
-	},
-} satisfies OpenAI.Chat.ChatCompletionTool
+export default defineNativeTool({
+	name: "ask_followup_question",
+	description: ASK_FOLLOWUP_QUESTION_DESCRIPTION,
+	schema: z.object({
+		question: z.string().describe(QUESTION_PARAMETER_DESCRIPTION),
+		follow_up: z
+			.array(
+				z.object({
+					text: z.string().describe(FOLLOW_UP_TEXT_DESCRIPTION),
+					mode: z.string().describe(FOLLOW_UP_MODE_DESCRIPTION).optional(),
+				}),
+			)
+			.describe(FOLLOW_UP_PARAMETER_DESCRIPTION)
+			.optional(),
+		form: z
+			.array(
+				z.object({
+					name: z.string().describe(FORM_NAME_DESCRIPTION),
+					type: z.enum(["string", "number", "boolean"]).describe(FORM_TYPE_DESCRIPTION),
+					description: z.string().describe(FORM_DESCRIPTION_DESCRIPTION).optional(),
+					widget: z
+						.enum(["dropdown", "radio", "checkbox", "slider"])
+						.describe(FORM_WIDGET_DESCRIPTION)
+						.optional(),
+					options: z.array(z.string()).describe(FORM_OPTIONS_DESCRIPTION).optional(),
+					min: z.number().describe(FORM_MIN_DESCRIPTION).optional(),
+					max: z.number().describe(FORM_MAX_DESCRIPTION).optional(),
+					step: z.number().describe(FORM_STEP_DESCRIPTION).optional(),
+					default: z
+						.union([z.string(), z.number(), z.boolean()])
+						.describe(FORM_DEFAULT_DESCRIPTION)
+						.optional(),
+				}),
+			)
+			.describe(FORM_PARAMETER_DESCRIPTION)
+			.optional(),
+	}),
+})

@@ -6,22 +6,25 @@
 		"type": "object",
 		"properties": {
 			"arguments": {
-				"type": "object",
 				"description": "A JSON object containing the tool's input parameters, following the tool's input schema. Pass null if the tool takes no arguments.",
+				"type": "object",
+				"propertyNames": {
+					"type": "string"
+				},
 				"additionalProperties": false
 			},
 			"server_name": {
-				"type": "string",
-				"description": "The name of the MCP server providing the tool."
+				"description": "The name of the MCP server providing the tool.",
+				"type": "string"
 			},
 			"source": {
+				"description": "Optional disambiguator when multiple MCP servers share the same name. \"global\" selects the user-level server, \"project\" the workspace-level one. Omit or pass null to use the default resolution.",
 				"type": "string",
-				"enum": ["global", "project", null],
-				"description": "Optional disambiguator when multiple MCP servers share the same name. \"global\" selects the user-level server, \"project\" the workspace-level one. Omit or pass null to use the default resolution."
+				"enum": ["global", "project", null]
 			},
 			"tool_name": {
-				"type": "string",
-				"description": "The name of the tool to execute on the MCP server."
+				"description": "The name of the tool to execute on the MCP server.",
+				"type": "string"
 			}
 		},
 		"required": ["arguments", "server_name", "source", "tool_name"],
