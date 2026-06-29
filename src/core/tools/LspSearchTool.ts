@@ -13,10 +13,11 @@
  * Ported from workspace-tools `workspace_searchCodebase`.
  */
 
-import * as vscode from "vscode"
+import * as path from "path"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"
+import { getHost } from "../../host/host-bridge"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -66,18 +67,13 @@ export class LspSearchTool extends BaseTool<"lsp_search"> {
 
 		try {
 			// Primary: use the LSP workspace symbol provider
-			const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
-				"vscode.executeWorkspaceSymbolProvider",
-				query,
-			)
+			const symbols = await getHost().lsp.workspaceSymbols(query)
 
 			if (symbols && symbols.length > 0) {
 				const limited = symbols.slice(0, effectiveMax)
 				const formatted = limited.map((s) => {
-					const relativePath = vscode.workspace.asRelativePath(s.location.uri, false)
-					const line = s.location.range.start.line + 1
-					const kind = vscode.SymbolKind[s.kind] || "Unknown"
-					return `${s.name} (${kind}) - ${relativePath}:${line}`
+					const relativePath = path.relative(task.cwd, s.filePath)
+					return `${s.name} (${s.kind}) - ${relativePath}:${s.line}`
 				})
 
 				let output = `Symbol search results for "${query}" (${limited.length} of ${symbols.length}):\n\n`
@@ -118,15 +114,18 @@ export class LspSearchTool extends BaseTool<"lsp_search"> {
 			return `No results for: ${query}`
 		}
 
-		const files = await vscode.workspace.findFiles(SOURCE_FILE_GLOB, "**/node_modules/**", 500)
+		const files = await getHost().fs.findFiles(SOURCE_FILE_GLOB, {
+			cwd,
+			exclude: ["**/node_modules/**"],
+			maxResults: 500,
+		})
 		const matches: Array<{ path: string; line: number; text: string; score: number }> = []
 
 		for (const file of files) {
 			if (matches.length >= maxResults * 2) break
 
 			try {
-				const content = await vscode.workspace.fs.readFile(file)
-				const text = Buffer.from(content).toString("utf-8")
+				const text = await getHost().fs.readFile(file)
 				const lines = text.split("\n")
 
 				for (let i = 0; i < lines.length; i++) {
@@ -139,7 +138,7 @@ export class LspSearchTool extends BaseTool<"lsp_search"> {
 					}
 					if (score > 0) {
 						matches.push({
-							path: file.fsPath,
+							path: file,
 							line: i + 1,
 							text: lines[i].trim().slice(0, 150),
 							score,
@@ -160,9 +159,7 @@ export class LspSearchTool extends BaseTool<"lsp_search"> {
 		const limited = matches.slice(0, maxResults)
 
 		let output = `Text fallback search results for "${query}" (${limited.length} matches):\n\n`
-		output += limited
-			.map((m) => `${vscode.workspace.asRelativePath(m.path, false)}:${m.line}: ${m.text}`)
-			.join("\n")
+		output += limited.map((m) => `${path.relative(cwd, m.path)}:${m.line}: ${m.text}`).join("\n")
 
 		return output
 	}

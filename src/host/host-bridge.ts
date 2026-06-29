@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises"
 import * as vscode from "vscode"
 import type {
 	HostBridge,
+	FindFilesOptions,
 	HostConfig,
 	HostDiagnostic,
 	HostDiagnosticSeverity,
@@ -10,6 +11,7 @@ import type {
 	HostFileSystem,
 	HostLsp,
 	HostReferencesResult,
+	HostSymbol,
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
@@ -65,6 +67,15 @@ class NodeFileSystem implements HostFileSystem {
 	}
 	delete(path: string): Promise<void> {
 		return fs.rm(path, { recursive: true, force: true })
+	}
+	async findFiles(pattern: string, options: FindFilesOptions): Promise<string[]> {
+		const excludeGlob = options.exclude && options.exclude.length ? `{${options.exclude.join(",")}}` : undefined
+		const uris = await vscode.workspace.findFiles(
+			new vscode.RelativePattern(options.cwd, pattern),
+			excludeGlob,
+			options.maxResults,
+		)
+		return uris.map((u) => u.fsPath)
 	}
 }
 
@@ -153,6 +164,20 @@ class VsCodeLsp implements HostLsp {
 			})
 		}
 		return { total: locations.length, references }
+	}
+
+	async workspaceSymbols(query: string): Promise<HostSymbol[]> {
+		const symbols =
+			(await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+				"vscode.executeWorkspaceSymbolProvider",
+				query,
+			)) ?? []
+		return symbols.map((s) => ({
+			name: s.name,
+			kind: vscode.SymbolKind[s.kind] || "Unknown",
+			filePath: s.location.uri.fsPath,
+			line: s.location.range.start.line + 1,
+		}))
 	}
 }
 

@@ -77,6 +77,15 @@ export interface HostReferencesResult {
 	references: HostReference[]
 }
 
+/** A workspace symbol (maps to one `vscode.SymbolInformation`). `line` is 1-based. */
+export interface HostSymbol {
+	name: string
+	/** Symbol kind name (e.g. "Function", "Class") — `vscode.SymbolKind` rendered as a string. */
+	kind: string
+	filePath: string
+	line: number
+}
+
 /**
  * Language-service queries the core needs (maps to `vscode.languages` +
  * `vscode.executeXProvider` commands). Read-only; a headless host returns empty
@@ -90,6 +99,8 @@ export interface HostLsp {
 	 * to `maxResults` (maps to `vscode.executeReferenceProvider`).
 	 */
 	findReferences(filePath: string, line: number, column: number, maxResults: number): Promise<HostReferencesResult>
+	/** Workspace symbols matching `query` (maps to `vscode.executeWorkspaceSymbolProvider`). */
+	workspaceSymbols(query: string): Promise<HostSymbol[]>
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */
@@ -100,6 +111,16 @@ export interface HostEnv {
 	readonly appRoot: string
 }
 
+/** Options for {@link HostFileSystem.findFiles}. */
+export interface FindFilesOptions {
+	/** Base directory the glob `pattern` is relative to. */
+	cwd: string
+	/** Glob patterns to exclude. */
+	exclude?: string[]
+	/** Maximum number of results. */
+	maxResults?: number
+}
+
 /** Minimal filesystem the core needs, independent of `vscode.workspace.fs` or `node:fs`. */
 export interface HostFileSystem {
 	readFile(path: string): Promise<string>
@@ -107,6 +128,12 @@ export interface HostFileSystem {
 	exists(path: string): Promise<boolean>
 	mkdir(path: string): Promise<void>
 	delete(path: string): Promise<void>
+	/**
+	 * Glob for files matching `pattern` under `options.cwd`, returning absolute
+	 * paths (maps to `vscode.workspace.findFiles`). A host without a file index
+	 * may return `[]`.
+	 */
+	findFiles(pattern: string, options: FindFilesOptions): Promise<string[]>
 }
 
 /** Aggregate host boundary handed to the core. */

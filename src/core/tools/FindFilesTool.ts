@@ -5,12 +5,11 @@
  */
 
 import * as path from "path"
-import * as vscode from "vscode"
 
 import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { getReadablePath } from "../../utils/path"
+import { getHost } from "../../host/host-bridge"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -56,17 +55,23 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 				return
 			}
 
-			// Find files matching the glob pattern using VS Code's built-in API
+			// Find files matching the glob pattern via the host file index.
 			// Exclude node_modules, .git, bazel artifacts, and .shofer/worktrees (git clones that produce 4-5x noise)
-			const uris = await vscode.workspace.findFiles(
-				new vscode.RelativePattern(task.cwd, pattern),
-				"{**/node_modules/**,**/.git/**,**/bazel-bin/**,**/bazel-out/**,**/bazel-testlogs/**,.shofer/worktrees/**}",
-				maxResults + 1,
-			)
+			const files = await getHost().fs.findFiles(pattern, {
+				cwd: task.cwd,
+				exclude: [
+					"**/node_modules/**",
+					"**/.git/**",
+					"**/bazel-bin/**",
+					"**/bazel-out/**",
+					"**/bazel-testlogs/**",
+					".shofer/worktrees/**",
+				],
+				maxResults: maxResults + 1,
+			})
 
-			const limitedUris = uris.slice(0, maxResults)
-			const didHitLimit = uris.length > maxResults
-			const limitedFiles = limitedUris.map((uri) => path.relative(task.cwd, uri.fsPath))
+			const didHitLimit = files.length > maxResults
+			const limitedFiles = files.slice(0, maxResults).map((f) => path.relative(task.cwd, f))
 
 			if (limitedFiles.length === 0) {
 				pushToolResult(`No files found matching pattern: ${pattern}`)
@@ -75,7 +80,7 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 
 			let result = limitedFiles.join("\n")
 			if (didHitLimit) {
-				result += `\n\n... limited to ${maxResults} results (${uris.length} total matches)`
+				result += `\n\n... limited to ${maxResults} results (${files.length} total matches)`
 			}
 
 			pushToolResult(result)

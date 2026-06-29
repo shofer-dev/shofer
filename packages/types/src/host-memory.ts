@@ -60,6 +60,10 @@ export class InMemoryFileSystem implements HostFileSystem {
 		this.files.delete(path)
 		this.dirs.delete(path)
 	}
+	/** No file index in the reference impl; a real headless host overrides this. */
+	async findFiles(): Promise<string[]> {
+		return []
+	}
 }
 
 /** An in-memory `HostConfig` (returns the provided default unless a value was `set`). */
@@ -81,6 +85,7 @@ export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
 export const noopLsp: HostLsp = {
 	getDiagnostics: () => [],
 	findReferences: async (): Promise<HostReferencesResult> => ({ total: 0, references: [] }),
+	workspaceSymbols: async () => [],
 }
 
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
