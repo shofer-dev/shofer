@@ -85,6 +85,30 @@ export function lookupStaticModel(provider: string, modelId: string): ModelInfo 
 }
 
 /**
+ * Local catalog overrides (Part E #4 decision: *bundled snapshot + local
+ * overrides* now; live models.dev refresh later). A nested map of
+ * `provider → modelId → Partial<ModelInfo>` that is merged over the bundled
+ * entry, letting config correct pricing/limits/capabilities or register a model
+ * the snapshot lacks — without code changes. A live (models.dev) source can
+ * populate the same shape later.
+ */
+export type CatalogOverrides = Record<string, Record<string, Partial<ModelInfo>>>
+
+/**
+ * Resolve a model's info from the bundled catalog with local overrides applied.
+ * If the model exists only in `overrides`, the override is returned as-is (it
+ * must be a complete `ModelInfo`); otherwise the override is shallow-merged over
+ * the bundled entry. Returns `undefined` when neither source has the model.
+ */
+export function lookupModel(provider: string, modelId: string, overrides?: CatalogOverrides): ModelInfo | undefined {
+	const base = lookupStaticModel(provider, modelId)
+	const override = overrides?.[provider]?.[modelId]
+	if (!override) return base
+	if (!base) return override as ModelInfo
+	return { ...base, ...override }
+}
+
+/**
  * A normalized capability/dialect view of a model — the inspectable data §7 wants
  * per-model behavior to be (vision, prompt-cache, context/limits, pricing, and the
  * tool include/exclude dialect) instead of scattered conditionals.

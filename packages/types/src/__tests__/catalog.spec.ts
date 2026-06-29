@@ -5,6 +5,7 @@ import {
 	hasStaticCatalog,
 	getStaticModelsForProvider,
 	lookupStaticModel,
+	lookupModel,
 	getModelCapabilities,
 } from "../providers/catalog.js"
 import { anthropicModels, anthropicDefaultModelId } from "../providers/anthropic.js"
@@ -42,6 +43,25 @@ describe("STATIC_MODEL_CATALOG", () => {
 		expect(info).toBe(anthropicModels[anthropicDefaultModelId as keyof typeof anthropicModels])
 		expect(lookupStaticModel("anthropic", "no-such-model")).toBeUndefined()
 		expect(lookupStaticModel("ollama", "anything")).toBeUndefined()
+	})
+
+	it("lookupModel merges local overrides over the bundled entry", () => {
+		const base = lookupStaticModel("anthropic", STATIC_MODEL_CATALOG.anthropic.defaultModelId)!
+		const overrides = {
+			anthropic: { [STATIC_MODEL_CATALOG.anthropic.defaultModelId]: { inputPrice: 999 } },
+		}
+		const merged = lookupModel("anthropic", STATIC_MODEL_CATALOG.anthropic.defaultModelId, overrides)!
+		expect(merged.inputPrice).toBe(999)
+		expect(merged.contextWindow).toBe(base.contextWindow) // untouched fields preserved
+	})
+
+	it("lookupModel can register a model the snapshot lacks", () => {
+		const overrides = {
+			openrouter: { "custom/model": { contextWindow: 123_000, supportsPromptCache: false } as never },
+		}
+		const m = lookupModel("openrouter", "custom/model", overrides)
+		expect(m?.contextWindow).toBe(123_000)
+		expect(lookupModel("openrouter", "custom/model")).toBeUndefined() // none without overrides
 	})
 
 	it("getModelCapabilities normalizes a ModelInfo into the capability/dialect view", () => {

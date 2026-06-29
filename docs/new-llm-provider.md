@@ -23,6 +23,33 @@ Each step below is **mandatory** unless marked "(if applicable)." Steps are numb
 
 ---
 
+## Model catalog (§7)
+
+Each static provider declares its models as a `Record<modelId, ModelInfo>` in
+`packages/types/src/providers/<provider>.ts`. These records are collected into a
+single queryable surface — the **model catalog** in
+[`packages/types/src/providers/catalog.ts`](../packages/types/src/providers/catalog.ts):
+
+- `STATIC_MODEL_CATALOG` — `provider → { models, defaultModelId }` for every
+  statically-known provider (dynamic providers like OpenRouter/Ollama fetch at
+  runtime and are absent).
+- `lookupStaticModel(provider, modelId)` / `getStaticModelsForProvider(provider)`
+  — resolve metadata without importing each `*Models` record or switching on
+  provider name.
+- `getModelCapabilities(info)` — a normalized view (vision, prompt-cache,
+  context/limits, pricing, tool include/exclude dialect).
+- `lookupModel(provider, modelId, overrides?)` — bundled entry **merged with
+  local overrides**. Overrides are a `provider → modelId → Partial<ModelInfo>`
+  map that can correct pricing/limits/capabilities or register a model the
+  bundled snapshot lacks, **without code changes** (Part E #4: bundled snapshot +
+  local overrides; a live models.dev source can populate the same shape later).
+
+Cost and context-limit logic consume `ModelInfo` directly (see
+[`cost-calculation-and-limits.md`](cost-calculation-and-limits.md)), so a catalog
+entry — bundled or overridden — feeds straight into cost and limits.
+
+---
+
 ## Layer 1: Model Definitions
 
 > Files: `packages/types/src/providers/`
