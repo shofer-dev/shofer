@@ -198,8 +198,13 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       exposing task control (`POST /api/v1/task`, `/message`, `/cancel`) + an SSE
       event stream (`GET /api/v1/event`), driven by an injected `AgentApi`. 6 tests;
       docs (`public_api.md`).
-    - ⬜ Wire `AgentApi` to the live `ShoferAPI` / headless CLI agent (needs §9 so it
-      runs headless); generate a typed SDK from the route set so clients can't drift.
+    - ✅ Live adapter: `ShoferApiAgent` (`src/server/shofer-api-agent.ts`) implements
+      `AgentApi` over the in-process `ShoferAPI` (createTask→startNewTask,
+      sendMessage→resume+send, cancel→cancelCurrentTask, subscribe→forward
+      ShoferAPI events). `new ShoferApiAgent(api)` makes `createHttpServer`
+      drivable. 4 tests.
+    - ⬜ Add a `shofer serve` entrypoint (`server.listen`) — running fully headless
+      is gated on §9; generate a typed SDK from the route set so clients can't drift.
 - 🚧 **§12 ACP agent adapter**
     - ✅ Mapping foundation: `src/acp/acp-mapping.ts` — the pure shofer↔ACP mapping
       (auto-approval decision → `requestPermission` outcome; mode ↔ ACP session
