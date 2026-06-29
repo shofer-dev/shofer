@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
 import { openFile } from "../open-file"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 // Mock vscode module
 vi.mock("vscode", () => ({
@@ -69,6 +70,7 @@ describe("openFile", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.spyOn(console, "warn").mockImplementation(() => {})
+		installVsCodeForwardingHost()
 	})
 
 	afterEach(() => {

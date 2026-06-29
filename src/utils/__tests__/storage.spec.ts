@@ -1,5 +1,7 @@
 import * as vscode from "vscode"
 
+import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
+
 vi.mock("fs/promises", async () => {
 	const mod = await import("../../__mocks__/fs/promises")
 	return (mod as any).default ?? mod
@@ -10,6 +12,7 @@ describe("getStorageBasePath - customStoragePath", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		installVsCodeForwardingHost()
 	})
 
 	afterEach(() => {

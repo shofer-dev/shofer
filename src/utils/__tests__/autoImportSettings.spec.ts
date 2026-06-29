@@ -119,6 +119,7 @@ import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManag
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { CustomModesManager } from "../../core/config/CustomModesManager"
 import { importSettingsFromPath } from "../../core/config/importExport"
+import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
 
 describe("autoImportSettings", () => {
 	let mockOutputChannel: any
@@ -128,6 +129,7 @@ describe("autoImportSettings", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		installVsCodeForwardingHost()
 		mockOutputChannel = {
 			appendLine: vi.fn(),
 			append: vi.fn(),

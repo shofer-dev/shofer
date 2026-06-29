@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises"
 
 import * as vscode from "vscode"
-import type { HostBridge, HostFileSystem, Notifier } from "@shofer/types"
+import type { HostBridge, HostFileSystem, Notifier, NotifyChoiceOptions } from "@shofer/types"
 import { createInMemoryHost } from "@shofer/types"
 
 /**
@@ -22,8 +22,15 @@ class VsCodeNotifier implements Notifier {
 	error(message: string): void {
 		void vscode.window.showErrorMessage(message)
 	}
-	showChoice(message: string, options: string[]): Promise<string | undefined> {
-		return Promise.resolve(vscode.window.showInformationMessage(message, ...options))
+	showChoice(message: string, options: string[], opts?: NotifyChoiceOptions): Promise<string | undefined> {
+		const messageOptions: vscode.MessageOptions = { modal: opts?.modal, detail: opts?.detail }
+		const show =
+			opts?.severity === "error"
+				? vscode.window.showErrorMessage
+				: opts?.severity === "warn"
+					? vscode.window.showWarningMessage
+					: vscode.window.showInformationMessage
+		return Promise.resolve(show(message, messageOptions, ...options))
 	}
 }
 

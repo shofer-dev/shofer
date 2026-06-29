@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../host/host-bridge"
 import * as path from "path"
 import * as os from "os"
 
@@ -48,14 +49,12 @@ export async function autoImportSettings(
 			outputChannel.appendLine(`[AutoImport] Successfully imported settings from ${resolvedPath}`)
 
 			// Show a notification to the user
-			vscode.window.showInformationMessage(
-				t("common:info.auto_import_success", { filename: path.basename(resolvedPath) }),
-			)
+			getHost().notifier.info(t("common:info.auto_import_success", { filename: path.basename(resolvedPath) }))
 		} else {
 			outputChannel.appendLine(`[AutoImport] Failed to import settings: ${result.error}`)
 
 			// Show a warning but don't fail the extension activation
-			vscode.window.showWarningMessage(t("common:warnings.auto_import_failed", { error: result.error }))
+			getHost().notifier.warn(t("common:warnings.auto_import_failed", { error: result.error }))
 		}
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)

@@ -1,6 +1,7 @@
 import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
+import { getHost } from "../../host/host-bridge"
 import { arePathsEqual, getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
 import { fsLog } from "../../utils/logging/subsystems"
@@ -146,9 +147,9 @@ export async function openFile(filePath: string, options: OpenFileOptions = {}) 
 		})
 	} catch (error) {
 		if (error instanceof Error) {
-			vscode.window.showErrorMessage(t("common:errors.could_not_open_file", { errorMessage: error.message }))
+			getHost().notifier.error(t("common:errors.could_not_open_file", { errorMessage: error.message }))
 		} else {
-			vscode.window.showErrorMessage(t("common:errors.could_not_open_file_generic"))
+			getHost().notifier.error(t("common:errors.could_not_open_file_generic"))
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import type { HostBridge, HostFileSystem, Notifier } from "./host.js"
+import type { HostBridge, HostFileSystem, Notifier, NotifyChoiceOptions } from "./host.js"
 
 /**
  * In-memory / no-op host implementations (§9) for the CLI, tests, and as a
@@ -19,8 +19,11 @@ export class RecordingNotifier implements Notifier {
 	error(message: string): void {
 		this.messages.push({ level: "error", message })
 	}
-	async showChoice(message: string, _options: string[]): Promise<string | undefined> {
-		this.messages.push({ level: "info", message })
+	async showChoice(message: string, _options: string[], opts?: NotifyChoiceOptions): Promise<string | undefined> {
+		this.messages.push({
+			level: opts?.severity === "error" ? "error" : opts?.severity === "warn" ? "warn" : "info",
+			message,
+		})
 		return this.choiceResponse
 	}
 }

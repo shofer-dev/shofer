@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { getHost } from "../host/host-bridge"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { constants as fsConstants } from "fs"
@@ -42,7 +43,7 @@ export async function getStorageBasePath(defaultPath: string): Promise<string> {
 		// If path is unusable, report error and fall back to default path
 		fsLog.error(`Custom storage path is unusable: ${error instanceof Error ? error.message : String(error)}`)
 		if (vscode.window) {
-			vscode.window.showErrorMessage(t("common:errors.custom_storage_path_unusable", { path: customStoragePath }))
+			getHost().notifier.error(t("common:errors.custom_storage_path_unusable", { path: customStoragePath }))
 		}
 		return defaultPath
 	}
@@ -133,9 +134,9 @@ export async function promptForCustomStoragePath(): Promise<void> {
 					// Test if path is accessible
 					await fs.mkdir(result, { recursive: true })
 					await fs.access(result, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK)
-					vscode.window.showInformationMessage(t("common:info.custom_storage_path_set", { path: result }))
+					getHost().notifier.info(t("common:info.custom_storage_path_set", { path: result }))
 				} catch (error) {
-					vscode.window.showErrorMessage(
+					getHost().notifier.error(
 						t("common:errors.cannot_access_path", {
 							path: result,
 							error: error instanceof Error ? error.message : String(error),
@@ -143,7 +144,7 @@ export async function promptForCustomStoragePath(): Promise<void> {
 					)
 				}
 			} else {
-				vscode.window.showInformationMessage(t("common:info.default_storage_path"))
+				getHost().notifier.info(t("common:info.default_storage_path"))
 			}
 		} catch (error) {
 			fsLog.error("Failed to update configuration", { error: String(error) })
