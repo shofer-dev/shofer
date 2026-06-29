@@ -3,6 +3,7 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
+import { getHost } from "../../host/host-bridge"
 
 export async function openImage(dataUriOrPath: string, options?: { values?: { action?: string } }) {
 	// Check if it's a file path (absolute or relative)
@@ -30,14 +31,14 @@ export async function openImage(dataUriOrPath: string, options?: { values?: { ac
 			// Check if this is a copy action
 			if (options?.values?.action === "copy") {
 				await vscode.env.clipboard.writeText(filePath)
-				vscode.window.showInformationMessage(t("common:info.path_copied_to_clipboard"))
+				getHost().notifier.info(t("common:info.path_copied_to_clipboard"))
 				return
 			}
 
 			// Open the image file directly
 			await vscode.commands.executeCommand("vscode.open", fileUri)
 		} catch (error) {
-			vscode.window.showErrorMessage(t("common:errors.error_opening_image", { error }))
+			getHost().notifier.error(t("common:errors.error_opening_image", { error }))
 		}
 		return
 	}
@@ -45,7 +46,7 @@ export async function openImage(dataUriOrPath: string, options?: { values?: { ac
 	// Handle data URI (existing logic)
 	const matches = dataUriOrPath.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/)
 	if (!matches) {
-		vscode.window.showErrorMessage(t("common:errors.invalid_data_uri"))
+		getHost().notifier.error(t("common:errors.invalid_data_uri"))
 		return
 	}
 	const [, format, base64Data] = matches
@@ -70,10 +71,10 @@ export async function openImage(dataUriOrPath: string, options?: { values?: { ac
 				// So we copy the data URI which can be pasted in many applications
 				await vscode.env.clipboard.writeText(dataUri)
 
-				vscode.window.showInformationMessage(t("common:info.image_copied_to_clipboard"))
+				getHost().notifier.info(t("common:info.image_copied_to_clipboard"))
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
-				vscode.window.showErrorMessage(t("common:errors.error_copying_image", { errorMessage }))
+				getHost().notifier.error(t("common:errors.error_copying_image", { errorMessage }))
 			} finally {
 				// Clean up temp file
 				try {
@@ -86,14 +87,14 @@ export async function openImage(dataUriOrPath: string, options?: { values?: { ac
 		}
 		await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(tempFilePath))
 	} catch (error) {
-		vscode.window.showErrorMessage(t("common:errors.error_opening_image", { error }))
+		getHost().notifier.error(t("common:errors.error_opening_image", { error }))
 	}
 }
 
 export async function saveImage(dataUri: string, defaultUri: vscode.Uri): Promise<vscode.Uri | undefined> {
 	const matches = dataUri.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/)
 	if (!matches) {
-		vscode.window.showErrorMessage(t("common:errors.invalid_data_uri"))
+		getHost().notifier.error(t("common:errors.invalid_data_uri"))
 		return undefined
 	}
 	const [, format, base64Data] = matches
@@ -116,11 +117,11 @@ export async function saveImage(dataUri: string, defaultUri: vscode.Uri): Promis
 	try {
 		// Write the image to the selected location
 		await vscode.workspace.fs.writeFile(saveUri, imageBuffer)
-		vscode.window.showInformationMessage(t("common:info.image_saved", { path: saveUri.fsPath }))
+		getHost().notifier.info(t("common:info.image_saved", { path: saveUri.fsPath }))
 		return saveUri
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
-		vscode.window.showErrorMessage(t("common:errors.error_saving_image", { errorMessage }))
+		getHost().notifier.error(t("common:errors.error_saving_image", { errorMessage }))
 		return undefined
 	}
 }

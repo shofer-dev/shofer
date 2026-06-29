@@ -166,10 +166,15 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       so far), with in-memory reference impls (`host-memory.ts`,
       `createInMemoryHost`) for CLI/tests. 3 tests; docs (`headless.md`). This is
       the cleaner-interface target the shim's broad mock evolves toward.
-    - ⬜ The XL remainder: add a VS Code-backed `HostBridge` adapter, migrate
-      `vscode.*` call sites (notifications, editor selection, diff) onto it one at a
-      time, shrink the shim, and extract the `vscode`-free core package. Gates §11
-      (API/SDK) and §12 (ACP).
+    - ✅ Step 2 (adapter + first migration): VS Code-backed `HostBridge`
+      (`src/host/host-bridge.ts`: `createVsCodeHost`, `setHost`/`getHost`), installed
+      at `activate()`; defaults to the in-memory host pre-activation/tests. Migrated
+      `integrations/misc/image-handler.ts`'s notifications off `vscode.window.*` onto
+      `getHost().notifier` as the proof. 2 host tests; suite green.
+    - ⬜ The XL remainder: migrate the other ~165 notification sites + editor
+      selection + diff onto `HostBridge` (note: choice-dialogs need a richer
+      `showChoice` method), shrink the shim, extract the `vscode`-free core package.
+      Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
