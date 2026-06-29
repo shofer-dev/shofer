@@ -83,8 +83,7 @@ vi.mock("../../task-persistence", () => {
 		readTaskMessages: vi.fn().mockResolvedValue([]),
 		saveTaskMessages: vi.fn().mockResolvedValue(undefined),
 		appendTaskMessage,
-		FileSystemMessagePersistence: MockBackend,
-		createMessagePersistence: vi.fn(async () => new MockBackend()),
+		SqliteMessagePersistence: MockBackend,
 		taskMetadata: vi.fn().mockResolvedValue({
 			historyItem: {
 				id: "test-task-id",

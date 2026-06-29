@@ -121,8 +121,7 @@ import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-
 import {
 	type ApiMessage,
 	type MessagePersistencePort,
-	type MessageBackend,
-	createMessagePersistence,
+	SqliteMessagePersistence,
 	taskMetadata,
 } from "../task-persistence"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
@@ -1501,17 +1500,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// API Messages
 
 	/**
-	 * Resolve the message-persistence backend once (cached). Defaults to the
-	 * flat-file backend; set `SHOFER_MESSAGE_BACKEND=sqlite` to opt into the SQLite
-	 * backend (§5) — `createMessagePersistence` feature-detects `node:sqlite` and
-	 * falls back to flat-file if unavailable, and the first read lazily imports any
-	 * existing flat-file history. Async because the SQLite check is async.
+	 * The SQLite-backed message persistence (§5), created once. Returned as a
+	 * resolved promise so the (async) call sites stay unchanged.
 	 */
 	private _persistencePromise?: Promise<MessagePersistencePort>
 	private getPersistence(): Promise<MessagePersistencePort> {
 		if (!this._persistencePromise) {
-			const backend: MessageBackend = process.env.SHOFER_MESSAGE_BACKEND === "sqlite" ? "sqlite" : "filesystem"
-			this._persistencePromise = createMessagePersistence(this.globalStoragePath, backend)
+			this._persistencePromise = Promise.resolve(new SqliteMessagePersistence(this.globalStoragePath))
 		}
 		return this._persistencePromise
 	}

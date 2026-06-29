@@ -2,6 +2,4 @@ export { type ApiMessage, appendApiMessage, readApiMessages, readApiMessagesTail
 export { appendTaskMessage, readTaskMessages, readTaskMessagesTail, saveTaskMessages } from "./taskMessages"
 export { taskMetadata } from "./taskMetadata"
 export { TaskHistoryStore } from "./TaskHistoryStore"
-export { type MessagePersistencePort, FileSystemMessagePersistence } from "./PersistencePort"
-export { SqliteMessagePersistence, isSqliteAvailable } from "./SqliteMessagePersistence"
-export { createMessagePersistence, type MessageBackend } from "./createMessagePersistence"
+export { type MessagePersistencePort, SqliteMessagePersistence } from "./PersistencePort"

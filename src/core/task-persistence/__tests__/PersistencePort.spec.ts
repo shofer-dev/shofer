@@ -4,21 +4,20 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import type { ApiMessage } from "../apiMessages"
-import { FileSystemMessagePersistence } from "../PersistencePort"
+import { SqliteMessagePersistence } from "../PersistencePort"
 
 /**
- * Round-trips the flat-file persistence port. Confirms the adapter is a faithful,
- * behavior-preserving facade over the existing JSONL functions (§5 strangler
- * step 1) before any call site is routed through it.
+ * Round-trips the SQLite persistence port adapter (§5) — confirms it is a faithful
+ * facade over the message-store-backed functions.
  */
-describe("FileSystemMessagePersistence", () => {
+describe("SqliteMessagePersistence", () => {
 	let dir: string
-	let port: FileSystemMessagePersistence
+	let port: SqliteMessagePersistence
 	const taskId = "task-abc"
 
 	beforeEach(() => {
 		dir = mkdtempSync(join(tmpdir(), "shofer-persist-"))
-		port = new FileSystemMessagePersistence(dir)
+		port = new SqliteMessagePersistence(dir)
 	})
 	afterEach(() => rmSync(dir, { recursive: true, force: true }))
 

@@ -82,8 +82,8 @@ vi.mock("p-wait-for", () => ({
 }))
 
 vi.mock("../../task-persistence", () => {
-	// §5: Task now reads/writes through the MessagePersistencePort, resolved via
-	// createMessagePersistence. This mock backend delegates to the same mock
+	// §5: Task reads/writes through the SQLite-backed MessagePersistencePort. This
+	// mock backend delegates to the same mock
 	// functions (with the original arg shape) so existing call assertions on
 	// mockSaveApiMessages/etc. still hold.
 	class MockBackend {
@@ -123,8 +123,7 @@ vi.mock("../../task-persistence", () => {
 		readApiMessages: mockReadApiMessages,
 		readTaskMessages: mockReadTaskMessages,
 		taskMetadata: mockTaskMetadata,
-		FileSystemMessagePersistence: MockBackend,
-		createMessagePersistence: vi.fn(async () => new MockBackend()),
+		SqliteMessagePersistence: MockBackend,
 		TaskHistoryStore: vi.fn().mockImplementation(() => ({
 			initialize: vi.fn().mockResolvedValue(undefined),
 			dispose: vi.fn(),
