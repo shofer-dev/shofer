@@ -189,16 +189,27 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           **12 core files now carry zero runtime `vscode` import.** Each migrated file's
           tests pass via `installVsCodeForwardingHost()` (now forwards notifier + config
         * env).
-    - ⬜ Remainder (structural, multi-session) — the genuinely VS-Code-coupled files
-      that need a designed capability (with a headless fallback), not a mechanical
-      swap: LSP/editor tools (`ListCodeUsagesTool`, `LspSearchTool`,
-      `RenameSymbolTool`, `GetErrorsTool` — use `commands.executeCommand` + vscode
-      value types `Location`/`Position`/`SymbolKind`/`WorkspaceEdit`/`DiagnosticSeverity`),
-      `FindFilesTool` (glob via `workspace.findFiles` → needs a node glob impl with
-      matching excludes), `CreateNewWorkspaceTool` + `presentAssistantMessage`'s
-      private-tools `commands.executeCommand`, the VS Code LM provider/format, and
-      `integrations/*`. Then shrink the shim and carve out the `vscode`-free core
-      package. Gates §11 (API/SDK) and §12 (ACP).
+    - ✅ Core extraction — LSP/editor + file-glob seams (17 core files vscode-free):
+        - `HostLsp` seam (read + write language-service ops, DTO-based, headless =
+          empty/no-op): `getDiagnostics`, `findReferences`, `workspaceSymbols`,
+          `computeRename`, `applyWorkspaceEdit`. VS Code adapter maps to
+          `languages.getDiagnostics` + the `executeXProvider` commands +
+          `workspace.applyEdit`.
+        - `HostFileSystem.findFiles(pattern, {cwd, exclude, maxResults})` seam (VS Code
+          adapter → `workspace.findFiles`/`RelativePattern`; in-memory → `[]`).
+        - Migrated all 5 remaining tool files onto these seams — `GetErrorsTool`,
+          `ListCodeUsagesTool`, `LspSearchTool` (+ its text fallback via
+          `fs.findFiles`/`fs.readFile`), `RenameSymbolTool`, `FindFilesTool` — each now
+          carries zero runtime `vscode` import.
+          **17 core files vscode-free** across 5 seams (notifier, fs+findFiles, config, env,
+          lsp). `installVsCodeForwardingHost()` forwards notifier + config + env.
+    - ⬜ Remainder (structural, multi-session) — the still-VS-Code-coupled files,
+      each genuinely a VS Code operation (no headless equivalent yet): the VS Code LM
+      provider/format (`api/providers/vscode-lm.ts`, `api/transform/vscode-lm-format.ts`),
+      `CreateNewWorkspaceTool` + `presentAssistantMessage`'s private-tools
+      `commands.executeCommand`, `NativeToolCallParser` (`vscode.lm`), and
+      `integrations/*` (editor/diff). Then shrink the shim and carve out the
+      `vscode`-free core package. Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
