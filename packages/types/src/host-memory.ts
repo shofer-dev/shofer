@@ -1,4 +1,4 @@
-import type { HostBridge, HostFileSystem, Notifier, NotifyChoiceOptions } from "./host.js"
+import type { HostBridge, HostConfig, HostFileSystem, Notifier, NotifyChoiceOptions } from "./host.js"
 
 /**
  * In-memory / no-op host implementations (§9) for the CLI, tests, and as a
@@ -53,7 +53,19 @@ export class InMemoryFileSystem implements HostFileSystem {
 	}
 }
 
+/** An in-memory `HostConfig` (returns the provided default unless a value was `set`). */
+export class InMemoryConfig implements HostConfig {
+	private readonly values = new Map<string, unknown>()
+	set(section: string, key: string, value: unknown): void {
+		this.values.set(`${section}.${key}`, value)
+	}
+	get<T>(section: string, key: string, defaultValue: T): T {
+		const v = this.values.get(`${section}.${key}`)
+		return v === undefined ? defaultValue : (v as T)
+	}
+}
+
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
 export function createInMemoryHost(): HostBridge {
-	return { notifier: new RecordingNotifier(), fs: new InMemoryFileSystem() }
+	return { notifier: new RecordingNotifier(), fs: new InMemoryFileSystem(), config: new InMemoryConfig() }
 }

@@ -39,6 +39,16 @@ export interface Notifier {
 	showChoice(message: string, options: string[], opts?: NotifyChoiceOptions): Promise<string | undefined>
 }
 
+/** Configuration reads the core needs (maps to `vscode.workspace.getConfiguration`). */
+export interface HostConfig {
+	/**
+	 * Read a config value. `section` is the configuration namespace (e.g. the
+	 * extension id), `key` the setting within it; returns `defaultValue` when unset.
+	 * Maps to `vscode.workspace.getConfiguration(section).get(key, defaultValue)`.
+	 */
+	get<T>(section: string, key: string, defaultValue: T): T
+}
+
 /** Minimal filesystem the core needs, independent of `vscode.workspace.fs` or `node:fs`. */
 export interface HostFileSystem {
 	readFile(path: string): Promise<string>
@@ -52,4 +62,5 @@ export interface HostFileSystem {
 export interface HostBridge {
 	readonly notifier: Notifier
 	readonly fs: HostFileSystem
+	readonly config: HostConfig
 }

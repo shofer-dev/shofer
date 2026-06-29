@@ -1,5 +1,4 @@
 import * as path from "path"
-import * as vscode from "vscode"
 import os from "os"
 import crypto from "crypto"
 import { v7 as uuidv7 } from "uuid"
@@ -124,6 +123,7 @@ import {
 	SqliteMessagePersistence,
 	taskMetadata,
 } from "../task-persistence"
+import { getHost } from "../../host/host-bridge"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling"
 import { isNonRetryableApiError } from "../../api/providers/utils/retryable-error"
@@ -6172,8 +6172,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const effectiveIncludeUserRules = ctx?.include_user_rules ?? true
 		const effectiveIncludeSkills = ctx?.include_skills ?? true
 		const effectiveRequireTodos =
-			ctx?.require_todos ??
-			vscode.workspace.getConfiguration(Package.name).get<boolean>("newTaskRequireTodos", false)
+			ctx?.require_todos ?? getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false)
 		const effectiveIncludeSystemInfo = ctx?.include_system_info ?? true
 		const effectiveIncludeMcp = ctx?.include_mcp ?? true
 
