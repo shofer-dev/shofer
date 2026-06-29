@@ -175,20 +175,30 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       `diagnosticsHandler`, `checkpointRestoreHandler`, `registerTerminalActions`).
       Button/confirm dialogs use `notifier.showChoice` (severity/modal). **Zero
       direct `vscode.window.show*Message` calls remain outside the host adapter.**
-    - ✅ Core extraction — config seam + first vscode-free core files: added
-      `HostConfig` (`get<T>(section, key, default)`; VS Code + `InMemoryConfig`
-      adapters). Made **`Task.ts` (the core's heart) fully vscode-free**, plus
-      `ExecuteCommandTool`, `AttemptCompletionTool`, `NewTaskTool`, `timeout-config`
-      (config seam) and `modes.ts` (type-only `import type`). 7 core files now carry
-      zero `vscode` import.
-    - ⬜ Remainder (structural, multi-session): the editor/LSP/VS-Code-LM-coupled
-      core files need richer host seams before they can be decoupled — editor +
-      diff + selection, file/symbol search (`FindFilesTool`, `LspSearchTool`,
-      `ListCodeUsagesTool`, `RenameSymbolTool`), diagnostics (`GetErrorsTool`),
-      workspace FS (`ReadProjectStructureTool`), the VS Code LM provider/format +
-      `build-tools` private-tools command, and `system.ts`'s `vscode.env.language`.
-      Then shrink the shim and carve out the `vscode`-free core package. Gates §11
-      (API/SDK) and §12 (ACP).
+    - ✅ Core extraction — seams + 12 vscode-free core files:
+        - Seams added to `HostBridge`: `HostConfig` (`get<T>(section, key, default)`)
+          and `HostEnv` (`language`, `appRoot`), each with VS Code + in-memory
+          adapters; `Notifier` extended with `NotifyChoiceOptions`.
+        - Config seam: `Task.ts` (**the core's heart**), `ExecuteCommandTool`,
+          `AttemptCompletionTool`, `NewTaskTool`, `timeout-config`.
+        - Env seam: `GrepSearchTool` (`appRoot`), `system.ts` (`language`).
+        - node-stdlib swaps (no new seam): `RagSearchTool` (`path.relative`),
+          `ReadProjectStructureTool` (`node:fs` readdir), `GenerateImageTool`
+          (`pathToFileURL`).
+        - type-only `import type`: `modes.ts`, `system.ts` (`vscode.ExtensionContext`).
+          **12 core files now carry zero runtime `vscode` import.** Each migrated file's
+          tests pass via `installVsCodeForwardingHost()` (now forwards notifier + config
+        * env).
+    - ⬜ Remainder (structural, multi-session) — the genuinely VS-Code-coupled files
+      that need a designed capability (with a headless fallback), not a mechanical
+      swap: LSP/editor tools (`ListCodeUsagesTool`, `LspSearchTool`,
+      `RenameSymbolTool`, `GetErrorsTool` — use `commands.executeCommand` + vscode
+      value types `Location`/`Position`/`SymbolKind`/`WorkspaceEdit`/`DiagnosticSeverity`),
+      `FindFilesTool` (glob via `workspace.findFiles` → needs a node glob impl with
+      matching excludes), `CreateNewWorkspaceTool` + `presentAssistantMessage`'s
+      private-tools `commands.executeCommand`, the VS Code LM provider/format, and
+      `integrations/*`. Then shrink the shim and carve out the `vscode`-free core
+      package. Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
