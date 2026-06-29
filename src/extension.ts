@@ -31,7 +31,7 @@ if (fs.existsSync(envPath)) {
 	}
 }
 
-import { TelemetryService, PostHogTelemetryClient } from "@shofer/telemetry"
+import { TelemetryService, PostHogTelemetryClient, OtelTelemetryClient } from "@shofer/telemetry"
 import { setHost, createVsCodeHost } from "./host/host-bridge"
 import { customToolRegistry } from "@shofer/core"
 
@@ -137,6 +137,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		telemetryService.register(new PostHogTelemetryClient())
 	} catch (error) {
 		outputChannel.appendLine(`[WARN] Failed to register PostHogTelemetryClient: ${error}`)
+	}
+
+	// §8: emit the typed event catalog through OpenTelemetry. No-op until an OTel
+	// SDK is registered by the host, so it is zero-overhead by default.
+	try {
+		telemetryService.register(new OtelTelemetryClient())
+	} catch (error) {
+		outputChannel.appendLine(`[WARN] Failed to register OtelTelemetryClient: ${error}`)
 	}
 
 	// Initialize i18n for internationalization support.

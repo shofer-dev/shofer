@@ -131,13 +131,15 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       with §7 the lookup is unified. `shared/__tests__/cost-catalog.spec.ts` pins
       the end-to-end flow (catalog `lookupStaticModel` → cost + context window;
       unpriced model → zero cost, no scattered fallbacks).
-    - ✅ OTel transport: `OtelTelemetryClient` (`@opentelemetry/api`) emits each
-      typed catalog event as an OTel span (taxonomy = data, OTel = transport). It's
-      a no-op until an OTel SDK is registered by the host, so it's zero-overhead +
-      opt-in (register alongside PostHog via `TelemetryService.register`). Added the
-      `@opentelemetry/api` dep; 3 tests; docs (`telemetry.md`). Spend caps kept
-      (Part E #6). Retiring the bespoke Prometheus exporter is a follow-on once an
-      OTel SDK/exporter is wired by the operator.
+    - ✅ OTel transport (events): `OtelTelemetryClient` (`@opentelemetry/api`) emits
+      each typed catalog event as an OTel span (taxonomy = data, OTel = transport),
+      **registered by default** in `extension.ts` alongside PostHog. No-op until an
+      OTel SDK is registered by the host (zero-overhead). 3 tests; docs
+      (`telemetry.md`). Spend caps kept (Part E #6).
+    - ⬜ Metrics: bridge the `src/metrics` registry (counters/gauges/histograms) to
+      OTel metrics, then drop the bespoke Prometheus exporter (`metrics/server.ts`,
+      opt-in/experimental). Deferred only because removing the server before the
+      bridge would lose metric export — the one remaining §8 piece.
 
 ## Phase 3 — Host-agnostic core
 
