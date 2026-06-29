@@ -1,6 +1,6 @@
 import path from "path"
 import fs from "fs/promises"
-import * as vscode from "vscode"
+import { pathToFileURL } from "node:url"
 import {
 	GenerateImageParams,
 	IMAGE_GENERATION_MODEL_IDS,
@@ -246,7 +246,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 
 			const fullImagePath = path.join(task.cwd, finalPath)
 
-			let imageUri = provider?.convertToWebviewUri?.(fullImagePath) ?? vscode.Uri.file(fullImagePath).toString()
+			let imageUri = provider?.convertToWebviewUri?.(fullImagePath) ?? pathToFileURL(fullImagePath).toString()
 
 			const cacheBuster = Date.now()
 			imageUri = imageUri.includes("?") ? `${imageUri}&t=${cacheBuster}` : `${imageUri}?t=${cacheBuster}`

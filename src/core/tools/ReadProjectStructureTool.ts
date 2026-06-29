@@ -6,7 +6,7 @@
  */
 
 import * as path from "path"
-import * as vscode from "vscode"
+import { readdir } from "node:fs/promises"
 
 import { Task } from "../task/Task"
 
@@ -57,32 +57,32 @@ export class ReadProjectStructureTool extends BaseTool<"read_project_structure">
 			}
 
 			const rootPath = task.cwd
-			const rootUri = vscode.Uri.file(rootPath)
 
-			const buildTree = async (uri: vscode.Uri, depth: number): Promise<DirectoryEntry[]> => {
+			const buildTree = async (dirPath: string, depth: number): Promise<DirectoryEntry[]> => {
 				if (depth > maxDepth) {
 					return []
 				}
 
-				const entries = await vscode.workspace.fs.readDirectory(uri)
+				const entries = await readdir(dirPath, { withFileTypes: true })
 				const result: DirectoryEntry[] = []
 
-				for (const [name, type] of entries) {
+				for (const dirent of entries) {
+					const name = dirent.name
+					const isDirectory = dirent.isDirectory()
 					if (!includeHidden && name.startsWith(".")) {
 						continue
 					}
-					if (type === vscode.FileType.Directory && SKIP_DIRS.has(name)) {
+					if (isDirectory && SKIP_DIRS.has(name)) {
 						continue
 					}
 
 					const entry: DirectoryEntry = {
 						name,
-						type: type === vscode.FileType.Directory ? "directory" : "file",
+						type: isDirectory ? "directory" : "file",
 					}
 
-					if (type === vscode.FileType.Directory && depth < maxDepth) {
-						const childUri = vscode.Uri.joinPath(uri, name)
-						entry.children = await buildTree(childUri, depth + 1)
+					if (isDirectory && depth < maxDepth) {
+						entry.children = await buildTree(path.join(dirPath, name), depth + 1)
 					}
 
 					result.push(entry)
@@ -98,7 +98,7 @@ export class ReadProjectStructureTool extends BaseTool<"read_project_structure">
 				return result
 			}
 
-			const tree = await buildTree(rootUri, 0)
+			const tree = await buildTree(rootPath, 0)
 
 			const formatTree = (entries: DirectoryEntry[], prefix: string = ""): string[] => {
 				const lines: string[] = []

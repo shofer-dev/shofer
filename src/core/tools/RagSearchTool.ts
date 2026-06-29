@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import path from "path"
 
 import { Task } from "../task/Task"
@@ -113,7 +112,7 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 				if (!result.payload) return
 				if (!("filePath" in result.payload)) return
 
-				const relativePath = vscode.workspace.asRelativePath(result.payload.filePath, false)
+				const relativePath = path.relative(workspacePath, result.payload.filePath)
 
 				jsonResult.results.push({
 					filePath: relativePath,
