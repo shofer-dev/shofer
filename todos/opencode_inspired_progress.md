@@ -196,4 +196,11 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       docs (`public_api.md`).
     - ⬜ Wire `AgentApi` to the live `ShoferAPI` / headless CLI agent (needs §9 so it
       runs headless); generate a typed SDK from the route set so clients can't drift.
-- 🚧 **§12 ACP agent adapter** — see below.
+- 🚧 **§12 ACP agent adapter**
+    - ✅ Mapping foundation: `src/acp/acp-mapping.ts` — the pure shofer↔ACP mapping
+      (auto-approval decision → `requestPermission` outcome; mode ↔ ACP session
+      mode; stream events → `sessionUpdate` variants with passthrough fallback) +
+      `ACP_METHOD_MAP` documenting the full agent method set. 5 tests; doc
+      `docs/acp.md`. Reuses §3 (events), §4 (permissions/modes), §6 (cancel).
+    - ⬜ Add `@agentclientprotocol/sdk`, implement the service over it, ship a
+      `shofer acp` stdio entrypoint. Gated on §9 (agent must run vscode-free).
