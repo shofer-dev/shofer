@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import type { ToolName, ModeConfig, ExperimentId, GroupOptions, GroupEntry } from "@shofer/types"
 import { toolNames as validToolNames } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"

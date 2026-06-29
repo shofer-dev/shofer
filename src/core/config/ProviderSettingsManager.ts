@@ -1,4 +1,4 @@
-import { ExtensionContext } from "vscode"
+import type { ExtensionContext } from "vscode"
 import { z, ZodError } from "zod"
 import deepEqual from "fast-deep-equal"
 

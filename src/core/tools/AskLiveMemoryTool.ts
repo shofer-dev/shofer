@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { Task } from "../task/Task"
 import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { getWorkspacePath } from "../../utils/path"
