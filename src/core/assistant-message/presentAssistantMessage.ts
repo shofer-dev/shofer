@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { serializeError } from "serialize-error"
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as fsp from "fs/promises"
@@ -16,6 +15,7 @@ import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } fr
 
 import { AskIgnoredError } from "../task/AskIgnoredError"
 import { Task } from "../task/Task"
+import { getHost } from "../../host/host-bridge"
 
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"
@@ -1520,7 +1520,7 @@ export async function presentAssistantMessage(shofer: Task) {
 								shofer.consecutiveMistakeCount = 0
 								await shofer.say("mcp_server_request_started")
 
-								const result = await vscode.commands.executeCommand<{
+								const result = await getHost().workspace.executeCommand<{
 									content: string
 									is_error?: boolean
 									// Optional absolute image paths a provider can return so a

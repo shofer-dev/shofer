@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { parseJSON } from "partial-json"
 import { distance } from "fastest-levenshtein"
 

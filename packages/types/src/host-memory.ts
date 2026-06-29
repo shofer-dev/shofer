@@ -85,6 +85,9 @@ export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
 /** A no-op `HostWorkspace` (no IDE window). */
 export const noopWorkspace: HostWorkspace = {
 	openFolder: async () => {},
+	executeCommand: async (command: string) => {
+		throw new Error(`Command "${command}" is not available in this host`)
+	},
 }
 
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */

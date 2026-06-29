@@ -138,6 +138,12 @@ export interface HostWorkspace {
 	 * command). A headless host has no IDE window and may no-op.
 	 */
 	openFolder(path: string, options?: { newWindow?: boolean }): Promise<void>
+	/**
+	 * Execute a host command and return its result (maps to
+	 * `vscode.commands.executeCommand`). Used for provider-contributed
+	 * (private-tool) commands. A headless host throws (no command registry).
+	 */
+	executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T>
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */

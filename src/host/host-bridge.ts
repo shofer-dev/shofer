@@ -238,6 +238,9 @@ class VsCodeWorkspace implements HostWorkspace {
 			forceNewWindow: options?.newWindow ?? false,
 		})
 	}
+	executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T> {
+		return Promise.resolve(vscode.commands.executeCommand<T>(command, ...args))
+	}
 }
 
 /** The VS Code host bridge (extension runtime). */
