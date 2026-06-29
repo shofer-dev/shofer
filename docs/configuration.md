@@ -143,6 +143,24 @@ USD amounts. Without this setting, only token counts are available.
 
 ## Storage & UI
 
+### `SHOFER_MESSAGE_BACKEND` (env var) — message storage backend (§5)
+
+|       |                                        |
+| ----- | -------------------------------------- |
+| Type  | `"filesystem"` (default) \| `"sqlite"` |
+| Scope | process (environment variable)         |
+
+Selects how a task's conversation/UI messages are stored. Default is the
+flat-file (JSONL) backend. Set `SHOFER_MESSAGE_BACKEND=sqlite` to opt into the
+SQLite backend ([`SqliteMessagePersistence`](../src/core/task-persistence/SqliteMessagePersistence.ts)),
+which stores messages as rows and removes the need for the flat-file performance
+machinery. It is **feature-detected** — if `node:sqlite` is unavailable on the
+runtime (e.g. an older extension host), it transparently falls back to the
+flat-file backend — and the first read of a task **lazily imports** any existing
+flat-file history, so opting in never loses data. Both backends implement the
+same `MessagePersistencePort`. Making SQLite the default is a deliberate future
+rollout (gated on extension-host runtime verification).
+
 ### `shofer.customStoragePath`
 
 |         |                         |

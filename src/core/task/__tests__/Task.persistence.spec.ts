@@ -81,18 +81,12 @@ vi.mock("p-wait-for", () => ({
 	default: mockPWaitFor,
 }))
 
-vi.mock("../../task-persistence", () => ({
-	saveApiMessages: mockSaveApiMessages,
-	saveTaskMessages: mockSaveTaskMessages,
-	appendApiMessage: mockAppendApiMessage,
-	appendTaskMessage: mockAppendTaskMessage,
-	readApiMessages: mockReadApiMessages,
-	readTaskMessages: mockReadTaskMessages,
-	taskMetadata: mockTaskMetadata,
-	// §5: Task now reads/writes through the MessagePersistencePort. This mock
-	// backend delegates to the same mock functions (with the original arg shape)
-	// so existing call assertions on mockSaveApiMessages/etc. still hold.
-	FileSystemMessagePersistence: class {
+vi.mock("../../task-persistence", () => {
+	// §5: Task now reads/writes through the MessagePersistencePort, resolved via
+	// createMessagePersistence. This mock backend delegates to the same mock
+	// functions (with the original arg shape) so existing call assertions on
+	// mockSaveApiMessages/etc. still hold.
+	class MockBackend {
 		appendApiMessage(taskId: string, message: unknown) {
 			return mockAppendApiMessage({ message, taskId, globalStoragePath: "" })
 		}
@@ -120,19 +114,30 @@ vi.mock("../../task-persistence", () => ({
 		disposeAppendHandleForTask() {
 			return Promise.resolve()
 		}
-	},
-	TaskHistoryStore: vi.fn().mockImplementation(() => ({
-		initialize: vi.fn().mockResolvedValue(undefined),
-		dispose: vi.fn(),
-		get: vi.fn(),
-		getAll: vi.fn().mockReturnValue([]),
-		upsert: vi.fn().mockResolvedValue([]),
-		delete: vi.fn().mockResolvedValue(undefined),
-		deleteMany: vi.fn().mockResolvedValue(undefined),
-		reconcile: vi.fn().mockResolvedValue(undefined),
-		initialized: Promise.resolve(),
-	})),
-}))
+	}
+	return {
+		saveApiMessages: mockSaveApiMessages,
+		saveTaskMessages: mockSaveTaskMessages,
+		appendApiMessage: mockAppendApiMessage,
+		appendTaskMessage: mockAppendTaskMessage,
+		readApiMessages: mockReadApiMessages,
+		readTaskMessages: mockReadTaskMessages,
+		taskMetadata: mockTaskMetadata,
+		FileSystemMessagePersistence: MockBackend,
+		createMessagePersistence: vi.fn(async () => new MockBackend()),
+		TaskHistoryStore: vi.fn().mockImplementation(() => ({
+			initialize: vi.fn().mockResolvedValue(undefined),
+			dispose: vi.fn(),
+			get: vi.fn(),
+			getAll: vi.fn().mockReturnValue([]),
+			upsert: vi.fn().mockResolvedValue([]),
+			delete: vi.fn().mockResolvedValue(undefined),
+			deleteMany: vi.fn().mockResolvedValue(undefined),
+			reconcile: vi.fn().mockResolvedValue(undefined),
+			initialized: Promise.resolve(),
+		})),
+	}
+})
 
 vi.mock("vscode", () => {
 	const mockDisposable = { dispose: vi.fn() }

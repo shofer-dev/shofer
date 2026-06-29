@@ -47,6 +47,35 @@ vi.mock("../../task-persistence", () => {
 	// spies on the module's `appendTaskMessage`, so the mock backend delegates to
 	// the same fn (other methods are no-ops here).
 	const appendTaskMessage = vi.fn().mockResolvedValue(undefined)
+	class MockBackend {
+		appendApiMessage() {
+			return Promise.resolve()
+		}
+		readApiMessages() {
+			return Promise.resolve([])
+		}
+		readApiMessagesTail() {
+			return Promise.resolve([[], false])
+		}
+		saveApiMessages() {
+			return Promise.resolve()
+		}
+		appendTaskMessage(taskId: string, message: unknown) {
+			return appendTaskMessage({ message, taskId, globalStoragePath: "" })
+		}
+		readTaskMessages() {
+			return Promise.resolve([])
+		}
+		readTaskMessagesTail() {
+			return Promise.resolve([[], false])
+		}
+		saveTaskMessages() {
+			return Promise.resolve()
+		}
+		disposeAppendHandleForTask() {
+			return Promise.resolve()
+		}
+	}
 	return {
 		readApiMessages: vi.fn().mockResolvedValue([]),
 		saveApiMessages: vi.fn().mockResolvedValue(undefined),
@@ -54,35 +83,8 @@ vi.mock("../../task-persistence", () => {
 		readTaskMessages: vi.fn().mockResolvedValue([]),
 		saveTaskMessages: vi.fn().mockResolvedValue(undefined),
 		appendTaskMessage,
-		FileSystemMessagePersistence: class {
-			appendApiMessage() {
-				return Promise.resolve()
-			}
-			readApiMessages() {
-				return Promise.resolve([])
-			}
-			readApiMessagesTail() {
-				return Promise.resolve([[], false])
-			}
-			saveApiMessages() {
-				return Promise.resolve()
-			}
-			appendTaskMessage(taskId: string, message: unknown) {
-				return appendTaskMessage({ message, taskId, globalStoragePath: "" })
-			}
-			readTaskMessages() {
-				return Promise.resolve([])
-			}
-			readTaskMessagesTail() {
-				return Promise.resolve([[], false])
-			}
-			saveTaskMessages() {
-				return Promise.resolve()
-			}
-			disposeAppendHandleForTask() {
-				return Promise.resolve()
-			}
-		},
+		FileSystemMessagePersistence: MockBackend,
+		createMessagePersistence: vi.fn(async () => new MockBackend()),
 		taskMetadata: vi.fn().mockResolvedValue({
 			historyItem: {
 				id: "test-task-id",

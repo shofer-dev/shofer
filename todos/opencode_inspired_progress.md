@@ -99,11 +99,15 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       feature-detects `node:sqlite` and **falls back to flat-file**, so opting in
       can't break a host that lacks it. 7 tests (round-trip/dedupe/tail/compact/
       import/factory) run on Node 22; skip where node:sqlite is absent.
-    - ⬜ Step 3 (rollout): flip the default to SQLite + retire the flat-file perf
+    - ✅ Step 3 (wired, opt-in): Task resolves its backend via
+      `createMessagePersistence` (async, cached). `SHOFER_MESSAGE_BACKEND=sqlite`
+      opts in (feature-detect + flat-file fallback + lazy import); default stays
+      flat-file. Docs: `configuration.md`. 277 task/persistence tests pass.
+    - ⬜ Step 3 (rollout): make SQLite the default + retire the flat-file perf
       machinery (debounced saves / append logs / tail reads). DELIBERATELY not
       flipped — needs extension-host runtime verification (Electron Node may lack
       `node:sqlite` → may require bundling `better-sqlite3`) before it's the default
-      on user data. Default remains flat-file; the SQLite backend is ready + tested.
+      on user data. A user-facing setting (vs the env var) is the thin follow-on.
 - 🚧 **§6 Structured cancellation**
     - ✅ `utils/process-termination.ts` — reusable `terminateProcessTree` with a
       SIGTERM→grace→SIGKILL escalation over a process tree (injectable

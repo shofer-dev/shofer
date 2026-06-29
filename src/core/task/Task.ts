@@ -121,7 +121,8 @@ import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-
 import {
 	type ApiMessage,
 	type MessagePersistencePort,
-	FileSystemMessagePersistence,
+	type MessageBackend,
+	createMessagePersistence,
 	taskMetadata,
 } from "../task-persistence"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
@@ -1509,20 +1510,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// API Messages
 
 	/**
-	 * Message persistence backend (§5). All api/UI message reads/writes go through
-	 * this port so the storage layer (currently flat JSONL) can be swapped without
-	 * touching these call sites. Lazily created to avoid constructor ordering.
+	 * Resolve the message-persistence backend once (cached). Defaults to the
+	 * flat-file backend; set `SHOFER_MESSAGE_BACKEND=sqlite` to opt into the SQLite
+	 * backend (§5) — `createMessagePersistence` feature-detects `node:sqlite` and
+	 * falls back to flat-file if unavailable, and the first read lazily imports any
+	 * existing flat-file history. Async because the SQLite check is async.
 	 */
-	private _persistence?: MessagePersistencePort
-	private get persistence(): MessagePersistencePort {
-		if (!this._persistence) {
-			this._persistence = new FileSystemMessagePersistence(this.globalStoragePath)
+	private _persistencePromise?: Promise<MessagePersistencePort>
+	private getPersistence(): Promise<MessagePersistencePort> {
+		if (!this._persistencePromise) {
+			const backend: MessageBackend = process.env.SHOFER_MESSAGE_BACKEND === "sqlite" ? "sqlite" : "filesystem"
+			this._persistencePromise = createMessagePersistence(this.globalStoragePath, backend)
 		}
-		return this._persistence
+		return this._persistencePromise
 	}
 
 	private async getSavedApiConversationHistory(): Promise<ApiMessage[]> {
-		return this.persistence.readApiMessages(this.taskId)
+		return (await this.getPersistence()).readApiMessages(this.taskId)
 	}
 
 	/**
@@ -1767,7 +1771,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `overwriteApiConversationHistory` / `retrySaveApiConversationHistory`.
 		try {
 			const last = this.apiConversationHistory[this.apiConversationHistory.length - 1]
-			await this.persistence.appendApiMessage(this.taskId, last)
+			await (await this.getPersistence()).appendApiMessage(this.taskId, last)
 		} catch (error) {
 			taskLog.error("Failed to append API message:", error)
 		}
@@ -1855,7 +1859,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// `retrySaveApiConversationHistory()` (which does a full rewrite).
 		let saved = true
 		try {
-			await this.persistence.appendApiMessage(this.taskId, userMessageWithTs as ApiMessage)
+			await (await this.getPersistence()).appendApiMessage(this.taskId, userMessageWithTs as ApiMessage)
 		} catch (error) {
 			saved = false
 			taskLog.error("Failed to append pending tool-result message:", error)
@@ -1882,7 +1886,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// injection, etc.) cannot race with the write.
 			const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
 			const serialized = serializeJsonLines(this.apiConversationHistory)
-			await this.persistence.saveApiMessages(this.taskId, this.apiConversationHistory, serialized)
+			await (await this.getPersistence()).saveApiMessages(this.taskId, this.apiConversationHistory, serialized)
 			return true
 		} catch (error) {
 			taskLog.error("Failed to save API conversation history:", error)
@@ -1917,17 +1921,17 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Shofer Messages
 
 	public async getSavedShoferMessages(): Promise<ShoferMessage[]> {
-		return this.persistence.readTaskMessages(this.taskId)
+		return (await this.getPersistence()).readTaskMessages(this.taskId)
 	}
 
 	// T1.B: tail-read helpers for cold task-switch optimisation.
 	// Read only the last N messages from disk instead of the full history.
 	private async getSavedShoferMessagesTail(maxMessages: number): Promise<[ShoferMessage[], boolean]> {
-		return this.persistence.readTaskMessagesTail(this.taskId, maxMessages)
+		return (await this.getPersistence()).readTaskMessagesTail(this.taskId, maxMessages)
 	}
 
 	private async getSavedApiConversationHistoryTail(maxMessages: number): Promise<[ApiMessage[], boolean]> {
-		return this.persistence.readApiMessagesTail(this.taskId, maxMessages)
+		return (await this.getPersistence()).readApiMessagesTail(this.taskId, maxMessages)
 	}
 
 	/**
@@ -2108,7 +2112,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// refresh so a crash between the in-memory push and the next compaction
 		// does not lose the message.
 		try {
-			await this.persistence.appendTaskMessage(this.taskId, message)
+			await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
 			// H12: track appended lines for threshold-triggered compaction.
 			this._appendedSinceCompaction++
 		} catch (error) {
@@ -2192,7 +2196,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const shouldAppend = !isPartial || now - this._lastPartialAppendTs >= Task.PARTIAL_APPEND_THROTTLE_MS
 		if (shouldAppend) {
 			try {
-				await this.persistence.appendTaskMessage(this.taskId, message)
+				await (await this.getPersistence()).appendTaskMessage(this.taskId, message)
 				// H12: re-appending a mutated message counts as an append.
 				this._appendedSinceCompaction++
 				if (isPartial) {
@@ -2258,7 +2262,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (shouldCompact) {
 				const { serializeJsonLines } = await import("../task-persistence/jsonlLog")
 				const serialized = serializeJsonLines(this.shoferMessages)
-				await this.persistence.saveTaskMessages(this.taskId, this.shoferMessages, serialized)
+				await (await this.getPersistence()).saveTaskMessages(this.taskId, this.shoferMessages, serialized)
 				this._appendedSinceCompaction = 0
 			}
 
@@ -4432,9 +4436,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// H13(b): release the long-lived append file handle for this task's
 		// JSONL log. Best-effort — the fd will be reclaimed by the kernel on
 		// process exit anyway.
-		void this.persistence.disposeAppendHandleForTask(this.taskId).catch(() => {
-			// EACCES in test envs, missing task dir, etc. — harmless.
-		})
+		void this.getPersistence()
+			.then((p) => p.disposeAppendHandleForTask(this.taskId))
+			.catch(() => {
+				// EACCES in test envs, missing task dir, etc. — harmless.
+			})
 	}
 
 	// Task Loop
