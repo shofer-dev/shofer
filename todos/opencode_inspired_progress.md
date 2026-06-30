@@ -212,21 +212,31 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
           `validateToolUse`, `AskLiveMemoryTool`, `ProviderSettingsManager`.
           **23 core files vscode-free** across 6 seams (notifier, fs+findFiles, config, env,
           lsp, workspace).
-    - ⬜ Remainder — two buckets:
-        1. **Needs a dedicated seam** (each its own small project): file watchers
-           (`ShoferIgnoreController`, `FileContextTracker` — `createFileSystemWatcher`),
-           file dialogs (`importExport`, `process-images` — `showSave/OpenDialog`),
-           editor/tab state (`getEnvironmentDetails` — visible tabs), an event-emitter
-           swap (`ContextProxy` — `vscode.EventEmitter`), and `mentions`/`checkpoints`
-           (`commands` + diagnostics). `build-tools` mixes config + the private-tools
-           `commands` + intrinsic `vscode.lm`.
-        2. **Intrinsic VS Code / legitimate adapter** (should stay coupled, not
-           abstracted): the VS Code LM provider/format (`api/providers/vscode-lm.ts`,
-           `api/transform/vscode-lm-format.ts`) is the VS Code Language Model API by
-           definition; and `integrations/*` (editor decorations, diff view, terminal,
-           theme) IS the VS Code adapter/UI layer — the correct home for vscode
-           coupling, like `host/host-bridge.ts`. Carving the headless core package out
-           draws the line _around_ these, not through them.
+    - ✅ Core extraction — `HostWatcher` seam (25 core files vscode-free):
+        - `HostWatcher.watch(baseDir, pattern)` → `HostFileWatcher`
+          (`onCreate`/`onChange`/`onDelete`/`dispose`; VS Code adapter →
+          `createFileSystemWatcher` + `RelativePattern`; headless → no-op).
+        - `ShoferIgnoreController` + `FileContextTracker` register watchers through it
+          (the latter resolves cwd via `getWorkspacePath`); both now carry zero runtime
+          `vscode` import.
+          **25 core files vscode-free** across 7 seams (notifier, fs+findFiles, config, env,
+          lsp, workspace, watcher). `installVsCodeForwardingHost()` forwards all of them.
+    - ⬜ Remainder — **the architectural boundary is now reached.** The files still
+      importing `vscode` are not "core logic leaking vscode" — they are:
+        1. **ExtensionContext-bound config managers** (`ContextProxy`,
+           `CustomModesManager`) — they take a `vscode.ExtensionContext`, so they are
+           inherently extension-scoped, not portable-core.
+        2. **Editor/diff UI** (`getEnvironmentDetails` tabs, `checkpoints`/`mentions`
+           diff + diagnostics commands, `importExport`/`process-images` dialogs) —
+           entangled with the diff view + dialogs, i.e. the **`integrations/*` adapter
+           layer**, the correct home for vscode coupling (like `host/host-bridge.ts`).
+        3. **Intrinsic VS Code** — the VS Code LM provider/format
+           (`api/providers/vscode-lm.ts`, `api/transform/vscode-lm-format.ts`) IS the
+           VS Code Language Model API; `build-tools`' `vscode.lm` private-tools path.
+           Carving the headless core package draws the line _around_ buckets 1–3. The
+           portable agent core — `Task`, all tool implementations, prompts, the
+           assistant-message dispatch loop, context-tracking, the ignore controller — is
+           vscode-free. Gates §11 (API/SDK) and §12 (ACP).
 - 🚧 **§10 Typed plugin API**
     - ✅ Foundation: `ShoferPlugin` contract (`packages/types/src/plugin.ts`) — a
       host-agnostic typed object with optional hooks (`registerTools`,
