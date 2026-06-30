@@ -25,6 +25,7 @@ describe("host-bridge accessor", () => {
 			env: base.env,
 			lsp: base.lsp,
 			workspace: base.workspace,
+			watcher: base.watcher,
 		}
 		setHost(host)
 		getHost().notifier.info("hello")

@@ -4,6 +4,8 @@ import type { Mock } from "vitest"
 
 import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "../ShoferIgnoreController"
 import * as vscode from "vscode"
+
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import * as path from "path"
 import * as fs from "fs/promises"
 import * as fsSync from "fs"
@@ -55,6 +57,7 @@ describe("ShoferIgnoreController", () => {
 	beforeEach(() => {
 		// Reset mocks
 		vi.clearAllMocks()
+		installVsCodeForwardingHost()
 
 		// Setup mock file watcher
 		mockWatcher = {

@@ -11,8 +11,10 @@ import type {
 	HostFileEdit,
 	HostFileSystem,
 	HostLsp,
+	HostFileWatcher,
 	HostReferencesResult,
 	HostSymbol,
+	HostWatcher,
 	HostWorkspace,
 	HostWorkspaceEdit,
 	Notifier,
@@ -243,6 +245,18 @@ class VsCodeWorkspace implements HostWorkspace {
 	}
 }
 
+class VsCodeWatcher implements HostWatcher {
+	watch(baseDir: string, pattern: string): HostFileWatcher {
+		const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(baseDir, pattern))
+		return {
+			onCreate: (handler) => w.onDidCreate(handler),
+			onChange: (handler) => w.onDidChange(handler),
+			onDelete: (handler) => w.onDidDelete(handler),
+			dispose: () => w.dispose(),
+		}
+	}
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
 	return {
@@ -252,6 +266,7 @@ export function createVsCodeHost(): HostBridge {
 		env: vsCodeEnv,
 		lsp: new VsCodeLsp(),
 		workspace: new VsCodeWorkspace(),
+		watcher: new VsCodeWatcher(),
 	}
 }
 

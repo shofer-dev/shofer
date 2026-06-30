@@ -3,8 +3,9 @@ import { fileExistsAtPath } from "../../utils/fs"
 import fs from "fs/promises"
 import fsSync from "fs"
 import ignore, { Ignore } from "ignore"
-import * as vscode from "vscode"
+import type { HostDisposable } from "@shofer/types"
 import { webviewLog } from "../../utils/logging/subsystems"
+import { getHost } from "../../host/host-bridge"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 
@@ -16,7 +17,7 @@ export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 export class ShoferIgnoreController {
 	private cwd: string
 	private ignoreInstance: Ignore
-	private disposables: vscode.Disposable[] = []
+	private disposables: HostDisposable[] = []
 	shoferIgnoreContent: string | undefined
 
 	constructor(cwd: string) {
@@ -39,18 +40,17 @@ export class ShoferIgnoreController {
 	 * Set up the file watcher for shoferignore changes
 	 */
 	private setupFileWatcher(): void {
-		const ignorePattern = new vscode.RelativePattern(path.join(this.cwd, ".shofer"), "shoferignore")
-		const fileWatcher = vscode.workspace.createFileSystemWatcher(ignorePattern)
+		const fileWatcher = getHost().watcher.watch(path.join(this.cwd, ".shofer"), "shoferignore")
 
 		// Watch for changes and updates
 		this.disposables.push(
-			fileWatcher.onDidChange(() => {
+			fileWatcher.onChange(() => {
 				this.loadShoferIgnore()
 			}),
-			fileWatcher.onDidCreate(() => {
+			fileWatcher.onCreate(() => {
 				this.loadShoferIgnore()
 			}),
-			fileWatcher.onDidDelete(() => {
+			fileWatcher.onDelete(() => {
 				this.loadShoferIgnore()
 			}),
 		)

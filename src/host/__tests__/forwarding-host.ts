@@ -14,6 +14,17 @@ export function installVsCodeForwardingHost(): void {
 	const base = createInMemoryHost()
 	setHost({
 		...base,
+		watcher: {
+			watch: (baseDir: string, pattern: string) => {
+				const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(baseDir, pattern))
+				return {
+					onCreate: (h: () => void) => w.onDidCreate(h),
+					onChange: (h: () => void) => w.onDidChange(h),
+					onDelete: (h: () => void) => w.onDidDelete(h),
+					dispose: () => w.dispose(),
+				}
+			},
+		},
 		env: {
 			get language() {
 				return vscode.env.language

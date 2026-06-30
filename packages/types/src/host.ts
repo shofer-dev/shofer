@@ -131,6 +131,32 @@ export interface HostLsp {
 	applyWorkspaceEdit(edit: HostWorkspaceEdit): Promise<boolean>
 }
 
+/** A disposable resource (maps to `vscode.Disposable`). */
+export interface HostDisposable {
+	dispose(): void
+}
+
+/**
+ * A file-system watcher over a glob (maps to `vscode.FileSystemWatcher`). Each
+ * `on*` registers a handler and returns its own disposable; `dispose()` tears the
+ * whole watcher down.
+ */
+export interface HostFileWatcher extends HostDisposable {
+	onCreate(handler: () => void): HostDisposable
+	onChange(handler: () => void): HostDisposable
+	onDelete(handler: () => void): HostDisposable
+}
+
+/** File-watching the core needs (maps to `vscode.workspace.createFileSystemWatcher`). */
+export interface HostWatcher {
+	/**
+	 * Watch files matching glob `pattern` under `baseDir` (maps to
+	 * `createFileSystemWatcher(new RelativePattern(baseDir, pattern))`). A headless
+	 * host may return a no-op watcher.
+	 */
+	watch(baseDir: string, pattern: string): HostFileWatcher
+}
+
 /** Workspace-level host actions (maps to `vscode.commands` workspace operations). */
 export interface HostWorkspace {
 	/**
@@ -187,4 +213,5 @@ export interface HostBridge {
 	readonly env: HostEnv
 	readonly lsp: HostLsp
 	readonly workspace: HostWorkspace
+	readonly watcher: HostWatcher
 }

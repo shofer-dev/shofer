@@ -3,8 +3,10 @@ import type {
 	HostConfig,
 	HostEnv,
 	HostFileSystem,
+	HostDisposable,
 	HostLsp,
 	HostReferencesResult,
+	HostWatcher,
 	HostWorkspace,
 	Notifier,
 	NotifyChoiceOptions,
@@ -82,6 +84,17 @@ export class InMemoryConfig implements HostConfig {
 /** A default in-memory `HostEnv` (English, no app root). */
 export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
 
+/** A no-op `HostWatcher` (no file events). */
+const noopDisposable: HostDisposable = { dispose() {} }
+export const noopWatcher: HostWatcher = {
+	watch: () => ({
+		onCreate: () => noopDisposable,
+		onChange: () => noopDisposable,
+		onDelete: () => noopDisposable,
+		dispose() {},
+	}),
+}
+
 /** A no-op `HostWorkspace` (no IDE window). */
 export const noopWorkspace: HostWorkspace = {
 	openFolder: async () => {},
@@ -108,5 +121,6 @@ export function createInMemoryHost(): HostBridge {
 		env: inMemoryEnv,
 		lsp: noopLsp,
 		workspace: noopWorkspace,
+		watcher: noopWatcher,
 	}
 }

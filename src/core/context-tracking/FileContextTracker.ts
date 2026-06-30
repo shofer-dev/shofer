@@ -1,7 +1,9 @@
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import * as path from "path"
 import * as crypto from "crypto"
-import * as vscode from "vscode"
+import type { HostFileWatcher } from "@shofer/types"
+import { getHost } from "../../host/host-bridge"
+import { getWorkspacePath } from "../../utils/path"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -43,7 +45,7 @@ export class FileContextTracker {
 	private providerRef: WeakRef<ShoferProvider>
 
 	// File tracking and watching
-	private fileWatchers = new Map<string, vscode.FileSystemWatcher>()
+	private fileWatchers = new Map<string, HostFileWatcher>()
 	private recentlyModifiedFiles = new Set<string>()
 	private recentlyEditedByRoo = new Set<string>()
 	private checkpointPossibleFiles = new Set<string>()
@@ -55,7 +57,7 @@ export class FileContextTracker {
 
 	// Gets the current working directory or returns undefined if it cannot be determined
 	private getCwd(): string | undefined {
-		const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0)
+		const cwd = getWorkspacePath() || undefined
 		if (!cwd) {
 			taskLog.info("No workspace folder available - cannot determine current working directory")
 		}
@@ -75,13 +77,11 @@ export class FileContextTracker {
 		}
 
 		// Create a file system watcher for this specific file
-		const fileUri = vscode.Uri.file(path.resolve(cwd, filePath))
-		const watcher = vscode.workspace.createFileSystemWatcher(
-			new vscode.RelativePattern(path.dirname(fileUri.fsPath), path.basename(fileUri.fsPath)),
-		)
+		const absPath = path.resolve(cwd, filePath)
+		const watcher = getHost().watcher.watch(path.dirname(absPath), path.basename(absPath))
 
 		// Track file changes
-		watcher.onDidChange(() => {
+		watcher.onChange(() => {
 			if (this.recentlyEditedByRoo.has(filePath)) {
 				this.recentlyEditedByRoo.delete(filePath) // This was an edit by Shofer, no need to inform Shofer
 			} else {
