@@ -5,7 +5,7 @@ import fsSync from "fs"
 import ignore, { Ignore } from "ignore"
 import type { HostDisposable } from "@shofer/types"
 import { webviewLog } from "../../utils/logging/subsystems"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 

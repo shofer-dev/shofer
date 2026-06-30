@@ -6,7 +6,7 @@ import * as fs from "fs/promises"
 import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import {
 	type Language,

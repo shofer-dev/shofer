@@ -15,7 +15,7 @@ import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } fr
 
 import { AskIgnoredError } from "../task/AskIgnoredError"
 import { Task } from "../task/Task"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import { listFilesTool } from "../tools/ListFilesTool"
 import { readFileTool } from "../tools/ReadFileTool"

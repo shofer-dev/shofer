@@ -8,7 +8,7 @@ import delay from "delay"
 import axios from "axios"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import {
 	type TaskProviderLike,

@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { getHost } from "../host/host-bridge"
+import { getHost } from "@shofer/types"
 import * as v8 from "v8"
 import * as path from "path"
 import fs from "fs/promises"

@@ -20,7 +20,6 @@ import type {
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
-import { createInMemoryHost } from "@shofer/types"
 
 /**
  * VS Code-backed implementation of the host boundary (§9). This is the extension
@@ -270,16 +269,7 @@ export function createVsCodeHost(): HostBridge {
 	}
 }
 
-// Module-level host accessor. Defaults to an in-memory host so call sites work in
-// tests / before activation; the extension installs the VS Code host on activate.
-let host: HostBridge = createInMemoryHost()
-
-/** Install the active host bridge (call once at activation). */
-export function setHost(bridge: HostBridge): void {
-	host = bridge
-}
-
-/** The active host bridge. */
-export function getHost(): HostBridge {
-	return host
-}
+// The host registry lives in `@shofer/types` (a vscode-free package) so the
+// portable core can import `getHost()` without pulling in this VS Code adapter.
+// Re-exported here for adapter-side callers (extension activation, tests).
+export { getHost, setHost } from "@shofer/types"

@@ -9,7 +9,7 @@ import * as path from "path"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "../../utils/path"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

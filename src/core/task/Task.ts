@@ -123,7 +123,7 @@ import {
 	SqliteMessagePersistence,
 	taskMetadata,
 } from "../task-persistence"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling"
 import { isNonRetryableApiError } from "../../api/providers/utils/retryable-error"

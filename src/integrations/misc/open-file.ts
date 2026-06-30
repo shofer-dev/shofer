@@ -1,7 +1,7 @@
 import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { arePathsEqual, getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
 import { fsLog } from "../../utils/logging/subsystems"

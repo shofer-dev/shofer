@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"

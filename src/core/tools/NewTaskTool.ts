@@ -1,5 +1,5 @@
 import { TodoItem } from "@shofer/types"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import type { HistoryItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 

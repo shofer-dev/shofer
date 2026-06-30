@@ -1,5 +1,5 @@
 import { Package } from "../../../shared/package"
-import { getHost } from "../../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 /**
  * Gets the API request timeout from VSCode configuration with validation.

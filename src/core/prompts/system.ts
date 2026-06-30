@@ -1,6 +1,6 @@
 import type * as vscode from "vscode"
 
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import {
 	type ModeConfig,

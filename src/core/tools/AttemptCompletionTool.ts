@@ -1,5 +1,5 @@
 import { ShoferEventName, type HistoryItem, type CompletionRating } from "@shofer/types"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"

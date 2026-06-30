@@ -12,7 +12,7 @@ import * as fs from "fs/promises"
 import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { getReadablePath } from "../../utils/path"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"

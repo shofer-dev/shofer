@@ -22,7 +22,7 @@
 import * as path from "path"
 import * as childProcess from "child_process"
 import * as readline from "readline"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import { type ShoferSayTool } from "@shofer/types"
 

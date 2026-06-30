@@ -3,7 +3,7 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 export async function openImage(dataUriOrPath: string, options?: { values?: { action?: string } }) {
 	// Check if it's a file path (absolute or relative)

@@ -4,7 +4,7 @@ import * as path from "path"
 import fs from "fs/promises"
 
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import { z, ZodError } from "zod"
 
 import {

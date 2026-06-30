@@ -2,7 +2,7 @@ import * as path from "path"
 import * as os from "os"
 import * as fs from "fs/promises"
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 
 import { getTaskDirectoryPath } from "../../utils/storage"
 

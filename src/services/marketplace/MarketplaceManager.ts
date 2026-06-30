@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import * as vscode from "vscode"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import * as yaml from "yaml"
 
 import type { MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"

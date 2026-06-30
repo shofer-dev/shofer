@@ -9,7 +9,7 @@ import * as path from "path"
 import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { getHost } from "../../host/host-bridge"
+import { getHost } from "@shofer/types"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
