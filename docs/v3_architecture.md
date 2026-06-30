@@ -156,6 +156,101 @@ built-in `node:sqlite` — no flat files, no native dependency.
 
 ---
 
+## Distributed execution (horizontal scaling)
+
+> **📐 Proposed.** No multi-host execution ships today. A single-node, same-host
+> relay prototype exists on the `feat/remote-agents` branch; the v3-native design
+> below (Category I as the distribution seam) is the target, not yet built.
+
+The Category I/II split is also what makes Shofer **horizontally scalable**: the
+portable core can run not just in a different front-end, but on a different _machine_
+from the user's UI. The vocabulary:
+
+- **Executor** — a running instance of the agent loop for a task: the portable core
+  plus a host adapter. The **Local executor** is in-process (today's behavior).
+  **Remote executors** run the same core elsewhere (a server/headless adapter).
+- **Controller** — the front-end that owns the user session: the UI, the executor
+  registry, task→executor routing, and ownership of workspace-shared services (e.g.
+  the code index). Always present.
+- **Node** — a registered executor (Local or Remote). With **zero remote nodes
+  registered, everything runs on the Local executor exactly as today** — the
+  distributed machinery is dormant until a node is added (backward-compatible by
+  construction).
+
+### Two seams — and why Category I pays off here
+
+Distributing execution uses two boundaries that the v3 split already defines:
+
+1. **Session transport (controller ↔ executor).** The high-level agent-session
+   protocol — task lifecycle, streamed assistant output, approvals, task-tree state.
+   This is the _same_ contract the HTTP API/SDK and ACP backend expose (initiatives
+   10–11): a remote executor is simply a **headless front-end reachable over a
+   transport** (WebSocket/HTTP/stdio). It is **version-locked** — the message
+   contract is only guaranteed within one Shofer version, so a controller may only
+   drive an executor on the exact same version.
+
+2. **Host-callback channel (executor → controller), over Category I.** A remote
+   executor runs on a machine that has the _workspace_ but not the _user's UI_. Its
+   host adapter is therefore a **split adapter**:
+
+    - **Workspace-scoped Category I capabilities** — filesystem, `findFiles`,
+      watching, command execution — are served **locally on the executor** (it shares
+      the workspace filesystem).
+    - **Front-end-bound Category I capabilities** — interactive notifications/
+      approvals, editor/tab context, language-service queries (`HostLsp`),
+      provider-contributed (private-tool) commands — are **RPC'd back to the
+      controller's real adapter**.
+
+    Because Category I is **DTO-based** (plain serializable data — paths, positions,
+    edits), it serializes over the wire directly, with no bespoke projection. This is
+    the v3-native improvement over a coarse relay that runs the _entire_ platform mock
+    remotely and special-cases the editor/LSP/private-tool divergences: in v3 those
+    divergences are not special cases — they are exactly the front-end-bound slice of
+    Category I, and the boundary is already drawn.
+
+### Routing and invariants
+
+- **Root-task-level routing.** Each new top-level task — and its entire tree (all
+  child and peer tasks) — is assigned to a single executor. So the in-process
+  multi-task coordination tools (`new_task`, `check_task_status`, `wait_for_task`,
+  `send_message_to_task`) keep working unchanged; coordination never crosses the wire.
+- **Single-owner invariant.** A whole root-task tree has exactly one executor owner,
+  so per-task state (message queue, checkpoints, file-change snapshots, cost
+  aggregation) is never shared between machines.
+- **Per-task working isolation.** Concurrent root tasks on different executors each
+  operate in their own `.shofer/worktrees/<name>/` branch, so they don't collide on
+  the shared working tree.
+
+### Shared-resource reconciliation
+
+A few subsystems are workspace-scoped singletons and must be reconciled across
+executors. The governing principles:
+
+- **Single-writer for shared indexes.** The code index has one writer — the
+  controller, which shares the workspace filesystem and already sees every change
+  (including those a remote executor makes). Executors are **search-only** against
+  the shared store. (End state: extract the index/embeddings/memory into standalone
+  services every node queries — at which point even the controller is just a client.)
+- **Serialize shared-repo mutations.** Worktree and shadow-git creation on the shared
+  `.git` must be serialized and per-executor-namespaced to avoid ref/object races.
+- **Network addressing, not loopback.** A remote executor cannot reach the
+  controller's `localhost`; loopback-bound MCP/services must be addressed over the
+  network.
+- **Front-end-bound capabilities degrade or proxy.** Editor context, LSP, private
+  tools, and output-channel reads either RPC back to the controller (the Category I
+  callback channel) or return empty / "n/a" on a headless executor.
+
+### Resilience
+
+Two failure cases: the **controller restarts** (reattach to the executor and resync
+its retained message stream) and an **executor restarts** (reschedule the task and
+recover state). Task IDs are globally unique (uuidv7), so there are no cross-executor
+collisions on reattach. (This supersedes, for the multi-_host_ case, the intra-process
+worker-thread parallelism described in `multi_threaded.md`, which remains the
+single-host story.)
+
+---
+
 ## Architectural initiatives (status)
 
 The v3 architecture is delivered as a set of initiatives. Current status:
@@ -173,6 +268,7 @@ The v3 architecture is delivered as a set of initiatives. Current status:
 | 9   | Typed plugin API (hooks: tools, prompt transform, events)                                      | ✅ foundation wired                           |
 | 10  | HTTP API + SDK + headless parity                                                               | 🚧 foundation (server + agent adapter)        |
 | 11  | Editor-agnostic agent protocol (ACP) backend                                                   | 🚧 protocol mapping                           |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 📐 proposed (single-node relay prototype)     |
 
 (Initiative numbers here are local to this document.)
 
@@ -201,6 +297,25 @@ A **CLI** front-end is the first target: it links the core, implements the Categ
 interfaces for a terminal (glob-based `findFiles`, `chokidar` watching, stdout
 notifications, direct-to-disk edits, no-op or standalone language services), and
 gets the full agent loop without any VS Code dependency.
+
+### Distributed execution (initiative 12)
+
+The horizontal model builds directly on the two tracks above and shares their
+prerequisites:
+
+- A **remote executor** is the headless front-end from initiatives 10–11 (linking
+  `@shofer/core` + a server adapter) made reachable over the session transport.
+- Its **split host adapter** is the one genuinely new piece: workspace-scoped
+  Category I served locally; front-end-bound Category I (notifications/approvals,
+  `HostLsp`, editor context, private-tool commands) RPC'd back to the controller —
+  serializable for free because Category I is DTO-based.
+- Controller-side: an **executor registry**, **root-task→executor routing**, and a
+  **unified multi-executor task view**, plus the shared-resource reconciliation
+  (single-writer index, serialized shared-repo mutations).
+
+So finishing the package carve-out and the headless transport is also what unlocks
+horizontal scaling; the distributed layer adds routing + the split adapter on top,
+not a parallel architecture.
 
 ---
 

@@ -285,3 +285,27 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started.
       `docs/acp.md`. Reuses §3 (events), §4 (permissions/modes), §6 (cancel).
     - ⬜ Add `@agentclientprotocol/sdk`, implement the service over it, ship a
       `shofer acp` stdio entrypoint. Gated on §9 (agent must run vscode-free).
+
+## Phase 5 — Horizontal scaling
+
+- 📐 **§13 Distributed execution (controllers/executors)** — DESIGN. See
+  `docs/v3_architecture.md` → _Distributed execution_. The portable core can run on a
+  different machine from the UI: a **controller** (front-end: UI, executor registry,
+  task routing, sole index-writer) drives one or more **executors** (core + host
+  adapter; Local in-process or Remote). Two seams: the **session transport**
+  (controller↔executor = the §11/§12 headless protocol) and a **Category I
+  host-callback channel** (front-end-bound capabilities — notifications/approvals,
+  `HostLsp`, editor context, private-tool commands — RPC'd back to the controller;
+  DTO-based Category I serializes for free). Root-task-level routing keeps in-process
+  coordination tools unchanged; single-owner-per-tree + per-task worktrees keep state
+  unshared.
+    - Prototype: a single-node, same-host relay exists on `feat/remote-agents` (it
+      relays the UI message protocol and runs the whole platform mock remotely). The
+      v3-native refinement is to make **Category I** the distribution seam instead, so
+      a remote executor runs the portable core + a split host adapter rather than the
+      full shim.
+    - Gated on §9 (the `@shofer/core` carve-out) + §11/§12 (the session transport).
+      New work on top: the split (local + RPC-back) host adapter, the controller-side
+      executor registry + root-task routing + unified multi-executor task view, and
+      shared-resource reconciliation (single-writer index, serialized shared-repo
+      mutations).
