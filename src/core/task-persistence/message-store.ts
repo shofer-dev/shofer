@@ -2,7 +2,7 @@ import { join } from "node:path"
 import { mkdirSync } from "node:fs"
 
 /**
- * SQLite message store (todos/opencode_inspired_work.md §5).
+ * SQLite message store (v3 architecture §5).
  *
  * The single persistence backend for task api/UI messages. Rows are keyed by
  * (task_id, kind, ts); `ts` is the dedupe/order key so a partial→final update at

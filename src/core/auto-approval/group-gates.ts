@@ -1,7 +1,7 @@
 import type { ExtensionState, ToolGroup } from "@shofer/types"
 
 /**
- * Unified per-group auto-approval gating (todos/opencode_inspired_work.md §4).
+ * Unified per-group auto-approval gating (v3 architecture §4).
  *
  * Before this module, "which toggle must be on for a tool's group to be
  * auto-approved" was declared in TWO places that could drift:

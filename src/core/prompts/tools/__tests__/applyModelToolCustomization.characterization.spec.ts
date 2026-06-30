@@ -6,7 +6,7 @@ import { applyModelToolCustomization } from "../filter-tools-for-mode"
 
 /**
  * Characterization tests for `applyModelToolCustomization` — the per-model tool
- * preference system (todos/opencode_inspired_work.md §4, one of the three systems
+ * preference system (v3 architecture §4, one of the three systems
  * to unify into the permission engine). Locks current behavior so the future
  * unification can preserve it. Asserts behavior as it is today.
  */

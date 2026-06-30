@@ -1,7 +1,7 @@
 import psTree from "ps-tree"
 
 /**
- * Structured process termination (todos/opencode_inspired_work.md §6).
+ * Structured process termination (v3 architecture §6).
  *
  * shofer historically aborted child processes by sending **SIGKILL immediately**
  * to the subprocess and each PID returned by a `ps-tree` snapshot. SIGKILL gives

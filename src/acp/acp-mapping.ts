@@ -1,5 +1,5 @@
 /**
- * ACP (Agent Client Protocol) mapping (todos/opencode_inspired_work.md §12).
+ * ACP (Agent Client Protocol) mapping (v3 architecture §12).
  *
  * ACP is a standard inbound protocol: any ACP-speaking client (Zed today, more
  * editors over time) can drive shofer as a backend agent with zero per-editor

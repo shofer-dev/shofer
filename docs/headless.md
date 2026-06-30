@@ -12,7 +12,7 @@ Node.js process, intercepting `require("vscode")` to return a mock API layer
 VSCode.
 
 > **Toward a clean host boundary (§9).** The shim mocks the _entire_ `vscode`
-> API. The opencode-inspired direction is to put what the core actually needs
+> API. The v3-architecture direction is to put what the core actually needs
 > behind narrow, host-agnostic interfaces instead: `HostBridge` in
 > [`packages/types/src/host.ts`](../packages/types/src/host.ts) (notifications +
 > filesystem so far, alongside the already-extracted `MessagePersistencePort`,

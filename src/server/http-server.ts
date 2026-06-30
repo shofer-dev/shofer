@@ -1,7 +1,7 @@
 import http from "node:http"
 
 /**
- * HTTP + SSE transport boundary (todos/opencode_inspired_work.md §11).
+ * HTTP + SSE transport boundary (v3 architecture §11).
  *
  * shofer already has an in-process `ShoferAPI` and a headless NDJSON protocol;
  * §11 publishes that as a versioned, network-accessible surface so a TUI, web

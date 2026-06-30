@@ -1,5 +1,5 @@
 /**
- * Host boundary (todos/opencode_inspired_work.md §9).
+ * Host boundary (v3 architecture §9).
  *
  * The agent core currently reaches directly into the VS Code API. §9 puts
  * everything host-specific behind narrow interfaces so the core can run with

@@ -1,7 +1,7 @@
 import type { CustomToolDefinition, PluginContext, PluginEvent, ShoferPlugin } from "@shofer/types"
 
 /**
- * Plugin registry (todos/opencode_inspired_work.md §10).
+ * Plugin registry (v3 architecture §10).
  *
  * Collects {@link ShoferPlugin}s and runs their hooks at the right points:
  * tool contribution, system-prompt transformation, and event observation.

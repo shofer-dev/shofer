@@ -6,7 +6,7 @@ import type OpenAI from "openai"
 import { getNativeTools } from "../index"
 
 /**
- * Tool-schema golden snapshots (todos/opencode_inspired_work.md §3).
+ * Tool-schema golden snapshots (v3 architecture §3).
  *
  * Locks the *normalized* schema (and description) of every native tool. Two jobs:
  *

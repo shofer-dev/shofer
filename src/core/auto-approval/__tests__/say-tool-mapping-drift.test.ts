@@ -4,7 +4,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, toolNames } from "@shofer/types"
 import { SAY_TOOL_TO_NATIVE_NAME, getToolGroupForSayTool } from "../tools"
 
 /**
- * Auto-approval mapping drift guard (todos/opencode_inspired_work.md §4).
+ * Auto-approval mapping drift guard (v3 architecture §4).
  *
  * `getToolGroupForSayTool` resolves a UI-facing camelCase tool id to its
  * snake_case native name (via `SAY_TOOL_TO_NATIVE_NAME`) and then to a

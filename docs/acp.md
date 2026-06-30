@@ -4,7 +4,7 @@
 > ([`src/acp/acp-mapping.ts`](../src/acp/acp-mapping.ts)) is implemented and
 > tested; the `shofer acp` stdio entrypoint + `@agentclientprotocol/sdk` wiring is
 > the remainder, gated on §9 (host-agnostic core) so the agent runs without VS
-> Code. See `todos/opencode_inspired_work.md` §12.
+> Code. See `docs/v3_architecture.md` §12.
 
 ## What ACP is (and isn't)
 
@@ -51,7 +51,7 @@ Pure mapping functions (all unit-tested in
 
 1. Add `@agentclientprotocol/sdk`; implement the `packages/.../acp/` service over
    it using the mapping above.
-2. Ship a `shofer acp` stdio entrypoint (mirroring `opencode acp`).
+2. Ship a `shofer acp` stdio entrypoint.
 3. Depends on §9: the agent must run host-agnostic (no `vscode`) for an ACP
    client to drive it. Reuses §3 (events → `sessionUpdate`), §4 (permissions →
    `requestPermission`), §6 (cancel) — so most of the mapping already exists.

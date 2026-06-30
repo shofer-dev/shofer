@@ -6,7 +6,7 @@ import { toolParamNames } from "../../../../../shared/tools"
 import { getNativeTools } from "../index"
 
 /**
- * Schema-as-contract drift guard (todos/opencode_inspired_work.md §3).
+ * Schema-as-contract drift guard (v3 architecture §3).
  *
  * A tool's shape is currently re-declared across several independent sources of
  * truth: the JSON schema in `native-tools/*.ts`, the `toolNames` enum and

@@ -1,7 +1,7 @@
 import { checkAutoApproval } from "../index"
 
 /**
- * Characterization tests for `checkAutoApproval` (todos/opencode_inspired_work.md §4).
+ * Characterization tests for `checkAutoApproval` (v3 architecture §4).
  *
  * §4 wants the three permission systems (tool access, categories, per-model prefs)
  * plus auto-approval collapsed into ONE ordered allow/ask/deny rule engine. That

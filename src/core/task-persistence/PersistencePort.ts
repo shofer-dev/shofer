@@ -10,7 +10,7 @@ import {
 } from "./taskMessages"
 
 /**
- * Message persistence port (todos/opencode_inspired_work.md §5; the seam §9 needs
+ * Message persistence port (v3 architecture §5; the seam §9 needs
  * to keep the core host-agnostic).
  *
  * The single interface for task api/UI message reads/writes. The backend is

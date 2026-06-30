@@ -4,7 +4,7 @@ import type OpenAI from "openai"
 import type { ToolName } from "@shofer/types"
 
 /**
- * Schema-as-contract foundation (todos/opencode_inspired_work.md §3).
+ * Schema-as-contract foundation (v3 architecture §3).
  *
  * A native tool is defined ONCE as a Zod schema. From that single source we
  * derive the OpenAI function definition sent to the model (`toOpenAITool`) and

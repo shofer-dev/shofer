@@ -6,7 +6,7 @@ import { BaseTelemetryClient } from "./BaseTelemetryClient"
 
 /**
  * OpenTelemetry transport for the typed telemetry catalog
- * (todos/opencode_inspired_work.md §8).
+ * (v3 architecture §8).
  *
  * Emits each captured event as an OpenTelemetry span via `@opentelemetry/api`,
  * keeping shofer's rich typed event taxonomy as the *data* and OTel as the

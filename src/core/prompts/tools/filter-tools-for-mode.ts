@@ -210,7 +210,7 @@ export function applyModelToolCustomization(
 }
 
 /**
- * Feature-gated tools (todos/opencode_inspired_work.md §4): each tool here is
+ * Feature-gated tools (v3 architecture §4): each tool here is
  * available only when its gate is on. Declaring them in one table replaces the
  * row of hand-written `allowedToolNames.delete(...)` branches that previously
  * lived inline in `filterNativeToolsForMode` — a single place to see which tools

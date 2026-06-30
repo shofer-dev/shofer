@@ -1,7 +1,7 @@
 import type { CustomToolDefinition } from "./custom-tool.js"
 
 /**
- * Typed plugin API (todos/opencode_inspired_work.md §10).
+ * Typed plugin API (v3 architecture §10).
  *
  * shofer's existing extensibility centers on the marketplace (data items) and the
  * custom-tool registry (tools only). A plugin generalizes that: a typed object

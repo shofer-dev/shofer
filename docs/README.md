@@ -1,7 +1,7 @@
 # Shofer design docs — conventions
 
 This directory holds Shofer's design/feature docs. To keep them trustworthy
-(see the opencode-inspired evolution, `todos/opencode_inspired_work.md` §2:
+(see the v3-architecture evolution, `docs/v3_architecture.md` §2:
 "docs running ahead of code erode trust and create phantom maintenance"), follow
 one rule:
 
@@ -30,11 +30,12 @@ proposed items — keep the "Not started" / "Implemented" column honest.
 
 ## Accuracy audit (2026-06-28)
 
-A doc-vs-code audit was run as part of §2 of the evolution roadmap. Spot-checked
+A doc-vs-code audit was run as part of the docs-hygiene initiative. Spot-checked
 docs and their verdicts:
 
 | Doc                                                                        | Verdict                                                                                                                                                                             |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v3_architecture.md`                                                       | ✅ Active — the canonical host-agnostic (Category I/II) architecture; progress in `../todos/v3_architecture_progress.md`                                                            |
 | `parallelism.md`, `message_queue.md`, `task-export.md`, `summarization.md` | ✅ Shipped                                                                                                                                                                          |
 | `performance_optimizations.md`, `public_api.md`, `headless.md`             | ✅ Shipped                                                                                                                                                                          |
 | `worktrees.md`, `worktree-shell-sandboxing.md`                             | ✅ Shipped                                                                                                                                                                          |

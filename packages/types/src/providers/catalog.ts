@@ -21,7 +21,7 @@ import { xaiModels, xaiDefaultModelId } from "./xai.js"
 import { internationalZAiModels, internationalZAiDefaultModelId } from "./zai.js"
 
 /**
- * Data-driven model catalog (todos/opencode_inspired_work.md §7).
+ * Data-driven model catalog (v3 architecture §7).
  *
  * Each provider already declares its models as a `Record<modelId, ModelInfo>` in
  * its own file. This registry collects the **statically-known** providers into a

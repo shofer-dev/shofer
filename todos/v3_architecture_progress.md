@@ -1,15 +1,15 @@
-# Progress log — opencode-inspired evolution (shofer submodule)
+# Progress log — Shofer v3 architecture (shofer submodule)
 
-Canonical tracker for work on the `opencode-inspired-evolution` branch of this
-submodule. Companion to the roadmap in the parent repo
-(`../../todos/opencode_inspired_work.md`). Per the strangler discipline (§1) every
-step lands behind a guard/adapter and leaves shofer shippable.
+Canonical tracker for the v3-architecture work on this submodule. Companion to the
+architecture description in [`../docs/v3_architecture.md`](../docs/v3_architecture.md).
+Per the strangler discipline (§1) every step lands behind a guard/adapter and leaves
+shofer shippable.
 
 **Working mode:** commits land on the **shofer submodule** branch only; the parent
 repo's submodule pointer is bumped once at the end (concurrent sessions share the
 parent working tree).
 
-Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Part D.
+Status key: ✅ done · 🚧 in progress · ⬜ not started.
 
 ## Phase 0 — Discipline & guardrails
 
@@ -101,8 +101,8 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started · order follows Par
       result; this closes the multi-partial gap.)
     - Run scope: shofer's `_taskAbortController` + `abortTask` (tears down terminal
       via the §6 escalation, MCP async calls, background children) already provide
-      the run-scoped teardown opencode gets from fibers. A full fiber/scope
-      abstraction is low marginal value over this; not pursued.
+      run-scoped teardown equivalent to a fiber/structured-concurrency runtime. A
+      full fiber/scope abstraction is low marginal value over this; not pursued.
 
 ## Phase 2 — Catalog & observability
 
