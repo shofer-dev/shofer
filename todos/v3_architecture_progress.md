@@ -221,6 +221,16 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started.
           `vscode` import.
           **25 core files vscode-free** across 7 seams (notifier, fs+findFiles, config, env,
           lsp, workspace, watcher). `installVsCodeForwardingHost()` forwards all of them.
+    - ✅ Package enabler — host registry moved to `@shofer/types`: `getHost`/`setHost`
+      (the Category I registry) now live in the vscode-free `@shofer/types` package
+      (`host-registry.ts`), not in the VS Code adapter. The 32 core files that call
+      `getHost()` import it from `@shofer/types`, so the portable core no longer
+      transitively imports the VS Code adapter at the module level. `host-bridge.ts`
+      re-exports for adapter-side callers. This is the structural unlock for the
+      `@shofer/core` package carve-out.
+    - ✅ Architecture doc: `docs/v3_architecture.md` is the canonical description of the
+      Category I (host APIs) vs Category II (front-end adapters: VS Code, CLI, headless)
+      boundary, the registry seam, and the package plan.
     - ⬜ Remainder — **the architectural boundary is now reached.** The files still
       importing `vscode` are not "core logic leaking vscode" — they are:
         1. **ExtensionContext-bound config managers** (`ContextProxy`,
