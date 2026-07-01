@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 
 import type { SkillMetadata, WebviewMessage } from "@shofer/types"

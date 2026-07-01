@@ -1,7 +1,6 @@
 import { Task } from "../task/Task"
 import { ShoferProvider } from "./ShoferProvider"
 import { saveTaskMessages } from "../task-persistence"
-import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 import pWaitFor from "p-wait-for"
 import { t } from "../../i18n"

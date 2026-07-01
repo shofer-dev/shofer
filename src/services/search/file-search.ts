@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as fs from "fs"
 import * as childProcess from "child_process"
@@ -19,7 +19,7 @@ export async function executeRipgrep({
 	workspacePath: string
 	limit?: number
 }): Promise<FileResult[]> {
-	const rgPath = await getBinPath(vscode.env.appRoot)
+	const rgPath = await getBinPath(getHost().env.appRoot)
 
 	if (!rgPath) {
 		throw new Error(
@@ -95,21 +95,21 @@ export async function executeRipgrep({
  * Get extra ripgrep arguments based on VSCode search configuration
  */
 function getRipgrepSearchOptions(): string[] {
-	const config = vscode.workspace.getConfiguration("search")
 	const extraArgs: string[] = []
+	const isDisabled = (key: string) => getHost().config.get<boolean | undefined>("search", key, undefined) === false
 
 	// Respect VSCode's search.useIgnoreFiles setting
-	if (config.get("useIgnoreFiles") === false) {
+	if (isDisabled("useIgnoreFiles")) {
 		extraArgs.push("--no-ignore")
 	}
 
 	// Respect VSCode's search.useGlobalIgnoreFiles setting
-	if (config.get("useGlobalIgnoreFiles") === false) {
+	if (isDisabled("useGlobalIgnoreFiles")) {
 		extraArgs.push("--no-ignore-global")
 	}
 
 	// Respect VSCode's search.useParentIgnoreFiles setting
-	if (config.get("useParentIgnoreFiles") === false) {
+	if (isDisabled("useParentIgnoreFiles")) {
 		extraArgs.push("--no-ignore-parent")
 	}
 
@@ -122,7 +122,7 @@ export async function executeRipgrepForFiles(
 ): Promise<{ path: string; type: "file" | "folder"; label?: string }[]> {
 	// Get limit from configuration if not provided
 	const effectiveLimit =
-		limit ?? vscode.workspace.getConfiguration(Package.name).get<number>("maximumIndexedFilesForFileSearch", 10000)
+		limit ?? getHost().config.get<number>(Package.name, "maximumIndexedFilesForFileSearch", 10000)
 
 	const args = [
 		"--files",
