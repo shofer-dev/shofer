@@ -2,7 +2,7 @@ import { Command } from "commander"
 
 import { DEFAULT_FLAGS } from "@/types/constants.js"
 import { VERSION } from "@/lib/utils/version.js"
-import { run, listCommands, listModes, listModels, listSessions, upgrade } from "@/commands/index.js"
+import { run, listCommands, listModes, listModels, listSessions, upgrade, acp } from "@/commands/index.js"
 
 const program = new Command()
 
@@ -136,5 +136,27 @@ program
 	.action(async () => {
 		await runUpgradeAction(() => upgrade())
 	})
+
+program
+	.command("acp")
+	.description("Run Shofer as an Agent Client Protocol (ACP) agent over stdio")
+	.option("-w, --workspace <path>", "Workspace directory path (defaults to current working directory)")
+	.option("-e, --extension <path>", "Path to the extension bundle directory")
+	.option("-k, --api-key <key>", "API key for the LLM provider")
+	.option("--provider <provider>", "API provider (defaults to openrouter)")
+	.option("-m, --model <model>", "Model to use")
+	.option("-d, --debug", "Enable debug output (to stderr)", false)
+	.action(
+		async (options: {
+			workspace?: string
+			extension?: string
+			apiKey?: string
+			provider?: string
+			model?: string
+			debug?: boolean
+		}) => {
+			await acp(options)
+		},
+	)
 
 program.parse()

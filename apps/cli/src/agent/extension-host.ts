@@ -109,6 +109,11 @@ export interface ExtensionHostOptions {
 interface ExtensionModule {
 	activate: (context: unknown) => Promise<unknown>
 	deactivate?: () => Promise<void>
+	/** §12 ACP — drive the activated ShoferAPI over the Agent Client Protocol on stdio. */
+	runAcpAgentOverShoferApi?: (
+		api: unknown,
+		streams: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream; agentVersion?: string },
+	) => Promise<void>
 }
 
 interface WebviewViewProvider {
@@ -521,6 +526,22 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		}
 
 		return this.extensionAPI
+	}
+
+	/**
+	 * §12 ACP — run the Agent Client Protocol server over the given streams,
+	 * driving the activated `ShoferAPI`. Resolves when the input stream closes.
+	 */
+	public runAcp(streams: {
+		input: NodeJS.ReadableStream
+		output: NodeJS.WritableStream
+		agentVersion?: string
+	}): Promise<void> {
+		const run = this.extensionModule?.runAcpAgentOverShoferApi
+		if (!run) {
+			throw new Error("ExtensionHost: this extension bundle does not export runAcpAgentOverShoferApi")
+		}
+		return run(this.api, streams)
 	}
 
 	// ==========================================================================
