@@ -67,7 +67,7 @@ accidental contract changes.
 > hand-written `OpenAI.Chat.ChatCompletionTool` objects where the schema needs
 > shapes the helper doesn't yet model (free-form object args, `strict: false`,
 > dynamic/factory schemas, deeply-nested optionals) — see the §3 notes in
-> `todos/v3_architecture_progress.md`. New tools should use `defineNativeTool`.
+> `docs/v3_architecture.md`. New tools should use `defineNativeTool`.
 
 Add to `native-tools/index.ts` — import it and append to the `tools` array that `getNativeTools()` builds and returns:
 

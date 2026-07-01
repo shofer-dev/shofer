@@ -1,9 +1,9 @@
 # Shofer v3 Architecture
 
-> **Status:** active. This is the canonical description of Shofer's v3 architecture
-> — the host-agnostic agent core and the front-end boundary around it. It replaces
-> the earlier evolution roadmap. Progress against the initiatives below is tracked
-> in [`../todos/v3_architecture_progress.md`](../todos/v3_architecture_progress.md).
+> **Status:** active. This is the **single canonical** description of Shofer's v3
+> architecture — the host-agnostic agent core, the front-end boundary around it, and
+> the current implementation status of every initiative (below). It replaces the
+> earlier evolution roadmap and the separate progress tracker.
 
 ## What this document is
 
@@ -253,24 +253,56 @@ single-host story.)
 
 ## Architectural initiatives (status)
 
-The v3 architecture is delivered as a set of initiatives. Current status:
+The v3 architecture is delivered as a set of initiatives. Current status (initiative
+numbers are local to this document):
 
-| #   | Initiative                                                                                     | Status                                            |
-| --- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                             |
-| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all tools migrated                             |
-| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                |
-| 4   | Durable, incremental persistence (SQLite, retire flat files)                                   | ✅                                                |
-| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                |
-| 6   | Data-driven model/provider catalog (one place to add a model)                                  | ✅                                                |
-| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                |
-| 8   | **Host-agnostic core (Category I/II split)** — this document                                   | ✅ substantially; package carve-out remaining     |
-| 9   | Typed plugin API (hooks: tools, prompt transform, events)                                      | ✅ foundation wired                               |
-| 10  | HTTP API + SDK + headless parity                                                               | 🚧 foundation (server + agent adapter)            |
-| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | 🚧 protocol mapping                               |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 📐 proposed; Category I-over-RPC substrate landed |
+| #   | Initiative                                                                                     | Status                                                                           |
+| --- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                            |
+| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 52 tools migrated                                                         |
+| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                               |
+| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                               |
+| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                               |
+| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                |
+| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                               |
+| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ 25 core files + registry vscode-free; agent-core package move remaining       |
+| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)              |
+| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; full headless parity pends the core move |
+| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred        |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 🚧 substrate + controller pool; remote-executor + UI wiring remaining            |
 
-(Initiative numbers here are local to this document.)
+### What "done" means, per initiative
+
+- **§2 tools** — every tool is one `defineNativeTool` Zod schema; golden snapshots
+  are the drift/equivalence gate. No hand-written tool defs remain.
+- **§3 permissions** — one `GROUP_GATE`/`isGroupAutoApproved` + `computeToolAccess`
+  SSOT drives both MCP and native paths.
+- **§4 persistence** — SQLite (`node:sqlite`) is the sole backend; `jsonlLog` and the
+  flat-file/compaction machinery are gone.
+- **§5 cancellation** — `terminateProcessTree` (SIGTERM→grace→SIGKILL); `abortStream`
+  finalizes every partial message.
+- **§6 catalog** — `STATIC_MODEL_CATALOG` + `lookupModel`/`getModelCapabilities` is the
+  queryable surface; cost/limits consume `ModelInfo`. _Deferred:_ a live/`models.dev`
+  data backing + routing `getProviderDefaultModelId` through it — gated on the
+  vendor-snapshot-vs-live-fetch product decision.
+- **§7 observability** — `OtelTelemetryClient` registered by default; the metrics
+  registry emits via the OTel meter API; `prom-client`/Prometheus server removed.
+- **§8 host split** — the 8 Category I seams + registry live in `@shofer/types`; 25
+  core files are vscode-free; the transport layer is in `@shofer/core`. _Remaining:_
+  the agent-core package move (below).
+- **§9 plugins** — `pluginRegistry` hooks are load-bearing: `collectTools` feeds the
+  tool assembly, `transformSystemPrompt` threads the system prompt, and
+  `dispatchEvent` receives every captured event (via `TelemetryService.onEvent`).
+- **§10 HTTP/SDK** — `createHttpServer` + a typed `ShoferHttpClient` that _implements
+  `AgentApi`_ (so client/server can't drift) + a `shofer serve` entrypoint.
+- **§11 ACP** — the full agent-side ACP (`AcpAgentServer` over `AgentApi` + mapping)
+  and a `shofer acp` entrypoint. _Deferred:_ swapping the direct JSON-RPC framing for
+  `@zed-industries/agent-client-protocol` (not in this registry), wiring
+  `session/request_permission` (needs an approval surface on `AgentApi`), and
+  live-client validation.
+- **§12 distributed** — see below; the Category-I-over-RPC split adapter, the session
+  transport, and the controller-side `ExecutorPool` (root-task routing + merged view)
+  are built.
 
 ---
 
@@ -314,20 +346,39 @@ prerequisites:
 
 - A **remote executor** is the headless front-end from initiatives 10–11 (linking
   `@shofer/core` + a server adapter) made reachable over the session transport.
-- Its **split host adapter** is the one genuinely new piece — and its foundation has
-  landed: `@shofer/types` now exposes `createSplitHost({ local, channel })` (executor
-  side: notifier/lsp/workspace proxied over an `HostRpcChannel`; fs/config/env/watcher
-  served locally) and `dispatchHostCall(host, …)` (controller side). Because Category I
-  is DTO-based it serializes for free; `HostLsp.getDiagnostics` was made async so the
-  whole front-end-bound surface is transport-agnostic. What remains is wiring an
-  `HostRpcChannel` onto the session transport.
-- Controller-side: an **executor registry**, **root-task→executor routing**, and a
-  **unified multi-executor task view**, plus the shared-resource reconciliation
-  (single-writer index, serialized shared-repo mutations).
+- Its **split host adapter** is built: `@shofer/types` exposes
+  `createSplitHost({ local, channel })` (executor side — notifier/lsp/workspace proxied
+  over an `HostRpcChannel`; fs/config/env/watcher local) and `dispatchHostCall` +
+  `serveSession`/`connectSession` (the **session transport** that carries both the
+  agent channel and the host-callback channel). Category I is DTO-based, so it
+  serializes for free.
+- **Controller-side routing is built**: `ExecutorPool` implements `AgentApi` over one
+  or more executors — round-robin root-task assignment, per-task routing, and a merged
+  event feed tagged by `executorId` (the unified view). Single-executor behaviour is
+  identical to driving one directly.
+- **Remaining**: stand up a real remote executor process (link `@shofer/core` + a
+  server adapter + the split host over a socket), wire the `ExecutorPool` into the
+  extension's UI (node registry, connect flow), and the shared-resource reconciliation
+  (single-writer index, serialized shadow-git/worktree creation).
 
-So finishing the package carve-out and the headless transport is also what unlocks
-horizontal scaling; the distributed layer adds routing + the split adapter on top,
-not a parallel architecture.
+So finishing the agent-core carve-out is what turns the built substrate into a live
+remote executor; the controller orchestration and host-callback plumbing already exist.
+
+### Deliberately deferred (gated, not oversights)
+
+- **§6 catalog data backing** — routing `getProviderDefaultModelId` and the API
+  handlers through a live/`models.dev` catalog with config overrides is gated on a
+  product decision (vendor snapshot vs live fetch vs both) and the accompanying network
+  policy. The catalog _abstraction_ is done; the data backing waits on that decision.
+- **§11 ACP** — swapping the direct JSON-RPC framing for the upstream SDK
+  (`@zed-industries/agent-client-protocol`) is blocked (not in the current registry);
+  `session/request_permission` needs an approval surface on `AgentApi`/`ShoferAPI`; and
+  end-to-end validation needs a live ACP client (Zed). The adapter is complete and
+  swap-ready.
+- **Justified boundaries** — single-sourcing the `NativeToolArgs`/`toolParamNames`
+  parser mirrors (§2) and a fully-abstract allow/ask/deny `Rule[]` model (§3) are
+  intentionally _not_ done: the drift guard and the unified SSOT modules already remove
+  the risk they'd address, so the extra indirection has no behavioural payoff.
 
 ---
 
