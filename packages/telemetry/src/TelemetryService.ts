@@ -24,11 +24,29 @@ const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
 export class TelemetryService {
 	constructor(private clients: TelemetryClient[]) {}
 
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private eventObservers: Array<(eventName: TelemetryEventName, properties?: Record<string, any>) => void> = []
+
 	public register(client: TelemetryClient): void {
 		if (!TELEMETRY_ENABLED) {
 			return
 		}
 		this.clients.push(client)
+	}
+
+	/**
+	 * Observe every captured event (independent of the telemetry opt-in gate). Used
+	 * to fan agent events out to consumers like the plugin registry (§10) without
+	 * coupling telemetry to them. Returns an unsubscribe fn.
+	 */
+	public onEvent(
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		observer: (eventName: TelemetryEventName, properties?: Record<string, any>) => void,
+	): () => void {
+		this.eventObservers.push(observer)
+		return () => {
+			this.eventObservers = this.eventObservers.filter((o) => o !== observer)
+		}
 	}
 
 	/**
@@ -73,6 +91,16 @@ export class TelemetryService {
 	 */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	public captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>): void {
+		// Fan out to observers (e.g. the plugin registry) regardless of the telemetry
+		// opt-in — plugins should see agent events even when telemetry is off.
+		for (const observer of this.eventObservers) {
+			try {
+				observer(eventName, properties)
+			} catch {
+				// An observer must never break event capture.
+			}
+		}
+
 		if (!this.isReady) {
 			return
 		}

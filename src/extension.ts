@@ -33,7 +33,7 @@ if (fs.existsSync(envPath)) {
 
 import { TelemetryService, PostHogTelemetryClient, OtelTelemetryClient } from "@shofer/telemetry"
 import { setHost, createVsCodeHost } from "./host/host-bridge"
-import { customToolRegistry } from "@shofer/core"
+import { customToolRegistry, pluginRegistry } from "@shofer/core"
 
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
@@ -142,6 +142,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	} catch (error) {
 		outputChannel.appendLine(`[WARN] Failed to register OtelTelemetryClient: ${error}`)
 	}
+
+	// §10: fan captured agent events out to plugins' `onEvent` hooks. No-op while no
+	// plugins are registered.
+	telemetryService.onEvent((name, properties) => pluginRegistry.dispatchEvent({ name, properties }))
 
 	// Initialize i18n for internationalization support.
 	initializeI18n(context.globalState.get("language") ?? formatLanguage(vscode.env.language))

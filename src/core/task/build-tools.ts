@@ -5,7 +5,7 @@ import type OpenAI from "openai"
 
 import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
 import { toolGroupsSchema } from "@shofer/types"
-import { customToolRegistry, formatNative } from "@shofer/core"
+import { customToolRegistry, formatNative, pluginRegistry } from "@shofer/core"
 
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
@@ -371,13 +371,19 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	const filteredMcpTools = filterMcpToolsForMode(mcpTools, mcpToolMeta, mode, customModes, experiments)
 
 	let nativeCustomTools: OpenAI.Chat.ChatCompletionFunctionTool[] = []
+	// §10: register plugin-contributed tools so they are assembled AND executable
+	// through the unified custom-tool path (independent of the customTools experiment).
+	const pluginTools = await pluginRegistry.collectTools({ workspacePath: cwd, mode })
+	for (const def of pluginTools) {
+		customToolRegistry.register(def, "plugin")
+	}
 	if (experiments?.customTools) {
 		const toolDirs = getRooDirectoriesForCwd(cwd).map((dir) => path.join(dir, "tools"))
 		await customToolRegistry.loadFromDirectoriesIfStale(toolDirs)
-		const customTools = customToolRegistry.getAllSerialized()
-		if (customTools.length > 0) {
-			nativeCustomTools = customTools.map(formatNative)
-		}
+	}
+	const serializedCustomTools = customToolRegistry.getAllSerialized()
+	if (serializedCustomTools.length > 0) {
+		nativeCustomTools = serializedCustomTools.map(formatNative)
 	}
 
 	// Discover all tools from private providers (extensions using the
