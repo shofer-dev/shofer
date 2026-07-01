@@ -36,6 +36,8 @@ vi.mock("@shofer/telemetry", () => ({
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	getWorkspacePath: vi.fn(() => "/test/workspace"),
+	// RepoPerTaskCheckpointService moved into @shofer/core; mock its factory here.
+	RepoPerTaskCheckpointService: { create: vi.fn() },
 }))
 
 vi.mock("../../../utils/git", () => ({
@@ -58,8 +60,6 @@ vi.mock("../../../i18n", () => ({
 vi.mock("p-wait-for", () => ({
 	default: vi.fn(),
 }))
-
-vi.mock("../../../services/checkpoints")
 
 describe("Checkpoint functionality", () => {
 	let mockProvider: any
@@ -108,7 +108,7 @@ describe("Checkpoint functionality", () => {
 		mockTask.messageManager = new MessageManager(mockTask)
 
 		// Update the mock to return our mockCheckpointService
-		const checkpointsModule = await import("../../../services/checkpoints")
+		const checkpointsModule = await import("@shofer/core")
 		vi.mocked(checkpointsModule.RepoPerTaskCheckpointService.create).mockReturnValue(mockCheckpointService)
 	})
 
@@ -430,7 +430,7 @@ describe("Checkpoint functionality", () => {
 
 			const service = getCheckpointService(mockTask)
 
-			const checkpointsModule = await import("../../../services/checkpoints")
+			const checkpointsModule = await import("@shofer/core")
 			expect(vi.mocked(checkpointsModule.RepoPerTaskCheckpointService.create)).toHaveBeenCalledWith({
 				taskId: "test-task-id",
 				workspaceDir: "/test/workspace",

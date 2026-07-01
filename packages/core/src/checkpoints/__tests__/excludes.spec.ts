@@ -1,9 +1,10 @@
 // npx vitest services/checkpoints/__tests__/excludes.spec.ts
 
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import { join } from "path"
 import fs from "fs/promises"
-import { fileExistsAtPath } from "../../../utils/fs"
-import { getExcludePatterns } from "../excludes"
+import { fileExistsAtPath } from "../../fs/fs.js"
+import { getExcludePatterns } from "../excludes.js"
 
 // Mock fs/promises
 vi.mock("fs/promises", () => ({
@@ -13,7 +14,7 @@ vi.mock("fs/promises", () => ({
 }))
 
 // Mock fileExistsAtPath
-vi.mock("../../../utils/fs", () => ({
+vi.mock("../../fs/fs.js", () => ({
 	fileExistsAtPath: vi.fn(),
 }))
 
@@ -81,7 +82,7 @@ readme.md text
 
 			// Verify LFS patterns are not included
 			// Just ensure no lines from our mock gitAttributes are in the result
-			const gitAttributesLines = gitAttributesContent.split("\n").map((line) => line.split(" ")[0].trim())
+			const gitAttributesLines = gitAttributesContent.split("\n").map((line) => line.split(" ")[0]!.trim())
 
 			gitAttributesLines.forEach((line) => {
 				if (line && !line.startsWith("#")) {

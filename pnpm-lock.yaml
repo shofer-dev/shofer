@@ -409,6 +409,12 @@ importers:
       openai:
         specifier: ^5.12.2
         version: 5.12.2(ws@8.20.0)(zod@3.25.76)
+      p-wait-for:
+        specifier: ^5.0.2
+        version: 5.0.2
+      simple-git:
+        specifier: ^3.27.0
+        version: 3.27.0
       zod:
         specifier: 3.25.76
         version: 3.25.76

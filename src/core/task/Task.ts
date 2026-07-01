@@ -83,7 +83,7 @@ import { getModelMaxOutputTokens } from "../../shared/api"
 // services
 import { McpHub } from "../../services/mcp/McpHub"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
-import { RepoPerTaskCheckpointService } from "../../services/checkpoints"
+import { RepoPerTaskCheckpointService } from "@shofer/core"
 
 // integrations
 import type { DiffView } from "@shofer/types"

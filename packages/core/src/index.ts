@@ -1,4 +1,5 @@
 export * from "./blob-store/BlobStore.js"
+export * from "./checkpoints/index.js"
 export * from "./custom-tools/index.js"
 export * from "./debug-log/index.js"
 export * from "./fs/fs.js"

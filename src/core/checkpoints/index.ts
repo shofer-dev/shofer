@@ -13,7 +13,7 @@ import { t } from "../../i18n"
 
 import { getApiMetrics } from "../../shared/getApiMetrics"
 
-import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "../../services/checkpoints"
+import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "@shofer/core"
 import { checkpointLog } from "@shofer/core"
 
 const WARNING_THRESHOLD_MS = 5000

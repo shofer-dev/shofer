@@ -7,10 +7,10 @@ import { EventEmitter } from "events"
 
 import { simpleGit, SimpleGit } from "simple-git"
 
-import { fileExistsAtPath } from "../../../utils/fs"
-import * as fileSearch from "@shofer/core"
+import { fileExistsAtPath } from "../../fs/fs.js"
+import * as fileSearch from "../../search/file-search.js"
 
-import { RepoPerTaskCheckpointService } from "../RepoPerTaskCheckpointService"
+import { RepoPerTaskCheckpointService } from "../RepoPerTaskCheckpointService.js"
 
 const tmpDir = path.join(os.tmpdir(), "CheckpointService")
 
@@ -88,24 +88,24 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 
 				const diff1 = await service.getDiff({ to: commit1!.commit })
 				expect(diff1).toHaveLength(1)
-				expect(diff1[0].paths.relative).toBe("test.txt")
-				expect(diff1[0].paths.absolute).toBe(testFile)
-				expect(diff1[0].content.before).toBe("Hello, world!")
-				expect(diff1[0].content.after).toBe("Ahoy, world!")
+				expect(diff1[0]!.paths.relative).toBe("test.txt")
+				expect(diff1[0]!.paths.absolute).toBe(testFile)
+				expect(diff1[0]!.content.before).toBe("Hello, world!")
+				expect(diff1[0]!.content.after).toBe("Ahoy, world!")
 
 				const diff2 = await service.getDiff({ from: service.baseHash, to: commit2!.commit })
 				expect(diff2).toHaveLength(1)
-				expect(diff2[0].paths.relative).toBe("test.txt")
-				expect(diff2[0].paths.absolute).toBe(testFile)
-				expect(diff2[0].content.before).toBe("Hello, world!")
-				expect(diff2[0].content.after).toBe("Goodbye, world!")
+				expect(diff2[0]!.paths.relative).toBe("test.txt")
+				expect(diff2[0]!.paths.absolute).toBe(testFile)
+				expect(diff2[0]!.content.before).toBe("Hello, world!")
+				expect(diff2[0]!.content.after).toBe("Goodbye, world!")
 
 				const diff12 = await service.getDiff({ from: commit1!.commit, to: commit2!.commit })
 				expect(diff12).toHaveLength(1)
-				expect(diff12[0].paths.relative).toBe("test.txt")
-				expect(diff12[0].paths.absolute).toBe(testFile)
-				expect(diff12[0].content.before).toBe("Ahoy, world!")
-				expect(diff12[0].content.after).toBe("Goodbye, world!")
+				expect(diff12[0]!.paths.relative).toBe("test.txt")
+				expect(diff12[0]!.paths.absolute).toBe(testFile)
+				expect(diff12[0]!.content.before).toBe("Ahoy, world!")
+				expect(diff12[0]!.content.after).toBe("Goodbye, world!")
 			})
 
 			it("handles new files in diff", async () => {
@@ -145,15 +145,15 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				const commit1 = await service.saveCheckpoint("First checkpoint")
 				expect(commit1?.commit).toBeTruthy()
 				const details1 = await service.getDiff({ to: commit1!.commit })
-				expect(details1[0].content.before).toContain("Hello, world!")
-				expect(details1[0].content.after).toContain("Ahoy, world!")
+				expect(details1[0]!.content.before).toContain("Hello, world!")
+				expect(details1[0]!.content.after).toContain("Ahoy, world!")
 
 				await fs.writeFile(testFile, "Hola, world!")
 				const commit2 = await service.saveCheckpoint("Second checkpoint")
 				expect(commit2?.commit).toBeTruthy()
 				const details2 = await service.getDiff({ from: commit1!.commit, to: commit2!.commit })
-				expect(details2[0].content.before).toContain("Ahoy, world!")
-				expect(details2[0].content.after).toContain("Hola, world!")
+				expect(details2[0]!.content.before).toContain("Ahoy, world!")
+				expect(details2[0]!.content.after).toContain("Hola, world!")
 
 				// Switch to checkpoint 1.
 				await service.restoreCheckpoint(commit1!.commit)
@@ -247,8 +247,8 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 
 				// Verify the untracked file was included in the checkpoint.
 				const details = await service.getDiff({ to: commit1!.commit })
-				expect(details[0].content.before).toContain("")
-				expect(details[0].content.after).toContain("I am untracked!")
+				expect(details[0]!.content.before).toContain("")
+				expect(details[0]!.content.after).toContain("I am untracked!")
 
 				// Create another checkpoint with a different state.
 				await fs.writeFile(testFile, "Changed tracked file")
@@ -420,7 +420,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				vitest.spyOn(fileSearch, "executeRipgrep").mockImplementation(({ args }) => {
 					const searchPattern = args[4]
 
-					if (searchPattern.includes(".git/HEAD")) {
+					if (searchPattern!.includes(".git/HEAD")) {
 						// Return the HEAD file path, not the .git directory
 						const headFilePath = path.join(path.relative(workspaceDir, nestedGitDir), "HEAD")
 						return Promise.resolve([
@@ -503,10 +503,10 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				let initializeEvent = null
 
 				for (let i = 0; i < emitSpy.mock.calls.length; i++) {
-					const call = emitSpy.mock.calls[i]
+					const call = emitSpy.mock.calls[i]!
 
-					if (call[0] === "initialize") {
-						initializeEvent = call[1]
+					if (call[0]! === "initialize") {
+						initializeEvent = call[1]!
 						break
 					}
 				}
@@ -544,7 +544,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				expect(result?.commit).toBeDefined()
 
 				expect(checkpointHandler).toHaveBeenCalledTimes(1)
-				const eventData = checkpointHandler.mock.calls[0][0]
+				const eventData = checkpointHandler.mock.calls[0]![0]
 				expect(eventData.type).toBe("checkpoint")
 				expect(eventData.toHash).toBeDefined()
 				expect(eventData.toHash).toBe(result!.commit)
@@ -569,7 +569,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 
 				// Verify the event was emitted.
 				expect(restoreHandler).toHaveBeenCalledTimes(1)
-				const eventData = restoreHandler.mock.calls[0][0]
+				const eventData = restoreHandler.mock.calls[0]![0]
 				expect(eventData.type).toBe("restore")
 				expect(eventData.commitHash).toBe(commit!.commit)
 				expect(typeof eventData.duration).toBe("number")
@@ -588,13 +588,13 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				// Try to restore an invalid checkpoint.
 				try {
 					await service.restoreCheckpoint(invalidCommitHash)
-				} catch (error) {
+				} catch {
 					// Expected to throw, we're testing the event emission.
 				}
 
 				// Verify the error event was emitted.
 				expect(errorHandler).toHaveBeenCalledTimes(1)
-				const eventData = errorHandler.mock.calls[0][0]
+				const eventData = errorHandler.mock.calls[0]![0]
 				expect(eventData.type).toBe("error")
 				expect(eventData.error).toBeInstanceOf(Error)
 			})
@@ -613,8 +613,8 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				expect(checkpointHandler1).toHaveBeenCalledTimes(1)
 				expect(checkpointHandler2).toHaveBeenCalledTimes(1)
 
-				const eventData1 = checkpointHandler1.mock.calls[0][0]
-				const eventData2 = checkpointHandler2.mock.calls[0][0]
+				const eventData1 = checkpointHandler1.mock.calls[0]![0]
+				const eventData2 = checkpointHandler2.mock.calls[0]![0]
 
 				expect(eventData1).toEqual(eventData2)
 				expect(eventData1.type).toBe("checkpoint")
@@ -690,7 +690,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				const result = await service.saveCheckpoint("Empty checkpoint event test", { allowEmpty: true })
 
 				expect(checkpointHandler).toHaveBeenCalledTimes(1)
-				const eventData = checkpointHandler.mock.calls[0][0]
+				const eventData = checkpointHandler.mock.calls[0]![0]
 				expect(eventData.type).toBe("checkpoint")
 				expect(eventData.toHash).toBe(result?.commit)
 				expect(typeof eventData.duration).toBe("number")
@@ -874,7 +874,7 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 				// (In Dev Containers, the workspace repo already exists before GIT_DIR is set)
 				const testShadowDir = path.join(tmpDir, `shadow-git-dir-test-${Date.now()}`)
 				const testWorkspaceDir = path.join(tmpDir, `workspace-git-dir-test-${Date.now()}`)
-				const testRepo = await initWorkspaceRepo({ workspaceDir: testWorkspaceDir })
+				await initWorkspaceRepo({ workspaceDir: testWorkspaceDir })
 
 				// Set GIT_DIR to point to the external repository BEFORE creating the service
 				// This simulates the Dev Container environment where GIT_DIR is already set
@@ -915,8 +915,8 @@ describe.each([[RepoPerTaskCheckpointService, "RepoPerTaskCheckpointService"]])(
 					// Verify the checkpoint is accessible in the shadow repo
 					const diff = await testService.getDiff({ to: commit!.commit })
 					expect(diff).toHaveLength(1)
-					expect(diff[0].paths.relative).toBe("test.txt")
-					expect(diff[0].content.after).toBe("Modified with GIT_DIR set")
+					expect(diff[0]!.paths.relative).toBe("test.txt")
+					expect(diff[0]!.content.after).toBe("Modified with GIT_DIR set")
 
 					// Verify we can restore the checkpoint
 					await fs.writeFile(testWorkspaceFile, "Another modification")
@@ -964,7 +964,12 @@ describe("worktree path comparison", () => {
 
 			// Second init with stubbed worktree returning a trailing newline
 			const service2 = new RepoPerTaskCheckpointService("trim-test-2", shadowDir, workspaceDir, () => {})
-			vitest.spyOn(service2 as any, "getShadowGitConfigWorktree").mockResolvedValue(workspaceDir + "\n")
+			vitest
+				.spyOn(
+					service2 as unknown as { getShadowGitConfigWorktree: () => Promise<string> },
+					"getShadowGitConfigWorktree",
+				)
+				.mockResolvedValue(workspaceDir + "\n")
 
 			await service2.initShadowGit()
 		} finally {

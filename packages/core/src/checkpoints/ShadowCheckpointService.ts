@@ -4,16 +4,16 @@ import * as path from "path"
 import crypto from "crypto"
 import EventEmitter from "events"
 
-import simpleGit, { SimpleGit, SimpleGitOptions } from "simple-git"
+import { simpleGit, type SimpleGit, type SimpleGitOptions } from "simple-git"
 import pWaitFor from "p-wait-for"
 
-import { fileExistsAtPath } from "../../utils/fs"
-import { arePathsEqual } from "@shofer/core"
-import { executeRipgrep } from "@shofer/core"
+import { fileExistsAtPath } from "../fs/fs.js"
+import { arePathsEqual } from "../path/path.js"
+import { executeRipgrep } from "../search/file-search.js"
 
-import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
-import { getExcludePatterns } from "./excludes"
-import { checkpointLog } from "@shofer/core"
+import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types.js"
+import { getExcludePatterns } from "./excludes.js"
+import { checkpointLog } from "../logging/subsystems.js"
 
 /**
  * Creates a SimpleGit instance with sanitized environment variables to prevent
@@ -175,7 +175,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 
 		await fs.mkdir(this.checkpointsDir, { recursive: true })
 		const git = createSanitizedGit(this.checkpointsDir)
-		const gitVersion = await git.version()
+		await git.version()
 
 		let created = false
 		const startTime = Date.now()
@@ -295,7 +295,7 @@ export abstract class ShadowCheckpointService extends EventEmitter {
 			if (nestedGitPaths.length > 0) {
 				// Get the first nested git repository path
 				// Remove .git/HEAD from the path to get the repository directory
-				const headPath = nestedGitPaths[0].path
+				const headPath = nestedGitPaths[0]!.path
 
 				// Use path module to properly extract the repository directory
 				// The HEAD file is at .git/HEAD, so we need to go up two directories
