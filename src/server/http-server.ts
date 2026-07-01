@@ -1,5 +1,7 @@
 import http from "node:http"
 
+import type { AgentApi, ServerEvent } from "@shofer/types"
+
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
  *
@@ -8,26 +10,13 @@ import http from "node:http"
  * client, or third-party tool can drive the agent — and a generated SDK can't
  * drift from it. This module is the transport itself: a small `node:http` server
  * (no framework dependency) exposing task control over HTTP and a one-way event
- * stream over SSE (`GET /api/event`), mirroring opencode's server shape.
+ * stream over SSE (`GET /api/event`).
  *
- * It is driven by an injected {@link AgentApi}, so the transport is testable in
- * isolation; wiring `AgentApi` to the live `ShoferAPI` (extension) or the headless
- * CLI agent is the follow-on, as is generating a typed SDK from the route set.
+ * It is driven by an injected {@link AgentApi} (now defined in `@shofer/types` and
+ * re-exported here), so the transport is testable in isolation.
  */
 
-export interface ServerEvent {
-	type: string
-	[key: string]: unknown
-}
-
-/** The agent surface the HTTP server exposes. Implemented over `ShoferAPI` / the CLI agent. */
-export interface AgentApi {
-	createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }>
-	sendMessage(taskId: string, message: string): Promise<void>
-	cancelTask(taskId: string): Promise<void>
-	/** Subscribe to the agent event stream; returns an unsubscribe fn. */
-	subscribe(listener: (event: ServerEvent) => void): () => void
-}
+export type { AgentApi, ServerEvent } from "@shofer/types"
 
 const API_VERSION = "v1"
 

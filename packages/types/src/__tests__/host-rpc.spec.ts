@@ -20,7 +20,10 @@ function setup() {
 		...base,
 		notifier,
 		lsp: { ...base.lsp, getDiagnostics: async () => [diag] },
-		workspace: { openFolder: async () => {}, executeCommand: async (cmd: string) => `ran:${cmd}` },
+		workspace: {
+			openFolder: async () => {},
+			executeCommand: async <T>(command: string): Promise<T> => `ran:${command}` as unknown as T,
+		},
 	}
 	const calls: Array<[string, string, unknown[]]> = []
 	const channel: HostRpcChannel = {
