@@ -19,6 +19,7 @@ import type {
 	HostShellExecution,
 	HostSymbol,
 	HostTerminals,
+	ShoferTerminal,
 	HostWatcher,
 	HostWorkspace,
 	HostWorkspaceEdit,
@@ -27,6 +28,8 @@ import type {
 } from "@shofer/types"
 
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
+import { Terminal } from "../integrations/terminal/Terminal"
+import { ShellIntegrationManager } from "../integrations/terminal/ShellIntegrationManager"
 
 /**
  * VS Code-backed implementation of the host boundary (§9). This is the extension
@@ -316,6 +319,16 @@ class VsCodeTerminals implements HostTerminals {
 				}),
 			) ?? { dispose() {} }
 		)
+	}
+	createTerminal(id: number, cwd: string): ShoferTerminal {
+		return new Terminal(id, undefined, cwd)
+	}
+	cleanupShellIntegration(terminalId?: number): void {
+		if (terminalId === undefined) {
+			ShellIntegrationManager.clear()
+		} else {
+			ShellIntegrationManager.zshCleanupTmpDir(terminalId)
+		}
 	}
 }
 

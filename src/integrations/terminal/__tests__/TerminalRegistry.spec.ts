@@ -3,6 +3,8 @@
 import * as vscode from "vscode"
 import { Terminal } from "../Terminal"
 import { TerminalRegistry } from "../TerminalRegistry"
+import { setHost } from "@shofer/types"
+import { createVsCodeHost } from "../../../host/host-bridge"
 
 const PAGER = process.platform === "win32" ? "" : "cat"
 
@@ -34,6 +36,7 @@ describe("TerminalRegistry", () => {
 					},
 				}) as any,
 		)
+		setHost(createVsCodeHost())
 	})
 
 	describe("createTerminal", () => {

@@ -11,6 +11,10 @@ import { webviewLog } from "@shofer/core"
 export class Terminal extends BaseTerminal {
 	public terminal: vscode.Terminal
 
+	get platformTerminal(): object {
+		return this.terminal
+	}
+
 	public cmdCounter: number = 0
 
 	constructor(id: number, terminal: vscode.Terminal | undefined, cwd: string) {

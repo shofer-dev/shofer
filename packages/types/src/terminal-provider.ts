@@ -4,6 +4,12 @@ export type ShoferTerminalProvider = "vscode" | "execa"
 
 export interface ShoferTerminal {
 	provider: ShoferTerminalProvider
+	/**
+	 * The underlying platform terminal handle (e.g. the vscode.Terminal), if this
+	 * terminal is backed by one. Used to correlate host shell-execution/close events
+	 * to their terminal. Undefined for the headless `execa` provider.
+	 */
+	readonly platformTerminal?: object
 	id: number
 	busy: boolean
 	running: boolean

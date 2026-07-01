@@ -114,6 +114,12 @@ export const noopTerminals: HostTerminals = {
 	onDidCloseTerminal: () => noopDisposable,
 	onDidStartShellExecution: () => noopDisposable,
 	onDidEndShellExecution: () => noopDisposable,
+	createTerminal: () => {
+		// The headless/CLI host has no interactive terminals; the core only reaches for
+		// this on the "vscode" provider, so a headless front-end selects "execa" instead.
+		throw new Error("No platform terminal backend on the in-memory host (use the execa provider).")
+	},
+	cleanupShellIntegration: () => {},
 }
 
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */

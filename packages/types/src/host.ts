@@ -16,6 +16,7 @@
  */
 
 import type { DiffView, DiffViewTaskHandle } from "./diff-view.js"
+import type { ShoferTerminal } from "./terminal-provider.js"
 
 /** Options for a choice dialog (maps to `vscode.MessageOptions` + severity). */
 export interface NotifyChoiceOptions {
@@ -275,6 +276,15 @@ export interface HostTerminals {
 	 * `vscode.window.onDidEndTerminalShellExecution`).
 	 */
 	onDidEndShellExecution(handler: (event: HostShellExecutionEndEvent) => void): HostDisposable
+	/**
+	 * Create the front-end's terminal backend for `id`/`cwd` (maps to `new Terminal(...)`
+	 * in the VS Code adapter). The portable `execa` provider is created by the core registry
+	 * itself; this factory supplies the platform-backed terminal. A headless host that has no
+	 * interactive terminals may throw — the core only calls it for the `"vscode"` provider.
+	 */
+	createTerminal(id: number, cwd: string): ShoferTerminal
+	/** Clean up shell-integration temp state: one terminal (id given) or all of it (id omitted). */
+	cleanupShellIntegration(terminalId?: number): void
 }
 
 /** Aggregate host boundary handed to the core. */

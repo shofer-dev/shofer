@@ -5,9 +5,7 @@ import { arePathsEqual } from "@shofer/core"
 
 import { ShoferTerminal, ShoferTerminalProvider } from "@shofer/types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
-import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
-import { ShellIntegrationManager } from "./ShellIntegrationManager"
 import { webviewLog } from "@shofer/core"
 
 // Although the host's window terminal list enumerates all open terminals,
@@ -43,7 +41,7 @@ export class TerminalRegistry {
 			const terminal = this.getTerminalByHostTerminal(hostTerminal)
 
 			if (terminal) {
-				ShellIntegrationManager.zshCleanupTmpDir(terminal.id)
+				getHost().terminals.cleanupShellIntegration(terminal.id)
 			}
 		})
 
@@ -127,7 +125,7 @@ export class TerminalRegistry {
 		let newTerminal
 
 		if (provider === "vscode") {
-			newTerminal = new Terminal(this.nextTerminalId++, undefined, cwd)
+			newTerminal = getHost().terminals.createTerminal(this.nextTerminalId++, cwd)
 		} else {
 			newTerminal = new ExecaTerminal(this.nextTerminalId++, cwd)
 		}
@@ -267,7 +265,7 @@ export class TerminalRegistry {
 
 	public static cleanup() {
 		// Clean up all temporary directories.
-		ShellIntegrationManager.clear()
+		getHost().terminals.cleanupShellIntegration()
 		this.disposables.forEach((disposable) => disposable.dispose())
 		this.disposables = []
 	}
@@ -308,7 +306,7 @@ export class TerminalRegistry {
 	 * @returns The Terminal object, or undefined if not found
 	 */
 	private static getTerminalByHostTerminal(hostTerminal: HostTerminalHandle): ShoferTerminal | undefined {
-		const found = this.terminals.find((t) => t instanceof Terminal && t.terminal === hostTerminal)
+		const found = this.terminals.find((t) => t.platformTerminal === hostTerminal)
 
 		if (found?.isClosed()) {
 			this.removeTerminal(found.id)
@@ -319,7 +317,7 @@ export class TerminalRegistry {
 	}
 
 	private static removeTerminal(id: number) {
-		ShellIntegrationManager.zshCleanupTmpDir(id)
+		getHost().terminals.cleanupShellIntegration(id)
 		this.terminals = this.terminals.filter((t) => t.id !== id)
 	}
 }
