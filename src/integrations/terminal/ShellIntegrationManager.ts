@@ -1,7 +1,7 @@
 import * as path from "path"
 
 import * as vscode from "vscode"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export class ShellIntegrationManager {
 	public static terminalTmpDirs: Map<number, string> = new Map()

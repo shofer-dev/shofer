@@ -14,7 +14,7 @@ import { withValidationErrorHandling, formatEmbeddingError, HttpError } from "..
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { handleOpenAIError } from "../../../api/providers/utils/openai-error-handler"
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 /**
  * OpenAI implementation of the embedder interface with batching and rate limiting

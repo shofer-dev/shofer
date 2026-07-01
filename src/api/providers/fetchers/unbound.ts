@@ -3,7 +3,7 @@ import axios from "axios"
 import type { ModelInfo } from "@shofer/types"
 
 import { parseApiPrice } from "../../../shared/cost"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 interface RawUnboundModel {
 	id: string

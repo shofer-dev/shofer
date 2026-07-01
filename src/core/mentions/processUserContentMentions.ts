@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { parseMentions, ParseMentionsResult, MentionContentBlock } from "./index"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 import type { SkillLookup } from "../../services/skills/skillInvocation"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 // Internal aliases for the Anthropic content block subtypes used during processing.
 type TextPart = Anthropic.Messages.TextBlockParam

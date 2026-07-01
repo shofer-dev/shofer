@@ -4,10 +4,11 @@ import { createHash } from "crypto"
 import { QdrantVectorStore } from "../qdrant-client"
 import { getWorkspacePath } from "../../../../utils/path"
 import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE } from "../../constants"
-import { codeIndexLog } from "../../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 // Mock logging subsystem
-vitest.mock("../../../../utils/logging/subsystems", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	codeIndexLog: {
 		error: vitest.fn(),
 		info: vitest.fn(),

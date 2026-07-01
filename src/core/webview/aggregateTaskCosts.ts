@@ -1,5 +1,5 @@
 import type { HistoryItem } from "@shofer/types"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export interface AggregatedCosts {
 	ownCost: number // This task's own API costs

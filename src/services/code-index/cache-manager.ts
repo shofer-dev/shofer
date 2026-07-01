@@ -5,7 +5,7 @@ import debounce from "lodash.debounce"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
-import { codeIndexLog } from "../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 import { recordIndexLoadDuration, recordIndexWriteDuration } from "../../metrics/registry"
 
 /**

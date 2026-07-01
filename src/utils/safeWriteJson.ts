@@ -4,7 +4,7 @@ import * as path from "path"
 import * as lockfile from "proper-lockfile"
 import { JsonStreamStringify } from "json-stream-stringify"
 
-import { fsLog } from "./logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 /**
  * Options for safeWriteJson function

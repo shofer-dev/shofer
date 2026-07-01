@@ -7,7 +7,7 @@ import ignore from "ignore"
 import { arePathsEqual } from "../../utils/path"
 import { getBinPath } from "../../services/ripgrep"
 import { DIRS_TO_IGNORE } from "./constants"
-import { utilLog } from "../../utils/logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 /**
  * Context object for directory scanning operations

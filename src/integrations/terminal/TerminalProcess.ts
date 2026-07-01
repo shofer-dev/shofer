@@ -6,7 +6,7 @@ import psTree from "ps-tree"
 import type { ExitCodeDetails } from "./types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { Terminal } from "./Terminal"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export class TerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<Terminal>

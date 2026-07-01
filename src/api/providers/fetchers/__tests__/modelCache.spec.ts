@@ -10,7 +10,8 @@ vi.mock("@shofer/telemetry", () => ({
 }))
 
 // Mock the subsystem logger
-vi.mock("../../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 
@@ -225,7 +226,7 @@ describe("getModelsFromCache disk fallback", () => {
 			throw new Error("Disk read failed")
 		})
 
-		const { apiLog } = await import("../../../../utils/logging/subsystems")
+		const { apiLog } = await import("@shofer/core")
 
 		const result = getModelsFromCache("openrouter")
 
@@ -237,7 +238,7 @@ describe("getModelsFromCache disk fallback", () => {
 		vi.mocked(fsSync.existsSync).mockReturnValue(true)
 		vi.mocked(fsSync.readFileSync).mockReturnValue("invalid json{")
 
-		const { apiLog } = await import("../../../../utils/logging/subsystems")
+		const { apiLog } = await import("@shofer/core")
 
 		const result = getModelsFromCache("openrouter")
 

@@ -11,7 +11,7 @@ import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { generateFoldedFileContext } from "./foldedFileContext"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext"
 

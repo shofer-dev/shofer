@@ -4,7 +4,7 @@ import { LLM, LLMInfo, LLMInstanceInfo, LMStudioClient } from "@lmstudio/sdk"
 import { type ModelInfo, lMStudioDefaultModelInfo } from "@shofer/types"
 
 import { flushModels, getModels } from "./modelCache"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 const modelsWithLoadedDetails = new Set<string>()
 

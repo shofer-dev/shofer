@@ -34,7 +34,7 @@ import {
 	ImageMemoryTracker,
 } from "./helpers/imageHelpers"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

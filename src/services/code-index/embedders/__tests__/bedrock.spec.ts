@@ -3,7 +3,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 
 import { BedrockEmbedder } from "../bedrock"
 import { MAX_ITEM_TOKENS, INITIAL_RETRY_DELAY_MS } from "../../constants"
-import { codeIndexLog } from "../../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 // Mock the AWS SDK
 vitest.mock("@aws-sdk/client-bedrock-runtime", () => {
@@ -56,7 +56,8 @@ vitest.mock("../../../../i18n", () => ({
 
 // Mock the code-index logger (pino-based) — the embedder uses codeIndexLog.warn/error, not console.*
 // Path is relative to THIS test file (4 levels up: __tests__ → embedders → code-index → services → src).
-vitest.mock("../../../../utils/logging/subsystems", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	codeIndexLog: {
 		error: vitest.fn(),
 		warn: vitest.fn(),

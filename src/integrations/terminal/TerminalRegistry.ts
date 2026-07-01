@@ -7,7 +7,7 @@ import { TerminalProcess } from "./TerminalProcess"
 import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 // Although vscode.window.terminals provides a list of all open terminals,
 // there's no way to know whether they're busy or not (exitStatus does not

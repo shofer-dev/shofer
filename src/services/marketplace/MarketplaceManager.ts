@@ -14,7 +14,7 @@ import { t } from "../../i18n"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 
 import { RemoteConfigLoader } from "./RemoteConfigLoader"
-import { marketplaceLog } from "../../utils/logging/subsystems"
+import { marketplaceLog } from "@shofer/core"
 import { SimpleInstaller } from "./SimpleInstaller"
 
 export interface MarketplaceItemsResponse {

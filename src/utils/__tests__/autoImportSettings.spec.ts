@@ -95,7 +95,8 @@ vi.mock("../../core/config/CustomModesManager", () => ({
 
 vi.mock("../../extension", () => ({}))
 
-vi.mock("../logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	configLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }))
 

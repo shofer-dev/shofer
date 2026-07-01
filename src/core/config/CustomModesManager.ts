@@ -12,11 +12,11 @@ import { type ModeConfig, type PromptComponent, customModesSettingsSchema, modeC
 import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "../../utils/path"
 import { getGlobalShoferDirectory } from "../../services/shofer-config"
-import { configLog as logger } from "../../utils/logging/subsystems"
+import { configLog as logger } from "@shofer/core"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
-import { configLog } from "../../utils/logging/subsystems"
+import { configLog } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 

@@ -1,7 +1,7 @@
 import * as path from "path"
 import { parseSourceCodeDefinitionsForFile } from "../../services/tree-sitter"
 import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 /**
  * Checks if a definitions string is actually an error message from tree-sitter

@@ -13,7 +13,7 @@ import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { Mutex } from "async-mutex"
 import { handleOpenAIError } from "../../../api/providers/utils/openai-error-handler"
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 // Default provider name when no specific provider is selected
 export const OPENROUTER_DEFAULT_PROVIDER_NAME = "[default]"

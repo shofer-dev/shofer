@@ -5,7 +5,7 @@ import process from "process"
 import type { ShoferTerminal } from "./types"
 import { BaseTerminal } from "./BaseTerminal"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 import { terminateProcessTree } from "../../utils/process-termination"
 
 export class ExecaTerminalProcess extends BaseTerminalProcess {

@@ -79,7 +79,7 @@ import { getCommand } from "../../utils/commands"
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
-import { webviewLog, scrollLog } from "../../utils/logging/subsystems"
+import { webviewLog, scrollLog } from "@shofer/core"
 import {
 	handleListWorktrees,
 	handleCreateWorktree,
@@ -585,7 +585,7 @@ export const webviewMessageHandler = async (
 			// Resolve the import BEFORE touching the watch, so setting the watch and
 			// reading the snapshot happen with no await between them. That keeps the
 			// snapshot and the live stream from both delivering the same line.
-			const { getTaskLogs } = await import("../../utils/logging")
+			const { getTaskLogs } = await import("@shofer/core")
 			provider.setLogsWatchTaskId(taskLogTaskId)
 			if (!taskLogTaskId) break
 			await provider.postMessageToWebview({
@@ -994,12 +994,12 @@ export const webviewMessageHandler = async (
 					} else if (key === "logLevel") {
 						if (value && typeof value === "string") {
 							// Wire log level change into the live transport immediately.
-							const { setLogLevel } = await import("../../utils/logging")
+							const { setLogLevel } = await import("@shofer/core")
 							setLogLevel(value as "debug" | "info" | "warn" | "error" | "fatal")
 						}
 					} else if (key === "logCategories") {
 						// Wire category whitelist into the live transport immediately.
-						const { setLogCategories } = await import("../../utils/logging")
+						const { setLogCategories } = await import("@shofer/core")
 						if (Array.isArray(value) && value.length > 0) {
 							setLogCategories(value as string[])
 						} else {

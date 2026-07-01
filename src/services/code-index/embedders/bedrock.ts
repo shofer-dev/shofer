@@ -13,7 +13,7 @@ import { t } from "../../../i18n"
 import { withValidationErrorHandling, formatEmbeddingError, HttpError } from "../shared/validation-helpers"
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 /**
  * Amazon Bedrock implementation of the embedder interface with batching and rate limiting

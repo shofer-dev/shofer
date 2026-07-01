@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import * as path from "path"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 /**
  * Represents an effective range in a document along with the corresponding text.

@@ -15,7 +15,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/
  * and reject invocations from outside callers.
  */
 import { isPrivateLmTool } from "../task/build-tools"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 /**
  * Checks if a tool name is a valid, known tool.

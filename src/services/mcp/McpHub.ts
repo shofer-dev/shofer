@@ -42,7 +42,7 @@ import { t } from "../../i18n"
 
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { mcpLog } from "./mcpLogger"
-import { mcpLog as mcpSysLog } from "../../utils/logging/subsystems"
+import { mcpLog as mcpSysLog } from "@shofer/core"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 

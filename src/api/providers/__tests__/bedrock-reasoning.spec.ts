@@ -7,9 +7,10 @@ import { BedrockRuntimeClient, ConverseStreamCommand } from "@aws-sdk/client-bed
 vi.mock("@aws-sdk/client-bedrock-runtime")
 
 // Mock the subsystem logger with spies
-vi.mock("../../../utils/logging/subsystems", () => {
+vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
+		...((await importOriginal()) as Record<string, unknown>),
 		apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 		taskLog: { error: noop, info: noop, warn: noop },
 		webviewLog: { error: noop, info: noop, warn: noop },
@@ -31,7 +32,7 @@ vi.mock("../../../utils/logging/subsystems", () => {
 })
 
 // Import the mocked logger for spy assertions
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 // Store the command payload for verification
 let capturedPayload: any = null

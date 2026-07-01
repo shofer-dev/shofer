@@ -4,7 +4,7 @@ import { TypedEmitter } from "@shofer/types"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
-import { gitLog as logger } from "../../../utils/logging/subsystems"
+import { gitLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[GitWatcher]"
 

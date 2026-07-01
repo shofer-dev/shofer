@@ -18,7 +18,7 @@ import * as vscode from "vscode"
 import * as path from "path"
 
 import { parseSlang, validateSlangAST } from "../workflow/slang-parser"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 import type { FlowDecl } from "../workflow/slang-ast"
 
 // ─── Stylesheet (loaded once at module scope) ────────────────────────────

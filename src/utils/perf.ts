@@ -14,7 +14,7 @@
  * (where they silently become comments).
  */
 
-import { utilLog } from "./logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 // ---------------------------------------------------------------------------
 // Histogram callback wiring

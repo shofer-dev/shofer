@@ -20,7 +20,7 @@ import { ContextProxy } from "./ContextProxy"
 import { CustomModesManager } from "./CustomModesManager"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { t } from "../../i18n"
-import { configLog } from "../../utils/logging/subsystems"
+import { configLog } from "@shofer/core"
 
 export type ImportOptions = {
 	providerSettingsManager: ProviderSettingsManager

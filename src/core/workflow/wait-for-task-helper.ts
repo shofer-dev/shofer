@@ -11,7 +11,7 @@
 import type { TaskHandle } from "@shofer/types"
 
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { workflowLog } from "../../utils/logging/subsystems"
+import { workflowLog } from "@shofer/core"
 
 export interface EventWaitOptions {
 	/** Map of taskId → TaskHandle, mutated in-place as events arrive. */

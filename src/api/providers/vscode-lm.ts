@@ -14,7 +14,7 @@ import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../trans
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 import { stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**

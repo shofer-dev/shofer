@@ -4,7 +4,7 @@ import type { ModelInfo } from "@shofer/types"
 
 import { parseApiPrice } from "../../../shared/cost"
 import { toRequestyServiceUrl } from "../../../shared/utils/requesty"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 export async function getRequestyModels(baseUrl?: string, apiKey?: string): Promise<Record<string, ModelInfo>> {
 	const models: Record<string, ModelInfo> = {}

@@ -17,9 +17,10 @@ vi.mock("../../ignore/ShoferIgnoreController")
 vi.mock("../../protect/ShoferProtectedController")
 vi.mock("../../context-tracking/FileContextTracker")
 vi.mock("../../../integrations/editor/DiffViewProvider")
-vi.mock("../../../utils/logging/subsystems", () => {
+vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
+		...((await importOriginal()) as Record<string, unknown>),
 		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 		webviewLog: { error: noop, info: noop, warn: noop },
 		apiLog: { error: noop, info: noop, warn: noop },

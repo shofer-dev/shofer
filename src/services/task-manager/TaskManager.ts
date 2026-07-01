@@ -13,7 +13,7 @@ import type {
 import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/types"
 
 import type { Task } from "../../core/task/Task"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { incTaskCreated, incTaskCompleted, incTaskErrored } from "../../metrics/registry"
 

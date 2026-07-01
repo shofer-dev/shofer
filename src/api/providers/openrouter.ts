@@ -16,7 +16,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
 
 import type { ApiHandlerOptions } from "../../shared/api"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 import {
 	convertToOpenAiMessages,

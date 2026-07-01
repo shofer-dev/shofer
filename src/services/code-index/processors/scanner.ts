@@ -31,7 +31,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
 import { Package } from "../../../shared/package"
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 export class DirectoryScanner implements IDirectoryScanner {
 	private readonly batchSegmentThreshold: number

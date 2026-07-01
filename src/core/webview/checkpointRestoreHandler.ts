@@ -4,7 +4,7 @@ import { saveTaskMessages } from "../task-persistence"
 import { getHost } from "@shofer/types"
 import pWaitFor from "p-wait-for"
 import { t } from "../../i18n"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export interface CheckpointRestoreConfig {
 	provider: ShoferProvider

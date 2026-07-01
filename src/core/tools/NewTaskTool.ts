@@ -12,7 +12,7 @@ import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { parseToolBoolean } from "./helpers/toolInputParsing"
 import type { ToolUse } from "../../shared/tools"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 interface NewTaskParams {
 	mode: string

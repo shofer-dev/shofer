@@ -26,7 +26,7 @@ import type { ChangedFileEntry, ChangedFilesPayload } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { FileSnapshot } from "../context-tracking/FileContextTracker"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 /** Normalize to POSIX-style workspace-relative path for stable webview keys. */
 function toPosix(p: string): string {

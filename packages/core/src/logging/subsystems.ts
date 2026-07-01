@@ -9,11 +9,11 @@
  *
  * Usage in subsystem code:
  *
- *   import { myLogger } from "../../utils/logging/subsystems"
+ *   import { myLogger } from "@shofer/core"
  *   myLogger.info("initialized", { key: value })
  */
 
-import { getLogger } from "./index"
+import { getLogger } from "./index.js"
 
 /** Core task engine (Task, BaseTool, condense, etc.) */
 export const taskLog = getLogger().child({ ctx: "Task" })

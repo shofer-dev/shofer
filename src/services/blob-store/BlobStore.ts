@@ -23,7 +23,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { createHash } from "crypto"
 
-import { utilLog } from "../../utils/logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 /** Default inline cap (bytes). Overridable via `shoferBlobCapBytes` setting. */
 export const DEFAULT_BLOB_CAP_BYTES = 2048

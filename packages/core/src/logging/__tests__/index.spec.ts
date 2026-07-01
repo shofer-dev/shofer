@@ -15,7 +15,8 @@
  * "test" and re-importing the module so the eager-init branch runs.
  */
 
-import type { CompactLogger } from "../CompactLogger"
+import type { CompactLogger } from "../CompactLogger.js"
+import type { LogSink } from "../types.js"
 
 describe("logging/index eager initialization", () => {
 	afterEach(() => {
@@ -25,7 +26,7 @@ describe("logging/index eager initialization", () => {
 
 	async function importFreshLoggingModule() {
 		vi.resetModules()
-		return import("../index")
+		return import("../index.js")
 	}
 
 	test("getLogger() returns a real (non-noop) logger before bootstrapLogging()", async () => {
@@ -60,7 +61,7 @@ describe("logging/index eager initialization", () => {
 			dispose: () => {},
 		}
 
-		mod.bootstrapLogging(fakeChannel as any)
+		mod.bootstrapLogging(fakeChannel as LogSink)
 		subsystemLog.info("hello after attach")
 
 		expect(lines.some((l) => l.includes("hello after attach") && l.includes("[Task]"))).toBe(true)

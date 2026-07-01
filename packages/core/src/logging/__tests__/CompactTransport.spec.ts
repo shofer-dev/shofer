@@ -1,6 +1,7 @@
 // npx vitest utils/logging/__tests__/CompactTransport.spec.ts
 
-import { CompactTransport } from "../CompactTransport"
+import { CompactTransport } from "../CompactTransport.js"
+import type { LogSink } from "../types.js"
 import fs from "fs"
 import path from "path"
 
@@ -45,7 +46,7 @@ describe("CompactTransport", () => {
 		cleanupTestLogs()
 		fs.mkdirSync(testDir, { recursive: true })
 
-		transport = new CompactTransport(outputChannel as any, {
+		transport = new CompactTransport(outputChannel as LogSink, {
 			level: "debug",
 			fileOutput: {
 				enabled: true,
@@ -73,11 +74,11 @@ describe("CompactTransport", () => {
 			const lines = fileContent.trim().split("\n")
 
 			expect(lines.length).toBe(2)
-			expect(JSON.parse(lines[0])).toMatchObject({
+			expect(JSON.parse(lines[0]!)).toMatchObject({
 				l: "info",
 				m: "Log session started",
 			})
-			expect(JSON.parse(lines[1])).toMatchObject({
+			expect(JSON.parse(lines[1]!)).toMatchObject({
 				l: "info",
 				m: "test message",
 			})
@@ -100,8 +101,8 @@ describe("CompactTransport", () => {
 			const lines = fileContent.trim().split("\n")
 
 			expect(lines.length).toBe(3)
-			expect(JSON.parse(lines[1])).toMatchObject({ m: "first" })
-			expect(JSON.parse(lines[2])).toMatchObject({ m: "second" })
+			expect(JSON.parse(lines[1]!)).toMatchObject({ m: "first" })
+			expect(JSON.parse(lines[2]!)).toMatchObject({ m: "second" })
 		})
 
 		test("writes session end marker on close", () => {
@@ -115,7 +116,7 @@ describe("CompactTransport", () => {
 
 			const fileContent = fs.readFileSync(testLogPath, "utf-8")
 			const lines = fileContent.trim().split("\n")
-			const lastLine = JSON.parse(lines[lines.length - 1])
+			const lastLine = JSON.parse(lines[lines.length - 1]!)
 
 			expect(lastLine).toMatchObject({
 				l: "info",
@@ -128,7 +129,7 @@ describe("CompactTransport", () => {
 		test("handles file path with deep directories", () => {
 			const deepDir = path.join(testDir, "deep/nested/path")
 			const deepPath = path.join(deepDir, "test.log")
-			const deepTransport = new CompactTransport(outputChannel as any, {
+			const deepTransport = new CompactTransport(outputChannel as LogSink, {
 				fileOutput: { enabled: true, path: deepPath },
 			})
 
@@ -266,7 +267,7 @@ describe("CompactTransport", () => {
 			// No channel yet → nothing buffered to a channel.
 			expect(lateChannel.lines.length).toBe(0)
 
-			lateTransport.setOutputChannel(lateChannel as any)
+			lateTransport.setOutputChannel(lateChannel as LogSink)
 			lateTransport.write({ t: Date.now(), l: "info", m: "after attach", c: "Task" })
 
 			const after = lateChannel.lines.find((l) => l.includes("after attach"))
@@ -276,7 +277,7 @@ describe("CompactTransport", () => {
 
 		test("category filter set before attach is honoured after attach", () => {
 			lateTransport.setCategories(["Task"])
-			lateTransport.setOutputChannel(lateChannel as any)
+			lateTransport.setOutputChannel(lateChannel as LogSink)
 
 			lateTransport.write({ t: Date.now(), l: "info", m: "task line", c: "Task" })
 			lateTransport.write({ t: Date.now(), l: "info", m: "git line", c: "Git" })
@@ -286,7 +287,7 @@ describe("CompactTransport", () => {
 		})
 
 		test("level filter changed live after attach takes effect", () => {
-			lateTransport.setOutputChannel(lateChannel as any)
+			lateTransport.setOutputChannel(lateChannel as LogSink)
 			lateTransport.setLevel("warn")
 
 			lateTransport.write({ t: Date.now(), l: "info", m: "info dropped", c: "Task" })

@@ -2,7 +2,7 @@ import { execFile } from "child_process"
 import * as path from "path"
 import { promisify } from "util"
 
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
 
 const execFileAsync = promisify(execFile)

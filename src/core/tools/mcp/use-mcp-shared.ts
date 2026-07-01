@@ -4,7 +4,7 @@ import type { Task } from "../../task/Task"
 import { formatResponse } from "../../prompts/responses"
 import { t } from "../../../i18n"
 import { toolNamesMatch } from "../../../utils/mcp-name"
-import { mcpLog } from "../../../utils/logging/subsystems"
+import { mcpLog } from "@shofer/core"
 
 /**
  * Result of MCP tool existence validation.

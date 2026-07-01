@@ -1,7 +1,7 @@
 import * as path from "path"
 import { getHost } from "@shofer/types"
 import os from "os"
-import { utilLog } from "./logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 /*
 The Node.js 'path' module resolves and normalizes paths differently depending on the platform:

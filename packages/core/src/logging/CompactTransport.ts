@@ -8,7 +8,7 @@
 
 import { writeFileSync, mkdirSync } from "fs"
 import { dirname } from "path"
-import type { LogSink } from "./types"
+import type { LogSink } from "./types.js"
 import {
 	CompactTransportConfig,
 	ICompactTransport,
@@ -17,16 +17,8 @@ import {
 	LOG_LEVELS,
 	TaskScopedLogLine,
 	TaskLogListener,
-} from "./types"
-import { getLogTaskContext } from "./logContext"
-
-/**
- * Default configuration: Output Channel only (no file output), all levels
- * enabled.
- */
-const DEFAULT_CONFIG: CompactTransportConfig = {
-	level: "debug",
-}
+} from "./types.js"
+import { getLogTaskContext } from "./logContext.js"
 
 /**
  * Determines if a log entry should be processed based on configured minimum level.

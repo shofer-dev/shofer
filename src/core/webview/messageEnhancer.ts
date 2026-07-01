@@ -4,7 +4,7 @@ import { supportPrompt } from "../../shared/support-prompt"
 import { singleCompletionHandler } from "../../utils/single-completion-handler"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { ShoferProvider } from "./ShoferProvider"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export interface MessageEnhancerOptions {
 	text: string

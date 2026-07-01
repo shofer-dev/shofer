@@ -23,7 +23,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 interface SedParams {
 	path: string

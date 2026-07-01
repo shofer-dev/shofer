@@ -142,8 +142,8 @@ import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
-import { taskLog } from "../../utils/logging/subsystems"
-import { runWithLogTaskContext } from "../../utils/logging"
+import { taskLog } from "@shofer/core"
+import { runWithLogTaskContext } from "@shofer/core"
 import { time } from "../../utils/perf"
 import {
 	recordLlmDuration,

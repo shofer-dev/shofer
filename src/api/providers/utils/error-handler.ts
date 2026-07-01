@@ -10,7 +10,7 @@
  */
 
 import i18n from "../../../i18n/setup"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 /**
  * Handles API provider errors and transforms them into user-friendly messages

@@ -6,7 +6,7 @@ import { IVectorStore, type IndexingMetadata } from "../interfaces/vector-store"
 import { Payload, VectorStoreSearchResult } from "../interfaces"
 import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE, QDRANT_CODE_BLOCK_NAMESPACE } from "../constants"
 import { t } from "../../../i18n"
-import { codeIndexLog } from "../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 /**
  * Describes the payload schema for a Qdrant collection. Used by `search()` both

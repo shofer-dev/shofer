@@ -6,7 +6,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { parseMarkdown } from "./markdownParser"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 import { QueryCapture } from "web-tree-sitter"
-import { utilLog } from "../../utils/logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 // Private constant
 const DEFAULT_MIN_COMPONENT_LINES_VALUE = 4

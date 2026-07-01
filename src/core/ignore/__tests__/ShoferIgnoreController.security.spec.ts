@@ -10,7 +10,8 @@ import { fileExistsAtPath } from "../../../utils/fs"
 // Mock dependencies
 vi.mock("fs/promises")
 vi.mock("../../../utils/fs")
-vi.mock("../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 vi.mock("vscode", () => {

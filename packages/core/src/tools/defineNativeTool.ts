@@ -118,7 +118,7 @@ export function defineNativeTool<S extends ZodType>(spec: NativeToolSpec<S>): De
 			const required = new Set((json.required as string[] | undefined) ?? [])
 			for (const key of allKeys) {
 				if (!required.has(key)) {
-					properties[key] = makeNullable(properties[key])
+					properties[key] = makeNullable(properties[key]!)
 				}
 			}
 			json.required = allKeys

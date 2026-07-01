@@ -14,7 +14,7 @@ import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
 import { Task } from "../../core/task/Task"
 
 import { DecorationController } from "./DecorationController"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 export const DIFF_VIEW_URI_SCHEME = "shofer-diff"
 export const DIFF_VIEW_LABEL_CHANGES = "Original ↔ Shofer's Changes"

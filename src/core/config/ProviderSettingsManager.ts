@@ -18,7 +18,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Mode, modes } from "../../shared/modes"
 import { buildApiHandler } from "../../api"
-import { configLog } from "../../utils/logging/subsystems"
+import { configLog } from "@shofer/core"
 
 // Type-safe model migrations mapping
 type ModelMigrations = {

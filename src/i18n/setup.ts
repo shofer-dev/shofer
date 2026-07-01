@@ -1,6 +1,6 @@
 import i18next from "i18next"
 
-import { i18nLog } from "../utils/logging/subsystems"
+import { i18nLog } from "@shofer/core"
 
 // Build translations object
 const translations: Record<string, Record<string, any>> = {}

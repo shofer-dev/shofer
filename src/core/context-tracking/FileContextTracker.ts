@@ -12,7 +12,7 @@ import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { LiveMemoryManager } from "../../services/live-memory/manager"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 /**
  * Snapshot kind written to the per-task originals/finals stores.

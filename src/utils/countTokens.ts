@@ -3,7 +3,7 @@ import workerpool from "workerpool"
 
 import { countTokensResultSchema } from "../workers/types"
 import { tiktoken } from "./tiktoken"
-import { utilLog } from "./logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 let pool: workerpool.Pool | null | undefined = undefined
 

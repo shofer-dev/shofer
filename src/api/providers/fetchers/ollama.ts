@@ -1,7 +1,7 @@
 import axios from "axios"
 import { ModelInfo, ollamaDefaultModelInfo } from "@shofer/types"
 import { z } from "zod"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 const OllamaModelDetailsSchema = z.object({
 	family: z.string(),

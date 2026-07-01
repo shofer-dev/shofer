@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Content, Part } from "@google/genai"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 type ThoughtSignatureContentBlock = {
 	type: "thoughtSignature"

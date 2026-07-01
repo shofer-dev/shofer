@@ -1,6 +1,6 @@
 import type { ModelInfo, ModelRecord } from "@shofer/types"
 import { fetchPoeModels, getModels } from "ai-sdk-provider-poe/code"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 export async function getPoeModels(apiKey?: string, baseURL?: string): Promise<ModelRecord> {
 	try {

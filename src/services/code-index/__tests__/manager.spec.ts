@@ -14,7 +14,8 @@ function mockUri(fsPath: string, scheme = "file") {
 	}
 }
 
-vi.mock("../../../utils/logging/subsystems", () => ({ codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>), codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
 
 // Mock vscode module
 vi.mock("vscode", () => {
