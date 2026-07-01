@@ -317,20 +317,32 @@ and the full ACP stack). That layer moved out of the extension cleanly because i
 imports only `@shofer/types` + Node, so a headless front-end can now link the
 server/ACP transport from `@shofer/core` directly.
 
-The remaining (larger) step is to extract the **agent core itself** — `Task`, the
-tool implementations, prompts, and the assistant-message dispatch loop — into
-`@shofer/core`, drawing the boundary so that:
+The remaining step is to extract the **agent core itself** — `Task`, the tool
+implementations, prompts, and the assistant-message dispatch loop — into
+`@shofer/core`. The first slice is done: `defineNativeTool` (the tool schema-as-contract
+primitive) now lives in `@shofer/core/tools`.
 
-- `@shofer/core` depends on `@shofer/types` (Category I) and standard Node APIs only.
-- Category II (`src/host/host-bridge.ts`, `integrations/*`, the VS Code LM provider,
-  platform-context config managers) stays in the extension and installs itself via
-  `setHost`.
+This is **not** a blind file-move: the agent core is vscode-free at the call level but
+reaches into `services/`/`integrations/` in a handful of places, and those couplings —
+not the file count — are the gate. `Task`'s non-portable dependencies are a bounded,
+enumerable set of **9 seams**, which split cleanly:
 
-The agent core is vscode-free at the call level (it reaches the host only through
-Category I) but still lives among extension modules and reaches into
-`integrations/`/`services/` in places; the move is mechanical but needs that
-untangling. It is what lets initiatives 10–12 run the core fully headless — a
-non-VS-Code front-end links `@shofer/core` and supplies its own Category II adapter.
+- **Portable → move into `@shofer/core`** (already vscode-free): `services/blob-store`,
+  `services/checkpoints`.
+- **VS Code-coupled → abstract behind a Category-I-style interface** (then the VS Code
+  impl stays in the extension adapter): `integrations/terminal` (TerminalRegistry),
+  `integrations/editor/DiffViewProvider`, `services/mcp/McpHub`, and
+  `integrations/misc/export-markdown`.
+
+So the carve-out plan is: (1) move the portable services; (2) give the four
+VS-Code-coupled subsystems narrow interfaces (the same treatment `HostBridge` gave the
+editor/fs/lsp surface) with a VS Code adapter on the Category II side; (3) move `Task`
+
+- tools + prompts + dispatch, now depending only on `@shofer/types` + those interfaces.
+  Each of the four abstractions is a self-contained unit of work comparable to a single
+  `HostBridge` seam. Completing it is what lets initiatives 10–12 run the core fully
+  headless — a non-VS-Code front-end links `@shofer/core` and supplies its own Category II
+  adapter.
 
 ### Front-end adapters beyond VS Code
 
