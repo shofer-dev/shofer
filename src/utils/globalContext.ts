@@ -1,4 +1,4 @@
-import { ExtensionContext } from "vscode"
+import type { ExtensionContext } from "vscode"
 import { getSettingsDirectoryPath } from "./storage"
 
 export async function ensureSettingsDirectoryExists(context: ExtensionContext): Promise<string> {

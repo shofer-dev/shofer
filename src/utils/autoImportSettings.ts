@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import type { OutputChannelLike } from "./outputChannel"
 import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as os from "os"
@@ -16,12 +16,12 @@ import { importSettingsFromPath, ImportOptions } from "../core/config/importExpo
  * their settings by placing a settings file at a predefined location.
  */
 export async function autoImportSettings(
-	outputChannel: vscode.OutputChannel,
+	outputChannel: OutputChannelLike,
 	{ providerSettingsManager, contextProxy, customModesManager }: ImportOptions,
 ): Promise<void> {
 	try {
 		// Get the auto-import settings path from VSCode settings
-		const settingsPath = vscode.workspace.getConfiguration(Package.name).get<string>("autoImportSettingsPath")
+		const settingsPath = getHost().config.get<string | undefined>(Package.name, "autoImportSettingsPath", undefined)
 
 		if (!settingsPath || settingsPath.trim() === "") {
 			outputChannel.appendLine("[AutoImport] No auto-import settings path specified, skipping auto-import")

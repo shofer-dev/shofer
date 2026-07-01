@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import type { OutputChannelLike } from "./outputChannel"
 
 export type LogFunction = (...args: unknown[]) => void
 
@@ -44,7 +44,7 @@ export function stringifyForLog(value: unknown, maxBytes: number = MAX_LOG_ARG_B
  * Creates a logging function that writes to a VSCode output channel
  * Based on the outputChannelLog implementation from src/extension/api.ts
  */
-export function createOutputChannelLogger(outputChannel: vscode.OutputChannel): LogFunction {
+export function createOutputChannelLogger(outputChannel: OutputChannelLike): LogFunction {
 	return (...args: unknown[]) => {
 		for (const arg of args) {
 			if (arg === null) {
