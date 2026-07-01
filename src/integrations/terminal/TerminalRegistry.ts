@@ -4,7 +4,7 @@ import type { HostDisposable, HostTerminalHandle } from "@shofer/types"
 import { arePathsEqual } from "@shofer/core"
 
 import { ShoferTerminal, ShoferTerminalProvider } from "@shofer/types"
-import { TerminalProcess } from "./TerminalProcess"
+import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
@@ -76,7 +76,7 @@ export class TerminalRegistry {
 			const endDisposable = terminals.onDidEndShellExecution((e) => {
 				const terminal = this.getTerminalByHostTerminal(e.terminal)
 				const process = terminal?.process
-				const exitDetails = TerminalProcess.interpretExitCode(e.exitCode)
+				const exitDetails = BaseTerminalProcess.interpretExitCode(e.exitCode)
 
 				webviewLog.info("[onDidEndTerminalShellExecution]", {
 					command: e.execution?.commandLine,
