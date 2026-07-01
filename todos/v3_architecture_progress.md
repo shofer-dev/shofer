@@ -265,18 +265,29 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started.
 ## Phase 4 — Externalize the boundary
 
 - 🚧 **§11 Public API (HTTP + SSE) + SDK**
-    - ✅ Transport boundary: `src/server/http-server.ts` — dependency-free
-      `node:http` HTTP+SSE server (`createHttpServer`/`createRequestHandler`)
-      exposing task control (`POST /api/v1/task`, `/message`, `/cancel`) + an SSE
-      event stream (`GET /api/v1/event`), driven by an injected `AgentApi`. 6 tests;
-      docs (`public_api.md`).
-    - ✅ Live adapter: `ShoferApiAgent` (`src/server/shofer-api-agent.ts`) implements
-      `AgentApi` over the in-process `ShoferAPI` (createTask→startNewTask,
-      sendMessage→resume+send, cancel→cancelCurrentTask, subscribe→forward
-      ShoferAPI events). `new ShoferApiAgent(api)` makes `createHttpServer`
-      drivable. 4 tests.
-    - ⬜ Add a `shofer serve` entrypoint (`server.listen`) — running fully headless
-      is gated on §9; generate a typed SDK from the route set so clients can't drift.
+    - ✅ Transport boundary: `http-server.ts` — dependency-free `node:http` HTTP+SSE
+      server (`createHttpServer`/`createRequestHandler`) driven by an injected
+      `AgentApi`; live adapter `ShoferApiAgent` over `ShoferAPI`. Now in
+      `@shofer/core/transport`. 10 tests; docs (`public_api.md`).
+    - ✅ Session transport (`@shofer/types/session-transport.ts`): the
+      controller↔executor protocol unifying the **agent channel** (`AgentApi` over the
+      wire) and the **Category I host-callback channel** (`HostRpcChannel`).
+      `serveSession` (executor) exposes an `HostRpcChannel` for `createSplitHost`;
+      `connectSession` (controller) proxies the remote `AgentApi` + serves callbacks
+      via `dispatchHostCall`. Also moved `AgentApi`/`ServerEvent` to `@shofer/types`.
+      4 round-trip tests.
+    - ⬜ Add a `shofer serve` entrypoint (`server.listen`); generate a typed SDK from
+      the route set so clients can't drift.
+- 🚧 **@shofer/core package carve-out**
+    - ✅ Step 1 — transport layer: moved `server/*` + `acp/*` from the extension into
+      `@shofer/core/transport` (self-contained: `@shofer/types` + node only). Repointed
+      shared types, added nodenext `.js` specifiers, satisfied core's stricter
+      tsconfig/lint. `extension.ts` re-exports `runAcpAgentOverShoferApi` from
+      `@shofer/core`. A headless front-end can now link the server/ACP transport
+      without the extension. build+lint+check-types green (core/shofer/cli).
+    - ⬜ Step 2 (large) — extract the agent core (`Task`, tool impls, prompts,
+      dispatch) into `@shofer/core`; needs untangling its reaches into
+      `integrations/`/`services/`. This is what lets §10–§12 run fully headless.
 - 🚧 **§12 ACP agent adapter**
     - ✅ Mapping foundation: `src/acp/acp-mapping.ts` — the pure shofer↔ACP mapping
       (auto-approval decision → `requestPermission` outcome; mode ↔ ACP session

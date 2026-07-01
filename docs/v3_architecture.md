@@ -278,18 +278,27 @@ The v3 architecture is delivered as a set of initiatives. Current status:
 
 ### Carve out the `@shofer/core` package
 
-The host registry now lives in `@shofer/types`, so the core's `getHost()` no longer
-pulls in any Category II adapter. The next structural step is to physically extract
-the portable core into a `@shofer/core` package, drawing the module boundary so that:
+`@shofer/core` already exists and holds shared core utilities (message-utils,
+task-history, worktree, custom-tools, plugins) plus — as of the first carve-out
+step — the **transport layer** (`transport/`: the HTTP/SSE server, `ShoferApiAgent`,
+and the full ACP stack). That layer moved out of the extension cleanly because it
+imports only `@shofer/types` + Node, so a headless front-end can now link the
+server/ACP transport from `@shofer/core` directly.
+
+The remaining (larger) step is to extract the **agent core itself** — `Task`, the
+tool implementations, prompts, and the assistant-message dispatch loop — into
+`@shofer/core`, drawing the boundary so that:
 
 - `@shofer/core` depends on `@shofer/types` (Category I) and standard Node APIs only.
 - Category II (`src/host/host-bridge.ts`, `integrations/*`, the VS Code LM provider,
-  platform-context config managers) stays in the extension package and installs
-  itself via `setHost`.
+  platform-context config managers) stays in the extension and installs itself via
+  `setHost`.
 
-This package boundary is what lets initiatives 10 (HTTP API/SDK) and 11 (ACP) run the
-core headless — a non-VS-Code front-end simply links `@shofer/core` and supplies its
-own Category II adapter.
+The agent core is vscode-free at the call level (it reaches the host only through
+Category I) but still lives among extension modules and reaches into
+`integrations/`/`services/` in places; the move is mechanical but needs that
+untangling. It is what lets initiatives 10–12 run the core fully headless — a
+non-VS-Code front-end links `@shofer/core` and supplies its own Category II adapter.
 
 ### Front-end adapters beyond VS Code
 
