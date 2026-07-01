@@ -14,8 +14,15 @@ function mockUri(fsPath: string, scheme = "file") {
 	}
 }
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>), codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
+vi.mock("@shofer/core", async (importOriginal) => {
+	const testPath = require("path")
+	const testWorkspacePath = testPath.join(testPath.sep, "test", "workspace")
+	return {
+		...((await importOriginal()) as Record<string, unknown>),
+		codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+		getWorkspacePath: vi.fn(() => testWorkspacePath),
+	}
+})
 
 // Mock vscode module
 vi.mock("vscode", () => {
@@ -58,15 +65,6 @@ vi.mock("vscode", () => {
 			getWorkspaceFolder: vi.fn(),
 		},
 		RelativePattern: vi.fn().mockImplementation((base: any, pattern: any) => ({ base, pattern })),
-	}
-})
-
-// Mock only the essential dependencies
-vi.mock("../../../utils/path", () => {
-	const testPath = require("path")
-	const testWorkspacePath = testPath.join(testPath.sep, "test", "workspace")
-	return {
-		getWorkspacePath: vi.fn(() => testWorkspacePath),
 	}
 })
 

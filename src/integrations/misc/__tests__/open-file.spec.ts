@@ -37,10 +37,11 @@ vi.mock("vscode", () => ({
 	TabInputText: vi.fn(),
 }))
 
-// Mock utils
-vi.mock("../../utils/path", () => {
+// Mock utils (path helpers now live in @shofer/core)
+vi.mock("@shofer/core", async (importOriginal) => {
 	const nodePath = require("path")
 	return {
+		...((await importOriginal()) as Record<string, unknown>),
 		arePathsEqual: vi.fn((a: string, b: string) => a === b),
 		getWorkspacePath: vi.fn(() => {
 			// In tests, we need to return a consistent workspace path
