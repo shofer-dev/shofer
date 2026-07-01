@@ -207,7 +207,7 @@ export class OutputInterceptor {
 			let removed = 0
 			let removeChars = 0
 			while (removed < excess && removeChars < this.tailBuffer.length) {
-				const charBytes = Buffer.byteLength(this.tailBuffer[removeChars], "utf8")
+				const charBytes = Buffer.byteLength(this.tailBuffer[removeChars]!, "utf8")
 				removed += charBytes
 				removeChars++
 			}
@@ -226,7 +226,7 @@ export class OutputInterceptor {
 		let bytes = 0
 		let i = 0
 		while (i < str.length && bytes < maxBytes) {
-			const charBytes = Buffer.byteLength(str[i], "utf8")
+			const charBytes = Buffer.byteLength(str[i]!, "utf8")
 			if (bytes + charBytes > maxBytes) {
 				break
 			}
@@ -245,7 +245,7 @@ export class OutputInterceptor {
 		let bytes = 0
 		let i = str.length - 1
 		while (i >= 0 && bytes < maxBytes) {
-			const charBytes = Buffer.byteLength(str[i], "utf8")
+			const charBytes = Buffer.byteLength(str[i]!, "utf8")
 			if (bytes + charBytes > maxBytes) {
 				break
 			}
@@ -419,7 +419,7 @@ export class OutputInterceptor {
 			const files = await fs.promises.readdir(storageDir)
 			for (const file of files) {
 				const match = file.match(/^cmd-(\d+)\.txt$/)
-				if (match && !executionIds.has(match[1])) {
+				if (match && !executionIds.has(match[1]!)) {
 					await fs.promises.unlink(path.join(storageDir, file)).catch(() => {})
 				}
 			}

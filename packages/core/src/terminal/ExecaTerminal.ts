@@ -1,7 +1,7 @@
 import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "@shofer/types"
-import { BaseTerminal } from "./BaseTerminal"
-import { ExecaTerminalProcess } from "./ExecaTerminalProcess"
-import { mergePromise } from "./mergePromise"
+import { BaseTerminal } from "./BaseTerminal.js"
+import { ExecaTerminalProcess } from "./ExecaTerminalProcess.js"
+import { mergePromise } from "./mergePromise.js"
 
 export class ExecaTerminal extends BaseTerminal {
 	constructor(id: number, cwd: string) {

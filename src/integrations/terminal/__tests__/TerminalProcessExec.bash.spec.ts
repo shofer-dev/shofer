@@ -6,7 +6,7 @@ import { execSync } from "child_process"
 import { ExitCodeDetails } from "@shofer/types"
 import { TerminalProcess } from "../TerminalProcess"
 import { Terminal } from "../Terminal"
-import { TerminalRegistry } from "../TerminalRegistry"
+import { TerminalRegistry } from "@shofer/core"
 import { createVsCodeHost, setHost } from "../../../host/host-bridge"
 
 // Mock the vscode module

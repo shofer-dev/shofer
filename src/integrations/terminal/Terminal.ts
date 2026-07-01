@@ -2,10 +2,10 @@ import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 
 import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "@shofer/types"
-import { BaseTerminal } from "./BaseTerminal"
+import { BaseTerminal } from "@shofer/core"
 import { TerminalProcess } from "./TerminalProcess"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
-import { mergePromise } from "./mergePromise"
+import { mergePromise } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 
 export class Terminal extends BaseTerminal {

@@ -5,20 +5,23 @@ import * as path from "path"
 import * as fs from "fs/promises"
 
 import { ExecuteCommandOptions } from "../ExecuteCommandTool"
-import { TerminalRegistry } from "../../../integrations/terminal/TerminalRegistry"
+import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../../integrations/terminal/Terminal"
-import { ExecaTerminal } from "../../../integrations/terminal/ExecaTerminal"
+import { ExecaTerminal } from "@shofer/core"
 import type { ShoferTerminalCallbacks } from "@shofer/types"
 
 // Mock fs to control directory existence checks
 vitest.mock("fs/promises")
 
-// Mock TerminalRegistry to control terminal creation
-vitest.mock("../../../integrations/terminal/TerminalRegistry")
+// TerminalRegistry + ExecaTerminal now live in @shofer/core; mock them there.
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	TerminalRegistry: { getOrCreateTerminal: vitest.fn() },
+	ExecaTerminal: vitest.fn(),
+}))
 
-// Mock Terminal and ExecaTerminal classes
+// Mock the vscode-backed Terminal class (still Cat II in src)
 vitest.mock("../../../integrations/terminal/Terminal")
-vitest.mock("../../../integrations/terminal/ExecaTerminal")
 
 // Import the actual executeCommand function (not mocked)
 import { executeCommandInTerminal } from "../ExecuteCommandTool"

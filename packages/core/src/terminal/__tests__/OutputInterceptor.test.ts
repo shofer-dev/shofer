@@ -2,7 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest"
 
-import { OutputInterceptor } from "../OutputInterceptor"
+import { OutputInterceptor } from "../OutputInterceptor.js"
 import { TerminalOutputPreviewSize } from "@shofer/types"
 
 // Mock filesystem operations

@@ -1,6 +1,6 @@
-import { truncateOutput, applyRunLengthEncoding } from "@shofer/core"
+import { truncateOutput, applyRunLengthEncoding } from "../text/output-truncation.js"
 
-import { webviewLog } from "@shofer/core"
+import { webviewLog } from "../logging/subsystems.js"
 import type {
 	ShoferTerminalProvider,
 	ShoferTerminal,
@@ -98,7 +98,7 @@ export abstract class BaseTerminal implements ShoferTerminal {
 		if (this.process) {
 			return this.process.command || ""
 		} else if (this.completedProcesses.length > 0) {
-			return this.completedProcesses[0].command || ""
+			return this.completedProcesses[0]!.command || ""
 		}
 
 		return ""

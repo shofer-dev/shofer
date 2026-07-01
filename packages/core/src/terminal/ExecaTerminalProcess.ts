@@ -3,10 +3,10 @@ import psTree from "ps-tree"
 import process from "process"
 
 import type { ShoferTerminal } from "@shofer/types"
-import { BaseTerminal } from "./BaseTerminal"
-import { BaseTerminalProcess } from "./BaseTerminalProcess"
-import { webviewLog } from "@shofer/core"
-import { terminateProcessTree } from "../../utils/process-termination"
+import { BaseTerminal } from "./BaseTerminal.js"
+import { BaseTerminalProcess } from "./BaseTerminalProcess.js"
+import { webviewLog } from "../logging/subsystems.js"
+import { terminateProcessTree } from "./process-termination.js"
 
 export class ExecaTerminalProcess extends BaseTerminalProcess {
 	private terminalRef: WeakRef<ShoferTerminal>
@@ -65,7 +65,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 						psTree(this.pid!, (err, children) => {
 							if (!err && children.length > 0) {
 								// Update PID to the first child (the actual command)
-								const actualPid = parseInt(children[0].PID)
+								const actualPid = parseInt(children[0]!.PID)
 								if (!isNaN(actualPid)) {
 									this.pid = actualPid
 								}
@@ -113,7 +113,9 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 					timeoutId = setTimeout(() => {
 						try {
 							this.subprocess?.kill("SIGKILL")
-						} catch (e) {}
+						} catch {
+							// Best-effort kill; ignore failures.
+						}
 
 						resolve()
 					}, 5_000)
@@ -201,7 +203,7 @@ export class ExecaTerminalProcess extends BaseTerminalProcess {
 	}
 
 	public override getUnretrievedOutput() {
-		let output = this.fullOutput.slice(this.lastRetrievedIndex)
+		const output = this.fullOutput.slice(this.lastRetrievedIndex)
 		let index = output.lastIndexOf("\n")
 
 		if (index === -1) {

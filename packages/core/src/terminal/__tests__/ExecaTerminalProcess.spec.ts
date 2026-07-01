@@ -22,8 +22,8 @@ vitest.mock("ps-tree", () => ({
 }))
 
 import { execa } from "execa"
-import { ExecaTerminalProcess } from "../ExecaTerminalProcess"
-import { BaseTerminal } from "../BaseTerminal"
+import { ExecaTerminalProcess } from "../ExecaTerminalProcess.js"
+import { BaseTerminal } from "../BaseTerminal.js"
 import type { ShoferTerminal } from "@shofer/types"
 
 describe("ExecaTerminalProcess", () => {
@@ -79,7 +79,7 @@ describe("ExecaTerminalProcess", () => {
 			terminalProcess = new ExecaTerminalProcess(mockTerminal)
 			await terminalProcess.run("echo test")
 			const execaMock = vitest.mocked(execa)
-			const calledOptions = execaMock.mock.calls[0][0] as any
+			const calledOptions = execaMock.mock.calls[0]![0] as any
 			expect(calledOptions.env.EXISTING_VAR).toBe("existing")
 		})
 
@@ -89,7 +89,7 @@ describe("ExecaTerminalProcess", () => {
 			terminalProcess = new ExecaTerminalProcess(mockTerminal)
 			await terminalProcess.run("echo test")
 			const execaMock = vitest.mocked(execa)
-			const calledOptions = execaMock.mock.calls[0][0] as any
+			const calledOptions = execaMock.mock.calls[0]![0] as any
 			expect(calledOptions.env.LANG).toBe("en_US.UTF-8")
 			expect(calledOptions.env.LC_ALL).toBe("en_US.UTF-8")
 		})

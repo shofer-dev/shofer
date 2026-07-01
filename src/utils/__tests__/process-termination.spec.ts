@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 
-import { terminateProcessTree } from "../process-termination"
+import { terminateProcessTree } from "@shofer/core"
 
 /**
  * §6 structured termination. Uses injected kill/getDescendants/delay so the

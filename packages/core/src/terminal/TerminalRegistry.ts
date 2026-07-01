@@ -1,12 +1,12 @@
 import { getHost } from "@shofer/types"
 import type { HostDisposable, HostTerminalHandle } from "@shofer/types"
 
-import { arePathsEqual } from "@shofer/core"
+import { arePathsEqual } from "../path/path.js"
 
 import { ShoferTerminal, ShoferTerminalProvider } from "@shofer/types"
-import { BaseTerminalProcess } from "./BaseTerminalProcess"
-import { ExecaTerminal } from "./ExecaTerminal"
-import { webviewLog } from "@shofer/core"
+import { BaseTerminalProcess } from "./BaseTerminalProcess.js"
+import { ExecaTerminal } from "./ExecaTerminal.js"
+import { webviewLog } from "../logging/subsystems.js"
 
 // Although the host's window terminal list enumerates all open terminals,
 // there's no way to know whether they're busy or not (exitStatus does not

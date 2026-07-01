@@ -2,10 +2,10 @@
 
 import * as vscode from "vscode"
 
-import { mergePromise } from "../mergePromise"
+import { mergePromise } from "@shofer/core"
 import { TerminalProcess } from "../TerminalProcess"
 import { Terminal } from "../Terminal"
-import { TerminalRegistry } from "../TerminalRegistry"
+import { TerminalRegistry } from "@shofer/core"
 
 class TestTerminalProcess extends TerminalProcess {
 	public callTrimRetrievedOutput(): void {

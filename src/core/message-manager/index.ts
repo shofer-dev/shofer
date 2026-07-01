@@ -3,7 +3,7 @@ import { Task } from "../task/Task"
 import { ShoferMessage } from "@shofer/types"
 import { ApiMessage } from "../task-persistence/apiMessages"
 import { cleanupAfterTruncation } from "../condense"
-import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
+import { OutputInterceptor } from "@shofer/core"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { taskLog } from "@shofer/core"
 

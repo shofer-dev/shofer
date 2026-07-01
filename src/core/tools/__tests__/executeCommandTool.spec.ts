@@ -25,7 +25,9 @@ vitest.mock("vscode", () => ({
 	},
 }))
 
-vitest.mock("../../../integrations/terminal/TerminalRegistry", () => ({
+// TerminalRegistry now lives in @shofer/core; mock it there (keep the rest of the barrel).
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	TerminalRegistry: {
 		getOrCreateTerminal: vitest.fn().mockResolvedValue({
 			runCommand: vitest.fn().mockResolvedValue(undefined),

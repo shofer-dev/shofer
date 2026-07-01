@@ -2,7 +2,7 @@
 
 import * as vscode from "vscode"
 import { Terminal } from "../Terminal"
-import { TerminalRegistry } from "../TerminalRegistry"
+import { TerminalRegistry } from "@shofer/core"
 import { setHost } from "@shofer/types"
 import { createVsCodeHost } from "../../../host/host-bridge"
 

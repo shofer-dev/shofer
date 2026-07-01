@@ -1,7 +1,7 @@
 // npx vitest run src/integrations/terminal/__tests__/ExecaTerminal.spec.ts
 
 import { ShoferTerminalCallbacks } from "@shofer/types"
-import { ExecaTerminal } from "../ExecaTerminal"
+import { ExecaTerminal } from "@shofer/core"
 
 describe("ExecaTerminal", () => {
 	it("should run terminal commands and collect output", async () => {

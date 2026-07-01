@@ -89,8 +89,8 @@ import { RepoPerTaskCheckpointService } from "@shofer/core"
 import type { DiffView } from "@shofer/types"
 import { findToolName } from "../../integrations/misc/export-markdown"
 import { ShoferTerminalProcess } from "@shofer/types"
-import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
-import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
+import { TerminalRegistry } from "@shofer/core"
+import { OutputInterceptor } from "@shofer/core"
 
 // utils
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"

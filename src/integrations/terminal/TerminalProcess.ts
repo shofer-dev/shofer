@@ -3,7 +3,7 @@ import nodeProcess from "process"
 import psTree from "ps-tree"
 
 import type { ExitCodeDetails } from "@shofer/types"
-import { BaseTerminalProcess } from "./BaseTerminalProcess"
+import { BaseTerminalProcess } from "@shofer/core"
 import { Terminal } from "./Terminal"
 import { getHost } from "@shofer/types"
 import { webviewLog } from "@shofer/core"

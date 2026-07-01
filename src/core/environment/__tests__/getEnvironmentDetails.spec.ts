@@ -9,7 +9,7 @@ import { getFullModeDetails } from "../../modes/getFullModeDetails"
 import { isToolAllowedForMode } from "../../tools/validateToolUse"
 import { getApiMetrics } from "../../../shared/getApiMetrics"
 import { listFiles } from "../../../services/glob/list-files"
-import { TerminalRegistry } from "../../../integrations/terminal/TerminalRegistry"
+import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../../integrations/terminal/Terminal"
 import { arePathsEqual } from "@shofer/core"
 import { FileContextTracker } from "../../context-tracking/FileContextTracker"
@@ -45,7 +45,6 @@ vi.mock("execa", () => ({
 vi.mock("../../modes/getFullModeDetails")
 vi.mock("../../../shared/getApiMetrics")
 vi.mock("../../../services/glob/list-files")
-vi.mock("../../../integrations/terminal/TerminalRegistry")
 vi.mock("../../../integrations/terminal/Terminal")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
@@ -54,6 +53,12 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	TerminalRegistry: {
+		getBackgroundTerminals: vi.fn(() => []),
+		getTerminals: vi.fn(() => []),
+		getUnretrievedOutput: vi.fn(() => ""),
+		isProcessHot: vi.fn(() => false),
+	},
 }))
 vi.mock("../../../utils/git")
 vi.mock("../../prompts/responses")
