@@ -1,17 +1,18 @@
 /**
  * Module-level logger for MCP services so they can write to Shofer's
- * OutputChannel without taking a `vscode.OutputChannel` dependency in their
- * constructors. Set once at activation by `extension.ts`.
+ * OutputChannel without each taking an output-channel dependency in their
+ * constructors. The sink is a minimal `OutputChannelLike` so this module stays
+ * vscode-free; the VS Code channel is supplied once at activation by `extension.ts`.
  *
  * If unset (e.g. in tests), falls back to console.log so messages are not lost.
  */
 
-import type * as vscode from "vscode"
+import type { OutputChannelLike } from "../../utils/outputChannel"
 import { mcpLog as mcpSysLog } from "../../utils/logging/subsystems"
 
-let outputChannel: vscode.OutputChannel | undefined
+let outputChannel: OutputChannelLike | undefined
 
-export function setMcpOutputChannel(channel: vscode.OutputChannel): void {
+export function setMcpOutputChannel(channel: OutputChannelLike): void {
 	outputChannel = channel
 }
 
