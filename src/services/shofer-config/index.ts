@@ -201,7 +201,7 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 		// (e.g. agent worktree snapshots). When the cap fires, every result is
 		// from the root .shofer/ (which we discard anyway via the
 		// rootShoferDir filter below) and no subfolder .shofer/ ever surfaces.
-		const { getBinPath } = await import("../ripgrep")
+		const { getBinPath } = await import("@shofer/core")
 		const vscode = await import("vscode")
 		const rgPath = await getBinPath(vscode.env.appRoot)
 		if (!rgPath) {

@@ -4,9 +4,9 @@ import * as readline from "readline"
 
 import { getHost } from "@shofer/types"
 
-import { ShoferIgnoreController } from "@shofer/core"
-import { fileExistsAtPath } from "../../utils/fs"
-import { codeIndexLog } from "@shofer/core"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController.js"
+import { fileExistsAtPath } from "../fs/fs.js"
+import { codeIndexLog } from "../logging/subsystems.js"
 /*
 This file provides functionality to perform regex searches on files using ripgrep.
 Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils
@@ -106,7 +106,7 @@ export async function getBinPath(vscodeAppRoot: string): Promise<string | undefi
 function getSystemRipgrepPath(): string | undefined {
 	try {
 		const cmd = isWindows ? "where" : "which"
-		const result = childProcess.execFileSync(cmd, [binName], { encoding: "utf8" }).trim().split("\n")[0].trim()
+		const result = childProcess.execFileSync(cmd, [binName], { encoding: "utf8" }).trim().split("\n")[0]!.trim()
 		return result || undefined
 	} catch {
 		return undefined
@@ -214,8 +214,8 @@ export async function regexGrepSearch(
 					}
 
 					const lastResult = currentFile.searchResults[currentFile.searchResults.length - 1]
-					if (lastResult?.lines.length > 0) {
-						const lastLine = lastResult.lines[lastResult.lines.length - 1]
+					if (lastResult && lastResult.lines.length > 0) {
+						const lastLine = lastResult.lines[lastResult.lines.length - 1]!
 
 						// If this line is contiguous with the last result, add to it
 						if (parsed.data.line_number <= lastLine.line + 1) {
@@ -252,7 +252,7 @@ export async function regexGrepSearch(
 function formatResults(fileResults: SearchFileResult[], cwd: string): string {
 	const groupedResults: { [key: string]: SearchResult[] } = {}
 
-	let totalResults = fileResults.reduce((sum, file) => sum + file.searchResults.length, 0)
+	const totalResults = fileResults.reduce((sum, file) => sum + file.searchResults.length, 0)
 	let output = ""
 	if (totalResults >= MAX_RESULTS) {
 		output += `Showing first ${MAX_RESULTS} of ${MAX_RESULTS}+ results. Use a more specific search if necessary.\n\n`

@@ -10,7 +10,8 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-vi.mock("../../ripgrep", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getBinPath: vi.fn().mockResolvedValue("/mock/path/to/rg"),
 }))
 
@@ -29,11 +30,6 @@ describe("listFiles", () => {
 		expect(result).toEqual([[], false])
 	})
 })
-
-// Mock ripgrep to avoid filesystem dependencies
-vi.mock("../../ripgrep", () => ({
-	getBinPath: vi.fn().mockResolvedValue("/mock/path/to/rg"),
-}))
 
 // Mock vscode
 vi.mock("vscode", () => ({

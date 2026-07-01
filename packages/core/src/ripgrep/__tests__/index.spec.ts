@@ -1,6 +1,6 @@
 // npx vitest run src/services/ripgrep/__tests__/index.spec.ts
 
-import { truncateLine } from "../index"
+import { truncateLine } from "../index.js"
 
 describe("Ripgrep line truncation", () => {
 	// The default MAX_LINE_LENGTH is 500 in the implementation

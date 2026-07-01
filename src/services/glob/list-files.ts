@@ -5,7 +5,7 @@ import * as childProcess from "child_process"
 import { getHost } from "@shofer/types"
 import ignore from "ignore"
 import { arePathsEqual } from "@shofer/core"
-import { getBinPath } from "../../services/ripgrep"
+import { getBinPath } from "@shofer/core"
 import { DIRS_TO_IGNORE } from "./constants"
 import { utilLog } from "@shofer/core"
 

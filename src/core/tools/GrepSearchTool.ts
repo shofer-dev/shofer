@@ -29,7 +29,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import { getBinPath } from "../../services/ripgrep"
+import { getBinPath } from "@shofer/core"
 import type { ShoferIgnoreController } from "@shofer/core"
 import type { ToolUse } from "../../shared/tools"
 

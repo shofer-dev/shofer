@@ -4,7 +4,7 @@ import * as fs from "fs"
 import * as childProcess from "child_process"
 import * as readline from "readline"
 import { byLengthAsc, Fzf } from "fzf"
-import { getBinPath } from "../ripgrep"
+import { getBinPath } from "@shofer/core"
 import { Package } from "../../shared/package"
 import { utilLog } from "@shofer/core"
 
