@@ -2,7 +2,7 @@ import { execa, ExecaError } from "execa"
 import psTree from "ps-tree"
 import process from "process"
 
-import type { ShoferTerminal } from "./types"
+import type { ShoferTerminal } from "@shofer/types"
 import { BaseTerminal } from "./BaseTerminal"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { webviewLog } from "@shofer/core"

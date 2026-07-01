@@ -3,7 +3,7 @@
 import * as vscode from "vscode"
 import { execSync } from "child_process"
 
-import { ExitCodeDetails } from "../types"
+import { ExitCodeDetails } from "@shofer/types"
 import { TerminalProcess } from "../TerminalProcess"
 import { Terminal } from "../Terminal"
 import { TerminalRegistry } from "../TerminalRegistry"

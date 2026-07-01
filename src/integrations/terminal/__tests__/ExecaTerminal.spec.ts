@@ -1,6 +1,6 @@
 // npx vitest run src/integrations/terminal/__tests__/ExecaTerminal.spec.ts
 
-import { ShoferTerminalCallbacks } from "../types"
+import { ShoferTerminalCallbacks } from "@shofer/types"
 import { ExecaTerminal } from "../ExecaTerminal"
 
 describe("ExecaTerminal", () => {

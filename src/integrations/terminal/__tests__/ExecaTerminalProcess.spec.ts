@@ -24,7 +24,7 @@ vitest.mock("ps-tree", () => ({
 import { execa } from "execa"
 import { ExecaTerminalProcess } from "../ExecaTerminalProcess"
 import { BaseTerminal } from "../BaseTerminal"
-import type { ShoferTerminal } from "../types"
+import type { ShoferTerminal } from "@shofer/types"
 
 describe("ExecaTerminalProcess", () => {
 	let mockTerminal: ShoferTerminal

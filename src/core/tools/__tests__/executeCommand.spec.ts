@@ -8,7 +8,7 @@ import { ExecuteCommandOptions } from "../ExecuteCommandTool"
 import { TerminalRegistry } from "../../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../../integrations/terminal/Terminal"
 import { ExecaTerminal } from "../../../integrations/terminal/ExecaTerminal"
-import type { ShoferTerminalCallbacks } from "../../../integrations/terminal/types"
+import type { ShoferTerminalCallbacks } from "@shofer/types"
 
 // Mock fs to control directory existence checks
 vitest.mock("fs/promises")

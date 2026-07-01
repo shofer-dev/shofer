@@ -11,7 +11,7 @@ import { Task } from "../task/Task"
 
 import { ToolUse, ToolResponse } from "../../shared/tools"
 import { formatResponse } from "../prompts/responses"
-import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "../../integrations/terminal/types"
+import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "@shofer/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"

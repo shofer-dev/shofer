@@ -8,7 +8,7 @@ import type {
 	ShoferTerminalProcess,
 	ShoferTerminalProcessResultPromise,
 	ExitCodeDetails,
-} from "./types"
+} from "@shofer/types"
 
 export abstract class BaseTerminal implements ShoferTerminal {
 	public readonly provider: ShoferTerminalProvider

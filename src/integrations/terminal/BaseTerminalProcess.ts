@@ -1,8 +1,11 @@
 import { EventEmitter } from "events"
 
-import type { ShoferTerminalProcess, ShoferTerminalProcessEvents, ExitCodeDetails } from "./types"
+import type { ShoferTerminalProcess, ShoferTerminalProcessEvents, ExitCodeDetails } from "@shofer/types"
 
-export abstract class BaseTerminalProcess extends EventEmitter<ShoferTerminalProcessEvents> implements ShoferTerminalProcess {
+export abstract class BaseTerminalProcess
+	extends EventEmitter<ShoferTerminalProcessEvents>
+	implements ShoferTerminalProcess
+{
 	public command: string = ""
 
 	public isHot: boolean = false

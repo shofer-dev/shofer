@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 
-import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "./types"
+import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "@shofer/types"
 import { BaseTerminal } from "./BaseTerminal"
 import { TerminalProcess } from "./TerminalProcess"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"

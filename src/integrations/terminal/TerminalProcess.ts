@@ -2,7 +2,7 @@ import { inspect } from "util"
 import nodeProcess from "process"
 import psTree from "ps-tree"
 
-import type { ExitCodeDetails } from "./types"
+import type { ExitCodeDetails } from "@shofer/types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { Terminal } from "./Terminal"
 import { getHost } from "@shofer/types"

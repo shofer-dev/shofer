@@ -1,4 +1,4 @@
-import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "./types"
+import type { ShoferTerminalCallbacks, ShoferTerminalProcessResultPromise } from "@shofer/types"
 import { BaseTerminal } from "./BaseTerminal"
 import { ExecaTerminalProcess } from "./ExecaTerminalProcess"
 import { mergePromise } from "./mergePromise"
@@ -15,7 +15,10 @@ export class ExecaTerminal extends BaseTerminal {
 		return false
 	}
 
-	public override runCommand(command: string, callbacks: ShoferTerminalCallbacks): ShoferTerminalProcessResultPromise {
+	public override runCommand(
+		command: string,
+		callbacks: ShoferTerminalCallbacks,
+	): ShoferTerminalProcessResultPromise {
 		this.busy = true
 
 		const process = new ExecaTerminalProcess(this)

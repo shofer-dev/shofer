@@ -1,9 +1,12 @@
-import type { ShoferTerminalProcess, ShoferTerminalProcessResultPromise } from "./types"
+import type { ShoferTerminalProcess, ShoferTerminalProcessResultPromise } from "@shofer/types"
 
 // Similar to execa's ResultPromise, this lets us create a mixin of both a
 // TerminalProcess and a Promise:
 // https://github.com/sindresorhus/execa/blob/main/lib/methods/promise.js
-export function mergePromise(process: ShoferTerminalProcess, promise: Promise<void>): ShoferTerminalProcessResultPromise {
+export function mergePromise(
+	process: ShoferTerminalProcess,
+	promise: Promise<void>,
+): ShoferTerminalProcessResultPromise {
 	const nativePromisePrototype = (async () => {})().constructor.prototype
 
 	const descriptors = ["then", "catch", "finally"].map(

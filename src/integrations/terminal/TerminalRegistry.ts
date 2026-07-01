@@ -3,7 +3,7 @@ import type { HostDisposable, HostTerminalHandle } from "@shofer/types"
 
 import { arePathsEqual } from "@shofer/core"
 
-import { ShoferTerminal, ShoferTerminalProvider } from "./types"
+import { ShoferTerminal, ShoferTerminalProvider } from "@shofer/types"
 import { TerminalProcess } from "./TerminalProcess"
 import { Terminal } from "./Terminal"
 import { ExecaTerminal } from "./ExecaTerminal"
