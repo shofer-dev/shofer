@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
 import { userInfo } from "os"
 import * as path from "path"
 
@@ -137,9 +137,16 @@ type LinuxTerminalProfiles = Record<string, LinuxTerminalProfile>
 
 function getWindowsTerminalConfig() {
 	try {
-		const config = vscode.workspace.getConfiguration("terminal.integrated")
-		const defaultProfileName = config.get<string>("defaultProfile.windows")
-		const profiles = config.get<WindowsTerminalProfiles>("profiles.windows") || {}
+		const defaultProfileName = getHost().config.get<string | undefined>(
+			"terminal.integrated",
+			"defaultProfile.windows",
+			undefined,
+		)
+		const profiles = getHost().config.get<WindowsTerminalProfiles>(
+			"terminal.integrated",
+			"profiles.windows",
+			{} as WindowsTerminalProfiles,
+		)
 		return { defaultProfileName, profiles }
 	} catch {
 		return { defaultProfileName: null, profiles: {} as WindowsTerminalProfiles }
@@ -148,9 +155,16 @@ function getWindowsTerminalConfig() {
 
 function getMacTerminalConfig() {
 	try {
-		const config = vscode.workspace.getConfiguration("terminal.integrated")
-		const defaultProfileName = config.get<string>("defaultProfile.osx")
-		const profiles = config.get<MacTerminalProfiles>("profiles.osx") || {}
+		const defaultProfileName = getHost().config.get<string | undefined>(
+			"terminal.integrated",
+			"defaultProfile.osx",
+			undefined,
+		)
+		const profiles = getHost().config.get<MacTerminalProfiles>(
+			"terminal.integrated",
+			"profiles.osx",
+			{} as MacTerminalProfiles,
+		)
 		return { defaultProfileName, profiles }
 	} catch {
 		return { defaultProfileName: null, profiles: {} as MacTerminalProfiles }
@@ -159,9 +173,16 @@ function getMacTerminalConfig() {
 
 function getLinuxTerminalConfig() {
 	try {
-		const config = vscode.workspace.getConfiguration("terminal.integrated")
-		const defaultProfileName = config.get<string>("defaultProfile.linux")
-		const profiles = config.get<LinuxTerminalProfiles>("profiles.linux") || {}
+		const defaultProfileName = getHost().config.get<string | undefined>(
+			"terminal.integrated",
+			"defaultProfile.linux",
+			undefined,
+		)
+		const profiles = getHost().config.get<LinuxTerminalProfiles>(
+			"terminal.integrated",
+			"profiles.linux",
+			{} as LinuxTerminalProfiles,
+		)
 		return { defaultProfileName, profiles }
 	} catch {
 		return { defaultProfileName: null, profiles: {} as LinuxTerminalProfiles }

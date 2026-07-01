@@ -1,4 +1,5 @@
 import { ExecException } from "child_process"
+import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
 import * as fs from "fs"
 import * as path from "path"
 
@@ -80,6 +81,7 @@ describe("git utils", () => {
 	const cwd = "/test/path"
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vitest.clearAllMocks()
 	})
 
@@ -448,6 +450,7 @@ describe("getGitRepositoryInfo", () => {
 	const headPath = path.join(gitDir, "HEAD")
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vitest.clearAllMocks()
 	})
 
@@ -779,6 +782,7 @@ describe("getWorkspaceGitInfo", () => {
 	const workspaceRoot = "/test/workspace"
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vitest.clearAllMocks()
 	})
 
@@ -840,6 +844,7 @@ describe("getGitStatus", () => {
 	const cwd = "/test/path"
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		vitest.clearAllMocks()
 	})
 

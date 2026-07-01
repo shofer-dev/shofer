@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
 import * as vscode from "vscode"
 import { userInfo } from "os"
 import { getShell } from "../shell"
@@ -46,6 +47,7 @@ describe("Shell Detection Tests", () => {
 	}
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		// Store original references
 		originalPlatform = process.platform
 		originalEnv = { ...process.env }
@@ -72,6 +74,7 @@ describe("Shell Detection Tests", () => {
 	// --------------------------------------------------------------------------
 	describe("Windows Shell Detection", () => {
 		beforeEach(() => {
+			installVsCodeForwardingHost()
 			Object.defineProperty(process, "platform", { value: "win32" })
 		})
 
@@ -200,6 +203,7 @@ describe("Shell Detection Tests", () => {
 	// --------------------------------------------------------------------------
 	describe("macOS Shell Detection", () => {
 		beforeEach(() => {
+			installVsCodeForwardingHost()
 			Object.defineProperty(process, "platform", { value: "darwin" })
 		})
 
@@ -256,6 +260,7 @@ describe("Shell Detection Tests", () => {
 	// --------------------------------------------------------------------------
 	describe("Linux Shell Detection", () => {
 		beforeEach(() => {
+			installVsCodeForwardingHost()
 			Object.defineProperty(process, "platform", { value: "linux" })
 		})
 

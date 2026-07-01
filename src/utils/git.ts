@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
 import * as path from "path"
 import { promises as fs } from "fs"
 import { exec } from "child_process"
@@ -182,14 +182,13 @@ export function extractRepositoryName(url: string): string {
  * @returns Git repository information or empty object if not available
  */
 export async function getWorkspaceGitInfo(): Promise<GitRepositoryInfo> {
-	const workspaceFolders = vscode.workspace.workspaceFolders
-	if (!workspaceFolders || workspaceFolders.length === 0) {
+	const workspaceRoots = getHost().workspace.workspaceRoots()
+	if (workspaceRoots.length === 0) {
 		return {}
 	}
 
 	// Use the first workspace folder.
-	const workspaceRoot = workspaceFolders[0].uri.fsPath
-	return getGitRepositoryInfo(workspaceRoot)
+	return getGitRepositoryInfo(workspaceRoots[0])
 }
 
 async function checkGitRepo(cwd: string): Promise<boolean> {
