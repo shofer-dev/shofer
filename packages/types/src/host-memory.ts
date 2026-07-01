@@ -105,7 +105,7 @@ export const noopWorkspace: HostWorkspace = {
 
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */
 export const noopLsp: HostLsp = {
-	getDiagnostics: () => [],
+	getDiagnostics: async () => [],
 	findReferences: async (): Promise<HostReferencesResult> => ({ total: 0, references: [] }),
 	workspaceSymbols: async () => [],
 	computeRename: async () => null,

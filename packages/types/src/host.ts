@@ -112,8 +112,11 @@ export interface HostWorkspaceEdit {
  * results (the feature degrades rather than failing).
  */
 export interface HostLsp {
-	/** All current workspace diagnostics (maps to `vscode.languages.getDiagnostics`). */
-	getDiagnostics(): HostDiagnostic[]
+	/**
+	 * All current workspace diagnostics (maps to `vscode.languages.getDiagnostics`).
+	 * Async so the whole `HostLsp` surface is transport-agnostic (remoteable).
+	 */
+	getDiagnostics(): Promise<HostDiagnostic[]>
 	/**
 	 * References to the symbol at a 1-based `line`/`column` in `filePath`, windowed
 	 * to `maxResults` (maps to `vscode.executeReferenceProvider`).

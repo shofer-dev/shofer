@@ -299,6 +299,14 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started.
   DTO-based Category I serializes for free). Root-task-level routing keeps in-process
   coordination tools unchanged; single-owner-per-tree + per-task worktrees keep state
   unshared.
+    - ✅ Category I-over-RPC substrate (`packages/types/src/host-rpc.ts`):
+      `createSplitHost({ local, channel })` (executor side — notifier/lsp/workspace
+      proxied over an `HostRpcChannel`; fs/config/env/watcher local) +
+      `dispatchHostCall(host, …)` (controller side). Made `HostLsp.getDiagnostics`
+      async so the whole front-end-bound surface is transport-agnostic. 6 tests
+      (round-trip via an in-memory channel). This is the executor-side foundation of
+      the split host adapter; remaining = bind an `HostRpcChannel` onto the session
+      transport.
     - Prototype: a single-node, same-host relay exists on `feat/remote-agents` (it
       relays the UI message protocol and runs the whole platform mock remotely). The
       v3-native refinement is to make **Category I** the distribution seam instead, so

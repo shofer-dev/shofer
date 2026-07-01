@@ -50,7 +50,7 @@ export class GetErrorsTool extends BaseTool<"get_errors"> {
 				return
 			}
 
-			const allDiagnostics = getHost().lsp.getDiagnostics()
+			const allDiagnostics = await getHost().lsp.getDiagnostics()
 			const entries: DiagnosticEntry[] = []
 
 			// Build set of absolute paths to filter by

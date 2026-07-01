@@ -114,7 +114,7 @@ function mapSeverity(severity: vscode.DiagnosticSeverity): HostDiagnosticSeverit
 }
 
 class VsCodeLsp implements HostLsp {
-	getDiagnostics(): HostDiagnostic[] {
+	async getDiagnostics(): Promise<HostDiagnostic[]> {
 		const out: HostDiagnostic[] = []
 		for (const [uri, diagnostics] of vscode.languages.getDiagnostics()) {
 			for (const d of diagnostics) {

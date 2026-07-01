@@ -255,20 +255,20 @@ single-host story.)
 
 The v3 architecture is delivered as a set of initiatives. Current status:
 
-| #   | Initiative                                                                                     | Status                                        |
-| --- | ---------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                         |
-| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all tools migrated                         |
-| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                            |
-| 4   | Durable, incremental persistence (SQLite, retire flat files)                                   | ✅                                            |
-| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                            |
-| 6   | Data-driven model/provider catalog (one place to add a model)                                  | ✅                                            |
-| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                            |
-| 8   | **Host-agnostic core (Category I/II split)** — this document                                   | ✅ substantially; package carve-out remaining |
-| 9   | Typed plugin API (hooks: tools, prompt transform, events)                                      | ✅ foundation wired                           |
-| 10  | HTTP API + SDK + headless parity                                                               | 🚧 foundation (server + agent adapter)        |
-| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | 🚧 protocol mapping                           |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 📐 proposed (single-node relay prototype)     |
+| #   | Initiative                                                                                     | Status                                            |
+| --- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                             |
+| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all tools migrated                             |
+| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                |
+| 4   | Durable, incremental persistence (SQLite, retire flat files)                                   | ✅                                                |
+| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                |
+| 6   | Data-driven model/provider catalog (one place to add a model)                                  | ✅                                                |
+| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                |
+| 8   | **Host-agnostic core (Category I/II split)** — this document                                   | ✅ substantially; package carve-out remaining     |
+| 9   | Typed plugin API (hooks: tools, prompt transform, events)                                      | ✅ foundation wired                               |
+| 10  | HTTP API + SDK + headless parity                                                               | 🚧 foundation (server + agent adapter)            |
+| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | 🚧 protocol mapping                               |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 📐 proposed; Category I-over-RPC substrate landed |
 
 (Initiative numbers here are local to this document.)
 
@@ -305,10 +305,13 @@ prerequisites:
 
 - A **remote executor** is the headless front-end from initiatives 10–11 (linking
   `@shofer/core` + a server adapter) made reachable over the session transport.
-- Its **split host adapter** is the one genuinely new piece: workspace-scoped
-  Category I served locally; front-end-bound Category I (notifications/approvals,
-  `HostLsp`, editor context, private-tool commands) RPC'd back to the controller —
-  serializable for free because Category I is DTO-based.
+- Its **split host adapter** is the one genuinely new piece — and its foundation has
+  landed: `@shofer/types` now exposes `createSplitHost({ local, channel })` (executor
+  side: notifier/lsp/workspace proxied over an `HostRpcChannel`; fs/config/env/watcher
+  served locally) and `dispatchHostCall(host, …)` (controller side). Because Category I
+  is DTO-based it serializes for free; `HostLsp.getDiagnostics` was made async so the
+  whole front-end-bound surface is transport-agnostic. What remains is wiring an
+  `HostRpcChannel` onto the session transport.
 - Controller-side: an **executor registry**, **root-task→executor routing**, and a
   **unified multi-executor task view**, plus the shared-resource reconciliation
   (single-writer index, serialized shared-repo mutations).
