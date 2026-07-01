@@ -38,16 +38,18 @@ is hosting it, expressed as plain TypeScript interfaces with no platform types i
 their signatures. They live in the **`@shofer/types`** package (vscode-free) and are
 aggregated into one `HostBridge` object:
 
-| Capability        | Interface                | What the core uses it for                                      |
-| ----------------- | ------------------------ | -------------------------------------------------------------- |
-| Notifications     | `Notifier`               | info/warn/error messages + choice dialogs (`showChoice`)       |
-| Filesystem        | `HostFileSystem`         | read/write/exists/mkdir/delete + `findFiles` (glob)            |
-| Configuration     | `HostConfig`             | `get<T>(section, key, default)` settings reads                 |
-| Environment       | `HostEnv`                | UI `language`, app `appRoot` (to locate bundled binaries)      |
-| Language services | `HostLsp`                | diagnostics, references, workspace symbols, rename (DTO-based) |
-| Workspace actions | `HostWorkspace`          | open a folder, execute a (provider-contributed) command        |
-| File watching     | `HostWatcher`            | watch a glob; create/change/delete callbacks                   |
-| Message storage   | `MessagePersistencePort` | durable api/UI message persistence (SQLite-backed)             |
+| Capability        | Interface                | What the core uses it for                                       |
+| ----------------- | ------------------------ | --------------------------------------------------------------- |
+| Notifications     | `Notifier`               | info/warn/error messages + choice dialogs (`showChoice`)        |
+| Filesystem        | `HostFileSystem`         | read/write/exists/mkdir/delete + `findFiles` (glob)             |
+| Configuration     | `HostConfig`             | `get<T>(section, key, default)` settings reads                  |
+| Environment       | `HostEnv`                | UI `language`, app `appRoot` (to locate bundled binaries)       |
+| Language services | `HostLsp`                | diagnostics, references, workspace symbols, rename (DTO-based)  |
+| Workspace actions | `HostWorkspace`          | open a folder, execute a command, workspace-folder change event |
+| File watching     | `HostWatcher`            | watch a glob; create/change/delete callbacks                    |
+| Terminals         | `HostTerminals`          | integrated-terminal backend + shell-execution start/end events  |
+| Diff view         | `createDiffView(...)`    | per-edit `DiffView` factory (open/update/save/revert)           |
+| Message storage   | `MessagePersistencePort` | durable api/UI message persistence (SQLite-backed)              |
 
 Category I interfaces are **DTO-based**: they pass plain data (paths as strings,
 positions as `{line, column}` numbers, edits as `{startLine, …, newText}`), never
@@ -127,8 +129,11 @@ A file belongs in the portable core only if it can be written with zero platform
 imports. Three kinds of code legitimately stay in Category II and are **not**
 abstracted away (doing so would just recreate the platform API as an interface):
 
-1. **Front-end UI** — editor decorations, the diff view, terminals, dialogs, theme
-   (`integrations/*`). This is the adapter's job by definition.
+1. **Front-end UI** — editor decorations, the live diff editor, the VS Code
+   _integrated_ terminal, dialogs, theme (`integrations/*`). This is the adapter's job
+   by definition. (Note: only the _presentation_ is Category II. Command execution
+   itself is portable — the terminal registry + `execa` backend are Category I core;
+   the integrated terminal is one optional backend behind `HostTerminals`.)
 2. **Platform-bound configuration** — objects handed a platform context
    (e.g. a `vscode.ExtensionContext`) are inherently front-end-scoped.
 3. **A platform's own model API** — e.g. the VS Code Language Model provider is the
