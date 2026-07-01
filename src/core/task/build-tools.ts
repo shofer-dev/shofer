@@ -1,10 +1,9 @@
 import path from "path"
-import * as vscode from "vscode"
 
 import type OpenAI from "openai"
 
 import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
-import { toolGroupsSchema } from "@shofer/types"
+import { toolGroupsSchema, getHost } from "@shofer/types"
 import { customToolRegistry, formatNative, pluginRegistry } from "@shofer/core"
 
 import type { ShoferProvider } from "../webview/ShoferProvider"
@@ -130,8 +129,11 @@ interface PrivateToolMeta {
  * Config key: `shofer.privateToolProviders`
  */
 async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
-	const config = vscode.workspace.getConfiguration("shofer")
-	const providers = config.get<Record<string, PrivateToolProviderConfig>>("privateToolProviders", {})
+	const providers = getHost().config.get<Record<string, PrivateToolProviderConfig>>(
+		"shofer",
+		"privateToolProviders",
+		{},
+	)
 
 	const allMeta: PrivateToolMeta[] = []
 
@@ -139,7 +141,7 @@ async function getPrivateLmToolMeta(): Promise<PrivateToolMeta[]> {
 		if (!providerCfg?.getDefinitionsCommand || !providerCfg?.invokeToolCommand) continue
 
 		try {
-			const definitions = await vscode.commands.executeCommand<PrivateToolDef[] | undefined>(
+			const definitions = await getHost().workspace.executeCommand<PrivateToolDef[] | undefined>(
 				providerCfg.getDefinitionsCommand,
 			)
 
@@ -185,8 +187,11 @@ function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolG
 
 	// 2. Provider-level config
 	try {
-		const config = vscode.workspace.getConfiguration(`shofer.${providerId}`)
-		const toolGroups = config.get<Record<string, string>>("toolGroups")
+		const toolGroups = getHost().config.get<Record<string, string> | undefined>(
+			`shofer.${providerId}`,
+			"toolGroups",
+			undefined,
+		)
 		if (toolGroups && typeof toolGroups[def.name] === "string") {
 			const declared = toolGroups[def.name]
 			if ((toolGroupsSchema.options as readonly string[]).includes(declared)) {
