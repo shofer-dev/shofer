@@ -1,5 +1,5 @@
 import type { IndexingState } from "../../code-index/interfaces/manager"
-import * as vscode from "vscode"
+import type { Event, EmitterDisposable } from "@shofer/types"
 
 /**
  * A parsed commit message segment ready for embedding and storage.
@@ -81,7 +81,7 @@ export interface IGitLogExtractor {
  *
  * Phase 2: polls `git log --since=<last-indexed-date>` every N minutes.
  */
-export interface IGitWatcher extends vscode.Disposable {
+export interface IGitWatcher extends EmitterDisposable {
 	/**
 	 * Start polling for new commits.
 	 * @param getLastCommitDate - Lazy getter for the ISO 8601 date of the most
@@ -102,7 +102,7 @@ export interface IGitWatcher extends vscode.Disposable {
 	readonly isRunning: boolean
 
 	/** Event emitted when new commits are discovered. */
-	readonly onNewCommits: vscode.Event<GitCommitBlock[]>
+	readonly onNewCommits: Event<GitCommitBlock[]>
 }
 
 /**

@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { TypedEmitter } from "@shofer/types"
 
 export type IndexingState = "Standby" | "Indexing" | "Indexed" | "Error" | "Stopping" | "Disabled"
 
@@ -19,7 +19,7 @@ export class CodeIndexStateManager {
 	private _indexedFileCount: number = 0
 	/** Most recent file the orchestrator/watcher (re)indexed, or empty. */
 	private _lastFileIndexed: string = ""
-	private _progressEmitter = new vscode.EventEmitter<ReturnType<typeof this.getCurrentStatus>>()
+	private _progressEmitter = new TypedEmitter<ReturnType<typeof this.getCurrentStatus>>()
 
 	// --- Public API ---
 

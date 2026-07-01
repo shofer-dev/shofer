@@ -1,6 +1,6 @@
 import * as path from "path"
 
-import * as vscode from "vscode"
+import { TypedEmitter } from "@shofer/types"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
 import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
@@ -40,7 +40,7 @@ export class GitWatcher implements IGitWatcher {
 	private _getLastCommitDate: (() => string | undefined) | null = null
 	private _getBranch: (() => string) | null = null
 
-	private readonly _onNewCommits = new vscode.EventEmitter<GitCommitBlock[]>()
+	private readonly _onNewCommits = new TypedEmitter<GitCommitBlock[]>()
 
 	/** Event emitted when the watcher discovers new commits to index. */
 	public readonly onNewCommits = this._onNewCommits.event

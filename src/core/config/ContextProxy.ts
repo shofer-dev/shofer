@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 import { ZodError } from "zod"
 
 import {
@@ -17,6 +17,7 @@ import {
 	isSecretStateKey,
 	isProviderName,
 	isRetiredProvider,
+	TypedEmitter,
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
@@ -47,7 +48,7 @@ export class ContextProxy {
 	// H8: EventEmitter so consumers can subscribe to settings changes
 	// without polling.  Fires with the changed key whenever a global-state
 	// or secret value is written through ContextProxy.
-	private readonly _onDidChangeEmitter = new vscode.EventEmitter<{ key: string }>()
+	private readonly _onDidChangeEmitter = new TypedEmitter<{ key: string }>()
 	public readonly onDidChange = this._onDidChangeEmitter.event
 
 	constructor(context: vscode.ExtensionContext) {

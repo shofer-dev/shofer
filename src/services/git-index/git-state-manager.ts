@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { TypedEmitter } from "@shofer/types"
 import type { IndexingState } from "./interfaces/git"
 
 /**
@@ -8,7 +8,7 @@ import type { IndexingState } from "./interfaces/git"
  * States: Standby | Indexing | Indexed | Error | Stopping
  */
 export class GitHistoryStateManager {
-	private _onProgressUpdate = new vscode.EventEmitter<{
+	private _onProgressUpdate = new TypedEmitter<{
 		systemStatus: IndexingState
 		message?: string
 		indexedCommitCount: number

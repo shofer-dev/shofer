@@ -1,5 +1,5 @@
 import { VectorStoreSearchResult } from "./vector-store"
-import * as vscode from "vscode"
+import type { Event } from "@shofer/types"
 
 /**
  * Interface for the code index manager
@@ -8,7 +8,7 @@ export interface ICodeIndexManager {
 	/**
 	 * Event emitted when progress is updated
 	 */
-	onProgressUpdate: vscode.Event<{
+	onProgressUpdate: Event<{
 		systemStatus: IndexingState
 		fileStatuses: Record<string, string>
 		message?: string
