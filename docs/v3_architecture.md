@@ -287,9 +287,19 @@ numbers are local to this document):
   vendor-snapshot-vs-live-fetch product decision.
 - **§7 observability** — `OtelTelemetryClient` registered by default; the metrics
   registry emits via the OTel meter API; `prom-client`/Prometheus server removed.
-- **§8 host split** — the 8 Category I seams + registry live in `@shofer/types`; 25
-  core files are vscode-free; the transport layer is in `@shofer/core`. _Remaining:_
-  the agent-core package move (below).
+- **§8 host split** — the 8 Category I seams + registry live in `@shofer/types`; the
+  transport layer is in `@shofer/core`. The foundation/service sweep is complete: the
+  agent core (`Task` itself has **zero** `vscode.` references) and its transitive
+  foundation — logging sinks, `path`/`git`/`pathUtils`/`shell`, `build-tools`,
+  `file-search`, `ripgrep`, `list-files`, `ContextProxy`, and the code-index/git-index
+  progress interfaces — are all vscode-free, routing through `getHost()` or the new
+  host-agnostic **`TypedEmitter`** (`@shofer/types`, a `vscode.EventEmitter` drop-in for
+  internally-consumed events; TreeDataProvider-style events fed back to VS Code stay in
+  the Cat II adapter). The remaining `vscode` importers are genuine Category II (webview
+  handlers, file/save dialogs, editor reveal, terminal, diff view). _Remaining:_ the
+  agent-core package move (below) — now gated only on relocating the shared foundation
+  (`utils/logging` et al.) into a package `@shofer/core` can link, plus the three Cat II
+  subsystem abstractions.
 - **§9 plugins** — `pluginRegistry` hooks are load-bearing: `collectTools` feeds the
   tool assembly, `transformSystemPrompt` threads the system prompt, and
   `dispatchEvent` receives every captured event (via `TelemetryService.onEvent`).
@@ -322,27 +332,35 @@ implementations, prompts, and the assistant-message dispatch loop — into
 `@shofer/core`. The first slice is done: `defineNativeTool` (the tool schema-as-contract
 primitive) now lives in `@shofer/core/tools`.
 
-This is **not** a blind file-move: the agent core is vscode-free at the call level but
-reaches into `services/`/`integrations/` in a handful of places, and those couplings —
-not the file count — are the gate. `Task`'s non-portable dependencies are a bounded,
-enumerable set of **9 seams**, which split cleanly:
+This is **not** a blind file-move. The agent core is now vscode-free **at the call
+level** — that sweep is finished (`Task` and its foundation route through `getHost()`
+and `TypedEmitter`; see §8). What remains is structural: a file in a package cannot
+import from `src/`, so before `Task` can move, its transitive deps must live somewhere
+the package can link. `Task`'s non-portable dependencies are a bounded, enumerable set
+that splits three ways:
 
-- **Portable → move into `@shofer/core`** (already vscode-free): `services/blob-store`,
-  `services/checkpoints`.
+- **Keystone — relocate shared foundation into a package.** Modules like
+  `utils/logging` (~114 consumers), `utils/fs`, `utils/path`, and `services/search`
+  are vscode-free but still live in `src/`. `services/blob-store` and
+  `services/checkpoints` (both portable) transitively need them, so the first move is
+  to lift this foundation into `@shofer/core` (or a lower shared package) and repoint
+  importers. This is mechanical but wide — the ripple, not any coupling, is the cost.
+- **Portable → move into `@shofer/core`** once the keystone lands (already vscode-free):
+  `services/blob-store`, `services/checkpoints`.
 - **VS Code-coupled → abstract behind a Category-I-style interface** (then the VS Code
   impl stays in the extension adapter): `integrations/terminal` (TerminalRegistry),
-  `integrations/editor/DiffViewProvider`, `services/mcp/McpHub`, and
-  `integrations/misc/export-markdown`.
+  `integrations/editor/DiffViewProvider`, and `services/mcp/McpHub`. (`export-markdown`
+  is no longer a seam: `Task` imports only its pure formatters — the save-dialog I/O is
+  called solely from `ShoferProvider`, which stays Category II.)
 
-So the carve-out plan is: (1) move the portable services; (2) give the four
-VS-Code-coupled subsystems narrow interfaces (the same treatment `HostBridge` gave the
-editor/fs/lsp surface) with a VS Code adapter on the Category II side; (3) move `Task`
-
-- tools + prompts + dispatch, now depending only on `@shofer/types` + those interfaces.
-  Each of the four abstractions is a self-contained unit of work comparable to a single
-  `HostBridge` seam. Completing it is what lets initiatives 10–12 run the core fully
-  headless — a non-VS-Code front-end links `@shofer/core` and supplies its own Category II
-  adapter.
+So the carve-out plan is: (1) relocate the shared foundation (keystone) and move the
+portable services; (2) give the three VS-Code-coupled subsystems narrow interfaces (the
+same treatment `HostBridge` gave the editor/fs/lsp surface) with a VS Code adapter on
+the Category II side; (3) move `Task` + tools + prompts + dispatch, now depending only
+on `@shofer/types` + those interfaces. Each of the three abstractions is a self-contained
+unit of work comparable to a single `HostBridge` seam. Completing it is what lets
+initiatives 10–12 run the core fully headless — a non-VS-Code front-end links
+`@shofer/core` and supplies its own Category II adapter.
 
 ### Front-end adapters beyond VS Code
 
