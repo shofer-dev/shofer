@@ -2,7 +2,7 @@ import { Command } from "commander"
 
 import { DEFAULT_FLAGS } from "@/types/constants.js"
 import { VERSION } from "@/lib/utils/version.js"
-import { run, listCommands, listModes, listModels, listSessions, upgrade, acp } from "@/commands/index.js"
+import { run, listCommands, listModes, listModels, listSessions, upgrade, acp, serve } from "@/commands/index.js"
 
 const program = new Command()
 
@@ -136,6 +136,32 @@ program
 	.action(async () => {
 		await runUpgradeAction(() => upgrade())
 	})
+
+program
+	.command("serve")
+	.description("Run the Shofer HTTP/SSE server (task-control API + event stream)")
+	.option("-p, --port <port>", "Port to listen on (default 30099)")
+	.option("--host <host>", "Host to bind (default 127.0.0.1)")
+	.option("-w, --workspace <path>", "Workspace directory path (defaults to current working directory)")
+	.option("-e, --extension <path>", "Path to the extension bundle directory")
+	.option("-k, --api-key <key>", "API key for the LLM provider")
+	.option("--provider <provider>", "API provider (defaults to openrouter)")
+	.option("-m, --model <model>", "Model to use")
+	.option("-d, --debug", "Enable debug output", false)
+	.action(
+		async (options: {
+			port?: string
+			host?: string
+			workspace?: string
+			extension?: string
+			apiKey?: string
+			provider?: string
+			model?: string
+			debug?: boolean
+		}) => {
+			await serve(options)
+		},
+	)
 
 program
 	.command("acp")

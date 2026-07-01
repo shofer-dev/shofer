@@ -89,9 +89,9 @@ let extensionContext: vscode.ExtensionContext
 // should import from "./utils/outputChannel" directly.
 export { getOutputChannel } from "./utils/outputChannel"
 
-// §12 ACP: exported from the bundle so a headless front-end (the `shofer acp` CLI
-// command) can drive the activated ShoferAPI over the Agent Client Protocol.
-export { runAcpAgentOverShoferApi } from "@shofer/core"
+// §11/§12: exported from the bundle so a headless front-end (the `shofer serve` /
+// `shofer acp` CLI commands) can drive the activated ShoferAPI over HTTP or ACP.
+export { runAcpAgentOverShoferApi, serveHttpOverShoferApi } from "@shofer/core"
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.
