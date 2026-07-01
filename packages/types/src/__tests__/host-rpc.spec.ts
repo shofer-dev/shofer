@@ -23,6 +23,9 @@ function setup() {
 		workspace: {
 			openFolder: async () => {},
 			executeCommand: async <T>(command: string): Promise<T> => `ran:${command}` as unknown as T,
+			workspaceRoots: () => [],
+			activeEditorFile: () => undefined,
+			workspaceFolderFor: () => undefined,
 		},
 	}
 	const calls: Array<[string, string, unknown[]]> = []

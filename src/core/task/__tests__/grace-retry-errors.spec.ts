@@ -1,6 +1,7 @@
 // npx vitest core/task/__tests__/grace-retry-errors.spec.ts
 
 import * as os from "os"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import * as path from "path"
 import * as vscode from "vscode"
 
@@ -16,13 +17,7 @@ import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ContextProxy } from "../../config/ContextProxy"
 
 // Mock @shofer/core
-vi.mock("@shofer/core", () => ({
-	customToolRegistry: {
-		getTools: vi.fn().mockReturnValue([]),
-		hasTool: vi.fn().mockReturnValue(false),
-		getTool: vi.fn().mockReturnValue(undefined),
-	},
-}))
+vi.mock("@shofer/core", async (importOriginal) => ({ ...((await importOriginal()) as Record<string, unknown>) }))
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
@@ -153,6 +148,7 @@ describe("Grace Retry Error Handling", () => {
 	let mockExtensionContext: vscode.ExtensionContext
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])
 		}

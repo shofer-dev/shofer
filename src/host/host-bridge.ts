@@ -242,6 +242,15 @@ class VsCodeWorkspace implements HostWorkspace {
 	executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T> {
 		return Promise.resolve(vscode.commands.executeCommand<T>(command, ...args))
 	}
+	workspaceRoots(): string[] {
+		return vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? []
+	}
+	activeEditorFile(): string | undefined {
+		return vscode.window.activeTextEditor?.document.uri.fsPath
+	}
+	workspaceFolderFor(filePath: string): string | undefined {
+		return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath))?.uri.fsPath
+	}
 }
 
 class VsCodeWatcher implements HostWatcher {

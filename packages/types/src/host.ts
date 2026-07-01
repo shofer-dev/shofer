@@ -173,6 +173,12 @@ export interface HostWorkspace {
 	 * (private-tool) commands. A headless host throws (no command registry).
 	 */
 	executeCommand<T = unknown>(command: string, ...args: unknown[]): Promise<T>
+	/** Absolute paths of the open workspace roots (maps to `vscode.workspace.workspaceFolders`). */
+	workspaceRoots(): string[]
+	/** Absolute path of the file in the active editor, if any (maps to `vscode.window.activeTextEditor`). */
+	activeEditorFile(): string | undefined
+	/** The workspace root containing `filePath`, if any (maps to `vscode.workspace.getWorkspaceFolder`). */
+	workspaceFolderFor(filePath: string): string | undefined
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */

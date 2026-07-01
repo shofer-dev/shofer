@@ -1,4 +1,7 @@
-import type * as vscode from "vscode"
+/** A log sink (structurally satisfied by `vscode.OutputChannel`; a headless host supplies its own). */
+export interface OutputChannelLike {
+	appendLine(value: string): void
+}
 
 /**
  * Standalone holder for the extension's output channel.
@@ -14,10 +17,10 @@ import type * as vscode from "vscode"
  * `extension.ts` seeds the channel via {@link setOutputChannel} during
  * activation; callers before activation get `undefined`.
  */
-let outputChannel: vscode.OutputChannel | undefined
+let outputChannel: OutputChannelLike | undefined
 
 /** Seed the shared output channel. Called once from `activate()`. */
-export function setOutputChannel(channel: vscode.OutputChannel): void {
+export function setOutputChannel(channel: OutputChannelLike): void {
 	outputChannel = channel
 }
 
@@ -25,6 +28,6 @@ export function setOutputChannel(channel: vscode.OutputChannel): void {
  * Get the extension's output channel for logging.
  * Returns `undefined` if called before extension activation.
  */
-export function getOutputChannel(): vscode.OutputChannel | undefined {
+export function getOutputChannel(): OutputChannelLike | undefined {
 	return outputChannel
 }

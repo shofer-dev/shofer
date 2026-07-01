@@ -1,6 +1,6 @@
 import * as path from "path"
+import { getHost } from "@shofer/types"
 import os from "os"
-import * as vscode from "vscode"
 import { utilLog } from "./logging/subsystems"
 
 /*
@@ -113,11 +113,10 @@ export const toRelativePath = (filePath: string, cwd: string) => {
 }
 
 export const getWorkspacePath = (defaultCwdPath = "") => {
-	const cwdPath = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) || defaultCwdPath
-	const currentFileUri = vscode.window.activeTextEditor?.document.uri
-	if (currentFileUri) {
-		const workspaceFolder = vscode.workspace.getWorkspaceFolder(currentFileUri)
-		return workspaceFolder?.uri.fsPath || cwdPath
+	const cwdPath = getHost().workspace.workspaceRoots().at(0) || defaultCwdPath
+	const currentFile = getHost().workspace.activeEditorFile()
+	if (currentFile) {
+		return getHost().workspace.workspaceFolderFor(currentFile) || cwdPath
 	}
 	return cwdPath
 }
@@ -125,9 +124,9 @@ export const getWorkspacePath = (defaultCwdPath = "") => {
 export const getWorkspacePathForContext = (contextPath?: string): string => {
 	// If context path provided, find its workspace
 	if (contextPath) {
-		const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(contextPath))
+		const workspaceFolder = getHost().workspace.workspaceFolderFor(contextPath)
 		if (workspaceFolder) {
-			return workspaceFolder.uri.fsPath
+			return workspaceFolder
 		}
 		// Debug logging when falling back
 		utilLog.info(`[CodeIndex] No workspace found for context path: ${contextPath}, falling back to default`)

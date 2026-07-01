@@ -1,6 +1,7 @@
 // npx vitest src/core/assistant-message/__tests__/presentAssistantMessage-custom-tool.spec.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import { presentAssistantMessage } from "../presentAssistantMessage"
 import { validateToolUse } from "../../tools/validateToolUse"
 
@@ -16,10 +17,15 @@ vi.mock("../../tools/validateToolUse", () => ({
 }))
 
 // Mock custom tool registry - must be done inline without external variable references
-vi.mock("@shofer/core", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),
+		register: vi.fn(),
+		getAll: vi.fn().mockReturnValue([]),
+		getAllSerialized: vi.fn().mockReturnValue([]),
+		loadFromDirectoriesIfStale: vi.fn().mockResolvedValue(undefined),
 	},
 }))
 
@@ -39,6 +45,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 	let mockTask: any
 
 	beforeEach(() => {
+		installVsCodeForwardingHost()
 		// Reset all mocks
 		vi.clearAllMocks()
 

@@ -92,12 +92,17 @@ function remoteLsp(channel: HostRpcChannel): HostLsp {
 	}
 }
 
-function remoteWorkspace(channel: HostRpcChannel): HostWorkspace {
+function remoteWorkspace(channel: HostRpcChannel, local: HostWorkspace): HostWorkspace {
 	return {
+		// UI actions proxy back to the controller…
 		openFolder: (path: string, options?: { newWindow?: boolean }) =>
 			channel.invoke("workspace", "openFolder", [path, options]) as Promise<void>,
 		executeCommand: <T = unknown>(command: string, ...args: unknown[]) =>
 			channel.invoke("workspace", "executeCommand", [command, ...args]) as Promise<T>,
+		// …workspace context is served locally (the executor shares the workspace FS).
+		workspaceRoots: () => local.workspaceRoots(),
+		activeEditorFile: () => local.activeEditorFile(),
+		workspaceFolderFor: (filePath: string) => local.workspaceFolderFor(filePath),
 	}
 }
 
@@ -110,7 +115,7 @@ export function createSplitHost({ local, channel }: { local: HostBridge; channel
 	return {
 		notifier: remoteNotifier(channel),
 		lsp: remoteLsp(channel),
-		workspace: remoteWorkspace(channel),
+		workspace: remoteWorkspace(channel, local.workspace),
 		fs: local.fs,
 		config: local.config,
 		env: local.env,

@@ -101,6 +101,9 @@ export const noopWorkspace: HostWorkspace = {
 	executeCommand: async (command: string) => {
 		throw new Error(`Command "${command}" is not available in this host`)
 	},
+	workspaceRoots: () => [],
+	activeEditorFile: () => undefined,
+	workspaceFolderFor: () => undefined,
 }
 
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */

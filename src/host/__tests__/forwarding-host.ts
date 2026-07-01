@@ -14,6 +14,19 @@ export function installVsCodeForwardingHost(): void {
 	const base = createInMemoryHost()
 	setHost({
 		...base,
+		workspace: {
+			...base.workspace,
+			workspaceRoots: () =>
+				(vscode.workspace.workspaceFolders ?? []).map((f: { uri: { fsPath: string } }) => f.uri.fsPath),
+			activeEditorFile: () => vscode.window.activeTextEditor?.document?.uri?.fsPath,
+			workspaceFolderFor: (filePath: string) => {
+				try {
+					return vscode.workspace.getWorkspaceFolder?.(vscode.Uri.file(filePath))?.uri?.fsPath
+				} catch {
+					return undefined
+				}
+			},
+		},
 		watcher: {
 			watch: (baseDir: string, pattern: string) => {
 				const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(baseDir, pattern))
