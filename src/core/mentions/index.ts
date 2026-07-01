@@ -16,7 +16,7 @@ import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
-import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { getCommand, type Command } from "../../services/command/commands"
 import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
 import type { SkillContent } from "../../shared/skills"

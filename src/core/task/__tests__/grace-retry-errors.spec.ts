@@ -17,7 +17,26 @@ import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ContextProxy } from "../../config/ContextProxy"
 
 // Mock @shofer/core
-vi.mock("@shofer/core", async (importOriginal) => ({ ...((await importOriginal()) as Record<string, unknown>) }))
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	// Noop controller so constructing a Task doesn't spin up the real file watcher.
+	ShoferIgnoreController: class {
+		validateAccess() {
+			return true
+		}
+		validateCommand() {
+			return undefined
+		}
+		filterPaths(paths: string[]) {
+			return paths
+		}
+		getInstructions() {
+			return undefined
+		}
+		async initialize() {}
+		dispose() {}
+	},
+}))
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({

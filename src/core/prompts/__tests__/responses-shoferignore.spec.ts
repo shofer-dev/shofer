@@ -3,13 +3,17 @@
 import type { Mock } from "vitest"
 
 import { formatResponse } from "../responses"
-import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "../../ignore/ShoferIgnoreController"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "@shofer/core"
+import { promises as fsPromises } from "fs"
 import * as fs from "fs/promises"
+import path from "path"
 import { toPosix } from "./utils"
 
 // Mock dependencies
-vi.mock("../../../utils/fs")
+vi.mock("fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("fs")>()
+	return { ...actual, promises: { ...actual.promises, access: vi.fn() } }
+})
 vi.mock("fs/promises")
 vi.mock("vscode", () => {
 	const mockDisposable = { dispose: vi.fn() }
@@ -28,7 +32,7 @@ vi.mock("vscode", () => {
 
 describe("ShoferIgnore Response Formatting", () => {
 	const TEST_CWD = "/test/path"
-	let mockFileExists: Mock<typeof fileExistsAtPath>
+	let mockAccess: Mock<typeof fsPromises.access>
 	let mockReadFile: Mock<typeof fs.readFile>
 
 	beforeEach(() => {
@@ -36,11 +40,11 @@ describe("ShoferIgnore Response Formatting", () => {
 		vi.clearAllMocks()
 
 		// Setup fs mocks
-		mockFileExists = fileExistsAtPath as Mock<typeof fileExistsAtPath>
+		mockAccess = fsPromises.access as Mock<typeof fsPromises.access>
 		mockReadFile = fs.readFile as Mock<typeof fs.readFile>
 
 		// Default mock implementations
-		mockFileExists.mockResolvedValue(true)
+		mockAccess.mockResolvedValue(undefined)
 		mockReadFile.mockResolvedValue("node_modules\n.git\nsecrets/**\n*.log")
 	})
 
@@ -214,12 +218,20 @@ describe("ShoferIgnore Response Formatting", () => {
 		 * Tests the instructions format
 		 */
 		it("should format shoferignore instructions for the LLM", async () => {
-			// Create controller
-			const controller = new ShoferIgnoreController(TEST_CWD)
+			// ShoferIgnoreController lives in @shofer/core (a built package), so its
+			// internal fs access can't be mocked from here — use a real .shoferignore.
+			const realFs = await vi.importActual<typeof import("fs")>("fs")
+			const os = await vi.importActual<typeof import("os")>("os")
+			const tmpDir = realFs.mkdtempSync(path.join(os.tmpdir(), "shoferignore-"))
+			realFs.mkdirSync(path.join(tmpDir, ".shofer"))
+			realFs.writeFileSync(path.join(tmpDir, ".shofer", "shoferignore"), "node_modules\n.git\nsecrets/**\n*.log")
+
+			const controller = new ShoferIgnoreController(tmpDir)
 			await controller.initialize()
 
 			// Get instructions
 			const instructions = controller.getInstructions()
+			realFs.rmSync(tmpDir, { recursive: true, force: true })
 
 			// Verify format and content
 			expect(instructions).toContain("# .shoferignore")
@@ -239,7 +251,7 @@ describe("ShoferIgnore Response Formatting", () => {
 		 */
 		it("should return undefined when no shoferignore exists", async () => {
 			// Set up no shoferignore
-			mockFileExists.mockResolvedValue(false)
+			mockAccess.mockRejectedValue(new Error("ENOENT"))
 
 			// Create controller without shoferignore
 			const controller = new ShoferIgnoreController(TEST_CWD)

@@ -45,7 +45,7 @@ import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { buildApiHandler } from "../../api"
 import { liveMemoryLog as logger } from "@shofer/core"
-import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 
 import { LiveMemoryDirectoryTree } from "./directory-tree"
 import { LiveMemoryFileWatcher } from "./file-watcher"
@@ -63,10 +63,7 @@ export class LiveMemoryManager implements vscode.Disposable {
 
 	private static instances = new Map<string, LiveMemoryManager>()
 
-	public static getInstance(
-		context: vscode.ExtensionContext,
-		workspacePath?: string,
-	): LiveMemoryManager | undefined {
+	public static getInstance(context: vscode.ExtensionContext, workspacePath?: string): LiveMemoryManager | undefined {
 		let folder: vscode.WorkspaceFolder | undefined
 
 		if (workspacePath) {
@@ -704,8 +701,7 @@ export class LiveMemoryManager implements vscode.Disposable {
 		const enabled = proxy.getValue("liveMemoryEnabled") ?? true
 		const apiConfigId = proxy.getValue("liveMemoryApiConfigId") ?? ""
 		const overrideMaxContextTokens = proxy.getValue("liveMemoryMaxContextTokens")
-		const contextFillThreshold =
-			proxy.getValue("liveMemoryContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
+		const contextFillThreshold = proxy.getValue("liveMemoryContextFillThreshold") ?? DEFAULT_CONTEXT_FILL_THRESHOLD
 
 		// No profile linked → return a partial config; initialize() turns this
 		// into an Error state with a "No API Configuration selected" message.

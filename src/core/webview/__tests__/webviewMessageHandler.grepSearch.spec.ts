@@ -9,7 +9,7 @@ vi.mock("../../ignore/ShoferIgnoreController")
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
 import { searchWorkspaceFiles } from "../../../services/search/file-search"
-import { ShoferIgnoreController } from "../../ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 
 const mockSearchWorkspaceFiles = searchWorkspaceFiles as Mock<typeof searchWorkspaceFiles>
 

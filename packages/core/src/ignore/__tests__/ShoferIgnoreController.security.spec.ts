@@ -1,37 +1,17 @@
 // npx vitest core/ignore/__tests__/ShoferIgnoreController.security.spec.ts
 
 import type { Mock } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 
-import { ShoferIgnoreController } from "../ShoferIgnoreController"
+import { ShoferIgnoreController } from "../ShoferIgnoreController.js"
+import { setHost, createInMemoryHost } from "@shofer/types"
 import * as path from "path"
 import * as fs from "fs/promises"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { fileExistsAtPath } from "../../fs/fs.js"
 
 // Mock dependencies
 vi.mock("fs/promises")
-vi.mock("../../../utils/fs")
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-}))
-vi.mock("vscode", () => {
-	const mockDisposable = { dispose: vi.fn() }
-
-	return {
-		workspace: {
-			createFileSystemWatcher: vi.fn(() => ({
-				onDidCreate: vi.fn(() => mockDisposable),
-				onDidChange: vi.fn(() => mockDisposable),
-				onDidDelete: vi.fn(() => mockDisposable),
-				dispose: vi.fn(),
-			})),
-		},
-		RelativePattern: vi.fn().mockImplementation((base, pattern) => ({
-			base,
-			pattern,
-		})),
-	}
-})
+vi.mock("../../fs/fs.js", () => ({ fileExistsAtPath: vi.fn() }))
 
 describe("ShoferIgnoreController Security Tests", () => {
 	const TEST_CWD = "/test/path"
@@ -42,6 +22,7 @@ describe("ShoferIgnoreController Security Tests", () => {
 	beforeEach(async () => {
 		// Reset mocks
 		vi.clearAllMocks()
+		setHost(createInMemoryHost())
 
 		// Setup mocks
 		mockFileExists = fileExistsAtPath as Mock<typeof fileExistsAtPath>

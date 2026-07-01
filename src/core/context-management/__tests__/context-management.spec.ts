@@ -896,7 +896,7 @@ describe("Context Management", () => {
 			const cwd = "/test/project"
 			const mockShoferIgnoreController = {
 				filterPaths: vi.fn(),
-			} as unknown as import("../../ignore/ShoferIgnoreController").ShoferIgnoreController
+			} as unknown as import("@shofer/core").ShoferIgnoreController
 
 			const result = await manageContext({
 				messages: messagesWithSmallContent,

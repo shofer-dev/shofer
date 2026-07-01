@@ -1,7 +1,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as path from "path"
 import * as diff from "diff"
-import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "../ignore/ShoferIgnoreController"
+import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "@shofer/core"
 import { ShoferProtectedController } from "../protect/ShoferProtectedController"
 
 export const formatResponse = {

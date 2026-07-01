@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import * as path from "path"
-import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import type { ShoferIgnoreController } from "@shofer/core"
 import { SKIP_PARTS } from "./directory-tree"
 
 /**

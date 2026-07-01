@@ -1,10 +1,10 @@
 import path from "path"
-import { fileExistsAtPath } from "../../utils/fs"
+import { fileExistsAtPath } from "../fs/fs.js"
 import fs from "fs/promises"
 import fsSync from "fs"
 import ignore, { Ignore } from "ignore"
 import type { HostDisposable } from "@shofer/types"
-import { webviewLog } from "@shofer/core"
+import { webviewLog } from "../logging/subsystems.js"
 import { getHost } from "@shofer/types"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
@@ -110,7 +110,7 @@ export class ShoferIgnoreController {
 
 			// Check if the real path is ignored
 			return !this.ignoreInstance.ignores(relativePath)
-		} catch (error) {
+		} catch {
 			// Allow access to files outside cwd or on errors (backward compatibility)
 			return true
 		}
@@ -129,7 +129,7 @@ export class ShoferIgnoreController {
 
 		// Split command into parts and get the base command
 		const parts = command.trim().split(/\s+/)
-		const baseCommand = parts[0].toLowerCase()
+		const baseCommand = parts[0]!.toLowerCase()
 
 		// Commands that read file contents
 		const fileReadingCommands = [
@@ -153,7 +153,7 @@ export class ShoferIgnoreController {
 		if (fileReadingCommands.includes(baseCommand)) {
 			// Check each argument that could be a file path
 			for (let i = 1; i < parts.length; i++) {
-				const arg = parts[i]
+				const arg = parts[i]!
 				// Skip command flags/options (both Unix and PowerShell style)
 				if (arg.startsWith("-") || arg.startsWith("/")) {
 					continue

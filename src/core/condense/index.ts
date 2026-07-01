@@ -9,7 +9,7 @@ import { ApiMessage } from "../task-persistence/apiMessages"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "../../shared/array"
 import { supportPrompt } from "../../shared/support-prompt"
-import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { generateFoldedFileContext } from "./foldedFileContext"
 import { taskLog } from "@shofer/core"
 

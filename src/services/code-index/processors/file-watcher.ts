@@ -7,7 +7,7 @@ import {
 	INITIAL_RETRY_DELAY_MS,
 } from "../constants"
 import { createHash } from "crypto"
-import { ShoferIgnoreController } from "../../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { v5 as uuidv5 } from "uuid"
 import { scannerExtensions } from "../shared/supported-extensions"
 import type { IIgnoreFilter } from "../shared/git-ignore-filter"

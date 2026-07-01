@@ -1,7 +1,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
-import type { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import type { ShoferIgnoreController } from "@shofer/core"
 
 /**
  * LiveMemoryDirectoryTree — generates a workspace `find .`-style tree

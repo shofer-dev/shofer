@@ -1,5 +1,5 @@
 import { listFiles } from "../../glob/list-files"
-import { ShoferIgnoreController } from "../../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"

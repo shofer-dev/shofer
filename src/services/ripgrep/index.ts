@@ -4,7 +4,7 @@ import * as readline from "readline"
 
 import { getHost } from "@shofer/types"
 
-import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { fileExistsAtPath } from "../../utils/fs"
 import { codeIndexLog } from "@shofer/core"
 /*

@@ -10,7 +10,7 @@ import { t } from "../../i18n"
 import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { Package } from "../../shared/package"
 
-import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 
 import { OpenAiEmbedder } from "./embedders/openai"
 import { CodeIndexOllamaEmbedder } from "./embedders/ollama"

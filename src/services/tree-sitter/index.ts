@@ -4,7 +4,7 @@ import { CODEBASE_INDEX_FILE_EXTENSIONS } from "@shofer/types"
 import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
 import { fileExistsAtPath } from "../../utils/fs"
 import { parseMarkdown } from "./markdownParser"
-import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
+import { ShoferIgnoreController } from "@shofer/core"
 import { QueryCapture } from "web-tree-sitter"
 import { utilLog } from "@shofer/core"
 

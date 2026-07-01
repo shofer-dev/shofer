@@ -2,74 +2,40 @@
 
 import type { Mock } from "vitest"
 
-import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "../ShoferIgnoreController"
-import * as vscode from "vscode"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "../ShoferIgnoreController.js"
+import { setHost, createInMemoryHost } from "@shofer/types"
 import * as path from "path"
 import * as fs from "fs/promises"
 import * as fsSync from "fs"
-import { fileExistsAtPath } from "../../../utils/fs"
+import { fileExistsAtPath } from "../../fs/fs.js"
 
 // Mock dependencies
 vi.mock("fs/promises")
 vi.mock("fs")
-vi.mock("../../../utils/fs")
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-}))
+vi.mock("../../fs/fs.js", () => ({ fileExistsAtPath: vi.fn() }))
 
-// Mock vscode
-vi.mock("vscode", () => {
-	const mockDisposable = { dispose: vi.fn() }
-	const mockEventEmitter = {
-		event: vi.fn(),
-		fire: vi.fn(),
-	}
-
-	return {
-		workspace: {
-			createFileSystemWatcher: vi.fn(() => ({
-				onDidCreate: vi.fn(() => mockDisposable),
-				onDidChange: vi.fn(() => mockDisposable),
-				onDidDelete: vi.fn(() => mockDisposable),
-				dispose: vi.fn(),
-			})),
-		},
-		RelativePattern: vi.fn().mockImplementation((base, pattern) => ({
-			base,
-			pattern,
-		})),
-		EventEmitter: vi.fn().mockImplementation(() => mockEventEmitter),
-		Disposable: {
-			from: vi.fn(),
-		},
-	}
-})
+// A host whose file watcher is spyable, so we can assert the .shoferignore watcher wiring
+// (the controller calls getHost().watcher.watch(...) then registers onChange/onCreate/onDelete).
+const fileWatcher = {
+	onChange: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
+	onCreate: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
+	onDelete: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
+	dispose: vi.fn(),
+}
+const mockWatch = vi.fn(() => fileWatcher)
 
 describe("ShoferIgnoreController", () => {
 	const TEST_CWD = "/test/path"
 	let controller: ShoferIgnoreController
 	let mockFileExists: Mock<typeof fileExistsAtPath>
 	let mockReadFile: Mock<typeof fs.readFile>
-	let mockWatcher: any
 
 	beforeEach(() => {
 		// Reset mocks
 		vi.clearAllMocks()
-		installVsCodeForwardingHost()
-
-		// Setup mock file watcher
-		mockWatcher = {
-			onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-			onDidChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-			onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-			dispose: vi.fn(),
-		}
-
-		// @ts-expect-error - Mocking
-		vscode.workspace.createFileSystemWatcher.mockReturnValue(mockWatcher)
+		setHost({ ...createInMemoryHost(), watcher: { watch: mockWatch } })
 
 		// Setup fs mocks
 		mockFileExists = fileExistsAtPath as Mock<typeof fileExistsAtPath>
@@ -131,18 +97,13 @@ describe("ShoferIgnoreController", () => {
 		 * Tests the file watcher setup
 		 */
 		it("should set up file watcher for .shofer/shoferignore changes", async () => {
-			// Check that watcher was created with correct pattern
-			expect(vscode.workspace.createFileSystemWatcher).toHaveBeenCalledWith(
-				expect.objectContaining({
-					base: `${TEST_CWD}/.shofer`,
-					pattern: "shoferignore",
-				}),
-			)
+			// Check that the host watcher was created with the correct base + pattern
+			expect(mockWatch).toHaveBeenCalledWith(path.join(TEST_CWD, ".shofer"), "shoferignore")
 
 			// Verify event handlers were registered
-			expect(mockWatcher.onDidCreate).toHaveBeenCalled()
-			expect(mockWatcher.onDidChange).toHaveBeenCalled()
-			expect(mockWatcher.onDidDelete).toHaveBeenCalled()
+			expect(fileWatcher.onCreate).toHaveBeenCalled()
+			expect(fileWatcher.onChange).toHaveBeenCalled()
+			expect(fileWatcher.onDelete).toHaveBeenCalled()
 		})
 
 		/**
@@ -506,7 +467,7 @@ describe("ShoferIgnoreController", () => {
 			mockFileExists.mockResolvedValue(false)
 
 			// Find and trigger the onDelete handler
-			const onDeleteHandler = mockWatcher.onDidDelete.mock.calls[0][0]
+			const onDeleteHandler = fileWatcher.onDelete.mock.calls[0]![0]
 			await onDeleteHandler()
 
 			// Verify content was reset
