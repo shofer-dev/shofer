@@ -1,14 +1,14 @@
 /**
  * @fileoverview Compact transport implementation.
  *
- * Writes human-readable lines to a `vscode.OutputChannel` (the "Shofer"
+ * Writes human-readable lines to a `LogSink` (the "Shofer"
  * output panel) and optionally appends compact JSON-lines to a file on
  * disk.  The minimum log level is mutable at runtime via `setLevel()`.
  */
 
 import { writeFileSync, mkdirSync } from "fs"
 import { dirname } from "path"
-import type * as vscode from "vscode"
+import type { LogSink } from "./types"
 import {
 	CompactTransportConfig,
 	ICompactTransport,
@@ -77,7 +77,7 @@ export class CompactTransport implements ICompactTransport {
 	private _level: LogLevel
 	private _categories: string[] | undefined
 	private _knownCategories: Set<string> = new Set()
-	private _outputChannel: vscode.OutputChannel | undefined
+	private _outputChannel: LogSink | undefined
 	/** Ring buffer of recent human-readable log lines for the public API. */
 	private _ringBuffer: string[] = []
 	private _ringBufferIndex = 0
@@ -96,7 +96,7 @@ export class CompactTransport implements ICompactTransport {
 	 *   can be set later via `setOutputChannel()`).
 	 * @param config - Optional transport configuration.
 	 */
-	constructor(outputChannel?: vscode.OutputChannel, config: CompactTransportConfig = {}) {
+	constructor(outputChannel?: LogSink, config: CompactTransportConfig = {}) {
 		this.sessionStart = Date.now()
 		this.lastTimestamp = this.sessionStart
 		this._level = config.level ?? "debug"
@@ -115,7 +115,7 @@ export class CompactTransport implements ICompactTransport {
 	 * Set or replace the Output Channel at runtime.
 	 * Useful when the channel is created during extension activation.
 	 */
-	setOutputChannel(channel: vscode.OutputChannel): void {
+	setOutputChannel(channel: LogSink): void {
 		this._outputChannel = channel
 	}
 

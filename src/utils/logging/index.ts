@@ -18,10 +18,9 @@
  *    controlled by Settings → Logging.
  */
 
-import type * as vscode from "vscode"
 import { CompactLogger } from "./CompactLogger"
 import { CompactTransport } from "./CompactTransport"
-import type { ILogger, LogLevel, TaskScopedLogLine, TaskLogListener } from "./types"
+import type { ILogger, LogLevel, LogSink, TaskScopedLogLine, TaskLogListener } from "./types"
 
 export { runWithLogTaskContext, getLogTaskContext } from "./logContext"
 export type { LogTaskContext } from "./logContext"
@@ -60,7 +59,7 @@ if (process.env.NODE_ENV !== "test") {
  * In test environments (`NODE_ENV === "test"`) a silent noop logger is
  * returned instead so test output is not flooded.
  */
-export function bootstrapLogging(outputChannel: vscode.OutputChannel): ILogger {
+export function bootstrapLogging(outputChannel: LogSink): ILogger {
 	if (process.env.NODE_ENV === "test") {
 		return _noopLogger
 	}

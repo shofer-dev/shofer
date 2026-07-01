@@ -13,7 +13,15 @@
  * filter by subsystem.
  */
 
-import type * as vscode from "vscode"
+/**
+ * A log sink — the destination the transport writes human-readable lines to. The
+ * front-end supplies it: the VS Code extension passes a `vscode.OutputChannel` (which
+ * structurally satisfies this), a headless/remote executor passes a stdout/file
+ * writer (or none). Keeps the logger vscode-free.
+ */
+export interface LogSink {
+	appendLine(value: string): void
+}
 
 /**
  * Represents a compact log entry format optimized for storage and transmission.
