@@ -26,6 +26,7 @@ function setup() {
 			workspaceRoots: () => [],
 			activeEditorFile: () => undefined,
 			workspaceFolderFor: () => undefined,
+			onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
 		},
 	}
 	const calls: Array<[string, string, unknown[]]> = []

@@ -103,6 +103,7 @@ function remoteWorkspace(channel: HostRpcChannel, local: HostWorkspace): HostWor
 		workspaceRoots: () => local.workspaceRoots(),
 		activeEditorFile: () => local.activeEditorFile(),
 		workspaceFolderFor: (filePath: string) => local.workspaceFolderFor(filePath),
+		onDidChangeWorkspaceFolders: (handler: () => void) => local.onDidChangeWorkspaceFolders(handler),
 	}
 }
 

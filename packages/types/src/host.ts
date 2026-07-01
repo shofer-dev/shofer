@@ -179,6 +179,12 @@ export interface HostWorkspace {
 	activeEditorFile(): string | undefined
 	/** The workspace root containing `filePath`, if any (maps to `vscode.workspace.getWorkspaceFolder`). */
 	workspaceFolderFor(filePath: string): string | undefined
+	/**
+	 * Register `handler` to run when the set of open workspace folders changes
+	 * (maps to `vscode.workspace.onDidChangeWorkspaceFolders`). A headless host
+	 * with no IDE window returns a no-op disposable.
+	 */
+	onDidChangeWorkspaceFolders(handler: () => void): HostDisposable
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */

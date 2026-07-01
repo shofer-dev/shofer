@@ -1,7 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 
-import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js"
@@ -21,6 +20,8 @@ import deepEqual from "fast-deep-equal"
 import { z } from "zod"
 
 import type {
+	HostDisposable,
+	HostFileWatcher,
 	McpResource,
 	McpResourceResponse,
 	McpResourceTemplate,
@@ -46,7 +47,7 @@ import { mcpLog as mcpSysLog } from "../../utils/logging/subsystems"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 
 import { fileExistsAtPath } from "../../utils/fs"
-import { arePathsEqual, getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "../../utils/path"
 import { injectVariables } from "../../utils/config"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name"
@@ -106,7 +107,7 @@ const createServerTypeSchema = () => {
 			type: z.enum(["stdio"]).optional(),
 			command: z.string().min(1, "Command cannot be empty"),
 			args: z.array(z.string()).optional(),
-			cwd: z.string().default(() => vscode.workspace.workspaceFolders?.at(0)?.uri.fsPath ?? process.cwd()),
+			cwd: z.string().default(() => getHost().workspace.workspaceRoots()[0] ?? process.cwd()),
 			env: z.record(z.string()).optional(),
 			// Ensure no SSE fields are present
 			url: z.undefined().optional(),
@@ -162,10 +163,10 @@ const McpSettingsSchema = z.object({
 
 export class McpHub {
 	private providerRef: WeakRef<ShoferProvider>
-	private disposables: vscode.Disposable[] = []
-	private settingsWatcher?: vscode.FileSystemWatcher
+	private disposables: HostDisposable[] = []
+	private settingsWatcher?: HostFileWatcher
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
-	private projectMcpWatcher?: vscode.FileSystemWatcher
+	private projectMcpWatcher?: HostFileWatcher
 	private isDisposed: boolean = false
 	connections: McpConnection[] = []
 	isConnecting: boolean = false
@@ -312,7 +313,7 @@ export class McpHub {
 		}
 
 		this.disposables.push(
-			vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+			getHost().workspace.onDidChangeWorkspaceFolders(async () => {
 				await this.updateProjectMcpServers()
 				await this.watchProjectMcpFile()
 			}),
@@ -384,8 +385,8 @@ export class McpHub {
 	}
 
 	private async watchProjectMcpFile(): Promise<void> {
-		// Skip if test environment is detected or VSCode APIs are not available
-		if (process.env.NODE_ENV === "test" || !vscode.workspace.createFileSystemWatcher) {
+		// Skip if test environment is detected
+		if (process.env.NODE_ENV === "test") {
 			return
 		}
 
@@ -395,37 +396,35 @@ export class McpHub {
 			this.projectMcpWatcher = undefined
 		}
 
-		if (!vscode.workspace.workspaceFolders?.length) {
+		if (!getHost().workspace.workspaceRoots().length) {
 			return
 		}
 
 		const workspaceFolder = this.providerRef.deref()?.cwd ?? getWorkspacePath()
-		const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".shofer/mcp.json")
+		const projectMcpPath = path.join(workspaceFolder, ".shofer", "mcp.json")
 
-		// Create a file system watcher for the project MCP file pattern
-		this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
+		// Create a file system watcher for the project MCP file
+		this.projectMcpWatcher = getHost().watcher.watch(workspaceFolder, ".shofer/mcp.json")
 
 		// Watch for file changes
-		const changeDisposable = this.projectMcpWatcher.onDidChange((uri) => {
-			this.debounceConfigChange(uri.fsPath, "project")
+		this.projectMcpWatcher.onChange(() => {
+			this.debounceConfigChange(projectMcpPath, "project")
 		})
 
 		// Watch for file creation
-		const createDisposable = this.projectMcpWatcher.onDidCreate((uri) => {
-			this.debounceConfigChange(uri.fsPath, "project")
+		this.projectMcpWatcher.onCreate(() => {
+			this.debounceConfigChange(projectMcpPath, "project")
 		})
 
 		// Watch for file deletion
-		const deleteDisposable = this.projectMcpWatcher.onDidDelete(async () => {
+		this.projectMcpWatcher.onDelete(async () => {
 			// Clean up all project MCP servers when the file is deleted
 			await this.cleanupProjectMcpServers()
 			await this.notifyWebviewOfServerChanges()
 			getHost().notifier.info(t("mcp:info.project_config_deleted"))
 		})
 
-		this.disposables.push(
-			vscode.Disposable.from(changeDisposable, createDisposable, deleteDisposable, this.projectMcpWatcher),
-		)
+		this.disposables.push(this.projectMcpWatcher)
 	}
 
 	private async updateProjectMcpServers(): Promise<void> {
@@ -564,8 +563,8 @@ export class McpHub {
 	}
 
 	private async watchMcpSettingsFile(): Promise<void> {
-		// Skip if test environment is detected or VSCode APIs are not available
-		if (process.env.NODE_ENV === "test" || !vscode.workspace.createFileSystemWatcher) {
+		// Skip if test environment is detected
+		if (process.env.NODE_ENV === "test") {
 			return
 		}
 
@@ -576,27 +575,22 @@ export class McpHub {
 		}
 
 		const settingsPath = await this.getMcpSettingsFilePath()
-		const settingsUri = vscode.Uri.file(settingsPath)
-		const settingsPattern = new vscode.RelativePattern(path.dirname(settingsPath), path.basename(settingsPath))
 
-		// Create a file system watcher for the global MCP settings file
-		this.settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPattern)
+		// Create a file system watcher for the global MCP settings file. The
+		// watcher is scoped to this exact file, so every event refers to it.
+		this.settingsWatcher = getHost().watcher.watch(path.dirname(settingsPath), path.basename(settingsPath))
 
 		// Watch for file changes
-		const changeDisposable = this.settingsWatcher.onDidChange((uri) => {
-			if (arePathsEqual(uri.fsPath, settingsPath)) {
-				this.debounceConfigChange(settingsPath, "global")
-			}
+		this.settingsWatcher.onChange(() => {
+			this.debounceConfigChange(settingsPath, "global")
 		})
 
 		// Watch for file creation
-		const createDisposable = this.settingsWatcher.onDidCreate((uri) => {
-			if (arePathsEqual(uri.fsPath, settingsPath)) {
-				this.debounceConfigChange(settingsPath, "global")
-			}
+		this.settingsWatcher.onCreate(() => {
+			this.debounceConfigChange(settingsPath, "global")
 		})
 
-		this.disposables.push(vscode.Disposable.from(changeDisposable, createDisposable, this.settingsWatcher))
+		this.disposables.push(this.settingsWatcher)
 	}
 
 	private async initializeMcpServers(source: "global" | "project"): Promise<void> {
@@ -687,7 +681,7 @@ export class McpHub {
 				status: "disconnected",
 				disabled: reason === DisableReason.SERVER_DISABLED ? true : config.disabled,
 				source,
-				projectPath: source === "project" ? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath : undefined,
+				projectPath: source === "project" ? getHost().workspace.workspaceRoots()[0] : undefined,
 				errorHistory: [],
 			},
 			client: null,
@@ -756,7 +750,7 @@ export class McpHub {
 			// Inject variables to the config (environment, magic variables,...)
 			const configInjected = (await injectVariables(config, {
 				env: process.env,
-				workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+				workspaceFolder: getHost().workspace.workspaceRoots()[0] ?? "",
 			})) as typeof config
 
 			if (configInjected.type === "stdio") {
@@ -951,7 +945,7 @@ export class McpHub {
 					status: "connecting",
 					disabled: configInjected.disabled,
 					source,
-					projectPath: source === "project" ? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath : undefined,
+					projectPath: source === "project" ? getHost().workspace.workspaceRoots()[0] : undefined,
 					errorHistory: [],
 				},
 				client,

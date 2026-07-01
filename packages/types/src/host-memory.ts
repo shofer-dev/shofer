@@ -104,6 +104,7 @@ export const noopWorkspace: HostWorkspace = {
 	workspaceRoots: () => [],
 	activeEditorFile: () => undefined,
 	workspaceFolderFor: () => undefined,
+	onDidChangeWorkspaceFolders: () => noopDisposable,
 }
 
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */

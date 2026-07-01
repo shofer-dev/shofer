@@ -5,6 +5,7 @@ import type {
 	HostBridge,
 	FindFilesOptions,
 	HostConfig,
+	HostDisposable,
 	HostDiagnostic,
 	HostDiagnosticSeverity,
 	HostEnv,
@@ -250,6 +251,9 @@ class VsCodeWorkspace implements HostWorkspace {
 	}
 	workspaceFolderFor(filePath: string): string | undefined {
 		return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath))?.uri.fsPath
+	}
+	onDidChangeWorkspaceFolders(handler: () => void): HostDisposable {
+		return vscode.workspace.onDidChangeWorkspaceFolders(() => handler())
 	}
 }
 
