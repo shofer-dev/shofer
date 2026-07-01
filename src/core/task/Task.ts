@@ -86,7 +86,7 @@ import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { RepoPerTaskCheckpointService } from "../../services/checkpoints"
 
 // integrations
-import { DiffViewProvider } from "../../integrations/editor/DiffViewProvider"
+import type { DiffView } from "@shofer/types"
 import { findToolName } from "../../integrations/misc/export-markdown"
 import { ShoferTerminalProcess } from "../../integrations/terminal/types"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
@@ -660,7 +660,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	backgroundTerminalProcesses = new Map<string, ShoferTerminalProcess>()
 
 	// Editing
-	diffViewProvider: DiffViewProvider
+	diffViewProvider: DiffView
 	diffStrategy?: DiffStrategy
 	didEditFile: boolean = false
 
@@ -1016,7 +1016,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.experimentsConfig = experimentsConfig
 		this.providerRef = new WeakRef(provider)
 		this.globalStoragePath = provider.context.globalStorageUri.fsPath
-		this.diffViewProvider = new DiffViewProvider(this.cwd, this)
+		this.diffViewProvider = getHost().createDiffView(this.cwd, this)
 		this.enableCheckpoints = enableCheckpoints
 		this.checkpointTimeout = checkpointTimeout
 

@@ -1,3 +1,4 @@
+import type { DiffView, DiffViewSaveResult } from "./diff-view.js"
 import type {
 	HostBridge,
 	HostConfig,
@@ -116,6 +117,40 @@ export const noopLsp: HostLsp = {
 	applyWorkspaceEdit: async () => false,
 }
 
+/**
+ * A no-op `DiffView` (no IDE, no disk): the lifecycle resolves without presenting
+ * a diff or reporting problems. The Task constructs one eagerly, so this must not
+ * throw; a real headless host that wants working edits supplies its own.
+ */
+export class NoopDiffView implements DiffView {
+	editType?: "create" | "modify"
+	originalContent: string | undefined
+	isEditing = false
+	userEdits?: string
+	newProblemsMessage?: string
+
+	async open(): Promise<void> {
+		this.isEditing = true
+	}
+	async update(): Promise<void> {}
+	async saveChanges(): Promise<DiffViewSaveResult> {
+		return { newProblemsMessage: undefined, userEdits: undefined, finalContent: undefined }
+	}
+	async saveDirectly(): Promise<DiffViewSaveResult> {
+		return { newProblemsMessage: undefined, userEdits: undefined, finalContent: undefined }
+	}
+	async pushToolWriteResult(): Promise<string> {
+		return "{}"
+	}
+	async revertChanges(): Promise<void> {}
+	scrollToFirstDiff(): void {}
+	async reset(): Promise<void> {
+		this.isEditing = false
+		this.editType = undefined
+		this.originalContent = undefined
+	}
+}
+
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
 export function createInMemoryHost(): HostBridge {
 	return {
@@ -126,5 +161,6 @@ export function createInMemoryHost(): HostBridge {
 		lsp: noopLsp,
 		workspace: noopWorkspace,
 		watcher: noopWatcher,
+		createDiffView: () => new NoopDiffView(),
 	}
 }

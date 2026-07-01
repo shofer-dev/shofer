@@ -1,7 +1,9 @@
 import * as vscode from "vscode"
-import { createInMemoryHost } from "@shofer/types"
-
-import { setHost } from "../host-bridge"
+// Import `setHost` from `@shofer/types` (not `../host-bridge`) so this test helper
+// does not transitively load the VS Code adapter — `host-bridge.ts` statically
+// imports `DiffViewProvider`, whose `DecorationController` touches `vscode.window`
+// at module load and would break specs that use only a minimal `vscode` mock.
+import { createInMemoryHost, setHost } from "@shofer/types"
 
 /**
  * Test helper (§9): install a `HostBridge` whose notifier forwards to the

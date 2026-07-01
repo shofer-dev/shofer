@@ -5,22 +5,32 @@ import * as diff from "diff"
 import stripBom from "strip-bom"
 import delay from "delay"
 
-import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
+import {
+	type ShoferSayTool,
+	type DiffView,
+	type DiffViewSaveResult,
+	type DiffViewTaskHandle,
+	type DiffViewWriteResultExtra,
+	DEFAULT_WRITE_DELAY_MS,
+	DIFF_VIEW_URI_SCHEME,
+	DIFF_VIEW_LABEL_CHANGES,
+} from "@shofer/types"
 
 import { createDirectoriesForFile } from "../../utils/fs"
 import { arePathsEqual, getReadablePath } from "../../utils/path"
 import { formatResponse } from "../../core/prompts/responses"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
-import { Task } from "../../core/task/Task"
 
 import { DecorationController } from "./DecorationController"
 import { fsLog } from "@shofer/core"
 
-export const DIFF_VIEW_URI_SCHEME = "shofer-diff"
-export const DIFF_VIEW_LABEL_CHANGES = "Original ↔ Shofer's Changes"
+// `DIFF_VIEW_URI_SCHEME` / `DIFF_VIEW_LABEL_CHANGES` now live in `@shofer/types`
+// (vscode-free) so the core can reference them without importing this adapter;
+// re-exported here for existing adapter-side importers.
+export { DIFF_VIEW_URI_SCHEME, DIFF_VIEW_LABEL_CHANGES }
 
 // TODO: https://github.com/shofer/shofer/pull/3354
-export class DiffViewProvider {
+export class DiffViewProvider implements DiffView {
 	// Properties to store the results of saveChanges
 	newProblemsMessage?: string
 	userEdits?: string
@@ -36,11 +46,11 @@ export class DiffViewProvider {
 	private activeLineController?: DecorationController
 	private streamedLines: string[] = []
 	private preDiagnostics: [vscode.Uri, vscode.Diagnostic[]][] = []
-	private taskRef: WeakRef<Task>
+	private taskRef: WeakRef<DiffViewTaskHandle>
 
 	constructor(
 		private cwd: string,
-		task: Task,
+		task: DiffViewTaskHandle,
 	) {
 		this.taskRef = new WeakRef(task)
 	}
@@ -208,11 +218,7 @@ export class DiffViewProvider {
 	async saveChanges(
 		diagnosticsEnabled: boolean = true,
 		writeDelayMs: number = DEFAULT_WRITE_DELAY_MS,
-	): Promise<{
-		newProblemsMessage: string | undefined
-		userEdits: string | undefined
-		finalContent: string | undefined
-	}> {
+	): Promise<DiffViewSaveResult> {
 		if (!this.relPath || !this.newContent || !this.activeDiffEditor) {
 			return { newProblemsMessage: undefined, userEdits: undefined, finalContent: undefined }
 		}
@@ -322,24 +328,17 @@ export class DiffViewProvider {
 	 * caller owns parsing its own payload and decides what to surface to the
 	 * model.
 	 *
-	 * @param task Task instance to get protocol info
+	 * @param task Task handle used to emit UI feedback (`say`)
 	 * @param cwd Current working directory for path resolution
 	 * @param isNewFile Whether this is a new file or an existing file being modified
 	 * @param extra Optional strategy-specific summary / hint / structured stats
 	 * @returns Formatted message (JSON)
 	 */
 	async pushToolWriteResult(
-		task: Task,
+		task: DiffViewTaskHandle,
 		cwd: string,
 		isNewFile: boolean,
-		extra?: {
-			/** Replaces the default "File X was created/modified." leading sentence. */
-			summary?: string
-			/** Optional follow-up sentence appended after the summary (e.g. remediation hint). */
-			hint?: string
-			/** Opaque structured stats forwarded to the model as `diff_stats`. */
-			stats?: Record<string, number>
-		},
+		extra?: DiffViewWriteResultExtra,
 	): Promise<string> {
 		if (!this.relPath) {
 			throw new Error("No file path available in DiffViewProvider")
@@ -682,11 +681,7 @@ export class DiffViewProvider {
 		openFile: boolean = true,
 		diagnosticsEnabled: boolean = true,
 		writeDelayMs: number = DEFAULT_WRITE_DELAY_MS,
-	): Promise<{
-		newProblemsMessage: string | undefined
-		userEdits: string | undefined
-		finalContent: string | undefined
-	}> {
+	): Promise<DiffViewSaveResult> {
 		const absolutePath = path.resolve(this.cwd, relPath)
 
 		// Capture the original content before writing, so the FileChangesPanel

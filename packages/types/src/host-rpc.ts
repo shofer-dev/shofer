@@ -121,5 +121,10 @@ export function createSplitHost({ local, channel }: { local: HostBridge; channel
 		config: local.config,
 		env: local.env,
 		watcher: local.watcher,
+		// The diff view is a per-edit *stateful* object driven by many fine-grained
+		// calls (open → update* → save/revert) against a live editor — it cannot be
+		// proxied over a request/response channel, and the executor has no editor of
+		// its own. Serve it from the executor-local host (which shares the workspace).
+		createDiffView: (cwd, task) => local.createDiffView(cwd, task),
 	}
 }

@@ -15,6 +15,8 @@
  * a VS Code-backed adapter is the extension's implementation.
  */
 
+import type { DiffView, DiffViewTaskHandle } from "./diff-view.js"
+
 /** Options for a choice dialog (maps to `vscode.MessageOptions` + severity). */
 export interface NotifyChoiceOptions {
 	/** Which `vscode.window.show*Message` variant backs the dialog. Default `info`. */
@@ -229,4 +231,11 @@ export interface HostBridge {
 	readonly lsp: HostLsp
 	readonly workspace: HostWorkspace
 	readonly watcher: HostWatcher
+	/**
+	 * Build a fresh, per-edit {@link DiffView} bound to `cwd` and its owning `task`
+	 * (maps to `new DiffViewProvider(cwd, task)` in the VS Code adapter). The
+	 * returned object is stateful and single-flight; the core creates one per Task.
+	 * A headless host may return a no-op diff view.
+	 */
+	createDiffView(cwd: string, task: DiffViewTaskHandle): DiffView
 }

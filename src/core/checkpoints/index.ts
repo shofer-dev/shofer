@@ -1,6 +1,6 @@
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
-import { getHost } from "@shofer/types"
+import { getHost, DIFF_VIEW_URI_SCHEME } from "@shofer/types"
 
 import type { ShoferApiReqInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
@@ -12,8 +12,6 @@ import { checkGitInstalled } from "../../utils/git"
 import { t } from "../../i18n"
 
 import { getApiMetrics } from "../../shared/getApiMetrics"
-
-import { DIFF_VIEW_URI_SCHEME } from "../../integrations/editor/DiffViewProvider"
 
 import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "../../services/checkpoints"
 import { checkpointLog } from "@shofer/core"

@@ -3,6 +3,8 @@ import * as fs from "node:fs/promises"
 import * as vscode from "vscode"
 import type {
 	HostBridge,
+	DiffView,
+	DiffViewTaskHandle,
 	FindFilesOptions,
 	HostConfig,
 	HostDisposable,
@@ -21,6 +23,8 @@ import type {
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
+
+import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 
 /**
  * VS Code-backed implementation of the host boundary (§9). This is the extension
@@ -279,6 +283,7 @@ export function createVsCodeHost(): HostBridge {
 		lsp: new VsCodeLsp(),
 		workspace: new VsCodeWorkspace(),
 		watcher: new VsCodeWatcher(),
+		createDiffView: (cwd: string, task: DiffViewTaskHandle): DiffView => new DiffViewProvider(cwd, task),
 	}
 }
 
