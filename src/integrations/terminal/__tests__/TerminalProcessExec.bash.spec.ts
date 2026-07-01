@@ -7,6 +7,7 @@ import { ExitCodeDetails } from "../types"
 import { TerminalProcess } from "../TerminalProcess"
 import { Terminal } from "../Terminal"
 import { TerminalRegistry } from "../TerminalRegistry"
+import { createVsCodeHost, setHost } from "../../../host/host-bridge"
 
 // Mock the vscode module
 vi.mock("vscode", () => {
@@ -284,6 +285,8 @@ import { TEST_PURPOSES, LARGE_OUTPUT_PARAMS, TEST_TEXT } from "./TerminalProcess
 describe("TerminalProcess with Bash Command Output", () => {
 	beforeAll(() => {
 		// Initialize TerminalRegistry event handlers once globally
+		// Route the registry through the (mocked) VS Code host before wiring handlers.
+		setHost(createVsCodeHost())
 		TerminalRegistry.initialize()
 	})
 

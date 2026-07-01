@@ -26,6 +26,7 @@ describe("host-bridge accessor", () => {
 			lsp: base.lsp,
 			workspace: base.workspace,
 			watcher: base.watcher,
+			terminals: base.terminals,
 			createDiffView: base.createDiffView,
 		}
 		setHost(host)

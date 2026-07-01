@@ -1,4 +1,5 @@
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
+import type { HostDisposable, HostTerminalHandle } from "@shofer/types"
 
 import { arePathsEqual } from "../../utils/path"
 
@@ -9,7 +10,7 @@ import { ExecaTerminal } from "./ExecaTerminal"
 import { ShellIntegrationManager } from "./ShellIntegrationManager"
 import { webviewLog } from "@shofer/core"
 
-// Although vscode.window.terminals provides a list of all open terminals,
+// Although the host's window terminal list enumerates all open terminals,
 // there's no way to know whether they're busy or not (exitStatus does not
 // provide useful information for most commands). In order to prevent creating
 // too many terminals, we need to keep track of terminals through the life of
@@ -21,7 +22,7 @@ import { webviewLog } from "@shofer/core"
 export class TerminalRegistry {
 	private static terminals: ShoferTerminal[] = []
 	private static nextTerminalId = 1
-	private static disposables: vscode.Disposable[] = []
+	private static disposables: HostDisposable[] = []
 	private static isInitialized = false
 
 	public static initialize() {
@@ -31,13 +32,15 @@ export class TerminalRegistry {
 
 		this.isInitialized = true
 
-		// TODO: This initialization code is VSCode specific, and therefore
-		// should probably live elsewhere.
+		// The host owns the platform-specific terminal/shell-integration event
+		// wiring (VS Code in the extension, no-op headless); the registry only
+		// keeps the vscode-free bookkeeping.
+		const terminals = getHost().terminals
 
 		// Register handler for terminal close events to clean up temporary
 		// directories.
-		const closeDisposable = vscode.window.onDidCloseTerminal((vsceTerminal) => {
-			const terminal = this.getTerminalByVSCETerminal(vsceTerminal)
+		const closeDisposable = terminals.onDidCloseTerminal((hostTerminal) => {
+			const terminal = this.getTerminalByHostTerminal(hostTerminal)
 
 			if (terminal) {
 				ShellIntegrationManager.zshCleanupTmpDir(terminal.id)
@@ -47,82 +50,74 @@ export class TerminalRegistry {
 		this.disposables.push(closeDisposable)
 
 		try {
-			const startDisposable = vscode.window.onDidStartTerminalShellExecution?.(
-				async (e: vscode.TerminalShellExecutionStartEvent) => {
-					// Get a handle to the stream as early as possible:
-					const stream = e.execution.read()
-					const terminal = this.getTerminalByVSCETerminal(e.terminal)
+			const startDisposable = terminals.onDidStartShellExecution((e) => {
+				// Get a handle to the stream as early as possible:
+				const stream = e.execution.read()
+				const terminal = this.getTerminalByHostTerminal(e.terminal)
 
-					webviewLog.info("[onDidStartTerminalShellExecution]", {
-						command: e.execution?.commandLine?.value,
-						terminalId: terminal?.id,
-					})
+				webviewLog.info("[onDidStartTerminalShellExecution]", {
+					command: e.execution?.commandLine,
+					terminalId: terminal?.id,
+				})
 
-					if (terminal) {
-						terminal.setActiveStream(stream)
-						terminal.busy = true // Mark terminal as busy when shell execution starts
-					} else {
-						webviewLog.error(
-							"[onDidStartTerminalShellExecution] Shell execution started, but not from a Shofer-registered terminal:",
-							e,
-						)
-					}
-				},
-			)
+				if (terminal) {
+					terminal.setActiveStream(stream)
+					terminal.busy = true // Mark terminal as busy when shell execution starts
+				} else {
+					webviewLog.error(
+						"[onDidStartTerminalShellExecution] Shell execution started, but not from a Shofer-registered terminal:",
+						e,
+					)
+				}
+			})
 
-			if (startDisposable) {
-				this.disposables.push(startDisposable)
-			}
+			this.disposables.push(startDisposable)
 
-			const endDisposable = vscode.window.onDidEndTerminalShellExecution?.(
-				async (e: vscode.TerminalShellExecutionEndEvent) => {
-					const terminal = this.getTerminalByVSCETerminal(e.terminal)
-					const process = terminal?.process
-					const exitDetails = TerminalProcess.interpretExitCode(e.exitCode)
+			const endDisposable = terminals.onDidEndShellExecution((e) => {
+				const terminal = this.getTerminalByHostTerminal(e.terminal)
+				const process = terminal?.process
+				const exitDetails = TerminalProcess.interpretExitCode(e.exitCode)
 
-					webviewLog.info("[onDidEndTerminalShellExecution]", {
-						command: e.execution?.commandLine?.value,
-						terminalId: terminal?.id,
-						...exitDetails,
-					})
+				webviewLog.info("[onDidEndTerminalShellExecution]", {
+					command: e.execution?.commandLine,
+					terminalId: terminal?.id,
+					...exitDetails,
+				})
 
-					if (!terminal) {
-						webviewLog.error(
-							"[onDidEndTerminalShellExecution] Shell execution ended, but not from a Shofer-registered terminal:",
-							e,
-						)
+				if (!terminal) {
+					webviewLog.error(
+						"[onDidEndTerminalShellExecution] Shell execution ended, but not from a Shofer-registered terminal:",
+						e,
+					)
 
-						return
-					}
+					return
+				}
 
-					if (!terminal.running) {
-						webviewLog.error(
-							"[TerminalRegistry] Shell execution end event received, but process is not running for terminal:",
-							{ terminalId: terminal?.id, command: process?.command, exitCode: e.exitCode },
-						)
+				if (!terminal.running) {
+					webviewLog.error(
+						"[TerminalRegistry] Shell execution end event received, but process is not running for terminal:",
+						{ terminalId: terminal?.id, command: process?.command, exitCode: e.exitCode },
+					)
 
-						terminal.busy = false
-						return
-					}
+					terminal.busy = false
+					return
+				}
 
-					if (!process) {
-						webviewLog.error(
-							"[TerminalRegistry] Shell execution end event received on running terminal, but process is undefined:",
-							{ terminalId: terminal.id, exitCode: e.exitCode },
-						)
+				if (!process) {
+					webviewLog.error(
+						"[TerminalRegistry] Shell execution end event received on running terminal, but process is undefined:",
+						{ terminalId: terminal.id, exitCode: e.exitCode },
+					)
 
-						return
-					}
+					return
+				}
 
-					// Signal completion to any waiting processes.
-					terminal.shellExecutionComplete(exitDetails)
-					terminal.busy = false // Mark terminal as not busy when shell execution ends
-				},
-			)
+				// Signal completion to any waiting processes.
+				terminal.shellExecutionComplete(exitDetails)
+				terminal.busy = false // Mark terminal as not busy when shell execution ends
+			})
 
-			if (endDisposable) {
-				this.disposables.push(endDisposable)
-			}
+			this.disposables.push(endDisposable)
 		} catch (error) {
 			webviewLog.error("[TerminalRegistry] Error setting up shell execution handlers:", error)
 		}
@@ -172,7 +167,7 @@ export class TerminalRegistry {
 					return false
 				}
 
-				return arePathsEqual(vscode.Uri.file(cwd).fsPath, terminalCwd)
+				return arePathsEqual(cwd, terminalCwd)
 			})
 		}
 
@@ -189,7 +184,7 @@ export class TerminalRegistry {
 					return false
 				}
 
-				return arePathsEqual(vscode.Uri.file(cwd).fsPath, terminalCwd)
+				return arePathsEqual(cwd, terminalCwd)
 			})
 		}
 
@@ -307,12 +302,13 @@ export class TerminalRegistry {
 	}
 
 	/**
-	 * Gets a terminal by its VSCode terminal instance
-	 * @param terminal The VSCode terminal instance
+	 * Gets a terminal by the opaque host terminal handle carried on shell-integration
+	 * events (identity match against the vscode-backed terminal it wraps).
+	 * @param hostTerminal The host terminal handle from a shell-execution/close event
 	 * @returns The Terminal object, or undefined if not found
 	 */
-	private static getTerminalByVSCETerminal(vsceTerminal: vscode.Terminal): ShoferTerminal | undefined {
-		const found = this.terminals.find((t) => t instanceof Terminal && t.terminal === vsceTerminal)
+	private static getTerminalByHostTerminal(hostTerminal: HostTerminalHandle): ShoferTerminal | undefined {
+		const found = this.terminals.find((t) => t instanceof Terminal && t.terminal === hostTerminal)
 
 		if (found?.isClosed()) {
 			this.removeTerminal(found.id)

@@ -16,7 +16,9 @@ import type {
 	HostLsp,
 	HostFileWatcher,
 	HostReferencesResult,
+	HostShellExecution,
 	HostSymbol,
+	HostTerminals,
 	HostWatcher,
 	HostWorkspace,
 	HostWorkspaceEdit,
@@ -273,6 +275,50 @@ class VsCodeWatcher implements HostWatcher {
 	}
 }
 
+/** Adapt a `vscode.TerminalShellExecution` to the vscode-free `HostShellExecution`. */
+function wrapShellExecution(execution: vscode.TerminalShellExecution): HostShellExecution {
+	return {
+		read: () => execution.read(),
+		get commandLine() {
+			return execution.commandLine?.value
+		},
+	}
+}
+
+class VsCodeTerminals implements HostTerminals {
+	onDidCloseTerminal(handler: (terminal: vscode.Terminal) => void): vscode.Disposable {
+		return vscode.window.onDidCloseTerminal((terminal) => handler(terminal))
+	}
+	onDidStartShellExecution(
+		handler: (event: { execution: HostShellExecution; terminal: vscode.Terminal }) => void,
+	): vscode.Disposable {
+		// The shell-integration API is unavailable on older VS Code builds; fall
+		// back to a no-op disposable so the core sees a uniform, always-present API.
+		return (
+			vscode.window.onDidStartTerminalShellExecution?.((e) =>
+				handler({ execution: wrapShellExecution(e.execution), terminal: e.terminal }),
+			) ?? { dispose() {} }
+		)
+	}
+	onDidEndShellExecution(
+		handler: (event: {
+			execution?: HostShellExecution
+			terminal: vscode.Terminal
+			exitCode: number | undefined
+		}) => void,
+	): vscode.Disposable {
+		return (
+			vscode.window.onDidEndTerminalShellExecution?.((e) =>
+				handler({
+					execution: e.execution ? wrapShellExecution(e.execution) : undefined,
+					terminal: e.terminal,
+					exitCode: e.exitCode,
+				}),
+			) ?? { dispose() {} }
+		)
+	}
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
 	return {
@@ -283,6 +329,7 @@ export function createVsCodeHost(): HostBridge {
 		lsp: new VsCodeLsp(),
 		workspace: new VsCodeWorkspace(),
 		watcher: new VsCodeWatcher(),
+		terminals: new VsCodeTerminals(),
 		createDiffView: (cwd: string, task: DiffViewTaskHandle): DiffView => new DiffViewProvider(cwd, task),
 	}
 }

@@ -222,6 +222,61 @@ export interface HostFileSystem {
 	findFiles(pattern: string, options: FindFilesOptions): Promise<string[]>
 }
 
+/**
+ * Opaque handle to a host-created terminal (maps to a `vscode.Terminal`). The
+ * core never inspects it — it only holds it and compares it by identity to
+ * correlate shell-execution events back to the terminal they came from.
+ */
+export type HostTerminalHandle = object
+
+/**
+ * A single shell command execution on a host terminal (maps to
+ * `vscode.TerminalShellExecution`). Only the fields the core actually reads are
+ * modelled.
+ */
+export interface HostShellExecution {
+	/** Stream the command's output as it arrives (maps to `TerminalShellExecution.read()`). */
+	read(): AsyncIterable<string>
+	/** The command line being executed, if known (maps to `TerminalShellExecution.commandLine.value`). */
+	readonly commandLine?: string
+}
+
+/** A shell command has started (maps to `vscode.TerminalShellExecutionStartEvent`). */
+export interface HostShellExecutionStartEvent {
+	readonly execution: HostShellExecution
+	readonly terminal: HostTerminalHandle
+}
+
+/** A shell command has ended (maps to `vscode.TerminalShellExecutionEndEvent`). */
+export interface HostShellExecutionEndEvent {
+	/** The execution, when reported (used only for best-effort logging). */
+	readonly execution?: HostShellExecution
+	readonly terminal: HostTerminalHandle
+	/** Exit code of the command, or `undefined` when not reported. */
+	readonly exitCode: number | undefined
+}
+
+/**
+ * Terminal shell-integration events the core's terminal registry needs (maps to
+ * the `vscode.window.onDid*Terminal*` event family). Each `on*` registers a
+ * handler and returns its own disposable. A headless host with no interactive
+ * terminals returns no-op disposables (the events simply never fire).
+ */
+export interface HostTerminals {
+	/** Register `handler` for terminal-close events (maps to `vscode.window.onDidCloseTerminal`). */
+	onDidCloseTerminal(handler: (terminal: HostTerminalHandle) => void): HostDisposable
+	/**
+	 * Register `handler` for shell-execution start events (maps to
+	 * `vscode.window.onDidStartTerminalShellExecution`).
+	 */
+	onDidStartShellExecution(handler: (event: HostShellExecutionStartEvent) => void): HostDisposable
+	/**
+	 * Register `handler` for shell-execution end events (maps to
+	 * `vscode.window.onDidEndTerminalShellExecution`).
+	 */
+	onDidEndShellExecution(handler: (event: HostShellExecutionEndEvent) => void): HostDisposable
+}
+
 /** Aggregate host boundary handed to the core. */
 export interface HostBridge {
 	readonly notifier: Notifier
@@ -231,6 +286,7 @@ export interface HostBridge {
 	readonly lsp: HostLsp
 	readonly workspace: HostWorkspace
 	readonly watcher: HostWatcher
+	readonly terminals: HostTerminals
 	/**
 	 * Build a fresh, per-edit {@link DiffView} bound to `cwd` and its owning `task`
 	 * (maps to `new DiffViewProvider(cwd, task)` in the VS Code adapter). The

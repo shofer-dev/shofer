@@ -7,6 +7,7 @@ import type {
 	HostDisposable,
 	HostLsp,
 	HostReferencesResult,
+	HostTerminals,
 	HostWatcher,
 	HostWorkspace,
 	Notifier,
@@ -108,6 +109,13 @@ export const noopWorkspace: HostWorkspace = {
 	onDidChangeWorkspaceFolders: () => noopDisposable,
 }
 
+/** A no-op `HostTerminals` (no interactive terminals): events never fire. */
+export const noopTerminals: HostTerminals = {
+	onDidCloseTerminal: () => noopDisposable,
+	onDidStartShellExecution: () => noopDisposable,
+	onDidEndShellExecution: () => noopDisposable,
+}
+
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */
 export const noopLsp: HostLsp = {
 	getDiagnostics: async () => [],
@@ -161,6 +169,7 @@ export function createInMemoryHost(): HostBridge {
 		lsp: noopLsp,
 		workspace: noopWorkspace,
 		watcher: noopWatcher,
+		terminals: noopTerminals,
 		createDiffView: () => new NoopDiffView(),
 	}
 }

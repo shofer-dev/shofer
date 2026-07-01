@@ -1,17 +1,27 @@
 import * as vscode from "vscode"
 
-const fadedOverlayDecorationType = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "rgba(255, 255, 0, 0.1)",
-	opacity: "0.4",
-	isWholeLine: true,
-})
+// Created lazily on first use rather than at module load: importing this module
+// must not touch `vscode.window` (it makes the file safe to pull into the host
+// adapter's dependency graph and out of test-time module-load side effects).
+let _fadedOverlayDecorationType: vscode.TextEditorDecorationType | undefined
+let _activeLineDecorationType: vscode.TextEditorDecorationType | undefined
 
-const activeLineDecorationType = vscode.window.createTextEditorDecorationType({
-	backgroundColor: "rgba(255, 255, 0, 0.3)",
-	opacity: "1",
-	isWholeLine: true,
-	border: "1px solid rgba(255, 255, 0, 0.5)",
-})
+function fadedOverlayDecorationType(): vscode.TextEditorDecorationType {
+	return (_fadedOverlayDecorationType ??= vscode.window.createTextEditorDecorationType({
+		backgroundColor: "rgba(255, 255, 0, 0.1)",
+		opacity: "0.4",
+		isWholeLine: true,
+	}))
+}
+
+function activeLineDecorationType(): vscode.TextEditorDecorationType {
+	return (_activeLineDecorationType ??= vscode.window.createTextEditorDecorationType({
+		backgroundColor: "rgba(255, 255, 0, 0.3)",
+		opacity: "1",
+		isWholeLine: true,
+		border: "1px solid rgba(255, 255, 0, 0.5)",
+	}))
+}
 
 type DecorationType = "fadedOverlay" | "activeLine"
 
@@ -28,9 +38,9 @@ export class DecorationController {
 	getDecoration() {
 		switch (this.decorationType) {
 			case "fadedOverlay":
-				return fadedOverlayDecorationType
+				return fadedOverlayDecorationType()
 			case "activeLine":
-				return activeLineDecorationType
+				return activeLineDecorationType()
 		}
 	}
 
