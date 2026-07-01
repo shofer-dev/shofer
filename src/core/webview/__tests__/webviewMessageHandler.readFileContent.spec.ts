@@ -48,7 +48,14 @@ vi.mock("fs/promises", () => {
 })
 
 vi.mock("../../../utils/fs")
-vi.mock("../../../utils/path")
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	arePathsEqual: vi.fn(),
+	getReadablePath: vi.fn(),
+	toRelativePath: vi.fn(),
+	getWorkspacePath: vi.fn(),
+	getWorkspacePathForContext: vi.fn(),
+}))
 vi.mock("../../../utils/globalContext")
 
 vi.mock("../../../utils/pathUtils", () => ({

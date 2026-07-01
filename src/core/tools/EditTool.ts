@@ -3,7 +3,7 @@ import path from "path"
 
 import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"

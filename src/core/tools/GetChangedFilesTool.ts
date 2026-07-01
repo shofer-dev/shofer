@@ -8,7 +8,7 @@
  */
 
 import { Task } from "../task/Task"
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

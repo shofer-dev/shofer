@@ -118,7 +118,8 @@ vi.mock("../../../services/marketplace")
 vi.mock("../../../integrations/workspace/WorkspaceTracker")
 vi.mock("../../config/ProviderSettingsManager")
 vi.mock("../../config/CustomModesManager")
-vi.mock("../../../utils/path", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getWorkspacePath: vi.fn().mockReturnValue("/test/workspace"),
 }))
 

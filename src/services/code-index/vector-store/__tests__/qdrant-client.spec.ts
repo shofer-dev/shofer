@@ -2,11 +2,13 @@ import { QdrantClient } from "@qdrant/js-client-rest"
 import { createHash } from "crypto"
 
 import { QdrantVectorStore } from "../qdrant-client"
-import { getWorkspacePath } from "../../../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { DEFAULT_MAX_SEARCH_RESULTS, DEFAULT_SEARCH_MIN_SCORE } from "../../constants"
 import { codeIndexLog } from "@shofer/core"
 
-// Mock logging subsystem
+// Mock the logging subsystem and the path helpers (both now live in @shofer/core).
+// NOTE: a single vi.mock per module — vitest hoists them and the last would win,
+// silently dropping earlier overrides (e.g. codeIndexLog).
 vitest.mock("@shofer/core", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	codeIndexLog: {
@@ -14,6 +16,11 @@ vitest.mock("@shofer/core", async (importOriginal) => ({
 		info: vitest.fn(),
 		warn: vitest.fn(),
 	},
+	arePathsEqual: vitest.fn(),
+	getReadablePath: vitest.fn(),
+	toRelativePath: vitest.fn(),
+	getWorkspacePath: vitest.fn(),
+	getWorkspacePathForContext: vitest.fn(),
 }))
 
 /**
@@ -30,7 +37,6 @@ function make404Error(): Error {
 // Mocks
 vitest.mock("@qdrant/js-client-rest")
 vitest.mock("crypto")
-vitest.mock("../../../../utils/path")
 vitest.mock("../../../../i18n", () => ({
 	t: (key: string, params?: any) => {
 		// Mock translation function that includes parameters for testing

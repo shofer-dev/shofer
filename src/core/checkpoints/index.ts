@@ -7,7 +7,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 
-import { getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { checkGitInstalled } from "../../utils/git"
 import { t } from "../../i18n"
 

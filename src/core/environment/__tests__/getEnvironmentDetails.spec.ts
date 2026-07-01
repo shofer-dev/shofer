@@ -11,7 +11,7 @@ import { getApiMetrics } from "../../../shared/getApiMetrics"
 import { listFiles } from "../../../services/glob/list-files"
 import { TerminalRegistry } from "../../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../../integrations/terminal/Terminal"
-import { arePathsEqual } from "../../../utils/path"
+import { arePathsEqual } from "@shofer/core"
 import { FileContextTracker } from "../../context-tracking/FileContextTracker"
 import { ApiHandler } from "../../../api/index"
 import { ShoferProvider } from "../../webview/ShoferProvider"
@@ -47,7 +47,14 @@ vi.mock("../../../shared/getApiMetrics")
 vi.mock("../../../services/glob/list-files")
 vi.mock("../../../integrations/terminal/TerminalRegistry")
 vi.mock("../../../integrations/terminal/Terminal")
-vi.mock("../../../utils/path")
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	arePathsEqual: vi.fn(),
+	getReadablePath: vi.fn(),
+	toRelativePath: vi.fn(),
+	getWorkspacePath: vi.fn(),
+	getWorkspacePathForContext: vi.fn(),
+}))
 vi.mock("../../../utils/git")
 vi.mock("../../prompts/responses")
 vi.mock("../../tools/validateToolUse")

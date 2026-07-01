@@ -1,7 +1,7 @@
 import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
-import { getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { t } from "../../i18n"
 import { getHost } from "@shofer/types"
 

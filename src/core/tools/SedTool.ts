@@ -11,7 +11,7 @@ import * as fs from "fs/promises"
 import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { formatResponse } from "../prompts/responses"

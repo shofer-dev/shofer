@@ -19,7 +19,8 @@ vi.mock("child_process", () => ({
 	spawn: vi.fn(),
 }))
 
-vi.mock("../../../utils/path", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	arePathsEqual: vi.fn().mockReturnValue(false),
 }))
 

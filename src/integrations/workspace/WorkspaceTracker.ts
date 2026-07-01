@@ -3,7 +3,7 @@ import * as path from "path"
 
 import { listFiles } from "../../services/glob/list-files"
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { toRelativePath, getWorkspacePath } from "../../utils/path"
+import { toRelativePath, getWorkspacePath } from "@shofer/core"
 
 const MAX_INITIAL_FILES = 1_000
 

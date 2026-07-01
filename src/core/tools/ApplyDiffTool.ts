@@ -4,7 +4,7 @@ import fs from "fs/promises"
 import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { Task } from "../task/Task"
 import { formatResponse } from "../prompts/responses"

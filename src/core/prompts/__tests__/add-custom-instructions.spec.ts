@@ -50,7 +50,7 @@ import { ModeConfig } from "@shofer/types"
 import { SYSTEM_PROMPT } from "../system"
 import { McpHub } from "../../../services/mcp/McpHub"
 import { defaultModeSlug, modes, Mode } from "../../../shared/modes"
-import "../../../utils/path"
+import "@shofer/core"
 import { addCustomInstructions } from "../sections/custom-instructions"
 import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"
 

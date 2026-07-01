@@ -12,7 +12,7 @@ import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-
 import type { ModeConfig } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../../utils/fs"
-import { getWorkspacePath } from "../../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { GlobalFileNames } from "../../../shared/globalFileNames"
 
 import { CustomModesManager } from "../CustomModesManager"
@@ -31,7 +31,14 @@ vi.mock("vscode", () => ({
 vi.mock("fs/promises")
 
 vi.mock("../../../utils/fs")
-vi.mock("../../../utils/path")
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	arePathsEqual: vi.fn(),
+	getReadablePath: vi.fn(),
+	toRelativePath: vi.fn(),
+	getWorkspacePath: vi.fn(),
+	getWorkspacePathForContext: vi.fn(),
+}))
 
 describe("CustomModesManager - YAML Edge Cases", () => {
 	let manager: CustomModesManager

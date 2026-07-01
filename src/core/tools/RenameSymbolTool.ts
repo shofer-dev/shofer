@@ -13,7 +13,7 @@ import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getHost } from "@shofer/types"
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"

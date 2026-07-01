@@ -9,7 +9,7 @@ import * as path from "path"
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { getHost } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

@@ -1,7 +1,7 @@
 import { getHost } from "@shofer/types"
 import type { HostDisposable, HostTerminalHandle } from "@shofer/types"
 
-import { arePathsEqual } from "../../utils/path"
+import { arePathsEqual } from "@shofer/core"
 
 import { ShoferTerminal, ShoferTerminalProvider } from "./types"
 import { TerminalProcess } from "./TerminalProcess"

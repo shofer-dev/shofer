@@ -10,7 +10,7 @@ import stripBom from "strip-bom"
 import { type ModeConfig, type PromptComponent, customModesSettingsSchema, modeConfigSchema } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../utils/fs"
-import { getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { getGlobalShoferDirectory } from "../../services/shofer-config"
 import { configLog as logger } from "@shofer/core"
 import { GlobalFileNames } from "../../shared/globalFileNames"

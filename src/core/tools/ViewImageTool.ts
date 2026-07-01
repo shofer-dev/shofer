@@ -12,7 +12,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { getReadablePath } from "../../utils/path"
+import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import type { ToolUse, ToolResponse } from "../../shared/tools"
 

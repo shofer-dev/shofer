@@ -33,7 +33,8 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-vi.mock("../../../utils/path", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getWorkspacePath: vi.fn(() => "/test/workspace"),
 }))
 
@@ -439,7 +440,7 @@ describe("Checkpoint functionality", () => {
 		})
 
 		it("should disable checkpoints if workspace path is not found", async () => {
-			const pathModule = await import("../../../utils/path")
+			const pathModule = await import("@shofer/core")
 			vi.mocked(pathModule.getWorkspacePath).mockReturnValue(null as any)
 
 			mockTask.checkpointService = undefined

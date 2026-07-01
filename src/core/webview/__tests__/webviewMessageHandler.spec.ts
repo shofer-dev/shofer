@@ -153,13 +153,20 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 import * as fsUtils from "../../../utils/fs"
-import { getWorkspacePath } from "../../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../../utils/globalContext"
 import { generateErrorDiagnostics } from "../diagnosticsHandler"
 import type { ModeConfig } from "@shofer/types"
 
 vi.mock("../../../utils/fs")
-vi.mock("../../../utils/path")
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	arePathsEqual: vi.fn(),
+	getReadablePath: vi.fn(),
+	toRelativePath: vi.fn(),
+	getWorkspacePath: vi.fn(),
+	getWorkspacePathForContext: vi.fn(),
+}))
 vi.mock("../../../utils/globalContext")
 
 vi.mock("../../mentions/resolveImageMentions", () => ({

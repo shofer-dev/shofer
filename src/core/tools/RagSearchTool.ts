@@ -2,7 +2,7 @@ import path from "path"
 
 import { Task } from "../task/Task"
 import { CodeIndexManager } from "../../services/code-index/manager"
-import { getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "../prompts/responses"
 import { VectorStoreSearchResult } from "../../services/code-index/interfaces"
 import type { ToolUse } from "../../shared/tools"

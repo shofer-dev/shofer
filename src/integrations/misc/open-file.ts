@@ -2,7 +2,7 @@ import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
-import { arePathsEqual, getWorkspacePath } from "../../utils/path"
+import { arePathsEqual, getWorkspacePath } from "@shofer/core"
 import { t } from "../../i18n"
 import { fsLog } from "@shofer/core"
 

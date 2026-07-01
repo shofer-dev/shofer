@@ -3,7 +3,7 @@ import { ShoferIgnoreController } from "../../../core/ignore/ShoferIgnoreControl
 import { stat } from "fs/promises"
 import * as path from "path"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
-import { getWorkspacePathForContext } from "../../../utils/path"
+import { getWorkspacePathForContext } from "@shofer/core"
 import { scannerExtensions } from "../shared/supported-extensions"
 import * as vscode from "vscode"
 import { CodeBlock, ICodeParser, IEmbedder, IVectorStore, IDirectoryScanner } from "../interfaces"

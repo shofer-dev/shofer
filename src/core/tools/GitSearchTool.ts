@@ -1,6 +1,6 @@
 import { Task } from "../task/Task"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
-import { getWorkspacePath } from "../../utils/path"
+import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "../prompts/responses"
 import type { GitSearchResult } from "../../services/git-index/interfaces/git"
 import type { ToolUse } from "../../shared/tools"

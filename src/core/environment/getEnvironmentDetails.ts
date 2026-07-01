@@ -14,7 +14,7 @@ import { getApiMetrics } from "../../shared/getApiMetrics"
 import { listFiles } from "../../services/glob/list-files"
 import { TerminalRegistry } from "../../integrations/terminal/TerminalRegistry"
 import { Terminal } from "../../integrations/terminal/Terminal"
-import { arePathsEqual } from "../../utils/path"
+import { arePathsEqual } from "@shofer/core"
 import { formatResponse } from "../prompts/responses"
 import { getGitStatus } from "../../utils/git"
 

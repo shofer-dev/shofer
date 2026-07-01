@@ -35,7 +35,7 @@ import { TelemetryService, PostHogTelemetryClient, OtelTelemetryClient } from "@
 import { setHost, createVsCodeHost } from "./host/host-bridge"
 import { customToolRegistry, pluginRegistry } from "@shofer/core"
 
-import "./utils/path" // Necessary to have access to String.prototype.toPosix.
+import "@shofer/core" // Necessary to install String.prototype.toPosix at runtime (implementation lives in @shofer/core).
 import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
 import { setOutputChannel } from "./utils/outputChannel"
 import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
