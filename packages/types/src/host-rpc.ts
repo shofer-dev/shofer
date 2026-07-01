@@ -27,7 +27,8 @@ import type {
  * The capabilities that cross the wire are exactly the ones that are async
  * (or fire-and-forget) — which is the whole `Notifier`, `HostLsp`, and
  * `HostWorkspace` surface. The synchronous, workspace-scoped capabilities
- * (`HostConfig`, `HostEnv`, `HostFileSystem`, `HostWatcher`) stay local.
+ * (`HostConfig`, `HostEnv`, `HostFileSystem`, `HostWatcher`, `HostTerminals`)
+ * stay local — the executor runs terminals in its own workspace.
  */
 
 /** The set of host capabilities that are proxied back to the controller. */
@@ -121,5 +122,6 @@ export function createSplitHost({ local, channel }: { local: HostBridge; channel
 		config: local.config,
 		env: local.env,
 		watcher: local.watcher,
+		terminals: local.terminals,
 	}
 }

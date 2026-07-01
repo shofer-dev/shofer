@@ -6,6 +6,7 @@ import { ExitCodeDetails } from "../types"
 import { TerminalProcess } from "../TerminalProcess"
 import { Terminal } from "../Terminal"
 import { TerminalRegistry } from "../TerminalRegistry"
+import { createVsCodeHost, setHost } from "../../../host/host-bridge"
 import { createCmdCommandStream } from "./streamUtils/cmdStream"
 import { createCmdMockStream } from "./streamUtils"
 
@@ -231,6 +232,8 @@ import { TEST_PURPOSES, LARGE_OUTPUT_PARAMS, TEST_TEXT } from "./TerminalProcess
 describePlatform("TerminalProcess with CMD Command Output", () => {
 	beforeAll(() => {
 		// Initialize TerminalRegistry event handlers
+		// Route the registry through the (mocked) VS Code host before wiring handlers.
+		setHost(createVsCodeHost())
 		TerminalRegistry.initialize()
 		// Log environment info
 		console.log(`Running CMD tests on Windows ${process.env.OS} ${process.arch}`)
