@@ -91,7 +91,7 @@ export { getOutputChannel } from "./utils/outputChannel"
 
 // §12 ACP: exported from the bundle so a headless front-end (the `shofer acp` CLI
 // command) can drive the activated ShoferAPI over the Agent Client Protocol.
-export { runAcpAgentOverShoferApi } from "./acp"
+export { runAcpAgentOverShoferApi } from "@shofer/core"
 
 // This method is called when your extension is activated.
 // Your extension is activated the very first time the command is executed.

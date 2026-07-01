@@ -2,14 +2,16 @@ import type { Readable, Writable } from "node:stream"
 
 import type { ShoferAPI } from "@shofer/types"
 
-import { ShoferApiAgent } from "../server/shofer-api-agent"
+import { ShoferApiAgent } from "./shofer-api-agent.js"
 
-import { runAcpAgent } from "./run-acp-agent"
+import { runAcpAgent } from "./run-acp-agent.js"
 
-export * from "./acp-mapping"
-export * from "./acp-connection"
-export * from "./acp-agent-server"
-export { runAcpAgent } from "./run-acp-agent"
+export * from "./http-server.js"
+export { ShoferApiAgent } from "./shofer-api-agent.js"
+export * from "./acp-mapping.js"
+export * from "./acp-connection.js"
+export * from "./acp-agent-server.js"
+export { runAcpAgent } from "./run-acp-agent.js"
 
 /**
  * Run the ACP agent over a live {@link ShoferAPI} (the extension's control plane),

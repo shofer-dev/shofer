@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 
-import { JsonRpcPeer, type JsonRpcMessage } from "../acp-connection"
+import { JsonRpcPeer, type JsonRpcMessage } from "../acp-connection.js"
 
 function makePeer() {
 	const out: JsonRpcMessage[] = []

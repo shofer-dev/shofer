@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events"
 
 import { ShoferEventName, type ShoferAPI } from "@shofer/types"
 
-import { ShoferApiAgent } from "../shofer-api-agent"
+import { ShoferApiAgent } from "../shofer-api-agent.js"
 
 /**
  * §11 live adapter — maps the transport's AgentApi onto the in-process ShoferAPI.
@@ -24,21 +24,24 @@ describe("ShoferApiAgent (§11)", () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api)
 		expect(await agent.createTask({ prompt: "hi" })).toEqual({ taskId: "task:hi" })
-		expect((api as any).startNewTask).toHaveBeenCalledWith({ text: "hi", taskId: undefined })
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
+			text: "hi",
+			taskId: undefined,
+		})
 	})
 
 	it("sendMessage resumes the addressed task then sends", async () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api)
 		await agent.sendMessage("t1", "go")
-		expect((api as any).resumeTask).toHaveBeenCalledWith("t1")
-		expect((api as any).sendMessage).toHaveBeenCalledWith("go")
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).resumeTask).toHaveBeenCalledWith("t1")
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).sendMessage).toHaveBeenCalledWith("go")
 	})
 
 	it("cancelTask cancels the current task", async () => {
 		const api = makeApi()
 		await new ShoferApiAgent(api).cancelTask("t1")
-		expect((api as any).cancelCurrentTask).toHaveBeenCalled()
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).cancelCurrentTask).toHaveBeenCalled()
 	})
 
 	it("subscribe forwards ShoferAPI events and unsubscribes", () => {

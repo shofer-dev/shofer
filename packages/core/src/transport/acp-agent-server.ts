@@ -12,15 +12,15 @@
  * events and reconciled with the real event stream in one place.
  */
 
-import type { AgentApi, ServerEvent } from "../server/http-server"
+import type { AgentApi, ServerEvent } from "@shofer/types"
 
-import { type JsonRpcPeer } from "./acp-connection"
+import { type JsonRpcPeer } from "./acp-connection.js"
 import {
 	type ShoferStreamEvent,
 	acpSessionModeToShoferMode,
 	shoferModeToAcpSessionMode,
 	toAcpSessionUpdate,
-} from "./acp-mapping"
+} from "./acp-mapping.js"
 
 /** ACP protocol version this agent implements. */
 export const ACP_PROTOCOL_VERSION = 1
@@ -83,7 +83,7 @@ export class AcpAgentServer {
 		this.getEventTaskId = opts.getEventTaskId ?? defaultGetEventTaskId
 		this.toStreamEvent = opts.toStreamEvent ?? defaultToStreamEvent
 
-		this.peer.onRequest("initialize", (p) => this.initialize(p))
+		this.peer.onRequest("initialize", () => this.initialize())
 		this.peer.onRequest("session/new", () => this.newSession())
 		this.peer.onRequest("session/prompt", (p) => this.prompt(p))
 		this.peer.onRequest("session/set_mode", (p) => this.setMode(p))
@@ -96,7 +96,7 @@ export class AcpAgentServer {
 		this.unsubscribe()
 	}
 
-	private initialize(_params: unknown): unknown {
+	private initialize(): unknown {
 		return {
 			protocolVersion: ACP_PROTOCOL_VERSION,
 			agentVersion: this.agentVersion,

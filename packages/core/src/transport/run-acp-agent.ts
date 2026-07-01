@@ -1,10 +1,10 @@
 import * as readline from "node:readline"
 import type { Readable, Writable } from "node:stream"
 
-import type { AgentApi } from "../server/http-server"
+import type { AgentApi } from "@shofer/types"
 
-import { JsonRpcPeer, type JsonRpcMessage } from "./acp-connection"
-import { AcpAgentServer } from "./acp-agent-server"
+import { JsonRpcPeer, type JsonRpcMessage } from "./acp-connection.js"
+import { AcpAgentServer } from "./acp-agent-server.js"
 
 /**
  * Run the ACP agent over a pair of streams (stdio for the `shofer acp` entrypoint,

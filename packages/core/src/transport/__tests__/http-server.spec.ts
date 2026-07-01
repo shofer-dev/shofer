@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { IncomingMessage, ServerResponse } from "node:http"
 
-import { createRequestHandler, type AgentApi, type ServerEvent } from "../http-server"
+import { createRequestHandler, type AgentApi, type ServerEvent } from "../http-server.js"
 
 /**
  * §11 HTTP/SSE transport. Drives the request handler with mock req/res (no

@@ -6,7 +6,7 @@ import {
 	shoferModeToAcpSessionMode,
 	toAcpPermissionOutcome,
 	toAcpSessionUpdate,
-} from "../acp-mapping"
+} from "../acp-mapping.js"
 
 /**
  * §12 ACP mapping — the pure shofer↔ACP translation that backs the (SDK-wired)

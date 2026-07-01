@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
 
-import type { AgentApi, ServerEvent } from "../../server/http-server"
-import { JsonRpcPeer, type JsonRpcMessage } from "../acp-connection"
-import { AcpAgentServer } from "../acp-agent-server"
+import type { AgentApi, ServerEvent } from "@shofer/types"
+import { JsonRpcPeer, type JsonRpcMessage } from "../acp-connection.js"
+import { AcpAgentServer } from "../acp-agent-server.js"
 
 /** A mock AgentApi whose event stream the test drives directly. */
 function makeApi() {
@@ -28,7 +28,9 @@ function makeServer() {
 }
 
 const reply = (out: JsonRpcMessage[], id: number) =>
-	out.find((m) => (m as { id?: number }).id === id) as { result?: any } | undefined
+	out.find((m) => (m as { id?: number }).id === id) as
+		| { result?: { sessionId?: string; stopReason?: string; protocolVersion?: number; agentVersion?: string } }
+		| undefined
 
 describe("AcpAgentServer", () => {
 	it("initialize returns the protocol version + agent version", async () => {
@@ -40,13 +42,13 @@ describe("AcpAgentServer", () => {
 	it("session/new allocates a session id", async () => {
 		const { peer, out } = makeServer()
 		await peer.receive({ jsonrpc: "2.0", id: 1, method: "session/new", params: {} })
-		expect(reply(out, 1)?.result.sessionId).toMatch(/^sess-/)
+		expect(reply(out, 1)?.result?.sessionId).toMatch(/^sess-/)
 	})
 
 	it("session/prompt creates a task, streams updates, and resolves on TaskCompleted", async () => {
 		const { peer, out, api, emit } = makeServer()
 		await peer.receive({ jsonrpc: "2.0", id: 1, method: "session/new", params: {} })
-		const sessionId = reply(out, 1)!.result.sessionId
+		const sessionId = reply(out, 1)!.result!.sessionId
 
 		// prompt is a long-lived request; don't await it until the turn ends.
 		const prompted = peer.receive({
@@ -77,7 +79,7 @@ describe("AcpAgentServer", () => {
 	it("session/cancel cancels the session's task", async () => {
 		const { peer, out, api, emit } = makeServer()
 		await peer.receive({ jsonrpc: "2.0", id: 1, method: "session/new", params: {} })
-		const sessionId = reply(out, 1)!.result.sessionId
+		const sessionId = reply(out, 1)!.result!.sessionId
 		const prompted = peer.receive({
 			jsonrpc: "2.0",
 			id: 2,

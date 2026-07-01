@@ -1,6 +1,6 @@
 import http from "node:http"
 
-import type { AgentApi, ServerEvent } from "@shofer/types"
+import type { AgentApi } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -90,7 +90,8 @@ export function createRequestHandler(api: AgentApi): (req: http.IncomingMessage,
 
 		const taskMatch = path.match(new RegExp(`^${base}/task/([^/]+)/(message|cancel)$`))
 		if (method === "POST" && taskMatch) {
-			const [, taskId, action] = taskMatch
+			const taskId = taskMatch[1]!
+			const action = taskMatch[2]!
 			if (action === "message") {
 				const body = await readJson(req)
 				if (typeof body.message !== "string") return send(res, 400, { error: "message is required" })
