@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const RENAME_SYMBOL_DESCRIPTION = `Request to rename a symbol at a specific position. This tool uses the language server to rename the symbol and all its references across the codebase.
 

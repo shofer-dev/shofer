@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CREATE_DIRECTORY_DESCRIPTION = `Request to create a new directory. This tool creates a directory at the specified path, including any necessary parent directories.
 

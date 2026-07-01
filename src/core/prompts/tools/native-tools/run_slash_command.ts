@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const RUN_SLASH_COMMAND_DESCRIPTION = `Execute a slash command to get specific instructions or content. Slash commands are predefined templates that provide detailed guidance for common tasks.`
 

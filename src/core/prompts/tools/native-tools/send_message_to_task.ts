@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const SEND_MESSAGE_TO_TASK_DESCRIPTION = `Send a message to a peer task sharing the same root task. Two modes: async (fire-and-forget, wait=false) and sync (blocking with mandatory timeout, wait=true). The caller and the target must share a root task (the root/parent task can message any task in its tree; sub-tasks require knownPeers). Discover the target's task ID via list_background_tasks(scope="peers").
 

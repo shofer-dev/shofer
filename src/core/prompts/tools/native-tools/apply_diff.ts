@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const APPLY_DIFF_DESCRIPTION = `Apply precise, targeted modifications to an existing file using one or more search/replace blocks. This tool is for surgical edits only; the SEARCH content is matched via normalized Levenshtein distance (default threshold: 100%, meaning exact match). Use read_file to get the current file content before crafting SEARCH blocks — stale line numbers are the #1 cause of failures. Include all independent changes in ONE apply_diff call with multiple SEARCH/REPLACE blocks. Each block is matched independently — the engine searches around :start_line: and adjusts for prior diffs within the call. Use the ORIGINAL line numbers from before any edits.
 

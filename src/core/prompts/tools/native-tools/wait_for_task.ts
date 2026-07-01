@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const WAIT_FOR_TASK_DESCRIPTION = `Block until one or more background child tasks (started with new_task using is_background=true) or peer tasks sharing your root task complete, then return their results. Use the \`wait\` parameter to control whether to wait for ALL tasks or just ANY one of them. The call is event-driven — it does not poll. Use this after starting background tasks when you need their results before continuing.`
 

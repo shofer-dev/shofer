@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const GIT_SEARCH_DESCRIPTION = `Search git commit history (commit messages only — not diffs, not file contents) using semantic search. This allows discovering relevant commit context — who changed what, when, and why — by searching by meaning rather than exact keywords.
 

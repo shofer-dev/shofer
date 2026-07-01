@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const SED_DESCRIPTION = `Request to perform regex find-and-replace on a workspace file using JavaScript's String.replace() with a RegExp pattern. IMPORTANT: The '.' character in regex matches ANY character (letter, slash, punctuation, etc.), not just a literal period. To match a literal dot/period, use \\. or [.]. This is the most common source of unexpected matches.
 

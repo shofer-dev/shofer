@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const SLEEP_DESCRIPTION = `Pause execution for a specified number of seconds. Use when you need to wait for a fixed amount of time — e.g. for an external process to make progress or to respect rate limits. Maximum duration is 300 seconds (5 minutes). Fractional values (e.g., 0.5) are supported. The sleep is interruptible — if the user cancels the task, the sleep terminates immediately.
 

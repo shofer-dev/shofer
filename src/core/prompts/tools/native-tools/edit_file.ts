@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const EDIT_FILE_DESCRIPTION = `Use this tool to replace text in an existing file, or create a new file.
 

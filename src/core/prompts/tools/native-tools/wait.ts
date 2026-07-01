@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const WAIT_DESCRIPTION = `Wait for an incoming MESSAGE from another task. Call this tool WHENEVER you have nothing to do right now except wait for a message, reply, or signal to arrive from another task, a peer, or the orchestrator.
 

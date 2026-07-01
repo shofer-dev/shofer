@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CHECK_MCP_CALL_STATUS_DESCRIPTION = `Check the status of an async MCP tool call previously started with call_mcp_tool_async. Non-blocking — returns immediately with the current status (running, completed, error, cancelled). When the call has finished, the response also includes the tool's result or error message.`
 

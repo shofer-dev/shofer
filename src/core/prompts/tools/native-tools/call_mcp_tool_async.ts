@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CALL_MCP_TOOL_ASYNC_DESCRIPTION = `Call an MCP server tool asynchronously (fire-and-forget). Returns immediately with a call_id; use check_mcp_call_status to poll or wait_for_mcp_call to block. Prefer this over use_mcp_tool / mcp--<server>--<tool> for long-running calls or when fanning out multiple independent MCP calls in parallel.`
 

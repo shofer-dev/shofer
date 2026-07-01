@@ -12,7 +12,7 @@
  */
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const DESCRIPTION = `Search the codebase for symbols (functions, classes, variables, interfaces, etc.) using the Language Server Protocol workspace symbol provider. This is a structural/symbol-aware search that finds declarations and definitions matching the query.
 

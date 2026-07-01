@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const FILE_TOOL_DESCRIPTION = `Filesystem operations on workspace files. Use this instead of \`execute_command\` with \`rm\`/\`mv\` so the operation is captured in the file-changes panel and is reversible.
 

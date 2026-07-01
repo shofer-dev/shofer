@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const GET_PROJECT_SETUP_INFO_DESCRIPTION = `Request to get information about the project setup, including detected languages, frameworks, build systems, and package managers. This tool analyzes the workspace to determine the project configuration.
 

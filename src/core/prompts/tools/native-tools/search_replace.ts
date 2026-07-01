@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const SEARCH_REPLACE_DESCRIPTION = `Use this tool to propose a search and replace operation on an existing file.
 

@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CREATE_NEW_WORKSPACE_DESCRIPTION = `Request to create a new workspace/project directory structure. This tool creates a new directory with optional subdirectories.
 

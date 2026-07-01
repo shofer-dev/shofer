@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const FIND_FILES_DESCRIPTION = `Request to find files matching a glob pattern. This tool searches for files by name pattern across the workspace, useful for locating specific file types or files in specific directories.
 

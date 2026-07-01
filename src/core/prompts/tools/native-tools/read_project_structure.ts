@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const READ_PROJECT_STRUCTURE_DESCRIPTION = `Request to read the project structure as a tree view. This tool provides an overview of the workspace directory structure, useful for understanding project organization.
 

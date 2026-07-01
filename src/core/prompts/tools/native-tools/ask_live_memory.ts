@@ -1,7 +1,7 @@
 import { parametersSchema as z } from "@shofer/types"
 import { DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC, DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const ASK_LIVE_MEMORY_DESCRIPTION = `Ask a question to the persistent live memory agent that maintains long-term context about the codebase. The live memory agent runs on a separate, cost-optimized model and accumulates codebase knowledge over time.
 

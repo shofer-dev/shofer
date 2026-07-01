@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const WAIT_FOR_MCP_CALL_DESCRIPTION = `Block until one or more async MCP tool calls (started with call_mcp_tool_async) complete, then return their results. Use the \`wait\` parameter to control whether to wait for ALL calls or just ANY one of them. The call is event-driven — it does not poll. Use this after starting async MCP calls when you need their results before continuing.`
 

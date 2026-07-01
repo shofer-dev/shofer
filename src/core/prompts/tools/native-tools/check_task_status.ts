@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CHECK_TASK_STATUS_DESCRIPTION = `Check the current status of a background child task that was previously started with new_task using is_background=true, or a peer task sharing your root task. Returns the task's status and, if it has completed/errored/cancelled, its result or error message. If the task is blocked waiting for clarification from you (it called ask_followup_question), the pending question is surfaced here so you can answer it via answer_subtask_question. Set include_activity to true to also see what the task is currently doing (last few tool calls or messages).`
 

@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const VIEW_IMAGE_DESCRIPTION = `Request to view an image file. This tool reads an image file and returns it for visual analysis. Supports common image formats (PNG, JPG, JPEG, GIF, BMP, SVG, WEBP).
 

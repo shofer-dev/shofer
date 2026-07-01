@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const GET_CHANGED_FILES_DESCRIPTION = `Request the list of files that Shofer has changed during the current task, along with the number of inserted and deleted lines per file.
 

@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const GET_ERRORS_DESCRIPTION = `Request to get errors and warnings from the workspace or specific files. This tool retrieves diagnostics from the language server.
 

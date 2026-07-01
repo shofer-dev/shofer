@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const CODEBASE_SEARCH_DESCRIPTION = `Find files most relevant to the search query using semantic search. Searches by meaning rather than exact text matches, but in practice the embedding model heavily weights word-level token overlap — results often match on shared keywords rather than architectural or structural relevance. By default searches entire workspace. Reuse the user's exact wording unless there's a clear reason not to — their phrasing often helps semantic search. Queries MUST be in English (translate if needed).
 

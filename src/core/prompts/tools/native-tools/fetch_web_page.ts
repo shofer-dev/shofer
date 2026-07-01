@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const FETCH_WEB_PAGE_DESCRIPTION = `Request to fetch and extract content from web pages. This tool downloads web pages and extracts their text content, removing HTML markup.
 

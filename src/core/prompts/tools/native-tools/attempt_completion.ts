@@ -1,7 +1,7 @@
 import { parametersSchema as z } from "@shofer/types"
 
 import { MAX_SUBTASK_RESULT_LENGTH } from "../../../tools/NewTaskTool"
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const ATTEMPT_COMPLETION_DESCRIPTION = `After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
 

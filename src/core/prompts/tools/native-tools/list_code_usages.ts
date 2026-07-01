@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const LIST_CODE_USAGES_DESCRIPTION = `Request to find all references/usages of a symbol at a specific position. This tool uses the language server to find all references to the symbol at the given location.
 

@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const INSERT_EDIT_DESCRIPTION = `Request to insert text at a specific position in a file. This tool inserts text at the specified line and column position.
 

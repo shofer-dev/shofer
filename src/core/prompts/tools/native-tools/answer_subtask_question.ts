@@ -1,6 +1,6 @@
 import { parametersSchema as z } from "@shofer/types"
 
-import { defineNativeTool } from "./defineNativeTool"
+import { defineNativeTool } from "@shofer/core"
 
 const ANSWER_SUBTASK_QUESTION_DESCRIPTION = `Answer a question that a background child task asked via ask_followup_question. When a background child needs clarification, its question is routed to you (the parent) instead of the user. Use this tool to provide the answer and unblock the child.`
 
