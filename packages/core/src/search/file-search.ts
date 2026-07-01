@@ -3,10 +3,14 @@ import * as path from "path"
 import * as fs from "fs"
 import * as childProcess from "child_process"
 import * as readline from "readline"
-import { byLengthAsc, Fzf } from "fzf"
-import { getBinPath } from "@shofer/core"
-import { Package } from "../../shared/package"
-import { utilLog } from "@shofer/core"
+import { Fzf } from "fzf"
+import * as fzfModule from "fzf"
+
+// fzf ships .d.ts files with extensionless re-exports that nodenext can't resolve, so the
+// `byLengthAsc` tiebreaker (a real runtime export of fzf.es.js) is pulled in via a cast.
+const byLengthAsc = (fzfModule as unknown as { byLengthAsc: never }).byLengthAsc
+import { getBinPath } from "../ripgrep/index.js"
+import { utilLog } from "../logging/subsystems.js"
 
 export type FileResult = { path: string; type: "file" | "folder"; label?: string }
 
@@ -54,7 +58,7 @@ export async function executeRipgrep({
 					}
 
 					count++
-				} catch (error) {
+				} catch {
 					// Silently ignore errors processing individual paths.
 				}
 			} else {
@@ -121,8 +125,7 @@ export async function executeRipgrepForFiles(
 	limit?: number,
 ): Promise<{ path: string; type: "file" | "folder"; label?: string }[]> {
 	// Get limit from configuration if not provided
-	const effectiveLimit =
-		limit ?? getHost().config.get<number>(Package.name, "maximumIndexedFilesForFileSearch", 10000)
+	const effectiveLimit = limit ?? getHost().config.get<number>("shofer", "maximumIndexedFilesForFileSearch", 10000)
 
 	const args = [
 		"--files",
@@ -158,24 +161,25 @@ export async function searchWorkspaceFiles(
 		}
 
 		// Create search items for all files AND directories
-		const searchItems = allItems.map((item) => ({
+		type SearchItem = { original: FileResult; searchStr: string }
+		const searchItems: SearchItem[] = allItems.map((item) => ({
 			original: item,
 			searchStr: `${item.path} ${item.label || ""}`,
 		}))
 
 		// Run fzf search on all items
 		const fzf = new Fzf(searchItems, {
-			selector: (item) => item.searchStr,
+			selector: (item: SearchItem) => item.searchStr,
 			tiebreakers: [byLengthAsc],
 			limit: limit,
 		})
 
 		// Get all matching results from fzf
-		const fzfResults = fzf.find(query).map((result) => result.item.original)
+		const fzfResults = fzf.find(query).map((result: { item: SearchItem }) => result.item.original)
 
 		// Verify types of the shortest results
 		const verifiedResults = await Promise.all(
-			fzfResults.map(async (result) => {
+			fzfResults.map(async (result: FileResult) => {
 				const fullPath = path.join(workspacePath, result.path)
 				// Verify if the path exists and is actually a directory
 				if (fs.existsSync(fullPath)) {

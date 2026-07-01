@@ -400,6 +400,9 @@ importers:
       execa:
         specifier: ^9.5.2
         version: 9.6.0
+      fzf:
+        specifier: ^0.5.2
+        version: 0.5.2
       ignore:
         specifier: ^7.0.3
         version: 7.0.5

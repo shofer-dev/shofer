@@ -9,7 +9,7 @@ import pWaitFor from "p-wait-for"
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { arePathsEqual } from "@shofer/core"
-import { executeRipgrep } from "../../services/search/file-search"
+import { executeRipgrep } from "@shofer/core"
 
 import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"

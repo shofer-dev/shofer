@@ -8,7 +8,7 @@ import { EventEmitter } from "events"
 import { simpleGit, SimpleGit } from "simple-git"
 
 import { fileExistsAtPath } from "../../../utils/fs"
-import * as fileSearch from "../../../services/search/file-search"
+import * as fileSearch from "@shofer/core"
 
 import { RepoPerTaskCheckpointService } from "../RepoPerTaskCheckpointService"
 

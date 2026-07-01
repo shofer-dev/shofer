@@ -3,12 +3,16 @@
 import type { Mock } from "vitest"
 
 // Mock dependencies - must come before imports
-vi.mock("../../../services/search/file-search")
-vi.mock("../../ignore/ShoferIgnoreController")
+// searchWorkspaceFiles + ShoferIgnoreController now live in @shofer/core. Mock only
+// searchWorkspaceFiles; keep the real ShoferIgnoreController (its prototype is spied below).
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	searchWorkspaceFiles: vi.fn(),
+}))
 
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
-import { searchWorkspaceFiles } from "../../../services/search/file-search"
+import { searchWorkspaceFiles } from "@shofer/core"
 import { ShoferIgnoreController } from "@shofer/core"
 
 const mockSearchWorkspaceFiles = searchWorkspaceFiles as Mock<typeof searchWorkspaceFiles>
