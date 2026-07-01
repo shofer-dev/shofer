@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { inspect } from "util"
 import nodeProcess from "process"
 import psTree from "ps-tree"
@@ -6,6 +5,7 @@ import psTree from "ps-tree"
 import type { ExitCodeDetails } from "./types"
 import { BaseTerminalProcess } from "./BaseTerminalProcess"
 import { Terminal } from "./Terminal"
+import { getHost } from "@shofer/types"
 import { webviewLog } from "@shofer/core"
 
 export class TerminalProcess extends BaseTerminalProcess {
@@ -108,9 +108,11 @@ export class TerminalProcess extends BaseTerminalProcess {
 		})
 
 		// Execute command
-		const defaultWindowsShellProfile = vscode.workspace
-			.getConfiguration("terminal.integrated.defaultProfile")
-			.get("windows")
+		const defaultWindowsShellProfile = getHost().config.get<string | undefined>(
+			"terminal.integrated.defaultProfile",
+			"windows",
+			undefined,
+		)
 
 		const isPowerShell =
 			process.platform === "win32" &&
