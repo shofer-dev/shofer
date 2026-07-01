@@ -337,30 +337,47 @@ level** — that sweep is finished (`Task` and its foundation route through `get
 and `TypedEmitter`; see §8). What remains is structural: a file in a package cannot
 import from `src/`, so before `Task` can move, its transitive deps must live somewhere
 the package can link. `Task`'s non-portable dependencies are a bounded, enumerable set
-that splits three ways:
+that splits three ways, and most are now resolved:
 
-- **Keystone — relocate shared foundation into a package.** Modules like
-  `utils/logging` (~114 consumers), `utils/fs`, `utils/path`, and `services/search`
-  are vscode-free but still live in `src/`. `services/blob-store` and
-  `services/checkpoints` (both portable) transitively need them, so the first move is
-  to lift this foundation into `@shofer/core` (or a lower shared package) and repoint
-  importers. This is mechanical but wide — the ripple, not any coupling, is the cost.
-- **Portable → move into `@shofer/core`** once the keystone lands (already vscode-free):
-  `services/blob-store`, `services/checkpoints`.
-- **VS Code-coupled → abstract behind a Category-I-style interface** (then the VS Code
-  impl stays in the extension adapter): `integrations/terminal` (TerminalRegistry),
-  `integrations/editor/DiffViewProvider`, and `services/mcp/McpHub`. (`export-markdown`
-  is no longer a seam: `Task` imports only its pure formatters — the save-dialog I/O is
-  called solely from `ShoferProvider`, which stays Category II.)
+- **Keystone — relocate shared foundation into a package.** ✅ `utils/logging` (~113
+  consumers) relocated into `@shofer/core`; `utils/path` (~50 consumers, incl. its
+  `String.prototype.toPosix` global) is in flight. `utils/fs` and `services/search`
+  remain. This is mechanical but wide — the ripple, not any coupling, is the cost.
+- **Portable → move into `@shofer/core`** (already vscode-free): ✅ `services/blob-store`
+  moved. `services/checkpoints` remains (needs `utils/path` + `services/search` first).
+- **VS Code-coupled → abstract behind a Category-I-style interface** (VS Code impl stays
+  in the extension adapter): ✅ **all three done** — `services/mcp/McpHub` routes through
+  `getHost()` (config/watcher/fs + a new `onDidChangeWorkspaceFolders` capability);
+  `integrations/editor/DiffViewProvider` sits behind the vscode-free `DiffView` interface,
+  built via a `getHost().createDiffView(cwd, task)` factory (the provider `implements
+DiffView` and stays Category II); `integrations/terminal/TerminalRegistry` is vscode-free
+  via the `HostTerminals` capability (shell-execution events routed through the host).
+  (`export-markdown` was never really a seam: `Task` imports only its pure formatters —
+  the save-dialog I/O is called solely from `ShoferProvider`, which stays Category II.)
 
-So the carve-out plan is: (1) relocate the shared foundation (keystone) and move the
-portable services; (2) give the three VS-Code-coupled subsystems narrow interfaces (the
-same treatment `HostBridge` gave the editor/fs/lsp surface) with a VS Code adapter on
-the Category II side; (3) move `Task` + tools + prompts + dispatch, now depending only
-on `@shofer/types` + those interfaces. Each of the three abstractions is a self-contained
-unit of work comparable to a single `HostBridge` seam. Completing it is what lets
-initiatives 10–12 run the core fully headless — a non-VS-Code front-end links
-`@shofer/core` and supplies its own Category II adapter.
+**Terminal is Category I, not a Category II subsystem.** Making `TerminalRegistry`
+vscode-free was the enabler, but the terminal/command-execution subsystem itself
+_belongs in the portable core_: running a shell command is an OS/filesystem operation,
+and across distributed executors that environment is the same — an executor runs
+commands in its own workspace exactly like the local host does. The codebase already
+encodes this with the `ShoferTerminalProvider = "vscode" | "execa"` split: **`execa` is
+the portable Category I backend**, and the VS Code _integrated_ terminal (with its
+shell-integration UI + events) is one optional Category II backend, plugged in via the
+new `HostTerminals` capability. So the follow-up is to move the registry + process
+management + the `execa` provider into `@shofer/core` (like `blob-store`), leaving only
+the VS Code terminal backend in the adapter — injected through the host so the core
+registry no longer statically imports the vscode `Terminal` class (the one remaining
+class-level edge the seam left behind). The same is _not_ true of the diff view: a live
+diff editor is intrinsically a front-end presentation, so `DiffView` stays a Category I
+_interface_ with the whole implementation Category II.
+
+So the carve-out plan is: (1) ✅ abstract the three VS-Code-coupled subsystems; (2)
+relocate the shared foundation (keystone, in progress), move the portable services, and
+lift the terminal core (registry + `execa`) into `@shofer/core`; (3) move `Task` + tools
+
+- prompts + dispatch, now depending only on `@shofer/types` + those interfaces.
+  Completing it is what lets initiatives 10–12 run the core fully headless — a non-VS-Code
+  front-end links `@shofer/core` and supplies its own Category II adapter.
 
 ### Front-end adapters beyond VS Code
 
