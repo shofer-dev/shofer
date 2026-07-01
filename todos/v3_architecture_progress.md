@@ -283,8 +283,17 @@ Status key: ✅ done · 🚧 in progress · ⬜ not started.
       mode; stream events → `sessionUpdate` variants with passthrough fallback) +
       `ACP_METHOD_MAP` documenting the full agent method set. 5 tests; doc
       `docs/acp.md`. Reuses §3 (events), §4 (permissions/modes), §6 (cancel).
-    - ⬜ Add `@agentclientprotocol/sdk`, implement the service over it, ship a
-      `shofer acp` stdio entrypoint. Gated on §9 (agent must run vscode-free).
+    - ✅ ACP adopted end-to-end: `acp-connection.ts` (JSON-RPC 2.0 over NDJSON),
+      `acp-agent-server.ts` (`AcpAgentServer` — initialize/session.new/session.prompt/
+      session.set_mode/session.cancel over the transport-agnostic `AgentApi` via the
+      mapping; event stream → `session/update`; turn resolves on Task terminal events),
+      `runAcpAgentOverShoferApi` (bundle export → `ShoferApiAgent`), and a `shofer acp`
+      CLI entrypoint (headless host, `disableOutput` to keep stdout clean). 19 tests;
+      typecheck/lint/build (CLI + extension) green. Wire framing implemented directly
+      (SDK absent from the registry), swappable for `@zed-industries/agent-client-protocol`.
+    - ⬜ Remaining: swap in the upstream SDK when available; wire
+      `session/request_permission` onto the approval flow; validate against a live ACP
+      client (Zed).
 
 ## Phase 5 — Horizontal scaling
 
