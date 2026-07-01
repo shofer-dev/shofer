@@ -2,7 +2,7 @@ import * as childProcess from "child_process"
 import * as path from "path"
 import * as readline from "readline"
 
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
 
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 import { fileExistsAtPath } from "../../utils/fs"
@@ -160,7 +160,7 @@ export async function regexGrepSearch(
 	filePattern?: string,
 	shoferIgnoreController?: ShoferIgnoreController,
 ): Promise<string> {
-	const vscodeAppRoot = vscode.env.appRoot
+	const vscodeAppRoot = getHost().env.appRoot
 	const rgPath = await getBinPath(vscodeAppRoot)
 
 	if (!rgPath) {

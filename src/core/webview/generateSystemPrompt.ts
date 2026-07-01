@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { getHost } from "@shofer/types"
 import { WebviewMessage } from "../../shared/WebviewMessage"
 import { defaultModeSlug } from "../../shared/modes"
 import { buildApiHandler } from "../../api"
@@ -58,9 +58,7 @@ export const generateSystemPrompt = async (provider: ShoferProvider, message: We
 			todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
 			useAgentRules: useAgentRules ?? true,
 			enableSubfolderRules: enableSubfolderRules ?? false,
-			newTaskRequireTodos: vscode.workspace
-				.getConfiguration(Package.name)
-				.get<boolean>("newTaskRequireTodos", false),
+			newTaskRequireTodos: getHost().config.get<boolean>(Package.name, "newTaskRequireTodos", false),
 			isStealthModel: modelInfo?.isStealthModel,
 		},
 		undefined, // todoList
