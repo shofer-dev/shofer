@@ -23,7 +23,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { createHash } from "crypto"
 
-import { utilLog } from "@shofer/core"
+import { utilLog } from "../logging/subsystems.js"
 
 /** Default inline cap (bytes). Overridable via `shoferBlobCapBytes` setting. */
 export const DEFAULT_BLOB_CAP_BYTES = 2048
@@ -55,7 +55,7 @@ export function extractBlobRefs(text: string): BlobRef[] {
 	const refs: BlobRef[] = []
 	BLOB_REF_REGEX.lastIndex = 0
 	for (const match of text.matchAll(BLOB_REF_REGEX)) {
-		refs.push({ sha256: match[1], bytes: Number(match[2]) })
+		refs.push({ sha256: match[1]!, bytes: Number(match[2]) })
 	}
 	return refs
 }

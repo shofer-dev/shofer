@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 
-import { BlobStore, BLOB_REF_REGEX, extractBlobRefs, formatBlobRef } from "../BlobStore"
+import { BlobStore, BLOB_REF_REGEX, extractBlobRefs, formatBlobRef } from "../BlobStore.js"
 
 let tmpDir: string
 
@@ -49,8 +49,8 @@ describe("BlobStore", () => {
 		expect(out).toMatch(BLOB_REF_REGEX)
 		const refs = extractBlobRefs(out)
 		expect(refs).toHaveLength(1)
-		expect(refs[0].bytes).toBe(5000)
-		expect(await store.read(refs[0].sha256)).toBe(big)
+		expect(refs[0]!.bytes).toBe(5000)
+		expect(await store.read(refs[0]!.sha256)).toBe(big)
 	})
 
 	it("externalizeIfOverCap does not re-wrap an existing single ref", async () => {

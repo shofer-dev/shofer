@@ -97,7 +97,7 @@ import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/
 import { getWorkspacePath } from "../../utils/path"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "../../services/blob-store/BlobStore"
+import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "@shofer/core"
 
 // prompts
 import { formatResponse } from "../prompts/responses"
