@@ -6,7 +6,7 @@ import { promisify } from "util"
 
 import type { GitRepositoryInfo, GitCommit } from "@shofer/types"
 
-import { truncateOutput } from "../integrations/misc/extract-text"
+import { truncateOutput } from "@shofer/core"
 import { gitLog } from "@shofer/core"
 
 const execAsync = promisify(exec)

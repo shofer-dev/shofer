@@ -1,4 +1,4 @@
-import { truncateOutput, applyRunLengthEncoding } from "../misc/extract-text"
+import { truncateOutput, applyRunLengthEncoding } from "@shofer/core"
 
 import { webviewLog } from "@shofer/core"
 import type {

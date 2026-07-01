@@ -2,11 +2,10 @@ import {
 	addLineNumbers,
 	everyLineHasLineNumbers,
 	stripLineNumbers,
-	truncateOutput,
-	applyRunLengthEncoding,
 	processCarriageReturns,
 	processBackspaces,
 } from "../extract-text"
+import { truncateOutput, applyRunLengthEncoding } from "@shofer/core"
 
 describe("addLineNumbers", () => {
 	it("should add line numbers starting from 1 by default", () => {

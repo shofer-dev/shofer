@@ -15,7 +15,7 @@ import {
 	convertGitUrlToHttps,
 	getGitStatus,
 } from "../git"
-import { truncateOutput } from "../../integrations/misc/extract-text"
+import { truncateOutput } from "@shofer/core"
 
 type ExecFunction = (
 	command: string,
@@ -70,8 +70,9 @@ vitest.mock("util", () => ({
 	}),
 }))
 
-// Mock extract-text
-vitest.mock("../../integrations/misc/extract-text", () => ({
+// truncateOutput now lives in @shofer/core; mock it there (keep the rest of the barrel).
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	truncateOutput: vitest.fn((text) => text),
 }))
 
