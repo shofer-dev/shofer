@@ -7,7 +7,8 @@ import ollamaModelsData from "./fixtures/ollama-model-details.json"
 vi.mock("axios")
 
 // Mock the subsystem logger so spy assertions work
-vi.mock("../../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 const mockedAxios = axios as any

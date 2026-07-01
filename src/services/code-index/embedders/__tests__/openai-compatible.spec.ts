@@ -2,10 +2,11 @@ import type { MockedClass, MockedFunction } from "vitest"
 import { OpenAI } from "openai"
 import { OpenAICompatibleEmbedder } from "../openai-compatible"
 import { MAX_ITEM_TOKENS, INITIAL_RETRY_DELAY_MS } from "../../constants"
-import { codeIndexLog } from "../../../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 // Mock logging subsystem
-vitest.mock("../../../../utils/logging/subsystems", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	codeIndexLog: {
 		error: vitest.fn(),
 		info: vitest.fn(),

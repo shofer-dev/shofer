@@ -5,7 +5,7 @@ import * as vscode from "vscode"
 import { isBinaryFile } from "isbinaryfile"
 
 import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 import { getCommitInfo, getWorkingState } from "../../utils/git"
 
@@ -20,7 +20,7 @@ import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController"
 import { getCommand, type Command } from "../../services/command/commands"
 import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
 import type { SkillContent } from "../../shared/skills"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export async function openMention(cwd: string, mention?: string): Promise<void> {
 	if (!mention) {

@@ -12,7 +12,7 @@
 
 import * as vscode from "vscode"
 import { Package } from "../shared/package"
-import { utilLog } from "./logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 /**
  * Proxy configuration state

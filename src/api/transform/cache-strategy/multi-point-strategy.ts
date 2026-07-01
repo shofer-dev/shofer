@@ -1,7 +1,7 @@
 import { SystemContentBlock } from "@aws-sdk/client-bedrock-runtime"
 import { CacheStrategy } from "./base-strategy"
 import { CacheResult, CachePointPlacement } from "./types"
-import { apiLog as logger } from "../../../utils/logging/subsystems"
+import { apiLog as logger } from "@shofer/core"
 
 /**
  * Strategy for handling multiple cache points.

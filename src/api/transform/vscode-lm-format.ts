@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import * as vscode from "vscode"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 /**
  * Safely converts a value into a plain object.

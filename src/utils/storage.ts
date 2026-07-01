@@ -6,7 +6,7 @@ import { constants as fsConstants } from "fs"
 
 import { Package } from "../shared/package"
 import { t } from "../i18n"
-import { fsLog } from "./logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 /**
  * Gets the base storage path for conversations

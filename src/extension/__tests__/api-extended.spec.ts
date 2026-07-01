@@ -6,7 +6,8 @@ import { ShoferProvider } from "../../core/webview/ShoferProvider"
 
 vi.mock("vscode")
 vi.mock("../../core/webview/ShoferProvider")
-vi.mock("../../utils/logging", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getRecentLogs: vi.fn(() => "2026-01-01 INFO  log line 1\n2026-01-01 WARN  log line 2"),
 	getLogLevel: vi.fn(() => "info"),
 	getLogKnownCategories: vi.fn(() => ["Task", "Webview"]),

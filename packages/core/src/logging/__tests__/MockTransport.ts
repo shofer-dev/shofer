@@ -1,6 +1,6 @@
 // __tests__/MockTransport.ts
-import { CompactTransport } from "../CompactTransport"
-import type { CompactLogEntry, CompactTransportConfig } from "../types"
+import { CompactTransport } from "../CompactTransport.js"
+import type { CompactLogEntry, CompactTransportConfig } from "../types.js"
 
 const TEST_CONFIG: CompactTransportConfig = {
 	level: "debug",

@@ -1,6 +1,6 @@
 import { truncateOutput, applyRunLengthEncoding } from "../misc/extract-text"
 
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 import type {
 	ShoferTerminalProvider,
 	ShoferTerminal,

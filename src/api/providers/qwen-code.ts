@@ -14,7 +14,7 @@ import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 
 import { BaseProvider } from "./base-provider"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 
 const QWEN_OAUTH_BASE_URL = "https://chat.qwen.ai"

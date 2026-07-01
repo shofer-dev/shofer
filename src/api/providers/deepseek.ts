@@ -9,7 +9,7 @@ import {
 } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"

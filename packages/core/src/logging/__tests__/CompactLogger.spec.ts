@@ -1,7 +1,7 @@
 // npx vitest utils/logging/__tests__/CompactLogger.spec.ts
 
-import { CompactLogger } from "../CompactLogger"
-import { MockTransport } from "./MockTransport"
+import { CompactLogger } from "../CompactLogger.js"
+import { MockTransport } from "./MockTransport.js"
 
 describe("CompactLogger", () => {
 	let transport: MockTransport
@@ -28,7 +28,7 @@ describe("CompactLogger", () => {
 				expect(transport.entries[0]).toMatchObject({
 					l: level,
 				})
-				expect(transport.entries[0].m).toContain(message)
+				expect(transport.entries[0]!.m).toContain(message)
 			})
 		})
 	})
@@ -42,7 +42,7 @@ describe("CompactLogger", () => {
 				l: "error",
 				m: "test error",
 			})
-			expect(transport.entries[0].d).toMatchObject({
+			expect(transport.entries[0]!.d).toMatchObject({
 				error: {
 					name: "Error",
 					message: "test error",
@@ -64,9 +64,9 @@ describe("CompactLogger", () => {
 		test("error with string and extra args appends them", () => {
 			logger.error("something failed", new Error("details"))
 
-			expect(transport.entries[0].l).toBe("error")
-			expect(transport.entries[0].m).toContain("something failed")
-			expect(transport.entries[0].m).toContain("details")
+			expect(transport.entries[0]!.l).toBe("error")
+			expect(transport.entries[0]!.m).toContain("something failed")
+			expect(transport.entries[0]!.m).toContain("details")
 		})
 	})
 
@@ -78,7 +78,7 @@ describe("CompactLogger", () => {
 			childLogger.info("test message")
 
 			// child.ctx overrides parent.ctx
-			expect(transport.entries[0].c).toBe("child")
+			expect(transport.entries[0]!.c).toBe("child")
 		})
 
 		test("child logger respects parent context when not overridden", () => {
@@ -87,7 +87,7 @@ describe("CompactLogger", () => {
 
 			childLogger.info("test message")
 
-			expect(transport.entries[0].c).toBe("parent")
+			expect(transport.entries[0]!.c).toBe("parent")
 		})
 
 		test("registers ctx as a known category at creation, before emitting", () => {
@@ -134,23 +134,23 @@ describe("CompactLogger", () => {
 			vi.setSystemTime(now + 10)
 			logger.info("second")
 
-			expect(transport.entries[0].t).toBeLessThan(transport.entries[1].t)
+			expect(transport.entries[0]!.t).toBeLessThan(transport.entries[1]!.t)
 		})
 	})
 
 	describe("Extra Arguments", () => {
 		test("appends extra string arguments to message", () => {
 			logger.info("hello", "world", 42)
-			expect(transport.entries[0].m).toContain("hello")
-			expect(transport.entries[0].m).toContain("world")
-			expect(transport.entries[0].m).toContain("42")
+			expect(transport.entries[0]!.m).toContain("hello")
+			expect(transport.entries[0]!.m).toContain("world")
+			expect(transport.entries[0]!.m).toContain("42")
 		})
 
 		test("formats Error extra args with message and stack", () => {
 			const err = new Error("boom")
 			logger.warn("warning:", err)
-			expect(transport.entries[0].m).toContain("warning:")
-			expect(transport.entries[0].m).toContain("boom")
+			expect(transport.entries[0]!.m).toContain("warning:")
+			expect(transport.entries[0]!.m).toContain("boom")
 		})
 	})
 

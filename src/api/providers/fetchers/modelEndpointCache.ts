@@ -14,7 +14,7 @@ import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 import { getModels } from "./modelCache"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
 

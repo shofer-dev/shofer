@@ -15,7 +15,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import { parsePatch, ParseError, processAllHunks } from "./apply-patch"
 import type { ApplyPatchFileChange } from "./apply-patch"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 interface ApplyPatchParams {
 	patch: string

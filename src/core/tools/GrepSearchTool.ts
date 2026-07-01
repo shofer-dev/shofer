@@ -35,7 +35,7 @@ import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 interface GrepSearchParams {
 	path: string

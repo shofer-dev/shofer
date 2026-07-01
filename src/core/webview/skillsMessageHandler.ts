@@ -5,7 +5,7 @@ import type { SkillMetadata, WebviewMessage } from "@shofer/types"
 import type { ShoferProvider } from "./ShoferProvider"
 import { openFile } from "../../integrations/misc/open-file"
 import { t } from "../../i18n"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 type SkillSource = SkillMetadata["source"]
 

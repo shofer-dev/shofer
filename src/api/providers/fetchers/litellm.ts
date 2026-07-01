@@ -3,7 +3,7 @@ import axios from "axios"
 import type { ModelRecord } from "@shofer/types"
 
 import { DEFAULT_HEADERS } from "../constants"
-import { apiLog } from "../../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 /**
  * Fetches available models from a LiteLLM server
  *

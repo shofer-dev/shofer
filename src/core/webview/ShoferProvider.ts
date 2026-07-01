@@ -111,8 +111,8 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
-import { ipcLog, webviewLog, scrollLog } from "../../utils/logging/subsystems"
-import { addTaskLogListener } from "../../utils/logging"
+import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
+import { addTaskLogListener } from "@shofer/core"
 import { time } from "../../utils/perf"
 
 /**
@@ -3948,7 +3948,7 @@ export class ShoferProvider
 			logCategories: logCategories ?? undefined,
 			logCategoriesKnown: (() => {
 				try {
-					const { getLogKnownCategories } = require("../../utils/logging")
+					const { getLogKnownCategories } = require("@shofer/core")
 					const cats = getLogKnownCategories()
 					return cats.length > 0 ? cats : undefined
 				} catch {

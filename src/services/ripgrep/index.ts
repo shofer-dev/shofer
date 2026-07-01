@@ -6,7 +6,7 @@ import { getHost } from "@shofer/types"
 
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 import { fileExistsAtPath } from "../../utils/fs"
-import { codeIndexLog } from "../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 /*
 This file provides functionality to perform regex searches on files using ripgrep.
 Inspired by: https://github.com/DiscreteTom/vscode-ripgrep-utils

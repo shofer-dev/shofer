@@ -8,7 +8,7 @@ import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-
 import { Package } from "../../shared/package"
 
 import { ShoferProvider } from "./ShoferProvider"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 export const generateSystemPrompt = async (provider: ShoferProvider, message: WebviewMessage) => {
 	const {

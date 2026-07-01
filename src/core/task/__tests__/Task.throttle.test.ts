@@ -18,7 +18,8 @@ vi.mock("../../../integrations/terminal/TerminalRegistry", () => ({
 vi.mock("../../ignore/ShoferIgnoreController")
 vi.mock("../../protect/ShoferProtectedController")
 vi.mock("../../context-tracking/FileContextTracker")
-vi.mock("../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }))

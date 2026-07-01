@@ -31,7 +31,7 @@ import type { LiveMemoryConfig } from "@shofer/types"
 
 import { buildApiHandler, type ApiHandler } from "../../api"
 import { estimateUsdCost } from "./pricing"
-import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[LiveMemory.LlmClient]"
 

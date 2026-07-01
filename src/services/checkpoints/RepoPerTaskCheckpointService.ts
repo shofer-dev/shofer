@@ -2,7 +2,7 @@ import * as path from "path"
 
 import { CheckpointServiceOptions } from "./types"
 import { ShadowCheckpointService } from "./ShadowCheckpointService"
-import { checkpointLog } from "../../utils/logging/subsystems"
+import { checkpointLog } from "@shofer/core"
 
 export class RepoPerTaskCheckpointService extends ShadowCheckpointService {
 	public static create({

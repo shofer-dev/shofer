@@ -5,7 +5,7 @@ import { Package } from "../shared/package"
 
 import { getCodeActionCommand } from "../utils/commands"
 import { EditorUtils } from "../integrations/editor/EditorUtils"
-import { utilLog } from "../utils/logging/subsystems"
+import { utilLog } from "@shofer/core"
 
 export const TITLES: Record<CodeActionName, string> = {
 	EXPLAIN: "Explain with Shofer",

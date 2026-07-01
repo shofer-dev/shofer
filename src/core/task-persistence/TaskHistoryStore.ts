@@ -7,7 +7,7 @@ import type { HistoryItem } from "@shofer/types"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import { getStorageBasePath } from "../../utils/storage"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 /**
  * Index file format for fast startup reads.

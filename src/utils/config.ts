@@ -1,4 +1,4 @@
-import { configLog } from "./logging/subsystems"
+import { configLog } from "@shofer/core"
 
 export type InjectableConfigType =
 	| string

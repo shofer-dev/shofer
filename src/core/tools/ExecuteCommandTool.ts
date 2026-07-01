@@ -24,7 +24,7 @@ import {
 	getWorktreeSandboxPrefix,
 	SandboxUnavailableError,
 } from "../../utils/worktreePathGuard"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 /**
  * Shell-quotes a command string for safe embedding in a sh -c argument.

@@ -77,7 +77,7 @@ async function computeFileChangeStats(task: Task): Promise<{ insertions: number;
 }
 
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const

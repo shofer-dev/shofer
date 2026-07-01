@@ -18,13 +18,13 @@
  *    controlled by Settings → Logging.
  */
 
-import { CompactLogger } from "./CompactLogger"
-import { CompactTransport } from "./CompactTransport"
-import type { ILogger, LogLevel, LogSink, TaskScopedLogLine, TaskLogListener } from "./types"
+import { CompactLogger } from "./CompactLogger.js"
+import { CompactTransport } from "./CompactTransport.js"
+import type { ILogger, LogLevel, LogSink, TaskScopedLogLine, TaskLogListener } from "./types.js"
 
-export { runWithLogTaskContext, getLogTaskContext } from "./logContext"
-export type { LogTaskContext } from "./logContext"
-export type { TaskScopedLogLine, TaskLogListener } from "./types"
+export { runWithLogTaskContext, getLogTaskContext } from "./logContext.js"
+export type { LogTaskContext } from "./logContext.js"
+export type { TaskScopedLogLine, TaskLogListener } from "./types.js"
 
 /** Shared transport — all loggers write through this single instance. */
 let _transport: CompactTransport | undefined

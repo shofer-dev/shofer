@@ -16,7 +16,7 @@ import { getApiMetrics } from "../../shared/getApiMetrics"
 import { DIFF_VIEW_URI_SCHEME } from "../../integrations/editor/DiffViewProvider"
 
 import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "../../services/checkpoints"
-import { checkpointLog } from "../../utils/logging/subsystems"
+import { checkpointLog } from "@shofer/core"
 
 const WARNING_THRESHOLD_MS = 5000
 

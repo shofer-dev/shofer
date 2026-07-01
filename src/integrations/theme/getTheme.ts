@@ -4,7 +4,7 @@ import * as fs from "fs/promises"
 import { convertTheme } from "monaco-vscode-textmate-theme-converter/lib/cjs"
 
 import { Package } from "../../shared/package"
-import { apiLog } from "../../utils/logging/subsystems"
+import { apiLog } from "@shofer/core"
 
 const defaultThemes: Record<string, string> = {
 	"Default Dark Modern": "dark_modern",

@@ -2,10 +2,11 @@
 
 import { AwsBedrockHandler } from "../bedrock"
 import { ApiHandlerOptions } from "../../../shared/api"
-import { apiLog as logger } from "../../../utils/logging/subsystems"
+import { apiLog as logger } from "@shofer/core"
 
 // Mock the logger
-vitest.mock("../../../utils/logging", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	logger: {
 		debug: vitest.fn(),
 		info: vitest.fn(),

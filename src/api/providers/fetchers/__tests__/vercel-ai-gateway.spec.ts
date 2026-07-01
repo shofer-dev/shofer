@@ -6,7 +6,8 @@ import { VERCEL_AI_GATEWAY_VISION_ONLY_MODELS, VERCEL_AI_GATEWAY_VISION_AND_TOOL
 import { getVercelAiGatewayModels, parseVercelAiGatewayModel } from "../vercel-ai-gateway"
 
 vitest.mock("axios")
-vitest.mock("../../../../utils/logging/subsystems", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 const mockedAxios = axios as any

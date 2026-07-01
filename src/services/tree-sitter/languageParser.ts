@@ -1,6 +1,6 @@
 import * as path from "path"
 import { Parser as ParserT, Language as LanguageT, Query as QueryT } from "web-tree-sitter"
-import { utilLog } from "../../utils/logging/subsystems"
+import { utilLog } from "@shofer/core"
 import {
 	javascriptQuery,
 	typescriptQuery,

@@ -6,7 +6,7 @@ import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager } from "./state-manager"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
-import { codeIndexLog } from "../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 
 /**
  * Service responsible for searching the code index.

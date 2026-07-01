@@ -16,7 +16,7 @@ import path from "path"
 import { t } from "../../i18n"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
-import { codeIndexLog } from "../../utils/logging/subsystems"
+import { codeIndexLog } from "@shofer/core"
 import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
 import { getEmbedderLaneDepth } from "./embedders/embedder-lane"
 

@@ -13,7 +13,7 @@ import { executeRipgrep } from "../../services/search/file-search"
 
 import { CheckpointDiff, CheckpointDiffStat, CheckpointResult, CheckpointEventMap } from "./types"
 import { getExcludePatterns } from "./excludes"
-import { checkpointLog } from "../../utils/logging/subsystems"
+import { checkpointLog } from "@shofer/core"
 
 /**
  * Creates a SimpleGit instance with sanitized environment variables to prevent

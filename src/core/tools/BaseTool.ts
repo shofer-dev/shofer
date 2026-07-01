@@ -2,7 +2,7 @@ import type { ToolName, ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "../../shared/tools"
-import { taskLog, toolsLog } from "../../utils/logging/subsystems"
+import { taskLog, toolsLog } from "@shofer/core"
 import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "../../metrics/registry"
 
 /**

@@ -38,8 +38,8 @@ import { customToolRegistry, pluginRegistry } from "@shofer/core"
 import "./utils/path" // Necessary to have access to String.prototype.toPosix.
 import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
 import { setOutputChannel } from "./utils/outputChannel"
-import { bootstrapLogging, setLogLevel, setLogCategories } from "./utils/logging"
-import { webviewLog } from "./utils/logging/subsystems"
+import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
+import { webviewLog } from "@shofer/core"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "./shared/package"

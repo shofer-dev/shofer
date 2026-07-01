@@ -1,6 +1,7 @@
 // npx vitest run utils/logging/__tests__/CompactTransport.recentLogs.spec.ts
 
-import { CompactTransport } from "../CompactTransport"
+import { CompactTransport } from "../CompactTransport.js"
+import type { LogSink } from "../types.js"
 
 /** Minimal mock OutputChannel for testing. */
 class MockOutputChannel {
@@ -16,7 +17,7 @@ describe("CompactTransport — getRecentLogs", () => {
 
 	beforeEach(() => {
 		outputChannel = new MockOutputChannel()
-		transport = new CompactTransport(outputChannel as any, { level: "debug" })
+		transport = new CompactTransport(outputChannel as LogSink, { level: "debug" })
 	})
 
 	afterEach(() => {
@@ -94,7 +95,7 @@ describe("CompactTransport — getRecentLogs", () => {
 		const indices = lines
 			.map((l) => {
 				const m = l.match(/uid(\d+)/)
-				return m ? parseInt(m[1], 10) : -1
+				return m ? parseInt(m[1]!, 10) : -1
 			})
 			.filter((n) => n >= 0)
 
@@ -102,7 +103,7 @@ describe("CompactTransport — getRecentLogs", () => {
 		expect(indices.length).toBe(5)
 		// Verify they are in strictly increasing chronological order
 		for (let i = 1; i < indices.length; i++) {
-			expect(indices[i]).toBeGreaterThan(indices[i - 1])
+			expect(indices[i]).toBeGreaterThan(indices[i - 1]!)
 		}
 	})
 
@@ -136,7 +137,7 @@ describe("CompactTransport — getRecentLogs", () => {
 		const channelLessTransport = new CompactTransport(undefined, { level: "debug" })
 		try {
 			channelLessTransport.write({ t: Date.now(), l: "info", m: "before attach" })
-			channelLessTransport.setOutputChannel(outputChannel as any)
+			channelLessTransport.setOutputChannel(outputChannel as LogSink)
 			channelLessTransport.write({ t: Date.now(), l: "info", m: "after attach" })
 
 			const result = channelLessTransport.getRecentLogs(10)

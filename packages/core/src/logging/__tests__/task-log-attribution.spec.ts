@@ -1,8 +1,8 @@
 // npx vitest utils/logging/__tests__/task-log-attribution.spec.ts
 
-import { CompactTransport } from "../CompactTransport"
-import { runWithLogTaskContext } from "../logContext"
-import type { TaskScopedLogLine } from "../types"
+import { CompactTransport } from "../CompactTransport.js"
+import { runWithLogTaskContext } from "../logContext.js"
+import type { TaskScopedLogLine } from "../types.js"
 
 /**
  * Verifies the per-task log attribution wired through the AsyncLocalStorage log
@@ -54,7 +54,7 @@ describe("CompactTransport task-scoped logs", () => {
 		runWithLogTaskContext({ taskId: "t" }, () => {
 			transport.write({ t: Date.now(), l: "warn", m: "with data", c: "API", d: { code: 429 } })
 		})
-		expect(transport.getTaskLogs("t")[0].message).toBe('with data {"code":429}')
+		expect(transport.getTaskLogs("t")[0]!.message).toBe('with data {"code":429}')
 	})
 
 	test("notifies registered listeners and supports unsubscribe", () => {

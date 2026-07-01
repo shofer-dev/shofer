@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 import { arePathsEqual, getWorkspacePath } from "../../utils/path"
 import { t } from "../../i18n"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 interface OpenFileOptions {
 	create?: boolean

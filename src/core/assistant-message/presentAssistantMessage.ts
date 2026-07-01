@@ -75,7 +75,7 @@ import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 import { stringifyForLog } from "../../utils/outputChannelLogger"
 
 /**

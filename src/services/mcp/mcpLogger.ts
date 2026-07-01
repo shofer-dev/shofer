@@ -8,7 +8,7 @@
  */
 
 import type { OutputChannelLike } from "../../utils/outputChannel"
-import { mcpLog as mcpSysLog } from "../../utils/logging/subsystems"
+import { mcpLog as mcpSysLog } from "@shofer/core"
 
 let outputChannel: OutputChannelLike | undefined
 

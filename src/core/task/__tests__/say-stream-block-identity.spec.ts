@@ -6,7 +6,8 @@ vi.mock("../../../extension", () => ({}))
 
 import type { ShoferMessage } from "@shofer/types"
 
-vi.mock("../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }))

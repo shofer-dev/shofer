@@ -44,7 +44,7 @@ import {
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
 import { buildApiHandler } from "../../api"
-import { liveMemoryLog as logger } from "../../utils/logging/subsystems"
+import { liveMemoryLog as logger } from "@shofer/core"
 import { ShoferIgnoreController } from "../../core/ignore/ShoferIgnoreController"
 
 import { LiveMemoryDirectoryTree } from "./directory-tree"

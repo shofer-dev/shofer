@@ -26,7 +26,7 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
 
 import { isPrivateLmTool } from "../task/build-tools"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 /**
  * Find the closest matching tool name from a list of candidates using

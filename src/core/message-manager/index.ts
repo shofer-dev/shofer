@@ -5,7 +5,7 @@ import { ApiMessage } from "../task-persistence/apiMessages"
 import { cleanupAfterTruncation } from "../condense"
 import { OutputInterceptor } from "../../integrations/terminal/OutputInterceptor"
 import { getTaskDirectoryPath } from "../../utils/storage"
-import { taskLog } from "../../utils/logging/subsystems"
+import { taskLog } from "@shofer/core"
 
 export interface RewindOptions {
 	/** Whether to include the target message in deletion (edit=true, delete=false) */

@@ -14,9 +14,10 @@ import { TelemetryService } from "@shofer/telemetry"
 vi.mock("../../../extension", () => ({}))
 
 // Mock the subsystem logger used by Task.ts (taskLog)
-vi.mock("../../../utils/logging/subsystems", () => {
+vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
+		...((await importOriginal()) as Record<string, unknown>),
 		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 		webviewLog: { error: noop, info: noop, warn: noop },
 		apiLog: { error: noop, info: noop, warn: noop },

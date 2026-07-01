@@ -19,7 +19,7 @@ import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { fsLog } from "../../utils/logging/subsystems"
+import { fsLog } from "@shofer/core"
 
 interface RenameSymbolParams {
 	path: string

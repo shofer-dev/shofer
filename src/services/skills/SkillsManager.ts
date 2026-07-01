@@ -13,7 +13,7 @@ import {
 	SkillNameValidationError,
 	SKILL_NAME_MAX_LENGTH,
 } from "@shofer/types"
-import { skillsLog } from "../../utils/logging/subsystems"
+import { skillsLog } from "@shofer/core"
 import { t } from "../../i18n"
 
 // Re-export for convenience

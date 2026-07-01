@@ -13,7 +13,7 @@ import { getToolGroupForSayTool } from "./tools"
 import { getMcpToolGroup } from "./mcp"
 import { getCommandDecision } from "./commands"
 import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates"
-import { webviewLog } from "../../utils/logging/subsystems"
+import { webviewLog } from "@shofer/core"
 
 // Per-group gating is centralized in ./group-gates (the §4 single source of
 // truth, used by both the MCP and native-tool paths below).

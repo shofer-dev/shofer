@@ -9,7 +9,8 @@ import { getLMStudioModels, parseLMStudioModel } from "../lmstudio"
 vi.mock("axios")
 
 // Mock the subsystem logger so the implementation doesn't use noop logger
-vi.mock("../../../../utils/logging/subsystems", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	apiLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }))
 const mockedAxios = axios as any

@@ -4,7 +4,7 @@ import { Dirent } from "fs"
 import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands"
-import { configLog } from "../../utils/logging/subsystems"
+import { configLog } from "@shofer/core"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
