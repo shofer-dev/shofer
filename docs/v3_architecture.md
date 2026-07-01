@@ -345,11 +345,14 @@ the package can link. `Task`'s non-portable dependencies are a bounded, enumerab
 that splits three ways, and most are now resolved:
 
 - **Keystone — relocate shared foundation into a package.** ✅ `utils/logging` (~113
-  consumers) relocated into `@shofer/core`; `utils/path` (~50 consumers, incl. its
-  `String.prototype.toPosix` global) is in flight. `utils/fs` and `services/search`
-  remain. This is mechanical but wide — the ripple, not any coupling, is the cost.
+  consumers) and ✅ `utils/path` (~50 consumers, incl. its `String.prototype.toPosix`
+  global — impl + `declare global` moved to `@shofer/core`, runtime installed via a
+  side-effect `import "@shofer/core"` in `extension.ts` + `vitest.setup.ts`) relocated
+  into `@shofer/core`. `utils/fs` and `services/search` remain. This is mechanical but
+  wide — the ripple, not any coupling, is the cost.
 - **Portable → move into `@shofer/core`** (already vscode-free): ✅ `services/blob-store`
-  moved. `services/checkpoints` remains (needs `utils/path` + `services/search` first).
+  moved. `services/checkpoints` remains (needs `services/search` first — `utils/path` is
+  now in place).
 - **VS Code-coupled → abstract behind a Category-I-style interface** (VS Code impl stays
   in the extension adapter): ✅ **all three done** — `services/mcp/McpHub` routes through
   `getHost()` (config/watcher/fs + a new `onDidChangeWorkspaceFolders` capability);
