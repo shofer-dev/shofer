@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { ApiMessage } from "@shofer/core"
-import { getEffectiveApiHistory, getMessagesSinceLastSummary } from "../index"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
+import { getEffectiveApiHistory, getMessagesSinceLastSummary } from "../index.js"
 
 describe("nested condensing scenarios", () => {
 	describe("fresh-start model (user-role summaries)", () => {
@@ -45,10 +45,10 @@ describe("nested condensing scenarios", () => {
 
 			// Should only contain: Summary2, and messages after it
 			expect(effectiveHistory.length).toBe(3)
-			expect(effectiveHistory[0].isSummary).toBe(true)
-			expect(effectiveHistory[0].condenseId).toBe(condenseId2) // Latest summary
-			expect(effectiveHistory[1].content).toBe("Database added")
-			expect(effectiveHistory[2].content).toBe("Now test it")
+			expect(effectiveHistory[0]!.isSummary).toBe(true)
+			expect(effectiveHistory[0]!.condenseId).toBe(condenseId2) // Latest summary
+			expect(effectiveHistory[1]!.content).toBe("Database added")
+			expect(effectiveHistory[2]!.content).toBe("Now test it")
 
 			// Verify NO condensed messages are included
 			const hasCondensedMessages = effectiveHistory.some(
@@ -61,8 +61,8 @@ describe("nested condensing scenarios", () => {
 
 			// Should be the same as effective history since Summary2 is already at the start
 			expect(messagesSinceLastSummary.length).toBe(3)
-			expect(messagesSinceLastSummary[0].isSummary).toBe(true)
-			expect(messagesSinceLastSummary[0].condenseId).toBe(condenseId2)
+			expect(messagesSinceLastSummary[0]!.isSummary).toBe(true)
+			expect(messagesSinceLastSummary[0]!.condenseId).toBe(condenseId2)
 
 			// CRITICAL: No previous history (Summary1 or original task) should be included
 			const hasSummary1 = messagesSinceLastSummary.some((m) => m.condenseId === condenseId1)
@@ -115,8 +115,8 @@ describe("nested condensing scenarios", () => {
 
 			// Should only contain Summary3 and current work
 			expect(effectiveHistory.length).toBe(2)
-			expect(effectiveHistory[0].condenseId).toBe(condenseId3)
-			expect(effectiveHistory[1].content).toBe("Current work")
+			expect(effectiveHistory[0]!.condenseId).toBe(condenseId3)
+			expect(effectiveHistory[1]!.content).toBe("Current work")
 
 			const messagesSinceLastSummary = getMessagesSinceLastSummary(effectiveHistory)
 			expect(messagesSinceLastSummary.length).toBe(2)
@@ -157,8 +157,8 @@ describe("nested condensing scenarios", () => {
 			expect(fromFullHistory.length).toBe(fromEffectiveHistory.length)
 
 			// Both should start with the summary
-			expect(fromFullHistory[0].isSummary).toBe(true)
-			expect(fromEffectiveHistory[0].isSummary).toBe(true)
+			expect(fromFullHistory[0]!.isSummary).toBe(true)
+			expect(fromEffectiveHistory[0]!.isSummary).toBe(true)
 		})
 
 		it("should not include condensed original task in effective history", () => {

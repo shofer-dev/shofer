@@ -1,6 +1,6 @@
 // npx vitest run core/prompts/sections/__tests__/capabilities.spec.ts
 
-import { getCapabilitiesSection } from "../capabilities"
+import { getCapabilitiesSection } from "../capabilities.js"
 
 /**
  * The CAPABILITIES section must not advertise tools the agent doesn't have.

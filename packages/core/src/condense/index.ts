@@ -3,17 +3,17 @@ import crypto from "crypto"
 
 import { TelemetryService } from "@shofer/telemetry"
 
-import { t } from "@shofer/core"
-import { ApiHandler, ApiHandlerCreateMessageMetadata } from "@shofer/core"
-import { ApiMessage } from "@shofer/core"
-import { maybeRemoveImageBlocks } from "@shofer/core"
-import { findLast } from "@shofer/core"
+import { t } from "../i18n/index.js"
+import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../api/api-handler-types.js"
+import type { ApiMessage } from "../task-persistence/apiMessages.js"
+import { maybeRemoveImageBlocks } from "../api/transform/image-cleaning.js"
+import { findLast } from "@shofer/types"
 import { supportPrompt } from "@shofer/types"
-import { ShoferIgnoreController } from "@shofer/core"
-import { generateFoldedFileContext } from "./foldedFileContext"
-import { taskLog } from "@shofer/core"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController.js"
+import { generateFoldedFileContext } from "./foldedFileContext.js"
+import { taskLog } from "../logging/subsystems.js"
 
-export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext"
+export type { FoldedFileContextResult, FoldedFileContextOptions } from "./foldedFileContext.js"
 
 /**
  * Converts a tool_use block to a text representation.
@@ -297,7 +297,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	// Use custom prompt if provided and non-empty, otherwise use the default CONDENSE prompt
 	// This respects user's custom condensing prompt setting
-	const condenseInstructions = customCondensingPrompt?.trim() || supportPrompt.default.CONDENSE
+	const condenseInstructions = customCondensingPrompt?.trim() || supportPrompt.default.CONDENSE!
 
 	const finalRequestMessage: Anthropic.MessageParam = {
 		role: "user",
@@ -330,7 +330,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 
 	let summary = ""
 	let cost = 0
-	let outputTokens = 0
+	let _outputTokens = 0
 
 	try {
 		const stream = apiHandler.createMessage(promptToUse, requestMessages, metadata)
@@ -341,7 +341,7 @@ export async function summarizeConversation(options: SummarizeConversationOption
 			} else if (chunk.type === "usage") {
 				// Record final usage chunk only
 				cost = chunk.totalCost ?? 0
-				outputTokens = chunk.outputTokens ?? 0
+				_outputTokens = chunk.outputTokens ?? 0
 			}
 		}
 	} catch (error) {
@@ -522,7 +522,7 @@ export function getMessagesSinceLastSummary(messages: ApiMessage[]): ApiMessage[
 	// whole array (`[...messages].reverse()`) on every request. [perf H27]
 	let lastSummaryIndex = -1
 	for (let i = messages.length - 1; i >= 0; i--) {
-		if (messages[i].isSummary) {
+		if (messages[i]!.isSummary) {
 			lastSummaryIndex = i
 			break
 		}

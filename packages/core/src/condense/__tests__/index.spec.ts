@@ -5,9 +5,9 @@ import type { Mock } from "vitest"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { ApiHandler } from "@shofer/core"
-import { ApiMessage } from "@shofer/core"
-import { maybeRemoveImageBlocks } from "@shofer/core"
+import type { ApiHandler } from "../../api/api-handler-types.js"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
+import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning.js"
 import {
 	summarizeConversation,
 	getMessagesSinceLastSummary,
@@ -19,10 +19,10 @@ import {
 	toolResultToText,
 	convertToolBlocksToText,
 	transformMessagesForCondensing,
-} from "../index"
+} from "../index.js"
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../api/transform/image-cleaning.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../api/transform/image-cleaning.js")>()),
 	maybeRemoveImageBlocks: vi.fn((messages: ApiMessage[], _apiHandler: ApiHandler) => [...messages]),
 }))
 
@@ -142,9 +142,9 @@ describe("injectSyntheticToolResults", () => {
 		const result = injectSyntheticToolResults(messages)
 
 		expect(result.length).toBe(3)
-		expect(result[2].role).toBe("user")
+		expect(result[2]!.role).toBe("user")
 
-		const content = result[2].content as any[]
+		const content = result[2]!.content as any[]
 		expect(content.length).toBe(1)
 		expect(content[0].type).toBe("tool_result")
 		expect(content[0].tool_use_id).toBe("tool-orphan")
@@ -168,7 +168,7 @@ describe("injectSyntheticToolResults", () => {
 		const result = injectSyntheticToolResults(messages)
 
 		expect(result.length).toBe(3)
-		const content = result[2].content as any[]
+		const content = result[2]!.content as any[]
 		expect(content.length).toBe(2)
 		expect(content[0].tool_use_id).toBe("tool-1")
 		expect(content[1].tool_use_id).toBe("tool-2")
@@ -196,7 +196,7 @@ describe("injectSyntheticToolResults", () => {
 		const result = injectSyntheticToolResults(messages)
 
 		expect(result.length).toBe(4)
-		const syntheticContent = result[3].content as any[]
+		const syntheticContent = result[3]!.content as any[]
 		expect(syntheticContent.length).toBe(1)
 		expect(syntheticContent[0].tool_use_id).toBe("orphan-tool")
 	})
@@ -304,8 +304,8 @@ describe("getMessagesSinceLastSummary", () => {
 		]
 
 		const result = getMessagesSinceLastSummary(messages)
-		expect(result[0].isSummary).toBe(true)
-		expect(result[0].role).toBe("user")
+		expect(result[0]!.isSummary).toBe(true)
+		expect(result[0]!.role).toBe("user")
 	})
 })
 
@@ -327,7 +327,7 @@ describe("getEffectiveApiHistory", () => {
 		const result = getEffectiveApiHistory(messages)
 
 		expect(result).toHaveLength(1)
-		expect(result[0].isSummary).toBe(true)
+		expect(result[0]!.isSummary).toBe(true)
 	})
 
 	it("should include messages after summary in fresh start model", () => {
@@ -348,9 +348,9 @@ describe("getEffectiveApiHistory", () => {
 		const result = getEffectiveApiHistory(messages)
 
 		expect(result).toHaveLength(3)
-		expect(result[0].isSummary).toBe(true)
-		expect(result[1].content).toBe("New response after summary")
-		expect(result[2].content).toBe("New user message")
+		expect(result[0]!.isSummary).toBe(true)
+		expect(result[1]!.content).toBe("New response after summary")
+		expect(result[2]!.content).toBe("New user message")
 	})
 
 	it("should return all messages when no summary exists", () => {
@@ -405,9 +405,9 @@ describe("getEffectiveApiHistory", () => {
 
 		// Summary + truncation marker + after truncation (the truncated response is filtered out)
 		expect(result).toHaveLength(3)
-		expect(result[0].isSummary).toBe(true)
-		expect(result[1].isTruncationMarker).toBe(true)
-		expect(result[2].content).toBe("After truncation")
+		expect(result[0]!.isSummary).toBe(true)
+		expect(result[1]!.isTruncationMarker).toBe(true)
+		expect(result[2]!.content).toBe("After truncation")
 	})
 
 	it("should filter out orphan tool_result blocks after fresh start condensation", () => {
@@ -439,7 +439,7 @@ describe("getEffectiveApiHistory", () => {
 
 		// Should only return the summary, orphan tool_result message should be filtered out
 		expect(result).toHaveLength(1)
-		expect(result[0].isSummary).toBe(true)
+		expect(result[0]!.isSummary).toBe(true)
 	})
 
 	it("should keep tool_result blocks that have matching tool_use in fresh start", () => {
@@ -468,9 +468,9 @@ describe("getEffectiveApiHistory", () => {
 
 		// All messages after summary should be included
 		expect(result).toHaveLength(3)
-		expect(result[0].isSummary).toBe(true)
-		expect((result[1].content as any[])[0].id).toBe("tool-valid")
-		expect((result[2].content as any[])[0].tool_use_id).toBe("tool-valid")
+		expect(result[0]!.isSummary).toBe(true)
+		expect((result[1]!.content as any[])[0].id).toBe("tool-valid")
+		expect((result[2]!.content as any[])[0].tool_use_id).toBe("tool-valid")
 	})
 
 	it("should filter orphan tool_results but keep other content in mixed user message", () => {
@@ -509,9 +509,9 @@ describe("getEffectiveApiHistory", () => {
 
 		// Summary + assistant with tool_use + filtered user message
 		expect(result).toHaveLength(3)
-		expect(result[0].isSummary).toBe(true)
+		expect(result[0]!.isSummary).toBe(true)
 		// The user message should only contain the valid tool_result
-		const userContent = result[2].content as any[]
+		const userContent = result[2]!.content as any[]
 		expect(userContent).toHaveLength(1)
 		expect(userContent[0].tool_use_id).toBe("tool-valid")
 	})
@@ -547,7 +547,7 @@ describe("getEffectiveApiHistory", () => {
 
 		// Only summary should remain
 		expect(result).toHaveLength(1)
-		expect(result[0].isSummary).toBe(true)
+		expect(result[0]!.isSummary).toBe(true)
 	})
 
 	it("should preserve non-tool_result content in user messages", () => {
@@ -580,8 +580,8 @@ describe("getEffectiveApiHistory", () => {
 
 		// Summary + user message with only text (orphan tool_result filtered)
 		expect(result).toHaveLength(2)
-		expect(result[0].isSummary).toBe(true)
-		const userContent = result[1].content as any[]
+		expect(result[0]!.isSummary).toBe(true)
+		const userContent = result[1]!.content as any[]
 		expect(userContent).toHaveLength(1)
 		expect(userContent[0].type).toBe("text")
 		expect(userContent[0].text).toBe("User added some text")
@@ -599,9 +599,9 @@ describe("cleanupAfterTruncation", () => {
 
 		const result = cleanupAfterTruncation(messages)
 
-		expect(result[0].condenseParent).toBeUndefined()
-		expect(result[1].condenseParent).toBeUndefined()
-		expect(result[2].condenseParent).toBeUndefined()
+		expect(result[0]!.condenseParent).toBeUndefined()
+		expect(result[1]!.condenseParent).toBeUndefined()
+		expect(result[2]!.condenseParent).toBeUndefined()
 	})
 
 	it("should keep condenseParent when summary still exists", () => {
@@ -619,8 +619,8 @@ describe("cleanupAfterTruncation", () => {
 
 		const result = cleanupAfterTruncation(messages)
 
-		expect(result[0].condenseParent).toBe(condenseId)
-		expect(result[1].condenseParent).toBe(condenseId)
+		expect(result[0]!.condenseParent).toBe(condenseId)
+		expect(result[1]!.condenseParent).toBe(condenseId)
 	})
 
 	it("should clear orphaned truncationParent references", () => {
@@ -632,7 +632,7 @@ describe("cleanupAfterTruncation", () => {
 
 		const result = cleanupAfterTruncation(messages)
 
-		expect(result[0].truncationParent).toBeUndefined()
+		expect(result[0]!.truncationParent).toBeUndefined()
 	})
 
 	it("should keep truncationParent when marker still exists", () => {
@@ -649,7 +649,7 @@ describe("cleanupAfterTruncation", () => {
 
 		const result = cleanupAfterTruncation(messages)
 
-		expect(result[0].truncationParent).toBe(truncationId)
+		expect(result[0]!.truncationParent).toBe(truncationId)
 	})
 
 	it("should handle mixed orphaned and valid references", () => {
@@ -668,8 +668,8 @@ describe("cleanupAfterTruncation", () => {
 
 		const result = cleanupAfterTruncation(messages)
 
-		expect(result[0].condenseParent).toBeUndefined() // orphaned, cleared
-		expect(result[1].condenseParent).toBe(validCondenseId) // valid, kept
+		expect(result[0]!.condenseParent).toBeUndefined() // orphaned, cleared
+		expect(result[1]!.condenseParent).toBe(validCondenseId) // valid, kept
 	})
 })
 
@@ -775,8 +775,8 @@ describe("summarizeConversation", () => {
 		// Fresh start: effective API history should contain only the summary
 		const effectiveHistory = getEffectiveApiHistory(result.messages)
 		expect(effectiveHistory).toHaveLength(1)
-		expect(effectiveHistory[0].isSummary).toBe(true)
-		expect(effectiveHistory[0].role).toBe("user")
+		expect(effectiveHistory[0]!.isSummary).toBe(true)
+		expect(effectiveHistory[0]!.role).toBe("user")
 
 		// Check the cost and token counts
 		expect(result.cost).toBe(0.05)
@@ -909,13 +909,13 @@ describe("summarizeConversation", () => {
 			undefined, // metadata is undefined when not passed to summarizeConversation
 		)
 		// Verify the CRITICAL instructions are included in the prompt
-		const actualPrompt = (mockApiHandler.createMessage as Mock).mock.calls[0][0]
+		const actualPrompt = (mockApiHandler.createMessage as Mock).mock.calls[0]![0]
 		expect(actualPrompt).toContain("CRITICAL: This is a summarization-only request")
 		expect(actualPrompt).toContain("CRITICAL: This summarization request is a SYSTEM OPERATION")
 
 		// Check that maybeRemoveImageBlocks was called with the correct messages
 		// The final request message now contains the detailed CONDENSE instructions
-		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0][0] as any[]
+		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0]![0] as any[]
 		const finalMessage = mockCallArgs[mockCallArgs.length - 1]
 		expect(finalMessage.role).toBe("user")
 		expect(finalMessage.content).toContain("Your task is to create a detailed summary of the conversation")
@@ -939,7 +939,7 @@ describe("summarizeConversation", () => {
 			taskId,
 		})
 
-		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0][0] as any[]
+		const mockCallArgs = (maybeRemoveImageBlocks as Mock).mock.calls[0]![0] as any[]
 
 		// Expect the original first user message to be present in the messages sent to the summarizer
 		const hasInitialAsk = mockCallArgs.some(
@@ -1028,7 +1028,7 @@ describe("summarizeConversation", () => {
 		// Fresh start: effective history should contain only the summary
 		const effectiveHistory = getEffectiveApiHistory(result.messages)
 		expect(effectiveHistory.length).toBe(1)
-		expect(effectiveHistory[0].isSummary).toBe(true)
+		expect(effectiveHistory[0]!.isSummary).toBe(true)
 
 		expect(result.cost).toBe(0.03)
 		expect(result.summary).toBe("Concise summary")
@@ -1113,7 +1113,7 @@ describe("summarizeConversation", () => {
 		})
 
 		// Summary should be the last message
-		const lastMessage = result.messages[result.messages.length - 1]
+		const lastMessage = result.messages[result.messages.length - 1]!
 		expect(lastMessage.isSummary).toBe(true)
 		expect(lastMessage.role).toBe("user")
 	})
@@ -1187,7 +1187,7 @@ describe("summarizeConversation with custom settings", () => {
 		const createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
 		expect(createMessageCalls.length).toBe(1)
 		// The custom prompt should be in the last message (the finalRequestMessage)
-		const requestMessages = createMessageCalls[0][1]
+		const requestMessages = createMessageCalls[0]![1]
 		const lastMessage = requestMessages[requestMessages.length - 1]
 		expect(lastMessage.role).toBe("user")
 		expect(lastMessage.content).toBe(customPrompt)
@@ -1210,10 +1210,10 @@ describe("summarizeConversation with custom settings", () => {
 		// Verify the default SUMMARY_PROMPT was used (contains CRITICAL instructions)
 		let createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
 		expect(createMessageCalls.length).toBe(1)
-		expect(createMessageCalls[0][0]).toContain(
+		expect(createMessageCalls[0]![0]).toContain(
 			"You are a helpful AI assistant tasked with summarizing conversations.",
 		)
-		expect(createMessageCalls[0][0]).toContain("CRITICAL: This is a summarization-only request")
+		expect(createMessageCalls[0]![0]).toContain("CRITICAL: This is a summarization-only request")
 
 		// Reset mock and test with undefined
 		vi.clearAllMocks()
@@ -1228,10 +1228,10 @@ describe("summarizeConversation with custom settings", () => {
 		// Verify the default SUMMARY_PROMPT was used again (contains CRITICAL instructions)
 		createMessageCalls = (mockMainApiHandler.createMessage as Mock).mock.calls
 		expect(createMessageCalls.length).toBe(1)
-		expect(createMessageCalls[0][0]).toContain(
+		expect(createMessageCalls[0]![0]).toContain(
 			"You are a helpful AI assistant tasked with summarizing conversations.",
 		)
-		expect(createMessageCalls[0][0]).toContain("CRITICAL: This is a summarization-only request")
+		expect(createMessageCalls[0]![0]).toContain("CRITICAL: This is a summarization-only request")
 	})
 
 	/**
@@ -1428,8 +1428,8 @@ describe("convertToolBlocksToText", () => {
 		const result = convertToolBlocksToText(content)
 
 		expect(Array.isArray(result)).toBe(true)
-		expect((result as Anthropic.Messages.ContentBlockParam[])[0].type).toBe("text")
-		expect((result as Anthropic.Messages.TextBlockParam[])[0].text).toContain("[Tool Use: read_file]")
+		expect((result as Anthropic.Messages.ContentBlockParam[])[0]!.type).toBe("text")
+		expect((result as Anthropic.Messages.TextBlockParam[])[0]!.text).toContain("[Tool Use: read_file]")
 	})
 
 	it("should convert tool_result blocks to text blocks", () => {
@@ -1444,8 +1444,8 @@ describe("convertToolBlocksToText", () => {
 		const result = convertToolBlocksToText(content)
 
 		expect(Array.isArray(result)).toBe(true)
-		expect((result as Anthropic.Messages.ContentBlockParam[])[0].type).toBe("text")
-		expect((result as Anthropic.Messages.TextBlockParam[])[0].text).toContain("[Tool Result]")
+		expect((result as Anthropic.Messages.ContentBlockParam[])[0]!.type).toBe("text")
+		expect((result as Anthropic.Messages.TextBlockParam[])[0]!.text).toContain("[Tool Result]")
 	})
 
 	it("should preserve non-tool blocks unchanged", () => {
@@ -1466,7 +1466,7 @@ describe("convertToolBlocksToText", () => {
 		const resultArray = result as Anthropic.Messages.ContentBlockParam[]
 		expect(resultArray).toHaveLength(3)
 		expect(resultArray[0]).toEqual({ type: "text", text: "Hello" })
-		expect(resultArray[1].type).toBe("text")
+		expect(resultArray[1]!.type).toBe("text")
 		expect((resultArray[1] as Anthropic.Messages.TextBlockParam).text).toContain("[Tool Use: read_file]")
 		expect(resultArray[2]).toEqual({ type: "text", text: "World" })
 	})
@@ -1527,13 +1527,13 @@ describe("transformMessagesForCondensing", () => {
 		const result = transformMessagesForCondensing(messages)
 
 		expect(result).toHaveLength(3)
-		expect(result[0].content).toBe("Hello")
-		expect(Array.isArray(result[1].content)).toBe(true)
-		expect((result[1].content as any[])[0].type).toBe("text")
-		expect((result[1].content as any[])[0].text).toContain("[Tool Use: read_file]")
-		expect(Array.isArray(result[2].content)).toBe(true)
-		expect((result[2].content as any[])[0].type).toBe("text")
-		expect((result[2].content as any[])[0].text).toContain("[Tool Result]")
+		expect(result[0]!.content).toBe("Hello")
+		expect(Array.isArray(result[1]!.content)).toBe(true)
+		expect((result[1]!.content as any[])[0].type).toBe("text")
+		expect((result[1]!.content as any[])[0].text).toContain("[Tool Use: read_file]")
+		expect(Array.isArray(result[2]!.content)).toBe(true)
+		expect((result[2]!.content as any[])[0].type).toBe("text")
+		expect((result[2]!.content as any[])[0].text).toContain("[Tool Result]")
 	})
 
 	it("should preserve message role and other properties", () => {
@@ -1553,7 +1553,7 @@ describe("transformMessagesForCondensing", () => {
 
 		const result = transformMessagesForCondensing(messages)
 
-		expect(result[0].role).toBe("assistant")
+		expect(result[0]!.role).toBe("assistant")
 	})
 
 	it("should handle empty messages array", () => {
@@ -1576,6 +1576,6 @@ describe("transformMessagesForCondensing", () => {
 		transformMessagesForCondensing(messages)
 
 		// Original should still have tool_use type
-		expect(messages[0].content[0].type).toBe("tool_use")
+		expect(messages[0]!.content[0]!.type).toBe("tool_use")
 	})
 })

@@ -1,4 +1,4 @@
-import { getToolUseGuidelinesSection } from "../tool-use-guidelines"
+import { getToolUseGuidelinesSection } from "../tool-use-guidelines.js"
 
 describe("getToolUseGuidelinesSection", () => {
 	it("should include proper numbered guidelines", () => {

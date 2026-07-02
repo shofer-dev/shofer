@@ -1,4 +1,4 @@
-import { getSharedToolUseSection } from "../tool-use"
+import { getSharedToolUseSection } from "../tool-use.js"
 
 describe("getSharedToolUseSection", () => {
 	it("should include native tool-calling instructions", () => {

@@ -3,12 +3,13 @@ import crypto from "crypto"
 
 import { TelemetryService } from "@shofer/telemetry"
 
-import { ApiHandler, ApiHandlerCreateMessageMetadata } from "@shofer/core"
-import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation, SummarizeResponse } from "../condense"
-import { ApiMessage } from "@shofer/core"
+import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../api/api-handler-types.js"
+import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation } from "../condense/index.js"
+import type { SummarizeResponse } from "../condense/index.js"
+import type { ApiMessage } from "../task-persistence/apiMessages.js"
 import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
-import { ShoferIgnoreController } from "@shofer/core"
-import { taskLog } from "@shofer/core"
+import type { ShoferIgnoreController } from "../ignore/ShoferIgnoreController.js"
+import { taskLog } from "../logging/subsystems.js"
 
 /**
  * Context Management
@@ -105,7 +106,7 @@ export function truncateConversation(messages: ApiMessage[], fracToRemove: numbe
 	})
 
 	// Find the actual boundary - the index right after the last truncated message
-	const lastTruncatedVisibleIndex = visibleIndices[messagesToRemove] // Last visible message being truncated
+	const _lastTruncatedVisibleIndex = visibleIndices[messagesToRemove] // Last visible message being truncated
 	// If all visible messages except the first are truncated, insert marker at the end
 	const firstKeptVisibleIndex = visibleIndices[messagesToRemove + 1] ?? taggedMessages.length
 
@@ -273,7 +274,7 @@ export async function manageContext({
 	const reservedTokens = maxTokens || ANTHROPIC_DEFAULT_MAX_TOKENS
 
 	// Estimate tokens for the last message (which is always a user message)
-	const lastMessage = messages[messages.length - 1]
+	const lastMessage = messages[messages.length - 1]!
 	const lastMessageContent = lastMessage.content
 	const lastMessageTokens = Array.isArray(lastMessageContent)
 		? await estimateTokenCount(lastMessageContent, apiHandler)
@@ -331,8 +332,10 @@ export async function manageContext({
 				return { ...result, prevContextTokens }
 			}
 		} else {
+			// condensing not attempted on this branch
 		}
 	} else {
+		// condensing not attempted on this branch
 	}
 
 	// Fall back to sliding window truncation if needed

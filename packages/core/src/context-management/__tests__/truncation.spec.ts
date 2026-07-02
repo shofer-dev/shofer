@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { TelemetryService } from "@shofer/telemetry"
-import { truncateConversation } from "../index"
-import { getEffectiveApiHistory, cleanupAfterTruncation } from "../../condense"
-import { ApiMessage } from "@shofer/core"
+import { truncateConversation } from "../index.js"
+import { getEffectiveApiHistory, cleanupAfterTruncation } from "../../condense/index.js"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
 
 describe("Non-Destructive Sliding Window Truncation", () => {
 	let messages: ApiMessage[]
@@ -49,7 +49,7 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			}
 
 			// First message should not be tagged
-			expect(result.messages[0].truncationParent).toBeUndefined()
+			expect(result.messages[0]!.truncationParent).toBeUndefined()
 
 			// Marker should not have truncationParent
 			const marker = result.messages.find((msg) => msg.isTruncationMarker)
@@ -108,10 +108,10 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			expect(effective.length).toBe(8)
 
 			// First message should be present
-			expect(effective[0].content).toBe("Initial task")
+			expect(effective[0]!.content).toBe("Initial task")
 
 			// Truncation marker should be present
-			expect(effective[1].isTruncationMarker).toBe(true)
+			expect(effective[1]!.isTruncationMarker).toBe(true)
 
 			// Messages with truncationParent should be filtered out
 			for (const msg of effective) {
@@ -133,8 +133,8 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			expect(effective.length).toBe(messages.length)
 
 			// Verify first and last messages are present
-			expect(effective[0].content).toBe("Initial task")
-			expect(effective[effective.length - 1].content).toBe("Message 6")
+			expect(effective[0]!.content).toBe("Initial task")
+			expect(effective[effective.length - 1]!.content).toBe("Message 6")
 		})
 
 		it("should handle both condenseParent and truncationParent filtering", () => {
@@ -209,8 +209,8 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			const cleaned = cleanupAfterTruncation(messagesWithBoth)
 
 			// Both orphaned parent references should be cleared
-			expect(cleaned[1].condenseParent).toBeUndefined()
-			expect(cleaned[2].truncationParent).toBeUndefined()
+			expect(cleaned[1]!.condenseParent).toBeUndefined()
+			expect(cleaned[2]!.truncationParent).toBeUndefined()
 		})
 
 		it("should preserve valid parent references", () => {
@@ -237,8 +237,8 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			const cleaned = cleanupAfterTruncation(messagesWithValidParents)
 
 			// Valid parent references should be preserved
-			expect(cleaned[1].condenseParent).toBe("valid-condense")
-			expect(cleaned[3].truncationParent).toBe("valid-truncation")
+			expect(cleaned[1]!.condenseParent).toBe("valid-condense")
+			expect(cleaned[3]!.truncationParent).toBe("valid-truncation")
 		})
 	})
 
@@ -410,16 +410,16 @@ describe("Non-Destructive Sliding Window Truncation", () => {
 			expect(result.messages.length).toBe(4)
 
 			// First message should be untouched
-			expect(result.messages[0].truncationParent).toBeUndefined()
-			expect(result.messages[0].content).toBe("Initial")
+			expect(result.messages[0]!.truncationParent).toBeUndefined()
+			expect(result.messages[0]!.content).toBe("Initial")
 
 			// Messages at indices 1 and 2 should be tagged
-			expect(result.messages[1].truncationParent).toBe(result.truncationId)
-			expect(result.messages[2].truncationParent).toBe(result.truncationId)
+			expect(result.messages[1]!.truncationParent).toBe(result.truncationId)
+			expect(result.messages[2]!.truncationParent).toBe(result.truncationId)
 
 			// Marker should be at the end (index 3)
-			expect(result.messages[3].isTruncationMarker).toBe(true)
-			expect(result.messages[3].role).toBe("user")
+			expect(result.messages[3]!.isTruncationMarker).toBe(true)
+			expect(result.messages[3]!.role).toBe("user")
 		})
 
 		it("should handle empty condenseParent and truncationParent gracefully", () => {

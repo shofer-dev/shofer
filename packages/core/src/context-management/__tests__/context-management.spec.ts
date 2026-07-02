@@ -5,9 +5,9 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { BaseProvider } from "@shofer/core"
-import { ApiMessage } from "@shofer/core"
-import * as condenseModule from "../../condense"
+import { BaseProvider } from "../../api/providers/base-provider.js"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
+import * as condenseModule from "../../condense/index.js"
 
 import {
 	TOKEN_BUFFER_PERCENTAGE,
@@ -15,7 +15,7 @@ import {
 	truncateConversation,
 	manageContext,
 	willManageContext,
-} from "../index"
+} from "../index.js"
 
 // Create a mock ApiHandler for testing
 class MockApiHandler extends BaseProvider {
@@ -98,16 +98,16 @@ describe("Context Management", () => {
 			expect(result.messages[0]).toEqual(messages[0])
 
 			// Messages at indices 1 and 2 from original should be tagged
-			expect(result.messages[1].truncationParent).toBe(result.truncationId)
-			expect(result.messages[2].truncationParent).toBe(result.truncationId)
+			expect(result.messages[1]!.truncationParent).toBe(result.truncationId)
+			expect(result.messages[2]!.truncationParent).toBe(result.truncationId)
 
 			// Marker should be at index 3 (at the boundary, after truncated messages)
-			expect(result.messages[3].isTruncationMarker).toBe(true)
-			expect(result.messages[3].role).toBe("user")
+			expect(result.messages[3]!.isTruncationMarker).toBe(true)
+			expect(result.messages[3]!.role).toBe("user")
 
 			// Messages at indices 3 and 4 from original should NOT be tagged (now at indices 4 and 5)
-			expect(result.messages[4].truncationParent).toBeUndefined()
-			expect(result.messages[5].truncationParent).toBeUndefined()
+			expect(result.messages[4]!.truncationParent).toBeUndefined()
+			expect(result.messages[5]!.truncationParent).toBeUndefined()
 		})
 
 		it("should round to an even number of messages to remove", () => {
@@ -162,15 +162,15 @@ describe("Context Management", () => {
 			expect(result.messages[0]).toEqual(messages[0])
 
 			// Messages at indices 1 and 2 should be tagged
-			expect(result.messages[1].truncationParent).toBe(result.truncationId)
-			expect(result.messages[2].truncationParent).toBe(result.truncationId)
+			expect(result.messages[1]!.truncationParent).toBe(result.truncationId)
+			expect(result.messages[2]!.truncationParent).toBe(result.truncationId)
 
 			// Marker should be at index 3 (at the boundary)
-			expect(result.messages[3].isTruncationMarker).toBe(true)
-			expect(result.messages[3].role).toBe("user")
+			expect(result.messages[3]!.isTruncationMarker).toBe(true)
+			expect(result.messages[3]!.role).toBe("user")
 
 			// Last message should NOT be tagged (now at index 4)
-			expect(result.messages[4].truncationParent).toBeUndefined()
+			expect(result.messages[4]!.truncationParent).toBeUndefined()
 		})
 	})
 
@@ -180,7 +180,7 @@ describe("Context Management", () => {
 	describe("estimateTokenCount", () => {
 		it("should return 0 for empty or undefined content", async () => {
 			expect(await estimateTokenCount([], mockApiHandler)).toBe(0)
-			// @ts-ignore - Testing with undefined
+			// @ts-expect-error - Testing with undefined
 			expect(await estimateTokenCount(undefined, mockApiHandler)).toBe(0)
 		})
 
@@ -288,7 +288,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -321,7 +321,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -356,7 +356,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Test below threshold
@@ -448,7 +448,7 @@ describe("Context Management", () => {
 			const smallContentTokens = await estimateTokenCount(smallContent, mockApiHandler)
 			const messagesWithSmallContent: ApiMessage[] = [
 				...messages.slice(0, -1),
-				{ role: messages[messages.length - 1].role, content: smallContent },
+				{ role: messages[messages.length - 1]!.role, content: smallContent },
 			]
 
 			// Set base tokens so total is well below threshold + buffer even with small content added
@@ -484,7 +484,7 @@ describe("Context Management", () => {
 			const largeContentTokens = await estimateTokenCount(largeContent, mockApiHandler)
 			const messagesWithLargeContent: ApiMessage[] = [
 				...messages.slice(0, -1),
-				{ role: messages[messages.length - 1].role, content: largeContent },
+				{ role: messages[messages.length - 1]!.role, content: largeContent },
 			]
 
 			// Set base tokens so we're just below threshold without content, but over with content
@@ -512,7 +512,7 @@ describe("Context Management", () => {
 			const veryLargeContentTokens = await estimateTokenCount(veryLargeContent, mockApiHandler)
 			const messagesWithVeryLargeContent: ApiMessage[] = [
 				...messages.slice(0, -1),
-				{ role: messages[messages.length - 1].role, content: veryLargeContent },
+				{ role: messages[messages.length - 1]!.role, content: veryLargeContent },
 			]
 
 			// Set base tokens so we're just below threshold without content
@@ -544,7 +544,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -594,7 +594,7 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -650,7 +650,7 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// When truncating, always uses 0.5 fraction
@@ -700,7 +700,7 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// When truncating, always uses 0.5 fraction
@@ -766,7 +766,7 @@ describe("Context Management", () => {
 			const totalTokens = 60000 // Below allowedTokens but 60% of context window
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -815,7 +815,7 @@ describe("Context Management", () => {
 			const totalTokens = 40000 // 40% of context window
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -889,14 +889,14 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const filesReadByRoo = ["src/test.ts", "src/utils.ts"]
 			const cwd = "/test/project"
 			const mockShoferIgnoreController = {
 				filterPaths: vi.fn(),
-			} as unknown as import("@shofer/core").ShoferIgnoreController
+			} as unknown as import("../../ignore/ShoferIgnoreController.js").ShoferIgnoreController
 
 			const result = await manageContext({
 				messages: messagesWithSmallContent,
@@ -962,7 +962,7 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -1022,7 +1022,7 @@ describe("Context Management", () => {
 			const totalTokens = 70001 // Above threshold
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			const result = await manageContext({
@@ -1093,7 +1093,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Mock the summarizeConversation function
@@ -1159,7 +1159,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Mock the summarizeConversation function
@@ -1227,7 +1227,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Reset any previous mock calls
@@ -1290,7 +1290,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Account for the dynamic buffer which is 10% of context window (10,000 tokens)
@@ -1346,7 +1346,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Account for the dynamic buffer which is 10% of context window (10,000 tokens)
@@ -1401,7 +1401,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Below max tokens and buffer - no truncation
@@ -1447,7 +1447,7 @@ describe("Context Management", () => {
 			// Create messages with very small content in the last one to avoid token overflow
 			const messagesWithSmallContent = [
 				...messages.slice(0, -1),
-				{ ...messages[messages.length - 1], content: "" },
+				{ ...messages[messages.length - 1]!, content: "" },
 			]
 
 			// Account for the dynamic buffer which is 10% of context window (20,000 tokens for this test)

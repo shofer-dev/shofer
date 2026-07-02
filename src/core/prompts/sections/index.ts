@@ -1,11 +1,16 @@
 export { getRulesSection } from "./rules"
 export { getSystemInfoSection } from "./system-info"
-export { getObjectiveSection } from "./objective"
 export { addCustomInstructions } from "./custom-instructions"
-export { getSharedToolUseSection } from "./tool-use"
-export { getToolUseGuidelinesSection } from "./tool-use-guidelines"
-export { getCapabilitiesSection } from "./capabilities"
 export { getModesSection } from "./modes"
-export { markdownFormattingSection } from "./markdown-formatting"
 export { getSkillsSection } from "./skills"
 export { getLiveMemorySection } from "./live-memory"
+
+// Relocated into @shofer/core (Task-cluster A4). Re-exported here so existing
+// `./sections` consumers keep importing them unchanged.
+export {
+	getObjectiveSection,
+	getSharedToolUseSection,
+	getToolUseGuidelinesSection,
+	getCapabilitiesSection,
+	markdownFormattingSection,
+} from "@shofer/core"

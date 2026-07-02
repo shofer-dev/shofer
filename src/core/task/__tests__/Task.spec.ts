@@ -18,6 +18,12 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
 		...((await importOriginal()) as Record<string, unknown>),
+		summarizeConversation: vi.fn().mockResolvedValue({
+			messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
+			summary: "summary",
+			cost: 0,
+			newContextTokens: 1,
+		}),
 		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 		webviewLog: { error: noop, info: noop, warn: noop },
 		apiLog: { error: noop, info: noop, warn: noop },
@@ -192,19 +198,6 @@ vi.mock("../../environment/getEnvironmentDetails", () => ({
 }))
 
 vi.mock("../../ignore/ShoferIgnoreController")
-
-vi.mock("../../condense", async (importOriginal) => {
-	const actual = (await importOriginal()) as any
-	return {
-		...actual,
-		summarizeConversation: vi.fn().mockResolvedValue({
-			messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
-			summary: "summary",
-			cost: 0,
-			newContextTokens: 1,
-		}),
-	}
-})
 
 vi.mock("../../../utils/fs", () => ({
 	fileExistsAtPath: vi.fn().mockImplementation((filePath) => {
