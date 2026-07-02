@@ -16,7 +16,7 @@ import { DiffStrategy } from "@shofer/core"
 import { formatLanguage } from "../../shared/language"
 import { isEmpty } from "../../utils/object"
 
-import { McpHub } from "../../services/mcp/McpHub"
+import { McpHub } from "@shofer/core"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 

@@ -50,7 +50,7 @@ import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-
 import { ModeConfig } from "@shofer/types"
 
 import { SYSTEM_PROMPT } from "../system"
-import { McpHub } from "../../../services/mcp/McpHub"
+import { McpHub } from "@shofer/core"
 import { defaultModeSlug, modes, Mode } from "@shofer/core"
 import "@shofer/core"
 import { addCustomInstructions } from "../sections/custom-instructions"

@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- McpHub validates and
+   normalizes arbitrary user MCP config JSON (mcp.json / settings) whose shape is
+   dynamic by nature; the parsed values are `any` until Zod-validated. */
 import * as fs from "fs/promises"
 import * as path from "path"
 
@@ -30,21 +33,26 @@ import type {
 	McpToolCallResponse,
 } from "@shofer/types"
 import { toolGroupsSchema } from "@shofer/types"
-import { recordMcpDuration, incMcpCalls, incMcpErrors, classifyMcpError, mcpErrorTypeToStatus } from "@shofer/core"
+import {
+	recordMcpDuration,
+	incMcpCalls,
+	incMcpErrors,
+	classifyMcpError,
+	mcpErrorTypeToStatus,
+} from "../../metrics/registry.js"
 
-import { t } from "@shofer/core"
+import { t } from "../../i18n/index.js"
 
-import { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { mcpLog } from "./mcpLogger"
-import { mcpLog as mcpSysLog } from "@shofer/core"
+import type { TaskProviderLike } from "../../task-provider/index.js"
+import { mcpLog as mcpSysLog } from "../../logging/subsystems.js"
 
-import { GlobalFileNames } from "@shofer/core"
+import { GlobalFileNames } from "../../shared/globalFileNames.js"
 
-import { fileExistsAtPath } from "../../utils/fs"
-import { getWorkspacePath } from "@shofer/core"
-import { injectVariables } from "@shofer/core"
-import { safeWriteJson } from "@shofer/core"
-import { sanitizeMcpName, toolNamesMatch } from "@shofer/core"
+import { fileExistsAtPath } from "../../fs/fs.js"
+import { getWorkspacePath } from "../../path/path.js"
+import { injectVariables } from "../../utils/config.js"
+import { safeWriteJson } from "../../utils/safeWriteJson.js"
+import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
@@ -156,7 +164,7 @@ const McpSettingsSchema = z.object({
 })
 
 export class McpHub {
-	private providerRef: WeakRef<ShoferProvider>
+	private providerRef: WeakRef<TaskProviderLike>
 	private disposables: HostDisposable[] = []
 	private settingsWatcher?: HostFileWatcher
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
@@ -174,7 +182,7 @@ export class McpHub {
 	private sanitizedNameRegistry: Map<string, string> = new Map()
 	private initializationPromise: Promise<void>
 
-	constructor(provider: ShoferProvider) {
+	constructor(provider: TaskProviderLike) {
 		this.providerRef = new WeakRef(provider)
 		this.watchMcpSettingsFile()
 		this.watchProjectMcpFile().catch((e: unknown) => mcpSysLog.error("McpHub watch error:", { error: String(e) }))
@@ -729,10 +737,15 @@ export class McpHub {
 		this.setupFileWatcher(name, config, source)
 
 		try {
+			// `context` is opaque (`unknown`) on TaskProviderLike; narrow structurally
+			// to read the host extension's package version without importing vscode.
+			const hostContext = this.providerRef.deref()?.context as
+				| { extension?: { packageJSON?: { version?: string } } }
+				| undefined
 			const client = new Client(
 				{
 					name: "Shofer",
-					version: this.providerRef.deref()?.context.extension?.packageJSON?.version ?? "1.0.0",
+					version: hostContext?.extension?.packageJSON?.version ?? "1.0.0",
 				},
 				{
 					capabilities: {},
@@ -884,7 +897,9 @@ export class McpHub {
 						})
 					},
 				}
-				global.EventSource = ReconnectingEventSource
+				// ReconnectingEventSource is a runtime-compatible polyfill; its static
+				// shape differs from the DOM `EventSource` type under core's stricter lib.
+				global.EventSource = ReconnectingEventSource as unknown as typeof EventSource
 				transport = new SSEClientTransport(new URL(configInjected.url), {
 					...sseOptions,
 					eventSourceInit: reconnectingEventSourceOptions,
@@ -1157,7 +1172,7 @@ export class McpHub {
 			}
 			const response = await connection.client.request({ method: "resources/list" }, ListResourcesResultSchema)
 			return response?.resources || []
-		} catch (error) {
+		} catch {
 			// mcpSysLog.error(`Failed to fetch resources for ${serverName}:`, error)
 			return []
 		}
@@ -1177,7 +1192,7 @@ export class McpHub {
 				ListResourceTemplatesResultSchema,
 			)
 			return response?.resourceTemplates || []
-		} catch (error) {
+		} catch {
 			// mcpSysLog.error(`Failed to fetch resource templates for ${serverName}:`, error)
 			return []
 		}
@@ -1430,25 +1445,20 @@ export class McpHub {
 		this.isConnecting = true
 
 		try {
+			// Probe the config files so any read error is surfaced/logged before we
+			// tear down and re-initialize (the authoritative parse happens in
+			// initializeMcpServers below).
 			const globalPath = await this.getMcpSettingsFilePath()
-			let globalServers: Record<string, any> = {}
 			try {
-				const globalContent = await fs.readFile(globalPath, "utf-8")
-				const globalConfig = JSON.parse(globalContent)
-				globalServers = globalConfig.mcpServers || {}
-				const globalServerNames = Object.keys(globalServers)
+				await fs.readFile(globalPath, "utf-8")
 			} catch (error) {
 				mcpSysLog.info("Error reading global MCP config:", error)
 			}
 
 			const projectPath = await this.getProjectMcpPath()
-			let projectServers: Record<string, any> = {}
 			if (projectPath) {
 				try {
-					const projectContent = await fs.readFile(projectPath, "utf-8")
-					const projectConfig = JSON.parse(projectContent)
-					projectServers = projectConfig.mcpServers || {}
-					const projectServerNames = Object.keys(projectServers)
+					await fs.readFile(projectPath, "utf-8")
 				} catch (error) {
 					mcpSysLog.info("Error reading project MCP config:", error)
 				}
@@ -1490,7 +1500,7 @@ export class McpHub {
 				const projectContent = await fs.readFile(projectMcpPath, "utf-8")
 				const projectConfig = JSON.parse(projectContent)
 				projectServerOrder = Object.keys(projectConfig.mcpServers || {})
-			} catch (error) {
+			} catch {
 				// Silently continue with empty project server order
 			}
 		}
@@ -1528,7 +1538,7 @@ export class McpHub {
 			this.notifyAllProvidersFn(message)
 		} else {
 			// Fallback: notify only the provider that created this hub.
-			const targetProvider: ShoferProvider | undefined = this.providerRef.deref()
+			const targetProvider: TaskProviderLike | undefined = this.providerRef.deref()
 			if (targetProvider) {
 				try {
 					await targetProvider.postMessageToWebview(message)
@@ -1830,7 +1840,7 @@ export class McpHub {
 			// Ensure the settings file exists and is accessible
 			try {
 				await fs.access(configPath)
-			} catch (error) {
+			} catch {
 				throw new Error("Settings file not accessible")
 			}
 

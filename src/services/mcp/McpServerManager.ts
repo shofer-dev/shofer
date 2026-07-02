@@ -1,7 +1,6 @@
 import type * as vscode from "vscode"
-import { McpHub } from "./McpHub"
+import { McpHub } from "@shofer/core"
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { mcpLog } from "./mcpLogger"
 
 /**
  * Singleton manager for MCP server instances.

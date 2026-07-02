@@ -43,6 +43,7 @@ import { webviewLog } from "@shofer/core"
 import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
 import { registerNativeApiHandler } from "@shofer/core"
+import { setMcpHubFactory } from "@shofer/core"
 import { VsCodeLmHandler } from "./api/providers/vscode-lm"
 import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
@@ -59,7 +60,7 @@ import { TerminalRegistry } from "@shofer/core"
 import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
-import { setMcpOutputChannel } from "./services/mcp/mcpLogger"
+import { setMcpOutputChannel } from "@shofer/core"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { GitIndexManager } from "./services/git-index/git-index-manager"
 import { LiveMemoryManager } from "./services/live-memory/manager"
@@ -138,6 +139,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	// "requires the VS Code host" error instead of a missing-provider crash.
 	registerNativeApiHandler("vscode-lm", (o) => new VsCodeLmHandler(o))
 	registerNativeApiHandler("openai-codex", (o) => new OpenAiCodexHandler(o))
+
+	// Register the host factory the portable Task core uses to obtain the MCP hub.
+	// The lifecycle owner (McpServerManager) needs a vscode.ExtensionContext and the
+	// concrete ShoferProvider, neither of which core may depend on; core calls this
+	// registered factory instead. Headless hosts leave it unset (no MCP).
+	setMcpHubFactory(async (provider) =>
+		McpServerManager.getInstance(
+			provider.context as Parameters<typeof McpServerManager.getInstance>[0],
+			provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
+		),
+	)
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)

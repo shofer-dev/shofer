@@ -81,8 +81,7 @@ import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolPa
 import { getModelMaxOutputTokens } from "@shofer/core"
 
 // services
-import { McpHub } from "../../services/mcp/McpHub"
-import { McpServerManager } from "../../services/mcp/McpServerManager"
+import { McpHub, getMcpHubFactory } from "@shofer/core"
 import { RepoPerTaskCheckpointService } from "@shofer/core"
 
 // integrations
@@ -3368,18 +3367,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				return { enabledToolCount: 0, enabledServerCount: 0 }
 			}
 
-			// Defensive deadline: McpServerManager.getInstance() awaits hub.waitUntilReady(),
+			// Defensive deadline: the MCP hub factory awaits hub.waitUntilReady(),
 			// which in turn awaits every server's connectToServer(). The MCP SDK does not
 			// always honour a connect-time deadline (e.g. a TCP-accepting but
 			// non-responsive HTTP/SSE endpoint), so a misbehaving server could otherwise
 			// hang task startup indefinitely. The MCP-tool-count warning is informational
 			// only, so we cap the wait and skip the warning if the hub isn't ready in time.
 			const MCP_READY_DEADLINE_MS = 12_000
+			const mcpHubFactory = getMcpHubFactory()
 			const mcpHub = await Promise.race([
-				McpServerManager.getInstance(
-					provider.context as Parameters<typeof McpServerManager.getInstance>[0],
-					provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
-				),
+				mcpHubFactory ? mcpHubFactory(provider) : Promise.resolve(undefined),
 				new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), MCP_READY_DEADLINE_MS)),
 			])
 			if (!mcpHub) {
@@ -6223,11 +6220,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// H17: MCP-connect gate only fires on cache miss — sidesteps the
 			// per-request pWaitFor overhead when the cache is hot.
 			let mcpHub: McpHub | undefined
-			if (mcpEnabled ?? true) {
-				mcpHub = await McpServerManager.getInstance(
-					provider.context as Parameters<typeof McpServerManager.getInstance>[0],
-					provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
-				)
+			// When no host factory is registered (headless / non-VS-Code), MCP is
+			// simply unavailable and we skip the connect gate. When a factory IS
+			// registered but fails to yield a hub, that's a real error we surface.
+			const mcpHubFactory = getMcpHubFactory()
+			if ((mcpEnabled ?? true) && mcpHubFactory) {
+				mcpHub = await mcpHubFactory(provider)
 				if (!mcpHub) {
 					throw new Error("Failed to get MCP hub from server manager")
 				}

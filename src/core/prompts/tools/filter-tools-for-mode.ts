@@ -6,7 +6,7 @@ import { defaultModeSlug } from "@shofer/core"
 import { buildMcpToolName } from "@shofer/core"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
 import type { GitIndexManager } from "../../../services/git-index/git-index-manager"
-import type { McpHub } from "../../../services/mcp/McpHub"
+import type { McpHub } from "@shofer/core"
 import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
 
 /**

@@ -1,12 +1,16 @@
 import fs from "fs/promises"
 
 import type { Mock } from "vitest"
-import type { ExtensionContext, Uri } from "vscode"
 
-import type { ShoferProvider } from "../../../core/webview/ShoferProvider"
+import type { TaskProviderLike } from "../../../task-provider/index.js"
 
-import type { McpHub as McpHubType, McpConnection, ConnectedMcpConnection, DisconnectedMcpConnection } from "../McpHub"
-import { ServerConfigSchema, McpHub } from "../McpHub"
+import type {
+	McpHub as McpHubType,
+	McpConnection,
+	ConnectedMcpConnection,
+	DisconnectedMcpConnection,
+} from "../McpHub.js"
+import { ServerConfigSchema, McpHub } from "../McpHub.js"
 
 // Mock fs/promises before importing anything that uses it
 vi.mock("fs/promises", () => ({
@@ -36,13 +40,11 @@ vi.mock("fs/promises", () => ({
 	mkdir: vi.fn().mockResolvedValue(undefined),
 }))
 
-// Import safeWriteJson to use in mocks (now exported from @shofer/core)
-import { safeWriteJson } from "@shofer/core"
-
-// Mock safeWriteJson (now exported from @shofer/core)
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	safeWriteJson: vi.fn(async (filePath, data) => {
+// Mock safeWriteJson at its core-relative source (McpHub imports it from there).
+// The factory keeps the module's other exports intact and only stubs the write.
+vi.mock("../../../utils/safeWriteJson.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../utils/safeWriteJson.js")>()),
+	safeWriteJson: vi.fn(async (filePath: string, data: unknown) => {
 		// Instead of trying to write to the file system, just call fs.writeFile mock
 		// This avoids the complex file locking and temp file operations
 		const fs = await import("fs/promises")
@@ -50,32 +52,16 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	}),
 }))
 
-vi.mock("vscode", () => ({
-	workspace: {
-		createFileSystemWatcher: vi.fn().mockReturnValue({
-			onDidChange: vi.fn(),
-			onDidCreate: vi.fn(),
-			onDidDelete: vi.fn(),
-			dispose: vi.fn(),
-		}),
-		onDidSaveTextDocument: vi.fn(),
-		onDidChangeWorkspaceFolders: vi.fn(),
-		workspaceFolders: [],
-	},
-	window: {
-		showErrorMessage: vi.fn(),
-		showInformationMessage: vi.fn(),
-		showWarningMessage: vi.fn(),
-		createTextEditorDecorationType: vi.fn().mockReturnValue({
-			dispose: vi.fn(),
-		}),
-	},
-	Disposable: {
-		from: vi.fn(),
-	},
-}))
 vi.mock("fs/promises")
-vi.mock("../../../core/webview/ShoferProvider")
+
+// core's fileExistsAtPath reads through the node `fs` module (not `fs/promises`),
+// so the `fs/promises` mock above doesn't reach it. Stub it to "exists" so McpHub
+// doesn't eagerly write an empty settings file (which would otherwise shift the
+// captured fs.writeFile calls the write-assertion tests inspect).
+vi.mock("../../../fs/fs.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../fs/fs.js")>()),
+	fileExistsAtPath: vi.fn().mockResolvedValue(true),
+}))
 
 // Mock the MCP SDK modules
 vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
@@ -99,7 +85,7 @@ vi.mock("chokidar", () => ({
 
 describe("McpHub", () => {
 	let mcpHub: McpHubType
-	let mockProvider: Partial<ShoferProvider>
+	let mockProvider: Partial<TaskProviderLike>
 
 	// Store original console methods
 	const originalConsoleError = console.error
@@ -111,7 +97,7 @@ describe("McpHub", () => {
 		// Mock console.error to suppress error messages during tests
 		console.error = vi.fn()
 
-		const mockUri: Uri = {
+		const mockUri = {
 			scheme: "file",
 			authority: "",
 			path: "/test/path",
@@ -156,7 +142,7 @@ describe("McpHub", () => {
 				extensionMode: 1,
 				logPath: "/test/path",
 				languageModelAccessInformation: {} as any,
-			} as ExtensionContext,
+			} as unknown,
 		}
 
 		// Mock fs.readFile for initial settings
@@ -173,7 +159,7 @@ describe("McpHub", () => {
 			}),
 		)
 
-		mcpHub = new McpHub(mockProvider as ShoferProvider)
+		mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 	})
 
 	afterEach(() => {
@@ -229,7 +215,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -261,7 +247,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -288,7 +274,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a mock McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -397,7 +383,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify watcher was created
@@ -470,7 +456,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify watchers were created
@@ -504,7 +490,7 @@ describe("McpHub", () => {
 
 			vi.mocked(chokidar.watch).mockClear()
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify no watcher was created for disabled server
@@ -528,7 +514,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -554,7 +540,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -581,7 +567,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Find the connection
@@ -610,7 +596,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -678,7 +664,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Get the connection
@@ -696,7 +682,7 @@ describe("McpHub", () => {
 		})
 
 		it("should handle missing connections safely", async () => {
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Try operations on non-existent server
@@ -750,7 +736,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Delete the connection
@@ -808,7 +794,7 @@ describe("McpHub", () => {
 
 			// The path might be normalized differently on different platforms,
 			// so we'll just check that we have a call with valid content
-			const writtenConfig = JSON.parse(callToUse[1])
+			const writtenConfig = JSON.parse(callToUse![1])
 			expect(writtenConfig.mcpServers).toBeDefined()
 			expect(writtenConfig.mcpServers["test-server"]).toBeDefined()
 			expect(Array.isArray(writtenConfig.mcpServers["test-server"].enabledForPrompt)).toBe(false)
@@ -856,7 +842,7 @@ describe("McpHub", () => {
 
 			// The path might be normalized differently on different platforms,
 			// so we'll just check that we have a call with valid content
-			const writtenConfig = JSON.parse(callToUse[1])
+			const writtenConfig = JSON.parse(callToUse![1])
 			expect(writtenConfig.mcpServers).toBeDefined()
 			expect(writtenConfig.mcpServers["test-server"]).toBeDefined()
 			expect(Array.isArray(writtenConfig.mcpServers["test-server"].enabledForPrompt)).toBe(false)
@@ -903,7 +889,7 @@ describe("McpHub", () => {
 			const writeCall = writeCalls.find((call) => call[0] === normalizedSettingsPath)
 			const callToUse = writeCall || writeCalls[0]
 
-			const writtenConfig = JSON.parse(callToUse[1])
+			const writtenConfig = JSON.parse(callToUse![1])
 			expect(writtenConfig.mcpServers["test-server"].disabledTools).toBeDefined()
 			expect(writtenConfig.mcpServers["test-server"].disabledTools).toContain("new-tool")
 		})
@@ -952,7 +938,7 @@ describe("McpHub", () => {
 			const writeCall = writeCalls.find((call: any) => call[0] === normalizedSettingsPath)
 			const callToUse = writeCall || writeCalls[0]
 
-			const writtenConfig = JSON.parse(callToUse[1] as string)
+			const writtenConfig = JSON.parse(callToUse![1] as string)
 			expect(writtenConfig.mcpServers["test-server"].disabled).toBe(true)
 		})
 
@@ -986,7 +972,7 @@ describe("McpHub", () => {
 			const servers = mcpHub.getServers()
 
 			expect(servers.length).toBe(1)
-			expect(servers[0].name).toBe("enabled-server")
+			expect(servers[0]!.name).toBe("enabled-server")
 		})
 
 		it("should deduplicate servers by name with project servers taking priority", () => {
@@ -1066,8 +1052,8 @@ describe("McpHub", () => {
 			const servers = mcpHub.getServers()
 
 			expect(servers.length).toBe(1)
-			expect(servers[0].name).toBe("global-only-server")
-			expect(servers[0].source).toBe("global")
+			expect(servers[0]!.name).toBe("global-only-server")
+			expect(servers[0]!.source).toBe("global")
 		})
 
 		it("should prevent calling tools on disabled servers", async () => {
@@ -1084,7 +1070,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1115,7 +1101,7 @@ describe("McpHub", () => {
 				}),
 			)
 
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1291,7 +1277,7 @@ describe("McpHub", () => {
 				const writeCall = writeCalls.find((call: any) => call[0] === normalizedSettingsPath)
 				const callToUse = writeCall || writeCalls[0]
 
-				const writtenConfig = JSON.parse(callToUse[1] as string)
+				const writtenConfig = JSON.parse(callToUse![1] as string)
 				expect(writtenConfig.mcpServers["test-server"].timeout).toBe(120)
 			})
 
@@ -1499,7 +1485,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub and let it initialize with MCP enabled
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Verify server is connected
@@ -1555,7 +1541,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a new McpHub instance with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1623,7 +1609,7 @@ describe("McpHub", () => {
 			)
 
 			// Create a new McpHub instance with enabled MCP
-			const mcpHub = new McpHub(enabledMockProvider as unknown as ShoferProvider)
+			const mcpHub = new McpHub(enabledMockProvider as unknown as TaskProviderLike)
 
 			// Wait for initialization
 			await new Promise((resolve) => setTimeout(resolve, 100))
@@ -1664,7 +1650,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Clear previous calls
@@ -1711,7 +1697,7 @@ describe("McpHub", () => {
 			)
 
 			// Create McpHub with disabled MCP
-			const mcpHub = new McpHub(disabledMockProvider as unknown as ShoferProvider)
+			const mcpHub = new McpHub(disabledMockProvider as unknown as TaskProviderLike)
 			await new Promise((resolve) => setTimeout(resolve, 100))
 
 			// Set isConnecting to false to ensure it's properly reset
@@ -1789,7 +1775,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Mock the config file read
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1851,7 +1837,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Mock the config file read
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1913,7 +1899,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Mock the config file read with cmd.exe already as command
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -1982,7 +1968,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Mock the config file read - simulating fnm/nvm-windows scenario
 			vi.mocked(fs.readFile).mockResolvedValue(
@@ -2055,7 +2041,7 @@ describe("McpHub", () => {
 			}))
 
 			// Create a new McpHub instance
-			const mcpHub = new McpHub(mockProvider as ShoferProvider)
+			const mcpHub = new McpHub(mockProvider as unknown as TaskProviderLike)
 
 			// Mock the config file read with CMD (uppercase) as command
 			vi.mocked(fs.readFile).mockResolvedValue(

@@ -7,6 +7,11 @@ import type {
 	TaskProviderEvents,
 } from "@shofer/types"
 
+// Type-only import: `McpHub` lives in `@shofer/core` (portable, Node-only). The
+// import is `type`-only so it never creates a runtime cycle
+// (McpHub → TaskProviderLike → McpHub).
+import type { McpHub } from "../services/mcp/McpHub.js"
+
 /**
  * TaskProviderLike — the narrow provider surface the portable {@link Task} core
  * depends on.
@@ -33,8 +38,16 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	/** Opaque host context (a `vscode.ExtensionContext` in the VS Code front-end). */
 	readonly context: unknown
 	readonly taskManager: TaskManagerLike<TTask>
+	/** Workspace root the provider is anchored to (used to locate project MCP config). */
+	readonly cwd: string
 
 	getState(): Promise<TaskProviderState>
+	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
+	getMcpHub(): McpHub | undefined
+	/** Ensures the global MCP servers directory exists and returns its path. */
+	ensureMcpServersDirectoryExists(): Promise<string>
+	/** Ensures the settings directory exists and returns its path. */
+	ensureSettingsDirectoryExists(): Promise<string>
 	log(message: string): void
 	postMessageToWebview(message: ExtensionMessage): Promise<void>
 	getTaskWithId(id: string, opts?: { skipApiHistory?: boolean }): Promise<{ historyItem: HistoryItem }>

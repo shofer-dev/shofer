@@ -1,5 +1,5 @@
 import type OpenAI from "openai"
-import { McpHub } from "../../../../services/mcp/McpHub"
+import { McpHub } from "@shofer/core"
 import { buildMcpToolName } from "@shofer/core"
 import { normalizeToolSchema, type JsonSchema } from "@shofer/core"
 

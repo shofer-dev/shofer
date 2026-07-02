@@ -174,6 +174,11 @@ export {
 } from "@shofer/types"
 export * from "./task-history/index.js"
 export * from "./task-provider/index.js"
+export * from "./services/mcp/McpHub.js"
+export * from "./services/mcp/mcp-hub-factory.js"
+// mcpLogger re-exports only `setMcpOutputChannel`; its `mcpLog` symbol would
+// collide with the `mcpLog` logger already exported from ./logging/subsystems.js.
+export { setMcpOutputChannel } from "./services/mcp/mcpLogger.js"
 export * from "./terminal/index.js"
 export * from "./shared/package.js"
 export * from "./shared/globalFileNames.js"

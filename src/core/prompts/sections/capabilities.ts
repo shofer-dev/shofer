@@ -1,4 +1,4 @@
-import { McpHub } from "../../../services/mcp/McpHub"
+import { McpHub } from "@shofer/core"
 
 /**
  * @param groups When provided (workflow agents with a `.slang` `tools:`

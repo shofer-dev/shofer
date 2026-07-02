@@ -2,7 +2,7 @@ import type OpenAI from "openai"
 
 import type { McpServer, McpTool } from "@shofer/types"
 
-import type { McpHub } from "../../../../../services/mcp/McpHub"
+import type { McpHub } from "@shofer/core"
 
 import { getMcpServerTools } from "../mcp_server"
 

@@ -15,7 +15,6 @@ import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } fr
 
 import { AskIgnoredError } from "@shofer/core"
 import { Task } from "../task/Task"
-import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getHost } from "@shofer/types"
 
 import { listFilesTool } from "../tools/ListFilesTool"
@@ -334,7 +333,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			// Resolve sanitized server name back to original server name
 			// The serverName from parsing is sanitized (e.g., "my_server" from "my server")
 			// We need the original name to find the actual MCP connection
-			const mcpHub = (shofer.providerRef.deref() as ShoferProvider | undefined)?.getMcpHub()
+			const mcpHub = shofer.providerRef.deref()?.getMcpHub()
 			let resolvedServerName = mcpBlock.serverName
 			if (mcpHub) {
 				const originalName = mcpHub.findServerNameBySanitizedName(mcpBlock.serverName)
