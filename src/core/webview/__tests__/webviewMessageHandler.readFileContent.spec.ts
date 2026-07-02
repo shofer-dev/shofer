@@ -53,10 +53,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
 	t: vi.fn((key: string) => key),
-}))
-vi.mock("../../../utils/globalContext")
-
-vi.mock("../../../utils/pathUtils", () => ({
 	isPathOutsideWorkspace: vi.fn((filePath: string) => {
 		const nodePath = require("path")
 		const normalized = nodePath.resolve(filePath)
@@ -67,6 +63,7 @@ vi.mock("../../../utils/pathUtils", () => ({
 		return true
 	}),
 }))
+vi.mock("../../../utils/globalContext")
 
 vi.mock("../../mentions/resolveImageMentions", () => ({
 	resolveImageMentions: vi.fn(async ({ text, images }: { text: string; images?: string[] }) => ({

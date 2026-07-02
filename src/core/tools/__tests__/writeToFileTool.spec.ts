@@ -3,7 +3,7 @@ import * as path from "path"
 import type { MockedFunction } from "vitest"
 
 import { fileExistsAtPath, createDirectoriesForFile } from "../../../utils/fs"
-import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
 import { everyLineHasLineNumbers, stripLineNumbers } from "../../../integrations/misc/extract-text"
 import { ToolUse, ToolResponse } from "@shofer/core"
@@ -30,12 +30,9 @@ vi.mock("../../../utils/fs", () => ({
 	createDirectoriesForFile: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock("../../../utils/pathUtils", () => ({
-	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
-}))
-
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
 	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
 	formatResponse: {
 		toolError: vi.fn((msg) => `Error: ${msg}`),

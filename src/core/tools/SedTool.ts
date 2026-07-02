@@ -12,7 +12,7 @@ import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
-import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { formatResponse } from "@shofer/core"
 import { fileExistsAtPath } from "../../utils/fs"

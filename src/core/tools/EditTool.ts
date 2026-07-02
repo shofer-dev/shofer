@@ -4,7 +4,7 @@ import path from "path"
 import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { getReadablePath } from "@shofer/core"
-import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"

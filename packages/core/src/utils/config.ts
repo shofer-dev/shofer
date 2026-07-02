@@ -1,4 +1,4 @@
-import { configLog } from "@shofer/core"
+import { configLog } from "../logging/subsystems.js"
 
 export type InjectableConfigType =
 	| string
@@ -19,6 +19,7 @@ export type InjectableConfigType =
  *
  * Does not mutate original object
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- callers pass arbitrary substitution fallbacks
 export async function injectEnv<C extends InjectableConfigType>(config: C, notFoundValue: any = "") {
 	return injectVariables(config, { env: process.env }, notFoundValue)
 }
@@ -37,6 +38,7 @@ export async function injectEnv<C extends InjectableConfigType>(config: C, notFo
 export async function injectVariables<C extends InjectableConfigType>(
 	config: C,
 	variables: Record<string, undefined | null | string | Record<string, undefined | null | string>>,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- callers pass arbitrary substitution fallbacks
 	propNotFoundValue?: any,
 ) {
 	const isObject = typeof config === "object"

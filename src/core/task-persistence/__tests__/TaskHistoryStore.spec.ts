@@ -7,7 +7,7 @@ import * as os from "os"
 import type { HistoryItem } from "@shofer/types"
 
 import { TaskHistoryStore } from "../TaskHistoryStore"
-import { GlobalFileNames } from "../../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 
 vi.mock("../../../utils/storage", () => ({
 	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),

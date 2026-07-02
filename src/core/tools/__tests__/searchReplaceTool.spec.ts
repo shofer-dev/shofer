@@ -4,7 +4,7 @@ import fs from "fs/promises"
 import type { MockedFunction } from "vitest"
 
 import { fileExistsAtPath } from "../../../utils/fs"
-import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
 import { ToolUse, ToolResponse } from "@shofer/core"
 import { searchReplaceTool } from "../SearchReplaceTool"
@@ -36,12 +36,9 @@ vi.mock("../../../utils/fs", () => ({
 	fileExistsAtPath: vi.fn().mockResolvedValue(true),
 }))
 
-vi.mock("../../../utils/pathUtils", () => ({
-	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
-}))
-
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
 	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
 	formatResponse: {
 		toolError: vi.fn((msg) => `Error: ${msg}`),

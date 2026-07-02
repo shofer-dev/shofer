@@ -3,7 +3,7 @@ import { generateImageTool } from "../GenerateImageTool"
 import { ToolUse } from "@shofer/core"
 import { Task } from "../../task/Task"
 import * as fs from "fs/promises"
-import * as pathUtils from "../../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import * as fileUtils from "../../../utils/fs"
 import { formatResponse } from "@shofer/core"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
@@ -11,13 +11,13 @@ import { OpenRouterHandler } from "@shofer/core"
 
 // Mock dependencies
 vi.mock("fs/promises")
-vi.mock("../../../utils/pathUtils")
 vi.mock("../../../utils/fs")
-// safeWriteJson and OpenRouterHandler are now exported from @shofer/core; partially mock them there
+// safeWriteJson, OpenRouterHandler and isPathOutsideWorkspace are exported from @shofer/core; partially mock them there
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	safeWriteJson: vi.fn(),
 	OpenRouterHandler: vi.fn(),
+	isPathOutsideWorkspace: vi.fn(),
 }))
 
 describe("generateImageTool", () => {
@@ -69,7 +69,7 @@ describe("generateImageTool", () => {
 		vi.mocked(fs.readFile).mockResolvedValue(Buffer.from("fake-image-data"))
 		vi.mocked(fs.mkdir).mockResolvedValue(undefined)
 		vi.mocked(fs.writeFile).mockResolvedValue(undefined)
-		vi.mocked(pathUtils.isPathOutsideWorkspace).mockReturnValue(false)
+		vi.mocked(isPathOutsideWorkspace).mockReturnValue(false)
 	})
 
 	describe("partial block handling", () => {

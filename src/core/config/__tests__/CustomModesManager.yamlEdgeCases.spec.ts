@@ -13,7 +13,7 @@ import type { ModeConfig } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
-import { GlobalFileNames } from "../../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 
 import { CustomModesManager } from "../CustomModesManager"
 

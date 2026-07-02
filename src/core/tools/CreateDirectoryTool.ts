@@ -11,7 +11,7 @@ import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
-import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import type { ToolUse } from "@shofer/core"
 

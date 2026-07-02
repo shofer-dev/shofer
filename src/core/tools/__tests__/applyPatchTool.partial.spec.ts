@@ -3,11 +3,12 @@ import path from "path"
 import type { MockedFunction } from "vitest"
 
 import type { ToolUse } from "@shofer/core"
-import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import type { Task } from "../../task/Task"
 import { ApplyPatchTool } from "../ApplyPatchTool"
 
-vi.mock("../../../utils/pathUtils", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	isPathOutsideWorkspace: vi.fn(),
 }))
 

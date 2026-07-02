@@ -38,11 +38,11 @@ import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { mcpLog } from "./mcpLogger"
 import { mcpLog as mcpSysLog } from "@shofer/core"
 
-import { GlobalFileNames } from "../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
-import { injectVariables } from "../../utils/config"
+import { injectVariables } from "@shofer/core"
 import { safeWriteJson } from "@shofer/core"
 import { sanitizeMcpName, toolNamesMatch } from "@shofer/core"
 

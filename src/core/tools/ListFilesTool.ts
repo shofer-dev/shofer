@@ -6,7 +6,7 @@ import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { listFiles } from "../../services/glob/list-files"
 import { getReadablePath } from "@shofer/core"
-import { isPathOutsideWorkspace } from "../../utils/pathUtils"
+import { isPathOutsideWorkspace } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

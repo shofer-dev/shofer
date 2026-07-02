@@ -3,7 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import * as yaml from "yaml"
 import type { MarketplaceItem, MarketplaceItemType, InstallMarketplaceItemOptions, McpParameter } from "@shofer/types"
-import { GlobalFileNames } from "../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 

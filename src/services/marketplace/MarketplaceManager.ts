@@ -8,7 +8,7 @@ import * as yaml from "yaml"
 import type { MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { GlobalFileNames } from "../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "@shofer/core"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"

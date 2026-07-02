@@ -4,7 +4,7 @@ import * as path from "path"
 
 import type { HistoryItem } from "@shofer/types"
 
-import { GlobalFileNames } from "../../shared/globalFileNames"
+import { GlobalFileNames } from "@shofer/core"
 import { safeWriteJson } from "@shofer/core"
 import { getStorageBasePath } from "../../utils/storage"
 import { taskLog } from "@shofer/core"
