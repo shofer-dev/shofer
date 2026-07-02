@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 import * as path from "path"
 import { CodeIndexConfigManager } from "./config-manager"
-import { CodeIndexStateManager, IndexingState } from "./state-manager"
-import { IFileWatcher, IVectorStore, BatchProcessingSummary } from "./interfaces"
+import { CodeIndexStateManager, IndexingState } from "@shofer/core"
+import { IFileWatcher, IVectorStore, BatchProcessingSummary } from "@shofer/core"
 import { DirectoryScanner } from "./processors"
 import { CacheManager } from "./cache-manager"
 import { GitSource } from "./git/git-source"
@@ -11,8 +11,8 @@ import { TelemetryEventName } from "@shofer/types"
 import { t } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 import { incCodeIndexError } from "@shofer/core"
-import { retryWithBackoff } from "./shared/retry"
-import { MAX_SERVICE_ATTEMPTS, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "./constants"
+import { retryWithBackoff } from "@shofer/core"
+import { MAX_SERVICE_ATTEMPTS, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "@shofer/core"
 
 /**
  * Auto-recovery constants — when indexing fails due to infrastructure

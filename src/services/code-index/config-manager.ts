@@ -1,9 +1,9 @@
 import { ApiHandlerOptions } from "@shofer/core"
 import { ContextProxy } from "../../core/config/ContextProxy"
-import { EmbedderProvider } from "./interfaces/manager"
-import { CodeIndexConfig, PreviousConfigSnapshot } from "./interfaces/config"
-import { DEFAULT_SEARCH_MIN_SCORE, DEFAULT_MAX_SEARCH_RESULTS } from "./constants"
-import { getDefaultModelId, getModelDimension, getModelScoreThreshold } from "../../shared/embeddingModels"
+import { EmbedderProvider } from "@shofer/core"
+import { CodeIndexConfig, PreviousConfigSnapshot } from "@shofer/core"
+import { DEFAULT_SEARCH_MIN_SCORE, DEFAULT_MAX_SEARCH_RESULTS } from "@shofer/core"
+import { getDefaultModelId, getModelDimension, getModelScoreThreshold } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 
 /**

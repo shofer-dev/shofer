@@ -1,4 +1,4 @@
-import type { IndexingState } from "../../code-index/interfaces/manager"
+import type { IndexingState } from "@shofer/core"
 import type { Event, EmitterDisposable } from "@shofer/types"
 
 /**

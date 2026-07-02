@@ -1,16 +1,21 @@
 // npx vitest services/code-index/__tests__/config-manager.spec.ts
 
 import { CodeIndexConfigManager } from "../config-manager"
-import { PreviousConfigSnapshot } from "../interfaces/config"
+import { PreviousConfigSnapshot } from "@shofer/core"
 
 // Mock ContextProxy
 vi.mock("../../../core/config/ContextProxy")
 
-// Mock embeddingModels module
-vi.mock("../../../shared/embeddingModels")
+// embeddingModels moved into @shofer/core; partial-mock only its helpers.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	getDefaultModelId: vi.fn(),
+	getModelDimension: vi.fn(),
+	getModelScoreThreshold: vi.fn(),
+}))
 
 // Import mocked functions
-import { getDefaultModelId, getModelDimension, getModelScoreThreshold } from "../../../shared/embeddingModels"
+import { getDefaultModelId, getModelDimension, getModelScoreThreshold } from "@shofer/core"
 
 // Type the mocked functions
 const mockedGetDefaultModelId = vi.mocked(getDefaultModelId)

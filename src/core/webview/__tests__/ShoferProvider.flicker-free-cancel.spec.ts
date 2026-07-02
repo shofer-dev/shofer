@@ -121,6 +121,8 @@ vi.mock("../../config/CustomModesManager")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	getWorkspacePath: vi.fn().mockReturnValue("/test/workspace"),
+	// embeddingModels moved into @shofer/core (was `../../../shared/embeddingModels`).
+	EMBEDDING_MODEL_PROFILES: [],
 }))
 
 // Mock TelemetryService
@@ -142,10 +144,6 @@ vi.mock("@shofer/cloud", () => ({
 		},
 	},
 	getShoferApiUrl: vi.fn().mockReturnValue("https://api.shofer-code.com"),
-}))
-
-vi.mock("../../../shared/embeddingModels", () => ({
-	EMBEDDING_MODEL_PROFILES: [],
 }))
 
 describe("ShoferProvider flicker-free cancel", () => {

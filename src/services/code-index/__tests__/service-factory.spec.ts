@@ -1,20 +1,21 @@
 import type { MockedClass, MockedFunction } from "vitest"
 import { CodeIndexServiceFactory } from "../service-factory"
-import { OpenAiEmbedder } from "../embedders/openai"
-import { CodeIndexOllamaEmbedder } from "../embedders/ollama"
-import { OpenAICompatibleEmbedder } from "../embedders/openai-compatible"
-import { GeminiEmbedder } from "../embedders/gemini"
-import { QdrantVectorStore } from "../vector-store/qdrant-client"
+import { OpenAiEmbedder } from "@shofer/core"
+import { CodeIndexOllamaEmbedder } from "@shofer/core"
+import { OpenAICompatibleEmbedder } from "@shofer/core"
+import { GeminiEmbedder } from "@shofer/core"
+import { QdrantVectorStore } from "@shofer/core"
 
-// Mock the embedders and vector store
-vitest.mock("../embedders/openai")
-vitest.mock("../embedders/ollama")
-vitest.mock("../embedders/openai-compatible")
-vitest.mock("../embedders/gemini")
-vitest.mock("../vector-store/qdrant-client")
-
-// Mock the embedding models module
-vitest.mock("../../../shared/embeddingModels", () => ({
+// The embedders, vector store, and embedding-model helpers moved into @shofer/core.
+// Partial-mock the barrel: replace only what this factory constructs / calls, leaving
+// the rest of the (real) core barrel intact.
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	OpenAiEmbedder: vitest.fn(),
+	CodeIndexOllamaEmbedder: vitest.fn(),
+	OpenAICompatibleEmbedder: vitest.fn(),
+	GeminiEmbedder: vitest.fn(),
+	QdrantVectorStore: vitest.fn(),
 	getDefaultModelId: vitest.fn(),
 	getModelDimension: vitest.fn(),
 }))
@@ -35,7 +36,7 @@ const MockedGeminiEmbedder = GeminiEmbedder as MockedClass<typeof GeminiEmbedder
 const MockedQdrantVectorStore = QdrantVectorStore as MockedClass<typeof QdrantVectorStore>
 
 // Import the mocked functions
-import { getDefaultModelId, getModelDimension } from "../../../shared/embeddingModels"
+import { getDefaultModelId, getModelDimension } from "@shofer/core"
 const mockGetDefaultModelId = getDefaultModelId as MockedFunction<typeof getDefaultModelId>
 const mockGetModelDimension = getModelDimension as MockedFunction<typeof getModelDimension>
 

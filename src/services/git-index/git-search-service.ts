@@ -1,6 +1,6 @@
 import type { GitSearchResult, IGitSearchService } from "./interfaces/git"
-import type { IEmbedder } from "../code-index/interfaces/embedder"
-import type { IVectorStore } from "../code-index/interfaces/vector-store"
+import type { IEmbedder } from "@shofer/core"
+import type { IVectorStore } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 

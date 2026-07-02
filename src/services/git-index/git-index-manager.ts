@@ -6,12 +6,12 @@ import { promisify } from "util"
 import type { ContextProxy } from "../../core/config/ContextProxy"
 import type { CodebaseIndexConfig } from "@shofer/types"
 import type { GitSearchResult } from "./interfaces/git"
-import type { IndexingState } from "../code-index/interfaces/manager"
-import type { IEmbedder } from "../code-index/interfaces/embedder"
+import type { IndexingState } from "@shofer/core"
+import type { IEmbedder } from "@shofer/core"
 
 import { CodeIndexConfigManager } from "../code-index/config-manager"
 import { CodeIndexServiceFactory } from "../code-index/service-factory"
-import { QdrantVectorStore } from "../code-index/vector-store/qdrant-client"
+import { QdrantVectorStore } from "@shofer/core"
 
 import { GitCacheManager } from "./git-cache-manager"
 import { GitHistoryStateManager } from "./git-state-manager"
@@ -535,7 +535,7 @@ export class GitIndexManager {
 
 		// Compute vector size using the same logic as CodeIndexServiceFactory.createVectorStore()
 		const config = configManager.getConfig()
-		const { getDefaultModelId, getModelDimension } = await import("../../shared/embeddingModels")
+		const { getDefaultModelId, getModelDimension } = await import("@shofer/core")
 		const provider = config.embedderProvider
 		const modelId = config.modelId ?? getDefaultModelId(provider)
 		let vectorSize: number | undefined = getModelDimension(provider, modelId)
