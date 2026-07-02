@@ -45,3 +45,6 @@ export * from "./text/output-truncation.js"
 export * from "./tools/defineNativeTool.js"
 export * from "./transport/index.js"
 export * from "./worktree/index.js"
+export * from "./i18n/index.js"
+// The default i18next instance for consumers that call `i18n.t(...)` directly.
+export { default as i18n } from "./i18n/index.js"
