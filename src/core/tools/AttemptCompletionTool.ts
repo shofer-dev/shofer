@@ -6,7 +6,7 @@ import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { Package } from "../../shared/package"
 import type { ToolUse } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"
 import { getOutputChannel } from "../../utils/outputChannel"
 

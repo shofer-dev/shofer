@@ -7,7 +7,7 @@ import {
 	INITIAL_RETRY_DELAY_MS as INITIAL_DELAY_MS,
 } from "../constants"
 import { getDefaultModelId, getModelQueryPrefix } from "../../../shared/embeddingModels"
-import { t } from "../../../i18n"
+import { t } from "@shofer/core"
 import { withValidationErrorHandling, HttpError, formatEmbeddingError } from "../shared/validation-helpers"
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"

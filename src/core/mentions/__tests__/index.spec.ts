@@ -12,7 +12,8 @@ vi.mock("vscode", () => ({
 }))
 
 // Mock i18n
-vi.mock("../../../i18n", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: vi.fn((key: string) => key),
 }))
 

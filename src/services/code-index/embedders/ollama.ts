@@ -1,7 +1,7 @@
 import { ApiHandlerOptions } from "@shofer/core"
 import { EmbedderInfo, EmbeddingResponse, IEmbedder } from "../interfaces"
 import { getModelQueryPrefix } from "../../../shared/embeddingModels"
-import { t } from "../../../i18n"
+import { t } from "@shofer/core"
 import { withValidationErrorHandling, sanitizeErrorMessage } from "../shared/validation-helpers"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"

@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import { Package } from "../shared/package"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
-import { t } from "../i18n"
+import { t } from "@shofer/core"
 
 /**
  * Handles the "New Task" command (pencil icon in sidebar header).

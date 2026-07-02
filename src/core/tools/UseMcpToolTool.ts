@@ -2,7 +2,7 @@ import type { ShoferAskUseMcpServer } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

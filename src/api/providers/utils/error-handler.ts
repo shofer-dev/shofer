@@ -9,8 +9,7 @@
  * - Enables telemetry and debugging with complete error context
  */
 
-import i18n from "../../../i18n/setup"
-import { apiLog } from "@shofer/core"
+import { apiLog, i18n } from "@shofer/core"
 
 /**
  * Handles API provider errors and transforms them into user-friendly messages

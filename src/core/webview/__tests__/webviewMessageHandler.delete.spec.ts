@@ -11,7 +11,8 @@ vi.mock("../../task-persistence", () => ({
 }))
 
 // Mock the i18n module
-vi.mock("../../../i18n", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: vi.fn((key: string) => key),
 	changeLanguage: vi.fn(),
 }))

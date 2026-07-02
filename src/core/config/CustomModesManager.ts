@@ -15,7 +15,7 @@ import { getGlobalShoferDirectory } from "../../services/shofer-config"
 import { configLog as logger } from "@shofer/core"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")

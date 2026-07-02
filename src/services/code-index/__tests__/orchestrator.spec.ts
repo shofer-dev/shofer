@@ -41,7 +41,8 @@ vi.mock("@shofer/telemetry", () => ({
 }))
 
 // Mock i18n translator used in orchestrator messages
-vi.mock("../../i18n", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: (key: string, params?: any) => {
 		if (key === "embeddings:orchestrator.failedDuringInitialScan" && params?.errorMessage) {
 			return `Failed during initial scan: ${params.errorMessage}`

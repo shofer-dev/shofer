@@ -4,6 +4,17 @@ import { FunctionCallingConfigMode } from "@google/genai"
 import { GeminiHandler } from "../gemini"
 import type { ApiHandlerOptions } from "@shofer/core"
 
+// The Gemini error paths call TelemetryService.instance.captureException; the
+// singleton is only initialized by the extension entry point, so mock it here
+// (matching the sibling provider specs) to keep this file self-contained.
+vitest.mock("@shofer/telemetry", () => ({
+	TelemetryService: {
+		instance: {
+			captureException: vitest.fn(),
+		},
+	},
+}))
+
 describe("GeminiHandler backend support", () => {
 	it("createMessage uses function declarations (URL context and grounding are only for completePrompt)", async () => {
 		// URL context and grounding are mutually exclusive with function declarations

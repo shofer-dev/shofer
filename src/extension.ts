@@ -70,7 +70,7 @@ import {
 	CodeActionProvider,
 } from "./activate"
 import { SlangEditorProvider } from "./core/webview/SlangEditorProvider"
-import { initializeI18n } from "./i18n"
+import { initializeI18n } from "@shofer/core"
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit

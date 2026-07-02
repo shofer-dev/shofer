@@ -94,7 +94,8 @@ vi.mock("../../shofer-config", () => ({
 }))
 
 // Mock i18n
-vi.mock("../../../i18n", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: (key: string, params?: Record<string, any>) => {
 		const translations: Record<string, string> = {
 			"skills:errors.name_length": `Skill name must be 1-${params?.maxLength} characters (got ${params?.length})`,

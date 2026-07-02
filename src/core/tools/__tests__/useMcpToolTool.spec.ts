@@ -25,9 +25,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 			return `Server '${server}' is not configured. Available servers: ${list}`
 		}),
 	},
-}))
-
-vi.mock("../../../i18n", () => ({
 	t: vi.fn((key: string, params?: any) => {
 		if (key === "mcp:errors.invalidJsonArgument" && params?.toolName) {
 			return `Shofer tried to use ${params.toolName} with an invalid JSON argument. Retrying...`

@@ -8,7 +8,7 @@ import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { customToolRegistry } from "@shofer/core"
 
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 import { defaultModeSlug, getModeBySlug } from "@shofer/core"
 import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "@shofer/core"

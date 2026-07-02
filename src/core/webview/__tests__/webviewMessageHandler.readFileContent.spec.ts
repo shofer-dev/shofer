@@ -27,10 +27,6 @@ vi.mock("vscode", async (importOriginal) => {
 	}
 })
 
-vi.mock("../../../i18n", () => ({
-	t: vi.fn((key: string) => key),
-}))
-
 vi.mock("fs/promises", () => {
 	const readFile = vi.fn().mockResolvedValue("file content here")
 	return {
@@ -55,6 +51,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	t: vi.fn((key: string) => key),
 }))
 vi.mock("../../../utils/globalContext")
 

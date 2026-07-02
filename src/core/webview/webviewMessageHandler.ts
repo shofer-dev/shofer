@@ -42,7 +42,7 @@ import {
 	handleUpdateSkillModes,
 	handleOpenSkillFile,
 } from "./skillsMessageHandler"
-import { changeLanguage, t } from "../../i18n"
+import { changeLanguage, t } from "@shofer/core"
 import { Package } from "../../shared/package"
 import { type RouterName, toRouterName } from "@shofer/core"
 import { MessageEnhancer } from "./messageEnhancer"

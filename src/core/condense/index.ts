@@ -3,7 +3,7 @@ import crypto from "crypto"
 
 import { TelemetryService } from "@shofer/telemetry"
 
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { ApiHandler, ApiHandlerCreateMessageMetadata } from "../../api"
 import { ApiMessage } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"

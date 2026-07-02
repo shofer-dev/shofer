@@ -3,7 +3,7 @@ import { ShoferProvider } from "./ShoferProvider"
 import { saveTaskMessages } from "../task-persistence"
 import { getHost } from "@shofer/types"
 import pWaitFor from "p-wait-for"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 
 export interface CheckpointRestoreConfig {

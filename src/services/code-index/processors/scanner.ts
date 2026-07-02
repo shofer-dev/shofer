@@ -12,7 +12,7 @@ import { v5 as uuidv5 } from "uuid"
 import pLimit from "p-limit"
 import { Mutex } from "async-mutex"
 import { CacheManager } from "../cache-manager"
-import { t } from "../../../i18n"
+import { t } from "@shofer/core"
 import {
 	QDRANT_CODE_BLOCK_NAMESPACE,
 	MAX_FILE_SIZE_BYTES,

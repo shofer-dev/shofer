@@ -1,6 +1,6 @@
 import stringify from "safe-stable-stringify"
 import { ToolUse } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 /**
  * Class for detecting consecutive identical tool calls

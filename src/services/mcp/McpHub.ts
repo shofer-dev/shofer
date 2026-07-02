@@ -38,7 +38,7 @@ import {
 	mcpErrorTypeToStatus,
 } from "../../metrics/registry"
 
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { mcpLog } from "./mcpLogger"

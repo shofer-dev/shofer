@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { generateImageWithImagesApi, generateImageWithProvider } from "../image-generation"
 
 // Mock the i18n module
-vi.mock("../../../i18n", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: (key: string, options?: any) => {
 		// Return a sensible mock for i18n
 		if (key === "tools:generateImage.failedWithMessage" && options?.message) {

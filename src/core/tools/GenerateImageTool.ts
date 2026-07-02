@@ -17,7 +17,7 @@ import { OpenRouterHandler } from "../../api/providers/openrouter"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 export class GenerateImageTool extends BaseTool<"generate_image"> {
 	readonly name = "generate_image" as const

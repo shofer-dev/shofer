@@ -1,7 +1,7 @@
 import { OpenAICompatibleEmbedder } from "./openai-compatible"
 import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces/embedder"
 import { MAX_ITEM_TOKENS } from "../constants"
-import { t } from "../../../i18n"
+import { t } from "@shofer/core"
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 

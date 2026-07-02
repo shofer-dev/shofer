@@ -6,7 +6,8 @@ import type { ToolUse } from "@shofer/core"
 
 import { ToolRepetitionDetector } from "../ToolRepetitionDetector"
 
-vitest.mock("../../../i18n", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: vitest.fn((key, options) => {
 		// For toolRepetitionLimitReached key, return a message with the tool name.
 		if (key === "tools:toolRepetitionLimitReached" && options?.toolName) {

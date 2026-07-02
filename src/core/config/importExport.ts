@@ -19,7 +19,7 @@ import { ProviderSettingsManager, providerProfilesSchema } from "./ProviderSetti
 import { ContextProxy } from "./ContextProxy"
 import { CustomModesManager } from "./CustomModesManager"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
 export type ImportOptions = {

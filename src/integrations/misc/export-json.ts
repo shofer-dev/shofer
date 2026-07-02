@@ -4,7 +4,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 
 import type { ExtendedContentBlock } from "./export-markdown"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { stringifyJsonToFile } from "../../utils/exportJsonWorker"
 
 /**

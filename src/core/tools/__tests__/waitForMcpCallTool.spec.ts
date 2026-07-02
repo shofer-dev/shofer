@@ -6,13 +6,12 @@ import { ToolUse } from "@shofer/core"
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	t: vi.fn((k: string) => k),
 	formatResponse: {
 		toolResult: vi.fn((result: string) => `Tool result: ${result}`),
 		toolError: vi.fn((error: string) => `Tool error: ${error}`),
 	},
 }))
-
-vi.mock("../../../i18n", () => ({ t: vi.fn((k: string) => k) }))
 
 const captureMcpAsyncCallTimedOut = vi.fn()
 

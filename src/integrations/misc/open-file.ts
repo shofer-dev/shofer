@@ -3,7 +3,7 @@ import * as os from "os"
 import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 import { arePathsEqual, getWorkspacePath } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { fsLog } from "@shofer/core"
 
 interface OpenFileOptions {

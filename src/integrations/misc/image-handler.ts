@@ -2,7 +2,7 @@ import * as path from "path"
 import * as os from "os"
 import * as vscode from "vscode"
 import { getWorkspacePath } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import { getHost } from "@shofer/types"
 
 export async function openImage(dataUriOrPath: string, options?: { values?: { action?: string } }) {

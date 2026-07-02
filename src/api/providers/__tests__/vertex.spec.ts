@@ -3,6 +3,17 @@
 // Mock vscode first to avoid import errors
 vitest.mock("vscode", () => ({}))
 
+// The Gemini error paths call TelemetryService.instance.captureException; the
+// singleton is only initialized by the extension entry point, so mock it here
+// (matching the sibling provider specs) to keep this file self-contained.
+vitest.mock("@shofer/telemetry", () => ({
+	TelemetryService: {
+		instance: {
+			captureException: vitest.fn(),
+		},
+	},
+}))
+
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import { ApiStreamChunk } from "@shofer/core"
