@@ -86,7 +86,7 @@ import { RepoPerTaskCheckpointService } from "@shofer/core"
 
 // integrations
 import type { DiffView } from "@shofer/types"
-import { findToolName } from "../../integrations/misc/export-markdown"
+import { findToolName } from "@shofer/core"
 import { ShoferTerminalProcess } from "@shofer/types"
 import { TerminalRegistry } from "@shofer/core"
 import { OutputInterceptor } from "@shofer/core"

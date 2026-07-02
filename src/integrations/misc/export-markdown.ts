@@ -157,16 +157,3 @@ export function formatContentBlockToMarkdown(block: ExtendedContentBlock): strin
 			return `[Unexpected content type: ${block.type}]`
 	}
 }
-
-export function findToolName(toolCallId: string, messages: Anthropic.MessageParam[]): string {
-	for (const message of messages) {
-		if (Array.isArray(message.content)) {
-			for (const block of message.content) {
-				if (block.type === "tool_use" && block.id === toolCallId) {
-					return block.name
-				}
-			}
-		}
-	}
-	return "Unknown Tool"
-}

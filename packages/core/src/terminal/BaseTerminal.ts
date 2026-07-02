@@ -36,6 +36,14 @@ export abstract class BaseTerminal implements ShoferTerminal {
 		return this.initialCwd
 	}
 
+	/**
+	 * Bring the terminal's UI to the foreground. No-op by default (headless
+	 * `execa` provider has no panel); the vscode-backed terminal overrides this.
+	 */
+	public show(_preserveFocus?: boolean): void {
+		// no-op for headless terminals
+	}
+
 	abstract isClosed(): boolean
 
 	abstract runCommand(command: string, callbacks: ShoferTerminalCallbacks): ShoferTerminalProcessResultPromise

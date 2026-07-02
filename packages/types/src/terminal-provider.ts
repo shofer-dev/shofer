@@ -16,6 +16,12 @@ export interface ShoferTerminal {
 	taskId?: string
 	process?: ShoferTerminalProcess
 	getCurrentWorkingDirectory(): string
+	/**
+	 * Bring the terminal's UI to the foreground, if it has one. A no-op for the
+	 * headless `execa` provider; the vscode-backed terminal reveals its panel.
+	 * @param preserveFocus When true, the terminal is revealed without stealing focus.
+	 */
+	show(preserveFocus?: boolean): void
 	isClosed: () => boolean
 	runCommand: (command: string, callbacks: ShoferTerminalCallbacks) => ShoferTerminalProcessResultPromise
 	setActiveStream(stream: AsyncIterable<string> | undefined, pid?: number): void

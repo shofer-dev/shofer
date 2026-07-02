@@ -72,6 +72,7 @@ describe("executeCommand", () => {
 			initialCwd: "/test/project",
 			getCurrentWorkingDirectory: vitest.fn().mockReturnValue("/test/project"),
 			runCommand: vitest.fn().mockReturnValue(mockProcess),
+			show: vitest.fn(),
 			terminal: {
 				show: vitest.fn(),
 			},

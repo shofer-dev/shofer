@@ -38,6 +38,14 @@ export class Terminal extends BaseTerminal {
 	}
 
 	/**
+	 * Reveals the underlying vscode terminal panel.
+	 * @param preserveFocus When true, the terminal is shown without stealing focus.
+	 */
+	public override show(preserveFocus?: boolean): void {
+		this.terminal.show(preserveFocus)
+	}
+
+	/**
 	 * The exit status of the terminal will be undefined while the terminal is
 	 * active. (This value is set when onDidCloseTerminal is fired.)
 	 */

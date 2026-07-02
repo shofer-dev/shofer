@@ -13,7 +13,7 @@ import { ToolUse, ToolResponse } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "@shofer/types"
 import { TerminalRegistry } from "@shofer/core"
-import { Terminal } from "../../integrations/terminal/Terminal"
+import { BaseTerminal } from "@shofer/core"
 import { OutputInterceptor } from "@shofer/core"
 import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
@@ -353,7 +353,7 @@ export async function executeCommandInTerminal(
 			interceptor?.write(lines)
 
 			// Continue sending compressed output to webview for UI display (unchanged behavior)
-			const compressedOutput = Terminal.compressTerminalOutput(accumulatedOutput)
+			const compressedOutput = BaseTerminal.compressTerminalOutput(accumulatedOutput)
 			latestCompressedOutput = compressedOutput
 			const status: CommandExecutionStatus = { executionId, status: "output", output: compressedOutput }
 			provider?.postMessageToWebview({ type: "commandExecutionStatus", text: JSON.stringify(status) })
@@ -391,7 +391,7 @@ export async function executeCommandInTerminal(
 				}
 
 				// Continue using compressed output for UI display
-				result = Terminal.compressTerminalOutput(output ?? "")
+				result = BaseTerminal.compressTerminalOutput(output ?? "")
 				latestCompressedOutput = result
 
 				// Preserve order: wait for queued partial updates, then emit the final
@@ -437,8 +437,9 @@ export async function executeCommandInTerminal(
 
 	const terminal = await TerminalRegistry.getOrCreateTerminal(workingDir, task.taskId, terminalProvider)
 
-	if (terminal instanceof Terminal) {
-		terminal.terminal.show(true)
+	if (terminalProvider === "vscode") {
+		// Reveal the vscode terminal panel (no-op for the headless execa provider).
+		terminal.show(true)
 
 		// Update the working directory in case the terminal we asked for has
 		// a different working directory so that the model will know where the
