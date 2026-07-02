@@ -1,6 +1,6 @@
 import { APIError } from "openai"
 
-import { checkContextWindowExceededError } from "../context-error-handling"
+import { checkContextWindowExceededError } from "../context-error-handling.js"
 
 describe("checkContextWindowExceededError", () => {
 	describe("OpenAI errors", () => {

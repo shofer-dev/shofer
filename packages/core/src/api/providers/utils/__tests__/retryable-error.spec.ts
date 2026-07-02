@@ -1,4 +1,4 @@
-import { isNonRetryableApiError } from "../retryable-error"
+import { isNonRetryableApiError } from "../retryable-error.js"
 
 describe("isNonRetryableApiError", () => {
 	describe("non-retryable auth/authorization errors", () => {

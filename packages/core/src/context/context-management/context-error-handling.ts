@@ -15,7 +15,13 @@ function checkIsOpenRouterContextWindowError(error: unknown): boolean {
 		}
 
 		// Use Record<string, any> for proper type narrowing
-		const err = error as Record<string, any>
+		const err = error as {
+			status?: unknown
+			code?: unknown
+			message?: unknown
+			response?: { status?: unknown }
+			error?: { status?: unknown; message?: unknown }
+		}
 		const status = err.status ?? err.code ?? err.error?.status ?? err.response?.status
 		const message: string = String(err.message || err.error?.message || "")
 
@@ -62,7 +68,7 @@ function checkIsAnthropicContextWindowError(response: unknown): boolean {
 		}
 
 		// Use type assertions with proper checks
-		const res = response as Record<string, any>
+		const res = response as { error?: { error?: { type?: unknown; message?: unknown; code?: unknown } } }
 
 		// Check for Anthropic-specific error structure with more specific validation
 		if (res.error?.error?.type === "invalid_request_error") {

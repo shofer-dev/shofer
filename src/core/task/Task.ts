@@ -125,8 +125,7 @@ import {
 } from "../task-persistence"
 import { getHost } from "@shofer/types"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails"
-import { checkContextWindowExceededError } from "../context/context-management/context-error-handling"
-import { isNonRetryableApiError } from "../../api/providers/utils/retryable-error"
+import { checkContextWindowExceededError, isNonRetryableApiError } from "@shofer/core"
 import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,

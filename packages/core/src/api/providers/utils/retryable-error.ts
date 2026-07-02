@@ -38,7 +38,12 @@ function extractStatus(error: unknown): number | undefined {
 		return undefined
 	}
 
-	const e = error as Record<string, any>
+	const e = error as {
+		status?: unknown
+		code?: unknown
+		response?: { status?: unknown }
+		error?: { status?: unknown; code?: unknown }
+	}
 	const raw = e.status ?? e.error?.status ?? e.error?.code ?? e.response?.status ?? e.code
 
 	const numeric = typeof raw === "string" ? Number(raw) : raw
