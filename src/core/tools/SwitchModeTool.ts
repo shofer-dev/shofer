@@ -5,7 +5,7 @@ import { formatResponse } from "@shofer/core"
 import { getModeBySlug } from "../../shared/modes"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 interface SwitchModeParams {
 	mode_slug: string

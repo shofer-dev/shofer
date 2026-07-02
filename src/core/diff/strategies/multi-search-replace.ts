@@ -3,7 +3,7 @@ import { distance } from "fastest-levenshtein"
 import { ToolProgressStatus } from "@shofer/types"
 
 import { addLineNumbers, everyLineHasLineNumbers, stripLineNumbers } from "../../../integrations/misc/extract-text"
-import { ToolUse, DiffStrategy, DiffResult } from "../../../shared/tools"
+import { ToolUse, DiffStrategy, DiffResult } from "@shofer/core"
 import { normalizeString } from "../../../utils/text-normalization"
 
 const BUFFER_LINES = 40 // Number of extra context lines to show before and after matches

@@ -24,7 +24,7 @@ import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 interface InsertEditParams {
 	path: string

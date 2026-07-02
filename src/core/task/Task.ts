@@ -77,7 +77,7 @@ import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "@shofer/core"
 import { ShoferAskResponse } from "@shofer/core"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
+import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "@shofer/core"
 import { getModelMaxOutputTokens } from "@shofer/core"
 
 // services
@@ -5746,7 +5746,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						if (block.type === "mcp_tool_use") {
 							// McpToolUse already has the original tool name (e.g., "mcp_serverName_toolName")
 							// The arguments are the raw tool arguments (matching the simplified schema)
-							const mcpBlock = block as import("../../shared/tools").McpToolUse
+							const mcpBlock = block as import("@shofer/core").McpToolUse
 							if (mcpBlock.id) {
 								const sanitizedId = sanitizeToolUseId(mcpBlock.id)
 								// Pre-flight deduplication: Skip if we've already added this ID
@@ -5766,7 +5766,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							}
 						} else {
 							// Regular ToolUse
-							const toolUse = block as import("../../shared/tools").ToolUse
+							const toolUse = block as import("@shofer/core").ToolUse
 							const toolCallId = toolUse.id
 							if (toolCallId) {
 								const sanitizedId = sanitizeToolUseId(toolCallId)

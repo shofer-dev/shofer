@@ -12,7 +12,7 @@
  */
 
 import { sanitizeToolUseId } from "@shofer/core"
-import type { ToolUse, McpToolUse } from "../../../shared/tools"
+import type { ToolUse, McpToolUse } from "@shofer/core"
 
 describe("Duplicate tool_use ID Prevention", () => {
 	describe("Pre-flight deduplication logic", () => {

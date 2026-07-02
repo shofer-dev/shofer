@@ -6,7 +6,7 @@ import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import type { TaskLifecycle } from "@shofer/types"
 import { formatResponse } from "@shofer/core"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 const DEFAULT_TIMEOUT_SECONDS = 120
 

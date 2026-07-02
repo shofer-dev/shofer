@@ -4,7 +4,7 @@ import { customToolRegistry } from "@shofer/core"
 
 import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "../../shared/modes"
 import { EXPERIMENT_IDS } from "../../shared/experiments"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/tools"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
 
 /**
  * Check whether a tool name belongs to a tool from a private provider

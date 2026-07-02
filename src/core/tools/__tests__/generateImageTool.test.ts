@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { generateImageTool } from "../GenerateImageTool"
-import { ToolUse } from "../../../shared/tools"
+import { ToolUse } from "@shofer/core"
 import { Task } from "../../task/Task"
 import * as fs from "fs/promises"
 import * as pathUtils from "../../../utils/pathUtils"

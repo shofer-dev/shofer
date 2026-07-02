@@ -3,7 +3,7 @@ import { formatResponse } from "@shofer/core"
 import { getCommand, getCommandNames } from "../../services/command/commands"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getModeBySlug } from "../../shared/modes"
 import {

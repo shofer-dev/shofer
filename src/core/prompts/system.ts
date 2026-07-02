@@ -12,7 +12,7 @@ import {
 import { pluginRegistry } from "@shofer/core"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "../../shared/modes"
-import { DiffStrategy } from "../../shared/tools"
+import { DiffStrategy } from "@shofer/core"
 import { formatLanguage } from "../../shared/language"
 import { isEmpty } from "../../utils/object"
 

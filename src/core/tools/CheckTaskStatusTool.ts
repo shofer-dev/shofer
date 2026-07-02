@@ -7,7 +7,7 @@ import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
 import { getModeBySlug } from "../../shared/modes"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { readTaskMessages } from "../task-persistence/taskMessages"
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 

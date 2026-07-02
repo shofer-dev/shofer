@@ -7,7 +7,7 @@
 
 import * as path from "path"
 
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
 import { getHost } from "@shofer/types"

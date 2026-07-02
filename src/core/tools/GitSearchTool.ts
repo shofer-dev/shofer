@@ -3,7 +3,7 @@ import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import type { GitSearchResult } from "../../services/git-index/interfaces/git"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"

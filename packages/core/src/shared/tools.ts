@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ShoferAsk, ToolProgressStatus, ToolGroup, ToolName, GenerateImageParams } from "@shofer/types"
+import type { ShoferAsk, ToolProgressStatus, ToolName, GenerateImageParams } from "@shofer/types"
 
 // NOTE: When adding a new tool parameter name to toolParamNames, also add it
 // to NativeToolArgs if the tool uses native (typed) arguments.
@@ -479,5 +479,5 @@ export interface DiffStrategy {
 		endLine?: number,
 	): Promise<DiffResult>
 
-	getProgressStatus?(toolUse: ToolUse, result?: any): ToolProgressStatus
+	getProgressStatus?(toolUse: ToolUse, result?: unknown): ToolProgressStatus
 }

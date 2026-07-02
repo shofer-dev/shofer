@@ -3,7 +3,7 @@ import type { ParamField } from "@shofer/types"
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

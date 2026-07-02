@@ -7,7 +7,7 @@
  * via an auto-approved `task.ask("tool", ...)` entry.
  */
 
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { Task } from "../task/Task"
 import { getOutputChannel } from "../../utils/outputChannel"
 

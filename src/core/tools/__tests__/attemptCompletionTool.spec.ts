@@ -1,6 +1,6 @@
 import { ShoferEventName, TodoItem } from "@shofer/types"
 
-import { AttemptCompletionToolUse } from "../../../shared/tools"
+import { AttemptCompletionToolUse } from "@shofer/core"
 
 // Mock the formatResponse module before importing the tool
 vi.mock("@shofer/core", async (importOriginal) => ({

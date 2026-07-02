@@ -11,7 +11,7 @@ import { customToolRegistry } from "@shofer/core"
 import { t } from "../../i18n"
 
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
-import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "../../shared/tools"
+import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "@shofer/core"
 
 import { AskIgnoredError } from "@shofer/core"
 import { Task } from "../task/Task"

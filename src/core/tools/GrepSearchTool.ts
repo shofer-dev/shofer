@@ -31,7 +31,7 @@ import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { getBinPath } from "@shofer/core"
 import type { ShoferIgnoreController } from "@shofer/core"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"

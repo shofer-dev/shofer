@@ -13,7 +13,7 @@ import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

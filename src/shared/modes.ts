@@ -7,7 +7,7 @@ import {
 	DEFAULT_MODES,
 } from "@shofer/types"
 
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tools"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "@shofer/core"
 
 export type Mode = string
 

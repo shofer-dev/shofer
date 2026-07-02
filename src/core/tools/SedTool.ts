@@ -22,7 +22,7 @@ import { computeDiffStats } from "../diff/stats"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 interface SedParams {

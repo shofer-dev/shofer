@@ -1,5 +1,5 @@
 import type { ShoferSayTool } from "@shofer/types"
-import { TOOL_GROUPS } from "../../shared/tools"
+import { TOOL_GROUPS } from "@shofer/core"
 
 /**
  * Map of ShoferSayTool.tool (camelCase) values to their snake_case tool names.

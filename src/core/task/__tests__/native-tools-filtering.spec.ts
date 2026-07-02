@@ -22,7 +22,7 @@ describe("Native Tools Filtering by Mode", () => {
 
 			// Import the functions we need to test
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
-			const { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } = await import("../../../shared/tools")
+			const { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/core")
 			const { getGroupName } = await import("../../../shared/modes")
 
 			// Test architect mode - should NOT have edit tools
@@ -112,7 +112,7 @@ describe("Native Tools Filtering by Mode", () => {
 			}
 
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
-			const { ALWAYS_AVAILABLE_TOOLS } = await import("../../../shared/tools")
+			const { ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/core")
 
 			// Always-available tools should work even with no groups
 			ALWAYS_AVAILABLE_TOOLS.forEach((tool) => {

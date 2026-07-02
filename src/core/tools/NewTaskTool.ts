@@ -12,7 +12,7 @@ import { parseMarkdownChecklist } from "./UpdateTodoListTool"
 import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { parseToolBoolean } from "./helpers/toolInputParsing"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 interface NewTaskParams {

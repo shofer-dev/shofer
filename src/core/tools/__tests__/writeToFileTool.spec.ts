@@ -6,7 +6,7 @@ import { fileExistsAtPath, createDirectoriesForFile } from "../../../utils/fs"
 import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
 import { getReadablePath } from "@shofer/core"
 import { everyLineHasLineNumbers, stripLineNumbers } from "../../../integrations/misc/extract-text"
-import { ToolUse, ToolResponse } from "../../../shared/tools"
+import { ToolUse, ToolResponse } from "@shofer/core"
 import { writeToFileTool } from "../WriteToFileTool"
 
 vi.mock("path", async () => {

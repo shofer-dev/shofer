@@ -23,7 +23,7 @@ import { getReadablePath } from "@shofer/core"
 import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../integrations/misc/extract-text"
 import { readWithIndentation, readWithSlice } from "../../integrations/misc/indentation-reader"
 import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
-import type { ToolUse, PushToolResult } from "../../shared/tools"
+import type { ToolUse, PushToolResult } from "@shofer/core"
 
 import {
 	DEFAULT_MAX_IMAGE_FILE_SIZE_MB,

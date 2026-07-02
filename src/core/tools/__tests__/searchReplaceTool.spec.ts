@@ -6,7 +6,7 @@ import type { MockedFunction } from "vitest"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
 import { getReadablePath } from "@shofer/core"
-import { ToolUse, ToolResponse } from "../../../shared/tools"
+import { ToolUse, ToolResponse } from "@shofer/core"
 import { searchReplaceTool } from "../SearchReplaceTool"
 
 vi.mock("fs/promises", () => ({

@@ -2,7 +2,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import type { TaskLifecycle } from "@shofer/types"
 
 type ListBackgroundTasksParams = {

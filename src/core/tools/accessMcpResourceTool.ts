@@ -1,6 +1,6 @@
 import type { ShoferAskUseMcpServer } from "@shofer/types"
 
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"

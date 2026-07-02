@@ -3,7 +3,7 @@ import type { ShoferAskUseMcpServer } from "@shofer/types"
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { t } from "../../i18n"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { validateMcpToolExists, processMcpToolContent, runMcpToolCall } from "./mcp/use-mcp-shared"

@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest"
 import type { ModeConfig } from "@shofer/types"
 
 import { modes } from "../../../shared/modes"
-import { TOOL_GROUPS } from "../../../shared/tools"
+import { TOOL_GROUPS } from "@shofer/core"
 
 import { validateToolUse, isToolAllowedForMode } from "../validateToolUse"
 

@@ -2,7 +2,7 @@
 
 import { waitForMcpCallTool } from "../WaitForMcpCallTool"
 import { Task, type McpAsyncCallHandle } from "../../task/Task"
-import { ToolUse } from "../../../shared/tools"
+import { ToolUse } from "@shofer/core"
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),

@@ -14,7 +14,7 @@ import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

@@ -4,7 +4,7 @@ import * as fs from "fs/promises"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
 import { getReadablePath } from "@shofer/core"
-import { ToolUse, ToolResponse } from "../../../shared/tools"
+import { ToolUse, ToolResponse } from "@shofer/core"
 import { sedTool } from "../SedTool"
 
 vi.mock("fs/promises", () => ({

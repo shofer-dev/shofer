@@ -14,7 +14,7 @@ import { type ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import type { ToolUse, ToolResponse } from "../../shared/tools"
+import type { ToolUse, ToolResponse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

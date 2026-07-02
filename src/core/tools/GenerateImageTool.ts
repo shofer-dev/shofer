@@ -15,7 +15,7 @@ import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { OpenRouterHandler } from "../../api/providers/openrouter"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { t } from "../../i18n"
 

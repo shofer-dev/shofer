@@ -2,7 +2,7 @@
 
 import { useMcpToolTool } from "../UseMcpToolTool"
 import { Task } from "../../task/Task"
-import { ToolUse } from "../../../shared/tools"
+import { ToolUse } from "@shofer/core"
 
 // Mock dependencies
 vi.mock("@shofer/core", async (importOriginal) => ({

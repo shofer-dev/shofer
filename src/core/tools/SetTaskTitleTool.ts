@@ -6,7 +6,7 @@
  * shows in the chat UI for visibility.
  */
 
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { Task } from "../task/Task"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

@@ -4,13 +4,7 @@ import { distance } from "fastest-levenshtein"
 import { type ToolName, toolNames, type FileEntry } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
 
-import {
-	type ToolUse,
-	type McpToolUse,
-	type ToolParamName,
-	type NativeToolArgs,
-	toolParamNames,
-} from "../../shared/tools"
+import { type ToolUse, type McpToolUse, type ToolParamName, type NativeToolArgs, toolParamNames } from "@shofer/core"
 import { resolveToolAlias } from "../prompts/tools/filter-tools-for-mode"
 import type { ApiStreamToolCallStartChunk, ApiStreamToolCallDeltaChunk, ApiStreamToolCallEndChunk } from "@shofer/core"
 import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpToolName } from "../../utils/mcp-name"

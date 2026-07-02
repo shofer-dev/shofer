@@ -2,7 +2,7 @@ import path from "path"
 
 import type { MockedFunction } from "vitest"
 
-import type { ToolUse } from "../../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../../utils/pathUtils"
 import type { Task } from "../../task/Task"
 import { ApplyPatchTool } from "../ApplyPatchTool"

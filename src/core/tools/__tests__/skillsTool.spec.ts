@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { skillsTool } from "../SkillsTool"
 import { Task } from "../../task/Task"
 import { formatResponse } from "@shofer/core"
-import type { ToolUse } from "../../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 describe("skillsTool", () => {
 	let mockTask: any

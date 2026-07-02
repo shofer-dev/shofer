@@ -2,7 +2,7 @@
 
 import type { ToolName } from "@shofer/types"
 
-import type { ToolUse } from "../../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { ToolRepetitionDetector } from "../ToolRepetitionDetector"
 

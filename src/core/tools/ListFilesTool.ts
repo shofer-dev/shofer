@@ -7,7 +7,7 @@ import { formatResponse } from "@shofer/core"
 import { listFiles } from "../../services/glob/list-files"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

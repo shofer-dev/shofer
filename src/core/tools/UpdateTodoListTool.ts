@@ -1,7 +1,7 @@
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 import cloneDeep from "clone-deep"
 import crypto from "crypto"
 import { TodoItem, TodoStatus, todoStatusSchema } from "@shofer/types"

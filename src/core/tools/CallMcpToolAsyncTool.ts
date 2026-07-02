@@ -3,7 +3,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Task, type McpAsyncCallHandle } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import type { ToolUse } from "../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { validateMcpToolExists, runMcpToolCall } from "./mcp/use-mcp-shared"

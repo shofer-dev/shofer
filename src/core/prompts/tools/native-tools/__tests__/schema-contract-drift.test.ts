@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import type OpenAI from "openai"
 
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_DISPLAY_NAMES, toolNames } from "@shofer/types"
-import { toolParamNames } from "../../../../../shared/tools"
+import { toolParamNames } from "@shofer/core"
 import { getNativeTools } from "../index"
 
 /**

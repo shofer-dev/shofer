@@ -55,7 +55,7 @@ vi.mock("vscode", async () => {
 
 import { GrepSearchTool } from "../GrepSearchTool"
 import type { Task } from "../../task/Task"
-import type { ToolUse } from "../../../shared/tools"
+import type { ToolUse } from "@shofer/core"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
