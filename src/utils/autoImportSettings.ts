@@ -3,7 +3,7 @@ import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as os from "os"
 
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 import { fileExistsAtPath } from "./fs"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"

@@ -50,6 +50,7 @@ export function installVsCodeForwardingHost(): void {
 			get machineId() {
 				return vscode.env.machineId
 			},
+			appInfo: { name: "shofer", version: "0.0.0", outputChannel: "Shofer" },
 		},
 		config: {
 			get: <T>(section: string, key: string, defaultValue: T): T =>

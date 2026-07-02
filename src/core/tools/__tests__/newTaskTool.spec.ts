@@ -12,18 +12,16 @@ vi.mock("vscode", () => ({
 }))
 
 // Mock Package module
-vi.mock("../../../shared/package", () => ({
+
+// Mock other modules first - these are hoisted to the top
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	Package: {
 		name: "shofer",
 		publisher: "shofer",
 		version: "1.0.0",
 		outputChannel: "Shofer",
 	},
-}))
-
-// Mock other modules first - these are hoisted to the top
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	getModeBySlug: vi.fn(),
 	defaultModeSlug: "code",
 	formatResponse: {
@@ -646,7 +644,7 @@ describe("newTaskTool", () => {
 			} as any)
 			vi.mocked(vscode.workspace.getConfiguration).mockImplementation(mockGetConfiguration)
 
-			const pkg = await import("../../../shared/package")
+			const pkg = await import("@shofer/core")
 			;(pkg.Package as any).name = "shofer-nightly"
 
 			const block: ToolUse<"new_task"> = {

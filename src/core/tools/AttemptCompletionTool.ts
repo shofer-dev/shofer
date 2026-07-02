@@ -4,7 +4,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 import { t } from "@shofer/core"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"

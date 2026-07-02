@@ -5,7 +5,7 @@ import OpenAI from "openai"
 
 import { RequestyHandler } from "../requesty"
 import { ApiHandlerOptions } from "@shofer/core"
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 import { ApiHandlerCreateMessageMetadata } from "../../index"
 
 const mockCreate = vitest.fn()

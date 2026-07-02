@@ -8,7 +8,7 @@ import { TelemetryEventName } from "@shofer/types"
 import { t } from "@shofer/core"
 
 import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 
 import { ShoferIgnoreController } from "@shofer/core"
 

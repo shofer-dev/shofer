@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import { CodeActionName, CodeActionId } from "@shofer/types"
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 
 import { getCodeActionCommand } from "../utils/commands"
 import { EditorUtils } from "../integrations/editor/EditorUtils"

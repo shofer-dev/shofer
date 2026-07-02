@@ -23,7 +23,7 @@ import {
 } from "@shofer/types"
 import { IpcServer } from "@shofer/ipc"
 
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "../services/command/commands"

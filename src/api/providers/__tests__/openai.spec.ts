@@ -5,7 +5,7 @@ import { ApiHandlerOptions } from "@shofer/core"
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { openAiModelInfoSaneDefaults } from "@shofer/types"
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 import axios from "axios"
 
 const mockCreate = vitest.fn()

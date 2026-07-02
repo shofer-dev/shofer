@@ -15,7 +15,7 @@ import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from 
 import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { OutputInterceptor } from "@shofer/core"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"

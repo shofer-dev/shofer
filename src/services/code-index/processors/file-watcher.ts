@@ -27,7 +27,7 @@ import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 
 /**

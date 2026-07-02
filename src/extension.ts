@@ -42,7 +42,7 @@ import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
-import { Package } from "./shared/package"
+import { Package } from "@shofer/core"
 import { formatLanguage } from "./shared/language"
 import { ContextProxy } from "./core/config/ContextProxy"
 import { ShoferProvider } from "./core/webview/ShoferProvider"

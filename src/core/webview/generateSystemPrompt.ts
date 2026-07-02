@@ -5,7 +5,7 @@ import { buildApiHandler } from "../../api"
 
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 
 import { ShoferProvider } from "./ShoferProvider"
 import { webviewLog } from "@shofer/core"

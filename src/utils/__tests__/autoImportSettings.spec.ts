@@ -99,9 +99,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	configLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 	t: vi.fn((key: string) => key),
-}))
-
-vi.mock("../../shared/package", () => ({
 	Package: { name: "arkware" },
 }))
 

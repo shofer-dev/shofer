@@ -12,7 +12,7 @@ import debounce from "lodash.debounce"
 import delay from "delay"
 import pWaitFor from "p-wait-for"
 import { serializeError } from "serialize-error"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import { formatToolInvocation } from "@shofer/core"
 
 import {

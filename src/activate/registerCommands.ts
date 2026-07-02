@@ -8,7 +8,7 @@ import delay from "delay"
 import type { CommandId } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 import { getCommand } from "../utils/commands"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { ContextProxy } from "../core/config/ContextProxy"

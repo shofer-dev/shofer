@@ -30,7 +30,7 @@ import type { IIgnoreFilter } from "../shared/git-ignore-filter"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { sanitizeErrorMessage } from "../shared/validation-helpers"
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 
 export class DirectoryScanner implements IDirectoryScanner {

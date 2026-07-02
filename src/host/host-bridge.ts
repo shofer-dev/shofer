@@ -11,6 +11,7 @@ import type {
 	HostDiagnostic,
 	HostDiagnosticSeverity,
 	HostEnv,
+	AppInfo,
 	HostFileEdit,
 	HostFileSystem,
 	HostLsp,
@@ -30,6 +31,7 @@ import type {
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { Terminal } from "../integrations/terminal/Terminal"
 import { ShellIntegrationManager } from "../integrations/terminal/ShellIntegrationManager"
+import { publisher as pkgPublisher, name as pkgName, version as pkgVersion } from "../package.json"
 
 /**
  * VS Code-backed implementation of the host boundary (§9). This is the extension
@@ -99,6 +101,17 @@ class VsCodeConfig implements HostConfig {
 	}
 }
 
+// App/build identity — was `shared/package`'s `Package`. `PKG_*` env vars let ESBuild
+// override the package.json values to build differently-branded extension variants.
+const vsCodeAppInfo: AppInfo = {
+	publisher: pkgPublisher,
+	name: process.env.PKG_NAME || pkgName,
+	version: process.env.PKG_VERSION || pkgVersion,
+	outputChannel: process.env.PKG_OUTPUT_CHANNEL || "Shofer",
+	sha: process.env.PKG_SHA,
+	changelog: process.env.PKG_CHANGELOG,
+}
+
 const vsCodeEnv: HostEnv = {
 	get language() {
 		return vscode.env.language
@@ -109,6 +122,7 @@ const vsCodeEnv: HostEnv = {
 	get machineId() {
 		return vscode.env.machineId
 	},
+	appInfo: vsCodeAppInfo,
 }
 
 function mapSeverity(severity: vscode.DiagnosticSeverity): HostDiagnosticSeverity {

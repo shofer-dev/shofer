@@ -14,7 +14,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"

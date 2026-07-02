@@ -5,7 +5,14 @@ import {
 	resolveVersionedSettings,
 	type VersionedSettings,
 } from "../versionedSettings"
-import { Package } from "../../../../shared/package"
+import { Package } from "@shofer/core"
+
+// Package now reads app identity from getHost() via getters; this test mutates
+// Package.name directly, so mock it as a plain mutable object.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	Package: { name: "shofer", version: "0.0.0", outputChannel: "Shofer" },
+}))
 
 describe("versionedSettings", () => {
 	describe("compareSemver", () => {

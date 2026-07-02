@@ -3,7 +3,7 @@ import { v7 as uuidv7 } from "uuid"
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import {
 	type ModelInfo,
 	openAiNativeDefaultModelId,

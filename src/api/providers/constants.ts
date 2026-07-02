@@ -1,4 +1,4 @@
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 
 export const DEFAULT_HEADERS = {
 	"HTTP-Referer": "https://github.com/shofer-dev/shofer",

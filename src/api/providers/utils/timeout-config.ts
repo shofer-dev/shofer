@@ -1,4 +1,4 @@
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 import { getHost } from "@shofer/types"
 
 /**

@@ -43,7 +43,7 @@ import {
 	handleOpenSkillFile,
 } from "./skillsMessageHandler"
 import { changeLanguage, t } from "@shofer/core"
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import { type RouterName, toRouterName } from "@shofer/core"
 import { MessageEnhancer } from "./messageEnhancer"
 

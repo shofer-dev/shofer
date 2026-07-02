@@ -5,6 +5,9 @@ import { AttemptCompletionToolUse } from "@shofer/core"
 // Mock the formatResponse module before importing the tool
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	Package: {
+		name: "shofer",
+	},
 	formatResponse: {
 		toolError: vi.fn((msg: string) => `Error: ${msg}`),
 		toolResult: vi.fn((msg: string) => `Result: ${msg}`),
@@ -45,11 +48,6 @@ vi.mock("vscode", () => ({
 }))
 
 // Mock Package module
-vi.mock("../../../shared/package", () => ({
-	Package: {
-		name: "shofer",
-	},
-}))
 
 import { attemptCompletionTool, AttemptCompletionCallbacks } from "../AttemptCompletionTool"
 import { Task } from "../../task/Task"

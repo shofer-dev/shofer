@@ -1,6 +1,6 @@
 import cmp from "semver-compare"
 
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 
 function isNightlyBuild(): boolean {
 	return Package.name.toLowerCase().includes("nightly")

@@ -7,7 +7,7 @@ import OpenAI from "openai"
 
 import { OpenRouterHandler } from "../openrouter"
 import { ApiHandlerOptions } from "@shofer/core"
-import { Package } from "../../../shared/package"
+import { Package } from "@shofer/core"
 
 vitest.mock("openai")
 vitest.mock("delay", () => ({ default: vitest.fn(() => Promise.resolve()) }))

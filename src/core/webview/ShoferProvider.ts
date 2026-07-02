@@ -51,7 +51,7 @@ import {
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import { findLast } from "@shofer/core"
 import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"

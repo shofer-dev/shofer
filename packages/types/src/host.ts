@@ -191,6 +191,20 @@ export interface HostWorkspace {
 }
 
 /** Host environment facts the core needs (maps to `vscode.env`). */
+/**
+ * Front-end/build identity — what the extension's `package.json` + `PKG_*` build env
+ * used to expose as `shared/package`'s `Package`. Host-provided so the portable core
+ * doesn't read the extension's `package.json`.
+ */
+export interface AppInfo {
+	readonly publisher?: string
+	readonly name: string
+	readonly version: string
+	readonly outputChannel: string
+	readonly sha?: string
+	readonly changelog?: string
+}
+
 export interface HostEnv {
 	/** UI display language / locale (maps to `vscode.env.language`, e.g. "en"). */
 	readonly language: string
@@ -198,6 +212,8 @@ export interface HostEnv {
 	readonly appRoot: string
 	/** Stable anonymous machine id for telemetry (maps to `vscode.env.machineId`). */
 	readonly machineId: string
+	/** Front-end/build identity (publisher/name/version/…) — supplants `shared/package`. */
+	readonly appInfo: AppInfo
 }
 
 /** Options for {@link HostFileSystem.findFiles}. */

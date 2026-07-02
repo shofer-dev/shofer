@@ -4,7 +4,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { constants as fsConstants } from "fs"
 
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
 import { fsLog } from "@shofer/core"
 

@@ -11,7 +11,7 @@
  */
 
 import * as vscode from "vscode"
-import { Package } from "../shared/package"
+import { Package } from "@shofer/core"
 import { utilLog } from "@shofer/core"
 
 /**

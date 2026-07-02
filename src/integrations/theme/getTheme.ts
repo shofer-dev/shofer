@@ -3,7 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { convertTheme } from "monaco-vscode-textmate-theme-converter/lib/cjs"
 
-import { Package } from "../../shared/package"
+import { Package } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 const defaultThemes: Record<string, string> = {
