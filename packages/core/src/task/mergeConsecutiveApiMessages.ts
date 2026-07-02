@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ApiMessage } from "../task-persistence"
+import type { ApiMessage } from "../task-persistence/apiMessages.js"
 
 type Role = ApiMessage["role"]
 
@@ -43,7 +43,7 @@ export function mergeConsecutiveApiMessages(messages: ApiMessage[], options?: { 
 	// adjacent elements, so no mergeable input pair ⇒ no merge happens. [perf H27]
 	let hasMergeable = false
 	for (let i = 1; i < messages.length; i++) {
-		if (canMergePair(messages[i - 1], messages[i])) {
+		if (canMergePair(messages[i - 1]!, messages[i]!)) {
 			hasMergeable = true
 			break
 		}

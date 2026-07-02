@@ -1,6 +1,6 @@
 // npx vitest run core/task/__tests__/mergeConsecutiveApiMessages.spec.ts
 
-import { mergeConsecutiveApiMessages } from "../mergeConsecutiveApiMessages"
+import { mergeConsecutiveApiMessages } from "../mergeConsecutiveApiMessages.js"
 
 describe("mergeConsecutiveApiMessages", () => {
 	it("merges consecutive user messages by default", () => {
@@ -11,12 +11,12 @@ describe("mergeConsecutiveApiMessages", () => {
 		])
 
 		expect(merged).toHaveLength(2)
-		expect(merged[0].role).toBe("user")
-		expect(merged[0].content).toEqual([
+		expect(merged[0]!.role).toBe("user")
+		expect(merged[0]!.content).toEqual([
 			{ type: "text", text: "A" },
 			{ type: "text", text: "B" },
 		])
-		expect(merged[1].role).toBe("assistant")
+		expect(merged[1]!.role).toBe("assistant")
 	})
 
 	it("merges regular user message into a summary (API shaping only)", () => {
@@ -26,8 +26,8 @@ describe("mergeConsecutiveApiMessages", () => {
 		])
 
 		expect(merged).toHaveLength(1)
-		expect(merged[0].isSummary).toBe(true)
-		expect(merged[0].content).toEqual([
+		expect(merged[0]!.isSummary).toBe(true)
+		expect(merged[0]!.content).toEqual([
 			{ type: "text", text: "Summary" },
 			{ type: "text", text: "After" },
 		])
@@ -40,7 +40,7 @@ describe("mergeConsecutiveApiMessages", () => {
 		])
 
 		expect(merged).toHaveLength(2)
-		expect(merged[0].isSummary).toBeUndefined()
-		expect(merged[1].isSummary).toBe(true)
+		expect(merged[0]!.isSummary).toBeUndefined()
+		expect(merged[1]!.isSummary).toBe(true)
 	})
 })
