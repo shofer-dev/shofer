@@ -17,7 +17,7 @@ import { findLast } from "@shofer/types"
 import { SuggestionItem } from "@shofer/types"
 import { getAllModes } from "@shofer/types"
 import { ProfileValidator } from "@shofer/shared/ProfileValidator"
-import { getLatestTodo } from "@shofer/shared/todo"
+import { getLatestTodo } from "@shofer/types"
 import { escapeSpaces } from "@src/utils/path-mentions"
 
 import { Heart, Star, Store } from "lucide-react"

@@ -21,7 +21,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { formatResponse } from "@shofer/core"
 import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
-import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"

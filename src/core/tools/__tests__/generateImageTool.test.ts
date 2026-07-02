@@ -6,7 +6,7 @@ import * as fs from "fs/promises"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import * as fileUtils from "../../../utils/fs"
 import { formatResponse } from "@shofer/core"
-import { EXPERIMENT_IDS } from "../../../shared/experiments"
+import { EXPERIMENT_IDS } from "@shofer/types"
 import { OpenRouterHandler } from "@shofer/core"
 
 // Mock dependencies

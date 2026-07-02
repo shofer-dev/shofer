@@ -46,7 +46,8 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 	VSCodeOption: ({ children, value }: any) => <option value={value}>{children}</option>,
 }))
 
-vi.mock("@shofer/shared/experiments", () => ({
+vi.mock("@shofer/types", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/types")>()),
 	EXPERIMENT_IDS: {},
 	experimentConfigsMap: {},
 }))

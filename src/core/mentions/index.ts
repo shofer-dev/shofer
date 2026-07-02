@@ -19,7 +19,7 @@ import { FileContextTracker } from "../context-tracking/FileContextTracker"
 import { ShoferIgnoreController } from "@shofer/core"
 import { getCommand, type Command } from "../../services/command/commands"
 import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
-import type { SkillContent } from "../../shared/skills"
+import type { SkillContent } from "@shofer/types"
 import { webviewLog } from "@shofer/core"
 
 export async function openMention(cwd: string, mention?: string): Promise<void> {

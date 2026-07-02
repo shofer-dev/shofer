@@ -1,4 +1,5 @@
-import type { AssertEqual, Equals, Keys, Values, ExperimentId, Experiments } from "@shofer/types"
+import type { AssertEqual, Equals, Keys, Values } from "./type-fu.js"
+import type { ExperimentId, Experiments } from "./experiment.js"
 
 export const EXPERIMENT_IDS = {
 	PREVENT_FOCUS_DISRUPTION: "preventFocusDisruption",

@@ -7,7 +7,7 @@ import delay from "delay"
 
 import type { ExperimentId } from "@shofer/types"
 
-import { formatLanguage } from "../../shared/language"
+import { formatLanguage } from "@shofer/types"
 import { defaultModeSlug } from "@shofer/core"
 import { getFullModeDetails } from "../modes/getFullModeDetails"
 import { getApiMetrics } from "@shofer/core"

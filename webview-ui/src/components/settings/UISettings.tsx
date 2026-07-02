@@ -4,7 +4,7 @@ import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { telemetryClient } from "@/utils/TelemetryClient"
 
 import type { Experiments } from "@shofer/types"
-import { EXPERIMENT_IDS } from "@shofer/shared/experiments"
+import { EXPERIMENT_IDS } from "@shofer/types"
 
 import { SetCachedStateField, SetExperimentEnabled } from "./types"
 import { SectionHeader } from "./SectionHeader"
@@ -124,10 +124,7 @@ export const UISettings = ({
 					</SearchableSetting>
 
 					{/* Text-to-speech (moved here from the dropped Notifications section). */}
-					<SearchableSetting
-						settingId="ui-tts"
-						section="ui"
-						label={t("settings:notifications.tts.label")}>
+					<SearchableSetting settingId="ui-tts" section="ui" label={t("settings:notifications.tts.label")}>
 						<VSCodeCheckbox
 							checked={ttsEnabled}
 							onChange={(e: any) => setCachedStateField("ttsEnabled", e.target.checked)}

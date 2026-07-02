@@ -1,6 +1,6 @@
 import { resolveSkillContentForMode, buildSkillApprovalMessage, buildSkillResult } from "../skillInvocation"
 import type { SkillLookup } from "../skillInvocation"
-import type { SkillContent } from "../../../shared/skills"
+import type { SkillContent } from "@shofer/types"
 
 describe("skillInvocation", () => {
 	const mockSkillContent: SkillContent = {

@@ -13,7 +13,7 @@ import { pluginRegistry } from "@shofer/core"
 
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "@shofer/core"
 import { DiffStrategy } from "@shofer/core"
-import { formatLanguage } from "../../shared/language"
+import { formatLanguage } from "@shofer/types"
 import { isEmpty } from "../../utils/object"
 
 import { McpHub } from "@shofer/core"

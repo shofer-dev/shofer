@@ -53,7 +53,7 @@ import { getConfiguredCustomStoragePath } from "./utils/storage"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "@shofer/core"
-import { formatLanguage } from "./shared/language"
+import { formatLanguage } from "@shofer/types"
 import { ContextProxy } from "./core/config/ContextProxy"
 import { ShoferProvider } from "./core/webview/ShoferProvider"
 import { ContextDropZoneProvider, addUrisToContext } from "./core/webview/ContextDropZoneProvider"
