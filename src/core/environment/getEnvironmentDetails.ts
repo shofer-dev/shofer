@@ -15,7 +15,7 @@ import { listFiles } from "../../services/glob/list-files"
 import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "@shofer/core"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { getGitStatus } from "../../utils/git"
 
 import { Task } from "../task/Task"

@@ -1,7 +1,7 @@
 import { Task } from "../task/Task"
 import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { getWorkspacePath } from "@shofer/core"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"

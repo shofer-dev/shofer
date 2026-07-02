@@ -4,7 +4,7 @@ import type { ToolUsage } from "@shofer/types"
 import * as vscode from "vscode"
 
 import { Task } from "../../task/Task"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { ToolUse, AskApproval, HandleError, PushToolResult } from "../../../shared/tools"
 import { unescapeHtmlEntities } from "../../../utils/text-normalization"
 
@@ -26,18 +26,21 @@ vitest.mock("vscode", () => ({
 }))
 
 // TerminalRegistry now lives in @shofer/core; mock it there (keep the rest of the barrel).
-vitest.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	TerminalRegistry: {
-		getOrCreateTerminal: vitest.fn().mockResolvedValue({
-			runCommand: vitest.fn().mockResolvedValue(undefined),
-			getCurrentWorkingDirectory: vitest.fn().mockReturnValue("/test/workspace"),
-		}),
-	},
-}))
+vitest.mock("@shofer/core", async (importOriginal) => {
+	const orig = (await importOriginal()) as Record<string, unknown>
+	return {
+		...orig,
+		formatResponse: { ...(orig.formatResponse as Record<string, unknown>), shoferIgnoreError: vitest.fn() },
+		TerminalRegistry: {
+			getOrCreateTerminal: vitest.fn().mockResolvedValue({
+				runCommand: vitest.fn().mockResolvedValue(undefined),
+				getCurrentWorkingDirectory: vitest.fn().mockReturnValue("/test/workspace"),
+			}),
+		},
+	}
+})
 
 vitest.mock("../../task/Task")
-vitest.mock("../../prompts/responses")
 
 // Import the module
 import * as executeCommandModule from "../ExecuteCommandTool"

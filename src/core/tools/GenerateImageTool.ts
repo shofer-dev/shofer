@@ -8,7 +8,7 @@ import {
 	getImageGenerationProvider,
 } from "@shofer/types"
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { fileExistsAtPath } from "../../utils/fs"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"

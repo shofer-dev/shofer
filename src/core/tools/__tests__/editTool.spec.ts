@@ -36,14 +36,6 @@ vi.mock("../../../utils/fs", () => ({
 	fileExistsAtPath: vi.fn().mockResolvedValue(true),
 }))
 
-vi.mock("../../prompts/responses", () => ({
-	formatResponse: {
-		toolError: vi.fn((msg: string) => `Error: ${msg}`),
-		shoferIgnoreError: vi.fn((filePath: string) => `Access denied: ${filePath}`),
-		createPrettyPatch: vi.fn(() => "mock-diff"),
-	},
-}))
-
 vi.mock("../../../utils/pathUtils", () => ({
 	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
 }))
@@ -51,6 +43,11 @@ vi.mock("../../../utils/pathUtils", () => ({
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
+	formatResponse: {
+		toolError: vi.fn((msg: string) => `Error: ${msg}`),
+		shoferIgnoreError: vi.fn((filePath: string) => `Access denied: ${filePath}`),
+		createPrettyPatch: vi.fn(() => "mock-diff"),
+	},
 }))
 
 vi.mock("../../diff/stats", () => ({

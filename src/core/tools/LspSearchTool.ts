@@ -16,7 +16,7 @@
 import * as path from "path"
 
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { getHost } from "@shofer/types"
 import type { ToolUse } from "../../shared/tools"
 

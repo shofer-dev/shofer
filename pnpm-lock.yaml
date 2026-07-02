@@ -391,9 +391,15 @@ importers:
 
   packages/core:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.37.0
+        version: 0.37.0
       '@shofer/types':
         specifier: workspace:^
         version: link:../types
+      diff:
+        specifier: ^5.2.0
+        version: 5.2.0
       esbuild:
         specifier: '>=0.25.0'
         version: 0.25.9
@@ -431,6 +437,9 @@ importers:
       '@shofer/config-typescript':
         specifier: workspace:^
         version: link:../config-typescript
+      '@types/diff':
+        specifier: ^5.2.1
+        version: 5.2.3
       '@types/node':
         specifier: ^24.1.0
         version: 24.2.1

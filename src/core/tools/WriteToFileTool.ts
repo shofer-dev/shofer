@@ -5,7 +5,7 @@ import fs from "fs/promises"
 import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { fileExistsAtPath, createDirectoriesForFile } from "../../utils/fs"
 import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/misc/extract-text"

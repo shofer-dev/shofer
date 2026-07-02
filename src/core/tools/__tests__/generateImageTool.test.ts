@@ -5,7 +5,7 @@ import { Task } from "../../task/Task"
 import * as fs from "fs/promises"
 import * as pathUtils from "../../../utils/pathUtils"
 import * as fileUtils from "../../../utils/fs"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
 import { OpenRouterHandler } from "../../../api/providers/openrouter"
 

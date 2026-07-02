@@ -18,7 +18,7 @@ import {
 
 import { createDirectoriesForFile } from "../../utils/fs"
 import { arePathsEqual, getReadablePath } from "@shofer/core"
-import { formatResponse } from "../../core/prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { diagnosticsToProblemsString, getNewDiagnostics } from "../diagnostics"
 
 import { DecorationController } from "./DecorationController"

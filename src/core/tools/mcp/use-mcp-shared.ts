@@ -2,7 +2,7 @@ import type { McpExecutionStatus, McpToolCallResponse, ToolName } from "@shofer/
 
 import type { Task } from "../../task/Task"
 import type { ShoferProvider } from "../../webview/ShoferProvider"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { t } from "../../../i18n"
 import { toolNamesMatch } from "../../../utils/mcp-name"
 import { mcpLog } from "@shofer/core"

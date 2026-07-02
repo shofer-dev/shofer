@@ -2,7 +2,7 @@ import type { ShoferAskUseMcpServer } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task, type McpAsyncCallHandle } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

@@ -10,7 +10,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { Task } from "../task/Task"
 
 import { ToolUse, ToolResponse } from "../../shared/tools"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { ExitCodeDetails, ShoferTerminalCallbacks, ShoferTerminalProcess } from "@shofer/types"
 import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../integrations/terminal/Terminal"

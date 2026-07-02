@@ -16,7 +16,7 @@ import { FileContextTracker } from "../../context-tracking/FileContextTracker"
 import { ApiHandler } from "../../../api/index"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ShoferIgnoreController } from "@shofer/core"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { getGitStatus } from "../../../utils/git"
 import { Task } from "../../task/Task"
 
@@ -45,23 +45,26 @@ vi.mock("execa", () => ({
 vi.mock("../../modes/getFullModeDetails")
 vi.mock("../../../services/glob/list-files")
 vi.mock("../../../integrations/terminal/Terminal")
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	getApiMetrics: vi.fn(),
-	arePathsEqual: vi.fn(),
-	getReadablePath: vi.fn(),
-	toRelativePath: vi.fn(),
-	getWorkspacePath: vi.fn(),
-	getWorkspacePathForContext: vi.fn(),
-	TerminalRegistry: {
-		getBackgroundTerminals: vi.fn(() => []),
-		getTerminals: vi.fn(() => []),
-		getUnretrievedOutput: vi.fn(() => ""),
-		isProcessHot: vi.fn(() => false),
-	},
-}))
+vi.mock("@shofer/core", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("@shofer/core")>()
+	return {
+		...orig,
+		getApiMetrics: vi.fn(),
+		arePathsEqual: vi.fn(),
+		getReadablePath: vi.fn(),
+		toRelativePath: vi.fn(),
+		getWorkspacePath: vi.fn(),
+		getWorkspacePathForContext: vi.fn(),
+		formatResponse: { ...orig.formatResponse, formatFilesList: vi.fn() },
+		TerminalRegistry: {
+			getBackgroundTerminals: vi.fn(() => []),
+			getTerminals: vi.fn(() => []),
+			getUnretrievedOutput: vi.fn(() => ""),
+			isProcessHot: vi.fn(() => false),
+		},
+	}
+})
 vi.mock("../../../utils/git")
-vi.mock("../../prompts/responses")
 vi.mock("../../tools/validateToolUse")
 
 describe("getEnvironmentDetails", () => {

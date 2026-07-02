@@ -3,7 +3,7 @@ import { getHost } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { Package } from "../../shared/package"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"

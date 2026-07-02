@@ -27,7 +27,8 @@ vi.mock("../../../shared/modes", () => ({
 	defaultModeSlug: "code",
 }))
 
-vi.mock("../../prompts/responses", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	formatResponse: {
 		toolError: vi.fn((msg: string) => `Tool Error: ${msg}`),
 	},

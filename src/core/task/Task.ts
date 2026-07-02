@@ -100,7 +100,7 @@ import { getTaskDirectoryPath } from "../../utils/storage"
 import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "@shofer/core"
 
 // prompts
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool"

@@ -10,9 +10,6 @@ vi.mock("../../../services/git-index/git-index-manager", () => ({
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	getWorkspacePath: vi.fn().mockReturnValue("/test/workspace"),
-}))
-
-vi.mock("../../prompts/responses", () => ({
 	formatResponse: {
 		toolDenied: vi.fn().mockReturnValue("Tool denied by user."),
 	},

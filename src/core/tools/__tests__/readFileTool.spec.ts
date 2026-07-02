@@ -17,7 +17,7 @@ import path from "path"
 import { isBinaryFile } from "isbinaryfile"
 
 import { readFileTool, ReadFileTool } from "../ReadFileTool"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import {
 	validateImageForProcessing,
 	processImageFile,
@@ -72,7 +72,8 @@ vi.mock("../helpers/imageHelpers", () => ({
 	})),
 }))
 
-vi.mock("../../prompts/responses", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	formatResponse: {
 		toolDenied: vi.fn(() => "The user denied this operation."),
 		toolDeniedWithFeedback: vi.fn(

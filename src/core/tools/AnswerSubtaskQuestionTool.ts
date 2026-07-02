@@ -1,7 +1,7 @@
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "../../shared/tools"
 
 interface AnswerSubtaskQuestionParams {

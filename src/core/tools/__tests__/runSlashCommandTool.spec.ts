@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { runSlashCommandTool } from "../RunSlashCommandTool"
 import { Task } from "../../task/Task"
-import { formatResponse } from "../../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { getCommand, getCommandNames } from "../../../services/command/commands"
 import type { ToolUse } from "../../../shared/tools"
 

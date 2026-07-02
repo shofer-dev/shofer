@@ -16,7 +16,7 @@ import type { ReadFileParams, ReadFileMode, ReadFileToolParams, FileEntry, LineR
 import { isLegacyReadFileParams, type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { isPathOutsideWorkspace } from "../../utils/pathUtils"
 import { getReadablePath } from "@shofer/core"

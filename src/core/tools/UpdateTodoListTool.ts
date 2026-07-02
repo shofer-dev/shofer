@@ -1,5 +1,5 @@
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import cloneDeep from "clone-deep"

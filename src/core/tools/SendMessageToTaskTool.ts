@@ -5,7 +5,7 @@ import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import type { TaskLifecycle } from "@shofer/types"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "../../shared/tools"
 
 const DEFAULT_TIMEOUT_SECONDS = 120

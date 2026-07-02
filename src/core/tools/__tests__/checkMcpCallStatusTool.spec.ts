@@ -4,7 +4,8 @@ import { checkMcpCallStatusTool } from "../CheckMcpCallStatusTool"
 import { Task, type McpAsyncCallHandle } from "../../task/Task"
 import { ToolUse } from "../../../shared/tools"
 
-vi.mock("../../prompts/responses", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	formatResponse: {
 		toolResult: vi.fn((result: string) => `Tool result: ${result}`),
 		toolError: vi.fn((error: string) => `Tool error: ${error}`),

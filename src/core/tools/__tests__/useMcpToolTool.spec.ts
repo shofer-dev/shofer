@@ -5,7 +5,8 @@ import { Task } from "../../task/Task"
 import { ToolUse } from "../../../shared/tools"
 
 // Mock dependencies
-vi.mock("../../prompts/responses", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	formatResponse: {
 		toolResult: vi.fn((result: string, images?: string[]) => {
 			if (images && images.length > 0) {

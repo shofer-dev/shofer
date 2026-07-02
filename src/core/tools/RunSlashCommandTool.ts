@@ -1,5 +1,5 @@
 import { Task } from "../task/Task"
-import { formatResponse } from "../prompts/responses"
+import { formatResponse } from "@shofer/core"
 import { getCommand, getCommandNames } from "../../services/command/commands"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { BaseTool, ToolCallbacks } from "./BaseTool"

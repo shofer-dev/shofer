@@ -2,7 +2,7 @@
 
 import type { Mock } from "vitest"
 
-import { formatResponse } from "../responses"
+import { formatResponse } from "@shofer/core"
 import { ShoferIgnoreController, LOCK_TEXT_SYMBOL } from "@shofer/core"
 import { promises as fsPromises } from "fs"
 import * as fs from "fs/promises"

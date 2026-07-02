@@ -15,7 +15,9 @@
 		"clean": "rimraf .turbo"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.37.0",
 		"@shofer/types": "workspace:^",
+		"diff": "^5.2.0",
 		"esbuild": "^0.25.0",
 		"execa": "^9.5.2",
 		"fzf": "^0.5.2",
@@ -28,6 +30,7 @@
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {
+		"@types/diff": "^5.2.1",
 		"@types/ps-tree": "^1.1.6",
 		"@shofer/config-eslint": "workspace:^",
 		"@shofer/config-typescript": "workspace:^",
