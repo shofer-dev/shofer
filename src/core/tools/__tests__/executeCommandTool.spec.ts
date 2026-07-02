@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 import { Task } from "../../task/Task"
 import { formatResponse } from "@shofer/core"
 import { ToolUse, AskApproval, HandleError, PushToolResult } from "@shofer/core"
-import { unescapeHtmlEntities } from "../../../utils/text-normalization"
+import { unescapeHtmlEntities } from "@shofer/core"
 
 // Mock dependencies
 vitest.mock("execa", () => ({

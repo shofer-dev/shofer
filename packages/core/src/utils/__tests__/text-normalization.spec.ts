@@ -1,4 +1,4 @@
-import { normalizeString, unescapeHtmlEntities } from "../text-normalization"
+import { normalizeString, unescapeHtmlEntities } from "../text-normalization.js"
 
 describe("Text normalization utilities", () => {
 	describe("normalizeString", () => {
