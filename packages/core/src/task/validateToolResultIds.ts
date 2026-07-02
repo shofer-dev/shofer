@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@shofer/telemetry"
-import { findLastIndex } from "@shofer/core"
+import { findLastIndex } from "../shared/array.js"
 
 /**
  * Custom error class for tool result ID mismatches.
@@ -62,7 +62,7 @@ export function validateAndFixToolResultIds(
 		return userMessage
 	}
 
-	const previousAssistantMessage = apiConversationHistory[prevAssistantIdx]
+	const previousAssistantMessage = apiConversationHistory[prevAssistantIdx]!
 
 	// Get tool_use blocks from the assistant message
 	const assistantContent = previousAssistantMessage.content
@@ -188,7 +188,7 @@ export function validateAndFixToolResultIds(
 
 			// Try to match by position - only fix if there's a corresponding tool_use
 			if (toolResultIndex !== -1 && toolResultIndex < toolUseBlocks.length) {
-				const correctId = toolUseBlocks[toolResultIndex].id
+				const correctId = toolUseBlocks[toolResultIndex]!.id
 				// Only use this ID if it hasn't been used yet
 				if (!usedToolUseIds.has(correctId)) {
 					usedToolUseIds.add(correctId)

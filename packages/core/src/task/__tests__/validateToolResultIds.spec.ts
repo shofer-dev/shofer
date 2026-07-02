@@ -4,7 +4,7 @@ import {
 	validateAndFixToolResultIds,
 	ToolResultIdMismatchError,
 	MissingToolResultError,
-} from "../validateToolResultIds"
+} from "../validateToolResultIds.js"
 
 // Mock TelemetryService
 vi.mock("@shofer/telemetry", () => ({
@@ -140,8 +140,8 @@ describe("validateAndFixToolResultIds", () => {
 
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
-			expect(resultContent[0].tool_use_id).toBe("correct-id-123")
-			expect(resultContent[0].content).toBe("File content")
+			expect(resultContent[0]!.tool_use_id).toBe("correct-id-123")
+			expect(resultContent[0]!.content).toBe("File content")
 		})
 
 		it("should fix multiple mismatched tool_use_ids by position", () => {
@@ -183,8 +183,8 @@ describe("validateAndFixToolResultIds", () => {
 
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
-			expect(resultContent[0].tool_use_id).toBe("correct-1")
-			expect(resultContent[1].tool_use_id).toBe("correct-2")
+			expect(resultContent[0]!.tool_use_id).toBe("correct-1")
+			expect(resultContent[1]!.tool_use_id).toBe("correct-2")
 		})
 
 		it("should partially fix when some IDs match and some don't", () => {
@@ -226,8 +226,8 @@ describe("validateAndFixToolResultIds", () => {
 
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
-			expect(resultContent[0].tool_use_id).toBe("id-1")
-			expect(resultContent[1].tool_use_id).toBe("id-2")
+			expect(resultContent[0]!.tool_use_id).toBe("id-1")
+			expect(resultContent[1]!.tool_use_id).toBe("id-2")
 		})
 	})
 
@@ -264,10 +264,10 @@ describe("validateAndFixToolResultIds", () => {
 
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>
-			expect(resultContent[0].type).toBe("tool_result")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
-			expect(resultContent[1].type).toBe("text")
-			expect((resultContent[1] as Anthropic.TextBlockParam).text).toBe("Additional context")
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
+			expect(resultContent[1]!.type).toBe("text")
+			expect((resultContent[1]! as Anthropic.TextBlockParam).text).toBe("Additional context")
 		})
 	})
 
@@ -304,7 +304,7 @@ describe("validateAndFixToolResultIds", () => {
 
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
-			expect(resultContent[0].tool_use_id).toBe("tool-123")
+			expect(resultContent[0]!.tool_use_id).toBe("tool-123")
 		})
 	})
 
@@ -393,7 +393,7 @@ describe("validateAndFixToolResultIds", () => {
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
 			// Only one tool_result should remain - the first one gets fixed to tool-1
 			expect(resultContent.length).toBe(1)
-			expect(resultContent[0].tool_use_id).toBe("tool-1")
+			expect(resultContent[0]!.tool_use_id).toBe("tool-1")
 		})
 
 		it("should filter out duplicate tool_results when one already has a valid ID", () => {
@@ -435,7 +435,7 @@ describe("validateAndFixToolResultIds", () => {
 			// The first invalid one gets fixed to the valid ID, then the second one
 			// (which already has that ID) becomes a duplicate and is filtered out
 			expect(resultContent.length).toBe(1)
-			expect(resultContent[0].tool_use_id).toBe("call_55577629")
+			expect(resultContent[0]!.tool_use_id).toBe("call_55577629")
 		})
 
 		it("should preserve text blocks while filtering orphaned tool_results", () => {
@@ -477,10 +477,10 @@ describe("validateAndFixToolResultIds", () => {
 			const resultContent = result.content as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>
 			// Should have tool_result + text block, orphaned tool_result filtered out
 			expect(resultContent.length).toBe(2)
-			expect(resultContent[0].type).toBe("tool_result")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-1")
-			expect(resultContent[1].type).toBe("text")
-			expect((resultContent[1] as Anthropic.TextBlockParam).text).toBe("Some additional context")
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-1")
+			expect(resultContent[1]!.type).toBe("text")
+			expect((resultContent[1]! as Anthropic.TextBlockParam).text).toBe("Some additional context")
 		})
 
 		// Verifies fix for GitHub #10465: Terminal fallback race condition can generate
@@ -522,8 +522,8 @@ describe("validateAndFixToolResultIds", () => {
 
 			// Only ONE tool_result should remain to prevent API protocol violation
 			expect(resultContent.length).toBe(1)
-			expect(resultContent[0].tool_use_id).toBe("tooluse_QZ-pU8v2QKO8L8fHoJRI2g")
-			expect(resultContent[0].content).toBe("No test processes found")
+			expect(resultContent[0]!.tool_use_id).toBe("tooluse_QZ-pU8v2QKO8L8fHoJRI2g")
+			expect(resultContent[0]!.content).toBe("No test processes found")
 		})
 
 		it("should preserve text blocks while deduplicating tool_results with same valid ID", () => {
@@ -566,11 +566,11 @@ describe("validateAndFixToolResultIds", () => {
 
 			// Should have: 1 tool_result + 1 text block (duplicate filtered out)
 			expect(resultContent.length).toBe(2)
-			expect(resultContent[0].type).toBe("tool_result")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).content).toBe("First result")
-			expect(resultContent[1].type).toBe("text")
-			expect((resultContent[1] as Anthropic.TextBlockParam).text).toBe("Environment details here")
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).content).toBe("First result")
+			expect(resultContent[1]!.type).toBe("text")
+			expect((resultContent[1]! as Anthropic.TextBlockParam).text).toBe("Environment details here")
 		})
 	})
 
@@ -612,10 +612,10 @@ describe("validateAndFixToolResultIds", () => {
 			// Should now have 2 tool_results: one fixed and one added for the missing tool_use
 			expect(resultContent.length).toBe(2)
 			// The missing tool_result is prepended
-			expect(resultContent[0].tool_use_id).toBe("tool-2")
-			expect(resultContent[0].content).toBe("Tool execution was interrupted before completion.")
+			expect(resultContent[0]!.tool_use_id).toBe("tool-2")
+			expect(resultContent[0]!.content).toBe("Tool execution was interrupted before completion.")
 			// The original is fixed
-			expect(resultContent[1].tool_use_id).toBe("tool-1")
+			expect(resultContent[1]!.tool_use_id).toBe("tool-1")
 		})
 	})
 
@@ -649,13 +649,13 @@ describe("validateAndFixToolResultIds", () => {
 			const resultContent = result.content as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>
 			expect(resultContent.length).toBe(2)
 			// Missing tool_result should be prepended
-			expect(resultContent[0].type).toBe("tool_result")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).content).toBe(
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-123")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).content).toBe(
 				"Tool execution was interrupted before completion.",
 			)
 			// Original text block should be preserved
-			expect(resultContent[1].type).toBe("text")
+			expect(resultContent[1]!.type).toBe("text")
 		})
 
 		it("should add missing tool_results for multiple tool_uses", () => {
@@ -693,12 +693,12 @@ describe("validateAndFixToolResultIds", () => {
 			const resultContent = result.content as Array<Anthropic.ToolResultBlockParam | Anthropic.TextBlockParam>
 			expect(resultContent.length).toBe(3)
 			// Both missing tool_results should be prepended
-			expect(resultContent[0].type).toBe("tool_result")
-			expect((resultContent[0] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-1")
-			expect(resultContent[1].type).toBe("tool_result")
-			expect((resultContent[1] as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-2")
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect((resultContent[0]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-1")
+			expect(resultContent[1]!.type).toBe("tool_result")
+			expect((resultContent[1]! as Anthropic.ToolResultBlockParam).tool_use_id).toBe("tool-2")
 			// Original text should be preserved
-			expect(resultContent[2].type).toBe("text")
+			expect(resultContent[2]!.type).toBe("text")
 		})
 
 		it("should add only the missing tool_results when some exist", () => {
@@ -737,11 +737,11 @@ describe("validateAndFixToolResultIds", () => {
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
 			expect(resultContent.length).toBe(2)
 			// Missing tool_result for tool-2 should be prepended
-			expect(resultContent[0].tool_use_id).toBe("tool-2")
-			expect(resultContent[0].content).toBe("Tool execution was interrupted before completion.")
+			expect(resultContent[0]!.tool_use_id).toBe("tool-2")
+			expect(resultContent[0]!.content).toBe("Tool execution was interrupted before completion.")
 			// Existing tool_result should be preserved
-			expect(resultContent[1].tool_use_id).toBe("tool-1")
-			expect(resultContent[1].content).toBe("Content for tool 1")
+			expect(resultContent[1]!.tool_use_id).toBe("tool-1")
+			expect(resultContent[1]!.content).toBe("Content for tool 1")
 		})
 
 		it("should handle empty user content array by adding all missing tool_results", () => {
@@ -767,9 +767,9 @@ describe("validateAndFixToolResultIds", () => {
 			expect(Array.isArray(result.content)).toBe(true)
 			const resultContent = result.content as Anthropic.ToolResultBlockParam[]
 			expect(resultContent.length).toBe(1)
-			expect(resultContent[0].type).toBe("tool_result")
-			expect(resultContent[0].tool_use_id).toBe("tool-1")
-			expect(resultContent[0].content).toBe("Tool execution was interrupted before completion.")
+			expect(resultContent[0]!.type).toBe("tool_result")
+			expect(resultContent[0]!.tool_use_id).toBe("tool-1")
+			expect(resultContent[0]!.content).toBe("Tool execution was interrupted before completion.")
 		})
 	})
 

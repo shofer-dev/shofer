@@ -14,7 +14,7 @@ import {
 	extractConsecutiveMistakeErrorProperties,
 } from "@shofer/types"
 
-import { BaseTelemetryClient } from "./BaseTelemetryClient"
+import { BaseTelemetryClient } from "./BaseTelemetryClient.js"
 
 const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
 

@@ -2,7 +2,7 @@ import { trace, SpanStatusCode, type Attributes } from "@opentelemetry/api"
 
 import type { TelemetryEvent } from "@shofer/types"
 
-import { BaseTelemetryClient } from "./BaseTelemetryClient"
+import { BaseTelemetryClient } from "./BaseTelemetryClient.js"
 
 /**
  * OpenTelemetry transport for the typed telemetry catalog

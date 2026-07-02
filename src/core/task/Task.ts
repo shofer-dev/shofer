@@ -139,7 +139,7 @@ import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHist
 import { MessageQueueService } from "@shofer/core"
 import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
-import { validateAndFixToolResultIds } from "./validateToolResultIds"
+import { validateAndFixToolResultIds } from "@shofer/core"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
 import { taskLog } from "@shofer/core"
 import { runWithLogTaskContext } from "@shofer/core"

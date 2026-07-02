@@ -394,6 +394,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.37.0
         version: 0.37.0
+      '@shofer/telemetry':
+        specifier: workspace:^
+        version: link:../telemetry
       '@shofer/types':
         specifier: workspace:^
         version: link:../types
