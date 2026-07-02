@@ -14,7 +14,7 @@
 import { describe, it, expect, vi } from "vitest"
 import type { HistoryItem, ModelInfo } from "@shofer/types"
 
-import { aggregateTaskCostsRecursive } from "../../webview/aggregateTaskCosts"
+import { aggregateTaskCostsRecursive } from "@shofer/core"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 
 /**

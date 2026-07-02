@@ -39,7 +39,7 @@ describe("Task per-ask _currentAskId", () => {
 		;(task as any).findMessageByTimestamp = vi.fn(() => undefined)
 		;(task as any)._debouncedSaveShoferMessages = { cancel: vi.fn() }
 
-		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")
+		const { MessageQueueService } = await import("@shofer/core")
 		;(task as any).messageQueueService = new MessageQueueService()
 
 		return task

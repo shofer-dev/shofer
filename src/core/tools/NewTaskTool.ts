@@ -5,7 +5,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
+import { aggregateTaskCostsRecursive } from "@shofer/core"
 import { getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
 import { parseMarkdownChecklist } from "./UpdateTodoListTool"

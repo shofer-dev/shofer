@@ -1,5 +1,5 @@
 import path from "path"
-import { ShoferProtectedController } from "../ShoferProtectedController"
+import { ShoferProtectedController } from "../ShoferProtectedController.js"
 
 describe("ShoferProtectedController", () => {
 	const TEST_CWD = "/test/workspace"

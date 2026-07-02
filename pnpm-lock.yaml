@@ -418,6 +418,9 @@ importers:
       simple-git:
         specifier: ^3.27.0
         version: 3.27.0
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
       zod:
         specifier: 3.25.76
         version: 3.25.76

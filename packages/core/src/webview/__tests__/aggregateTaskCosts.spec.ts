@@ -170,7 +170,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.ownCost).toBe(1.0)
 		expect(result.childrenCost).toBe(0.5) // Only task-b's own cost, circular ref returns 0
 		expect(result.totalCost).toBe(1.5)
-
 	})
 
 	it("should handle missing task gracefully", async () => {
@@ -189,7 +188,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.ownCost).toBe(1.0)
 		expect(result.childrenCost).toBe(0) // Missing child contributes 0
 		expect(result.totalCost).toBe(1.0)
-
 	})
 
 	it("should return zero costs for completely missing task", async () => {
@@ -202,7 +200,6 @@ describe("aggregateTaskCostsRecursive", () => {
 		expect(result.ownCost).toBe(0)
 		expect(result.childrenCost).toBe(0)
 		expect(result.totalCost).toBe(0)
-
 	})
 
 	it("should handle task with null totalCost", async () => {

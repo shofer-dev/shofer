@@ -36,7 +36,7 @@ describe("Task.handleWebviewAskResponse stray response handling", () => {
 		;(task as any).saveShoferMessages = vi.fn(async () => {})
 		;(task as any).diagLog = vi.fn(() => {})
 
-		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")
+		const { MessageQueueService } = await import("@shofer/core")
 		;(task as any).messageQueueService = new MessageQueueService()
 
 		return task

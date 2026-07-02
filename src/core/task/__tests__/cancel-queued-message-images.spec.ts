@@ -37,7 +37,7 @@ describe("Task.cancelAndProcessQueuedMessages — queued images reach the LLM", 
 		;(task as any).resumableAsk = undefined
 		;(task as any).interactiveAsk = undefined
 
-		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")
+		const { MessageQueueService } = await import("@shofer/core")
 		;(task as any).messageQueueService = new MessageQueueService()
 		;(task as any).diagLog = vi.fn()
 		;(task as any).emit = vi.fn()

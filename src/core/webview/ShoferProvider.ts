@@ -48,7 +48,7 @@ import {
 	getModelId,
 	isRetiredProvider,
 } from "@shofer/types"
-import { aggregateTaskCostsRecursive, type AggregatedCosts } from "./aggregateTaskCosts"
+import { aggregateTaskCostsRecursive, type AggregatedCosts } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "../../shared/package"

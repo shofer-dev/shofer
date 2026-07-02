@@ -38,7 +38,7 @@ describe("Task.ask queued message drain", () => {
 		;(task as any).lastMessageTs = undefined
 		;(task as any).isAwaitingAskResponse = false
 
-		const { MessageQueueService } = await import("../../message-queue/MessageQueueService")
+		const { MessageQueueService } = await import("@shofer/core")
 		;(task as any).messageQueueService = new MessageQueueService()
 		;(task as any).addToShoferMessages = vi.fn(async () => {})
 		;(task as any).saveShoferMessages = vi.fn(async () => {})

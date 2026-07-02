@@ -24,6 +24,7 @@
 		"ps-tree": "^1.2.0",
 		"p-wait-for": "^5.0.2",
 		"simple-git": "^3.27.0",
+		"uuid": "^11.1.0",
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {

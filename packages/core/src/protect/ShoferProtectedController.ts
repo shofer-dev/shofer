@@ -1,6 +1,6 @@
 import path from "path"
 import ignore, { Ignore } from "ignore"
-import { webviewLog } from "@shofer/core"
+import { webviewLog } from "../logging/subsystems.js"
 
 export const SHIELD_SYMBOL = "\u{1F6E1}"
 
