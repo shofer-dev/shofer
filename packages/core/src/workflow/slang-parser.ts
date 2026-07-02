@@ -7,11 +7,11 @@
  * Files: slang-parser-upstream.ts (lexer + parser), slang-resolver.ts (dependency analysis)
  */
 
-import { parseWithRecovery } from "./slang-parser-upstream"
-import { analyzeFlow } from "./slang-resolver"
-import type { Program } from "./slang-ast"
+import { parseWithRecovery } from "./slang-parser-upstream.js"
+import { analyzeFlow } from "./slang-resolver.js"
+import type { Program } from "./slang-ast.js"
 
-export type { Program as SlangAST } from "./slang-ast"
+export type { Program as SlangAST } from "./slang-ast.js"
 
 /**
  * Parse a .slang source file and return the AST + errors.

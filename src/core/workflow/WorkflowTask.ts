@@ -34,7 +34,7 @@ import {
 	deserializeFlowState,
 	serializeFlowState,
 	topologyToMermaid,
-} from "./slang-types"
+} from "@shofer/core"
 import {
 	advanceAgent as advanceAgentPure,
 	allAgentsCommitted as allAgentsCommittedPure,
@@ -50,8 +50,8 @@ import {
 	type EmittedMessage,
 	type Instr,
 	MAX_CONTROL_FLOW_STEPS,
-} from "./slang-interpreter"
-import { parseSlang, parseSlang as parseSlangFull, validateSlangAST } from "./slang-parser"
+} from "@shofer/core"
+import { parseSlang, parseSlang as parseSlangFull, validateSlangAST } from "@shofer/core"
 import type {
 	FlowDecl as UpstreamFlowDecl,
 	AgentDecl as UpstreamAgentDecl,
@@ -64,9 +64,9 @@ import type {
 	LetOp,
 	SetOp,
 	OutputSchema,
-} from "./slang-ast"
-import { exprAsNumber, contractToJsonSchema } from "./slang-ast"
-import { aggregateRatings } from "./aggregate-rating"
+} from "@shofer/core"
+import { exprAsNumber, contractToJsonSchema } from "@shofer/core"
+import { aggregateRatings } from "@shofer/core"
 
 // ─── Adapter: upstream AST → WorkflowTask needs ───
 

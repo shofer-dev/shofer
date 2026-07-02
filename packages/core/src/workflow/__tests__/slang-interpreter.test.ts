@@ -25,9 +25,9 @@ import {
 	type Instr,
 	routeOutput,
 	toBool,
-} from "../slang-interpreter"
-import type { AgentState, FlowState, MailboxEntry } from "../slang-types"
-import type { Expr, FlowDecl, StakeOp } from "../slang-ast"
+} from "../slang-interpreter.js"
+import type { AgentState, FlowState, MailboxEntry } from "../slang-types.js"
+import type { Expr, FlowDecl, StakeOp } from "../slang-ast.js"
 
 // ── Test fixture helpers ──
 

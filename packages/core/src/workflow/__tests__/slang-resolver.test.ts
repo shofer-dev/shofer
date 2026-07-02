@@ -9,8 +9,8 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { resolveDeps, detectDeadlocks, analyzeFlow, type AgentDep, type DepGraph } from "../slang-resolver"
-import type { FlowDecl, AgentDecl, Operation } from "../slang-ast"
+import { resolveDeps, detectDeadlocks, analyzeFlow, type AgentDep, type DepGraph } from "../slang-resolver.js"
+import type { FlowDecl, AgentDecl, Operation } from "../slang-ast.js"
 
 // ── Fixture helpers ──
 

@@ -11,7 +11,7 @@
  * constructed fresh per test invocation.
  */
 
-import type { AgentState, FlowState, MailboxEntry } from "./slang-types"
+import type { AgentState, FlowState, MailboxEntry } from "./slang-types.js"
 import type {
 	Expr,
 	StakeOp,
@@ -26,7 +26,7 @@ import type {
 	ConvergeStmt,
 	AgentDecl,
 	Operation,
-} from "./slang-ast"
+} from "./slang-ast.js"
 
 // ── Compiled instruction model ──
 //
@@ -365,9 +365,9 @@ export function interpolate(template: string, state: AgentState, flowState: Flow
 			.map((s) => s.trim())
 			.filter(Boolean)
 		if (path.length === 0) return whole
-		let val: unknown = resolveName(path[0], state, flowState)
+		let val: unknown = resolveName(path[0]!, state, flowState)
 		for (let i = 1; i < path.length; i++) {
-			if (val && typeof val === "object") val = (val as Record<string, unknown>)[path[i]]
+			if (val && typeof val === "object") val = (val as Record<string, unknown>)[path[i]!]
 			else {
 				val = undefined
 				break

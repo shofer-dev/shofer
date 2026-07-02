@@ -5,7 +5,7 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { validateSlangProgram } from "../validate-slang"
+import { validateSlangProgram } from "../validate-slang.js"
 
 // ── Valid source (minimal flow) ──
 

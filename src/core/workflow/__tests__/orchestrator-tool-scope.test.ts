@@ -2,8 +2,8 @@
 import * as fs from "fs"
 import * as path from "path"
 
-import { parseSlang, validateSlangAST } from "../slang-parser"
-import { analyzeFlow } from "../slang-resolver"
+import { parseSlang, validateSlangAST } from "@shofer/core"
+import { analyzeFlow } from "@shofer/core"
 
 /**
  * The orchestrating agents in the shipped workflows MUST declare a `tools:`

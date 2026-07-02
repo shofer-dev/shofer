@@ -10,8 +10,8 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { parseSlang, validateSlangAST } from "../slang-parser"
-import type { AgentDecl, BudgetStmt, ConvergeStmt, FlowDecl } from "../slang-ast"
+import { parseSlang, validateSlangAST } from "../slang-parser.js"
+import type { AgentDecl, BudgetStmt, ConvergeStmt, FlowDecl } from "../slang-ast.js"
 
 // ── Test helpers ──
 
@@ -927,7 +927,7 @@ flow "bad-target" () {
 
 // ── Serialization tests ──
 
-import { serializeFlowState, deserializeFlowState, type FlowState } from "../slang-types"
+import { serializeFlowState, deserializeFlowState, type FlowState } from "../slang-types.js"
 
 describe("FlowState serialization", () => {
 	function makeFlowState(): FlowState {

@@ -8,7 +8,7 @@
 
 import { readFileSync } from "fs"
 import { resolve } from "path"
-import { parseSlang, validateSlangAST } from "../slang-parser"
+import { parseSlang, validateSlangAST } from "@shofer/core"
 
 describe("slang file parse smoke test", () => {
 	it("parses implement-feature.slang with zero parse errors", () => {

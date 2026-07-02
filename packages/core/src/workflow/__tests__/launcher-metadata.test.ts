@@ -6,8 +6,8 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { parseSlang } from "../slang-parser"
-import type { AgentDecl } from "../slang-ast"
+import { parseSlang } from "../slang-parser.js"
+import type { AgentDecl } from "../slang-ast.js"
 
 // ── The extraction logic, duplicated here to keep the test self-contained ──
 // This is exactly the code from the listWorkflows handler.

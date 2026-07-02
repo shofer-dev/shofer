@@ -6,8 +6,8 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { compileAgentProgram } from "../slang-interpreter"
-import type { AgentDecl } from "../slang-ast"
+import { compileAgentProgram } from "../slang-interpreter.js"
+import type { AgentDecl } from "../slang-ast.js"
 
 // ── Fixture helpers ──
 

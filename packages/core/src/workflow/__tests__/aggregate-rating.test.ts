@@ -7,7 +7,7 @@
 
 import type { CompletionRating } from "@shofer/types"
 
-import { aggregateRatings, RATING_ORDER } from "../aggregate-rating"
+import { aggregateRatings, RATING_ORDER } from "../aggregate-rating.js"
 
 describe("aggregateRatings", () => {
 	it("defaults to 'poor' for an empty set (no committed agent produced a rating)", () => {

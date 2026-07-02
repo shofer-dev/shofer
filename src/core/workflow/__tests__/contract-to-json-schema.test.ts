@@ -9,7 +9,7 @@
  * deterministic, network-free tests prove the feature WORKS.
  */
 
-import { contractToJsonSchema, type OutputSchema } from "../slang-ast"
+import { contractToJsonSchema, type OutputSchema } from "@shofer/core"
 import { getNativeTools } from "../../prompts/tools/native-tools"
 
 describe("contractToJsonSchema", () => {

@@ -6,8 +6,8 @@
  * Supports error recovery for IDE/editor use cases.
  */
 
-import { Token, TokenType, tokenize } from "./slang-lexer"
-import { SlangErrorCode, SlangError, formatErrorMessage } from "./slang-lexer"
+import { Token, TokenType, tokenize } from "./slang-lexer.js"
+import { SlangErrorCode, SlangError, formatErrorMessage } from "./slang-lexer.js"
 import type {
 	Program,
 	FlowDecl,
@@ -43,9 +43,9 @@ import type {
 	Position,
 	OutputSchema,
 	OutputField,
-} from "./slang-ast"
+} from "./slang-ast.js"
 // These are functions used as values (not types), so they need a value import.
-import { exprAsString, exprAsNumber, exprAsBoolean, exprAsStringList } from "./slang-ast"
+import { exprAsString, exprAsNumber, exprAsBoolean, exprAsStringList } from "./slang-ast.js"
 
 export class ParseError extends SlangError {
 	public token: Token
@@ -363,6 +363,7 @@ class Parser {
 				// Shofer extension: 'mode: "slug"' in agent config
 				this.advance() // "mode"
 				this.expect(TokenType.Colon)
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic metadata bag from upstream slang grammar
 				;(meta as any).mode = this.expect(TokenType.String).value
 			} else if (this.check(TokenType.Retry)) {
 				this.advance()
@@ -543,7 +544,6 @@ class Parser {
 	private parseCommitOp(): CommitOp {
 		const start = this.expect(TokenType.Commit)
 		let value: Expr | undefined
-		let condition: Expr | undefined
 
 		// Parse optional value expression (must come before optional 'if' guard).
 		if (
@@ -556,7 +556,7 @@ class Parser {
 		}
 
 		// Parse optional 'if' guard.
-		condition = this.parseOptionalCondition()
+		const condition = this.parseOptionalCondition()
 
 		return { type: "CommitOp", value, condition, span: this.spanFrom(start) }
 	}
@@ -920,6 +920,7 @@ class Parser {
 		if (compOps.includes(this.peek().type)) {
 			const op = this.advance()
 			const right = this.parseContains()
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any -- op.value is a validated binary operator token narrowed by the grammar
 			left = { type: "BinaryExpr", op: op.value as any, left, right, span: this.spanFrom(op) }
 		}
 		return left

@@ -9,7 +9,7 @@
  * in the UI.
  */
 
-import { parseSlang, validateSlangAST } from "./slang-parser"
+import { parseSlang, validateSlangAST } from "./slang-parser.js"
 
 /**
  * Validation result returned by {@link validateSlangProgram}.

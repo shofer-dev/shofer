@@ -8,7 +8,7 @@
 
 import { toolGroups } from "@shofer/types"
 
-import type { FlowDecl, AgentDecl, Operation } from "./slang-ast"
+import type { FlowDecl, AgentDecl, Operation } from "./slang-ast.js"
 
 const VALID_TOOL_GROUPS = new Set<string>(toolGroups)
 

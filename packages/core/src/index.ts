@@ -74,6 +74,7 @@ export * from "./task-persistence/PersistencePort.js"
 export * from "./prompts/responses.js"
 export * from "./protect/ShoferProtectedController.js"
 export * from "./webview/aggregateTaskCosts.js"
+export * from "./workflow/index.js"
 export * from "./auto-approval/commands.js"
 // Browser-safe shared modules were relocated to @shofer/types (importable by both
 // the webview and the Node core). Re-export them here so existing `@shofer/core`

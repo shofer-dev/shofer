@@ -12,7 +12,7 @@
  * Layout Rule in AGENTS.md. Naming convention: *.test.ts (Node env).
  */
 
-import { topologyToMermaid, type AgentState } from "../slang-types"
+import { topologyToMermaid, type AgentState } from "../slang-types.js"
 
 function agent(name: string, over: Partial<AgentState> = {}): AgentState {
 	return {
