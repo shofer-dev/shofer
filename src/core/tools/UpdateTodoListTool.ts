@@ -5,7 +5,7 @@ import type { ToolUse } from "@shofer/core"
 import cloneDeep from "clone-deep"
 import crypto from "crypto"
 import { TodoItem, TodoStatus, todoStatusSchema } from "@shofer/types"
-import { getLatestTodo } from "../../shared/todo"
+import { getLatestTodo } from "@shofer/types"
 
 interface UpdateTodoListParams {
 	todos: string

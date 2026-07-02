@@ -1,6 +1,6 @@
 import { ProviderSettings, ShoferMessage, GlobalState, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
-import { supportPrompt } from "../../shared/support-prompt"
+import { supportPrompt } from "@shofer/types"
 import { singleCompletionHandler } from "../../utils/single-completion-handler"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { ShoferProvider } from "./ShoferProvider"

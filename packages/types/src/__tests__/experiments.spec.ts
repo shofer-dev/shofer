@@ -1,8 +1,8 @@
 // npx vitest run src/shared/__tests__/experiments.spec.ts
 
-import type { ExperimentId } from "@shofer/types"
+import type { ExperimentId } from "../experiment.js"
 
-import { EXPERIMENT_IDS, experimentConfigsMap, experiments as Experiments } from "../experiments"
+import { EXPERIMENT_IDS, experimentConfigsMap, experiments as Experiments } from "../experiments.js"
 
 describe("experiments", () => {
 	describe("PREVENT_FOCUS_DISRUPTION", () => {

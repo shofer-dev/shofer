@@ -1,4 +1,4 @@
-import type { SkillContent } from "../../shared/skills"
+import type { SkillContent } from "@shofer/types"
 
 export interface SkillLookup {
 	getSkillContent(name: string, currentMode?: string): Promise<SkillContent | null>

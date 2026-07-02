@@ -1,4 +1,4 @@
-import { type Language, isLanguage } from "@shofer/types"
+import { type Language, isLanguage } from "./vscode.js"
 
 /**
  * Language name mapping from ISO codes to full language names.

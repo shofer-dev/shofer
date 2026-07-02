@@ -1,7 +1,7 @@
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
 import { getCommand, getCommandNames } from "../../services/command/commands"
-import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
 import type { ShoferProvider } from "../webview/ShoferProvider"

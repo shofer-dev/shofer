@@ -6,7 +6,7 @@ import matter from "gray-matter"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../shofer-config"
 import { directoryExists, fileExists } from "../shofer-config"
-import { SkillMetadata, SkillContent } from "../../shared/skills"
+import { SkillMetadata, SkillContent } from "@shofer/types"
 import { modes, getAllModes } from "@shofer/core"
 import {
 	validateSkillName as validateSkillNameShared,

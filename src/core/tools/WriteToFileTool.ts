@@ -12,7 +12,7 @@ import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/mi
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
-import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
+import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
 import type { ToolUse } from "@shofer/core"
 

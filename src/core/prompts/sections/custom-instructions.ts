@@ -7,7 +7,7 @@ import { isLanguage } from "@shofer/types"
 
 import type { SystemPromptSettings } from "../types"
 
-import { LANGUAGES } from "../../../shared/language"
+import { LANGUAGES } from "@shofer/types"
 import {
 	getRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd,

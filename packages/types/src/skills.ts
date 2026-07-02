@@ -21,6 +21,13 @@ export interface SkillMetadata {
 }
 
 /**
+ * Full skill content (loaded on activation)
+ */
+export interface SkillContent extends SkillMetadata {
+	instructions: string // Full markdown body
+}
+
+/**
  * Skill name validation constants per agentskills.io specification:
  * https://agentskills.io/specification
  *

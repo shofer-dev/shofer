@@ -3,7 +3,7 @@ import { toolNames as validToolNames } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
 
 import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "@shofer/core"
-import { EXPERIMENT_IDS } from "../../shared/experiments"
+import { EXPERIMENT_IDS } from "@shofer/types"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
 
 /**

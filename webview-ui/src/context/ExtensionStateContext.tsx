@@ -26,8 +26,8 @@ import { findLastIndex } from "@shofer/types"
 
 import { checkExistKey } from "@shofer/shared/checkExistApiConfig"
 import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/types"
-import { CustomSupportPrompts } from "@shofer/shared/support-prompt"
-import { experimentDefault } from "@shofer/shared/experiments"
+import { CustomSupportPrompts } from "@shofer/types"
+import { experimentDefault } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { convertTextMateToHljs } from "@src/utils/textMateToHljs"

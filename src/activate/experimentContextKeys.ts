@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import type { Experiments } from "@shofer/types"
 
-import { EXPERIMENT_IDS, experiments } from "../shared/experiments"
+import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 
 /**
  * Mirror every experiment flag whose value drives `when`-clause visibility

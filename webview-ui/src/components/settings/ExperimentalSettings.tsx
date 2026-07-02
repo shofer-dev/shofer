@@ -3,7 +3,7 @@ import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type { Experiments, ImageGenerationProvider } from "@shofer/types"
 
-import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/shared/experiments"
+import { EXPERIMENT_IDS, experimentConfigsMap } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { cn } from "@src/lib/utils"

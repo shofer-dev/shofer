@@ -1,4 +1,4 @@
-import { supportPrompt } from "../support-prompt"
+import { supportPrompt } from "../support-prompt.js"
 
 describe("Code Action Prompts", () => {
 	const testFilePath = "test/file.ts"

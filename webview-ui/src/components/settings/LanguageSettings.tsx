@@ -3,7 +3,7 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 
 import type { Language } from "@shofer/types"
 
-import { LANGUAGES } from "@shofer/shared/language"
+import { LANGUAGES } from "@shofer/types"
 
 import { cn } from "@src/lib/utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@src/components/ui"
