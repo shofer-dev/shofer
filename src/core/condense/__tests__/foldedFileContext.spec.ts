@@ -6,8 +6,9 @@ import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { BaseProvider } from "@shofer/core"
 
-// Mock the tree-sitter module
-vi.mock("../../../services/tree-sitter", () => ({
+// tree-sitter now lives in @shofer/core; partial-mock only parseSourceCodeDefinitionsForFile.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	parseSourceCodeDefinitionsForFile: vi.fn(),
 }))
 
@@ -21,7 +22,7 @@ vi.mock("../foldedFileContext", async (importOriginal) => {
 })
 
 import { generateFoldedFileContext } from "../foldedFileContext"
-import { parseSourceCodeDefinitionsForFile } from "../../../services/tree-sitter"
+import { parseSourceCodeDefinitionsForFile } from "@shofer/core"
 
 const mockedGenerateFoldedFileContext = vi.mocked(generateFoldedFileContext)
 

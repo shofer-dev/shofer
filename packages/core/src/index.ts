@@ -76,6 +76,12 @@ export * from "./protect/ShoferProtectedController.js"
 export * from "./webview/aggregateTaskCosts.js"
 export * from "./workflow/index.js"
 export * from "./auto-approval/commands.js"
+// tree-sitter code-definition parsing (portable, wasm-backed). Public surface:
+// parseSourceCodeDefinitionsForFile / extensions / get|setMinComponentLines (index)
+// and LanguageParser / loadRequiredLanguageParsers (languageParser).
+export * from "./services/tree-sitter/index.js"
+export * from "./services/tree-sitter/languageParser.js"
+export * from "./services/tree-sitter/markdownParser.js"
 // Browser-safe shared modules were relocated to @shofer/types (importable by both
 // the webview and the Node core). Re-export them here so existing `@shofer/core`
 // consumers keep importing them from the core barrel unchanged. NOTE: intentionally

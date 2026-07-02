@@ -1,5 +1,5 @@
 import * as path from "path"
-import { parseSourceCodeDefinitionsForFile } from "../../services/tree-sitter"
+import { parseSourceCodeDefinitionsForFile } from "@shofer/core"
 import { ShoferIgnoreController } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 

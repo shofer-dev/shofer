@@ -1,8 +1,7 @@
 // npx vitest services/code-index/processors/__tests__/parser.spec.ts
 
 import { CodeParser, codeParser } from "../parser"
-import { loadRequiredLanguageParsers } from "../../../tree-sitter/languageParser"
-import { parseMarkdown } from "../../../tree-sitter/markdownParser"
+import { loadRequiredLanguageParsers, parseMarkdown } from "@shofer/core"
 import { readFile } from "fs/promises"
 import { Node } from "web-tree-sitter"
 
@@ -33,8 +32,12 @@ vi.mock("fs/promises", () => ({
 	rename: vi.fn(),
 }))
 
-vi.mock("../../../tree-sitter/languageParser")
-vi.mock("../../../tree-sitter/markdownParser")
+// tree-sitter now lives in @shofer/core; partial-mock only its parsing entry points.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	loadRequiredLanguageParsers: vi.fn(),
+	parseMarkdown: vi.fn(),
+}))
 
 const mockLanguageParser = {
 	js: {

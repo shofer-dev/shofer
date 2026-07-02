@@ -10,6 +10,10 @@ export default [
 		rules: {
 			"@typescript-eslint/no-explicit-any": "off",
 			"@typescript-eslint/no-unused-vars": "off",
+			// Parser tests embed source-fixture regexes and match multi-space output
+			// literally; these stylistic rules only add noise in that context.
+			"no-regex-spaces": "off",
+			"no-useless-escape": "off",
 		},
 	},
 ]
