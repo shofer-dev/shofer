@@ -13,7 +13,7 @@ import { mergeEnvironmentDetailsForMiniMax } from "../transform/minimax-format"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { calculateApiCostAnthropic } from "../../shared/cost"
+import { calculateApiCostAnthropic } from "@shofer/core"
 import { convertOpenAIToolsToAnthropic } from "../../core/prompts/tools/native-tools/converters"
 
 /**

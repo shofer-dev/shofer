@@ -10,7 +10,7 @@ import {
 } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "../../../shared/api"
-import { parseApiPrice } from "../../../shared/cost"
+import { parseApiPrice } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 /**

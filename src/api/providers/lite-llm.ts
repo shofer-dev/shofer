@@ -3,7 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk" // Keep for type usage only
 
 import { litellmDefaultModelId, litellmDefaultModelInfo } from "@shofer/types"
 
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostOpenAI } from "@shofer/core"
 
 import { ApiHandlerOptions } from "../../shared/api"
 

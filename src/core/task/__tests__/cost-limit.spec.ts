@@ -15,7 +15,7 @@ import { describe, it, expect, vi } from "vitest"
 import type { HistoryItem, ModelInfo } from "@shofer/types"
 
 import { aggregateTaskCostsRecursive } from "../../webview/aggregateTaskCosts"
-import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../../shared/cost"
+import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 
 /**
  * Minimal duck-type for the parentTask walk used by Task.resolveCostLimit.

@@ -115,7 +115,7 @@ export function calculateApiCostOpenAI(
 	)
 }
 
-export const parseApiPrice = (price: any) => (price ? parseFloat(price) * 1_000_000 : undefined)
+export const parseApiPrice = (price: unknown) => (price ? parseFloat(price as string) * 1_000_000 : undefined)
 
 /**
  * Apply manual pricing overrides from ProviderSettings.customPricing on top of

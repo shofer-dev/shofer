@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 
 import { STATIC_MODEL_CATALOG, lookupStaticModel, getModelCapabilities } from "@shofer/types"
 
-import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../cost"
+import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 
 const anthropicDefault = () => STATIC_MODEL_CATALOG.anthropic.defaultModelId
 

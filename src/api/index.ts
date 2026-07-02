@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import { isRetiredProvider, type ProviderSettings, type ModelInfo } from "@shofer/types"
 
 import { ApiStream } from "./transform/stream"
-import { applyCustomPricing } from "../shared/cost"
+import { applyCustomPricing } from "@shofer/core"
 
 import {
 	AnthropicHandler,

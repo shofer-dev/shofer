@@ -2,7 +2,7 @@ import axios from "axios"
 
 import type { ModelInfo } from "@shofer/types"
 
-import { parseApiPrice } from "../../../shared/cost"
+import { parseApiPrice } from "@shofer/core"
 import { toRequestyServiceUrl } from "../../../shared/utils/requesty"
 import { apiLog } from "@shofer/core"
 

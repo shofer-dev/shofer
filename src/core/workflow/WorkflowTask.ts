@@ -23,7 +23,7 @@ import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "@shofer/core"
 import { runWithLogTaskContext } from "@shofer/core"
-import { findLastIndex } from "../../shared/array"
+import { findLastIndex } from "@shofer/core"
 import { waitForTasksEventDriven } from "./wait-for-task-helper"
 
 import {

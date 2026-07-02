@@ -20,7 +20,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostOpenAI } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
 import { getModelParams } from "../transform/model-params"

@@ -9,7 +9,7 @@
 export function findLastIndex<T>(array: Array<T>, predicate: (value: T, index: number, obj: T[]) => boolean): number {
 	let l = array.length
 	while (l--) {
-		if (predicate(array[l], l, array)) {
+		if (predicate(array[l]!, l, array)) {
 			return l
 		}
 	}
@@ -18,5 +18,5 @@ export function findLastIndex<T>(array: Array<T>, predicate: (value: T, index: n
 
 export function findLast<T>(array: Array<T>, predicate: (value: T, index: number, obj: T[]) => boolean): T | undefined {
 	const index = findLastIndex(array, predicate)
-	return index === -1 ? undefined : array[index]
+	return index === -1 ? undefined : array[index]!
 }

@@ -52,7 +52,7 @@ import { aggregateTaskCostsRecursive, type AggregatedCosts } from "./aggregateTa
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "../../shared/package"
-import { findLast } from "../../shared/array"
+import { findLast } from "@shofer/core"
 import { supportPrompt } from "../../shared/support-prompt"
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { Mode, defaultModeSlug, getModeBySlug } from "../../shared/modes"

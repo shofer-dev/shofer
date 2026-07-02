@@ -22,7 +22,7 @@ import { handleProviderError } from "./utils/error-handler"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { calculateApiCostAnthropic } from "../../shared/cost"
+import { calculateApiCostAnthropic } from "@shofer/core"
 import {
 	convertOpenAIToolsToAnthropic,
 	convertOpenAIToolChoiceToAnthropic,

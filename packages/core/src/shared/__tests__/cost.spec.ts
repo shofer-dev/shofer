@@ -2,7 +2,7 @@
 
 import type { ModelInfo } from "@shofer/types"
 
-import { applyCustomPricing, calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
+import { applyCustomPricing, calculateApiCostAnthropic, calculateApiCostOpenAI } from "../cost.js"
 
 describe("Cost Utility", () => {
 	describe("calculateApiCostAnthropic", () => {

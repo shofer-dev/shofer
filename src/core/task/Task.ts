@@ -70,7 +70,7 @@ import { ApiStream, GroundingSource } from "../../api/transform/stream"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 
 // shared
-import { findLastIndex } from "../../shared/array"
+import { findLastIndex } from "@shofer/core"
 import { combineApiRequests } from "../../shared/combineApiRequests"
 import { combineCommandSequences } from "../../shared/combineCommandSequences"
 import { t } from "../../i18n"
@@ -93,7 +93,7 @@ import { TerminalRegistry } from "@shofer/core"
 import { OutputInterceptor } from "@shofer/core"
 
 // utils
-import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { sanitizeToolUseId } from "../../utils/tool-id"
 import { getTaskDirectoryPath } from "../../utils/storage"

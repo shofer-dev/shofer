@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import { type ModelInfo, type ModelRecord, unboundDefaultModelId, unboundDefaultModelInfo } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "../../shared/api"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostOpenAI } from "@shofer/core"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"

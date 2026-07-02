@@ -12,7 +12,7 @@ import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from ".
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"
 import { handleOpenAIError } from "./utils/openai-error-handler"
-import { calculateApiCostOpenAI } from "../../shared/cost"
+import { calculateApiCostOpenAI } from "@shofer/core"
 import { getApiRequestTimeout } from "./utils/timeout-config"
 
 type BaseOpenAiCompatibleProviderOptions<ModelName extends string> = ApiHandlerOptions & {
