@@ -17,7 +17,7 @@ import { t } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { codeIndexLog } from "@shofer/core"
-import { updateCodeIndexMetrics, incCodeIndexError } from "../../metrics/registry"
+import { updateCodeIndexMetrics, incCodeIndexError } from "@shofer/core"
 import { getEmbedderLaneDepth } from "./embedders/embedder-lane"
 
 /**

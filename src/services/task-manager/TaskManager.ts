@@ -15,7 +15,7 @@ import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/t
 import type { Task } from "../../core/task/Task"
 import { taskLog } from "@shofer/core"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { incTaskCreated, incTaskCompleted, incTaskErrored } from "../../metrics/registry"
+import { incTaskCreated, incTaskCompleted, incTaskErrored } from "@shofer/core"
 
 interface ManagedTaskNotification {
 	targetTaskId: string

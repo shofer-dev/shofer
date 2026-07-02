@@ -6,7 +6,7 @@ import { safeWriteJson } from "../../utils/safeWriteJson"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName, codebaseIndexCacheSchema, type CodebaseIndexCacheEntry } from "@shofer/types"
 import { codeIndexLog } from "@shofer/core"
-import { recordIndexLoadDuration, recordIndexWriteDuration } from "../../metrics/registry"
+import { recordIndexLoadDuration, recordIndexWriteDuration } from "@shofer/core"
 
 /**
  * Manages the cache for code indexing.

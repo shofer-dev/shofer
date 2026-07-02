@@ -1,5 +1,5 @@
 import { safeWriteJson } from "../../utils/safeWriteJson"
-import { registry, incWebviewPushError, FAST_BUCKETS_MS } from "../../metrics/registry"
+import { registry, incWebviewPushError, FAST_BUCKETS_MS } from "@shofer/core"
 import * as path from "path"
 import * as os from "os"
 import * as fs from "fs/promises"

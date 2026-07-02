@@ -3,7 +3,7 @@ import type { ToolName, ShoferSayTool } from "@shofer/types"
 import { Task } from "../task/Task"
 import type { ToolUse, HandleError, PushToolResult, AskApproval, NativeToolArgs } from "@shofer/core"
 import { taskLog, toolsLog } from "@shofer/core"
-import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "../../metrics/registry"
+import { recordToolDuration, incToolCalls, incToolErrors, classifyToolError } from "@shofer/core"
 
 /**
  * Callbacks passed to tool execution

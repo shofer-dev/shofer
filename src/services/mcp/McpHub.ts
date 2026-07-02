@@ -30,13 +30,7 @@ import type {
 	McpToolCallResponse,
 } from "@shofer/types"
 import { toolGroupsSchema } from "@shofer/types"
-import {
-	recordMcpDuration,
-	incMcpCalls,
-	incMcpErrors,
-	classifyMcpError,
-	mcpErrorTypeToStatus,
-} from "../../metrics/registry"
+import { recordMcpDuration, incMcpCalls, incMcpErrors, classifyMcpError, mcpErrorTypeToStatus } from "@shofer/core"
 
 import { t } from "@shofer/core"
 

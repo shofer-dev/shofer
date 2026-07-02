@@ -19,6 +19,7 @@
 		"@shofer/telemetry": "workspace:^",
 		"@shofer/types": "workspace:^",
 		"diff": "^5.2.0",
+		"@opentelemetry/api": "^1.9.1",
 		"esbuild": "^0.25.0",
 		"execa": "^9.5.2",
 		"fzf": "^0.5.2",

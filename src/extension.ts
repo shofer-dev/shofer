@@ -60,7 +60,7 @@ import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { syncExperimentContextKeys } from "./activate/experimentContextKeys"
-import { registry } from "./metrics/registry"
+import { registry } from "@shofer/core"
 
 import {
 	handleUri,

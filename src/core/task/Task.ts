@@ -144,14 +144,7 @@ import { mergeConsecutiveApiMessages } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 import { runWithLogTaskContext } from "@shofer/core"
 import { time } from "@shofer/core"
-import {
-	recordLlmDuration,
-	incLlmCalls,
-	incLlmErrors,
-	incLlmCost,
-	incLlmTokens,
-	classifyLlmError,
-} from "../../metrics/registry"
+import { recordLlmDuration, incLlmCalls, incLlmErrors, incLlmCost, incLlmTokens, classifyLlmError } from "@shofer/core"
 
 const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
 const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds

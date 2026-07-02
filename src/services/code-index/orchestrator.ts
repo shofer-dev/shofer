@@ -10,7 +10,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 import { t } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
-import { incCodeIndexError } from "../../metrics/registry"
+import { incCodeIndexError } from "@shofer/core"
 import { retryWithBackoff } from "./shared/retry"
 import { MAX_SERVICE_ATTEMPTS, SERVICE_INITIAL_RETRY_DELAY_MS, SERVICE_MAX_BACKOFF_MS } from "./constants"
 
