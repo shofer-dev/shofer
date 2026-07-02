@@ -19,11 +19,6 @@ vi.mock("vscode", () => {
 	}
 })
 
-// Mock storage utilities
-vi.mock("../../../utils/storage", () => ({
-	getTaskDirectoryPath: vi.fn(async () => "/mock/task-dir"),
-}))
-
 // Mock fs/promises (only writeFile is exercised directly; readApiMessages handles reads)
 vi.mock("fs/promises", () => {
 	const mockWriteFile = vi.fn().mockResolvedValue(undefined)
@@ -34,9 +29,11 @@ vi.mock("fs/promises", () => {
 })
 
 // Mock the JSONL API messages reader used by diagnosticsHandler.
-const readApiMessagesMock = vi.fn()
+// `vi.hoisted` so the ref is initialized before the hoisted `vi.mock` factory runs.
+const readApiMessagesMock = vi.hoisted(() => vi.fn())
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getTaskDirectoryPath: vi.fn(async () => "/mock/task-dir"),
 	readApiMessages: readApiMessagesMock,
 }))
 

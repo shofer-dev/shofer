@@ -3,7 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { fileExistsAtPath } from "./fs"
 import { GlobalFileNames } from "@shofer/core"
-import { getSettingsDirectoryPath } from "./storage"
+import { getSettingsDirectoryPath } from "@shofer/core"
 import * as yaml from "yaml"
 
 const deprecatedCustomModesJSONFilename = "custom_modes.json"

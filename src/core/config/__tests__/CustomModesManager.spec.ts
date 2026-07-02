@@ -28,8 +28,12 @@ vi.mock("vscode", () => ({
 	},
 }))
 
+// Hoisted mkdir spy so the relocated `getSettingsDirectoryPath` (in the @shofer/core
+// mock below) can call the SAME mock that tests assert on via `fs.mkdir`.
+const { mockMkdir } = vi.hoisted(() => ({ mockMkdir: vi.fn() }))
+
 vi.mock("fs/promises", () => ({
-	mkdir: vi.fn(),
+	mkdir: mockMkdir,
 	readFile: vi.fn(),
 	writeFile: vi.fn(),
 	stat: vi.fn(),
@@ -45,6 +49,12 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	getSettingsDirectoryPath: vi.fn(async (globalStoragePath: string) => {
+		// Mirror the real core helper: ensure the settings dir exists (fs/promises is mocked).
+		const settingsDir = path.join(globalStoragePath, "settings")
+		await mockMkdir(settingsDir, { recursive: true })
+		return settingsDir
+	}),
 }))
 
 describe("CustomModesManager", () => {

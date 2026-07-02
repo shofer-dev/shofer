@@ -17,7 +17,7 @@ import { Terminal } from "../../integrations/terminal/Terminal"
 import { OutputInterceptor } from "@shofer/core"
 import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import {

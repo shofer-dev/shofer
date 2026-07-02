@@ -16,6 +16,10 @@ vitest.mock("fs/promises", () => ({
 }))
 vitest.mock("fs")
 vitest.mock("../utils/fs")
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	getSettingsDirectoryPath: vitest.fn(async (globalStoragePath: string) => path.join(globalStoragePath, "settings")),
+}))
 
 describe("Settings Migration", () => {
 	let mockContext: vscode.ExtensionContext

@@ -7,7 +7,7 @@ import { combineApiRequests } from "@shofer/core"
 import { combineCommandSequences } from "@shofer/core"
 import { getApiMetrics } from "@shofer/core"
 import { findLastIndex } from "@shofer/core"
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 import { t } from "@shofer/core"
 
 const taskSizeCache = new NodeCache({ stdTTL: 30, checkperiod: 5 * 60 })

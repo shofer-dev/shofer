@@ -19,8 +19,9 @@ vi.mock("fs/promises", () => ({
 	readFile: vi.fn(),
 }))
 
-// Mock getTaskDirectoryPath
-vi.mock("../../../utils/storage", () => ({
+// Mock getTaskDirectoryPath (relocated into @shofer/core)
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getTaskDirectoryPath: vi.fn((globalStoragePath: string, taskId: string) => {
 		return path.join(globalStoragePath, "tasks", taskId)
 	}),

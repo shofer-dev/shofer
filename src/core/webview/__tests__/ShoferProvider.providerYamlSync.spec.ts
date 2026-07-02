@@ -128,6 +128,9 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		flushModels: vi.fn(),
 		getModelsFromCache: vi.fn().mockReturnValue(undefined),
 		safeWriteJson: vi.fn(),
+		getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
+		getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
+		getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
 		modes: builtins,
 		getAllModes: vi.fn(() => [...builtins]),
 		getModeBySlug: vi.fn(),
@@ -158,16 +161,6 @@ vi.mock("fs/promises", () => ({
 	access: vi.fn().mockResolvedValue(undefined),
 	rm: vi.fn().mockResolvedValue(undefined),
 }))
-
-vi.mock("../../../utils/storage", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../../../utils/storage")>()
-	return {
-		...actual,
-		getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
-		getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
-		getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
-	}
-})
 
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {

@@ -44,6 +44,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	getSettingsDirectoryPath: vi.fn(async (globalStoragePath: string) => path.join(globalStoragePath, "settings")),
 }))
 
 describe("CustomModesManager - Export/Import with Slug Changes", () => {

@@ -4,7 +4,7 @@ import { ShoferMessage } from "@shofer/types"
 import { ApiMessage } from "@shofer/core"
 import { cleanupAfterTruncation } from "../condense"
 import { OutputInterceptor } from "@shofer/core"
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 export interface RewindOptions {

@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import { Task } from "../task/Task"
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"

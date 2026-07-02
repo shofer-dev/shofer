@@ -177,6 +177,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 			roleDefinition: "You are a code assistant",
 			tools: ["read", "write"],
 		}),
+		getSettingsDirectoryPath: vi.fn(async (globalStoragePath: string) => `${globalStoragePath}/settings`),
 		defaultModeSlug: "code",
 	}
 })

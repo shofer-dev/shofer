@@ -47,7 +47,9 @@ import { setMcpHubFactory } from "@shofer/core"
 import { VsCodeLmHandler } from "./api/providers/vscode-lm"
 import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
-import { getCacheDirectoryPath } from "./utils/storage"
+import { getCacheDirectoryPath } from "@shofer/core"
+import { setCustomStoragePathResolver } from "@shofer/core"
+import { getConfiguredCustomStoragePath } from "./utils/storage"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "@shofer/core"
@@ -131,6 +133,11 @@ export async function activate(context: vscode.ExtensionContext) {
 		getDir: async () => getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath),
 		getDirSync: () => path.join(ContextProxy.instance.globalStorageUri.fsPath, "cache"),
 	})
+
+	// The storage base-path logic lives in host-agnostic core; register the VS Code
+	// resolver that reads the user's `customStoragePath` setting (headless hosts
+	// leave this unset and fall back to the default global-storage path).
+	setCustomStoragePathResolver(getConfiguredCustomStoragePath)
 
 	// Register the "native" (host-dependent) API handlers that cannot live in
 	// host-agnostic @shofer/core: vscode-lm (VS Code Language Model API) and

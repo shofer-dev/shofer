@@ -2874,7 +2874,7 @@ export class ShoferProvider
 	}
 
 	async ensureSettingsDirectoryExists(): Promise<string> {
-		const { getSettingsDirectoryPath } = await import("../../utils/storage")
+		const { getSettingsDirectoryPath } = await import("@shofer/core")
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 		return getSettingsDirectoryPath(globalStoragePath)
 	}
@@ -2962,7 +2962,7 @@ export class ShoferProvider
 			throw new Error("Task not found")
 		}
 
-		const { getTaskDirectoryPath } = await import("../../utils/storage")
+		const { getTaskDirectoryPath } = await import("@shofer/core")
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, id)
 		const apiConversationHistoryFilePath = path.join(taskDirPath, GlobalFileNames.apiConversationHistory)
@@ -3368,7 +3368,7 @@ export class ShoferProvider
 			// Delete associated shadow repositories or branches and task directories
 			const globalStorageDir = this.contextProxy.globalStorageUri.fsPath
 			const workspaceDir = this.cwd
-			const { getTaskDirectoryPath } = await import("../../utils/storage")
+			const { getTaskDirectoryPath } = await import("@shofer/core")
 			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 
 			for (const taskId of allIdsToDelete) {

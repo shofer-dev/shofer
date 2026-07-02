@@ -152,6 +152,9 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		roleDefinition: "You are a code assistant",
 		tools: ["read", "write"],
 	}),
+	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
+	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
+	getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
 	defaultModeSlug: "code",
 }))
 
@@ -178,16 +181,6 @@ vi.mock("fs/promises", () => ({
 	access: vi.fn().mockResolvedValue(undefined),
 	rm: vi.fn().mockResolvedValue(undefined),
 }))
-
-vi.mock("../../../utils/storage", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../../../utils/storage")>()
-	return {
-		...actual,
-		getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
-		getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
-		getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
-	}
-})
 
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {

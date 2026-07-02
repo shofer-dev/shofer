@@ -9,13 +9,10 @@ import type { HistoryItem } from "@shofer/types"
 import { TaskHistoryStore } from "../TaskHistoryStore"
 import { GlobalFileNames } from "@shofer/core"
 
-vi.mock("../../../utils/storage", () => ({
-	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
-}))
-
 // Mock safeWriteJson to use plain fs writes in tests (avoids proper-lockfile issues)
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
 	safeWriteJson: vi.fn().mockImplementation(async (filePath: string, data: any) => {
 		await fs.mkdir(path.dirname(filePath), { recursive: true })
 		await fs.writeFile(filePath, JSON.stringify(data, null, "\t"), "utf8")

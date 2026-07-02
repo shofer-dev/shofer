@@ -147,8 +147,9 @@ vi.mock("../../condense", () => ({
 	}),
 }))
 
-// Mock storage utilities
-vi.mock("../../../utils/storage", () => ({
+// Mock storage utilities (relocated into @shofer/core)
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getTaskDirectoryPath: vi
 		.fn()
 		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),

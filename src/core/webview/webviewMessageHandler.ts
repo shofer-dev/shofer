@@ -3943,7 +3943,7 @@ export const webviewMessageHandler = async (
 			}
 
 			try {
-				const { getTaskDirectoryPath } = await import("../../utils/storage")
+				const { getTaskDirectoryPath } = await import("@shofer/core")
 				const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 				const taskDirPath = await getTaskDirectoryPath(globalStoragePath, currentTask.taskId)
 

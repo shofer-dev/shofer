@@ -6,7 +6,7 @@ import type { HistoryItem } from "@shofer/types"
 
 import { GlobalFileNames } from "@shofer/core"
 import { safeWriteJson } from "@shofer/core"
-import { getStorageBasePath } from "../../utils/storage"
+import { getStorageBasePath } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 /**

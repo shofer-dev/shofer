@@ -7,7 +7,8 @@ import type { ShoferMessage } from "@shofer/types"
 
 import { taskMetadata } from "../taskMetadata"
 
-vi.mock("../../../utils/storage", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getTaskDirectoryPath: vi.fn(async (base: string, id: string) => path.join(base, "tasks", id)),
 }))
 

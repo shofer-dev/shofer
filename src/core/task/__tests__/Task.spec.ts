@@ -35,6 +35,12 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		workflowLog: { error: noop, info: noop, warn: noop },
 		i18nLog: { error: noop, info: noop, warn: noop },
 		scrollLog: { error: noop, info: noop, warn: noop },
+		getTaskDirectoryPath: vi
+			.fn()
+			.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
+		getSettingsDirectoryPath: vi
+			.fn()
+			.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
 	}
 })
 
@@ -199,15 +205,6 @@ vi.mock("../../condense", async (importOriginal) => {
 		}),
 	}
 })
-// Mock storagePathManager to prevent dynamic import issues.
-vi.mock("../../../utils/storage", () => ({
-	getTaskDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
-	getSettingsDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
-}))
 
 vi.mock("../../../utils/fs", () => ({
 	fileExistsAtPath: vi.fn().mockImplementation((filePath) => {
@@ -1824,6 +1821,11 @@ describe("Queued message processing after condense", () => {
 		const provider = new ShoferProvider(ctx, output as any, "sidebar", new ContextProxy(ctx)) as any
 		provider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
 		provider.getState = vi.fn().mockResolvedValue({})
+		// The async task-history init schedules a recurring 24h archived-cleanup
+		// setInterval; under this suite's fake timers `vi.runAllTimers()` would loop
+		// on it forever. These tests only exercise the condense/queue path, so
+		// neutralize the periodic cleanup (looked up on `this` when init reaches it).
+		provider.scheduleArchivedCleanup = vi.fn()
 		return provider
 	}
 

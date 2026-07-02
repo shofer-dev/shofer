@@ -95,7 +95,7 @@ import { OutputInterceptor } from "@shofer/core"
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { sanitizeToolUseId } from "@shofer/core"
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "@shofer/core"
 
 // prompts

@@ -4,7 +4,7 @@ import * as fs from "fs/promises"
 import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
 
-import { getTaskDirectoryPath } from "../../utils/storage"
+import { getTaskDirectoryPath } from "@shofer/core"
 
 export interface ErrorDiagnosticsValues {
 	timestamp?: string

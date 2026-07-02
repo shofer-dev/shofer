@@ -1,82 +1,22 @@
 import * as vscode from "vscode"
-import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { constants as fsConstants } from "fs"
 
+import { getHost } from "@shofer/types"
 import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
 import { fsLog } from "@shofer/core"
 
 /**
- * Gets the base storage path for conversations
- * If a custom path is configured, uses that path
- * Otherwise uses the default VSCode extension global storage path
+ * VS Code resolver for the user-configured custom storage path, registered into
+ * `@shofer/core`'s storage seam (`setCustomStoragePathResolver`) at activation.
+ * The base-path logic (validation/fallback) lives in core; this just reads the
+ * `customStoragePath` setting.
  */
-export async function getStorageBasePath(defaultPath: string): Promise<string> {
-	// Get user-configured custom storage path
-	let customStoragePath = ""
-
-	try {
-		// This is the line causing the error in tests
-		const config = vscode.workspace.getConfiguration(Package.name)
-		customStoragePath = config.get<string>("customStoragePath", "")
-	} catch (error) {
-		fsLog.warn("Could not access VSCode configuration - using default path")
-		return defaultPath
-	}
-
-	// If no custom path is set, use default path
-	if (!customStoragePath) {
-		return defaultPath
-	}
-
-	try {
-		// Ensure custom path exists
-		await fs.mkdir(customStoragePath, { recursive: true })
-
-		// Check directory write permission without creating temp files
-		await fs.access(customStoragePath, fsConstants.R_OK | fsConstants.W_OK | fsConstants.X_OK)
-
-		return customStoragePath
-	} catch (error) {
-		// If path is unusable, report error and fall back to default path
-		fsLog.error(`Custom storage path is unusable: ${error instanceof Error ? error.message : String(error)}`)
-		if (vscode.window) {
-			getHost().notifier.error(t("common:errors.custom_storage_path_unusable", { path: customStoragePath }))
-		}
-		return defaultPath
-	}
-}
-
-/**
- * Gets the storage directory path for a task
- */
-export async function getTaskDirectoryPath(globalStoragePath: string, taskId: string): Promise<string> {
-	const basePath = await getStorageBasePath(globalStoragePath)
-	const taskDir = path.join(basePath, "tasks", taskId)
-	await fs.mkdir(taskDir, { recursive: true })
-	return taskDir
-}
-
-/**
- * Gets the settings directory path
- */
-export async function getSettingsDirectoryPath(globalStoragePath: string): Promise<string> {
-	const basePath = await getStorageBasePath(globalStoragePath)
-	const settingsDir = path.join(basePath, "settings")
-	await fs.mkdir(settingsDir, { recursive: true })
-	return settingsDir
-}
-
-/**
- * Gets the cache directory path
- */
-export async function getCacheDirectoryPath(globalStoragePath: string): Promise<string> {
-	const basePath = await getStorageBasePath(globalStoragePath)
-	const cacheDir = path.join(basePath, "cache")
-	await fs.mkdir(cacheDir, { recursive: true })
-	return cacheDir
+export async function getConfiguredCustomStoragePath(): Promise<string> {
+	const config = vscode.workspace.getConfiguration(Package.name)
+	return config.get<string>("customStoragePath", "")
 }
 
 /**
@@ -93,7 +33,7 @@ export async function promptForCustomStoragePath(): Promise<void> {
 	try {
 		const currentConfig = vscode.workspace.getConfiguration(Package.name)
 		currentPath = currentConfig.get<string>("customStoragePath", "")
-	} catch (error) {
+	} catch {
 		fsLog.error("Could not access configuration")
 		return
 	}
@@ -117,7 +57,7 @@ export async function promptForCustomStoragePath(): Promise<void> {
 				}
 
 				return null // Path format is valid
-			} catch (e) {
+			} catch {
 				return t("common:storage.enter_valid_path")
 			}
 		},
