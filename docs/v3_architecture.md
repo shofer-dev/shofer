@@ -261,20 +261,20 @@ single-host story.)
 The v3 architecture is delivered as a set of initiatives. Current status (initiative
 numbers are local to this document):
 
-| #   | Initiative                                                                                     | Status                                                                           |
-| --- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                            |
-| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 52 tools migrated                                                         |
-| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                               |
-| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                               |
-| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                               |
-| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                |
-| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                               |
-| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ 25 core files + registry vscode-free; agent-core package move remaining       |
-| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)              |
-| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; full headless parity pends the core move |
-| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred        |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 🚧 substrate + controller pool; remote-executor + UI wiring remaining            |
+| #   | Initiative                                                                                     | Status                                                                                                                               |
+| --- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                                                                                |
+| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 52 tools migrated                                                                                                             |
+| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                                                                                   |
+| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                                                                                   |
+| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                                                                                   |
+| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                                                                    |
+| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                                                                                   |
+| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ core vscode-free + all seams abstracted + portable tail relocated; ⏳ `Task`-closure move into `@shofer/core` in progress (below) |
+| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)                                                                  |
+| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; full headless parity pends the core move                                                     |
+| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                            |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | 🚧 substrate + controller pool; remote-executor + UI wiring remaining                                                                |
 
 ### What "done" means, per initiative
 
@@ -301,10 +301,11 @@ numbers are local to this document):
   host-agnostic **`TypedEmitter`** (`@shofer/types`, a `vscode.EventEmitter` drop-in for
   internally-consumed events; TreeDataProvider-style events fed back to VS Code stay in
   the Cat II adapter). The remaining `vscode` importers are genuine Category II (webview
-  handlers, file/save dialogs, editor reveal, terminal, diff view). _Remaining:_ the
-  agent-core package move (below) — now gated only on relocating the shared foundation
-  (`utils/logging` et al.) into a package `@shofer/core` can link, plus the three Cat II
-  subsystem abstractions.
+  handlers, file/save dialogs, editor reveal). _Since:_ the three Cat II subsystem
+  abstractions (McpHub / DiffView / terminal), the portable-service relocation, and the
+  `Task ↔ ShoferProvider` untangle are all **done**; what remains is the `Task`-closure
+  relocation into `@shofer/core` (below), clearing transitive vscode blockers in shared
+  packages (telemetry ✅, i18n ⏳) as they surface.
 - **§9 plugins** — `pluginRegistry` hooks are load-bearing: `collectTools` feeds the
   tool assembly, `transformSystemPrompt` threads the system prompt, and
   `dispatchEvent` receives every captured event (via `TelemetryService.onEvent`).
@@ -325,67 +326,67 @@ numbers are local to this document):
 
 ### Carve out the `@shofer/core` package
 
-`@shofer/core` already exists and holds shared core utilities (message-utils,
-task-history, worktree, custom-tools, plugins) plus — as of the first carve-out
-step — the **transport layer** (`transport/`: the HTTP/SSE server, `ShoferApiAgent`,
-and the full ACP stack). That layer moved out of the extension cleanly because it
-imports only `@shofer/types` + Node, so a headless front-end can now link the
-server/ACP transport from `@shofer/core` directly.
+`@shofer/core` holds the portable agent core. The transport layer (`transport/`: the
+HTTP/SSE server, `ShoferApiAgent`, the full ACP stack) and the tool schema-as-contract
+primitive (`defineNativeTool`) moved out early. The remaining step — extracting **`Task`
+itself** + the tool implementations, prompts, and the assistant-message dispatch loop —
+is **in progress**, and is what this section tracks.
 
-The remaining step is to extract the **agent core itself** — `Task`, the tool
-implementations, prompts, and the assistant-message dispatch loop — into
-`@shofer/core`. The first slice is done: `defineNativeTool` (the tool schema-as-contract
-primitive) now lives in `@shofer/core/tools`.
+This is **not** a de-coupling problem: the agent core is already vscode-free **at the
+call level** (`Task.ts` has zero `vscode.` references; it reaches the platform only
+through `getHost()` and `TypedEmitter`). It is a **structural** one — a file in a
+package cannot import from `src/`, so every module `Task` transitively imports must
+first live in `@shofer/core` (or `@shofer/types`).
 
-This is **not** a blind file-move. The agent core is now vscode-free **at the call
-level** — that sweep is finished (`Task` and its foundation route through `getHost()`
-and `TypedEmitter`; see §8). What remains is structural: a file in a package cannot
-import from `src/`, so before `Task` can move, its transitive deps must live somewhere
-the package can link. `Task`'s non-portable dependencies are a bounded, enumerable set
-that splits three ways, and most are now resolved:
+**Seams — ✅ done.** The three VS Code-coupled subsystems `Task` depended on are
+abstracted, their implementations staying Category II in `src`:
 
-- **Keystone — relocate shared foundation into a package.** ✅ `utils/logging` (~113
-  consumers) and ✅ `utils/path` (~50 consumers, incl. its `String.prototype.toPosix`
-  global — impl + `declare global` moved to `@shofer/core`, runtime installed via a
-  side-effect `import "@shofer/core"` in `extension.ts` + `vitest.setup.ts`) relocated
-  into `@shofer/core`. `utils/fs` and `services/search` remain. This is mechanical but
-  wide — the ripple, not any coupling, is the cost.
-- **Portable → move into `@shofer/core`** (already vscode-free): ✅ `services/blob-store`
-  moved. `services/checkpoints` remains (needs `services/search` first — `utils/path` is
-  now in place).
-- **VS Code-coupled → abstract behind a Category-I-style interface** (VS Code impl stays
-  in the extension adapter): ✅ **all three done** — `services/mcp/McpHub` routes through
-  `getHost()` (config/watcher/fs + a new `onDidChangeWorkspaceFolders` capability);
-  `integrations/editor/DiffViewProvider` sits behind the vscode-free `DiffView` interface,
-  built via a `getHost().createDiffView(cwd, task)` factory (the provider `implements
-DiffView` and stays Category II); `integrations/terminal/TerminalRegistry` is vscode-free
-  via the `HostTerminals` capability (shell-execution events routed through the host).
-  (`export-markdown` was never really a seam: `Task` imports only its pure formatters —
-  the save-dialog I/O is called solely from `ShoferProvider`, which stays Category II.)
+- `services/mcp/McpHub` routes through `getHost()` (config/watcher/fs + an
+  `onDidChangeWorkspaceFolders` capability).
+- `DiffViewProvider` sits behind the vscode-free `DiffView` interface, built via a
+  `getHost().createDiffView(cwd, task)` factory. A live diff editor is intrinsically a
+  front-end presentation, so `DiffView` stays a Category I _interface_ over a wholly
+  Category II implementation.
+- The terminal subsystem splits along the `ShoferTerminalProvider = "vscode" | "execa"`
+  line: command **execution is Category I** (the registry + `execa` backend now live in
+  `@shofer/core/terminal`), while the VS Code integrated terminal is one optional
+  Category II backend, injected via a `HostTerminals.createTerminal` host factory so the
+  core registry statically imports no vscode classes.
 
-**Terminal is Category I, not a Category II subsystem.** Making `TerminalRegistry`
-vscode-free was the enabler, but the terminal/command-execution subsystem itself
-_belongs in the portable core_: running a shell command is an OS/filesystem operation,
-and across distributed executors that environment is the same — an executor runs
-commands in its own workspace exactly like the local host does. The codebase already
-encodes this with the `ShoferTerminalProvider = "vscode" | "execa"` split: **`execa` is
-the portable Category I backend**, and the VS Code _integrated_ terminal (with its
-shell-integration UI + events) is one optional Category II backend, plugged in via the
-new `HostTerminals` capability. So the follow-up is to move the registry + process
-management + the `execa` provider into `@shofer/core` (like `blob-store`), leaving only
-the VS Code terminal backend in the adapter — injected through the host so the core
-registry no longer statically imports the vscode `Terminal` class (the one remaining
-class-level edge the seam left behind). The same is _not_ true of the diff view: a live
-diff editor is intrinsically a front-end presentation, so `DiffView` stays a Category I
-_interface_ with the whole implementation Category II.
+**Portable relocation — ✅ done.** Moved into `@shofer/core`: `utils/logging`,
+`utils/path` (with its `String.prototype.toPosix` global), `services/blob-store`,
+`ShoferIgnoreController`, `services/ripgrep`, `services/search`, `services/checkpoints`,
+and the terminal core — plus a portable `fileExistsAtPath` helper, which let the tail
+avoid moving the 62-consumer `utils/fs` (not on `Task`'s path; it stays in `src`).
 
-So the carve-out plan is: (1) ✅ abstract the three VS-Code-coupled subsystems; (2)
-relocate the shared foundation (keystone, in progress), move the portable services, and
-lift the terminal core (registry + `execa`) into `@shofer/core`; (3) move `Task` + tools
+**Provider circularity — ✅ done.** `Task` held `WeakRef<ShoferProvider>`, a hard
+reference to the concrete Category II webview provider. Broken via a **generic
+`TaskProviderLike<TTask>`** interface in `@shofer/core`: `ShoferProvider implements` it,
+`Task.providerRef` is typed `WeakRef<TaskProviderLike<Task>>`, and because the interface
+lives in the same package as `Task` it can name `Task` without re-introducing a cycle.
 
-- prompts + dispatch, now depending only on `@shofer/types` + those interfaces.
-  Completing it is what lets initiatives 10–12 run the core fully headless — a non-VS-Code
-  front-end links `@shofer/core` and supplies its own Category II adapter.
+**Closure relocation — ⏳ in progress.** `Task.ts`'s ~45 imports fan out across `api/`,
+`tools/`, `prompts/`, `assistant-message/`, `context/`, `mentions/`, `shared/`, … and
+those interdepend, so the whole vscode-free closure moves together, **leaves-first**, as
+merge-and-verify rounds (each relocates a chunk, committed green). Landed so far: ~25
+modules including `shared/{api,tools,modes,…}`, `api/transform/stream`, `message-queue`,
+the `task-persistence` primitives, `prompts/responses`, and `text-normalization`. Each
+round tends to surface a **systemic blocker** — a shared package that _transitively_
+imports vscode — which is cleared before continuing:
+
+- ✅ `@shofer/telemetry` — `PostHogTelemetryClient` used `vscode.env.machineId` + a
+  telemetry-level config read; both now route through `getHost()` (a new
+  `HostEnv.machineId` capability), so the whole telemetry-using core is unblocked.
+- ⏳ `src/i18n` (`t`, imported by ~21 closure modules) — loaded locale JSON via
+  `fs`/`__dirname` at module load; relocating into `@shofer/core` with static JSON
+  locale imports.
+- Remaining Category II edges to abstract as the closure reaches them: `api/index` +
+  providers (the VS Code LM provider), `integrations/misc/export-markdown` (save-dialog
+  I/O), `context-tracking/FileContextTracker`, and the webview handlers.
+
+Completing this — `Task.ts` landing in `packages/core/src/task/` — is what lets
+initiatives 10–12 run the core fully headless: a non-VS-Code front-end links
+`@shofer/core` and supplies its own Category II adapter.
 
 ### Front-end adapters beyond VS Code
 
