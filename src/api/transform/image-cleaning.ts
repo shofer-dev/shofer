@@ -1,4 +1,4 @@
-import { ApiMessage } from "../../core/task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 
 import { ApiHandler } from "../index"
 

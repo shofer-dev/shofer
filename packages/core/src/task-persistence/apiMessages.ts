@@ -9,7 +9,7 @@
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store"
+import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store.js"
 
 export type ApiMessage = Anthropic.MessageParam & {
 	ts?: number
@@ -17,10 +17,12 @@ export type ApiMessage = Anthropic.MessageParam & {
 	id?: string
 	// For reasoning items stored in API history
 	type?: "reasoning"
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- provider-specific reasoning payload
 	summary?: any[]
 	encrypted_content?: string
 	text?: string
 	// For OpenRouter reasoning_details array format (used by Gemini 3, etc.)
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- provider-specific reasoning payload
 	reasoning_details?: any[]
 	// For DeepSeek/Z.ai interleaved thinking: reasoning_content that must be preserved during tool call sequences
 	// See: https://api-docs.deepseek.com/guides/thinking_mode#tool-calls

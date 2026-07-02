@@ -14,7 +14,7 @@ import {
 	readApiMessagesTail,
 	saveApiMessages,
 	type ApiMessage,
-} from "../apiMessages"
+} from "../apiMessages.js"
 
 let dir: string
 const taskId = "task-api"

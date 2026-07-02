@@ -10,7 +10,7 @@
 
 import type { ShoferMessage } from "@shofer/types"
 
-import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store"
+import { storeAppend, storeReadAll, storeReadTail, storeSaveAll } from "./message-store.js"
 
 export type ReadTaskMessagesOptions = {
 	taskId: string

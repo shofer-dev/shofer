@@ -1,13 +1,19 @@
 import type { ShoferMessage } from "@shofer/types"
 
-import { type ApiMessage, appendApiMessage, readApiMessages, readApiMessagesTail, saveApiMessages } from "./apiMessages"
+import {
+	type ApiMessage,
+	appendApiMessage,
+	readApiMessages,
+	readApiMessagesTail,
+	saveApiMessages,
+} from "./apiMessages.js"
 import {
 	appendTaskMessage,
 	disposeAppendHandleForTask,
 	readTaskMessages,
 	readTaskMessagesTail,
 	saveTaskMessages,
-} from "./taskMessages"
+} from "./taskMessages.js"
 
 /**
  * Message persistence port (v3 architecture §5; the seam §9 needs

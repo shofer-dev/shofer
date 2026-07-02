@@ -5,7 +5,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { t } from "../../i18n"
 import { ApiHandler, ApiHandlerCreateMessageMetadata } from "../../api"
-import { ApiMessage } from "../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 import { findLast } from "@shofer/core"
 import { supportPrompt } from "../../shared/support-prompt"

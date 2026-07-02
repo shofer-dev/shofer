@@ -773,7 +773,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		// Read ui_messages for per-request metadata via the JSONL reader.
 		let uiMessages: Array<{ type: string; say?: string; ts: number; text?: string }> = []
 		try {
-			const { readTaskMessages } = await import("../core/task-persistence/taskMessages")
+			const { readTaskMessages } = await import("@shofer/core")
 			const globalStoragePath = this.sidebarProvider.contextProxy.globalStorageUri.fsPath
 			uiMessages = (await readTaskMessages({ taskId, globalStoragePath })) as typeof uiMessages
 		} catch {

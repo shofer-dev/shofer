@@ -5,7 +5,7 @@ import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { BaseProvider } from "../../../api/providers/base-provider"
-import { ApiMessage } from "../../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 import {
 	summarizeConversation,
 	getMessagesSinceLastSummary,

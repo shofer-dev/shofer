@@ -7,7 +7,7 @@ import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
-import { readTaskMessages } from "../task-persistence/taskMessages"
+import { readTaskMessages } from "@shofer/core"
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 
 const DEFAULT_TIMEOUT_SECONDS = 120

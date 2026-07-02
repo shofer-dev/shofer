@@ -35,7 +35,8 @@ vi.mock("fs/promises", () => {
 
 // Mock the JSONL API messages reader used by diagnosticsHandler.
 const readApiMessagesMock = vi.fn()
-vi.mock("../../task-persistence/apiMessages", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	readApiMessages: readApiMessagesMock,
 }))
 

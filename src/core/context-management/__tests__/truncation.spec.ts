@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { TelemetryService } from "@shofer/telemetry"
 import { truncateConversation } from "../index"
 import { getEffectiveApiHistory, cleanupAfterTruncation } from "../../condense"
-import { ApiMessage } from "../../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 
 describe("Non-Destructive Sliding Window Truncation", () => {
 	let messages: ApiMessage[]

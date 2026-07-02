@@ -39,7 +39,7 @@ export async function generateErrorDiagnostics(params: GenerateDiagnosticsParams
 		const taskDirPath = await getTaskDirectoryPath(globalStoragePath, taskId)
 
 		// Load API conversation history from the JSONL log used by openDebugApiHistory.
-		const { readApiMessages } = await import("../task-persistence/apiMessages")
+		const { readApiMessages } = await import("@shofer/core")
 		let history: unknown = []
 		try {
 			history = await readApiMessages({ taskId, globalStoragePath })

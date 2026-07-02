@@ -28,7 +28,7 @@ import {
 import { customToolRegistry } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { type ApiMessage } from "../task-persistence/apiMessages"
+import { type ApiMessage } from "@shofer/core"
 import { saveTaskMessages } from "../task-persistence"
 
 import { ShoferProvider } from "./ShoferProvider"
@@ -602,7 +602,7 @@ export const webviewMessageHandler = async (
 			// webview can break each down on its own timeline and sum.
 			const ids = Array.isArray(message.workflowStatsTaskIds) ? message.workflowStatsTaskIds : []
 			const rootId = typeof message.taskId === "string" ? message.taskId : undefined
-			const { readTaskMessages } = await import("../task-persistence/taskMessages")
+			const { readTaskMessages } = await import("@shofer/core")
 			const globalStoragePath = provider.contextProxy.globalStorageUri.fsPath
 			const requests: Record<string, string[]> = {}
 			await Promise.all(

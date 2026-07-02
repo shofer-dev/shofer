@@ -3,7 +3,7 @@
 import type { ModelInfo } from "@shofer/types"
 
 import { ApiHandler } from "../../index"
-import { ApiMessage } from "../../../core/task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "../image-cleaning"
 
 describe("maybeRemoveImageBlocks", () => {

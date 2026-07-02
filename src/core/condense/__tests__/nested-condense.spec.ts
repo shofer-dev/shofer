@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { ApiMessage } from "../../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 import { getEffectiveApiHistory, getMessagesSinceLastSummary } from "../index"
 
 describe("nested condensing scenarios", () => {

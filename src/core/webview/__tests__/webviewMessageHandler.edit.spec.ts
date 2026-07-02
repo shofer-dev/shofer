@@ -53,7 +53,7 @@ vi.mock("../checkpointRestoreHandler", () => ({
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
 import type { ShoferMessage } from "@shofer/types"
-import type { ApiMessage } from "../../task-persistence/apiMessages"
+import type { ApiMessage } from "@shofer/core"
 import { MessageManager } from "../../message-manager"
 
 describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {

@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import type { ApiMessage } from "../apiMessages"
-import { SqliteMessagePersistence } from "../PersistencePort"
+import type { ApiMessage } from "../apiMessages.js"
+import { SqliteMessagePersistence } from "../PersistencePort.js"
 
 /**
  * Round-trips the SQLite persistence port adapter (§5) — confirms it is a faithful

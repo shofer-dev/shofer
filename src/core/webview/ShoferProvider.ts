@@ -2975,7 +2975,7 @@ export class ShoferProvider
 		// re-reads the same file in preloadShoferMessages). This avoids a
 		// 100%-wasted read + parse + dedupe on every cold task switch.
 		if (!opts?.skipApiHistory) {
-			const { readApiMessages } = await import("../task-persistence/apiMessages")
+			const { readApiMessages } = await import("@shofer/core")
 			try {
 				apiConversationHistory = await readApiMessages({ taskId: id, globalStoragePath })
 			} catch (error) {
@@ -3032,7 +3032,7 @@ export class ShoferProvider
 		const history = this.getGlobalState("taskHistory") ?? []
 		const taskIds = history.filter((i) => (i.rootTaskId ?? i.id) === rootTaskId).map((i) => i.id)
 
-		const { readTaskMessages } = await import("../task-persistence/taskMessages")
+		const { readTaskMessages } = await import("@shofer/core")
 		const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 
 		const interactions: TaskInteractionPayload[] = []
@@ -3166,7 +3166,7 @@ export class ShoferProvider
 			// match the JSON export's `events` field).
 			let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
 			try {
-				const { readTaskMessages } = await import("../task-persistence/taskMessages")
+				const { readTaskMessages } = await import("@shofer/core")
 				const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 				uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
 			} catch (err) {
@@ -3261,7 +3261,7 @@ export class ShoferProvider
 		// Read ui_messages for per-request metadata via the JSONL reader.
 		let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
 		try {
-			const { readTaskMessages } = await import("../task-persistence/taskMessages")
+			const { readTaskMessages } = await import("@shofer/core")
 			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 			uiMessages = (await readTaskMessages({ taskId: id, globalStoragePath })) as typeof uiMessages
 		} catch (err) {

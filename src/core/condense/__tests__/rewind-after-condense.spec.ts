@@ -12,7 +12,7 @@
 import { TelemetryService } from "@shofer/telemetry"
 
 import { getEffectiveApiHistory, cleanupAfterTruncation } from "../index"
-import { ApiMessage } from "../../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 
 describe("Rewind After Condense - Issue #8295", () => {
 	beforeEach(() => {

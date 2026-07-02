@@ -8,7 +8,7 @@ import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
 import { getModeBySlug } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
-import { readTaskMessages } from "../task-persistence/taskMessages"
+import { readTaskMessages } from "@shofer/core"
 import { MAX_SUBTASK_RESULT_LENGTH } from "./NewTaskTool"
 
 interface CheckTaskStatusParams {

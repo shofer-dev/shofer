@@ -6,7 +6,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { ApiHandler } from "../../../api"
-import { ApiMessage } from "../../task-persistence/apiMessages"
+import { ApiMessage } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "../../../api/transform/image-cleaning"
 import {
 	summarizeConversation,

@@ -14,7 +14,7 @@ import {
 	readTaskMessages,
 	readTaskMessagesTail,
 	saveTaskMessages,
-} from "../taskMessages"
+} from "../taskMessages.js"
 
 let dir: string
 const taskId = "task-ui"
