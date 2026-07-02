@@ -13,7 +13,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
+import { NativeToolCallParser } from "@shofer/core"
 
 import type { ApiHandlerOptions } from "@shofer/core"
 import { apiLog } from "@shofer/core"

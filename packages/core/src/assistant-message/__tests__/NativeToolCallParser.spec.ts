@@ -1,4 +1,4 @@
-import { NativeToolCallParser } from "../NativeToolCallParser"
+import { NativeToolCallParser } from "../NativeToolCallParser.js"
 
 describe("NativeToolCallParser", () => {
 	beforeEach(() => {
@@ -227,7 +227,7 @@ describe("NativeToolCallParser", () => {
 						const nativeArgs = result.nativeArgs as { files: Array<{ path: string }>; _legacyFormat: true }
 						expect(nativeArgs._legacyFormat).toBe(true)
 						expect(nativeArgs.files).toHaveLength(1)
-						expect(nativeArgs.files[0].path).toBe("src/legacy/file.ts")
+						expect(nativeArgs.files[0]!.path).toBe("src/legacy/file.ts")
 					}
 				})
 
@@ -248,9 +248,9 @@ describe("NativeToolCallParser", () => {
 						expect(result.usedLegacyFormat).toBe(true)
 						const nativeArgs = result.nativeArgs as { files: Array<{ path: string }>; _legacyFormat: true }
 						expect(nativeArgs.files).toHaveLength(3)
-						expect(nativeArgs.files[0].path).toBe("src/file1.ts")
-						expect(nativeArgs.files[1].path).toBe("src/file2.ts")
-						expect(nativeArgs.files[2].path).toBe("src/file3.ts")
+						expect(nativeArgs.files[0]!.path).toBe("src/file1.ts")
+						expect(nativeArgs.files[1]!.path).toBe("src/file2.ts")
+						expect(nativeArgs.files[2]!.path).toBe("src/file3.ts")
 					}
 				})
 
@@ -281,9 +281,9 @@ describe("NativeToolCallParser", () => {
 							files: Array<{ path: string; lineRanges?: Array<{ start: number; end: number }> }>
 							_legacyFormat: true
 						}
-						expect(nativeArgs.files[0].lineRanges).toHaveLength(2)
-						expect(nativeArgs.files[0].lineRanges?.[0]).toEqual({ start: 1, end: 50 })
-						expect(nativeArgs.files[0].lineRanges?.[1]).toEqual({ start: 100, end: 150 })
+						expect(nativeArgs.files[0]!.lineRanges).toHaveLength(2)
+						expect(nativeArgs.files[0]!.lineRanges?.[0]).toEqual({ start: 1, end: 50 })
+						expect(nativeArgs.files[0]!.lineRanges?.[1]).toEqual({ start: 100, end: 150 })
 					}
 				})
 
@@ -313,9 +313,9 @@ describe("NativeToolCallParser", () => {
 						const nativeArgs = result.nativeArgs as {
 							files: Array<{ path: string; lineRanges?: Array<{ start: number; end: number }> }>
 						}
-						expect(nativeArgs.files[0].lineRanges).toHaveLength(2)
-						expect(nativeArgs.files[0].lineRanges?.[0]).toEqual({ start: 10, end: 20 })
-						expect(nativeArgs.files[0].lineRanges?.[1]).toEqual({ start: 30, end: 40 })
+						expect(nativeArgs.files[0]!.lineRanges).toHaveLength(2)
+						expect(nativeArgs.files[0]!.lineRanges?.[0]).toEqual({ start: 10, end: 20 })
+						expect(nativeArgs.files[0]!.lineRanges?.[1]).toEqual({ start: 30, end: 40 })
 					}
 				})
 
@@ -342,9 +342,9 @@ describe("NativeToolCallParser", () => {
 						const nativeArgs = result.nativeArgs as {
 							files: Array<{ path: string; lineRanges?: Array<{ start: number; end: number }> }>
 						}
-						expect(nativeArgs.files[0].lineRanges).toHaveLength(2)
-						expect(nativeArgs.files[0].lineRanges?.[0]).toEqual({ start: 1, end: 50 })
-						expect(nativeArgs.files[0].lineRanges?.[1]).toEqual({ start: 100, end: 150 })
+						expect(nativeArgs.files[0]!.lineRanges).toHaveLength(2)
+						expect(nativeArgs.files[0]!.lineRanges?.[0]).toEqual({ start: 1, end: 50 })
+						expect(nativeArgs.files[0]!.lineRanges?.[1]).toEqual({ start: 100, end: 150 })
 					}
 				})
 
@@ -374,8 +374,8 @@ describe("NativeToolCallParser", () => {
 						}
 						expect(nativeArgs._legacyFormat).toBe(true)
 						expect(nativeArgs.files).toHaveLength(2)
-						expect(nativeArgs.files[0].path).toBe("src/services/example/service.ts")
-						expect(nativeArgs.files[1].path).toBe("src/services/mcp/McpServerManager.ts")
+						expect(nativeArgs.files[0]!.path).toBe("src/services/example/service.ts")
+						expect(nativeArgs.files[1]!.path).toBe("src/services/mcp/McpServerManager.ts")
 					}
 				})
 

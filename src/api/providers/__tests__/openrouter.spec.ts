@@ -455,7 +455,7 @@ describe("OpenRouterHandler", () => {
 
 		it("yields tool_call_end events when finish_reason is tool_calls", async () => {
 			// Import NativeToolCallParser to set up state
-			const { NativeToolCallParser } = await import("../../../core/assistant-message/NativeToolCallParser")
+			const { NativeToolCallParser } = await import("@shofer/core")
 
 			// Clear any previous state
 			NativeToolCallParser.clearRawChunkState()

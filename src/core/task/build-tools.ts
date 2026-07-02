@@ -4,18 +4,14 @@ import type OpenAI from "openai"
 
 import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
 import { toolGroupsSchema, getHost } from "@shofer/types"
-import { customToolRegistry, formatNative, pluginRegistry } from "@shofer/core"
+import { customToolRegistry, formatNative, pluginRegistry, setPrivateToolInvokeMap } from "@shofer/core"
 
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
 
 import { getNativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
-import {
-	filterNativeToolsForMode,
-	filterMcpToolsForMode,
-	resolveToolAlias,
-} from "../prompts/tools/filter-tools-for-mode"
-import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode } from "@shofer/core"
+import { filterNativeToolsForMode, filterMcpToolsForMode } from "../prompts/tools/filter-tools-for-mode"
+import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode, resolveToolAlias } from "@shofer/core"
 
 interface BuildToolsOptions {
 	provider: ShoferProvider
@@ -206,28 +202,6 @@ function resolvePrivateToolGroup(providerId: string, def: PrivateToolDef): ToolG
 }
 
 /**
- * Lookup map: tool name → invoke command, built during discovery.
- * Used by the execution layer (presentAssistantMessage.ts) to route
- * private tool invocations to the correct provider.
- */
-let _privateToolInvokeMap: Map<string, string> | null = null
-
-/**
- * Return the invoke command for a private tool name, or undefined
- * if the name is not a known private tool.
- */
-export function getPrivateToolInvokeCommand(toolName: string): string | undefined {
-	return _privateToolInvokeMap?.get(toolName)
-}
-
-/**
- * Check whether a tool name belongs to any registered private provider.
- */
-export function isPrivateLmTool(toolName: string): boolean {
-	return _privateToolInvokeMap?.has(toolName) ?? false
-}
-
-/**
  * Filter private tools by mode, using each tool's assigned group.
  *
  * @param privateMeta - Private tool metadata with group assignments
@@ -397,8 +371,8 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	const allPrivateTools = privateMeta.map((m) => m.tool)
 	const filteredPrivateTools = filterPrivateToolsForMode(privateMeta, mode, customModes)
 
-	// Build the invoke-command lookup map for the execution layer.
-	_privateToolInvokeMap = new Map(privateMeta.map((m) => [getToolName(m.tool), m.invokeCommand]))
+	// Build the invoke-command lookup map for the execution layer (core registry).
+	setPrivateToolInvokeMap(privateMeta.map((m) => [getToolName(m.tool), m.invokeCommand]))
 
 	// Per-task `.slang` `tools:` restriction (no-op when the field is absent).
 	const {

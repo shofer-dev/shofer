@@ -8,7 +8,7 @@ import { type ModelInfo, type QwenCodeModelId, qwenCodeModels, qwenCodeDefaultMo
 
 import type { ApiHandlerOptions } from "@shofer/core"
 
-import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
+import { NativeToolCallParser } from "@shofer/core"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "@shofer/core"

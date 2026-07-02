@@ -2,12 +2,16 @@ import { parseJSON } from "partial-json"
 import { distance } from "fastest-levenshtein"
 
 import { type ToolName, toolNames, type FileEntry } from "@shofer/types"
-import { customToolRegistry } from "@shofer/core"
+import { type ToolUse, type McpToolUse, type ToolParamName, type NativeToolArgs, toolParamNames } from "@shofer/types"
+import { customToolRegistry } from "../custom-tools/index.js"
 
-import { type ToolUse, type McpToolUse, type ToolParamName, type NativeToolArgs, toolParamNames } from "@shofer/core"
-import { resolveToolAlias } from "../prompts/tools/filter-tools-for-mode"
-import type { ApiStreamToolCallStartChunk, ApiStreamToolCallDeltaChunk, ApiStreamToolCallEndChunk } from "@shofer/core"
-import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpToolName } from "@shofer/core"
+import { resolveToolAlias } from "../tools/tool-aliases.js"
+import type {
+	ApiStreamToolCallStartChunk,
+	ApiStreamToolCallDeltaChunk,
+	ApiStreamToolCallEndChunk,
+} from "../api/transform/stream.js"
+import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpToolName } from "../utils/mcp-name.js"
 
 /**
  * Helper type to extract properly typed native arguments for a given tool.
@@ -15,8 +19,8 @@ import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpTool
  */
 type NativeArgsFor<TName extends ToolName> = TName extends keyof NativeToolArgs ? NativeToolArgs[TName] : never
 
-import { isPrivateLmTool } from "../task/build-tools"
-import { webviewLog } from "@shofer/core"
+import { isPrivateLmTool } from "../tools/private-tool-registry.js"
+import { webviewLog } from "../logging/subsystems.js"
 
 /**
  * Find the closest matching tool name from a list of candidates using
@@ -26,14 +30,14 @@ import { webviewLog } from "@shofer/core"
 function findClosestToolName(haystack: string, candidates: readonly string[]): string | undefined {
 	if (candidates.length === 0) return undefined
 
-	let best = candidates[0]
+	let best = candidates[0]!
 	let bestDist = distance(haystack, best)
 
 	for (let i = 1; i < candidates.length; i++) {
-		const dist = distance(haystack, candidates[i])
+		const dist = distance(haystack, candidates[i]!)
 		if (dist < bestDist) {
 			bestDist = dist
-			best = candidates[i]
+			best = candidates[i]!
 		}
 	}
 
@@ -405,7 +409,7 @@ export class NativeToolCallParser {
 		//   extremely unlikely.  No false positives have been observed.
 		const match = value.match(/\n<.*?parameter\s+name="path"\s+string="true">([^\n<]+)\s*(?:<\/parameter>)?\s*$/)
 		if (!match) return null
-		const extractedPath = match[1].trim()
+		const extractedPath = match[1]!.trim()
 		if (!extractedPath) return null
 		const sanitized = value.slice(0, match.index!)
 		return { path: extractedPath, sanitized }
@@ -576,7 +580,7 @@ export class NativeToolCallParser {
 						if (typeof range === "string") {
 							const match = range.match(/^(\d+)-(\d+)$/)
 							if (match) {
-								return { start: parseInt(match[1], 10), end: parseInt(match[2], 10) }
+								return { start: parseInt(match[1]!, 10), end: parseInt(match[2]!, 10) }
 							}
 						}
 						return null
@@ -595,6 +599,7 @@ export class NativeToolCallParser {
 	private static createPartialToolUse(
 		id: string,
 		name: ToolName,
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		partialArgs: Record<string, any>,
 		partial: boolean,
 		originalName?: string,
@@ -614,6 +619,7 @@ export class NativeToolCallParser {
 		}
 
 		// Build partial nativeArgs based on what we have so far
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		let nativeArgs: any = undefined
 
 		// Track if legacy format was used (for telemetry)

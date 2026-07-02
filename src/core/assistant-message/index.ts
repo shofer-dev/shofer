@@ -1,2 +1,2 @@
-export type { AssistantMessageContent } from "./types"
+export type { AssistantMessageContent } from "@shofer/core"
 export { presentAssistantMessage } from "./presentAssistantMessage"

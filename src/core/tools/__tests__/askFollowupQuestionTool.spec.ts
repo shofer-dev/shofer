@@ -1,6 +1,6 @@
 import { askFollowupQuestionTool } from "../AskFollowupQuestionTool"
 import { ToolUse } from "@shofer/core"
-import { NativeToolCallParser } from "../../assistant-message/NativeToolCallParser"
+import { NativeToolCallParser } from "@shofer/core"
 
 describe("askFollowupQuestionTool", () => {
 	let mockShofer: any

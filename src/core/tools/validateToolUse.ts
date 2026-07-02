@@ -14,7 +14,7 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
  * they are tightly coupled to their owning extension's internal orchestration
  * and reject invocations from outside callers.
  */
-import { isPrivateLmTool } from "../task/build-tools"
+import { isPrivateLmTool } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 /**

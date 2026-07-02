@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { OpenAiCodexHandler } from "../openai-codex"
 import type { ApiHandlerOptions } from "@shofer/core"
-import { NativeToolCallParser } from "../../../core/assistant-message/NativeToolCallParser"
+import { NativeToolCallParser } from "@shofer/core"
 import { openAiCodexOAuthManager } from "../../../integrations/openai-codex/oauth"
 
 describe("OpenAiCodexHandler native tool calls", () => {

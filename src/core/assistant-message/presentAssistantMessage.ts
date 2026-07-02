@@ -43,7 +43,7 @@ import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillsTool } from "../tools/SkillsTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
-import { NativeToolCallParser } from "./NativeToolCallParser"
+import { NativeToolCallParser } from "@shofer/core"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { ragSearchTool } from "../tools/RagSearchTool"
 import { gitSearchTool } from "../tools/GitSearchTool"
@@ -75,7 +75,7 @@ import { waitForMcpCallTool } from "../tools/WaitForMcpCallTool"
 import { sleepTool } from "../tools/SleepTool"
 import { formatResponse } from "@shofer/core"
 import { sanitizeToolUseId } from "@shofer/core"
-import { isPrivateLmTool, getPrivateToolInvokeCommand } from "../task/build-tools"
+import { isPrivateLmTool, getPrivateToolInvokeCommand } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { stringifyForLog } from "../../utils/outputChannelLogger"
 
@@ -885,7 +885,7 @@ export async function presentAssistantMessage(shofer: Task) {
 				// Resolve aliases in includedTools before validation
 				// e.g., "edit_file" should resolve to "apply_diff"
 				const rawIncludedTools = modelInfo?.info?.includedTools
-				const { resolveToolAlias } = await import("../prompts/tools/filter-tools-for-mode")
+				const { resolveToolAlias } = await import("@shofer/core")
 				const includedTools = rawIncludedTools?.map((tool) => resolveToolAlias(tool))
 
 				try {
