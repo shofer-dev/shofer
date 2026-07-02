@@ -8,7 +8,7 @@ import {
 	litellmDefaultModelId,
 } from "@shofer/types"
 
-import { RouterName } from "@shofer/shared/api"
+import { RouterName } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

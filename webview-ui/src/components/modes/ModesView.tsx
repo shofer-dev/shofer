@@ -20,8 +20,8 @@ import {
 	getAllModes,
 	findModeBySlug as findCustomModeBySlug,
 	defaultModeSlug,
-} from "@shofer/shared/modes"
-import { TOOL_GROUPS } from "@shofer/shared/tools"
+} from "@shofer/types"
+import { TOOL_GROUPS } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { buildDocLink } from "@src/utils/docLinks"

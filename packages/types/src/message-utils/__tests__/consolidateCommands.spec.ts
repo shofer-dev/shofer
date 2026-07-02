@@ -1,6 +1,6 @@
 // npx vitest run packages/core/src/message-utils/__tests__/consolidateCommands.spec.ts
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "../../message.js"
 
 import { consolidateCommands, COMMAND_OUTPUT_STRING } from "../consolidateCommands.js"
 

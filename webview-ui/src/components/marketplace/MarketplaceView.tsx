@@ -10,7 +10,7 @@ import { MarketplaceListView } from "./MarketplaceListView"
 import { cn } from "@/lib/utils"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ExtensionStateContext } from "@/context/ExtensionStateContext"
-import { Package } from "@shofer/shared/package"
+import { Package } from "@src/utils/package"
 import MarkdownBlock from "@/components/common/MarkdownBlock"
 
 interface MarketplaceViewProps {

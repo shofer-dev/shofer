@@ -1,4 +1,4 @@
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "../message.js"
 
 import { safeJsonParse } from "./safeJsonParse.js"
 

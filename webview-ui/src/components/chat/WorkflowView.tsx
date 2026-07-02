@@ -12,9 +12,9 @@ import { batchConsecutive } from "@src/utils/batchConsecutive"
 import type { ShoferAsk, ShoferSayTool, ShoferMessage, ExtensionMessage, AudioType } from "@shofer/types"
 import { isRetiredProvider } from "@shofer/types"
 
-import { findLast } from "@shofer/shared/array"
+import { findLast } from "@shofer/types"
 import { SuggestionItem } from "@shofer/types"
-import { getAllModes } from "@shofer/shared/modes"
+import { getAllModes } from "@shofer/types"
 import { ProfileValidator } from "@shofer/shared/ProfileValidator"
 import { escapeSpaces } from "@src/utils/path-mentions"
 

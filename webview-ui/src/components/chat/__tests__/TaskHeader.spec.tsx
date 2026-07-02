@@ -55,18 +55,6 @@ vi.mock("@src/context/ExtensionStateContext", () => ({
 	useExtensionState: () => mockExtensionState,
 }))
 
-// Mock findLastIndex from @shofer/array
-vi.mock("@shofer/shared/array", () => ({
-	findLastIndex: (array: any[], predicate: (item: any) => boolean) => {
-		for (let i = array.length - 1; i >= 0; i--) {
-			if (predicate(array[i])) {
-				return i
-			}
-		}
-		return -1
-	},
-}))
-
 // Create a variable to hold the mock model info for useSelectedModel
 let mockModelInfo: { contextWindow: number; maxTokens: number } | undefined = undefined
 
@@ -81,11 +69,25 @@ vi.mock("@/components/ui/hooks/useSelectedModel", () => ({
 	}),
 }))
 
-// Mock getModelMaxOutputTokens from @shofer/api
+// Mock findLastIndex + getModelMaxOutputTokens (both formerly @shofer/shared/{array,api},
+// now the @shofer/types barrel). Spread the real barrel so the many other symbols the
+// component tree imports from @shofer/types stay intact.
 let mockMaxOutputTokens = 0
-vi.mock("@shofer/shared/api", () => ({
-	getModelMaxOutputTokens: () => mockMaxOutputTokens,
-}))
+vi.mock("@shofer/types", async () => {
+	const actual = await vi.importActual<typeof import("@shofer/types")>("@shofer/types")
+	return {
+		...actual,
+		findLastIndex: (array: any[], predicate: (item: any) => boolean) => {
+			for (let i = array.length - 1; i >= 0; i--) {
+				if (predicate(array[i])) {
+					return i
+				}
+			}
+			return -1
+		},
+		getModelMaxOutputTokens: () => mockMaxOutputTokens,
+	}
+})
 
 describe("TaskHeader", () => {
 	const defaultProps: TaskHeaderProps = {

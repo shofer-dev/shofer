@@ -2,7 +2,7 @@
 
 import type { ToolName } from "@shofer/types"
 
-import type { ToolUse } from "../../shared/tools.js"
+import type { ToolUse } from "@shofer/types"
 
 import { ToolRepetitionDetector } from "../ToolRepetitionDetector.js"
 

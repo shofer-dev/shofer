@@ -1,6 +1,6 @@
 import stringify from "safe-stable-stringify"
 
-import type { ToolUse } from "../shared/tools.js"
+import type { ToolUse } from "@shofer/types"
 import { t } from "../i18n/index.js"
 
 /**

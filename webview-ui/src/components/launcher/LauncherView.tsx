@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ListChecks, Rocket, Beaker, Code, Cog, Search, Shield, Star, X, type LucideIcon } from "lucide-react"
 
-import { Mode } from "@shofer/shared/modes"
+import { Mode } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"

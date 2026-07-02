@@ -1,13 +1,5 @@
-import {
-	type GroupEntry,
-	type ModeConfig,
-	type CustomModePrompts,
-	type ToolGroup,
-	type PromptComponent,
-	DEFAULT_MODES,
-} from "@shofer/types"
-
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tools.js"
+import { type GroupEntry, type ModeConfig, type CustomModePrompts, type PromptComponent, DEFAULT_MODES } from "./mode.js"
+import { type ToolGroup, TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tool.js"
 
 export type Mode = string
 

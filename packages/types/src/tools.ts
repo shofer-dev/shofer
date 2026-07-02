@@ -1,19 +1,15 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import type { ShoferAsk, ToolProgressStatus, ToolName, GenerateImageParams } from "@shofer/types"
+import type { ShoferAsk, ToolProgressStatus } from "./message.js"
+import type { ToolName } from "./tool.js"
+import type { GenerateImageParams } from "./tool-params.js"
 
 // NOTE: When adding a new tool parameter name to toolParamNames, also add it
 // to NativeToolArgs if the tool uses native (typed) arguments.
-
-// Re-export tool metadata from @shofer/types to avoid duplication
-export {
-	type ToolGroupConfig,
-	TOOL_DISPLAY_NAMES,
-	TOOL_GROUPS,
-	ALWAYS_AVAILABLE_TOOLS,
-	TOOL_ALIASES,
-	CROSS_ASSISTANT_ALIASES,
-} from "@shofer/types"
+//
+// Tool metadata (TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_DISPLAY_NAMES,
+// TOOL_ALIASES, CROSS_ASSISTANT_ALIASES, ToolGroupConfig) is defined in ./tool.ts
+// and re-exported from the @shofer/types barrel — no need to re-export here.
 
 export type ToolResponse = string | Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam>
 
@@ -187,7 +183,7 @@ export type NativeToolArgs = {
 		softResultLength?: number | null
 	}
 	access_mcp_resource: { server_name: string; uri: string }
-	read_file: import("@shofer/types").ReadFileToolParams
+	read_file: import("./tool-params.js").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }
 	read_output_channel: {
 		channel?: string
@@ -227,7 +223,7 @@ export type NativeToolArgs = {
 	ask_followup_question: {
 		question: string
 		follow_up?: Array<{ text: string; mode?: string }> | null
-		form?: Array<import("@shofer/types").ParamField> | null
+		form?: Array<import("./followup.js").ParamField> | null
 	}
 	rag_search: { query: string; path?: string; maxResults?: number | null }
 	generate_image: GenerateImageParams

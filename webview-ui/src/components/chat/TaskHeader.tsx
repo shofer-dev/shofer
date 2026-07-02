@@ -13,7 +13,7 @@ import prettyBytes from "pretty-bytes"
 
 import type { ShoferMessage, WorkflowVizMeta } from "@shofer/types"
 
-import { getModelMaxOutputTokens } from "@shofer/shared/api"
+import { getModelMaxOutputTokens } from "@shofer/types"
 
 import { formatLargeNumber, formatDuration } from "@src/utils/format"
 import { cn } from "@src/lib/utils"

@@ -1,4 +1,5 @@
-import type { PromptComponent } from "@shofer/types"
+/* eslint-disable @typescript-eslint/no-explicit-any -- test fixtures cast partial prompt objects */
+import type { PromptComponent } from "../mode.js"
 
 import { getModeSelection, modes } from "../modes.js"
 

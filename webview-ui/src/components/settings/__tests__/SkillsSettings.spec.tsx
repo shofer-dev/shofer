@@ -32,13 +32,18 @@ vi.mock("@/utils/docLinks", () => ({
 	buildDocLink: (path: string, anchor?: string) => `https://docs.example.com/${path}${anchor ? `#${anchor}` : ""}`,
 }))
 
-// Mock modes
-vi.mock("@shofer/shared/modes", () => ({
-	getAllModes: () => [
-		{ slug: "code", name: "Code" },
-		{ slug: "architect", name: "Architect" },
-	],
-}))
+// Mock modes (getAllModes formerly from @shofer/shared/modes, now the @shofer/types
+// barrel). Spread the real barrel so sibling exports the component imports stay intact.
+vi.mock("@shofer/types", async () => {
+	const actual = await vi.importActual<typeof import("@shofer/types")>("@shofer/types")
+	return {
+		...actual,
+		getAllModes: () => [
+			{ slug: "code", name: "Code" },
+			{ slug: "architect", name: "Architect" },
+		],
+	}
+})
 
 // Mock UI components
 vi.mock("@/components/ui", () => ({

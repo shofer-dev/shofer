@@ -593,9 +593,15 @@ importers:
 
   packages/types:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.37.0
+        version: 0.37.0
       ai-sdk-provider-poe:
         specifier: 2.0.18
         version: 2.0.18(ai@6.0.77(zod@3.25.76))(zod@3.25.76)
+      shell-quote:
+        specifier: ^1.8.2
+        version: 1.8.3
       zod:
         specifier: 3.25.76
         version: 3.25.76
@@ -609,6 +615,9 @@ importers:
       '@types/node':
         specifier: ^24.1.0
         version: 24.2.1
+      '@types/shell-quote':
+        specifier: ^1.7.5
+        version: 1.7.5
       ajv:
         specifier: ^8.18.0
         version: 8.18.0

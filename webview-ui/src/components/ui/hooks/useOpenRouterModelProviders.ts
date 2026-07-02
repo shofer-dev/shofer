@@ -4,7 +4,7 @@ import { useQuery, UseQueryOptions } from "@tanstack/react-query"
 
 import type { ModelInfo } from "@shofer/types"
 
-import { parseApiPrice } from "@shofer/shared/cost"
+import { parseApiPrice } from "@shofer/types"
 
 export const OPENROUTER_DEFAULT_PROVIDER_NAME = "[default]"
 

@@ -6,7 +6,7 @@ import { VSCodeCheckbox, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
 
 import type { TelemetrySetting } from "@shofer/types"
 
-import { Package } from "@shofer/shared/package"
+import { Package } from "@src/utils/package"
 import { TelemetryClient } from "@/utils/TelemetryClient"
 
 import { vscode } from "@/utils/vscode"

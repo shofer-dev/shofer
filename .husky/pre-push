@@ -18,6 +18,14 @@ fi
 
 $pnpm_cmd run check-types
 
+# Build the shippable bundle before running tests. `bundle` (see src/turbo.json)
+# depends on `@shofer/vscode-webview#build`, so this compiles the webview browser
+# bundle (Vite) too. tsc/vitest DON'T fully exercise the webview's Vite-only module
+# aliases, so a broken webview build can otherwise slip past the gate (as happened
+# when browser-safe `shared/` modules moved out from under the `@shofer/shared/*`
+# alias). Turbo caches this — it's ~instant when nothing relevant changed.
+$pnpm_cmd run bundle
+
 # Run all test suites sequentially with capped parallelism.
 # A single failure blocks the push.
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

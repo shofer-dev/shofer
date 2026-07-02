@@ -1,4 +1,4 @@
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "../message.js"
 
 /**
  * Consolidates API request start and finish messages in an array of ShoferMessages.

@@ -1,4 +1,4 @@
-import { defaultModeSlug } from "@shofer/shared/modes"
+import { defaultModeSlug } from "@shofer/types"
 
 import { render, fireEvent, screen } from "@src/utils/test-utils"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

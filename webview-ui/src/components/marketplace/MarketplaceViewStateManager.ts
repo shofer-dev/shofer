@@ -14,7 +14,7 @@
 import { MarketplaceItem, MarketplaceInstalledMetadata } from "@shofer/types"
 
 import { vscode } from "../../utils/vscode"
-import { WebviewMessage } from "../../../../src/shared/WebviewMessage"
+import { WebviewMessage } from "@shofer/types"
 
 export interface ViewState {
 	allItems: MarketplaceItem[]

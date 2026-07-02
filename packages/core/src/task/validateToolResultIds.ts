@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@shofer/telemetry"
-import { findLastIndex } from "../shared/array.js"
+import { findLastIndex } from "@shofer/types"
 
 /**
  * Custom error class for tool result ID mismatches.

@@ -6,8 +6,8 @@ import { VolumeX, Image, WandSparkles, SendHorizontal, X, ListEnd, Square } from
 import type { ExtensionMessage } from "@shofer/types"
 
 import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@shofer/shared/context-mentions"
-import { WebviewMessage } from "@shofer/shared/WebviewMessage"
-import { Mode, getAllModes } from "@shofer/shared/modes"
+import { WebviewMessage } from "@shofer/types"
+import { Mode, getAllModes } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { useExtensionState } from "@src/context/ExtensionStateContext"

@@ -3,7 +3,7 @@ import { useEvent } from "react-use"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { type ExtensionMessage } from "@shofer/types"
-import { getAllModes } from "@shofer/shared/modes"
+import { getAllModes } from "@shofer/types"
 
 import TranslationProvider from "./i18n/TranslationContext"
 

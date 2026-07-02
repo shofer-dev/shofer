@@ -1,4 +1,4 @@
-import { Package } from "@shofer/shared/package"
+import { Package } from "@src/utils/package"
 
 export function getCallbackUrl(provider: string, uriScheme?: string) {
 	return encodeURIComponent(`${uriScheme || "vscode"}://${Package.publisher}.${Package.name}/${provider}`)

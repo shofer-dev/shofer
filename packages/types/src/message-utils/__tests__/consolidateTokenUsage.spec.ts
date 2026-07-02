@@ -1,6 +1,6 @@
 // npx vitest run packages/core/src/message-utils/__tests__/consolidateTokenUsage.spec.ts
 
-import type { ShoferMessage } from "@shofer/types"
+import type { ShoferMessage } from "../../message.js"
 
 import { consolidateTokenUsage, hasTokenUsageChanged, hasToolUsageChanged } from "../consolidateTokenUsage.js"
 

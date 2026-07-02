@@ -1,5 +1,5 @@
-import type { ModelInfo, ProviderSettings } from "@shofer/types"
-import type { ServiceTier } from "@shofer/types"
+import type { ModelInfo, ServiceTier } from "./model.js"
+import type { ProviderSettings } from "./provider-settings.js"
 
 export interface ApiCostResult {
 	totalInputTokens: number

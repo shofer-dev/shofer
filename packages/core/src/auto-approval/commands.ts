@@ -1,4 +1,4 @@
-import { parseCommand } from "../shared/parse-command.js"
+import { parseCommand } from "@shofer/types"
 
 /**
  * Detect dangerous parameter substitutions that could lead to command execution.

@@ -1,6 +1,9 @@
-import { type ModelInfo, type ProviderSettings, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
+/* eslint-disable @typescript-eslint/no-explicit-any -- test fixtures cast partial model/settings objects */
+import type { ModelInfo } from "../model.js"
+import type { ProviderSettings } from "../provider-settings.js"
+import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "../providers/index.js"
 
-import { getModelMaxOutputTokens, shouldUseReasoningBudget, shouldUseReasoningEffort } from "../api.js"
+import { getModelMaxOutputTokens, shouldUseReasoningBudget, shouldUseReasoningEffort } from "../provider-api.js"
 
 describe("getModelMaxOutputTokens", () => {
 	const mockModel: ModelInfo = {

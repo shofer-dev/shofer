@@ -13,9 +13,9 @@ import type {
 	ShoferSayTool,
 } from "@shofer/types"
 
-import { Mode } from "@shofer/shared/modes"
+import { Mode } from "@shofer/types"
 
-import { COMMAND_OUTPUT_STRING } from "@shofer/shared/combineCommandSequences"
+import { COMMAND_OUTPUT_STRING } from "@shofer/types"
 import { safeJsonParse } from "@shofer/shared/core"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"

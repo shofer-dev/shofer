@@ -4,7 +4,7 @@ import { Trans } from "react-i18next"
 
 import { MARKETPLACE_ENABLED, type SkillMetadata } from "@shofer/types"
 
-import { getAllModes } from "@shofer/shared/modes"
+import { getAllModes } from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"

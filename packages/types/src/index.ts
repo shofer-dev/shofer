@@ -46,3 +46,14 @@ export * from "./vscode.js"
 export * from "./worktree.js"
 
 export * from "./providers/index.js"
+
+// Browser-safe shared modules relocated from `@shofer/core`'s `shared/` so both the
+// webview (browser bundle) and the Node core can import them from a single lowest layer.
+export * from "./array.js"
+export * from "./cost.js"
+export * from "./provider-api.js"
+export * from "./parse-command.js"
+export * from "./tools.js"
+export * from "./modes.js"
+export * from "./message-utils/index.js"
+export * from "./message-combine.js"

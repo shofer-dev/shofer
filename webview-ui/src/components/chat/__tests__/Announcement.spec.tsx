@@ -2,7 +2,7 @@ import { render, screen } from "@/utils/test-utils"
 
 import Announcement from "../Announcement"
 
-vi.mock("@shofer/shared/package", () => ({
+vi.mock("@src/utils/package", () => ({
 	Package: {
 		version: "3.52.0",
 		changelog: "## 3.52.0 — 2026-06-14\n\n### Features\n\n- A shiny new thing that landed in this release.",

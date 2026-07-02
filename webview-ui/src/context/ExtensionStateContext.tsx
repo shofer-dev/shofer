@@ -22,10 +22,10 @@ import {
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 } from "@shofer/types"
 
-import { findLastIndex } from "@shofer/shared/array"
+import { findLastIndex } from "@shofer/types"
 
 import { checkExistKey } from "@shofer/shared/checkExistApiConfig"
-import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/shared/modes"
+import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/types"
 import { CustomSupportPrompts } from "@shofer/shared/support-prompt"
 import { experimentDefault } from "@shofer/shared/experiments"
 

@@ -3,4 +3,13 @@
  * in browser environments like `webview-ui`.
  */
 
-export * from "./message-utils/index.js"
+export {
+	type ParsedApiReqStartedTextType,
+	consolidateTokenUsage,
+	hasTokenUsageChanged,
+	hasToolUsageChanged,
+	consolidateApiRequests,
+	consolidateCommands,
+	COMMAND_OUTPUT_STRING,
+	safeJsonParse,
+} from "@shofer/types"

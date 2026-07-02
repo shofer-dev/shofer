@@ -4,7 +4,7 @@ import { Check, X } from "lucide-react"
 
 import { type ModeConfig, type CustomModePrompts, TelemetryEventName, MARKETPLACE_ENABLED } from "@shofer/types"
 
-import { type Mode, getAllModes, defaultModeSlug } from "@shofer/shared/modes"
+import { type Mode, getAllModes, defaultModeSlug } from "@shofer/types"
 
 import { vscode } from "@/utils/vscode"
 import { telemetryClient } from "@/utils/TelemetryClient"

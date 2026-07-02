@@ -1,4 +1,5 @@
-import type { TokenUsage, ToolUsage, ToolName, ShoferMessage } from "@shofer/types"
+import type { TokenUsage, ShoferMessage } from "../message.js"
+import type { ToolUsage, ToolName } from "../tool.js"
 
 export type ParsedApiReqStartedTextType = {
 	tokensIn: number

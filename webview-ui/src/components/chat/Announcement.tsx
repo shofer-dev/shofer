@@ -1,6 +1,6 @@
 import { memo, useState } from "react"
 
-import { Package } from "@shofer/shared/package"
+import { Package } from "@src/utils/package"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@src/components/ui"
 import MarkdownBlock from "@src/components/common/MarkdownBlock"

@@ -1,6 +1,6 @@
 // npx vitest utils/__tests__/cost.spec.ts
 
-import type { ModelInfo } from "@shofer/types"
+import type { ModelInfo } from "../model.js"
 
 import { applyCustomPricing, calculateApiCostAnthropic, calculateApiCostOpenAI } from "../cost.js"
 

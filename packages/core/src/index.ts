@@ -6,7 +6,6 @@ export * from "./fs/fs.js"
 export * from "./ignore/ShoferIgnoreController.js"
 export * from "./logging/index.js"
 export * from "./logging/subsystems.js"
-export * from "./message-utils/index.js"
 export * from "./metrics/registry.js"
 export * from "./path/path.js"
 export * from "./ripgrep/index.js"
@@ -30,17 +29,111 @@ export * from "./task-persistence/PersistencePort.js"
 export * from "./prompts/responses.js"
 export * from "./protect/ShoferProtectedController.js"
 export * from "./webview/aggregateTaskCosts.js"
-export * from "./shared/array.js"
-export * from "./shared/combineApiRequests.js"
-export * from "./shared/combineCommandSequences.js"
-export * from "./shared/getApiMetrics.js"
-export * from "./shared/WebviewMessage.js"
-export * from "./shared/cost.js"
-export * from "./shared/api.js"
-export * from "./shared/parse-command.js"
 export * from "./auto-approval/commands.js"
-export * from "./shared/tools.js"
-export * from "./shared/modes.js"
+// Browser-safe shared modules were relocated to @shofer/types (importable by both
+// the webview and the Node core). Re-export them here so existing `@shofer/core`
+// consumers keep importing them from the core barrel unchanged. NOTE: intentionally
+// NOT `export * from "@shofer/types"` — that would collide with core's own
+// `TaskProviderLike` (and future overlaps); these are the exact relocated symbols.
+export {
+	// shared/array
+	findLast,
+	findLastIndex,
+	// shared/cost
+	type ApiCostResult,
+	calculateApiCostAnthropic,
+	calculateApiCostOpenAI,
+	parseApiPrice,
+	applyCustomPricing,
+	// shared/api (provider-api)
+	type ApiHandlerOptions,
+	type RouterName,
+	type GetModelsOptions,
+	isRouterName,
+	toRouterName,
+	shouldUseReasoningBudget,
+	shouldUseReasoningEffort,
+	getModelMaxOutputTokens,
+	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
+	DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
+	GEMINI_25_PRO_MIN_THINKING_TOKENS,
+	// shared/parse-command
+	type ShellToken,
+	parseCommand,
+	// shared/tools
+	type ToolResponse,
+	type AskApproval,
+	type HandleError,
+	type PushToolResult,
+	type AskFinishSubTaskApproval,
+	type TextContent,
+	type ToolParamName,
+	type NativeToolArgs,
+	type ToolUse,
+	type McpToolUse,
+	type ExecuteCommandToolUse,
+	type ReadFileToolUse,
+	type WriteToFileToolUse,
+	type RagSearchToolUse,
+	type GrepSearchToolUse,
+	type GitSearchToolUse,
+	type ListFilesToolUse,
+	type UseMcpToolToolUse,
+	type AccessMcpResourceToolUse,
+	type AskFollowupQuestionToolUse,
+	type AttemptCompletionToolUse,
+	type SwitchModeToolUse,
+	type NewTaskToolUse,
+	type RunSlashCommandToolUse,
+	type SkillsToolUse,
+	type GenerateImageToolUse,
+	type DiffResult,
+	type DiffItem,
+	type DiffStrategy,
+	toolParamNames,
+	// tool metadata (was re-exported via shared/tools.js)
+	type ToolGroupConfig,
+	TOOL_DISPLAY_NAMES,
+	TOOL_GROUPS,
+	ALWAYS_AVAILABLE_TOOLS,
+	TOOL_ALIASES,
+	CROSS_ASSISTANT_ALIASES,
+	// shared/modes
+	type Mode,
+	getGroupName,
+	getToolsForMode,
+	modes,
+	defaultModeSlug,
+	getModeBySlug,
+	getModeConfig,
+	getAllModes,
+	isCustomMode,
+	findModeBySlug,
+	getModeSelection,
+	FileRestrictionError,
+	defaultPrompts,
+	getRoleDefinition,
+	getDescription,
+	getWhenToUse,
+	getCustomInstructions,
+	// message-utils
+	type ParsedApiReqStartedTextType,
+	consolidateTokenUsage,
+	hasTokenUsageChanged,
+	hasToolUsageChanged,
+	consolidateApiRequests,
+	consolidateCommands,
+	COMMAND_OUTPUT_STRING,
+	safeJsonParse,
+	// message-utils legacy aliases (combineApiRequests/…)
+	combineApiRequests,
+	combineCommandSequences,
+	getApiMetrics,
+	// WebviewMessage shim was deleted; symbols already live in @shofer/types
+	type WebviewMessage,
+	type WebViewMessagePayload,
+	type ShoferAskResponse,
+} from "@shofer/types"
 export * from "./task-history/index.js"
 export * from "./task-provider/index.js"
 export * from "./terminal/index.js"

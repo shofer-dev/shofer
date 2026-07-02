@@ -43,7 +43,12 @@ describe("PostHogTelemetryClient", () => {
 		hostConfigGet = vi.fn().mockReturnValue("all")
 		setHost({
 			...createInMemoryHost(),
-			env: { language: "en", appRoot: "", machineId: "test-machine-id" },
+			env: {
+				language: "en",
+				appRoot: "",
+				machineId: "test-machine-id",
+				appInfo: { name: "shofer", version: "0.0.0", outputChannel: "Shofer" },
+			},
 			config: { get: hostConfigGet } as any,
 		})
 	})

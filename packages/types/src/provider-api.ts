@@ -1,12 +1,12 @@
+import type { ModelInfo } from "./model.js"
 import {
-	type ModelInfo,
 	type ProviderSettings,
 	type DynamicProvider,
 	type LocalProvider,
-	ANTHROPIC_DEFAULT_MAX_TOKENS,
 	isDynamicProvider,
 	isLocalProvider,
-} from "@shofer/types"
+} from "./provider-settings.js"
+import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "./providers/index.js"
 
 // ApiHandlerOptions
 // Extend ProviderSettings (minus apiProvider) with handler-specific toggles.

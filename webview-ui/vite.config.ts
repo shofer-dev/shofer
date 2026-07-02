@@ -84,6 +84,7 @@ export default defineConfig(({ mode }) => {
 	const define: Record<string, any> = {
 		"process.platform": JSON.stringify(process.platform),
 		"process.env.VSCODE_TEXTMATE_DEBUG": JSON.stringify(process.env.VSCODE_TEXTMATE_DEBUG),
+		"process.env.PKG_PUBLISHER": JSON.stringify(pkg.publisher),
 		"process.env.PKG_NAME": JSON.stringify(pkg.name),
 		"process.env.PKG_VERSION": JSON.stringify(pkg.version),
 		"process.env.PKG_OUTPUT_CHANNEL": JSON.stringify("Shofer"),

@@ -10,7 +10,7 @@ import {
 	type ProviderName,
 } from "@shofer/types"
 
-import { RouterName } from "@shofer/shared/api"
+import { RouterName } from "@shofer/types"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { VSCodeButtonLink } from "@src/components/common/VSCodeButtonLink"
