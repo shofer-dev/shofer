@@ -2,7 +2,7 @@ import { type ModelInfo, type VertexModelId, vertexDefaultModelId, vertexModels 
 
 import type { ApiHandlerOptions } from "@shofer/core"
 
-import { getModelParams } from "../transform/model-params"
+import { getModelParams } from "@shofer/core"
 
 import { GeminiHandler } from "./gemini"
 import { SingleCompletionHandler } from "../index"

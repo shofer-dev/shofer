@@ -15,10 +15,10 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import type { ApiHandlerOptions } from "@shofer/core"
 
-import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
+import { convertAnthropicMessageToGemini } from "@shofer/core"
 import { t } from "i18next"
 import type { ApiStream, GroundingSource } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
+import { getModelParams } from "@shofer/core"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { BaseProvider } from "./base-provider"

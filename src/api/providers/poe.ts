@@ -14,7 +14,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { shouldUseReasoningBudget, shouldUseReasoningEffort, type ApiHandlerOptions } from "@shofer/core"
 
-import { convertToAiSdkMessages, convertToolsForAiSdk, processAiSdkStreamPart } from "../transform/ai-sdk"
+import { convertToAiSdkMessages, convertToolsForAiSdk, processAiSdkStreamPart } from "@shofer/core"
 import { ApiStream } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"

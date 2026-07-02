@@ -13,6 +13,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		toolResult: vi.fn((msg: string) => `Result: ${msg}`),
 		toolDenied: vi.fn(() => "Denied"),
 	},
+	getOutputChannel: vi.fn(() => mockOutputChannel),
 }))
 
 const { mockCaptureTaskCompleted } = vi.hoisted(() => ({
@@ -34,9 +35,6 @@ const { mockOutputChannel } = vi.hoisted(() => {
 		},
 	}
 })
-vi.mock("../../../utils/outputChannel", () => ({
-	getOutputChannel: vi.fn(() => mockOutputChannel),
-}))
 
 // Mock vscode module
 vi.mock("vscode", () => ({

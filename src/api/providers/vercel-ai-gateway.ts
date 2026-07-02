@@ -11,8 +11,8 @@ import {
 import { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
-import { convertToOpenAiMessages } from "../transform/openai-format"
-import { addCacheBreakpoints } from "../transform/caching/vercel-ai-gateway"
+import { convertToOpenAiMessages } from "@shofer/core"
+import { addVercelAiGatewayCacheBreakpoints as addCacheBreakpoints } from "@shofer/core"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { RouterProvider } from "./router-provider"

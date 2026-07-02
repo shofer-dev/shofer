@@ -1,4 +1,4 @@
-import type { OutputChannelLike } from "./outputChannel"
+import type { OutputChannelLike } from "@shofer/core"
 import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as os from "os"

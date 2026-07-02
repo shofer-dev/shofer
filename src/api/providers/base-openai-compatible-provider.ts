@@ -6,7 +6,7 @@ import type { ModelInfo } from "@shofer/types"
 import { type ApiHandlerOptions, getModelMaxOutputTokens } from "@shofer/core"
 import { TagMatcher } from "@shofer/core"
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { convertToOpenAiMessages } from "../transform/openai-format"
+import { convertToOpenAiMessages } from "@shofer/core"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { DEFAULT_HEADERS } from "./constants"

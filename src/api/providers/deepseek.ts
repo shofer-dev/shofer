@@ -12,12 +12,12 @@ import type { ApiHandlerOptions } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
-import { convertToR1Format } from "../transform/r1-format"
+import { getModelParams } from "@shofer/core"
+import { convertToR1Format } from "@shofer/core"
 
 import { OpenAiHandler } from "./openai"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
-import { cleanReasoningChunk } from "../transform/reasoning-preamble"
+import { cleanReasoningChunk } from "@shofer/core"
 
 // Custom interface for DeepSeek params to support thinking mode
 type DeepSeekChatCompletionParams = OpenAI.Chat.ChatCompletionCreateParamsStreaming & {

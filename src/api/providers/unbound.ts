@@ -6,10 +6,10 @@ import { type ModelInfo, type ModelRecord, unboundDefaultModelId, unboundDefault
 import type { ApiHandlerOptions } from "@shofer/core"
 import { calculateApiCostOpenAI } from "@shofer/core"
 
-import { convertToOpenAiMessages } from "../transform/openai-format"
+import { convertToOpenAiMessages } from "@shofer/core"
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
-import { OpenAiReasoningParams } from "../transform/reasoning"
+import { getModelParams } from "@shofer/core"
+import { OpenAiReasoningParams } from "@shofer/core"
 
 import { DEFAULT_HEADERS } from "./constants"
 import { getModels } from "./fetchers/modelCache"

@@ -15,7 +15,7 @@ import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../trans
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { apiLog } from "@shofer/core"
-import { stringifyForLog } from "../../utils/outputChannelLogger"
+import { stringifyForLog } from "@shofer/core"
 
 /**
  * Converts OpenAI-format tools to VSCode Language Model tools.

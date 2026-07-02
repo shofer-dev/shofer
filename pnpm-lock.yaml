@@ -394,6 +394,15 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.37.0
         version: 0.37.0
+      '@aws-sdk/client-bedrock-runtime':
+        specifier: ^3.922.0
+        version: 3.922.0
+      '@google/genai':
+        specifier: ^1.29.1
+        version: 1.29.1(@modelcontextprotocol/sdk@1.14.0)
+      '@mistralai/mistralai':
+        specifier: ^1.9.18
+        version: 1.9.18(zod@3.25.76)
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -403,6 +412,9 @@ importers:
       '@shofer/types':
         specifier: workspace:^
         version: link:../types
+      ai:
+        specifier: ^6.0.75
+        version: 6.0.77(zod@3.25.76)
       diff:
         specifier: ^5.2.0
         version: 5.2.0

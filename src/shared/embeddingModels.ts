@@ -3,7 +3,7 @@
  */
 
 import type { EmbedderProvider, EmbeddingModelProfiles } from "@shofer/types"
-import { getOutputChannel } from "../utils/outputChannel"
+import { getOutputChannel } from "@shofer/core"
 
 // Example profiles - expand this list as needed
 export const EMBEDDING_MODEL_PROFILES: EmbeddingModelProfiles = {

@@ -18,19 +18,14 @@ import { NativeToolCallParser } from "@shofer/core"
 import type { ApiHandlerOptions } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
-import {
-	convertToOpenAiMessages,
-	sanitizeGeminiMessages,
-	consolidateReasoningDetails,
-} from "../transform/openai-format"
-import { normalizeMistralToolCallId } from "../transform/mistral-format"
+import { convertToOpenAiMessages, sanitizeGeminiMessages, consolidateReasoningDetails } from "@shofer/core"
+import { normalizeMistralToolCallId } from "@shofer/core"
 import { ApiStreamChunk } from "@shofer/core"
-import { convertToR1Format } from "../transform/r1-format"
-import { addCacheBreakpoints as addAnthropicCacheBreakpoints } from "../transform/caching/anthropic"
-import { addCacheBreakpoints as addGeminiCacheBreakpoints } from "../transform/caching/gemini"
-import type { OpenRouterReasoningParams } from "../transform/reasoning"
-import { cleanReasoningChunk } from "../transform/reasoning-preamble"
-import { getModelParams } from "../transform/model-params"
+import { convertToR1Format } from "@shofer/core"
+import { addAnthropicCacheBreakpoints, addGeminiCacheBreakpoints } from "@shofer/core"
+import type { OpenRouterReasoningParams } from "@shofer/core"
+import { cleanReasoningChunk } from "@shofer/core"
+import { getModelParams } from "@shofer/core"
 
 import { getModels } from "./fetchers/modelCache"
 import { getModelEndpoints } from "./fetchers/modelEndpointCache"

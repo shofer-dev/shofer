@@ -67,7 +67,7 @@ import { TelemetryService } from "@shofer/telemetry"
 // api
 import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
 import { ApiStream, GroundingSource } from "@shofer/core"
-import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
+import { maybeRemoveImageBlocks } from "@shofer/core"
 
 // shared
 import { findLastIndex } from "@shofer/core"

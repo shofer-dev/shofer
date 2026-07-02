@@ -10,7 +10,7 @@ import type { ApiHandlerOptions } from "@shofer/core"
 
 import { NativeToolCallParser } from "@shofer/core"
 
-import { convertToOpenAiMessages } from "../transform/openai-format"
+import { convertToOpenAiMessages } from "@shofer/core"
 import { ApiStream } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"

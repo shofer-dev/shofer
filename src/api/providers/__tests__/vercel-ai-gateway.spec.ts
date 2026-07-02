@@ -54,8 +54,9 @@ vitest.mock("../fetchers/modelCache", () => ({
 	getModelsFromCache: vitest.fn().mockReturnValue(undefined),
 }))
 
-vitest.mock("../../transform/caching/vercel-ai-gateway", () => ({
-	addCacheBreakpoints: vitest.fn(),
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	addVercelAiGatewayCacheBreakpoints: vitest.fn(),
 }))
 
 const mockCreate = vitest.fn()
@@ -225,7 +226,7 @@ describe("VercelAiGatewayHandler", () => {
 		})
 
 		it("adds cache breakpoints for supported models", async () => {
-			const { addCacheBreakpoints } = await import("../../transform/caching/vercel-ai-gateway")
+			const { addVercelAiGatewayCacheBreakpoints: addCacheBreakpoints } = await import("@shofer/core")
 			const handler = new VercelAiGatewayHandler({
 				...mockOptions,
 				vercelAiGatewayModelId: "anthropic/claude-3.5-haiku",

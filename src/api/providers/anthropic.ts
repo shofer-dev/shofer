@@ -16,17 +16,14 @@ import { TelemetryService } from "@shofer/telemetry"
 import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
-import { filterNonAnthropicBlocks } from "../transform/anthropic-filter"
+import { getModelParams } from "@shofer/core"
+import { filterNonAnthropicBlocks } from "@shofer/core"
 import { handleProviderError } from "./utils/error-handler"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { calculateApiCostAnthropic } from "@shofer/core"
-import {
-	convertOpenAIToolsToAnthropic,
-	convertOpenAIToolChoiceToAnthropic,
-} from "../../core/prompts/tools/native-tools/converters"
+import { convertOpenAIToolsToAnthropic, convertOpenAIToolChoiceToAnthropic } from "@shofer/core"
 
 export class AnthropicHandler extends BaseProvider implements SingleCompletionHandler {
 	private options: ApiHandlerOptions

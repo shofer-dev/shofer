@@ -77,7 +77,7 @@ import { formatResponse } from "@shofer/core"
 import { sanitizeToolUseId } from "@shofer/core"
 import { isPrivateLmTool, getPrivateToolInvokeCommand } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
-import { stringifyForLog } from "../../utils/outputChannelLogger"
+import { stringifyForLog } from "@shofer/core"
 
 /**
  * Processes and presents assistant message content to the user interface.

@@ -103,7 +103,7 @@ import viewImage from "./view_image"
 import writeToFile from "./write_to_file"
 
 export { getMcpServerTools } from "./mcp_server"
-export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
+export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "@shofer/core"
 export type { ReadFileToolOptions } from "./read_file"
 
 /**

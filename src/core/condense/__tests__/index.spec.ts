@@ -7,7 +7,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { ApiHandler } from "../../../api"
 import { ApiMessage } from "@shofer/core"
-import { maybeRemoveImageBlocks } from "../../../api/transform/image-cleaning"
+import { maybeRemoveImageBlocks } from "@shofer/core"
 import {
 	summarizeConversation,
 	getMessagesSinceLastSummary,
@@ -21,7 +21,8 @@ import {
 	transformMessagesForCondensing,
 } from "../index"
 
-vi.mock("../../../api/transform/image-cleaning", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	maybeRemoveImageBlocks: vi.fn((messages: ApiMessage[], _apiHandler: ApiHandler) => [...messages]),
 }))
 

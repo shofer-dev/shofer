@@ -8,7 +8,7 @@ import { calculateApiCostOpenAI } from "@shofer/core"
 import { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { convertToOpenAiMessages } from "../transform/openai-format"
+import { convertToOpenAiMessages } from "@shofer/core"
 import { sanitizeOpenAiCallId } from "@shofer/core"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"

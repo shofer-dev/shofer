@@ -3,7 +3,7 @@ import axios from "axios"
 import type { ModelInfo } from "@shofer/types"
 
 import { parseApiPrice } from "@shofer/core"
-import { toRequestyServiceUrl } from "../../../shared/utils/requesty"
+import { toRequestyServiceUrl } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 export async function getRequestyModels(baseUrl?: string, apiKey?: string): Promise<Record<string, ModelInfo>> {

@@ -14,10 +14,10 @@ import type { ApiHandlerOptions } from "@shofer/core"
 
 import { TagMatcher } from "@shofer/core"
 
-import { convertToOpenAiMessages } from "../transform/openai-format"
-import { convertToR1Format } from "../transform/r1-format"
+import { convertToOpenAiMessages } from "@shofer/core"
+import { convertToR1Format } from "@shofer/core"
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
+import { getModelParams } from "@shofer/core"
 
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"

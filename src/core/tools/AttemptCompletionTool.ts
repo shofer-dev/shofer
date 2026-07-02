@@ -8,7 +8,7 @@ import { Package } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 import { t } from "@shofer/core"
 import { getChangedFiles } from "../file-changes/ChangedFilesService"
-import { getOutputChannel } from "../../utils/outputChannel"
+import { getOutputChannel } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

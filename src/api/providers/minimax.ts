@@ -8,13 +8,13 @@ import { type MinimaxModelId, minimaxDefaultModelId, minimaxModels } from "@shof
 import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
-import { mergeEnvironmentDetailsForMiniMax } from "../transform/minimax-format"
+import { getModelParams } from "@shofer/core"
+import { mergeEnvironmentDetailsForMiniMax } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { calculateApiCostAnthropic } from "@shofer/core"
-import { convertOpenAIToolsToAnthropic } from "../../core/prompts/tools/native-tools/converters"
+import { convertOpenAIToolsToAnthropic } from "@shofer/core"
 
 /**
  * Converts OpenAI tool_choice to Anthropic ToolChoice format

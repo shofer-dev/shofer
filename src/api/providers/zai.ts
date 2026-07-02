@@ -12,7 +12,7 @@ import {
 } from "@shofer/types"
 
 import { type ApiHandlerOptions, getModelMaxOutputTokens, shouldUseReasoningEffort } from "@shofer/core"
-import { convertToZAiFormat } from "../transform/zai-format"
+import { convertToZAiFormat } from "@shofer/core"
 
 import type { ApiHandlerCreateMessageMetadata } from "../index"
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider"

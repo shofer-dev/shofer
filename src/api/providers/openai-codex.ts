@@ -18,7 +18,7 @@ import { Package } from "@shofer/core"
 import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
-import { getModelParams } from "../transform/model-params"
+import { getModelParams } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"

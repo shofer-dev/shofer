@@ -9,7 +9,7 @@
 
 import type { ToolUse } from "@shofer/core"
 import { Task } from "../task/Task"
-import { getOutputChannel } from "../../utils/outputChannel"
+import { getOutputChannel } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 

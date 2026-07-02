@@ -16,8 +16,12 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.37.0",
+		"@aws-sdk/client-bedrock-runtime": "^3.922.0",
+		"@google/genai": "^1.29.1",
+		"@mistralai/mistralai": "^1.9.18",
 		"@shofer/telemetry": "workspace:^",
 		"@shofer/types": "workspace:^",
+		"ai": "^6.0.75",
 		"diff": "^5.2.0",
 		"@opentelemetry/api": "^1.9.1",
 		"esbuild": "^0.25.0",

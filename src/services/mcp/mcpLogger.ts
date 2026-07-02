@@ -7,7 +7,7 @@
  * If unset (e.g. in tests), falls back to console.log so messages are not lost.
  */
 
-import type { OutputChannelLike } from "../../utils/outputChannel"
+import type { OutputChannelLike } from "@shofer/core"
 import { mcpLog as mcpSysLog } from "@shofer/core"
 
 let outputChannel: OutputChannelLike | undefined

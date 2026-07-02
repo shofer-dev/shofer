@@ -36,8 +36,8 @@ import { setHost, createVsCodeHost } from "./host/host-bridge"
 import { customToolRegistry, pluginRegistry } from "@shofer/core"
 
 import "@shofer/core" // Necessary to install String.prototype.toPosix at runtime (implementation lives in @shofer/core).
-import { createDualLogger, createOutputChannelLogger } from "./utils/outputChannelLogger"
-import { setOutputChannel } from "./utils/outputChannel"
+import { createDualLogger, createOutputChannelLogger } from "@shofer/core"
+import { setOutputChannel } from "@shofer/core"
 import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { initializeNetworkProxy } from "./utils/networkProxy"
@@ -86,8 +86,8 @@ let extensionContext: vscode.ExtensionContext
 // Re-export from the leaf module so existing `import { getOutputChannel } from
 // ".../extension"` call sites keep working, while the canonical source lives in
 // a dependency-free module (avoids the WorkflowTask import cycle). New callers
-// should import from "./utils/outputChannel" directly.
-export { getOutputChannel } from "./utils/outputChannel"
+// should import from "@shofer/core" directly.
+export { getOutputChannel } from "@shofer/core"
 
 // §11/§12: exported from the bundle so a headless front-end (the `shofer serve` /
 // `shofer acp` CLI commands) can drive the activated ShoferAPI over HTTP or ACP.

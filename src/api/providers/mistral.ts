@@ -13,7 +13,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { ApiHandlerOptions } from "@shofer/core"
 
-import { convertToMistralMessages } from "../transform/mistral-format"
+import { convertToMistralMessages } from "@shofer/core"
 import { ApiStream } from "@shofer/core"
 import { handleProviderError } from "./utils/error-handler"
 
