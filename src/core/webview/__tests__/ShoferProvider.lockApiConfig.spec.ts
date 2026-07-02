@@ -84,8 +84,6 @@ vi.mock("../../task/Task", () => ({
 
 vi.mock("../../prompts/sections/custom-instructions")
 
-vi.mock("../../../utils/safeWriteJson")
-
 vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn().mockReturnValue({
 		getModel: vi.fn().mockReturnValue({
@@ -157,6 +155,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 
 	return {
 		...original,
+		safeWriteJson: vi.fn(),
 		modes: mockModes,
 		getAllModes: vi.fn((customModes?: Array<{ slug: string }>) => {
 			if (!customModes?.length) {

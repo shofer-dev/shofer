@@ -6,11 +6,8 @@ import sanitize from "sanitize-filename"
 
 import type { ModelRecord } from "@shofer/types"
 
-import { ContextProxy } from "../../../core/config/ContextProxy"
-import { RouterName } from "@shofer/core"
-import { getCacheDirectoryPath } from "../../../utils/storage"
+import { RouterName, getModelsCacheDir, safeWriteJson } from "@shofer/core"
 import { fileExistsAtPath } from "../../../utils/fs"
-import { safeWriteJson } from "../../../utils/safeWriteJson"
 
 import { getOpenRouterModelEndpoints } from "./openrouter"
 import { getModels } from "./modelCache"
@@ -22,13 +19,13 @@ const getCacheKey = (router: RouterName, modelId: string) => sanitize(`${router}
 
 async function writeModelEndpoints(key: string, data: ModelRecord) {
 	const filename = `${key}_endpoints.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	const cacheDir = await getModelsCacheDir()
 	await safeWriteJson(path.join(cacheDir, filename), data)
 }
 
 async function readModelEndpoints(key: string): Promise<ModelRecord | undefined> {
 	const filename = `${key}_endpoints.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	const cacheDir = await getModelsCacheDir()
 	const filePath = path.join(cacheDir, filename)
 	const exists = await fileExistsAtPath(filePath)
 	return exists ? JSON.parse(await fs.readFile(filePath, "utf8")) : undefined

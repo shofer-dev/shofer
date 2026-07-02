@@ -4,7 +4,7 @@ import { Writable } from "stream"
 import * as path from "path"
 import * as os from "os"
 
-import { safeWriteJson } from "../safeWriteJson"
+import { safeWriteJson } from "../safeWriteJson.js"
 
 const originalFsPromisesRename = actualFsPromises.rename
 const originalFsPromisesUnlink = actualFsPromises.unlink
@@ -407,7 +407,7 @@ describe("safeWriteJson", () => {
 		}))
 
 		// Re-import safeWriteJson to use the mocked proper-lockfile
-		const { safeWriteJson: mockedSafeWriteJson } = await import("../safeWriteJson")
+		const { safeWriteJson: mockedSafeWriteJson } = await import("../safeWriteJson.js")
 
 		await expect(mockedSafeWriteJson(lockTestFilePath, data)).rejects.toThrow("Failed to get lock.")
 

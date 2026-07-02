@@ -13,7 +13,7 @@ import { importSettings, importSettingsFromFile, importSettingsWithFeedback, exp
 import { ProviderSettingsManager } from "../ProviderSettingsManager"
 import { ContextProxy } from "../ContextProxy"
 import { CustomModesManager } from "../CustomModesManager"
-import { safeWriteJson } from "../../../utils/safeWriteJson"
+import { safeWriteJson } from "@shofer/core"
 
 import type { Mock } from "vitest"
 
@@ -63,7 +63,11 @@ vi.mock("os", () => ({
 	homedir: vi.fn(() => "/mock/home"),
 }))
 
-vi.mock("../../../utils/safeWriteJson")
+// safeWriteJson is now exported from @shofer/core; partially mock it there
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	safeWriteJson: vi.fn(),
+}))
 
 // Mock buildApiHandler to avoid issues with provider instantiation in tests
 vi.mock("../../../api", () => ({

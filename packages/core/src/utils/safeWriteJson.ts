@@ -4,7 +4,7 @@ import * as path from "path"
 import * as lockfile from "proper-lockfile"
 import { JsonStreamStringify } from "json-stream-stringify"
 
-import { fsLog } from "@shofer/core"
+import { fsLog } from "../logging/subsystems.js"
 
 /**
  * Options for safeWriteJson function
@@ -51,6 +51,7 @@ const writeQueues = new Map<string, Promise<void>>()
  * @returns {Promise<void>}
  */
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function safeWriteJson(filePath: string, data: any, options?: SafeWriteJsonOptions): Promise<void> {
 	const absoluteFilePath = path.resolve(filePath)
 
@@ -76,6 +77,7 @@ async function safeWriteJson(filePath: string, data: any, options?: SafeWriteJso
 }
 
 /** Inner implementation — called only by safeWriteJson after the per-file queue gate. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeWriteJsonOptions): Promise<void> {
 	const absoluteFilePath = path.resolve(filePath)
 	let releaseLock = async () => {} // Initialized to a no-op
@@ -90,6 +92,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 
 		// Verify directory exists after creation attempt
 		await fs.access(dirPath)
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} catch (dirError: any) {
 		fsLog.error(`Failed to create or access directory for ${absoluteFilePath}:`, { error: String(dirError) })
 		throw dirError
@@ -145,6 +148,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
 				`.${path.basename(absoluteFilePath)}.bak_${Date.now()}_${Math.random().toString(36).substring(2)}.tmp`,
 			)
 			await fs.rename(absoluteFilePath, actualTempBackupFilePath)
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} catch (accessError: any) {
 			// Explicitly type accessError
 			if (accessError.code !== "ENOENT") {
@@ -248,6 +252,7 @@ async function _safeWriteJsonLocked(filePath: string, data: any, options?: SafeW
  */
 async function _streamDataToFile(
 	targetPath: string,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	data: any,
 	prettyPrint = false,
 	preSerialized?: string,

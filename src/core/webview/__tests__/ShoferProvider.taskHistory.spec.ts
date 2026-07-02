@@ -50,10 +50,6 @@ vi.mock("../../../utils/storage", () => ({
 	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
 }))
 
-vi.mock("../../../utils/safeWriteJson", () => ({
-	safeWriteJson: vi.fn().mockResolvedValue(undefined),
-}))
-
 vi.mock("@modelcontextprotocol/sdk/types.js", () => ({
 	CallToolResultSchema: {},
 	ListResourcesResultSchema: {},
@@ -227,6 +223,7 @@ vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	safeWriteJson: vi.fn().mockResolvedValue(undefined),
 	modes: [{ slug: "code", name: "Code Mode", roleDefinition: "You are a code assistant", tools: ["read", "write"] }],
 	getModeBySlug: vi.fn().mockReturnValue({
 		slug: "code",
@@ -736,7 +733,7 @@ describe("ShoferProvider Task History Synchronization", () => {
 			await provider.resolveWebviewView(mockWebviewView)
 
 			// Temporarily make the store's safeWriteJson throw
-			const { safeWriteJson } = await import("../../../utils/safeWriteJson")
+			const { safeWriteJson } = await import("@shofer/core")
 			const mockSafeWriteJson = vi.mocked(safeWriteJson)
 			let callCount = 0
 			mockSafeWriteJson.mockImplementation(async () => {

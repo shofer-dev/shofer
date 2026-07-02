@@ -4,13 +4,14 @@ import { createHash } from "crypto"
 import debounce from "lodash.debounce"
 import { CacheManager } from "../cache-manager"
 
-// Mock safeWriteJson utility
-vitest.mock("../../../utils/safeWriteJson", () => ({
+// Mock safeWriteJson utility (now exported from @shofer/core)
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	safeWriteJson: vitest.fn().mockResolvedValue(undefined),
 }))
 
 // Import the mocked version
-import { safeWriteJson } from "../../../utils/safeWriteJson"
+import { safeWriteJson } from "@shofer/core"
 
 // Mock vscode
 vitest.mock("vscode", () => {

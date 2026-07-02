@@ -9,10 +9,6 @@ import type { ProviderName, ModelRecord } from "@shofer/types"
 import { modelInfoSchema, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { safeWriteJson } from "../../../utils/safeWriteJson"
-
-import { ContextProxy } from "../../../core/config/ContextProxy"
-import { getCacheDirectoryPath } from "../../../utils/storage"
 import type { RouterName } from "@shofer/core"
 import { fileExistsAtPath } from "../../../utils/fs"
 
@@ -21,7 +17,7 @@ import { getVercelAiGatewayModels } from "./vercel-ai-gateway"
 import { getRequestyModels } from "./requesty"
 import { getUnboundModels } from "./unbound"
 import { getLiteLLMModels } from "./litellm"
-import { GetModelsOptions } from "@shofer/core"
+import { GetModelsOptions, getModelsCacheDir, getModelsCacheDirSync, safeWriteJson } from "@shofer/core"
 import { getOllamaModels } from "./ollama"
 import { getLMStudioModels } from "./lmstudio"
 import { getPoeModels } from "./poe"
@@ -38,13 +34,13 @@ const inFlightRefresh = new Map<RouterName, Promise<ModelRecord>>()
 
 async function writeModels(router: RouterName, data: ModelRecord) {
 	const filename = `${router}_models.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	const cacheDir = await getModelsCacheDir()
 	await safeWriteJson(path.join(cacheDir, filename), data)
 }
 
 async function readModels(router: RouterName): Promise<ModelRecord | undefined> {
 	const filename = `${router}_models.json`
-	const cacheDir = await getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath)
+	const cacheDir = await getModelsCacheDir()
 	const filePath = path.join(cacheDir, filename)
 	const exists = await fileExistsAtPath(filePath)
 	return exists ? JSON.parse(await fs.readFile(filePath, "utf8")) : undefined
@@ -289,11 +285,7 @@ export function getModelsFromCache(provider: ProviderName): ModelRecord | undefi
 	// This is acceptable because it only happens on cold start or after cache expiry
 	try {
 		const filename = `${provider}_models.json`
-		const cacheDir = getCacheDirectoryPathSync()
-		if (!cacheDir) {
-			return undefined
-		}
-
+		const cacheDir = getModelsCacheDirSync()
 		const filePath = path.join(cacheDir, filename)
 
 		// Use synchronous fs to avoid async complexity in getModel() callers
@@ -322,22 +314,4 @@ export function getModelsFromCache(provider: ProviderName): ModelRecord | undefi
 	}
 
 	return undefined
-}
-
-/**
- * Synchronous version of getCacheDirectoryPath for use in getModelsFromCache.
- * Returns the cache directory path without async operations.
- */
-function getCacheDirectoryPathSync(): string | undefined {
-	try {
-		const globalStoragePath = ContextProxy.instance?.globalStorageUri?.fsPath
-		if (!globalStoragePath) {
-			return undefined
-		}
-		const cachePath = path.join(globalStoragePath, "cache")
-		return cachePath
-	} catch (error) {
-		apiLog.error(`[MODEL_CACHE] Error getting cache directory path:`, error)
-		return undefined
-	}
 }

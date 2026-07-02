@@ -43,7 +43,7 @@ import { GlobalFileNames } from "../../shared/globalFileNames"
 import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
 import { injectVariables } from "../../utils/config"
-import { safeWriteJson } from "../../utils/safeWriteJson"
+import { safeWriteJson } from "@shofer/core"
 import { sanitizeMcpName, toolNamesMatch } from "@shofer/core"
 
 // Discriminated union for connection states

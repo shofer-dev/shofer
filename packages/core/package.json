@@ -30,10 +30,12 @@
 		"fzf": "^0.5.2",
 		"i18next": "^25.0.0",
 		"ignore": "^7.0.3",
+		"json-stream-stringify": "^3.1.6",
 		"openai": "^5.12.2",
 		"partial-json": "^0.1.7",
 		"ps-tree": "^1.2.0",
 		"p-wait-for": "^5.0.2",
+		"proper-lockfile": "^4.1.2",
 		"safe-stable-stringify": "^2.5.0",
 		"shell-quote": "^1.8.2",
 		"simple-git": "^3.27.0",
@@ -48,6 +50,7 @@
 		"@shofer/config-eslint": "workspace:^",
 		"@shofer/config-typescript": "workspace:^",
 		"@types/node": "^24.1.0",
+		"@types/proper-lockfile": "^4.1.4",
 		"vitest": "^3.2.3"
 	}
 }

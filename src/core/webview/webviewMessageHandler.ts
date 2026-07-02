@@ -1,4 +1,4 @@
-import { safeWriteJson } from "../../utils/safeWriteJson"
+import { safeWriteJson } from "@shofer/core"
 import { registry, incWebviewPushError, FAST_BUCKETS_MS } from "@shofer/core"
 import * as path from "path"
 import * as os from "os"

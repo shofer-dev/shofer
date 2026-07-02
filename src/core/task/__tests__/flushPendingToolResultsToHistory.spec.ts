@@ -25,7 +25,8 @@ vi.mock("execa", () => ({
 	execa: vi.fn(),
 }))
 
-vi.mock("../../../utils/safeWriteJson", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	safeWriteJson: vi.fn().mockResolvedValue(undefined),
 }))
 

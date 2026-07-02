@@ -41,7 +41,9 @@ import { setOutputChannel } from "@shofer/core"
 import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { setTokenCounter } from "@shofer/core"
+import { setModelsCacheDirProvider } from "@shofer/core"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
+import { getCacheDirectoryPath } from "./utils/storage"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "@shofer/core"
@@ -116,6 +118,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	// the portable synchronous tiktoken implementation; here we register the
 	// worker-backed counter so the extension host keeps its off-thread offload.
 	setTokenCounter((content) => countTokensWithWorker(content, { useWorker: true }))
+
+	// Root the model/model-endpoint fetcher caches under the extension's global
+	// storage (host-agnostic core defaults to an OS-temp dir when unregistered).
+	// The async resolver honors the user's customStoragePath; the sync resolver
+	// (cold-start disk reads) mirrors the previous globalStorage/cache behavior.
+	setModelsCacheDirProvider({
+		getDir: async () => getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath),
+		getDirSync: () => path.join(ContextProxy.instance.globalStorageUri.fsPath, "cache"),
+	})
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)

@@ -436,6 +436,9 @@ importers:
       ignore:
         specifier: ^7.0.3
         version: 7.0.5
+      json-stream-stringify:
+        specifier: ^3.1.6
+        version: 3.1.6
       openai:
         specifier: ^5.12.2
         version: 5.12.2(ws@8.20.0)(zod@3.25.76)
@@ -445,6 +448,9 @@ importers:
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
+      proper-lockfile:
+        specifier: ^4.1.2
+        version: 4.1.2
       ps-tree:
         specifier: ^1.2.0
         version: 1.2.0
@@ -479,6 +485,9 @@ importers:
       '@types/node':
         specifier: ^24.1.0
         version: 24.2.1
+      '@types/proper-lockfile':
+        specifier: ^4.1.4
+        version: 4.1.4
       '@types/ps-tree':
         specifier: ^1.1.6
         version: 1.1.6

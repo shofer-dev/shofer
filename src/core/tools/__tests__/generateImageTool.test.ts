@@ -13,7 +13,11 @@ import { OpenRouterHandler } from "../../../api/providers/openrouter"
 vi.mock("fs/promises")
 vi.mock("../../../utils/pathUtils")
 vi.mock("../../../utils/fs")
-vi.mock("../../../utils/safeWriteJson")
+// safeWriteJson is now exported from @shofer/core; partially mock it there
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	safeWriteJson: vi.fn(),
+}))
 vi.mock("../../../api/providers/openrouter")
 
 describe("generateImageTool", () => {

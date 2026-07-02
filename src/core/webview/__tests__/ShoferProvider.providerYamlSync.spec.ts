@@ -89,7 +89,6 @@ vi.mock("../../task/Task", () => ({
 }))
 
 vi.mock("../../prompts/sections/custom-instructions")
-vi.mock("../../../utils/safeWriteJson")
 
 vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn().mockReturnValue({
@@ -128,6 +127,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", tools: ["read", "write"] }]
 	return {
 		...original,
+		safeWriteJson: vi.fn(),
 		modes: builtins,
 		getAllModes: vi.fn(() => [...builtins]),
 		getModeBySlug: vi.fn(),

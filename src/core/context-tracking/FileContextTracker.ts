@@ -1,4 +1,4 @@
-import { safeWriteJson } from "../../utils/safeWriteJson"
+import { safeWriteJson } from "@shofer/core"
 import * as path from "path"
 import * as crypto from "crypto"
 import type { HostFileWatcher } from "@shofer/types"
