@@ -3,15 +3,15 @@ import * as path from "path"
 import { v5 as uuidv5 } from "uuid"
 
 import type { GitCommitBlock } from "./interfaces/git"
-import type { IEmbedder } from "../code-index/interfaces/embedder"
-import type { IVectorStore } from "../code-index/interfaces/vector-store"
+import type { IEmbedder } from "@shofer/core"
+import type { IVectorStore } from "@shofer/core"
 
 import { GitHistoryStateManager } from "./git-state-manager"
 import { GitLogExtractor } from "./processors/git-log-extractor"
 import { GitWatcher } from "./processors/git-watcher"
 import { GitCacheManager } from "./git-cache-manager"
 
-import { BATCH_SEGMENT_THRESHOLD } from "../code-index/constants"
+import { BATCH_SEGMENT_THRESHOLD } from "@shofer/core"
 import { listSubmoduleDisplayPaths } from "@shofer/core"
 import { gitLog as logger } from "@shofer/core"
 

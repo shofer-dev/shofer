@@ -5,13 +5,13 @@ import {
 	BATCH_SEGMENT_THRESHOLD,
 	MAX_BATCH_RETRIES,
 	INITIAL_RETRY_DELAY_MS,
-} from "../constants"
+} from "@shofer/core"
 import { createHash } from "crypto"
 import { ShoferIgnoreController } from "@shofer/core"
 import { v5 as uuidv5 } from "uuid"
-import { scannerExtensions } from "../shared/supported-extensions"
-import type { IIgnoreFilter } from "../shared/git-ignore-filter"
-import { makeSingleflightRefresh } from "../shared/git-ignore-filter"
+import { scannerExtensions } from "@shofer/core"
+import type { IIgnoreFilter } from "@shofer/core"
+import { makeSingleflightRefresh } from "@shofer/core"
 import {
 	IFileWatcher,
 	FileProcessingResult,
@@ -19,14 +19,14 @@ import {
 	IVectorStore,
 	PointStruct,
 	BatchProcessingSummary,
-} from "../interfaces"
-import { codeParser } from "./parser"
+} from "@shofer/core"
+import { codeParser } from "@shofer/core"
 import { CacheManager } from "../cache-manager"
-import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
+import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "@shofer/core"
 import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
-import { sanitizeErrorMessage } from "../shared/validation-helpers"
+import { sanitizeErrorMessage } from "@shofer/core"
 import { Package } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 

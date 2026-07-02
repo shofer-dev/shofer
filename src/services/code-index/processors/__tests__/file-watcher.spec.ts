@@ -23,7 +23,8 @@ vi.mock("../../../core/ignore/ShoferIgnoreController", () => ({
 	})),
 }))
 vi.mock("ignore")
-vi.mock("../parser", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	codeParser: {
 		parseFile: vi.fn().mockResolvedValue([]),
 	},
@@ -307,7 +308,7 @@ describe("FileWatcher", () => {
 			;(mockCacheManager.getEntry as any).mockReturnValue(undefined)
 
 			// Mock parser to return blocks so the path goes through to "processed_for_batching"
-			const { codeParser } = await import("../parser")
+			const { codeParser } = await import("@shofer/core")
 			;(codeParser.parseFile as any).mockResolvedValue([
 				{
 					file_path: "/mock/workspace/src/test.ts",

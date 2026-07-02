@@ -197,6 +197,10 @@ export {
 } from "@shofer/types"
 export * from "./task-history/index.js"
 export * from "./task-provider/index.js"
+// Portable code-index engine (embedders / interfaces / vector-store / parser).
+export * from "./services/code-index/index.js"
+// Embedding model profiles (browser-safe data + helpers) used by the code-index engine.
+export * from "./shared/embeddingModels.js"
 export * from "./services/mcp/McpHub.js"
 export * from "./services/mcp/mcp-hub-factory.js"
 // mcpLogger re-exports only `setMcpOutputChannel`; its `mcpLog` symbol would

@@ -21,6 +21,13 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		...((await importOriginal()) as Record<string, unknown>),
 		codeIndexLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 		getWorkspacePath: vi.fn(() => testWorkspacePath),
+		// CodeIndexStateManager moved into @shofer/core; mock it here (was `../state-manager`).
+		CodeIndexStateManager: vi.fn().mockImplementation(() => ({
+			onProgressUpdate: vi.fn(),
+			getCurrentStatus: vi.fn(),
+			dispose: vi.fn(),
+			setSystemState: vi.fn(),
+		})),
 	}
 })
 
@@ -86,15 +93,6 @@ vi.mock("ignore", () => ({
 		add: vi.fn(),
 		ignores: vi.fn().mockReturnValue(false),
 	}),
-}))
-
-vi.mock("../state-manager", () => ({
-	CodeIndexStateManager: vi.fn().mockImplementation(() => ({
-		onProgressUpdate: vi.fn(),
-		getCurrentStatus: vi.fn(),
-		dispose: vi.fn(),
-		setSystemState: vi.fn(),
-	})),
 }))
 
 // Mock TelemetryService

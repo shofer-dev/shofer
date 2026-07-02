@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 import { createHash } from "crypto"
-import { ICacheManager } from "./interfaces/cache"
+import { ICacheManager } from "@shofer/core"
 import debounce from "lodash.debounce"
 import { safeWriteJson } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"

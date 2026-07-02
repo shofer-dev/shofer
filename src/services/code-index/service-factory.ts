@@ -1,30 +1,30 @@
 import * as vscode from "vscode"
 
 import type { EmbedderProvider } from "@shofer/types"
-import type { IIgnoreFilter } from "./shared/git-ignore-filter"
+import type { IIgnoreFilter } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 
 import { t } from "@shofer/core"
 
-import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
+import { getDefaultModelId, getModelDimension } from "@shofer/core"
 import { Package } from "@shofer/core"
 
 import { ShoferIgnoreController } from "@shofer/core"
 
-import { OpenAiEmbedder } from "./embedders/openai"
-import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
-import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
-import { GeminiEmbedder } from "./embedders/gemini"
-import { MistralEmbedder } from "./embedders/mistral"
-import { VercelAiGatewayEmbedder } from "./embedders/vercel-ai-gateway"
-import { BedrockEmbedder } from "./embedders/bedrock"
-import { OpenRouterEmbedder } from "./embedders/openrouter"
-import { getEmbedderLane } from "./embedders/embedder-lane"
-import { SerializedEmbedder } from "./embedders/serialized-embedder"
-import { QdrantVectorStore } from "./vector-store/qdrant-client"
+import { OpenAiEmbedder } from "@shofer/core"
+import { CodeIndexOllamaEmbedder } from "@shofer/core"
+import { OpenAICompatibleEmbedder } from "@shofer/core"
+import { GeminiEmbedder } from "@shofer/core"
+import { MistralEmbedder } from "@shofer/core"
+import { VercelAiGatewayEmbedder } from "@shofer/core"
+import { BedrockEmbedder } from "@shofer/core"
+import { OpenRouterEmbedder } from "@shofer/core"
+import { getEmbedderLane } from "@shofer/core"
+import { SerializedEmbedder } from "@shofer/core"
+import { QdrantVectorStore } from "@shofer/core"
 import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
-import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
+import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "@shofer/core"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import {
@@ -32,8 +32,8 @@ import {
 	MAX_SERVICE_ATTEMPTS,
 	SERVICE_INITIAL_RETRY_DELAY_MS,
 	SERVICE_MAX_BACKOFF_MS,
-} from "./constants"
-import { retryWithBackoff } from "./shared/retry"
+} from "@shofer/core"
+import { retryWithBackoff } from "@shofer/core"
 
 /**
  * Options for constructing a {@link CodeIndexServiceFactory}.
