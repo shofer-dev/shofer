@@ -16,7 +16,7 @@ import { inputEventTransform } from "../transforms"
 import { ModelPicker } from "../ModelPicker"
 import { RequestyBalanceDisplay } from "./RequestyBalanceDisplay"
 import { getCallbackUrl } from "@/oauth/urls"
-import { toRequestyServiceUrl } from "@shofer/shared/utils/requesty"
+import { toRequestyServiceUrl } from "@shofer/types"
 
 type RequestyProps = {
 	apiConfiguration: ProviderSettings

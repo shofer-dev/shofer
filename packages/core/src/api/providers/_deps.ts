@@ -75,7 +75,7 @@ export { normalizeToolSchema } from "../../utils/json-schema.js"
 export { countTokens } from "../../utils/token-counter.js"
 export { sanitizeOpenAiCallId } from "../../utils/tool-id.js"
 export { safeWriteJson } from "../../utils/safeWriteJson.js"
-export { toRequestyServiceUrl } from "../../shared/utils/requesty.js"
+export { toRequestyServiceUrl } from "@shofer/types"
 export { fileExistsAtPath } from "../../fs/fs.js"
 
 // ── model-cache-dir seam ───────────────────────────────────────────────────
