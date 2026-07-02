@@ -11,7 +11,7 @@
  * - Layer 2: Pre-flight deduplication when building API request content
  */
 
-import { sanitizeToolUseId } from "../../../utils/tool-id"
+import { sanitizeToolUseId } from "@shofer/core"
 import type { ToolUse, McpToolUse } from "../../../shared/tools"
 
 describe("Duplicate tool_use ID Prevention", () => {

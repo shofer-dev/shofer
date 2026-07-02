@@ -1,4 +1,4 @@
-import { sanitizeToolUseId, truncateOpenAiCallId, sanitizeOpenAiCallId, OPENAI_CALL_ID_MAX_LENGTH } from "../tool-id"
+import { sanitizeToolUseId, truncateOpenAiCallId, sanitizeOpenAiCallId, OPENAI_CALL_ID_MAX_LENGTH } from "../tool-id.js"
 
 describe("sanitizeToolUseId", () => {
 	describe("valid IDs pass through unchanged", () => {

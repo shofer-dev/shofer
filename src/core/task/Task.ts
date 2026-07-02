@@ -13,7 +13,7 @@ import delay from "delay"
 import pWaitFor from "p-wait-for"
 import { serializeError } from "serialize-error"
 import { Package } from "../../shared/package"
-import { formatToolInvocation } from "../tools/helpers/toolResultFormatting"
+import { formatToolInvocation } from "@shofer/core"
 
 import {
 	type TaskLike,
@@ -95,7 +95,7 @@ import { OutputInterceptor } from "@shofer/core"
 // utils
 import { calculateApiCostAnthropic, calculateApiCostOpenAI } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
-import { sanitizeToolUseId } from "../../utils/tool-id"
+import { sanitizeToolUseId } from "@shofer/core"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "@shofer/core"
 
@@ -143,7 +143,7 @@ import { validateAndFixToolResultIds } from "./validateToolResultIds"
 import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages"
 import { taskLog } from "@shofer/core"
 import { runWithLogTaskContext } from "@shofer/core"
-import { time } from "../../utils/perf"
+import { time } from "@shofer/core"
 import {
 	recordLlmDuration,
 	incLlmCalls,

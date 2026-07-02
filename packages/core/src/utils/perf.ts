@@ -14,7 +14,7 @@
  * (where they silently become comments).
  */
 
-import { utilLog } from "@shofer/core"
+import { utilLog } from "../logging/subsystems.js"
 
 // ---------------------------------------------------------------------------
 // Histogram callback wiring
@@ -47,8 +47,8 @@ function writeDebugSummary(key: string, dur: number): void {
 	let summary = ""
 	if (buf.count % WINDOW === 0 && buf.durations.length > 0) {
 		const sorted = [...buf.durations].sort((a, b) => a - b)
-		const p50 = sorted[Math.floor(sorted.length * 0.5)]
-		const p95 = sorted[Math.floor(sorted.length * 0.95)]
+		const p50 = sorted[Math.floor(sorted.length * 0.5)]!
+		const p95 = sorted[Math.floor(sorted.length * 0.95)]!
 		summary = ` p50=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms n=${buf.count}`
 	}
 	utilLog.info(`[perf] ${key} dur=${dur.toFixed(1)}ms${summary}`)

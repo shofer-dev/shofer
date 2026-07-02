@@ -31,7 +31,7 @@ import {
 	type ObservableResult,
 } from "@opentelemetry/api"
 import { type CallStatus, type LlmErrorType, type ToolErrorType, type McpErrorType } from "@shofer/types"
-import { setHistogramCallback } from "../utils/perf"
+import { setHistogramCallback } from "@shofer/core"
 
 // ---------------------------------------------------------------------------
 // Bucket presets (ms) — advisory hints for OTel SDK View configuration.

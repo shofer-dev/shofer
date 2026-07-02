@@ -114,7 +114,7 @@ import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
 import type { TaskProviderLike as CoreTaskProviderLike } from "@shofer/core"
-import { time } from "../../utils/perf"
+import { time } from "@shofer/core"
 
 /**
  * https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts

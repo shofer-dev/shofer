@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { ConversationRole, Message, ContentBlock } from "@aws-sdk/client-bedrock-runtime"
-import { sanitizeOpenAiCallId } from "../../utils/tool-id"
+import { sanitizeOpenAiCallId } from "@shofer/core"
 
 interface BedrockMessageContent {
 	type: "text" | "image" | "video" | "tool_use" | "tool_result"

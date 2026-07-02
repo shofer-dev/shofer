@@ -3,7 +3,7 @@
 import { convertToBedrockConverseMessages } from "../bedrock-converse-format"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { ContentBlock, ToolResultContentBlock } from "@aws-sdk/client-bedrock-runtime"
-import { OPENAI_CALL_ID_MAX_LENGTH } from "../../../utils/tool-id"
+import { OPENAI_CALL_ID_MAX_LENGTH } from "@shofer/core"
 
 describe("convertToBedrockConverseMessages", () => {
 	it("converts simple text messages correctly", () => {

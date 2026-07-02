@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { formatToolInvocation } from "../toolResultFormatting"
+import { formatToolInvocation } from "../toolResultFormatting.js"
 
 describe("toolResultFormatting", () => {
 	describe("formatToolInvocation", () => {
