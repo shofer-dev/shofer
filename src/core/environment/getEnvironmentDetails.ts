@@ -1,11 +1,11 @@
 import path from "path"
 import os from "os"
 
-import * as vscode from "vscode"
 import pWaitFor from "p-wait-for"
 import delay from "delay"
 
 import type { ExperimentId } from "@shofer/types"
+import { getHost } from "@shofer/types"
 
 import { formatLanguage } from "../../shared/language"
 import { defaultModeSlug } from "@shofer/core"
@@ -30,9 +30,8 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 
 	// It could be useful for shofer to know if the user went from one or no
 	// file to another between messages, so we always include this context.
-	const visibleFilePaths = vscode.window.visibleTextEditors
-		?.map((editor) => editor.document?.uri?.fsPath)
-		.filter(Boolean)
+	const visibleFilePaths = getHost()
+		.workspace.visibleFiles()
 		.map((absolutePath) => path.relative(shofer.cwd, absolutePath))
 		.slice(0, maxWorkspaceFiles)
 
@@ -48,11 +47,8 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 
 	const { maxOpenTabsContext } = state ?? {}
 	const maxTabs = maxOpenTabsContext ?? 20
-	const openTabPaths = vscode.window.tabGroups.all
-		.flatMap((group) => group.tabs)
-		.filter((tab) => tab.input instanceof vscode.TabInputText)
-		.map((tab) => (tab.input as vscode.TabInputText).uri.fsPath)
-		.filter(Boolean)
+	const openTabPaths = getHost()
+		.workspace.openTabs()
 		.map((absolutePath) => path.relative(shofer.cwd, absolutePath).toPosix())
 		.slice(0, maxTabs)
 
@@ -223,7 +219,7 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 	const modeDetails = await getFullModeDetails(currentMode, customModes, customModePrompts, {
 		cwd: shofer.cwd,
 		globalCustomInstructions,
-		language: language ?? formatLanguage(vscode.env.language),
+		language: language ?? formatLanguage(getHost().env.language),
 	})
 
 	details += `\n\n# Current Mode\n`

@@ -103,6 +103,8 @@ function remoteWorkspace(channel: HostRpcChannel, local: HostWorkspace): HostWor
 		// …workspace context is served locally (the executor shares the workspace FS).
 		workspaceRoots: () => local.workspaceRoots(),
 		activeEditorFile: () => local.activeEditorFile(),
+		visibleFiles: () => local.visibleFiles(),
+		openTabs: () => local.openTabs(),
 		workspaceFolderFor: (filePath: string) => local.workspaceFolderFor(filePath),
 		onDidChangeWorkspaceFolders: (handler: () => void) => local.onDidChangeWorkspaceFolders(handler),
 	}

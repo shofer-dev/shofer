@@ -180,6 +180,20 @@ export interface HostWorkspace {
 	workspaceRoots(): string[]
 	/** Absolute path of the file in the active editor, if any (maps to `vscode.window.activeTextEditor`). */
 	activeEditorFile(): string | undefined
+	/**
+	 * Absolute paths of the files shown in the currently visible editors (maps to
+	 * `vscode.window.visibleTextEditors`, mapped to `document.uri.fsPath`, empty
+	 * paths dropped). A headless host with no IDE window returns `[]`. Callers do
+	 * their own workspace-relative rewriting and windowing.
+	 */
+	visibleFiles(): string[]
+	/**
+	 * Absolute paths of the text-input tabs open across all tab groups (maps to
+	 * `vscode.window.tabGroups.all` flattened, filtered to `TabInputText`, mapped
+	 * to `uri.fsPath`, empty paths dropped). A headless host with no IDE window
+	 * returns `[]`. Callers do their own workspace-relative rewriting and windowing.
+	 */
+	openTabs(): string[]
 	/** The workspace root containing `filePath`, if any (maps to `vscode.workspace.getWorkspaceFolder`). */
 	workspaceFolderFor(filePath: string): string | undefined
 	/**
