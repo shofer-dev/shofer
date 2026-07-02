@@ -3,8 +3,8 @@ import getFolderSize from "get-folder-size"
 
 import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
-import { combineApiRequests } from "../../shared/combineApiRequests"
-import { combineCommandSequences } from "../../shared/combineCommandSequences"
+import { combineApiRequests } from "@shofer/core"
+import { combineCommandSequences } from "@shofer/core"
 import { getApiMetrics } from "../../shared/getApiMetrics"
 import { findLastIndex } from "@shofer/core"
 import { getTaskDirectoryPath } from "../../utils/storage"

@@ -2,7 +2,7 @@
 
 import type { ShoferMessage, ShoferSay } from "@shofer/types"
 
-import { combineApiRequests } from "../combineApiRequests"
+import { combineApiRequests } from "@shofer/core"
 
 describe("combineApiRequests", () => {
 	// Helper function to create a basic api_req_started message

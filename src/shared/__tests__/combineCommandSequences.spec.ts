@@ -2,7 +2,7 @@
 
 import type { ShoferMessage } from "@shofer/types"
 
-import { combineCommandSequences } from "../combineCommandSequences"
+import { combineCommandSequences } from "@shofer/core"
 
 describe("combineCommandSequences", () => {
 	describe("command sequences", () => {

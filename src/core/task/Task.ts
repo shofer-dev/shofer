@@ -71,8 +71,8 @@ import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 
 // shared
 import { findLastIndex } from "@shofer/core"
-import { combineApiRequests } from "../../shared/combineApiRequests"
-import { combineCommandSequences } from "../../shared/combineCommandSequences"
+import { combineApiRequests } from "@shofer/core"
+import { combineCommandSequences } from "@shofer/core"
 import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "../../shared/getApiMetrics"
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
