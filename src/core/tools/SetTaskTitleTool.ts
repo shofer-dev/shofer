@@ -10,6 +10,7 @@ import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 
 interface SetTaskTitleParams {
 	title: string
@@ -69,7 +70,7 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 			}
 
 			// Get provider reference to update the task history
-			const provider = task.providerRef.deref()
+			const provider = task.providerRef.deref() as ShoferProvider | undefined
 			if (!provider) {
 				task.recordToolError("set_task_title")
 				task.didToolFailInCurrentTurn = true

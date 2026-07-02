@@ -4,6 +4,7 @@ import type { BackgroundTaskStatus, TaskHandle } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { readTaskMessages } from "../task-persistence/taskMessages"
@@ -55,7 +56,7 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 
 			// Peer check: same rootTaskId, not a direct child.
 			if (task.rootTaskId) {
-				const provider = task.providerRef.deref()
+				const provider = task.providerRef.deref() as ShoferProvider | undefined
 				let isPeer = false
 				if (provider) {
 					try {
@@ -112,7 +113,7 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 			return
 		}
 
-		const provider = task.providerRef.deref()
+		const provider = task.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) {
 			pushToolResult(formatResponse.toolError("Provider reference lost"))
 			return

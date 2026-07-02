@@ -4,6 +4,7 @@ import type { HistoryItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
 import { getModeBySlug } from "../../shared/modes"
 import { formatResponse } from "../prompts/responses"
@@ -98,7 +99,7 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 					: DEFAULT_SOFT_TIMEOUT_SEC
 
 			// Get the VSCode setting for requiring todos.
-			const provider = task.providerRef.deref()
+			const provider = task.providerRef.deref() as ShoferProvider | undefined
 
 			if (!provider) {
 				pushToolResult(formatResponse.toolError("Provider reference lost"))

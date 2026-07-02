@@ -4,6 +4,7 @@ import type { BackgroundTaskStatus } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "../prompts/responses"
 import { getModeBySlug } from "../../shared/modes"
 import type { ToolUse } from "../../shared/tools"
@@ -46,7 +47,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		if (!isDirectChild) {
 			// Check if the task_id shares the caller's rootTaskId.
 			if (task.rootTaskId) {
-				const provider = task.providerRef.deref()
+				const provider = task.providerRef.deref() as ShoferProvider | undefined
 				if (provider) {
 					try {
 						const { historyItem } = await provider.getTaskWithId(task_id)
@@ -74,7 +75,7 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 			return
 		}
 
-		const provider = task.providerRef.deref()
+		const provider = task.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) {
 			pushToolResult(formatResponse.toolError("Provider reference lost"))
 			return

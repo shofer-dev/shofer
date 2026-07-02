@@ -1,4 +1,5 @@
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "../prompts/responses"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
@@ -39,7 +40,7 @@ export class SkillsTool extends BaseTool<"skills"> {
 			}
 
 			// Get SkillsManager from provider
-			const provider = task.providerRef.deref()
+			const provider = task.providerRef.deref() as ShoferProvider | undefined
 			const skillsManager = provider?.getSkillsManager()
 
 			if (!skillsManager) {

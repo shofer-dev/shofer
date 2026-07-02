@@ -8,6 +8,7 @@ import { VectorStoreSearchResult } from "../../services/code-index/interfaces"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { RAG_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
 
 interface RagSearchParams {
@@ -58,7 +59,7 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 		task.consecutiveMistakeCount = 0
 
 		try {
-			const context = task.providerRef.deref()?.context
+			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}

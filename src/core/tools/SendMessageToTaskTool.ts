@@ -3,6 +3,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import type { TaskLifecycle } from "@shofer/types"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
@@ -29,7 +30,7 @@ interface SendMessageToTaskParams {
  */
 async function resolveTargetLifecycle(
 	task_id: string,
-	provider: ReturnType<Task["providerRef"]["deref"]>,
+	provider: ShoferProvider | undefined,
 ): Promise<{ lifecycle: TaskLifecycle; exists: boolean }> {
 	if (!provider) return { lifecycle: "error", exists: false }
 
@@ -69,7 +70,7 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				return
 			}
 
-			const provider = task.providerRef.deref()
+			const provider = task.providerRef.deref() as ShoferProvider | undefined
 			if (!provider) {
 				pushToolResult(formatResponse.toolError("Provider reference lost"))
 				return

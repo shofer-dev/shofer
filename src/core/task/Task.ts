@@ -115,7 +115,7 @@ import { type AssistantMessageContent, presentAssistantMessage } from "../assist
 import { NativeToolCallParser } from "../assistant-message/NativeToolCallParser"
 import { manageContext, willManageContext } from "../context-management"
 import { aggregateTaskCostsRecursive } from "../webview/aggregateTaskCosts"
-import { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
 import {
 	type ApiMessage,
@@ -160,7 +160,7 @@ const FORCED_CONTEXT_REDUCTION_PERCENT = 75 // Keep 75% of context (remove 25%) 
 const MAX_CONTEXT_WINDOW_RETRIES = 3 // Maximum retries for context window errors
 
 export interface TaskOptions extends CreateTaskOptions {
-	provider: ShoferProvider
+	provider: TaskProviderLike<Task>
 	apiConfiguration: ProviderSettings
 	enableCheckpoints?: boolean
 	checkpointTimeout?: number
@@ -519,7 +519,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	private taskApiConfigReady: Promise<void>
 
-	providerRef: WeakRef<ShoferProvider>
+	providerRef: WeakRef<TaskProviderLike<Task>>
 	private readonly globalStoragePath: string
 	abort: boolean = false
 
@@ -998,7 +998,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.shoferIgnoreController = new ShoferIgnoreController(this.cwd)
 		this.shoferProtectedController = new ShoferProtectedController(this.cwd)
-		this.fileContextTracker = new FileContextTracker(provider, this.taskId)
+		this.fileContextTracker = new FileContextTracker(
+			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
+			this.taskId,
+		)
 
 		this.shoferIgnoreController.initialize().catch((error) => {
 			taskLog.error("Failed to initialize ShoferIgnoreController:", error)
@@ -1015,7 +1018,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.consecutiveMistakeLimit = consecutiveMistakeLimit ?? DEFAULT_CONSECUTIVE_MISTAKE_LIMIT
 		this.experimentsConfig = experimentsConfig
 		this.providerRef = new WeakRef(provider)
-		this.globalStoragePath = provider.context.globalStorageUri.fsPath
+		this.globalStoragePath = (provider.context as { globalStorageUri: { fsPath: string } }).globalStorageUri.fsPath
 		this.diffViewProvider = getHost().createDiffView(this.cwd, this)
 		this.enableCheckpoints = enableCheckpoints
 		this.checkpointTimeout = checkpointTimeout
@@ -1219,7 +1222,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @param provider - The ShoferProvider instance to fetch state from
 	 * @returns Promise that resolves when initialization is complete
 	 */
-	private async initializeTaskMode(provider: ShoferProvider): Promise<void> {
+	private async initializeTaskMode(provider: TaskProviderLike<Task>): Promise<void> {
 		try {
 			const state = await provider.getState()
 			// The global `mode` is the tier-3 cold-start default for a new task that
@@ -1255,7 +1258,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @param provider - The ShoferProvider instance to fetch state from
 	 * @returns Promise that resolves when initialization is complete
 	 */
-	private async initializeTaskApiConfigName(provider: ShoferProvider): Promise<void> {
+	private async initializeTaskApiConfigName(provider: TaskProviderLike<Task>): Promise<void> {
 		try {
 			const state = await provider.getState()
 
@@ -1281,7 +1284,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @private
 	 * @param provider - The ShoferProvider instance to listen to
 	 */
-	private setupProviderProfileChangeListener(provider: ShoferProvider): void {
+	private setupProviderProfileChangeListener(provider: TaskProviderLike<Task>): void {
 		// Only set up listener if provider has the on method (may not exist in test mocks)
 		if (typeof provider.on !== "function") {
 			return
@@ -1945,7 +1948,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	public getBlobCapBytes(): number {
 		const provider = this.providerRef.deref()
-		const v = provider?.contextProxy?.getValue?.("shoferBlobCapBytes")
+		const v = (
+			provider as { contextProxy?: { getValue?(key: string): unknown } } | undefined
+		)?.contextProxy?.getValue?.("shoferBlobCapBytes")
 		return typeof v === "number" && v >= 0 ? v : DEFAULT_BLOB_CAP_BYTES
 	}
 
@@ -1961,7 +1966,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 */
 	public getMcpMaxResponseBytes(): number {
 		const provider = this.providerRef.deref()
-		const v = provider?.contextProxy?.getValue?.("shoferMcpMaxResponseBytes")
+		const v = (
+			provider as { contextProxy?: { getValue?(key: string): unknown } } | undefined
+		)?.contextProxy?.getValue?.("shoferMcpMaxResponseBytes")
 		return typeof v === "number" && v >= 0 ? v : 1024 * 1024
 	}
 
@@ -3045,7 +3052,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (provider) {
 			const modelInfo = this.api.getModel().info
 			const toolsResult = await buildNativeToolsArrayWithRestrictions({
-				provider,
+				provider: provider as Parameters<typeof buildNativeToolsArrayWithRestrictions>[0]["provider"],
 				cwd: this.cwd,
 				mode,
 				customModes: state?.customModes,
@@ -3377,7 +3384,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// only, so we cap the wait and skip the warning if the hub isn't ready in time.
 			const MCP_READY_DEADLINE_MS = 12_000
 			const mcpHub = await Promise.race([
-				McpServerManager.getInstance(provider.context, provider),
+				McpServerManager.getInstance(
+					provider.context as Parameters<typeof McpServerManager.getInstance>[0],
+					provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
+				),
 				new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), MCP_READY_DEADLINE_MS)),
 			])
 			if (!mcpHub) {
@@ -4618,7 +4628,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				showShoferIgnoredFiles,
 				includeDiagnosticMessages,
 				maxDiagnosticMessages,
-				skillsManager: provider?.getSkillsManager(),
+				skillsManager: provider?.getSkillsManager() as Parameters<
+					typeof processUserContentMentions
+				>[0]["skillsManager"],
 				currentMode,
 			})
 
@@ -6220,7 +6232,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// per-request pWaitFor overhead when the cache is hot.
 			let mcpHub: McpHub | undefined
 			if (mcpEnabled ?? true) {
-				mcpHub = await McpServerManager.getInstance(provider.context, provider)
+				mcpHub = await McpServerManager.getInstance(
+					provider.context as Parameters<typeof McpServerManager.getInstance>[0],
+					provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
+				)
 				if (!mcpHub) {
 					throw new Error("Failed to get MCP hub from server manager")
 				}
@@ -6238,7 +6253,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			const shoferIgnoreInstructions = this.shoferIgnoreController?.getInstructions()
 
 			systemPrompt = await SYSTEM_PROMPT(
-				provider.context,
+				provider.context as Parameters<typeof SYSTEM_PROMPT>[0],
 				this.cwd,
 				false,
 				mcpHub,
@@ -6268,7 +6283,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				},
 				undefined, // todoList
 				this.api.getModel().id,
-				provider.getSkillsManager(),
+				provider.getSkillsManager() as Parameters<typeof SYSTEM_PROMPT>[15],
 			)
 
 			this._cachedSystemPromptBase = systemPrompt
@@ -6508,7 +6523,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let allTools: import("openai").default.Chat.ChatCompletionTool[] = []
 		if (provider) {
 			const toolsResult = await buildNativeToolsArrayWithRestrictions({
-				provider,
+				provider: provider as Parameters<typeof buildNativeToolsArrayWithRestrictions>[0]["provider"],
 				cwd: this.cwd,
 				mode,
 				customModes: state?.customModes,
@@ -6913,7 +6928,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				throw new Error("Provider reference lost during tool building")
 			}
 			const toolsResult = await buildNativeToolsArrayWithRestrictions({
-				provider,
+				provider: provider as Parameters<typeof buildNativeToolsArrayWithRestrictions>[0]["provider"],
 				cwd: this.cwd,
 				mode,
 				customModes: state?.customModes,

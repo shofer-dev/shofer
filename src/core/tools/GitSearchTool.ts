@@ -6,6 +6,7 @@ import type { GitSearchResult } from "../../services/git-index/interfaces/git"
 import type { ToolUse } from "../../shared/tools"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
 
 interface GitSearchParams {
@@ -60,7 +61,7 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 
 			task.consecutiveMistakeCount = 0
 
-			const context = task.providerRef.deref()?.context
+			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}

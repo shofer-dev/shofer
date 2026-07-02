@@ -5,6 +5,7 @@ import { Task } from "../task/Task"
 import { getTaskDirectoryPath } from "../../utils/storage"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 
 /** Default byte limit for read operations (40KB) */
 const DEFAULT_LIMIT = 40 * 1024 // 40KB default limit
@@ -122,7 +123,7 @@ export class ReadCommandOutputTool extends BaseTool<"read_command_output"> {
 
 		try {
 			// Get the task directory path
-			const provider = await task.providerRef.deref()
+			const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
 			const globalStoragePath = provider?.context?.globalStorageUri?.fsPath
 
 			if (!globalStoragePath) {

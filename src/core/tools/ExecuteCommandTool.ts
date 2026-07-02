@@ -19,6 +19,7 @@ import { Package } from "../../shared/package"
 import { t } from "../../i18n"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import {
 	getWorktreeCommandWarning,
 	getWorktreeSandboxPrefix,
@@ -114,7 +115,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			}
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
-			const provider = await task.providerRef.deref()
+			const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
 			const providerState = await provider?.getState()
 
 			// Force execa backend for sandboxed worktree tasks so the sandbox
@@ -255,7 +256,7 @@ export async function executeCommandInTerminal(
 	let hasAskedForCommandOutput = false
 
 	const terminalProvider = terminalShellIntegrationDisabled ? "execa" : "vscode"
-	const provider = await task.providerRef.deref()
+	const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
 
 	// Get global storage path for persisted output artifacts
 	const globalStoragePath = provider?.context?.globalStorageUri?.fsPath

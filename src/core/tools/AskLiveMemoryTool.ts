@@ -4,6 +4,7 @@ import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "../prompts/responses"
 import type { ToolUse } from "../../shared/tools"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { liveMemoryLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[AskLiveMemoryTool]"
@@ -64,7 +65,7 @@ export class AskLiveMemoryTool extends BaseTool<"ask_live_memory"> {
 		task.consecutiveMistakeCount = 0
 
 		try {
-			const context = task.providerRef.deref()?.context
+			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}

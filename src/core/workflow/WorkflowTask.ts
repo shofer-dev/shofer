@@ -541,7 +541,7 @@ export class WorkflowTask extends Task {
 					// context) copy carries the embedded answeredValues. Without this
 					// the form re-mounts EMPTY after a Chat-tab switch: persistence
 					// alone only updates disk, not the live webview state.
-					const provider = this.providerRef.deref()
+					const provider = this.providerRef.deref() as ShoferProvider | undefined
 					if (provider) {
 						void provider.postMessageToWebview({ type: "messageUpdated", shoferMessage: msg })
 					}
@@ -612,7 +612,7 @@ export class WorkflowTask extends Task {
 		// (subtasks), whose cwd must not move. Persisted via serializeFlowState so
 		// the webview's WorktreeIndicator switches to read-only.
 		this.flowState.started = true
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
 
 		const budget = getBudget(this.flowDecl, this.flowState.params)
@@ -1027,7 +1027,7 @@ export class WorkflowTask extends Task {
 	 *                     decoding enforce the contract at decode time.
 	 */
 	private async spawnAgentTask(agentName: string, prompt: string, outputSchema?: OutputSchema): Promise<void> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) {
 			workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE spawnAgentTask '${agentName}' FAIL: no provider`)
 			return
@@ -1182,7 +1182,7 @@ export class WorkflowTask extends Task {
 			return
 		}
 
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) {
 			workflowLog.info(`[WorkflowTask#${this.taskId}] #TRACE resumeAgentTask '${agentName}' FAIL: no provider`)
 			return
@@ -1287,7 +1287,7 @@ export class WorkflowTask extends Task {
 	 * through the `answer_subtask_question` path.
 	 */
 	private async waitForStakes(names: string[]): Promise<void> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) return
 
 		const taskIds = names.map((n) => this.flowState.agents.get(n)?.taskId).filter(Boolean) as string[]
@@ -1399,7 +1399,7 @@ export class WorkflowTask extends Task {
 	 * not in question-awaiting state or the relay failed.
 	 */
 	private async relayChildQuestion(childTaskId: string): Promise<boolean> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) return false
 
 		const liveInstance = provider.taskManager.getManagedTaskInstance(childTaskId)
@@ -1447,7 +1447,7 @@ export class WorkflowTask extends Task {
 	 * advance its program counter past the stake.
 	 */
 	private async collectStakeResults(names: string[]): Promise<void> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) return
 
 		for (const name of names) {
@@ -1818,7 +1818,7 @@ export class WorkflowTask extends Task {
 	 * If no committed agent has a rating (all errored / no committed agents), defaults to "poor".
 	 */
 	private async aggregateChildRatings(): Promise<CompletionRating> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) return "poor"
 
 		const ratings: CompletionRating[] = []
@@ -1892,7 +1892,7 @@ export class WorkflowTask extends Task {
 		// the serialized FlowState is pushed so SlangViz can forward it as a
 		// `runtimeState` postMessage and the render engine patches the
 		// diagrams in-place — no iframe reload, no lost zoom/pan/view.
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (provider) {
 			if (!this._vizHtmlPushed) {
 				// Flow header metadata rendered natively in TaskHeader.
@@ -1947,7 +1947,7 @@ export class WorkflowTask extends Task {
 
 	private async persistCheckpoint(): Promise<void> {
 		try {
-			const provider = this.providerRef.deref()
+			const provider = this.providerRef.deref() as ShoferProvider | undefined
 			if (!provider) return
 			await provider.updateTaskHistory({ id: this.taskId, ...this.getHistoryExtension() } as any)
 		} catch (error) {
@@ -1956,7 +1956,7 @@ export class WorkflowTask extends Task {
 	}
 
 	private async emitTaskCompleted(rating: "poor" | "well" | "excellent"): Promise<void> {
-		const provider = this.providerRef.deref()
+		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) return
 		try {
 			// Push the terminal FlowState to the viz so the swimlane reflects the

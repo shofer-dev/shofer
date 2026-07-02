@@ -6,6 +6,7 @@ import type { ShoferApiReqInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 
 import { getWorkspacePath } from "@shofer/core"
 import { checkGitInstalled } from "../../utils/git"
@@ -34,7 +35,7 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 		return task.checkpointService
 	}
 
-	const provider = task.providerRef.deref()
+	const provider = task.providerRef.deref() as ShoferProvider | undefined
 
 	// Get checkpoint timeout from task settings (converted to milliseconds)
 	const checkpointTimeoutMs = task.checkpointTimeout * 1000
@@ -250,7 +251,7 @@ export async function checkpointRestore(
 		return
 	}
 
-	const provider = task.providerRef.deref()
+	const provider = task.providerRef.deref() as ShoferProvider | undefined
 
 	try {
 		await service.restoreCheckpoint(commitHash)

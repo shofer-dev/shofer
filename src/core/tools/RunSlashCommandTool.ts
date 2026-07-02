@@ -4,6 +4,7 @@ import { getCommand, getCommandNames } from "../../services/command/commands"
 import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getModeBySlug } from "../../shared/modes"
 import {
 	buildSkillApprovalMessage,
@@ -24,7 +25,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		// Check if run slash command experiment is enabled
-		const provider = task.providerRef.deref()
+		const provider = task.providerRef.deref() as ShoferProvider | undefined
 		const state = await provider?.getState()
 		const isRunSlashCommandEnabled = experiments.isEnabled(
 			state?.experiments ?? {},
@@ -109,7 +110,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 
 			// Switch mode if specified in the command frontmatter
 			if (command.mode) {
-				const provider = task.providerRef.deref()
+				const provider = task.providerRef.deref() as ShoferProvider | undefined
 				const targetMode = getModeBySlug(command.mode, (await provider?.getState())?.customModes)
 				if (targetMode) {
 					// Scope the mode switch to this task so it doesn't leak

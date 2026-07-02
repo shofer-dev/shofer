@@ -4,6 +4,7 @@ import * as path from "path"
 import { Task } from "../task/Task"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 
 /** Default byte limit for a read (40KB). */
 const DEFAULT_LIMIT = 40 * 1024
@@ -173,7 +174,7 @@ export class ReadOutputChannelTool extends BaseTool<"read_output_channel"> {
 	 * session root. Falls back to three-levels-up if the heuristic fails.
 	 */
 	private async resolveSessionRoot(task: Task): Promise<string | undefined> {
-		const provider = await task.providerRef.deref()
+		const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
 		const logPath: string | undefined = provider?.context?.logUri?.fsPath
 		if (!logPath) return undefined
 

@@ -113,6 +113,7 @@ import { getUri } from "./getUri"
 import { REQUESTY_BASE_URL } from "../../shared/utils/requesty"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
+import type { TaskProviderLike as CoreTaskProviderLike } from "@shofer/core"
 import { time } from "../../utils/perf"
 
 /**
@@ -136,7 +137,7 @@ interface PendingEditOperation {
 
 export class ShoferProvider
 	extends EventEmitter<TaskProviderEvents>
-	implements vscode.WebviewViewProvider, TelemetryPropertiesProvider, TaskProviderLike
+	implements vscode.WebviewViewProvider, TelemetryPropertiesProvider, TaskProviderLike, CoreTaskProviderLike<Task>
 {
 	// Used in package.json as the view's id. This value cannot be changed due
 	// to how VSCode caches views based on their id, and updating the id would

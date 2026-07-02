@@ -2,6 +2,7 @@ import type { ShoferAskUseMcpServer } from "@shofer/types"
 
 import type { ToolUse } from "../../shared/tools"
 import { Task } from "../task/Task"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "../prompts/responses"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -50,8 +51,7 @@ export class AccessMcpResourceTool extends BaseTool<"access_mcp_resource"> {
 
 			// Now execute the tool
 			await task.say("mcp_server_request_started")
-			const resourceResult = await task.providerRef
-				.deref()
+			const resourceResult = await (task.providerRef.deref() as ShoferProvider | undefined)
 				?.getMcpHub()
 				?.readResource(server_name, uri, undefined, task.abortSignal)
 

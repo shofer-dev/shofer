@@ -16,6 +16,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { OpenRouterHandler } from "../../api/providers/openrouter"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
+import type { ShoferProvider } from "../webview/ShoferProvider"
 import { t } from "../../i18n"
 
 export class GenerateImageTool extends BaseTool<"generate_image"> {
@@ -25,7 +26,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 		const { prompt, path: relPath, image: inputImagePath } = params
 		const { handleError, pushToolResult, askApproval } = callbacks
 
-		const provider = task.providerRef.deref()
+		const provider = task.providerRef.deref() as ShoferProvider | undefined
 		const state = await provider?.getState()
 		const isImageGenerationEnabled = experiments.isEnabled(
 			state?.experiments ?? {},
