@@ -3,7 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 
 import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { countTokens } from "../../utils/countTokens"
 import { isMcpTool } from "../../utils/mcp-name"
 

@@ -7,7 +7,7 @@ import { calculateApiCostOpenAI } from "@shofer/core"
 
 import { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { sanitizeOpenAiCallId } from "@shofer/core"
 

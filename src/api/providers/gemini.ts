@@ -17,7 +17,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { t } from "i18next"
-import type { ApiStream, GroundingSource } from "../transform/stream"
+import type { ApiStream, GroundingSource } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"

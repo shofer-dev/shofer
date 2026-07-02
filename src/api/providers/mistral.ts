@@ -14,7 +14,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { ApiHandlerOptions } from "../../shared/api"
 
 import { convertToMistralMessages } from "../transform/mistral-format"
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { handleProviderError } from "./utils/error-handler"
 
 import { BaseProvider } from "./base-provider"

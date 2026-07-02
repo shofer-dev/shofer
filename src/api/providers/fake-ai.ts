@@ -4,7 +4,7 @@ import type { ModelInfo } from "@shofer/types"
 
 import type { ApiHandler, SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import type { ApiHandlerOptions } from "../../shared/api"
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 
 interface FakeAI {
 	/**

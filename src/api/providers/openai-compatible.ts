@@ -13,7 +13,7 @@ import type { ModelInfo } from "@shofer/types"
 import type { ApiHandlerOptions } from "../../shared/api"
 
 import { convertToAiSdkMessages, convertToolsForAiSdk, processAiSdkStreamPart } from "../transform/ai-sdk"
-import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 
 import { DEFAULT_HEADERS } from "./constants"
 import { BaseProvider } from "./base-provider"

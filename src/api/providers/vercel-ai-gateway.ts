@@ -10,7 +10,7 @@ import {
 
 import { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { addCacheBreakpoints } from "../transform/caching/vercel-ai-gateway"
 

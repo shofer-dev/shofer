@@ -7,7 +7,7 @@ import { type MinimaxModelId, minimaxDefaultModelId, minimaxModels } from "@shof
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 import { mergeEnvironmentDetailsForMiniMax } from "../transform/minimax-format"
 

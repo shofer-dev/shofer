@@ -34,7 +34,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { BaseProvider } from "./base-provider"
 import { apiLog as logger } from "@shofer/core"
 import { Package } from "../../shared/package"

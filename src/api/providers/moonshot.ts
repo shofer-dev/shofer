@@ -2,7 +2,7 @@ import { moonshotModels, moonshotDefaultModelId, type ModelInfo } from "@shofer/
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import type { ApiStreamUsageChunk } from "../transform/stream"
+import type { ApiStreamUsageChunk } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 
 import { OpenAICompatibleHandler, OpenAICompatibleConfig } from "./openai-compatible"

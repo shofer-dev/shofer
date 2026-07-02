@@ -5,7 +5,7 @@ vitest.mock("vscode", () => ({}))
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { ApiStreamChunk } from "../../transform/stream"
+import { ApiStreamChunk } from "@shofer/core"
 
 import { t } from "i18next"
 import { VertexHandler } from "../vertex"

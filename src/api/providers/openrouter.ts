@@ -24,7 +24,7 @@ import {
 	consolidateReasoningDetails,
 } from "../transform/openai-format"
 import { normalizeMistralToolCallId } from "../transform/mistral-format"
-import { ApiStreamChunk } from "../transform/stream"
+import { ApiStreamChunk } from "@shofer/core"
 import { convertToR1Format } from "../transform/r1-format"
 import { addCacheBreakpoints as addAnthropicCacheBreakpoints } from "../transform/caching/anthropic"
 import { addCacheBreakpoints as addGeminiCacheBreakpoints } from "../transform/caching/gemini"

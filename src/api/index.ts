@@ -3,7 +3,7 @@ import OpenAI from "openai"
 
 import { isRetiredProvider, type ProviderSettings, type ModelInfo } from "@shofer/types"
 
-import { ApiStream } from "./transform/stream"
+import { ApiStream } from "@shofer/core"
 import { applyCustomPricing } from "@shofer/core"
 
 import {

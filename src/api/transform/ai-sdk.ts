@@ -6,7 +6,7 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { tool as createTool, jsonSchema, type ModelMessage, type TextStreamPart } from "ai"
-import type { ApiStreamChunk } from "./stream"
+import type { ApiStreamChunk } from "@shofer/core"
 
 /**
  * Convert Anthropic messages to AI SDK ModelMessage format.

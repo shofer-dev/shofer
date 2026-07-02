@@ -1,6 +1,6 @@
 // npx vitest run src/api/transform/__tests__/stream.spec.ts
 
-import { ApiStreamChunk } from "../stream"
+import { ApiStreamChunk } from "../stream.js"
 
 describe("API Stream Types", () => {
 	describe("ApiStreamChunk", () => {

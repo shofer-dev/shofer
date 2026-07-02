@@ -18,7 +18,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import type { ApiHandlerOptions } from "../../shared/api"
 import type { ApiHandlerCreateMessageMetadata } from "../index"
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 
 import { OpenRouterHandler } from "./openrouter"
 

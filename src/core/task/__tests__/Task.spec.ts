@@ -40,7 +40,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
-import { ApiStreamChunk } from "../../../api/transform/stream"
+import { ApiStreamChunk } from "@shofer/core"
 import { ContextProxy } from "../../config/ContextProxy"
 import { processUserContentMentions } from "../../mentions/processUserContentMentions"
 import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"

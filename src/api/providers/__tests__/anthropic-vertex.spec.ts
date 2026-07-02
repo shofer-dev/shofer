@@ -5,7 +5,7 @@ import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 
 import { VERTEX_1M_CONTEXT_MODEL_IDS } from "@shofer/types"
 
-import { ApiStreamChunk } from "../../transform/stream"
+import { ApiStreamChunk } from "@shofer/core"
 
 import { AnthropicVertexHandler } from "../anthropic-vertex"
 

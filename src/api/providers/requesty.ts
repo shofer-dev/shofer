@@ -7,7 +7,7 @@ import type { ApiHandlerOptions } from "../../shared/api"
 import { calculateApiCostOpenAI } from "@shofer/core"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
-import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 import { AnthropicReasoningParams } from "../transform/reasoning"
 

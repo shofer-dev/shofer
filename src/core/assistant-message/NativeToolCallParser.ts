@@ -12,11 +12,7 @@ import {
 	toolParamNames,
 } from "../../shared/tools"
 import { resolveToolAlias } from "../prompts/tools/filter-tools-for-mode"
-import type {
-	ApiStreamToolCallStartChunk,
-	ApiStreamToolCallDeltaChunk,
-	ApiStreamToolCallEndChunk,
-} from "../../api/transform/stream"
+import type { ApiStreamToolCallStartChunk, ApiStreamToolCallDeltaChunk, ApiStreamToolCallEndChunk } from "@shofer/core"
 import { MCP_TOOL_PREFIX, MCP_TOOL_SEPARATOR, parseMcpToolName, normalizeMcpToolName } from "../../utils/mcp-name"
 
 /**

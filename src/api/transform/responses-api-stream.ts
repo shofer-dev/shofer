@@ -1,4 +1,4 @@
-import type { ApiStream, ApiStreamUsageChunk } from "./stream"
+import type { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 
 /**
  * Processes Responses API stream events and yields ApiStreamChunks.

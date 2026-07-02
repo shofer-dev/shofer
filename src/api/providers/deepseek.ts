@@ -11,7 +11,7 @@ import {
 import type { ApiHandlerOptions } from "../../shared/api"
 import { apiLog } from "@shofer/core"
 
-import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
+import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 import { convertToR1Format } from "../transform/r1-format"
 

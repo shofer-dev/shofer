@@ -66,7 +66,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 // api
 import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
-import { ApiStream, GroundingSource } from "../../api/transform/stream"
+import { ApiStream, GroundingSource } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "../../api/transform/image-cleaning"
 
 // shared

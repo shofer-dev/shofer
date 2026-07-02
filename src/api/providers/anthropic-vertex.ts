@@ -14,7 +14,7 @@ import { safeJsonParse } from "@shofer/core"
 
 import { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { addCacheBreakpoints } from "../transform/caching/vertex"
 import { getModelParams } from "../transform/model-params"
 import { filterNonAnthropicBlocks } from "../transform/anthropic-filter"

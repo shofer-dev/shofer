@@ -3,7 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 
 import { BaseProvider } from "../base-provider"
-import type { ApiStream } from "../../transform/stream"
+import type { ApiStream } from "@shofer/core"
 
 // Create a concrete implementation for testing
 class TestProvider extends BaseProvider {

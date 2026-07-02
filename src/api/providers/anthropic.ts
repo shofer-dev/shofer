@@ -15,7 +15,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"
 import { filterNonAnthropicBlocks } from "../transform/anthropic-filter"
 import { handleProviderError } from "./utils/error-handler"

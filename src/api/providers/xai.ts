@@ -6,7 +6,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import type { ApiHandlerOptions } from "../../shared/api"
 
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 import { convertToResponsesApiInput } from "../transform/responses-api-input"
 import { processResponsesApiStream, createUsageNormalizer } from "../transform/responses-api-stream"
 import { getModelParams } from "../transform/model-params"

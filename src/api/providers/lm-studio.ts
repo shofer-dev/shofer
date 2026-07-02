@@ -10,7 +10,7 @@ import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCal
 import { TagMatcher } from "../../utils/tag-matcher"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
-import { ApiStream } from "../transform/stream"
+import { ApiStream } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"
 import { apiLog } from "@shofer/core"
