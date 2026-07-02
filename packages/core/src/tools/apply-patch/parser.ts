@@ -140,7 +140,7 @@ function parseUpdateFileChunk(
 
 	let parsedLines = 0
 	for (let i = startIndex; i < lines.length; i++) {
-		const line = lines[i]
+		const line = lines[i]!
 
 		if (line === EOF_MARKER) {
 			if (parsedLines === 0) {

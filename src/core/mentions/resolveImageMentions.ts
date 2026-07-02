@@ -8,7 +8,7 @@ import {
 	ImageMemoryTracker,
 	DEFAULT_MAX_IMAGE_FILE_SIZE_MB,
 	DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB,
-} from "../tools/helpers/imageHelpers"
+} from "@shofer/core"
 
 const MAX_IMAGES_PER_MESSAGE = 20
 

@@ -7,17 +7,17 @@ import {
 	isAutoApprovableAsk,
 } from "@shofer/types"
 
-import { ShoferAskResponse } from "@shofer/core"
+import { ShoferAskResponse } from "@shofer/types"
 
-import { getToolGroupForSayTool } from "./tools"
-import { getMcpToolGroup } from "./mcp"
-import { getCommandDecision } from "@shofer/core"
-import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates"
-import { webviewLog } from "@shofer/core"
+import { getToolGroupForSayTool } from "./tools.js"
+import { getMcpToolGroup } from "./mcp.js"
+import { getCommandDecision } from "./commands.js"
+import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates.js"
+import { webviewLog } from "../logging/subsystems.js"
 
 // Per-group gating is centralized in ./group-gates (the §4 single source of
 // truth, used by both the MCP and native-tool paths below).
-export type { AutoApprovalState, AutoApprovalStateOptions } from "./group-gates"
+export type { AutoApprovalState, AutoApprovalStateOptions } from "./group-gates.js"
 
 export type CheckAutoApprovalResult =
 	| { decision: "approve" }
@@ -66,7 +66,7 @@ export async function checkAutoApproval({
 				} else {
 					return { decision: "ask" }
 				}
-			} catch (error) {
+			} catch {
 				return { decision: "ask" }
 			}
 		} else {
@@ -114,7 +114,7 @@ export async function checkAutoApproval({
 			} else if (mcpServerUse.type === "access_mcp_resource") {
 				return state.alwaysAllowMcp === true ? { decision: "approve" } : { decision: "ask" }
 			}
-		} catch (error) {
+		} catch {
 			return { decision: "ask" }
 		}
 
@@ -204,6 +204,7 @@ export async function checkAutoApproval({
 
 		// sendMessageToTask: async is always approved (fire-and-forget); sync is gated.
 		if ((tool?.tool as string) === "sendMessageToTask") {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const isSync = (tool as any).wait === true
 			if (!isSync) {
 				return { decision: "approve" }
@@ -272,4 +273,4 @@ export async function checkAutoApproval({
 	return { decision: "ask" }
 }
 
-export { AutoApprovalHandler } from "./AutoApprovalHandler"
+export { AutoApprovalHandler } from "./AutoApprovalHandler.js"

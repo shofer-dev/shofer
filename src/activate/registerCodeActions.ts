@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import { CodeActionId, CodeActionName } from "@shofer/types"
 
-import { getCodeActionCommand } from "../utils/commands"
+import { getCodeActionCommand } from "@shofer/core"
 import { EditorUtils } from "../integrations/editor/EditorUtils"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 

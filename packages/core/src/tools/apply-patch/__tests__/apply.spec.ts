@@ -1,5 +1,5 @@
-import { applyChunksToContent, ApplyPatchError } from "../apply"
-import type { UpdateFileChunk } from "../parser"
+import { applyChunksToContent, ApplyPatchError } from "../apply.js"
+import type { UpdateFileChunk } from "../parser.js"
 
 describe("apply-patch apply", () => {
 	describe("applyChunksToContent", () => {

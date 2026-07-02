@@ -1,6 +1,6 @@
 import type { CommandId, CodeActionId, TerminalActionId } from "@shofer/types"
 
-import { Package } from "@shofer/core"
+import { Package } from "../shared/package.js"
 
 export const getCommand = (id: CommandId) => `${Package.name}.${id}`
 

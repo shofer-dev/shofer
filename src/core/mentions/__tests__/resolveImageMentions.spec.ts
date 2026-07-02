@@ -2,7 +2,8 @@ import * as path from "path"
 
 import { resolveImageMentions } from "../resolveImageMentions"
 
-vi.mock("../../tools/helpers/imageHelpers", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	isSupportedImageFormat: vi.fn((ext: string) =>
 		[".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico", ".tiff", ".tif", ".avif"].includes(
 			ext.toLowerCase(),
@@ -18,7 +19,7 @@ vi.mock("../../tools/helpers/imageHelpers", () => ({
 	DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB: 20,
 }))
 
-import { validateImageForProcessing, readImageAsDataUrlWithBuffer } from "../../tools/helpers/imageHelpers"
+import { validateImageForProcessing, readImageAsDataUrlWithBuffer } from "@shofer/core"
 
 const mockReadImageAsDataUrl = vi.mocked(readImageAsDataUrlWithBuffer)
 const mockValidateImage = vi.mocked(validateImageForProcessing)

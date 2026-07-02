@@ -3,12 +3,12 @@ import getFolderSize from "get-folder-size"
 
 import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
-import { combineApiRequests } from "@shofer/core"
-import { combineCommandSequences } from "@shofer/core"
-import { getApiMetrics } from "@shofer/core"
-import { findLastIndex } from "@shofer/core"
-import { getTaskDirectoryPath } from "@shofer/core"
-import { t } from "@shofer/core"
+import { combineApiRequests } from "@shofer/types"
+import { combineCommandSequences } from "@shofer/types"
+import { getApiMetrics } from "@shofer/types"
+import { findLastIndex } from "@shofer/types"
+import { getTaskDirectoryPath } from "../utils/storage.js"
+import { t } from "../i18n/index.js"
 
 const taskSizeCache = new NodeCache({ stdTTL: 30, checkperiod: 5 * 60 })
 
@@ -91,7 +91,7 @@ export async function taskMetadata({
 		taskDirSize = 0
 	} else {
 		// Handle messages case
-		taskMessage = messages[0] // First message is always the task say.
+		taskMessage = messages[0]! // First message is always the task say.
 
 		// createdAt captures the moment the task was created (first message timestamp).
 		createdAt = taskMessage.ts
@@ -111,7 +111,7 @@ export async function taskMetadata({
 			try {
 				taskDirSize = await getFolderSize.loose(taskDir)
 				taskSizeCache.set<number>(taskDir, taskDirSize)
-			} catch (error) {
+			} catch {
 				taskDirSize = 0
 			}
 		} else {

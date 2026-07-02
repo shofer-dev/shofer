@@ -15,7 +15,7 @@ function formatCellValue(cell: ExcelJS.Cell): string {
 
 	// Handle dates - ExcelJS can parse them as Date objects
 	if (value instanceof Date) {
-		return value.toISOString().split("T")[0]
+		return value.toISOString().split("T")[0]!
 	}
 
 	// Handle rich text
@@ -51,7 +51,7 @@ export async function extractTextFromXLSX(filePathOrWorkbook: string | ExcelJS.W
 		workbook = filePathOrWorkbook
 	}
 
-	workbook.eachSheet((worksheet, sheetId) => {
+	workbook.eachSheet((worksheet, _sheetId) => {
 		if (worksheet.state === "hidden" || worksheet.state === "veryHidden") {
 			return
 		}
@@ -67,7 +67,7 @@ export async function extractTextFromXLSX(filePathOrWorkbook: string | ExcelJS.W
 			const rowTexts: string[] = []
 			let hasContent = false
 
-			row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+			row.eachCell({ includeEmpty: true }, (cell, _colNumber) => {
 				const cellText = formatCellValue(cell)
 				if (cellText.trim()) {
 					hasContent = true

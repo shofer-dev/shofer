@@ -5,10 +5,10 @@ import * as path from "path"
 
 import type { ShoferMessage } from "@shofer/types"
 
-import { taskMetadata } from "../taskMetadata"
+import { taskMetadata } from "../taskMetadata.js"
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../utils/storage.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/storage.js")>()),
 	getTaskDirectoryPath: vi.fn(async (base: string, id: string) => path.join(base, "tasks", id)),
 }))
 

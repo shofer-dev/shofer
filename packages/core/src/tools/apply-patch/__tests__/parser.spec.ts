@@ -1,4 +1,4 @@
-import { parsePatch, ParseError } from "../parser"
+import { parsePatch, ParseError } from "../parser.js"
 
 describe("apply_patch parser", () => {
 	describe("parsePatch", () => {

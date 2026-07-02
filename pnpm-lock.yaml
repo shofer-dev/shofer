@@ -448,6 +448,9 @@ importers:
       esbuild:
         specifier: '>=0.25.0'
         version: 0.25.9
+      exceljs:
+        specifier: ^4.4.0
+        version: 4.4.0
       execa:
         specifier: ^9.5.2
         version: 9.6.0
@@ -460,6 +463,9 @@ importers:
       fzf:
         specifier: ^0.5.2
         version: 0.5.2
+      get-folder-size:
+        specifier: ^5.0.0
+        version: 5.0.0
       google-auth-library:
         specifier: ^9.15.1
         version: 9.15.1
@@ -487,6 +493,9 @@ importers:
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
+      pretty-bytes:
+        specifier: ^7.0.0
+        version: 7.0.0
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2

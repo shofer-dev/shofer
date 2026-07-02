@@ -13,8 +13,8 @@ import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
-import { parsePatch, ParseError, processAllHunks } from "./apply-patch"
-import type { ApplyPatchFileChange } from "./apply-patch"
+import { parsePatch, ParseError, processAllHunks } from "@shofer/core"
+import type { ApplyPatchFileChange } from "@shofer/core"
 import { fsLog } from "@shofer/core"
 
 interface ApplyPatchParams {

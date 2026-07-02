@@ -14,7 +14,7 @@ import {
 	RAG_SEARCH_CAP,
 	resolveMaxResults,
 	formatTruncationHeader,
-} from "../searchCap"
+} from "../searchCap.js"
 
 describe("searchCap constants", () => {
 	it("exposes the documented per-tool caps", () => {

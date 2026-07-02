@@ -74,7 +74,7 @@ import { getModels, flushModels } from "@shofer/core"
 import { GetModelsOptions } from "@shofer/core"
 import { generateSystemPrompt } from "./generateSystemPrompt"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
-import { getCommand } from "../../utils/commands"
+import { getCommand } from "@shofer/core"
 
 const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 

@@ -7,7 +7,7 @@ import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
+import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "@shofer/core"
 
 interface GitSearchParams {
 	query: string

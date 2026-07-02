@@ -9,7 +9,7 @@ import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { RAG_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
+import { RAG_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "@shofer/core"
 
 interface RagSearchParams {
 	query: string

@@ -1,4 +1,4 @@
-import { checkAutoApproval } from "../index"
+import { checkAutoApproval } from "../index.js"
 
 /**
  * Characterization tests for `checkAutoApproval` (v3 architecture §4).
