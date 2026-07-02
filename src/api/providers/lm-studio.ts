@@ -7,7 +7,7 @@ import { type ModelInfo, openAiModelInfoSaneDefaults, LMSTUDIO_DEFAULT_TEMPERATU
 import type { ApiHandlerOptions } from "@shofer/core"
 
 import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
-import { TagMatcher } from "../../utils/tag-matcher"
+import { TagMatcher } from "@shofer/core"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "@shofer/core"

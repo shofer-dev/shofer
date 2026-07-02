@@ -4,7 +4,7 @@ import type { Task } from "../../task/Task"
 import type { ShoferProvider } from "../../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
 import { t } from "@shofer/core"
-import { toolNamesMatch } from "../../../utils/mcp-name"
+import { toolNamesMatch } from "@shofer/core"
 import { mcpLog } from "@shofer/core"
 
 /**

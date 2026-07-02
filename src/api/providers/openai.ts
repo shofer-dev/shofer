@@ -12,7 +12,7 @@ import {
 
 import type { ApiHandlerOptions } from "@shofer/core"
 
-import { TagMatcher } from "../../utils/tag-matcher"
+import { TagMatcher } from "@shofer/core"
 
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { convertToR1Format } from "../transform/r1-format"

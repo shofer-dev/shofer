@@ -27,7 +27,7 @@ import { getModelParams } from "../transform/model-params"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { isMcpTool } from "../../utils/mcp-name"
+import { isMcpTool } from "@shofer/core"
 import { sanitizeOpenAiCallId } from "@shofer/core"
 
 export type OpenAiNativeModel = ReturnType<OpenAiNativeHandler["getModel"]>

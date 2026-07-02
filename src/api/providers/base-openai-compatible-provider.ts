@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import type { ModelInfo } from "@shofer/types"
 
 import { type ApiHandlerOptions, getModelMaxOutputTokens } from "@shofer/core"
-import { TagMatcher } from "../../utils/tag-matcher"
+import { TagMatcher } from "@shofer/core"
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { normalizeToolSchema } from "../json-schema"
+import { normalizeToolSchema } from "../json-schema.js"
 
 describe("normalizeToolSchema", () => {
 	it("should convert type array to anyOf for nullable string", () => {
@@ -141,10 +141,10 @@ describe("normalizeToolSchema", () => {
 
 		expect(result.properties).toBeDefined()
 		const properties = result.properties as Record<string, Record<string, unknown>>
-		const filesItems = properties.files.items as Record<string, unknown>
+		const filesItems = properties.files!.items as Record<string, unknown>
 		const filesItemsProps = filesItems.properties as Record<string, Record<string, unknown>>
 		// Array-specific properties (items) should be moved inside the array variant
-		expect(filesItemsProps.ranges.anyOf).toEqual([
+		expect(filesItemsProps.ranges!.anyOf).toEqual([
 			{ type: "array", items: { type: "array", items: { type: "integer" } } },
 			{ type: "null" },
 		])
@@ -245,9 +245,9 @@ describe("normalizeToolSchema", () => {
 
 		// Verify nested nullable objects are transformed correctly
 		const props = result.properties as Record<string, Record<string, unknown>>
-		expect(props.indentation.anyOf).toEqual([{ type: "object" }, { type: "null" }])
-		expect(props.indentation.additionalProperties).toBe(false)
-		expect((props.indentation.properties as Record<string, unknown>).anchor_line).toEqual({
+		expect(props.indentation!.anyOf).toEqual([{ type: "object" }, { type: "null" }])
+		expect(props.indentation!.additionalProperties).toBe(false)
+		expect((props.indentation!.properties as Record<string, unknown>).anchor_line).toEqual({
 			anyOf: [{ type: "integer" }, { type: "null" }],
 		})
 	})
@@ -370,10 +370,10 @@ describe("normalizeToolSchema", () => {
 			const result = normalizeToolSchema(input)
 
 			const props = result.properties as Record<string, Record<string, unknown>>
-			expect(props.url.format).toBeUndefined()
-			expect(props.url.description).toBe("A URL")
-			expect(props.email.format).toBe("email")
-			expect(props.email.description).toBe("An email")
+			expect(props.url!.format).toBeUndefined()
+			expect(props.url!.description).toBe("A URL")
+			expect(props.email!.format).toBe("email")
+			expect(props.email!.description).toBe("An email")
 		})
 
 		it("should strip unsupported format in deeply nested structures", () => {
@@ -402,10 +402,10 @@ describe("normalizeToolSchema", () => {
 			const result = normalizeToolSchema(input)
 
 			const props = result.properties as Record<string, Record<string, unknown>>
-			const itemsItems = props.items.items as Record<string, unknown>
+			const itemsItems = props.items!.items as Record<string, unknown>
 			const nestedProps = itemsItems.properties as Record<string, Record<string, unknown>>
-			expect(nestedProps.link.format).toBeUndefined()
-			expect(nestedProps.timestamp.format).toBe("date-time")
+			expect(nestedProps.link!.format).toBeUndefined()
+			expect(nestedProps.timestamp!.format).toBe("date-time")
 		})
 
 		it("should handle MCP fetch server schema with uri format", () => {
@@ -425,9 +425,9 @@ describe("normalizeToolSchema", () => {
 			const result = normalizeToolSchema(input)
 
 			const props = result.properties as Record<string, Record<string, unknown>>
-			expect(props.url.format).toBeUndefined()
-			expect(props.url.type).toBe("string")
-			expect(props.url.description).toBe("URL to fetch")
+			expect(props.url!.format).toBeUndefined()
+			expect(props.url!.type).toBe("string")
+			expect(props.url!.description).toBe("URL to fetch")
 		})
 
 		describe("top-level anyOf/oneOf/allOf flattening", () => {
@@ -555,7 +555,7 @@ describe("normalizeToolSchema", () => {
 
 				// Nested anyOf should be preserved
 				const props = result.properties as Record<string, Record<string, unknown>>
-				expect(props.field.anyOf).toBeDefined()
+				expect(props.field!.anyOf).toBeDefined()
 			})
 
 			it("should handle MCP server schema with top-level anyOf", () => {

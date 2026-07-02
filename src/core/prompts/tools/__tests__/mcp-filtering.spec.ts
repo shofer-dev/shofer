@@ -11,7 +11,7 @@
 import type OpenAI from "openai"
 import type { McpTool, ModeConfig } from "@shofer/types"
 import { filterMcpToolsForMode } from "../filter-tools-for-mode"
-import { buildMcpToolName } from "../../../../utils/mcp-name"
+import { buildMcpToolName } from "@shofer/core"
 
 function makeMcpTool(serverName: string, toolName: string): OpenAI.Chat.ChatCompletionTool {
 	return {

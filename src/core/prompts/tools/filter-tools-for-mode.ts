@@ -3,7 +3,7 @@ import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofe
 import { getGroupName, getModeBySlug, getToolsForMode } from "@shofer/core"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES, CROSS_ASSISTANT_ALIASES } from "@shofer/core"
 import { defaultModeSlug } from "@shofer/core"
-import { buildMcpToolName } from "../../../utils/mcp-name"
+import { buildMcpToolName } from "@shofer/core"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
 import type { GitIndexManager } from "../../../services/git-index/git-index-manager"
 import type { McpHub } from "../../../services/mcp/McpHub"

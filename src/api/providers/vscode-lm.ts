@@ -7,7 +7,7 @@ import { type ModelInfo, openAiModelInfoSaneDefaults } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "@shofer/core"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
-import { normalizeToolSchema } from "../../utils/json-schema"
+import { normalizeToolSchema } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../transform/vscode-lm-format"

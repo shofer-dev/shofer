@@ -44,7 +44,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
 import { injectVariables } from "../../utils/config"
 import { safeWriteJson } from "../../utils/safeWriteJson"
-import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name"
+import { sanitizeMcpName, toolNamesMatch } from "@shofer/core"
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {

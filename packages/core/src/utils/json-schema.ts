@@ -159,6 +159,8 @@ const NormalizedToolSchemaInternal: z.ZodType<Record<string, unknown>, z.ZodType
 					type,
 					required,
 					properties,
+					// Destructured to strip it from `...rest` (unsupported by OpenAI); intentionally unused.
+					// eslint-disable-next-line @typescript-eslint/no-unused-vars
 					additionalProperties,
 					format,
 					items,

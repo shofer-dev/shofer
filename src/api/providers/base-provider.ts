@@ -5,7 +5,7 @@ import type { ModelInfo } from "@shofer/types"
 import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { ApiStream } from "@shofer/core"
 import { countTokens } from "../../utils/countTokens"
-import { isMcpTool } from "../../utils/mcp-name"
+import { isMcpTool } from "@shofer/core"
 
 /**
  * Base class for API providers that implements common functionality.

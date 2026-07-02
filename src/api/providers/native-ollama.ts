@@ -6,7 +6,7 @@ import { ApiStream } from "@shofer/core"
 import { BaseProvider } from "./base-provider"
 import type { ApiHandlerOptions } from "@shofer/core"
 import { getOllamaModels } from "./fetchers/ollama"
-import { TagMatcher } from "../../utils/tag-matcher"
+import { TagMatcher } from "@shofer/core"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { apiLog } from "@shofer/core"
 

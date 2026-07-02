@@ -54,7 +54,7 @@ export function normalizeMcpToolName(toolName: string): string {
 		// Pattern: mcp__server__tool or mcp__server__tool_with_underscores
 		const parts = toolName.split(/__|--/)
 
-		if (parts.length >= 3 && parts[0].toLowerCase() === "mcp") {
+		if (parts.length >= 3 && parts[0]!.toLowerCase() === "mcp") {
 			// Reconstruct with proper -- separators
 			const serverName = parts[1]
 			const toolNamePart = parts.slice(2).join("--") // Rejoin in case tool name had separator
@@ -96,7 +96,7 @@ export function sanitizeMcpName(name: string): string {
 	let sanitized = name.replace(/\s+/g, "_")
 
 	// Only allow alphanumeric, underscores, and hyphens
-	sanitized = sanitized.replace(/[^a-zA-Z0-9_\-]/g, "")
+	sanitized = sanitized.replace(/[^a-zA-Z0-9_-]/g, "")
 
 	// Replace any double-hyphen sequences with single hyphen to avoid separator conflicts
 	sanitized = sanitized.replace(/--+/g, "-")

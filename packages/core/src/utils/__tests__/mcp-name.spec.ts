@@ -8,7 +8,7 @@ import {
 	isMcpTool,
 	MCP_TOOL_SEPARATOR,
 	MCP_TOOL_PREFIX,
-} from "../mcp-name"
+} from "../mcp-name.js"
 
 describe("mcp-name utilities", () => {
 	describe("constants", () => {
