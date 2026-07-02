@@ -21,6 +21,11 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
 		...((await importOriginal()) as Record<string, unknown>),
+		ToolRepetitionDetector: class {
+			check() {
+				return { allowExecution: true }
+			}
+		},
 		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 		webviewLog: { error: noop, info: noop, warn: noop },
 		apiLog: { error: noop, info: noop, warn: noop },
@@ -41,7 +46,6 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	}
 })
 
-vi.mock("../../tools/ToolRepetitionDetector")
 vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn(() => ({
 		getModel: () => ({ info: {}, id: "test-model" }),

@@ -1,14 +1,14 @@
-// npx vitest run src/core/tools/__tests__/ToolRepetitionDetector.spec.ts
+// npx vitest run packages/core/src/tools/__tests__/ToolRepetitionDetector.spec.ts
 
 import type { ToolName } from "@shofer/types"
 
-import type { ToolUse } from "@shofer/core"
+import type { ToolUse } from "../../shared/tools.js"
 
-import { ToolRepetitionDetector } from "../ToolRepetitionDetector"
+import { ToolRepetitionDetector } from "../ToolRepetitionDetector.js"
 
-vitest.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	t: vitest.fn((key, options) => {
+vitest.mock("../../i18n/index.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../i18n/index.js")>()),
+	t: vitest.fn((key: string, options?: Record<string, unknown>) => {
 		// For toolRepetitionLimitReached key, return a message with the tool name.
 		if (key === "tools:toolRepetitionLimitReached" && options?.toolName) {
 			return `Shofer appears to be stuck in a loop, attempting the same action (${options.toolName}) repeatedly. This might indicate a problem with its current strategy.`
@@ -243,8 +243,11 @@ describe("ToolRepetitionDetector", () => {
 			const toolUse2 = createToolUse("tool-name-2", "tool-name-2", { param: "value" })
 
 			// Override the private method to force identical serialization
-			const originalSerialize = (detector as any).serializeToolUse
-			;(detector as any).serializeToolUse = (tool: ToolUse) => {
+			const detectorAny = detector as unknown as {
+				serializeToolUse: (tool: ToolUse) => string
+			}
+			const originalSerialize = detectorAny.serializeToolUse
+			detectorAny.serializeToolUse = (tool: ToolUse) => {
 				// Use string comparison for the name since it's technically an enum
 				if (String(tool.name) === "tool-name-2") {
 					return originalSerialize.call(detector, toolUse1) // Return the same JSON as toolUse1
@@ -260,7 +263,7 @@ describe("ToolRepetitionDetector", () => {
 			const result3 = detector.check(toolUse2)
 
 			// Restore the original method
-			;(detector as any).serializeToolUse = originalSerialize
+			detectorAny.serializeToolUse = originalSerialize
 
 			// Since we're directly manipulating the internal state for testing,
 			// we expect it to consider this a repetition

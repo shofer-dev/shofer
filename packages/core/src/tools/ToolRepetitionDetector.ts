@@ -1,6 +1,7 @@
 import stringify from "safe-stable-stringify"
-import { ToolUse } from "@shofer/core"
-import { t } from "@shofer/core"
+
+import type { ToolUse } from "../shared/tools.js"
+import { t } from "../i18n/index.js"
 
 /**
  * Class for detecting consecutive identical tool calls
@@ -74,7 +75,7 @@ export class ToolRepetitionDetector {
 	 * @returns JSON string representation of the tool use with sorted parameter keys
 	 */
 	private serializeToolUse(toolUse: ToolUse): string {
-		const toolObject: Record<string, any> = {
+		const toolObject: Record<string, unknown> = {
 			name: toolUse.name,
 			params: toolUse.params,
 		}

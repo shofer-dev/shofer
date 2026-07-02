@@ -427,6 +427,9 @@ importers:
       ps-tree:
         specifier: ^1.2.0
         version: 1.2.0
+      safe-stable-stringify:
+        specifier: ^2.5.0
+        version: 2.5.0
       simple-git:
         specifier: ^3.27.0
         version: 3.27.0

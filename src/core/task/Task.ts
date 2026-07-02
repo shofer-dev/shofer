@@ -106,7 +106,7 @@ import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool"
 
 // core modules
-import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector"
+import { ToolRepetitionDetector } from "@shofer/core"
 import { restoreTodoListForTask } from "../tools/UpdateTodoListTool"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 import { ShoferIgnoreController } from "@shofer/core"
