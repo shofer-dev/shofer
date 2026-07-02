@@ -15,7 +15,8 @@ vitest.mock("@shofer/telemetry", () => ({
 }))
 
 // Mock i18n
-vitest.mock("../../../../i18n", () => ({
+vitest.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: (key: string, params?: Record<string, any>) => {
 		const translations: Record<string, string> = {
 			"embeddings:validation.serviceUnavailable":

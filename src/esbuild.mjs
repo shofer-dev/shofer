@@ -6,7 +6,7 @@ import process from "node:process"
 import { execSync } from "node:child_process"
 import * as console from "node:console"
 
-import { copyPaths, copyWasms, copyLocales, setupLocaleWatcher } from "@shofer/build"
+import { copyPaths, copyWasms } from "@shofer/build"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -128,12 +128,6 @@ async function main() {
 			},
 		},
 		{
-			name: "copyLocales",
-			setup(build) {
-				build.onEnd(() => copyLocales(srcDir, distDir))
-			},
-		},
-		{
 			name: "esbuild-problem-matcher",
 			setup(build) {
 				build.onStart(() => console.log("[esbuild-problem-matcher#onStart]"))
@@ -189,8 +183,6 @@ async function main() {
 
 	if (watch) {
 		await Promise.all([extensionCtx.watch(), workerCtx.watch()])
-		copyLocales(srcDir, distDir)
-		setupLocaleWatcher(srcDir, distDir)
 	} else {
 		await Promise.all([extensionCtx.rebuild(), workerCtx.rebuild()])
 		await Promise.all([extensionCtx.dispose(), workerCtx.dispose()])

@@ -5,7 +5,7 @@ import type { IIgnoreFilter } from "./shared/git-ignore-filter"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"
 
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
 import { Package } from "../../shared/package"

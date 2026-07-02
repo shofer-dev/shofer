@@ -12,9 +12,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		unknownMcpToolError: vi.fn((s: string, t: string) => `unknown tool ${s}:${t}`),
 		unknownMcpServerError: vi.fn((s: string) => `unknown server ${s}`),
 	},
-}))
-
-vi.mock("../../../i18n", () => ({
 	t: vi.fn((key: string) => key),
 }))
 

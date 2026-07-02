@@ -14,7 +14,7 @@ import {
 	SKILL_NAME_MAX_LENGTH,
 } from "@shofer/types"
 import { skillsLog } from "@shofer/core"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 // Re-export for convenience
 export type { SkillMetadata, SkillContent }

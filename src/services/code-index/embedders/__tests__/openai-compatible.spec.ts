@@ -17,25 +17,6 @@ vitest.mock("@shofer/core", async (importOriginal) => ({
 		info: vitest.fn(),
 		warn: vitest.fn(),
 	},
-}))
-
-// Mock the OpenAI SDK
-vitest.mock("openai")
-
-// Mock global fetch
-global.fetch = vitest.fn()
-
-// Mock TelemetryService
-vitest.mock("@shofer/telemetry", () => ({
-	TelemetryService: {
-		instance: {
-			captureEvent: vitest.fn(),
-		},
-	},
-}))
-
-// Mock i18n
-vitest.mock("../../../../i18n", () => ({
 	t: (key: string, params?: Record<string, any>) => {
 		const translations: Record<string, string> = {
 			"embeddings:authenticationFailed":
@@ -51,17 +32,29 @@ vitest.mock("../../../../i18n", () => ({
 		}
 		return translations[key] || key
 	},
-}))
-
-// Mock i18n/setup module used by the error handler
-vitest.mock("../../../../i18n/setup", () => ({
-	default: {
+	// The error handler calls `i18n.t(...)` on the default i18next instance.
+	i18n: {
 		t: (key: string) => {
 			const translations: Record<string, string> = {
 				"common:errors.api.invalidKeyInvalidChars":
 					"API key contains invalid characters. Please check your API key for special characters.",
 			}
 			return translations[key] || key
+		},
+	},
+}))
+
+// Mock the OpenAI SDK
+vitest.mock("openai")
+
+// Mock global fetch
+global.fetch = vitest.fn()
+
+// Mock TelemetryService
+vitest.mock("@shofer/telemetry", () => ({
+	TelemetryService: {
+		instance: {
+			captureEvent: vitest.fn(),
 		},
 	},
 }))

@@ -38,13 +38,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getWorkspacePath: vi.fn(() => "/test/workspace"),
 	// RepoPerTaskCheckpointService moved into @shofer/core; mock its factory here.
 	RepoPerTaskCheckpointService: { create: vi.fn() },
-}))
-
-vi.mock("../../../utils/git", () => ({
-	checkGitInstalled: vi.fn().mockResolvedValue(true),
-}))
-
-vi.mock("../../../i18n", () => ({
 	t: vi.fn((key: string, options?: Record<string, any>) => {
 		if (key === "common:errors.wait_checkpoint_long_time") {
 			return `Checkpoint initialization is taking longer than ${options?.timeout} seconds...`
@@ -54,6 +47,10 @@ vi.mock("../../../i18n", () => ({
 		}
 		return key
 	}),
+}))
+
+vi.mock("../../../utils/git", () => ({
+	checkGitInstalled: vi.fn().mockResolvedValue(true),
 }))
 
 // Mock p-wait-for to control timeout behavior
@@ -456,7 +453,7 @@ describe("Checkpoint functionality", () => {
 	describe("getCheckpointService - initialization timeout behavior", () => {
 		it("should send warning message when initialization is slow", async () => {
 			// This test verifies the warning logic by directly testing the condition function behavior
-			const i18nModule = await import("../../../i18n")
+			const i18nModule = await import("@shofer/core")
 
 			// Setup: Create a scenario where initialization is in progress
 			mockTask.checkpointService = undefined
@@ -500,7 +497,7 @@ describe("Checkpoint functionality", () => {
 		})
 
 		it("should send timeout error message when initialization fails", async () => {
-			const i18nModule = await import("../../../i18n")
+			const i18nModule = await import("@shofer/core")
 
 			// Setup
 			mockTask.checkpointService = undefined
@@ -578,7 +575,7 @@ describe("Checkpoint functionality", () => {
 		})
 
 		it("should use correct i18n keys for warning messages", async () => {
-			const i18nModule = await import("../../../i18n")
+			const i18nModule = await import("@shofer/core")
 			vi.clearAllMocks()
 
 			// Test warning message i18n key

@@ -10,7 +10,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 
 import { RemoteConfigLoader } from "./RemoteConfigLoader"

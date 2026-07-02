@@ -84,7 +84,7 @@ const mockShoferProvider = {
 	cwd: "/mock/workspace",
 } as unknown as ShoferProvider
 
-import { t } from "../../../i18n"
+import { t } from "@shofer/core"
 
 vi.mock("vscode", async (importOriginal) => {
 	const actual: any = await importOriginal()
@@ -108,24 +108,6 @@ vi.mock("vscode", async (importOriginal) => {
 		},
 	}
 })
-
-vi.mock("../../../i18n", () => ({
-	t: vi.fn((key: string, args?: Record<string, any>) => {
-		// For the delete confirmation with rules, we need to return the interpolated string
-		if (key === "common:confirmation.delete_custom_mode_with_rules" && args) {
-			return `Are you sure you want to delete this ${args.scope} mode?\n\nThis will also delete the associated rules folder at:\n${args.rulesFolderPath}`
-		}
-		// Return the translated value for "Yes"
-		if (key === "common:answers.yes") {
-			return "Yes"
-		}
-		// Return the translated value for "Cancel"
-		if (key === "common:answers.cancel") {
-			return "Cancel"
-		}
-		return key
-	}),
-}))
 
 vi.mock("fs/promises", () => {
 	const mockRm = vi.fn().mockResolvedValue(undefined)
@@ -166,6 +148,21 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	t: vi.fn((key: string, args?: Record<string, any>) => {
+		// For the delete confirmation with rules, we need to return the interpolated string
+		if (key === "common:confirmation.delete_custom_mode_with_rules" && args) {
+			return `Are you sure you want to delete this ${args.scope} mode?\n\nThis will also delete the associated rules folder at:\n${args.rulesFolderPath}`
+		}
+		// Return the translated value for "Yes"
+		if (key === "common:answers.yes") {
+			return "Yes"
+		}
+		// Return the translated value for "Cancel"
+		if (key === "common:answers.cancel") {
+			return "Cancel"
+		}
+		return key
+	}),
 }))
 vi.mock("../../../utils/globalContext")
 

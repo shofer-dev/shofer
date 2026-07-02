@@ -53,19 +53,15 @@ vi.mock("@shofer/core", async (importOriginal) => {
 			}
 			return cwd
 		}),
+		t: vi.fn((key: string, params?: any) => {
+			// Return the key without namespace prefix to match actual behavior
+			if (key.startsWith("common:")) {
+				return key.replace("common:", "")
+			}
+			return key
+		}),
 	}
 })
-
-// Mock i18n
-vi.mock("../../i18n", () => ({
-	t: vi.fn((key: string, params?: any) => {
-		// Return the key without namespace prefix to match actual behavior
-		if (key.startsWith("common:")) {
-			return key.replace("common:", "")
-		}
-		return key
-	}),
-}))
 
 describe("openFile", () => {
 	beforeEach(() => {

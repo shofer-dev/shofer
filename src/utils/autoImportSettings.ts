@@ -5,7 +5,7 @@ import * as os from "os"
 
 import { Package } from "../shared/package"
 import { fileExistsAtPath } from "./fs"
-import { t } from "../i18n"
+import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
 import { importSettingsFromPath, ImportOptions } from "../core/config/importExport"

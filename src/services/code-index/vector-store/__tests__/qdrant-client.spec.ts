@@ -21,6 +21,16 @@ vitest.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vitest.fn(),
 	getWorkspacePath: vitest.fn(),
 	getWorkspacePathForContext: vitest.fn(),
+	t: (key: string, params?: any) => {
+		// Mock translation function that includes parameters for testing
+		if (key === "embeddings:vectorStore.vectorDimensionMismatch" && params?.errorMessage) {
+			return `Failed to update vector index for new model. Please try clearing the index and starting again. Details: ${params.errorMessage}`
+		}
+		if (key === "embeddings:vectorStore.qdrantConnectionFailed" && params?.qdrantUrl && params?.errorMessage) {
+			return `Failed to connect to Qdrant vector database. Please ensure Qdrant is running and accessible at ${params.qdrantUrl}. Error: ${params.errorMessage}`
+		}
+		return key // Just return the key for other cases
+	},
 }))
 
 /**
@@ -37,18 +47,6 @@ function make404Error(): Error {
 // Mocks
 vitest.mock("@qdrant/js-client-rest")
 vitest.mock("crypto")
-vitest.mock("../../../../i18n", () => ({
-	t: (key: string, params?: any) => {
-		// Mock translation function that includes parameters for testing
-		if (key === "embeddings:vectorStore.vectorDimensionMismatch" && params?.errorMessage) {
-			return `Failed to update vector index for new model. Please try clearing the index and starting again. Details: ${params.errorMessage}`
-		}
-		if (key === "embeddings:vectorStore.qdrantConnectionFailed" && params?.qdrantUrl && params?.errorMessage) {
-			return `Failed to connect to Qdrant vector database. Please ensure Qdrant is running and accessible at ${params.qdrantUrl}. Error: ${params.errorMessage}`
-		}
-		return key // Just return the key for other cases
-	},
-}))
 vitest.mock("path", async () => {
 	const actual = await vitest.importActual("path")
 	return {

@@ -25,7 +25,7 @@ import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from ".
 import { isMcpTool } from "../../utils/mcp-name"
 import { sanitizeOpenAiCallId } from "@shofer/core"
 import { openAiCodexOAuthManager } from "../../integrations/openai-codex/oauth"
-import { t } from "../../i18n"
+import { t } from "@shofer/core"
 
 export type OpenAiCodexModel = ReturnType<OpenAiCodexHandler["getModel"]>
 
