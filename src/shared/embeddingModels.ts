@@ -13,6 +13,9 @@ export const EMBEDDING_MODEL_PROFILES: EmbeddingModelProfiles = {
 		"text-embedding-ada-002": { dimension: 1536, scoreThreshold: 0.4 },
 	},
 	ollama: {
+		// Code-capable default: best MTEB-Code score among small local models,
+		// 768-dim, needs no query/document prefix. Kept first so getDefaultModelId() picks it.
+		embeddinggemma: { dimension: 768, scoreThreshold: 0.4 },
 		"nomic-embed-text": { dimension: 768, scoreThreshold: 0.4 },
 		"nomic-embed-code": {
 			dimension: 3584,

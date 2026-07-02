@@ -40,7 +40,7 @@ import {
 
 const DEFAULT_QDRANT_URL = "http://localhost:6333"
 const DEFAULT_OLLAMA_URL = "http://localhost:11434"
-const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
+const DEFAULT_OLLAMA_EMBEDDING_MODEL = "embeddinggemma"
 const SECRET_PLACEHOLDER = "••••••••••••••••"
 
 interface LocalCodeIndexSettings {
