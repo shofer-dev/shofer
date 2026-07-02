@@ -119,7 +119,7 @@ export function copyWasms(srcDir: string, distDir: string): void {
 	// Tiktoken WASM. BOTH copies are required, not just the worker one:
 	//   - dist/workers/ — loaded by the countTokens worker bundle.
 	//   - dist/ (root)  — the MAIN extension bundle imports `tiktoken/lite`
-	//     directly (src/utils/tiktoken.ts) and loads the wasm relative to the
+	//     directly (@shofer/core utils/tiktoken.ts) and loads the wasm relative to the
 	//     bundle dir. This import initializes at activation, so a missing root
 	//     copy throws "Missing tiktoken_bg.wasm" and the extension fails to
 	//     activate. (Regressed in "reduce VSIX" when the root copy was dropped

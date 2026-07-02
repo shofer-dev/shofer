@@ -40,6 +40,8 @@ import { createDualLogger, createOutputChannelLogger } from "@shofer/core"
 import { setOutputChannel } from "@shofer/core"
 import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
+import { setTokenCounter } from "@shofer/core"
+import { countTokens as countTokensWithWorker } from "./utils/countTokens"
 import { initializeNetworkProxy } from "./utils/networkProxy"
 
 import { Package } from "@shofer/core"
@@ -108,6 +110,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Bootstrap the shared logging transport — must happen before any module
 	// uses `getLogger()` so the Output Channel is wired.
 	bootstrapLogging(outputChannel)
+
+	// Offload token counting to the extension's worker pool. Host-agnostic core
+	// (e.g. BaseProvider) calls `countTokens` from @shofer/core, which defaults to
+	// the portable synchronous tiktoken implementation; here we register the
+	// worker-backed counter so the extension host keeps its off-thread offload.
+	setTokenCounter((content) => countTokensWithWorker(content, { useWorker: true }))
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)

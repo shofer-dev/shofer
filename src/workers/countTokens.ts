@@ -2,9 +2,7 @@ import workerpool from "workerpool"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 
-import { tiktoken } from "../utils/tiktoken"
-
-import { type CountTokensResult } from "./types"
+import { tiktoken, type CountTokensResult } from "@shofer/core"
 
 async function countTokens(content: Anthropic.Messages.ContentBlockParam[]): Promise<CountTokensResult> {
 	try {

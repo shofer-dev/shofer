@@ -2,7 +2,7 @@ import { writeFile } from "fs/promises"
 
 import workerpool from "workerpool"
 
-import { type StringifyAndWriteResult } from "./types"
+import { type StringifyAndWriteResult } from "@shofer/core"
 
 /**
  * Pretty-print `value` to JSON and write it to `filePath` — entirely off the

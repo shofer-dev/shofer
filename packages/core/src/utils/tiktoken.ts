@@ -1,6 +1,6 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import { Tiktoken } from "tiktoken/lite"
-import o200kBase from "tiktoken/encoders/o200k_base"
+import o200kBase from "tiktoken/encoders/o200k_base.json" with { type: "json" }
 
 const TOKEN_FUDGE_FACTOR = 1.5
 

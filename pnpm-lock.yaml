@@ -457,6 +457,9 @@ importers:
       simple-git:
         specifier: ^3.27.0
         version: 3.27.0
+      tiktoken:
+        specifier: ^1.0.21
+        version: 1.0.21
       uuid:
         specifier: ^11.1.0
         version: 11.1.0

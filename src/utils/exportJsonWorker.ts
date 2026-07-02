@@ -2,8 +2,7 @@ import { writeFile } from "fs/promises"
 
 import workerpool from "workerpool"
 
-import { stringifyAndWriteResultSchema } from "../workers/types"
-import { utilLog } from "@shofer/core"
+import { stringifyAndWriteResultSchema, utilLog } from "@shofer/core"
 
 let pool: workerpool.Pool | null | undefined = undefined
 
