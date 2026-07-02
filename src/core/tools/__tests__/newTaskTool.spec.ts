@@ -22,13 +22,10 @@ vi.mock("../../../shared/package", () => ({
 }))
 
 // Mock other modules first - these are hoisted to the top
-vi.mock("../../../shared/modes", () => ({
-	getModeBySlug: vi.fn(),
-	defaultModeSlug: "code",
-}))
-
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getModeBySlug: vi.fn(),
+	defaultModeSlug: "code",
 	formatResponse: {
 		toolError: vi.fn((msg: string) => `Tool Error: ${msg}`),
 	},
@@ -123,7 +120,7 @@ const mockShofer = {
 
 // Import the class to test AFTER mocks are set up
 import { newTaskTool } from "../NewTaskTool"
-import { getModeBySlug } from "../../../shared/modes"
+import { getModeBySlug } from "@shofer/core"
 import * as vscode from "vscode"
 import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 

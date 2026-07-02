@@ -7,7 +7,7 @@ vi.mock("../../prompts/sections/custom-instructions", () => ({
 }))
 
 import { getFullModeDetails } from "../getFullModeDetails"
-import { modes } from "../../../shared/modes"
+import { modes } from "@shofer/core"
 import { addCustomInstructions } from "../../prompts/sections/custom-instructions"
 
 describe("getFullModeDetails", () => {

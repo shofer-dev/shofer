@@ -1,6 +1,6 @@
 import { getHost } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
-import { defaultModeSlug } from "../../shared/modes"
+import { defaultModeSlug } from "@shofer/core"
 import { buildApiHandler } from "../../api"
 
 import { SYSTEM_PROMPT } from "../prompts/system"

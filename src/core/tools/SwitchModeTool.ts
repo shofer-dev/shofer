@@ -2,7 +2,7 @@ import delay from "delay"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { getModeBySlug } from "../../shared/modes"
+import { getModeBySlug } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import type { ToolUse } from "@shofer/core"

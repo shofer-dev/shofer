@@ -120,7 +120,8 @@ vi.mock("@shofer/cloud", () => ({
 	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
 }))
 
-vi.mock("../../../shared/modes", () => {
+vi.mock("@shofer/core", async (importOriginal) => {
+	const original = await importOriginal<typeof import("@shofer/core")>()
 	const mockModes = [
 		{
 			slug: "code",
@@ -155,6 +156,7 @@ vi.mock("../../../shared/modes", () => {
 	]
 
 	return {
+		...original,
 		modes: mockModes,
 		getAllModes: vi.fn((customModes?: Array<{ slug: string }>) => {
 			if (!customModes?.length) {

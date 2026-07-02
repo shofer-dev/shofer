@@ -132,7 +132,8 @@ vi.mock("@shofer/cloud", () => ({
 	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
 }))
 
-vi.mock("../../../shared/modes", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	modes: [
 		{
 			slug: "code",

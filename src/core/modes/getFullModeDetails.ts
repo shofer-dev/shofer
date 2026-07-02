@@ -1,7 +1,7 @@
 import type { ModeConfig, CustomModePrompts } from "@shofer/types"
 
 import { addCustomInstructions } from "../prompts/sections/custom-instructions"
-import { getModeBySlug, modes } from "../../shared/modes"
+import { getModeBySlug, modes } from "@shofer/core"
 
 /**
  * Resolve a mode's full prompt-time details (role definition, when-to-use,

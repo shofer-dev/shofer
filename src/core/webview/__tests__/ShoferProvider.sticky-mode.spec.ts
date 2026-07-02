@@ -127,7 +127,8 @@ vi.mock("@shofer/cloud", () => ({
 	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
 }))
 
-vi.mock("../../../shared/modes", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	modes: [
 		{
 			slug: "code",
@@ -779,7 +780,7 @@ describe("ShoferProvider - Sticky Mode", () => {
 			}
 
 			// Mock getModeBySlug to return undefined for deleted mode
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue(undefined)
 
 			// Mock getTaskWithId

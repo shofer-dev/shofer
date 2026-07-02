@@ -718,7 +718,7 @@ export class CustomModesManager {
 	public async exportModeWithRules(slug: string, customPrompts?: PromptComponent): Promise<ExportResult> {
 		try {
 			// Import modes from shared to check built-in modes
-			const { modes: builtInModes } = await import("../../shared/modes")
+			const { modes: builtInModes } = await import("@shofer/core")
 
 			// Get all current modes
 			const allModes = await this.getCustomModes()

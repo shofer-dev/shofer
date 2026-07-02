@@ -16,7 +16,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { Mode, modes } from "../../shared/modes"
+import { Mode, modes } from "@shofer/core"
 import { buildApiHandler } from "../../api"
 import { configLog } from "@shofer/core"
 

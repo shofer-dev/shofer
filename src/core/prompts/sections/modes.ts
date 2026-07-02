@@ -2,7 +2,7 @@ import type * as vscode from "vscode"
 
 import type { CustomModePrompts, ModeConfig } from "@shofer/types"
 
-import { getAllModes } from "../../../shared/modes"
+import { getAllModes } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../../utils/globalContext"
 
 // Host-only helper: merges built-in + custom modes with their per-mode prompt

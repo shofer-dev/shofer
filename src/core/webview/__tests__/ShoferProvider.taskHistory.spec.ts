@@ -225,7 +225,8 @@ vi.mock("../../../api/providers/fetchers/modelCache", () => ({
 	getModelsFromCache: vi.fn().mockReturnValue(undefined),
 }))
 
-vi.mock("../../../shared/modes", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	modes: [{ slug: "code", name: "Code Mode", roleDefinition: "You are a code assistant", tools: ["read", "write"] }],
 	getModeBySlug: vi.fn().mockReturnValue({
 		slug: "code",

@@ -10,7 +10,7 @@ import { customToolRegistry } from "@shofer/core"
 
 import { t } from "../../i18n"
 
-import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
+import { defaultModeSlug, getModeBySlug } from "@shofer/core"
 import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "@shofer/core"
 
 import { AskIgnoredError } from "@shofer/core"

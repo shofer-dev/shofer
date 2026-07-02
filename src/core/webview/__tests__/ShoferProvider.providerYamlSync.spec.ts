@@ -123,9 +123,11 @@ vi.mock("@shofer/cloud", () => ({
 
 // Built-in mode `code` plus a custom mode `reviewer` are returned via getModeBySlug.
 // Each test replaces this default with a more specific mock.
-vi.mock("../../../shared/modes", () => {
+vi.mock("@shofer/core", async (importOriginal) => {
+	const original = await importOriginal<typeof import("@shofer/core")>()
 	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", tools: ["read", "write"] }]
 	return {
+		...original,
 		modes: builtins,
 		getAllModes: vi.fn(() => [...builtins]),
 		getModeBySlug: vi.fn(),
@@ -284,7 +286,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 
 	describe("handleModeSwitch precedence", () => {
 		it("YAML provider:` field overrides saved per-mode mapping", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",
 				name: "Reviewer",
@@ -327,7 +329,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 		})
 
 		it("falls back to saved mapping when YAML has no provider field", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",
 				name: "Reviewer",
@@ -359,7 +361,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 			).syncCustomModeProviderToYaml(mode, name)
 
 		it("is a no-op for built-in modes (no source)", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "code",
 				name: "Code",
@@ -375,7 +377,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 		})
 
 		it("short-circuits when YAML provider already matches", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",
 				name: "Reviewer",
@@ -395,7 +397,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 		})
 
 		it("writes to project (.shofer/shofermodes) when a workspace is open", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",
 				name: "Reviewer",
@@ -419,7 +421,7 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 		})
 
 		it("writes to global when no workspace is open", async () => {
-			const { getModeBySlug } = await import("../../../shared/modes")
+			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({
 				slug: "reviewer",
 				name: "Reviewer",

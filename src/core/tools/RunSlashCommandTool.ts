@@ -5,7 +5,7 @@ import { EXPERIMENT_IDS, experiments } from "../../shared/experiments"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
 import type { ShoferProvider } from "../webview/ShoferProvider"
-import { getModeBySlug } from "../../shared/modes"
+import { getModeBySlug } from "@shofer/core"
 import {
 	buildSkillApprovalMessage,
 	buildSkillResult,

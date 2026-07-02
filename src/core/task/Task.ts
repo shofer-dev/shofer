@@ -76,7 +76,7 @@ import { combineCommandSequences } from "@shofer/core"
 import { t } from "../../i18n"
 import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "@shofer/core"
 import { ShoferAskResponse } from "@shofer/core"
-import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
+import { defaultModeSlug, getModeBySlug } from "@shofer/core"
 import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "@shofer/core"
 import { getModelMaxOutputTokens } from "@shofer/core"
 

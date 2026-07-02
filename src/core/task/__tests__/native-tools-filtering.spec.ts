@@ -23,7 +23,7 @@ describe("Native Tools Filtering by Mode", () => {
 			// Import the functions we need to test
 			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
 			const { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/core")
-			const { getGroupName } = await import("../../../shared/modes")
+			const { getGroupName } = await import("@shofer/core")
 
 			// Test architect mode - should NOT have edit tools
 			const architectAllowedTools = new Set<string>()

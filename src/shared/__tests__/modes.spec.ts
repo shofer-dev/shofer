@@ -5,7 +5,7 @@ import type { ModeConfig, PromptComponent } from "@shofer/types"
 // Mock setup must come before imports
 vi.mock("vscode")
 
-import { FileRestrictionError, modes, getModeSelection } from "../modes"
+import { FileRestrictionError, modes, getModeSelection } from "@shofer/core"
 import { isToolAllowedForMode } from "../../core/tools/validateToolUse"
 
 describe("isToolAllowedForMode", () => {

@@ -7,7 +7,7 @@ import {
 	DEFAULT_MODES,
 } from "@shofer/types"
 
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "@shofer/core"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tools.js"
 
 export type Mode = string
 
@@ -90,7 +90,7 @@ export function getToolsForMode(
 export const modes = DEFAULT_MODES
 
 // Export the default mode slug
-export const defaultModeSlug = modes[0].slug
+export const defaultModeSlug = modes[0]!.slug
 
 // Helper functions
 export function getModeBySlug(slug: string, customModes?: ModeConfig[]): ModeConfig | undefined {
@@ -167,7 +167,7 @@ export function getModeSelection(mode: string, promptComponent?: PromptComponent
 	}
 
 	// Otherwise, use built-in mode as base and merge with promptComponent
-	const baseMode = builtInMode || modes[0] // fallback to default mode
+	const baseMode = builtInMode || modes[0]! // fallback to default mode
 
 	return {
 		roleDefinition: promptComponent?.roleDefinition || baseMode.roleDefinition || "",

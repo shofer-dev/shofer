@@ -1,6 +1,6 @@
 import type { PromptComponent } from "@shofer/types"
 
-import { getModeSelection, modes } from "../modes"
+import { getModeSelection, modes } from "../modes.js"
 
 describe("getModeSelection with empty promptComponent", () => {
 	it("should use built-in mode instructions when promptComponent is undefined", () => {
@@ -82,7 +82,7 @@ describe("getModeSelection with empty promptComponent", () => {
 	})
 
 	it("should fall back to default mode when built-in mode is not found", () => {
-		const defaultMode = modes[0] // First mode is the default
+		const defaultMode = modes[0]! // First mode is the default
 
 		// Test with non-existent mode
 		const partialPromptComponent: PromptComponent = {

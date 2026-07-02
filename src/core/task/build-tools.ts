@@ -15,7 +15,7 @@ import {
 	filterMcpToolsForMode,
 	resolveToolAlias,
 } from "../prompts/tools/filter-tools-for-mode"
-import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode } from "../../shared/modes"
+import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode } from "@shofer/core"
 
 interface BuildToolsOptions {
 	provider: ShoferProvider
