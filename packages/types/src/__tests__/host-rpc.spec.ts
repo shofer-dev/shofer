@@ -25,6 +25,8 @@ function setup() {
 			executeCommand: async <T>(command: string): Promise<T> => `ran:${command}` as unknown as T,
 			workspaceRoots: () => [],
 			activeEditorFile: () => undefined,
+			visibleFiles: () => [],
+			openTabs: () => [],
 			workspaceFolderFor: () => undefined,
 			onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
 		},

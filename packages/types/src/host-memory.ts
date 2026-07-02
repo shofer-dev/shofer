@@ -110,6 +110,8 @@ export const noopWorkspace: HostWorkspace = {
 	},
 	workspaceRoots: () => [],
 	activeEditorFile: () => undefined,
+	visibleFiles: () => [],
+	openTabs: () => [],
 	workspaceFolderFor: () => undefined,
 	onDidChangeWorkspaceFolders: () => noopDisposable,
 }

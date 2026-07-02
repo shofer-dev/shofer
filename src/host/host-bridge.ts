@@ -275,6 +275,18 @@ class VsCodeWorkspace implements HostWorkspace {
 	activeEditorFile(): string | undefined {
 		return vscode.window.activeTextEditor?.document.uri.fsPath
 	}
+	visibleFiles(): string[] {
+		return (vscode.window.visibleTextEditors ?? [])
+			.map((editor) => editor.document?.uri?.fsPath)
+			.filter((p): p is string => Boolean(p))
+	}
+	openTabs(): string[] {
+		return vscode.window.tabGroups.all
+			.flatMap((group) => group.tabs)
+			.filter((tab) => tab.input instanceof vscode.TabInputText)
+			.map((tab) => (tab.input as vscode.TabInputText).uri.fsPath)
+			.filter((p): p is string => Boolean(p))
+	}
 	workspaceFolderFor(filePath: string): string | undefined {
 		return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath))?.uri.fsPath
 	}
