@@ -10,7 +10,7 @@
  * convention used by all upstream providers' published pricing.
  */
 
-import type { ApiHandler } from "@shofer/core"
+import type { ApiHandler } from "../../api/api-handler-types.js"
 
 /** USD per 1M tokens. Conservative defaults used when no model info is available. */
 const FALLBACK_INPUT_USD_PER_MTOK = 0.5

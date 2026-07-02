@@ -1,7 +1,7 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
-import type { ShoferIgnoreController } from "@shofer/core"
+import type { ShoferIgnoreController } from "../../ignore/ShoferIgnoreController.js"
 
 /**
  * LiveMemoryDirectoryTree — generates a workspace `find .`-style tree
@@ -127,7 +127,7 @@ export class LiveMemoryDirectoryTree {
 		let result = ""
 
 		for (let i = 0; i < entries.length; i++) {
-			const entry = entries[i]
+			const entry = entries[i]!
 			const isLast = i === entries.length - 1
 			const prefix = isLast ? "└── " : "├── "
 			const nextIndent = isLast ? "    " : "│   "

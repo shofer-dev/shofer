@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 
-import { QuestionQueue } from "../question-queue"
+import { QuestionQueue } from "../question-queue.js"
 import type { QuestionResult } from "@shofer/types"
 
 const fakeResult = (answer: string): QuestionResult => ({

@@ -68,7 +68,8 @@ vi.mock("../../../../core/ignore/ShoferIgnoreController", () => ({
 vi.mock("ignore")
 
 // Override the Jest-based mock with a vitest-compatible version
-vi.mock("../../../glob/list-files", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	listFiles: vi.fn(),
 }))
 
@@ -155,13 +156,13 @@ describe("DirectoryScanner", () => {
 		vi.mocked(stat).mockResolvedValue(mockStats)
 
 		// Get and mock the listFiles function
-		const { listFiles } = await import("../../../glob/list-files")
+		const { listFiles } = await import("@shofer/core")
 		vi.mocked(listFiles).mockResolvedValue([["test/file1.js", "test/file2.js"], false])
 	})
 
 	describe("scanDirectory", () => {
 		it("should skip files larger than MAX_FILE_SIZE_BYTES", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
 
 			// Create large file mock stats
@@ -186,7 +187,7 @@ describe("DirectoryScanner", () => {
 				mockIgnoreInstance,
 			)
 
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
 			const mockBlocks: any[] = [
 				{
@@ -235,7 +236,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should filter out files in hidden directories", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			// Mock listFiles to return files including some in hidden directories
 			vi.mocked(listFiles).mockResolvedValue([
 				[
@@ -277,7 +278,7 @@ describe("DirectoryScanner", () => {
 				mockIgnoreInstance,
 			)
 
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/README.md", "test/app.js", "docs/guide.markdown"], false])
 
 			const mockMarkdownBlocks: any[] = [
@@ -344,7 +345,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should generate unique point IDs for each block from the same file", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/large-doc.md"], false])
 
 			// Mock multiple blocks from the same file with different segmentHash values
@@ -404,7 +405,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should stop processing files when signal is aborted", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js", "test/file2.js", "test/file3.js"], false])
 
 			// Create an already-aborted signal
@@ -419,7 +420,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should stop processing batches when signal is aborted mid-scan", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js", "test/file2.js"], false])
 
 			const controller = new AbortController()
@@ -450,7 +451,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should not process deleted files when signal is aborted", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([[], false])
 
 			// Set up cached files that would normally be detected as deleted
@@ -469,7 +470,7 @@ describe("DirectoryScanner", () => {
 		// ── Phase 1: mtime+size fast-path tests ──
 
 		it("should skip file with matching mtime+size without calling readFile", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
 
 			// Return a stat with specific mtimeMs/size
@@ -500,7 +501,7 @@ describe("DirectoryScanner", () => {
 		})
 
 		it("should re-hash when mtime changed but content matches, update cache entry, and not re-embed", async () => {
-			const { listFiles } = await import("../../../glob/list-files")
+			const { listFiles } = await import("@shofer/core")
 			vi.mocked(listFiles).mockResolvedValue([["test/file1.js"], false])
 
 			// mtimeMs changed (from 999999 to 1000000) but size unchanged

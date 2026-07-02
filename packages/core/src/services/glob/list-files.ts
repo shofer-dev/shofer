@@ -4,10 +4,10 @@ import * as fs from "fs"
 import * as childProcess from "child_process"
 import { getHost } from "@shofer/types"
 import ignore from "ignore"
-import { arePathsEqual } from "@shofer/core"
-import { getBinPath } from "@shofer/core"
-import { DIRS_TO_IGNORE } from "./constants"
-import { utilLog } from "@shofer/core"
+import { arePathsEqual } from "../../path/path.js"
+import { getBinPath } from "../../ripgrep/index.js"
+import { DIRS_TO_IGNORE } from "./constants.js"
+import { utilLog } from "../../logging/subsystems.js"
 
 /**
  * Context object for directory scanning operations
@@ -135,20 +135,20 @@ function ensureFirstLevelDirectoriesIncluded(
 	// Add the missing directories at the beginning (after any existing first-level dirs)
 	// First, separate existing results into first-level and others
 	const resultPaths = adjustedResults.map((r) => path.resolve(r))
-	const basePath = path.resolve(firstLevelDirs[0]).split(path.sep).slice(0, -1).join(path.sep)
+	const basePath = path.resolve(firstLevelDirs[0]!).split(path.sep).slice(0, -1).join(path.sep)
 
 	const firstLevelResults: string[] = []
 	const otherResults: string[] = []
 
 	for (let i = 0; i < adjustedResults.length; i++) {
-		const resolvedPath = resultPaths[i]
+		const resolvedPath = resultPaths[i]!
 		const relativePath = path.relative(basePath, resolvedPath)
 		const depth = relativePath.split(path.sep).length
 
 		if (depth === 1) {
-			firstLevelResults.push(adjustedResults[i])
+			firstLevelResults.push(adjustedResults[i]!)
 		} else {
-			otherResults.push(adjustedResults[i])
+			otherResults.push(adjustedResults[i]!)
 		}
 	}
 
@@ -653,12 +653,9 @@ function formatAndCombineResults(files: string[], directories: string[], limit: 
  */
 async function execRipgrep(rgPath: string, args: string[], limit: number): Promise<string[]> {
 	return new Promise((resolve, reject) => {
-		// Extract the directory path from args (it's the last argument)
-		const searchDir = args[args.length - 1]
-
 		const rgProcess = childProcess.spawn(rgPath, args)
 		let output = ""
-		let results: string[] = []
+		const results: string[] = []
 
 		// Set timeout to avoid hanging
 		const timeoutId = setTimeout(() => {

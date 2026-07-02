@@ -4,7 +4,7 @@ import { type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { listFiles } from "../../services/glob/list-files"
+import { listFiles } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"

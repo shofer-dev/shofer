@@ -3,7 +3,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
 
-import { ConversationStore, emptyConversation } from "../conversation-store"
+import { ConversationStore, emptyConversation } from "../conversation-store.js"
 import type { AgentMessage, FileContextEntry } from "@shofer/types"
 
 let tmpDir: string

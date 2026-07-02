@@ -24,7 +24,7 @@ import { Buffer } from "buffer"
 
 import { extractTextFromFile, addLineNumbers } from "../../integrations/misc/extract-text"
 import { regexGrepSearch } from "@shofer/core"
-import { listFiles as globListFiles } from "../glob/list-files"
+import { listFiles as globListFiles } from "@shofer/core"
 import { CodeIndexManager } from "../code-index/manager"
 import { GitIndexManager } from "../git-index/git-index-manager"
 import { liveMemoryLog as logger } from "@shofer/core"

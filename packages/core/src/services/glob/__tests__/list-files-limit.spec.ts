@@ -1,9 +1,10 @@
 import * as path from "path"
 import * as fs from "fs"
-import { listFiles } from "../list-files"
+import { listFiles } from "../list-files.js"
 
 // Mock ripgrep
-vi.mock("../../ripgrep", () => ({
+vi.mock("../../../ripgrep/index.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getBinPath: vi.fn().mockResolvedValue("/mock/path/to/rg"),
 }))
 
@@ -19,8 +20,8 @@ vi.mock("child_process", () => ({
 	spawn: vi.fn(),
 }))
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../../path/path.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	arePathsEqual: vi.fn().mockReturnValue(false),
 }))
 

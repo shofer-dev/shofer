@@ -2,8 +2,7 @@ import type { Mock } from "vitest"
 import * as vscode from "vscode"
 import WorkspaceTracker from "../WorkspaceTracker"
 import { ShoferProvider } from "../../../core/webview/ShoferProvider"
-import { listFiles } from "../../../services/glob/list-files"
-import { getWorkspacePath } from "@shofer/core"
+import { listFiles, getWorkspacePath } from "@shofer/core"
 
 // Mock functions - must be defined before vitest.mock calls
 const mockOnDidCreate = vitest.fn()
@@ -16,6 +15,7 @@ let registeredTabChangeCallback: (() => Promise<void>) | null = null
 // Mock workspace path
 vitest.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	listFiles: vitest.fn(),
 	getWorkspacePath: vitest.fn().mockReturnValue("/test/workspace"),
 	toRelativePath: vitest.fn((path, cwd) => {
 		// Handle both Windows and POSIX paths by using path.relative
@@ -60,10 +60,6 @@ vitest.mock("vscode", () => ({
 		},
 	},
 	FileType: { File: 1, Directory: 2 },
-}))
-
-vitest.mock("../../../services/glob/list-files", () => ({
-	listFiles: vitest.fn(),
 }))
 
 describe("WorkspaceTracker", () => {

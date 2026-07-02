@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { ContextWindow, estimateTokens } from "../context-window"
+import { ContextWindow, estimateTokens } from "../context-window.js"
 import type { AgentMessage, FileContextEntry } from "@shofer/types"
 
 const MS = 1
@@ -63,9 +63,9 @@ describe("ContextWindow", () => {
 				lastReferencedAt: 200,
 			})
 			expect(cw.fileContexts.length).toBe(1)
-			expect(cw.fileContexts[0].contentHash).toBe("newhash")
-			expect(cw.fileContexts[0].lastReferencedAt).toBe(200)
-			expect(cw.fileContexts[0].tokenEstimate).toBe(12)
+			expect(cw.fileContexts[0]!.contentHash).toBe("newhash")
+			expect(cw.fileContexts[0]!.lastReferencedAt).toBe(200)
+			expect(cw.fileContexts[0]!.tokenEstimate).toBe(12)
 		})
 	})
 
@@ -74,7 +74,7 @@ describe("ContextWindow", () => {
 			const cw = new ContextWindow()
 			cw.upsertFileContext(makeFile("a.ts", 10))
 			cw.invalidateFileContext("a.ts")
-			expect(cw.fileContexts[0].contentHash).toBe("")
+			expect(cw.fileContexts[0]!.contentHash).toBe("")
 		})
 	})
 

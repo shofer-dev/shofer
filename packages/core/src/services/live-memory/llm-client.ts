@@ -29,9 +29,10 @@ import type OpenAI from "openai"
 
 import type { LiveMemoryConfig } from "@shofer/types"
 
-import { buildApiHandler, type ApiHandler } from "@shofer/core"
-import { estimateUsdCost } from "./pricing"
-import { liveMemoryLog as logger } from "@shofer/core"
+import { buildApiHandler } from "../../api/index.js"
+import type { ApiHandler } from "../../api/api-handler-types.js"
+import { estimateUsdCost } from "./pricing.js"
+import { liveMemoryLog as logger } from "../../logging/subsystems.js"
 
 const LOG_PREFIX = "[LiveMemory.LlmClient]"
 
@@ -193,6 +194,7 @@ export class LiveMemoryLlmClient {
 						if (onStream && chunk.text) onStream({ kind: "text", delta: chunk.text })
 						break
 					case "reasoning": {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const text: string = typeof c.text === "string" ? c.text : ""
 						if (text) {
@@ -206,6 +208,7 @@ export class LiveMemoryLlmClient {
 						completionTokens += chunk.outputTokens ?? 0
 						break
 					case "tool_call": {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId ?? `tc_${toolCallsById.size}`
 						toolCallsById.set(id, {
@@ -218,6 +221,7 @@ export class LiveMemoryLlmClient {
 						break
 					}
 					case "tool_call_start": {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId ?? `tc_${toolCallsById.size}`
 						toolCallsById.set(id, { id, name: c.name ?? c.toolName ?? "", arguments: "" })
@@ -225,6 +229,7 @@ export class LiveMemoryLlmClient {
 						break
 					}
 					case "tool_call_delta": {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId
 						if (id) {
@@ -239,6 +244,7 @@ export class LiveMemoryLlmClient {
 					case "tool_call_partial": {
 						// Some providers emit a single partial that grows; only the
 						// final cumulative payload is meaningful, so overwrite.
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId ?? `tc_${toolCallsById.size}`
 						toolCallsById.set(id, {
@@ -251,6 +257,7 @@ export class LiveMemoryLlmClient {
 						break
 					}
 					case "tool_call_end": {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const c = chunk as any
 						const id = c.id ?? c.toolCallId
 						if (id) emitToolCallIfReady(id)
@@ -258,6 +265,7 @@ export class LiveMemoryLlmClient {
 					}
 					case "error":
 						logger.error(
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
 							`${LOG_PREFIX} chat() received error chunk: ${JSON.stringify({ message: (chunk as any).message, error: (chunk as any).error })}`,
 						)
 						throw new Error(`Live Memory LLM error: ${chunk.message ?? chunk.error}`)
