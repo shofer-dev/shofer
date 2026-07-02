@@ -3,8 +3,8 @@
  * Transforms file contents using parsed hunks.
  */
 
-import type { Hunk, UpdateFileChunk } from "./parser"
-import { seekSequence } from "./seek-sequence"
+import type { Hunk, UpdateFileChunk } from "./parser.js"
+import { seekSequence } from "./seek-sequence.js"
 
 /**
  * Error during patch application.

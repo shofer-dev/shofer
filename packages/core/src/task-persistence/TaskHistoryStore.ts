@@ -4,10 +4,10 @@ import * as path from "path"
 
 import type { HistoryItem } from "@shofer/types"
 
-import { GlobalFileNames } from "@shofer/core"
-import { safeWriteJson } from "@shofer/core"
-import { getStorageBasePath } from "@shofer/core"
-import { taskLog } from "@shofer/core"
+import { GlobalFileNames } from "../shared/globalFileNames.js"
+import { safeWriteJson } from "../utils/safeWriteJson.js"
+import { getStorageBasePath } from "../utils/storage.js"
+import { taskLog } from "../logging/subsystems.js"
 
 /**
  * Index file format for fast startup reads.

@@ -1,4 +1,4 @@
-import { checkAutoApproval } from "../index"
+import { checkAutoApproval } from "../index.js"
 
 // Minimal enabled state — auto-approval master gate on, every category toggle off.
 // Individual tests turn on only the toggle under test.

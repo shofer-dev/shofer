@@ -1,4 +1,4 @@
-import { seekSequence } from "../seek-sequence"
+import { seekSequence } from "../seek-sequence.js"
 
 describe("seek-sequence", () => {
 	describe("seekSequence", () => {

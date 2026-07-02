@@ -34,7 +34,7 @@ import type { ShoferIgnoreController } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "./helpers/searchCap"
+import { GREP_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 interface GrepSearchParams {

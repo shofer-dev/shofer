@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import { CodeActionName, CodeActionId } from "@shofer/types"
 import { Package } from "@shofer/core"
 
-import { getCodeActionCommand } from "../utils/commands"
+import { getCodeActionCommand } from "@shofer/core"
 import { EditorUtils } from "../integrations/editor/EditorUtils"
 import { utilLog } from "@shofer/core"
 

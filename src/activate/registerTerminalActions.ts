@@ -3,7 +3,7 @@ import { getHost } from "@shofer/types"
 
 import { TerminalActionId, TerminalActionPromptType } from "@shofer/types"
 
-import { getTerminalCommand } from "../utils/commands"
+import { getTerminalCommand } from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { Terminal } from "../integrations/terminal/Terminal"
 import { t } from "@shofer/core"

@@ -9,7 +9,7 @@ import type { CommandId } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "@shofer/core"
-import { getCommand } from "../utils/commands"
+import { getCommand } from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"

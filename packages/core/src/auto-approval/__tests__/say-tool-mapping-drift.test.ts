@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, toolNames } from "@shofer/types"
-import { SAY_TOOL_TO_NATIVE_NAME, getToolGroupForSayTool } from "../tools"
+import { SAY_TOOL_TO_NATIVE_NAME, getToolGroupForSayTool } from "../tools.js"
 
 /**
  * Auto-approval mapping drift guard (v3 architecture §4).

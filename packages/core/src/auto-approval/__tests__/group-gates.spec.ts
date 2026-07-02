@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import { toolGroups } from "@shofer/types"
-import { GROUP_GATE, isGroupAutoApproved } from "../group-gates"
+import { GROUP_GATE, isGroupAutoApproved } from "../group-gates.js"
 
 /**
  * §4 unified group-gate engine. The full decision behavior is covered by the

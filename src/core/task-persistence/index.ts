@@ -11,7 +11,6 @@ export {
 	saveTaskMessages,
 	type MessagePersistencePort,
 	SqliteMessagePersistence,
+	taskMetadata,
+	TaskHistoryStore,
 } from "@shofer/core"
-// These remain in src (depend on vscode-tainted storage/i18n helpers).
-export { taskMetadata } from "./taskMetadata"
-export { TaskHistoryStore } from "./TaskHistoryStore"

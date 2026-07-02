@@ -136,7 +136,7 @@ import {
 import { processUserContentMentions } from "../mentions/processUserContentMentions"
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense"
 import { MessageQueueService } from "@shofer/core"
-import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
+import { AutoApprovalHandler, checkAutoApproval } from "@shofer/core"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "@shofer/core"
 import { mergeConsecutiveApiMessages } from "@shofer/core"

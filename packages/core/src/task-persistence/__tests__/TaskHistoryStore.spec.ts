@@ -6,13 +6,17 @@ import * as os from "os"
 
 import type { HistoryItem } from "@shofer/types"
 
-import { TaskHistoryStore } from "../TaskHistoryStore"
-import { GlobalFileNames } from "@shofer/core"
+import { TaskHistoryStore } from "../TaskHistoryStore.js"
+import { GlobalFileNames } from "../../shared/globalFileNames.js"
 
 // Mock safeWriteJson to use plain fs writes in tests (avoids proper-lockfile issues)
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../utils/storage.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/storage.js")>()),
 	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),
+}))
+
+vi.mock("../../utils/safeWriteJson.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/safeWriteJson.js")>()),
 	safeWriteJson: vi.fn().mockImplementation(async (filePath: string, data: any) => {
 		await fs.mkdir(path.dirname(filePath), { recursive: true })
 		await fs.writeFile(filePath, JSON.stringify(data, null, "\t"), "utf8")
@@ -108,9 +112,9 @@ describe("TaskHistoryStore", () => {
 
 			const all = store.getAll()
 			expect(all).toHaveLength(3)
-			expect(all[0].id).toBe("new")
-			expect(all[1].id).toBe("mid")
-			expect(all[2].id).toBe("old")
+			expect(all[0]!.id).toBe("new")
+			expect(all[1]!.id).toBe("mid")
+			expect(all[2]!.id).toBe("old")
 		})
 	})
 
@@ -128,7 +132,7 @@ describe("TaskHistoryStore", () => {
 
 			const wsB = store.getByWorkspace("/workspace-b")
 			expect(wsB).toHaveLength(1)
-			expect(wsB[0].id).toBe("ws-b-1")
+			expect(wsB[0]!.id).toBe("ws-b-1")
 		})
 	})
 
@@ -219,8 +223,8 @@ describe("TaskHistoryStore", () => {
 
 			expect(result).toHaveLength(2)
 			// Should be sorted by ts descending
-			expect(result[0].id).toBe("item-2")
-			expect(result[1].id).toBe("item-1")
+			expect(result[0]!.id).toBe("item-2")
+			expect(result[1]!.id).toBe("item-1")
 		})
 	})
 

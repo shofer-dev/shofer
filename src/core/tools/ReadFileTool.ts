@@ -32,7 +32,7 @@ import {
 	validateImageForProcessing,
 	processImageFile,
 	ImageMemoryTracker,
-} from "./helpers/imageHelpers"
+} from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { taskLog } from "@shofer/core"
 

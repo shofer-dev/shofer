@@ -4,7 +4,7 @@ import pdf from "pdf-parse/lib/pdf-parse"
 import mammoth from "mammoth"
 import fs from "fs/promises"
 import { isBinaryFile } from "isbinaryfile"
-import { extractTextFromXLSX } from "./extract-text-from-xlsx"
+import { extractTextFromXLSX } from "@shofer/core"
 import { readWithSlice } from "./indentation-reader"
 import { DEFAULT_LINE_LIMIT } from "../../core/prompts/tools/native-tools/read_file"
 

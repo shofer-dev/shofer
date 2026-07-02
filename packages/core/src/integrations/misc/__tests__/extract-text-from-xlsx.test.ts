@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs"
-import { extractTextFromXLSX } from "../extract-text-from-xlsx"
+import { extractTextFromXLSX } from "../extract-text-from-xlsx.js"
 
 describe("extractTextFromXLSX", () => {
 	describe("basic functionality", () => {

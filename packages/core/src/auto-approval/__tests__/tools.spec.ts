@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { getToolGroupForSayTool, isReadOnlyToolAction, isWriteToolAction } from "../tools"
+import { getToolGroupForSayTool, isReadOnlyToolAction, isWriteToolAction } from "../tools.js"
 import type { ShoferSayTool } from "@shofer/types"
 
 function makeSayTool(tool: string): ShoferSayTool {

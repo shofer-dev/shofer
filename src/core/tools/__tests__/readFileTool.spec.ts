@@ -23,7 +23,7 @@ import {
 	processImageFile,
 	isSupportedImageFormat,
 	ImageMemoryTracker,
-} from "../helpers/imageHelpers"
+} from "@shofer/core"
 import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../../integrations/misc/extract-text"
 import { readWithIndentation, readWithSlice } from "../../../integrations/misc/indentation-reader"
 
@@ -60,7 +60,8 @@ vi.mock("../../../integrations/misc/indentation-reader", () => ({
 	readWithSlice: vi.fn(),
 }))
 
-vi.mock("../helpers/imageHelpers", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	DEFAULT_MAX_IMAGE_FILE_SIZE_MB: 5,
 	DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB: 20,
 	isSupportedImageFormat: vi.fn(),
@@ -70,10 +71,6 @@ vi.mock("../helpers/imageHelpers", () => ({
 		getTotalMemoryUsed: vi.fn().mockReturnValue(0),
 		addMemoryUsage: vi.fn(),
 	})),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	formatResponse: {
 		toolDenied: vi.fn(() => "The user denied this operation."),
 		toolDeniedWithFeedback: vi.fn(
