@@ -2,7 +2,7 @@ import OpenAI from "openai"
 
 import { OpenAiHandler } from "../openai"
 import { OpenAiNativeHandler } from "../openai-native"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 describe("OpenAiHandler native tools", () => {
 	it("includes tools in request when tools are provided via metadata (regression test)", async () => {
@@ -24,7 +24,7 @@ describe("OpenAiHandler native tools", () => {
 				maxTokens: 4096,
 				contextWindow: 128000,
 			},
-		} as unknown as import("../../../shared/api").ApiHandlerOptions)
+		} as unknown as import("@shofer/core").ApiHandlerOptions)
 
 		// Patch the OpenAI client call
 		const mockClient = {

@@ -5,7 +5,7 @@ import {
 	DASHSCOPE_THINKING_MODELS,
 } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { getModelParams } from "../transform/model-params"
 

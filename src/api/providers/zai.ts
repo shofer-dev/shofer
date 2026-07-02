@@ -11,7 +11,7 @@ import {
 	zaiApiLineConfigs,
 } from "@shofer/types"
 
-import { type ApiHandlerOptions, getModelMaxOutputTokens, shouldUseReasoningEffort } from "../../shared/api"
+import { type ApiHandlerOptions, getModelMaxOutputTokens, shouldUseReasoningEffort } from "@shofer/core"
 import { convertToZAiFormat } from "../transform/zai-format"
 
 import type { ApiHandlerCreateMessageMetadata } from "../index"

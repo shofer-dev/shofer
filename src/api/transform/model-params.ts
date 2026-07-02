@@ -13,7 +13,7 @@ import {
 	shouldUseReasoningBudget,
 	shouldUseReasoningEffort,
 	getModelMaxOutputTokens,
-} from "../../shared/api"
+} from "@shofer/core"
 
 import {
 	type AnthropicReasoningParams,

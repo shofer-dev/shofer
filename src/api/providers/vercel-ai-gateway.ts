@@ -8,7 +8,7 @@ import {
 	VERCEL_AI_GATEWAY_PROMPT_CACHING_MODELS,
 } from "@shofer/types"
 
-import { ApiHandlerOptions } from "../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { convertToOpenAiMessages } from "../transform/openai-format"

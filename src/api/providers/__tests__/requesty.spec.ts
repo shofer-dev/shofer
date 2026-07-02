@@ -4,7 +4,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { RequestyHandler } from "../requesty"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { Package } from "../../../shared/package"
 import { ApiHandlerCreateMessageMetadata } from "../../index"
 

@@ -61,7 +61,7 @@ vi.mock("openai", () => {
 import type { Anthropic } from "@anthropic-ai/sdk"
 
 import { LmStudioHandler } from "../lm-studio"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 describe("LmStudioHandler", () => {
 	let handler: LmStudioHandler

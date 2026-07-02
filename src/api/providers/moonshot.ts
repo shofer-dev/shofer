@@ -1,6 +1,6 @@
 import { moonshotModels, moonshotDefaultModelId, type ModelInfo } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import type { ApiStreamUsageChunk } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"

@@ -1,6 +1,6 @@
 import { type ModelInfo, type VertexModelId, vertexDefaultModelId, vertexModels } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { getModelParams } from "../transform/model-params"
 

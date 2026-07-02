@@ -124,7 +124,7 @@ import type { Anthropic } from "@anthropic-ai/sdk"
 
 import { deepSeekDefaultModelId, DEEP_SEEK_DEFAULT_TEMPERATURE, type ModelInfo } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { DeepSeekHandler } from "../deepseek"
 

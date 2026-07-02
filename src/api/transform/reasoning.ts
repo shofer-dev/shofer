@@ -4,7 +4,7 @@ import type { GenerateContentConfig } from "@google/genai"
 
 import type { ModelInfo, ProviderSettings, ReasoningEffortExtended } from "@shofer/types"
 
-import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "../../shared/api"
+import { shouldUseReasoningBudget, shouldUseReasoningEffort } from "@shofer/core"
 
 export type OpenRouterReasoningParams = {
 	effort?: ReasoningEffortExtended

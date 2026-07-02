@@ -1,7 +1,7 @@
 // npx vitest run api/providers/__tests__/native-ollama.spec.ts
 
 import { NativeOllamaHandler } from "../native-ollama"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { getOllamaModels } from "../fetchers/ollama"
 
 // Mock the ollama package

@@ -7,7 +7,7 @@ import sanitize from "sanitize-filename"
 import type { ModelRecord } from "@shofer/types"
 
 import { ContextProxy } from "../../../core/config/ContextProxy"
-import { RouterName } from "../../../shared/api"
+import { RouterName } from "@shofer/core"
 import { getCacheDirectoryPath } from "../../../utils/storage"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { safeWriteJson } from "../../../utils/safeWriteJson"

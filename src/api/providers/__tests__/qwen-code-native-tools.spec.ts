@@ -27,7 +27,7 @@ vi.mock("openai", () => {
 import { promises as fs } from "node:fs"
 import { QwenCodeHandler } from "../qwen-code"
 import { NativeToolCallParser } from "../../../core/assistant-message/NativeToolCallParser"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 describe("QwenCodeHandler Native Tools", () => {
 	let handler: QwenCodeHandler

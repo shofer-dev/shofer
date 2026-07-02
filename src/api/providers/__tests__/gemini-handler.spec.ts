@@ -2,7 +2,7 @@ import { t } from "i18next"
 import { FunctionCallingConfigMode } from "@google/genai"
 
 import { GeminiHandler } from "../gemini"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 describe("GeminiHandler backend support", () => {
 	it("createMessage uses function declarations (URL context and grounding are only for completePrompt)", async () => {

@@ -17,7 +17,7 @@ vi.mock("openai", () => {
 
 import { LmStudioHandler } from "../lm-studio"
 import { NativeToolCallParser } from "../../../core/assistant-message/NativeToolCallParser"
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 describe("LmStudioHandler Native Tools", () => {
 	let handler: LmStudioHandler

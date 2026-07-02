@@ -15,7 +15,7 @@ import {
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "../../shared/package"
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"

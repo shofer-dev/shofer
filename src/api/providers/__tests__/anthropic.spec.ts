@@ -1,7 +1,7 @@
 // npx vitest run src/api/providers/__tests__/anthropic.spec.ts
 
 import { AnthropicHandler } from "../anthropic"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 
 // Mock TelemetryService
 vitest.mock("@shofer/telemetry", () => ({

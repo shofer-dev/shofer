@@ -1,6 +1,6 @@
 import { type SambaNovaModelId, sambaNovaDefaultModelId, sambaNovaModels } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider"
 

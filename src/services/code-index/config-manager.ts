@@ -1,4 +1,4 @@
-import { ApiHandlerOptions } from "../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { EmbedderProvider } from "./interfaces/manager"
 import { CodeIndexConfig, PreviousConfigSnapshot } from "./interfaces/config"

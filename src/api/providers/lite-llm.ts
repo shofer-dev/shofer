@@ -5,7 +5,7 @@ import { litellmDefaultModelId, litellmDefaultModelInfo } from "@shofer/types"
 
 import { calculateApiCostOpenAI } from "@shofer/core"
 
-import { ApiHandlerOptions } from "../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"
 import { convertToOpenAiMessages } from "../transform/openai-format"

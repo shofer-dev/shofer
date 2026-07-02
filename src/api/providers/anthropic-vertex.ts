@@ -12,7 +12,7 @@ import {
 } from "@shofer/types"
 import { safeJsonParse } from "@shofer/core"
 
-import { ApiHandlerOptions } from "../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { addCacheBreakpoints } from "../transform/caching/vertex"

@@ -1,4 +1,4 @@
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { EmbedderInfo, EmbeddingResponse, IEmbedder } from "../interfaces"
 import { getModelQueryPrefix } from "../../../shared/embeddingModels"
 import { t } from "../../../i18n"

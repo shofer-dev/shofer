@@ -2,7 +2,7 @@
 
 import { AWS_INFERENCE_PROFILE_MAPPING } from "@shofer/types"
 import { AwsBedrockHandler } from "../bedrock"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 
 // Mock AWS SDK
 vitest.mock("@aws-sdk/client-bedrock-runtime", () => {

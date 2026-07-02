@@ -12,7 +12,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { shouldUseReasoningBudget, shouldUseReasoningEffort, type ApiHandlerOptions } from "../../shared/api"
+import { shouldUseReasoningBudget, shouldUseReasoningEffort, type ApiHandlerOptions } from "@shofer/core"
 
 import { convertToAiSdkMessages, convertToolsForAiSdk, processAiSdkStreamPart } from "../transform/ai-sdk"
 import { ApiStream } from "@shofer/core"

@@ -7,7 +7,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { VercelAiGatewayHandler } from "../vercel-ai-gateway"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { vercelAiGatewayDefaultModelId, VERCEL_AI_GATEWAY_DEFAULT_TEMPERATURE } from "@shofer/types"
 
 // Mock dependencies

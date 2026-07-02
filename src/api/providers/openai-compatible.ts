@@ -10,7 +10,7 @@ import { streamText, generateText, LanguageModel, ToolSet } from "ai"
 
 import type { ModelInfo } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { convertToAiSdkMessages, convertToolsForAiSdk, processAiSdkStreamPart } from "../transform/ai-sdk"
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"

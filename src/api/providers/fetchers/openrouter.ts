@@ -9,7 +9,7 @@ import {
 	anthropicModels,
 } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { parseApiPrice } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 

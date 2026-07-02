@@ -2,7 +2,7 @@ import OpenAI from "openai"
 
 import { type ModelInfo, type ModelRecord } from "@shofer/types"
 
-import { ApiHandlerOptions, RouterName } from "../../shared/api"
+import { ApiHandlerOptions, RouterName } from "@shofer/core"
 
 import { BaseProvider } from "./base-provider"
 import { getModels, getModelsFromCache } from "./fetchers/modelCache"

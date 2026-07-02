@@ -5,7 +5,7 @@ import { v7 as uuidv7 } from "uuid"
 
 import { type ModelInfo, openAiModelInfoSaneDefaults } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
 import { normalizeToolSchema } from "../../utils/json-schema"
 

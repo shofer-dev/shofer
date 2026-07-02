@@ -4,7 +4,7 @@ import { z } from "zod"
 import type { ModelInfo } from "@shofer/types"
 import { VERCEL_AI_GATEWAY_VISION_ONLY_MODELS, VERCEL_AI_GATEWAY_VISION_AND_TOOLS_MODELS } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { parseApiPrice } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 

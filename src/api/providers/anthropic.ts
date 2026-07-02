@@ -13,7 +13,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"

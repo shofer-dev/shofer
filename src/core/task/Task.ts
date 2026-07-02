@@ -78,7 +78,7 @@ import { getApiMetrics, hasTokenUsageChanged, hasToolUsageChanged } from "@shofe
 import { ShoferAskResponse } from "@shofer/core"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "../../shared/tools"
-import { getModelMaxOutputTokens } from "../../shared/api"
+import { getModelMaxOutputTokens } from "@shofer/core"
 
 // services
 import { McpHub } from "../../services/mcp/McpHub"

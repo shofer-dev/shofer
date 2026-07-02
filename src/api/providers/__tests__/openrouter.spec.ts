@@ -6,7 +6,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
 import { OpenRouterHandler } from "../openrouter"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { Package } from "../../../shared/package"
 
 vitest.mock("openai")

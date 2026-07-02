@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import { type XAIModelId, xaiDefaultModelId, xaiModels, ApiProviderError } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { convertToResponsesApiInput } from "../transform/responses-api-input"

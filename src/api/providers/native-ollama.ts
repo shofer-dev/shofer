@@ -4,7 +4,7 @@ import { Message, Ollama, Tool as OllamaTool, type Config as OllamaOptions } fro
 import { ModelInfo, openAiModelInfoSaneDefaults, DEEP_SEEK_DEFAULT_TEMPERATURE } from "@shofer/types"
 import { ApiStream } from "@shofer/core"
 import { BaseProvider } from "./base-provider"
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { getOllamaModels } from "./fetchers/ollama"
 import { TagMatcher } from "../../utils/tag-matcher"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"

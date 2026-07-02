@@ -15,7 +15,7 @@ import { TelemetryService } from "@shofer/telemetry"
 
 import { NativeToolCallParser } from "../../core/assistant-message/NativeToolCallParser"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 import {

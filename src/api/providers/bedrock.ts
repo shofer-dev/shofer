@@ -42,7 +42,7 @@ import { MultiPointStrategy } from "../transform/cache-strategy/multi-point-stra
 import { ModelInfo as CacheModelInfo } from "../transform/cache-strategy/types"
 import { convertToBedrockConverseMessages as sharedConverter } from "../transform/bedrock-converse-format"
 import { getModelParams } from "../transform/model-params"
-import { shouldUseReasoningBudget } from "../../shared/api"
+import { shouldUseReasoningBudget } from "@shofer/core"
 import { normalizeToolSchema } from "../../utils/json-schema"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
 

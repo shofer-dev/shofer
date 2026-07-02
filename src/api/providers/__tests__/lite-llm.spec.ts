@@ -2,7 +2,7 @@ import OpenAI from "openai"
 import { Anthropic } from "@anthropic-ai/sdk"
 
 import { LiteLLMHandler } from "../lite-llm"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "@shofer/core"
 import { litellmDefaultModelId, litellmDefaultModelInfo } from "@shofer/types"
 
 // Mock vscode first to avoid import errors

@@ -46,7 +46,7 @@ import { z } from "zod"
 import type { ModelInfo } from "@shofer/types"
 
 import type { ApiHandler, SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { ApiStream } from "@shofer/core"
 
 // ── Scenario schema ────────────────────────────────────────────────

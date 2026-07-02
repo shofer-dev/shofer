@@ -3,10 +3,7 @@
 import { type ModelInfo, ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"
 
 import { getModelParams } from "../model-params"
-import {
-	DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS,
-	DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS,
-} from "../../../shared/api"
+import { DEFAULT_HYBRID_REASONING_MODEL_MAX_TOKENS, DEFAULT_HYBRID_REASONING_MODEL_THINKING_TOKENS } from "@shofer/core"
 
 describe("getModelParams", () => {
 	const baseModel: ModelInfo = {

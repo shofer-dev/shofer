@@ -5,7 +5,7 @@ import OpenAI from "openai"
 
 import { type MinimaxModelId, minimaxDefaultModelId, minimaxModels } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { ApiStream } from "@shofer/core"
 import { getModelParams } from "../transform/model-params"

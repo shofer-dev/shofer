@@ -8,7 +8,7 @@ import {
 	OPENAI_AZURE_AI_INFERENCE_PATH,
 } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 
 import { ApiStream, ApiStreamUsageChunk } from "@shofer/core"

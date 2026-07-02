@@ -75,7 +75,7 @@ export const shouldUseReasoningEffort = ({
 	if (settings?.enableReasoningEffort === false) return false
 
 	// Selected effort from settings or model default
-	const selectedEffort = (settings?.reasoningEffort ?? (model as any).reasoningEffort) as
+	const selectedEffort = (settings?.reasoningEffort ?? model.reasoningEffort) as
 		| "disable"
 		| "none"
 		| "minimal"
@@ -101,13 +101,7 @@ export const shouldUseReasoningEffort = ({
 
 	// Not explicitly supported: only allow when the model itself defines a default effort
 	// Ignore settings-only selections when capability is absent/false
-	const modelDefaultEffort = (model as any).reasoningEffort as
-		| "none"
-		| "minimal"
-		| "low"
-		| "medium"
-		| "high"
-		| undefined
+	const modelDefaultEffort = model.reasoningEffort as "none" | "minimal" | "low" | "medium" | "high" | undefined
 	return !!modelDefaultEffort
 }
 
@@ -183,6 +177,7 @@ type CommonFetchParams = {
 // Exhaustive, value-level map for all dynamic providers.
 // If a new dynamic provider is added in packages/types, this will fail to compile
 // until a corresponding entry is added here.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- used only in type positions via `typeof`
 const dynamicProviderExtras = {
 	openrouter: {} as {}, // eslint-disable-line @typescript-eslint/no-empty-object-type
 	"vercel-ai-gateway": {} as {}, // eslint-disable-line @typescript-eslint/no-empty-object-type

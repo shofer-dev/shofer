@@ -13,7 +13,7 @@ import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels,
 import { safeJsonParse } from "@shofer/core"
 import { TelemetryService } from "@shofer/telemetry"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import { t } from "i18next"

@@ -18,7 +18,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { calculateApiCostOpenAI } from "@shofer/core"
 

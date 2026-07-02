@@ -10,7 +10,7 @@ import {
 	OPENAI_AZURE_AI_INFERENCE_PATH,
 } from "@shofer/types"
 
-import type { ApiHandlerOptions } from "../../shared/api"
+import type { ApiHandlerOptions } from "@shofer/core"
 
 import { TagMatcher } from "../../utils/tag-matcher"
 
