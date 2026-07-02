@@ -17,7 +17,7 @@ import { ApiHandler } from "@shofer/core"
 import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ShoferIgnoreController } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
-import { getGitStatus } from "../../../utils/git"
+import { getGitStatus } from "@shofer/core"
 import { Task } from "../../task/Task"
 
 vi.mock("vscode", () => ({
@@ -56,6 +56,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		getWorkspacePath: vi.fn(),
 		getWorkspacePathForContext: vi.fn(),
 		formatResponse: { ...orig.formatResponse, formatFilesList: vi.fn() },
+		getGitStatus: vi.fn(),
 		TerminalRegistry: {
 			getBackgroundTerminals: vi.fn(() => []),
 			getTerminals: vi.fn(() => []),
@@ -64,7 +65,6 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		},
 	}
 })
-vi.mock("../../../utils/git")
 vi.mock("../../tools/validateToolUse")
 
 describe("getEnvironmentDetails", () => {

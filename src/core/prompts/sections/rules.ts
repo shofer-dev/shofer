@@ -1,4 +1,4 @@
-import type { SystemPromptSettings } from "../types"
+import type { SystemPromptSettings } from "@shofer/core"
 
 import { getShell } from "../../../utils/shell"
 

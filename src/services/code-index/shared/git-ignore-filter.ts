@@ -3,7 +3,7 @@ import * as path from "path"
 import { promisify } from "util"
 
 import { codeIndexLog } from "@shofer/core"
-import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
+import { listSubmoduleDisplayPaths } from "@shofer/core"
 
 const execFileAsync = promisify(execFile)
 

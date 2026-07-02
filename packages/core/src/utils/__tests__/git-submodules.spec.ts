@@ -11,7 +11,12 @@ vi.mock("fs/promises", async () => {
 })
 
 import * as fs from "fs/promises"
-import { parseGitmodules, formatSubmoduleBlock, resolveSubmoduleEntries, type SubmoduleEntry } from "../git-submodules"
+import {
+	parseGitmodules,
+	formatSubmoduleBlock,
+	resolveSubmoduleEntries,
+	type SubmoduleEntry,
+} from "../git-submodules.js"
 
 const readFileMock = fs.readFile as unknown as ReturnType<typeof vi.fn>
 

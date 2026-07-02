@@ -88,7 +88,7 @@ import { TaskManager } from "../../services/task-manager/TaskManager"
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { setTtsEnabled, setTtsSpeed } from "../../utils/tts"
-import { getWorkspaceGitInfo } from "../../utils/git"
+import { getWorkspaceGitInfo } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { OrganizationAllowListViolationError } from "../../utils/errors"
 

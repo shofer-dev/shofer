@@ -7,7 +7,7 @@ import { isBinaryFile } from "isbinaryfile"
 import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
 import { taskLog } from "@shofer/core"
 
-import { getCommitInfo, getWorkingState } from "../../utils/git"
+import { getCommitInfo, getWorkingState } from "@shofer/core"
 
 import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFileWithMetadata, type ExtractTextResult } from "../../integrations/misc/extract-text"

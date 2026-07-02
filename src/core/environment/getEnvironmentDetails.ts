@@ -16,10 +16,10 @@ import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../integrations/terminal/Terminal"
 import { arePathsEqual } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
-import { getGitStatus } from "../../utils/git"
+import { getGitStatus } from "@shofer/core"
 
 import { Task } from "../task/Task"
-import { formatReminderSection } from "./reminder"
+import { formatReminderSection } from "@shofer/core"
 
 export async function getEnvironmentDetails(shofer: Task, includeFileDetails: boolean = false) {
 	let details = ""

@@ -1,4 +1,4 @@
-import { isEmpty } from "../object"
+import { isEmpty } from "../object.js"
 
 describe("isEmpty", () => {
 	describe("should return true for empty values", () => {

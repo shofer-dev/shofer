@@ -38,6 +38,8 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getWorkspacePath: vi.fn(() => "/test/workspace"),
 	// RepoPerTaskCheckpointService moved into @shofer/core; mock its factory here.
 	RepoPerTaskCheckpointService: { create: vi.fn() },
+	// checkGitInstalled moved into @shofer/core; mock it here.
+	checkGitInstalled: vi.fn().mockResolvedValue(true),
 	t: vi.fn((key: string, options?: Record<string, any>) => {
 		if (key === "common:errors.wait_checkpoint_long_time") {
 			return `Checkpoint initialization is taking longer than ${options?.timeout} seconds...`
@@ -47,10 +49,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		}
 		return key
 	}),
-}))
-
-vi.mock("../../../utils/git", () => ({
-	checkGitInstalled: vi.fn().mockResolvedValue(true),
 }))
 
 // Mock p-wait-for to control timeout behavior

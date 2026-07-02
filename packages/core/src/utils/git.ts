@@ -6,8 +6,8 @@ import { promisify } from "util"
 
 import type { GitRepositoryInfo, GitCommit } from "@shofer/types"
 
-import { truncateOutput } from "@shofer/core"
-import { gitLog } from "@shofer/core"
+import { truncateOutput } from "../text/output-truncation.js"
+import { gitLog } from "../logging/subsystems.js"
 
 const execAsync = promisify(exec)
 
@@ -55,7 +55,7 @@ export async function getGitRepositoryInfo(workspaceRoot: string): Promise<GitRe
 			if (branchMatch && branchMatch[1]) {
 				gitInfo.defaultBranch = branchMatch[1]
 			}
-		} catch (error) {
+		} catch {
 			// Ignore config reading errors
 		}
 
@@ -68,13 +68,13 @@ export async function getGitRepositoryInfo(workspaceRoot: string): Promise<GitRe
 				if (branchMatch && branchMatch[1]) {
 					gitInfo.defaultBranch = branchMatch[1].trim()
 				}
-			} catch (error) {
+			} catch {
 				// Ignore HEAD reading errors
 			}
 		}
 
 		return gitInfo
-	} catch (error) {
+	} catch {
 		// Return empty object on any error
 		return {}
 	}
@@ -103,7 +103,7 @@ export function convertGitUrlToHttps(url: string): string {
 
 		// Handle SSH with protocol: ssh://git@github.com/user/repo.git -> https://github.com/user/repo.git
 		if (url.startsWith("ssh://")) {
-			const match = url.match(/ssh:\/\/(?:git@)?([^\/]+)\/(.+)/)
+			const match = url.match(/ssh:\/\/(?:git@)?([^/]+)\/(.+)/)
 			if (match && match.length === 3) {
 				const [, host, path] = match
 				return `https://${host}/${path}`
@@ -157,11 +157,11 @@ export function extractRepositoryName(url: string): string {
 		// Handle different URL formats
 		const patterns = [
 			// HTTPS: https://github.com/user/repo.git -> user/repo
-			/https:\/\/[^\/]+\/([^\/]+\/[^\/]+?)(?:\.git)?$/,
+			/https:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/,
 			// SSH: git@github.com:user/repo.git -> user/repo
-			/git@[^:]+:([^\/]+\/[^\/]+?)(?:\.git)?$/,
+			/git@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/,
 			// SSH with user: ssh://git@github.com/user/repo.git -> user/repo
-			/ssh:\/\/[^\/]+\/([^\/]+\/[^\/]+?)(?:\.git)?$/,
+			/ssh:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/,
 		]
 
 		for (const pattern of patterns) {
@@ -188,14 +188,14 @@ export async function getWorkspaceGitInfo(): Promise<GitRepositoryInfo> {
 	}
 
 	// Use the first workspace folder.
-	return getGitRepositoryInfo(workspaceRoots[0])
+	return getGitRepositoryInfo(workspaceRoots[0]!)
 }
 
 async function checkGitRepo(cwd: string): Promise<boolean> {
 	try {
 		await execAsync("git rev-parse --git-dir", { cwd })
 		return true
-	} catch (error) {
+	} catch {
 		return false
 	}
 }
@@ -213,7 +213,7 @@ export async function checkGitInstalled(): Promise<boolean> {
 	try {
 		await execAsync("git --version")
 		return true
-	} catch (error) {
+	} catch {
 		return false
 	}
 }
@@ -261,11 +261,11 @@ export async function searchCommits(query: string, cwd: string): Promise<GitComm
 
 		for (let i = 0; i < lines.length; i += 5) {
 			commits.push({
-				hash: lines[i],
-				shortHash: lines[i + 1],
-				subject: lines[i + 2],
-				author: lines[i + 3],
-				date: lines[i + 4],
+				hash: lines[i]!,
+				shortHash: lines[i + 1]!,
+				subject: lines[i + 2]!,
+				author: lines[i + 3]!,
+				date: lines[i + 4]!,
 			})
 		}
 
@@ -374,7 +374,7 @@ export async function getGitStatus(cwd: string, maxFiles: number = 20): Promise<
 		const lines = stdout.trim().split("\n")
 
 		// First line is always branch info (e.g., "## main...origin/main")
-		const branchLine = lines[0]
+		const branchLine = lines[0]!
 		const fileLines = lines.slice(1)
 
 		// Build output with branch info and limited file entries

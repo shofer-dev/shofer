@@ -17,7 +17,7 @@ import { GitCacheManager } from "./git-cache-manager"
 import { GitHistoryStateManager } from "./git-state-manager"
 import { GitHistoryOrchestrator } from "./git-history-orchestrator"
 import { GitSearchService } from "./git-search-service"
-import { listSubmoduleDisplayPaths } from "../../utils/git-submodules"
+import { listSubmoduleDisplayPaths } from "@shofer/core"
 
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"

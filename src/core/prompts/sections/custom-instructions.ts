@@ -5,7 +5,7 @@ import { Dirent } from "fs"
 
 import { isLanguage } from "@shofer/types"
 
-import type { SystemPromptSettings } from "../types"
+import type { SystemPromptSettings } from "@shofer/core"
 
 import { LANGUAGES } from "@shofer/types"
 import {

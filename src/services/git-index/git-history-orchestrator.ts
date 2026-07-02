@@ -12,7 +12,7 @@ import { GitWatcher } from "./processors/git-watcher"
 import { GitCacheManager } from "./git-cache-manager"
 
 import { BATCH_SEGMENT_THRESHOLD } from "../code-index/constants"
-import { listSubmoduleDisplayPaths } from "../../utils/git-submodules"
+import { listSubmoduleDisplayPaths } from "@shofer/core"
 import { gitLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[GitHistoryOrchestrator]"

@@ -3,7 +3,7 @@ import * as path from "path"
 import { TypedEmitter } from "@shofer/types"
 import type { IGitWatcher, GitCommitBlock } from "../interfaces/git"
 import { GitLogExtractor } from "./git-log-extractor"
-import { listSubmoduleDisplayPaths } from "../../../utils/git-submodules"
+import { listSubmoduleDisplayPaths } from "@shofer/core"
 import { gitLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[GitWatcher]"

@@ -1,5 +1,5 @@
 import { ExecException } from "child_process"
-import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
+import { createInMemoryHost, setHost } from "@shofer/types"
 import * as fs from "fs"
 import * as path from "path"
 
@@ -14,8 +14,8 @@ import {
 	getWorkspaceGitInfo,
 	convertGitUrlToHttps,
 	getGitStatus,
-} from "../git"
-import { truncateOutput } from "@shofer/core"
+} from "../git.js"
+import { truncateOutput } from "../../text/output-truncation.js"
 
 type ExecFunction = (
 	command: string,
@@ -38,15 +38,13 @@ vitest.mock("fs", () => ({
 	},
 }))
 
-// Create a mock for vscode
-const mockWorkspaceFolders = vitest.fn()
-vitest.mock("vscode", () => ({
-	workspace: {
-		get workspaceFolders() {
-			return mockWorkspaceFolders()
-		},
-	},
-}))
+// getWorkspaceGitInfo reads workspace roots via getHost(); drive it with a mutable value.
+let mockWorkspaceRoots: string[] = []
+function installHost(): void {
+	const base = createInMemoryHost()
+	mockWorkspaceRoots = []
+	setHost({ ...base, workspace: { ...base.workspace, workspaceRoots: () => mockWorkspaceRoots } })
+}
 
 // Mock util.promisify to return our own mock function
 vitest.mock("util", () => ({
@@ -70,10 +68,9 @@ vitest.mock("util", () => ({
 	}),
 }))
 
-// truncateOutput now lives in @shofer/core; mock it there (keep the rest of the barrel).
-vitest.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	truncateOutput: vitest.fn((text) => text),
+// truncateOutput lives in core's text module; mock it there.
+vitest.mock("../../text/output-truncation.js", () => ({
+	truncateOutput: vitest.fn((text: string) => text),
 }))
 
 import { exec } from "child_process"
@@ -82,7 +79,7 @@ describe("git utils", () => {
 	const cwd = "/test/path"
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		installHost()
 		vitest.clearAllMocks()
 	})
 
@@ -451,7 +448,7 @@ describe("getGitRepositoryInfo", () => {
 	const headPath = path.join(gitDir, "HEAD")
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		installHost()
 		vitest.clearAllMocks()
 	})
 
@@ -783,13 +780,13 @@ describe("getWorkspaceGitInfo", () => {
 	const workspaceRoot = "/test/workspace"
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		installHost()
 		vitest.clearAllMocks()
 	})
 
 	it("should return empty object when no workspace folders", async () => {
 		// Mock workspace with no folders
-		mockWorkspaceFolders.mockReturnValue(undefined)
+		mockWorkspaceRoots = []
 
 		const result = await getWorkspaceGitInfo()
 
@@ -801,7 +798,7 @@ describe("getWorkspaceGitInfo", () => {
 		vitest.clearAllMocks()
 
 		// Mock workspace with one folder
-		mockWorkspaceFolders.mockReturnValue([{ uri: { fsPath: workspaceRoot }, name: "workspace", index: 0 }])
+		mockWorkspaceRoots = [workspaceRoot]
 
 		// Create a spy to track the implementation
 		const gitSpy = vitest.spyOn(fs.promises, "access")
@@ -845,7 +842,7 @@ describe("getGitStatus", () => {
 	const cwd = "/test/path"
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		installHost()
 		vitest.clearAllMocks()
 	})
 

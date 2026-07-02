@@ -14,15 +14,15 @@ import { pluginRegistry } from "@shofer/core"
 import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "@shofer/core"
 import { DiffStrategy } from "@shofer/core"
 import { formatLanguage } from "@shofer/types"
-import { isEmpty } from "../../utils/object"
+import { isEmpty } from "@shofer/core"
 
 import { McpHub } from "@shofer/core"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 
-import { listSubmodules } from "../../utils/git-submodules"
+import { listSubmodules } from "@shofer/core"
 
-import type { SystemPromptSettings } from "./types"
+import type { SystemPromptSettings } from "@shofer/core"
 import {
 	getRulesSection,
 	getSystemInfoSection,

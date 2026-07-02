@@ -2,7 +2,7 @@ import os from "os"
 import osName from "os-name"
 
 import { getShell } from "../../../utils/shell"
-import { type SubmoduleEntry, formatSubmoduleBlock } from "../../../utils/git-submodules"
+import { type SubmoduleEntry, formatSubmoduleBlock } from "@shofer/core"
 
 /**
  * Generate the SYSTEM INFORMATION section of the system prompt.

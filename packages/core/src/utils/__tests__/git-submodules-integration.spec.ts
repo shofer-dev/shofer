@@ -9,7 +9,7 @@ vi.mock("fs/promises", async () => {
 	return mockedFs
 })
 
-import { parseGitmodules, formatSubmoduleBlock, type SubmoduleEntry } from "../git-submodules"
+import { parseGitmodules, formatSubmoduleBlock, type SubmoduleEntry } from "../git-submodules.js"
 
 describe("integration tests with real .gitmodules", () => {
 	const repoRoot = path.resolve(__dirname, "../../../../../..")

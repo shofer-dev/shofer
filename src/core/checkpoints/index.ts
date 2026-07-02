@@ -9,7 +9,7 @@ import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 
 import { getWorkspacePath } from "@shofer/core"
-import { checkGitInstalled } from "../../utils/git"
+import { checkGitInstalled } from "@shofer/core"
 import { t } from "@shofer/core"
 
 import { getApiMetrics } from "@shofer/core"
