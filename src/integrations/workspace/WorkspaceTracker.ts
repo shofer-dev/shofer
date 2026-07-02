@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 import * as path from "path"
 
-import { listFiles } from "../../services/glob/list-files"
+import { listFiles } from "@shofer/core"
 import { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { toRelativePath, getWorkspacePath } from "@shofer/core"
 

@@ -1,4 +1,4 @@
-import { listFiles } from "../../glob/list-files"
+import { listFiles } from "@shofer/core"
 import { ShoferIgnoreController } from "@shofer/core"
 import { stat } from "fs/promises"
 import * as path from "path"
@@ -25,7 +25,7 @@ import {
 	BATCH_PROCESSING_CONCURRENCY,
 	MAX_PENDING_BATCHES,
 } from "../constants"
-import { isPathInIgnoredDirectory } from "../../glob/ignore-utils"
+import { isPathInIgnoredDirectory } from "@shofer/core"
 import type { IIgnoreFilter } from "../shared/git-ignore-filter"
 import { TelemetryService } from "@shofer/telemetry"
 import { TelemetryEventName } from "@shofer/types"

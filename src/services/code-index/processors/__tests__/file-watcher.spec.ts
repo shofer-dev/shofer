@@ -28,7 +28,8 @@ vi.mock("../parser", () => ({
 		parseFile: vi.fn().mockResolvedValue([]),
 	},
 }))
-vi.mock("../../../glob/ignore-utils", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	isPathInIgnoredDirectory: vi.fn().mockReturnValue(false),
 }))
 

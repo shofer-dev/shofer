@@ -27,7 +27,7 @@ import {
 	type LiveMemoryCostTracking,
 } from "@shofer/types"
 
-import { liveMemoryLog as logger } from "@shofer/core"
+import { liveMemoryLog as logger } from "../../logging/subsystems.js"
 
 /** Persisted snapshot returned by load() / accepted by save(). */
 export interface ConversationSnapshot {

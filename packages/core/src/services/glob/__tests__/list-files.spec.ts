@@ -1,6 +1,6 @@
 import * as path from "path"
 import * as childProcess from "child_process"
-import { listFiles } from "../list-files"
+import { listFiles } from "../list-files.js"
 
 vi.mock("child_process")
 vi.mock("fs")
@@ -10,13 +10,13 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-vi.mock("@shofer/core", async (importOriginal) => ({
+vi.mock("../../../ripgrep/index.js", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	getBinPath: vi.fn().mockResolvedValue("/mock/path/to/rg"),
 }))
 
-vi.mock("../list-files", async () => {
-	const actual = await vi.importActual("../list-files")
+vi.mock("../list-files.js", async () => {
+	const actual = await vi.importActual("../list-files.js")
 	return {
 		...actual,
 		handleSpecialDirectories: vi.fn(),
@@ -54,7 +54,7 @@ vi.mock("child_process", () => ({
 	spawn: vi.fn(),
 }))
 
-vi.mock("../../path", () => ({
+vi.mock("../../../path/path.js", () => ({
 	arePathsEqual: vi.fn().mockReturnValue(false),
 }))
 
@@ -97,7 +97,7 @@ describe("list-files symlink support", () => {
 		await listFiles(testDir, false, 100)
 
 		// Verify that spawn was called with --follow flag (the critical fix)
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		expect(rgPath).toBe("/mock/path/to/rg")
 		expect(args).toContain("--files")
 		expect(args).toContain("--hidden")
@@ -144,7 +144,7 @@ describe("list-files symlink support", () => {
 		await listFiles(testDir, true, 100)
 
 		// Verify that spawn was called with --follow flag (the critical fix)
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		expect(rgPath).toBe("/mock/path/to/rg")
 		expect(args).toContain("--files")
 		expect(args).toContain("--hidden")
@@ -396,7 +396,7 @@ describe("hidden directory exclusion", () => {
 		const [files] = await listFiles("/test/.shofer/temp", true, 100)
 
 		// Verify ripgrep was called with correct arguments
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		expect(args).toContain("--no-ignore-vcs")
 		expect(args).toContain("--no-ignore")
 
@@ -446,7 +446,7 @@ describe("buildRecursiveArgs edge cases", () => {
 		// Test with trailing slash on hidden directory
 		await listFiles("/test/.hidden/", true, 100)
 
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		// When targeting a hidden directory, these flags should be present
 		expect(args).toContain("--no-ignore-vcs")
 		expect(args).toContain("--no-ignore")
@@ -480,7 +480,7 @@ describe("buildRecursiveArgs edge cases", () => {
 		// Test with redundant separators before hidden directory
 		await listFiles("/test//.hidden", true, 100)
 
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		// When targeting a hidden directory, these flags should be present
 		expect(args).toContain("--no-ignore-vcs")
 		expect(args).toContain("--no-ignore")
@@ -514,7 +514,7 @@ describe("buildRecursiveArgs edge cases", () => {
 		// Test with complex path including hidden directory
 		await listFiles("/test//normal/.hidden//subdir/", true, 100)
 
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		// When targeting a path containing a hidden directory, these flags should be present
 		expect(args).toContain("--no-ignore-vcs")
 		expect(args).toContain("--no-ignore")
@@ -548,7 +548,7 @@ describe("buildRecursiveArgs edge cases", () => {
 		// Test with a path that has dots but no hidden directories
 		await listFiles("/test/file.with.dots/normal", true, 100)
 
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		// Should NOT have the special flags for hidden directories
 		expect(args).not.toContain("--no-ignore-vcs")
 		expect(args).not.toContain("--no-ignore")

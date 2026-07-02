@@ -3,7 +3,8 @@ import * as fs from "fs"
 import * as os from "os"
 
 // Mock ripgrep to avoid filesystem dependencies
-vi.mock("../../ripgrep", () => ({
+vi.mock("../../../ripgrep/index.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getBinPath: vi.fn().mockResolvedValue("/mock/path/to/rg"),
 }))
 
@@ -19,11 +20,11 @@ vi.mock("child_process", () => ({
 	spawn: vi.fn(),
 }))
 
-vi.mock("../../path", () => ({
+vi.mock("../../../path/path.js", () => ({
 	arePathsEqual: vi.fn().mockReturnValue(false),
 }))
 
-import { listFiles } from "../list-files"
+import { listFiles } from "../list-files.js"
 import * as childProcess from "child_process"
 
 describe("list-files gitignore integration", () => {
@@ -192,7 +193,7 @@ describe("list-files gitignore integration", () => {
 		const [files, didHitLimit] = await listFiles(tempDir, false, 100)
 
 		// Verify ripgrep was called without --no-ignore-vcs (should respect .gitignore)
-		const [rgPath, args] = mockSpawn.mock.calls[0]
+		const [rgPath, args] = mockSpawn.mock.calls[0]!
 		expect(args).not.toContain("--no-ignore-vcs")
 
 		// Filter out only directories from the results
