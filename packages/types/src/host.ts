@@ -196,6 +196,8 @@ export interface HostEnv {
 	readonly language: string
 	/** Application install root, used to locate bundled binaries (maps to `vscode.env.appRoot`). */
 	readonly appRoot: string
+	/** Stable anonymous machine id for telemetry (maps to `vscode.env.machineId`). */
+	readonly machineId: string
 }
 
 /** Options for {@link HostFileSystem.findFiles}. */

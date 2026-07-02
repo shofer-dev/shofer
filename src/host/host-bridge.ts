@@ -106,6 +106,9 @@ const vsCodeEnv: HostEnv = {
 	get appRoot() {
 		return vscode.env.appRoot
 	},
+	get machineId() {
+		return vscode.env.machineId
+	},
 }
 
 function mapSeverity(severity: vscode.DiagnosticSeverity): HostDiagnosticSeverity {

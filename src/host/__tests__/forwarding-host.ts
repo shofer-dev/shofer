@@ -47,6 +47,9 @@ export function installVsCodeForwardingHost(): void {
 			get appRoot() {
 				return vscode.env.appRoot
 			},
+			get machineId() {
+				return vscode.env.machineId
+			},
 		},
 		config: {
 			get: <T>(section: string, key: string, defaultValue: T): T =>

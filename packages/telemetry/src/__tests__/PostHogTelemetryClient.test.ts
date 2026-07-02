@@ -9,7 +9,6 @@ vi.hoisted(() => {
 
 // pnpm --filter @shofer/telemetry test src/__tests__/PostHogTelemetryClient.test.ts
 
-import * as vscode from "vscode"
 import { PostHog } from "posthog-node"
 
 import { type TelemetryPropertiesProvider, TelemetryEventName, ApiProviderError } from "@shofer/types"
@@ -17,15 +16,7 @@ import { type TelemetryPropertiesProvider, TelemetryEventName, ApiProviderError 
 import { PostHogTelemetryClient } from "../PostHogTelemetryClient"
 
 vi.mock("posthog-node")
-
-vi.mock("vscode", () => ({
-	env: {
-		machineId: "test-machine-id",
-	},
-	workspace: {
-		getConfiguration: vi.fn(),
-	},
-}))
+import { setHost, createInMemoryHost } from "@shofer/types"
 
 describe("PostHogTelemetryClient", () => {
 	const getPrivateProperty = <T>(instance: any, propertyName: string): T => {
@@ -33,6 +24,7 @@ describe("PostHogTelemetryClient", () => {
 	}
 
 	let mockPostHogClient: any
+	let hostConfigGet: any
 
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -48,8 +40,11 @@ describe("PostHogTelemetryClient", () => {
 
 		// @ts-expect-error - Accessing private static property for testing
 		PostHogTelemetryClient._instance = undefined
-		;(vscode.workspace.getConfiguration as any).mockReturnValue({
-			get: vi.fn().mockReturnValue("all"),
+		hostConfigGet = vi.fn().mockReturnValue("all")
+		setHost({
+			...createInMemoryHost(),
+			env: { language: "en", appRoot: "", machineId: "test-machine-id" },
+			config: { get: hostConfigGet } as any,
 		})
 	})
 
@@ -338,9 +333,7 @@ describe("PostHogTelemetryClient", () => {
 		it("should enable telemetry when user opts in and global telemetry is enabled", () => {
 			const client = new PostHogTelemetryClient()
 
-			;(vscode.workspace.getConfiguration as any).mockReturnValue({
-				get: vi.fn().mockReturnValue("all"),
-			})
+			hostConfigGet.mockReturnValue("all")
 
 			client.updateTelemetryState(true)
 
@@ -351,9 +344,7 @@ describe("PostHogTelemetryClient", () => {
 		it("should disable telemetry when user opts out", () => {
 			const client = new PostHogTelemetryClient()
 
-			;(vscode.workspace.getConfiguration as any).mockReturnValue({
-				get: vi.fn().mockReturnValue("all"),
-			})
+			hostConfigGet.mockReturnValue("all")
 
 			client.updateTelemetryState(false)
 
@@ -364,9 +355,7 @@ describe("PostHogTelemetryClient", () => {
 		it("should disable telemetry when global telemetry is disabled, regardless of user opt-in", () => {
 			const client = new PostHogTelemetryClient()
 
-			;(vscode.workspace.getConfiguration as any).mockReturnValue({
-				get: vi.fn().mockReturnValue("off"),
-			})
+			hostConfigGet.mockReturnValue("off")
 
 			client.updateTelemetryState(true)
 			expect(client.isTelemetryEnabled()).toBe(false)

@@ -84,7 +84,7 @@ export class InMemoryConfig implements HostConfig {
 }
 
 /** A default in-memory `HostEnv` (English, no app root). */
-export const inMemoryEnv: HostEnv = { language: "en", appRoot: "" }
+export const inMemoryEnv: HostEnv = { language: "en", appRoot: "", machineId: "" }
 
 /** A no-op `HostWatcher` (no file events). */
 const noopDisposable: HostDisposable = { dispose() {} }
