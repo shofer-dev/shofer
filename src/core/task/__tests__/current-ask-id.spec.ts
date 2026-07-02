@@ -9,7 +9,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 }))
 
 import { Task } from "../Task"
-import { AskIgnoredError } from "../AskIgnoredError"
+import { AskIgnoredError } from "@shofer/core"
 
 /**
  * Tests for the per-ask `_currentAskId` system that replaces the global

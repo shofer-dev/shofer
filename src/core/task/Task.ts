@@ -4,7 +4,7 @@ import crypto from "crypto"
 import { v7 as uuidv7 } from "uuid"
 import EventEmitter from "events"
 
-import { AskIgnoredError } from "./AskIgnoredError"
+import { AskIgnoredError } from "@shofer/core"
 
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"

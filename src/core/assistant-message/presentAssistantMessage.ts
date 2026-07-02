@@ -13,7 +13,7 @@ import { t } from "../../i18n"
 import { defaultModeSlug, getModeBySlug } from "../../shared/modes"
 import type { ToolParamName, ToolResponse, ToolUse, McpToolUse, TextContent } from "../../shared/tools"
 
-import { AskIgnoredError } from "../task/AskIgnoredError"
+import { AskIgnoredError } from "@shofer/core"
 import { Task } from "../task/Task"
 import type { ShoferProvider } from "../webview/ShoferProvider"
 import { getHost } from "@shofer/types"
