@@ -1,5 +1,5 @@
 import { getHost } from "@shofer/types"
-import { WebviewMessage } from "../../shared/WebviewMessage"
+import { WebviewMessage } from "@shofer/core"
 import { defaultModeSlug } from "../../shared/modes"
 import { buildApiHandler } from "../../api"
 

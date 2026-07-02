@@ -1,7 +1,7 @@
 import { GlobalState, ShoferMessage, ShoferAsk } from "@shofer/types"
 
 import { getApiMetrics } from "@shofer/core"
-import { ShoferAskResponse } from "../../shared/WebviewMessage"
+import { ShoferAskResponse } from "@shofer/core"
 
 export interface AutoApprovalResult {
 	shouldProceed: boolean

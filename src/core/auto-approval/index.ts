@@ -7,7 +7,7 @@ import {
 	isAutoApprovableAsk,
 } from "@shofer/types"
 
-import { ShoferAskResponse } from "../../shared/WebviewMessage"
+import { ShoferAskResponse } from "@shofer/core"
 
 import { getToolGroupForSayTool } from "./tools"
 import { getMcpToolGroup } from "./mcp"
