@@ -2,7 +2,7 @@ import { ShoferEventName, ProviderSettings, TokenUsage, ToolUsage } from "@shofe
 
 import { Task } from "../Task"
 import { ShoferProvider } from "../../webview/ShoferProvider"
-import { hasToolUsageChanged, hasTokenUsageChanged } from "../../../shared/getApiMetrics"
+import { hasToolUsageChanged, hasTokenUsageChanged } from "@shofer/core"
 import { appendTaskMessage } from "../../task-persistence"
 // Prevent the transitive import graph from loading extension.ts,
 // which pulls in WorkflowTask (which extends Task — circular).

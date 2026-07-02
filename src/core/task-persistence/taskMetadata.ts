@@ -5,7 +5,7 @@ import type { ShoferMessage, HistoryItem } from "@shofer/types"
 
 import { combineApiRequests } from "@shofer/core"
 import { combineCommandSequences } from "@shofer/core"
-import { getApiMetrics } from "../../shared/getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 import { findLastIndex } from "@shofer/core"
 import { getTaskDirectoryPath } from "../../utils/storage"
 import { t } from "../../i18n"

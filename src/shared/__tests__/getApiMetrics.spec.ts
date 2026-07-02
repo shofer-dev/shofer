@@ -2,7 +2,7 @@
 
 import type { ShoferMessage } from "@shofer/types"
 
-import { getApiMetrics } from "../getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 
 describe("getApiMetrics", () => {
 	// Helper function to create a basic api_req_started message

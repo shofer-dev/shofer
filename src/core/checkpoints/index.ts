@@ -12,7 +12,7 @@ import { getWorkspacePath } from "@shofer/core"
 import { checkGitInstalled } from "../../utils/git"
 import { t } from "../../i18n"
 
-import { getApiMetrics } from "../../shared/getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 
 import { CheckpointServiceOptions, RepoPerTaskCheckpointService } from "@shofer/core"
 import { checkpointLog } from "@shofer/core"

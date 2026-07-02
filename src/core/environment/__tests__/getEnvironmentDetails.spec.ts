@@ -7,7 +7,7 @@ import type { Mock } from "vitest"
 import { getEnvironmentDetails } from "../getEnvironmentDetails"
 import { getFullModeDetails } from "../../modes/getFullModeDetails"
 import { isToolAllowedForMode } from "../../tools/validateToolUse"
-import { getApiMetrics } from "../../../shared/getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 import { listFiles } from "../../../services/glob/list-files"
 import { TerminalRegistry } from "@shofer/core"
 import { Terminal } from "../../../integrations/terminal/Terminal"
@@ -43,11 +43,11 @@ vi.mock("execa", () => ({
 }))
 
 vi.mock("../../modes/getFullModeDetails")
-vi.mock("../../../shared/getApiMetrics")
 vi.mock("../../../services/glob/list-files")
 vi.mock("../../../integrations/terminal/Terminal")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getApiMetrics: vi.fn(),
 	arePathsEqual: vi.fn(),
 	getReadablePath: vi.fn(),
 	toRelativePath: vi.fn(),

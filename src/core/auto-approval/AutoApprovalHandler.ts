@@ -1,6 +1,6 @@
 import { GlobalState, ShoferMessage, ShoferAsk } from "@shofer/types"
 
-import { getApiMetrics } from "../../shared/getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 import { ShoferAskResponse } from "../../shared/WebviewMessage"
 
 export interface AutoApprovalResult {

@@ -2,11 +2,12 @@ import { GlobalState, ShoferMessage } from "@shofer/types"
 
 import { AutoApprovalHandler } from "../AutoApprovalHandler"
 
-vi.mock("../../../shared/getApiMetrics", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getApiMetrics: vi.fn(),
 }))
 
-import { getApiMetrics } from "../../../shared/getApiMetrics"
+import { getApiMetrics } from "@shofer/core"
 
 describe("AutoApprovalHandler", () => {
 	let handler: AutoApprovalHandler
