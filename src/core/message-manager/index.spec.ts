@@ -1,5 +1,12 @@
 import { MessageManager } from "./index"
-import * as condenseModule from "../condense"
+import { cleanupAfterTruncation } from "@shofer/core"
+
+// `cleanupAfterTruncation` was relocated into @shofer/core (Task-cluster A4);
+// partial-mock the barrel so this residual src test can still control it.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	cleanupAfterTruncation: vi.fn(),
+}))
 
 describe("MessageManager", () => {
 	let mockTask: any
@@ -16,12 +23,12 @@ describe("MessageManager", () => {
 		manager = new MessageManager(mockTask)
 
 		// Mock cleanupAfterTruncation to track calls and return input by default
-		cleanupAfterTruncationSpy = vi.spyOn(condenseModule, "cleanupAfterTruncation")
+		cleanupAfterTruncationSpy = vi.mocked(cleanupAfterTruncation)
 		cleanupAfterTruncationSpy.mockImplementation((messages: any[]) => messages)
 	})
 
 	afterEach(() => {
-		cleanupAfterTruncationSpy.mockRestore()
+		cleanupAfterTruncationSpy.mockReset()
 	})
 
 	describe("Basic rewind operations", () => {

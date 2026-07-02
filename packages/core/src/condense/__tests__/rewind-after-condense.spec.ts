@@ -11,8 +11,8 @@
 
 import { TelemetryService } from "@shofer/telemetry"
 
-import { getEffectiveApiHistory, cleanupAfterTruncation } from "../index"
-import { ApiMessage } from "@shofer/core"
+import { getEffectiveApiHistory, cleanupAfterTruncation } from "../index.js"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
 
 describe("Rewind After Condense - Issue #8295", () => {
 	beforeEach(() => {
@@ -38,9 +38,9 @@ describe("Rewind After Condense - Issue #8295", () => {
 
 			// Fresh start model: summary + all messages after it
 			expect(effective.length).toBe(3)
-			expect(effective[0].isSummary).toBe(true)
-			expect(effective[1].content).toBe("Third message")
-			expect(effective[2].content).toBe("Third response")
+			expect(effective[0]!.isSummary).toBe(true)
+			expect(effective[1]!.content).toBe("Third message")
+			expect(effective[2]!.content).toBe("Third response")
 		})
 
 		it("should include messages without condenseParent", () => {
@@ -74,8 +74,8 @@ describe("Rewind After Condense - Issue #8295", () => {
 			const cleaned = cleanupAfterTruncation(messages)
 
 			// All condenseParent tags should be cleared since summary is gone
-			expect(cleaned[1].condenseParent).toBeUndefined()
-			expect(cleaned[2].condenseParent).toBeUndefined()
+			expect(cleaned[1]!.condenseParent).toBeUndefined()
+			expect(cleaned[2]!.condenseParent).toBeUndefined()
 		})
 
 		it("should preserve condenseParent when summary message still exists", () => {
@@ -89,7 +89,7 @@ describe("Rewind After Condense - Issue #8295", () => {
 			const cleaned = cleanupAfterTruncation(messages)
 
 			// condenseParent should remain since summary exists
-			expect(cleaned[1].condenseParent).toBe(condenseId)
+			expect(cleaned[1]!.condenseParent).toBe(condenseId)
 		})
 
 		it("should handle multiple condense operations with different IDs", () => {
@@ -105,9 +105,9 @@ describe("Rewind After Condense - Issue #8295", () => {
 			const cleaned = cleanupAfterTruncation(messages)
 
 			// condenseId1 should remain (summary exists)
-			expect(cleaned[0].condenseParent).toBe(condenseId1)
+			expect(cleaned[0]!.condenseParent).toBe(condenseId1)
 			// condenseId2 should be cleared (summary deleted)
-			expect(cleaned[2].condenseParent).toBeUndefined()
+			expect(cleaned[2]!.condenseParent).toBeUndefined()
 		})
 
 		it("should not modify messages without condenseParent", () => {
@@ -154,9 +154,9 @@ describe("Rewind After Condense - Issue #8295", () => {
 			// Verify effective history after cleanup: all messages should be visible now
 			const effectiveAfterCleanup = getEffectiveApiHistory(cleanedAfterDeletingSummary)
 			expect(effectiveAfterCleanup.length).toBe(3)
-			expect(effectiveAfterCleanup[0].content).toBe("Initial task")
-			expect(effectiveAfterCleanup[1].content).toBe("Working on it")
-			expect(effectiveAfterCleanup[2].content).toBe("Continue")
+			expect(effectiveAfterCleanup[0]!.content).toBe("Initial task")
+			expect(effectiveAfterCleanup[1]!.content).toBe("Working on it")
+			expect(effectiveAfterCleanup[2]!.content).toBe("Continue")
 		})
 
 		it("should properly restore context after rewind when summary was deleted", () => {
@@ -177,17 +177,17 @@ describe("Rewind After Condense - Issue #8295", () => {
 			// getEffectiveApiHistory already includes orphaned messages (summary doesn't exist)
 			const effectiveBefore = getEffectiveApiHistory(messages)
 			expect(effectiveBefore.length).toBe(5) // All messages visible since summary was deleted
-			expect(effectiveBefore[0].content).toBe("Start")
-			expect(effectiveBefore[1].content).toBe("Response 1")
+			expect(effectiveBefore[0]!.content).toBe("Start")
+			expect(effectiveBefore[1]!.content).toBe("Response 1")
 
 			// cleanupAfterTruncation clears the orphaned condenseParent tags for data hygiene
 			const cleaned = cleanupAfterTruncation(messages)
 
 			// Verify condenseParent was cleared for all orphaned messages
-			expect(cleaned[1].condenseParent).toBeUndefined()
-			expect(cleaned[2].condenseParent).toBeUndefined()
-			expect(cleaned[3].condenseParent).toBeUndefined()
-			expect(cleaned[4].condenseParent).toBeUndefined()
+			expect(cleaned[1]!.condenseParent).toBeUndefined()
+			expect(cleaned[2]!.condenseParent).toBeUndefined()
+			expect(cleaned[3]!.condenseParent).toBeUndefined()
+			expect(cleaned[4]!.condenseParent).toBeUndefined()
 
 			// After cleanup, effective history is the same (all visible)
 			const effectiveAfter = getEffectiveApiHistory(cleaned)
@@ -211,14 +211,14 @@ describe("Rewind After Condense - Issue #8295", () => {
 			// "Start" is NOT included because it's before the summary
 			const effective = getEffectiveApiHistory(messages)
 			expect(effective.length).toBe(2) // Summary, After summary (NOT Start)
-			expect(effective[0].content).toBe("Summary")
-			expect(effective[0].isSummary).toBe(true)
-			expect(effective[1].content).toBe("After summary")
+			expect(effective[0]!.content).toBe("Summary")
+			expect(effective[0]!.isSummary).toBe(true)
+			expect(effective[1]!.content).toBe("After summary")
 
 			// cleanupAfterTruncation should NOT clear condenseParent since summary exists
 			const cleaned = cleanupAfterTruncation(messages)
-			expect(cleaned[1].condenseParent).toBe(condenseId)
-			expect(cleaned[2].condenseParent).toBe(condenseId)
+			expect(cleaned[1]!.condenseParent).toBe(condenseId)
+			expect(cleaned[2]!.condenseParent).toBe(condenseId)
 		})
 
 		describe("Summary timestamp collision prevention", () => {
@@ -263,7 +263,7 @@ describe("Rewind After Condense - Issue #8295", () => {
 
 				// There should be exactly one message with the summary timestamp
 				expect(messagesWithSummaryTs.length).toBe(1)
-				expect(messagesWithSummaryTs[0].isSummary).toBe(true)
+				expect(messagesWithSummaryTs[0]!.isSummary).toBe(true)
 
 				// The first kept message should have a different timestamp
 				const firstKeptMessage = messagesAfterCondense.find(
@@ -350,18 +350,18 @@ describe("Rewind After Condense - Issue #8295", () => {
 				expect(effective.length).toBe(4)
 
 				// Verify exact order and content
-				expect(effective[0].role).toBe("user")
-				expect(effective[0].isSummary).toBe(true)
-				expect(effective[0].content).toBe("Summary: Built API with validation, working on tests")
+				expect(effective[0]!.role).toBe("user")
+				expect(effective[0]!.isSummary).toBe(true)
+				expect(effective[0]!.content).toBe("Summary: Built API with validation, working on tests")
 
-				expect(effective[1].role).toBe("assistant")
-				expect(effective[1].content).toBe("Writing unit tests now")
+				expect(effective[1]!.role).toBe("assistant")
+				expect(effective[1]!.content).toBe("Writing unit tests now")
 
-				expect(effective[2].role).toBe("user")
-				expect(effective[2].content).toBe("Include edge cases")
+				expect(effective[2]!.role).toBe("user")
+				expect(effective[2]!.content).toBe("Include edge cases")
 
-				expect(effective[3].role).toBe("assistant")
-				expect(effective[3].content).toBe("Added edge case tests")
+				expect(effective[3]!.role).toBe("assistant")
+				expect(effective[3]!.content).toBe("Added edge case tests")
 
 				// Verify condensed messages are NOT in effective history
 				const condensedContents = ["I'll help with that", "Start with the API", "Creating API endpoints"]
@@ -437,19 +437,19 @@ describe("Rewind After Condense - Issue #8295", () => {
 				expect(effective.length).toBe(4)
 
 				// Verify exact order and content
-				expect(effective[0].role).toBe("user")
-				expect(effective[0].isSummary).toBe(true)
-				expect(effective[0].condenseId).toBe(condenseId2) // Must be the SECOND summary
-				expect(effective[0].content).toContain("Summary2")
+				expect(effective[0]!.role).toBe("user")
+				expect(effective[0]!.isSummary).toBe(true)
+				expect(effective[0]!.condenseId).toBe(condenseId2) // Must be the SECOND summary
+				expect(effective[0]!.content).toContain("Summary2")
 
-				expect(effective[1].role).toBe("assistant")
-				expect(effective[1].content).toBe("Writing integration tests")
+				expect(effective[1]!.role).toBe("assistant")
+				expect(effective[1]!.content).toBe("Writing integration tests")
 
-				expect(effective[2].role).toBe("user")
-				expect(effective[2].content).toBe("Test the auth flow")
+				expect(effective[2]!.role).toBe("user")
+				expect(effective[2]!.content).toBe("Test the auth flow")
 
-				expect(effective[3].role).toBe("assistant")
-				expect(effective[3].content).toBe("Auth tests passing")
+				expect(effective[3]!.role).toBe("assistant")
+				expect(effective[3]!.content).toBe("Auth tests passing")
 
 				// Verify Summary1 is NOT in effective history (it's tagged with condenseParent)
 				const summary1 = effective.find((m) => m.content?.toString().includes("Summary1"))
@@ -488,11 +488,11 @@ describe("Rewind After Condense - Issue #8295", () => {
 
 				// Verify the sequence: user(summary), assistant, user, assistant
 				// This is the fresh-start model with user-role summaries
-				expect(effective[0].role).toBe("user")
-				expect(effective[0].isSummary).toBe(true)
-				expect(effective[1].role).toBe("assistant")
-				expect(effective[2].role).toBe("user")
-				expect(effective[3].role).toBe("assistant")
+				expect(effective[0]!.role).toBe("user")
+				expect(effective[0]!.isSummary).toBe(true)
+				expect(effective[1]!.role).toBe("assistant")
+				expect(effective[2]!.role).toBe("user")
+				expect(effective[3]!.role).toBe("assistant")
 			})
 
 			it("should preserve timestamps in chronological order in effective history", () => {
@@ -511,8 +511,8 @@ describe("Rewind After Condense - Issue #8295", () => {
 
 				// Verify timestamps are in ascending order
 				for (let i = 1; i < effective.length; i++) {
-					const prevTs = effective[i - 1].ts ?? 0
-					const currTs = effective[i].ts ?? 0
+					const prevTs = effective[i - 1]!.ts ?? 0
+					const currTs = effective[i]!.ts ?? 0
 					expect(currTs).toBeGreaterThan(prevTs)
 				}
 			})
@@ -545,8 +545,8 @@ describe("Rewind After Condense - Issue #8295", () => {
 
 			// Should only include summary + new message (fresh start model)
 			expect(effective).toHaveLength(2)
-			expect(effective[0].isSummary).toBe(true)
-			expect(effective[1].ts).toBe(500)
+			expect(effective[0]!.isSummary).toBe(true)
+			expect(effective[1]!.ts).toBe(500)
 		})
 
 		it("should restore ALL messages if summary is missing (the bug scenario before fix)", () => {

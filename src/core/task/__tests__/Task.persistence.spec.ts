@@ -212,21 +212,14 @@ vi.mock("../../environment/getEnvironmentDetails", () => ({
 
 vi.mock("../../ignore/ShoferIgnoreController")
 
-vi.mock("../../condense", async (importOriginal) => {
-	const actual = (await importOriginal()) as Record<string, unknown>
-	return {
-		...actual,
-		summarizeConversation: vi.fn().mockResolvedValue({
-			messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
-			summary: "summary",
-			cost: 0,
-			newContextTokens: 1,
-		}),
-	}
-})
-
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	summarizeConversation: vi.fn().mockResolvedValue({
+		messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
+		summary: "summary",
+		cost: 0,
+		newContextTokens: 1,
+	}),
 	getTaskDirectoryPath: vi
 		.fn()
 		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),

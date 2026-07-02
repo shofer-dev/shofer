@@ -4,25 +4,25 @@ import * as path from "path"
 import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
-import { BaseProvider } from "@shofer/core"
+import { BaseProvider } from "../../api/providers/base-provider.js"
 
-// tree-sitter now lives in @shofer/core; partial-mock only parseSourceCodeDefinitionsForFile.
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+// tree-sitter now lives in core; partial-mock only parseSourceCodeDefinitionsForFile.
+vi.mock("../../services/tree-sitter/index.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../services/tree-sitter/index.js")>()),
 	parseSourceCodeDefinitionsForFile: vi.fn(),
 }))
 
 // Mock generateFoldedFileContext for summarizeConversation tests
-vi.mock("../foldedFileContext", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("../foldedFileContext")>()
+vi.mock("../foldedFileContext.js", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../foldedFileContext.js")>()
 	return {
 		...actual,
 		generateFoldedFileContext: vi.fn().mockImplementation(actual.generateFoldedFileContext),
 	}
 })
 
-import { generateFoldedFileContext } from "../foldedFileContext"
-import { parseSourceCodeDefinitionsForFile } from "@shofer/core"
+import { generateFoldedFileContext } from "../foldedFileContext.js"
+import { parseSourceCodeDefinitionsForFile } from "../../services/tree-sitter/index.js"
 
 const mockedGenerateFoldedFileContext = vi.mocked(generateFoldedFileContext)
 
@@ -259,7 +259,7 @@ describe("foldedFileContext", () => {
 		}
 
 		it("should include folded file context with each file as a separate content block", async () => {
-			const { summarizeConversation } = await import("../index")
+			const { summarizeConversation } = await import("../index.js")
 
 			const mockApiHandler = new MockApiHandler()
 			const taskId = "test-task-id"
@@ -346,7 +346,7 @@ describe("foldedFileContext", () => {
 		})
 
 		it("should not include file context section when filesReadByRoo is empty", async () => {
-			const { summarizeConversation } = await import("../index")
+			const { summarizeConversation } = await import("../index.js")
 
 			const mockApiHandler = new MockApiHandler()
 			const taskId = "test-task-id-2"

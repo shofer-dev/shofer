@@ -4,14 +4,14 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { BaseProvider } from "@shofer/core"
-import { ApiMessage } from "@shofer/core"
+import { BaseProvider } from "../../api/providers/base-provider.js"
+import type { ApiMessage } from "../../task-persistence/apiMessages.js"
 import {
 	summarizeConversation,
 	getMessagesSinceLastSummary,
 	getEffectiveApiHistory,
 	extractCommandBlocks,
-} from "../index"
+} from "../index.js"
 
 // Create a mock ApiHandler for testing
 class MockApiHandler extends BaseProvider {
@@ -157,8 +157,8 @@ Line 2
 			// Fresh start model: effective history should only contain the summary
 			const effectiveHistory = getEffectiveApiHistory(result.messages)
 			expect(effectiveHistory.length).toBe(1)
-			expect(effectiveHistory[0].isSummary).toBe(true)
-			expect(effectiveHistory[0].role).toBe("user")
+			expect(effectiveHistory[0]!.isSummary).toBe(true)
+			expect(effectiveHistory[0]!.role).toBe("user")
 		})
 
 		it("should tag ALL messages with condenseParent", async () => {
@@ -256,8 +256,8 @@ Line 2
 			// Effective history should contain only the summary (fresh start)
 			const effectiveHistory = getEffectiveApiHistory(result.messages)
 			expect(effectiveHistory).toHaveLength(1)
-			expect(effectiveHistory[0].isSummary).toBe(true)
-			expect(effectiveHistory[0].role).toBe("user")
+			expect(effectiveHistory[0]!.isSummary).toBe(true)
+			expect(effectiveHistory[0]!.role).toBe("user")
 		})
 
 		it("should return error when not enough messages to summarize", async () => {
@@ -354,7 +354,7 @@ Line 2
 			const result = getEffectiveApiHistory(messages)
 
 			expect(result).toHaveLength(1)
-			expect(result[0].isSummary).toBe(true)
+			expect(result[0]!.isSummary).toBe(true)
 		})
 
 		it("should include messages after summary in fresh start model", () => {
@@ -375,9 +375,9 @@ Line 2
 			const result = getEffectiveApiHistory(messages)
 
 			expect(result).toHaveLength(3)
-			expect(result[0].isSummary).toBe(true)
-			expect(result[1].content).toBe("New response after summary")
-			expect(result[2].content).toBe("New user message")
+			expect(result[0]!.isSummary).toBe(true)
+			expect(result[1]!.content).toBe("New response after summary")
+			expect(result[2]!.content).toBe("New user message")
 		})
 
 		it("should return all messages when no summary exists", () => {

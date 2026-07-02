@@ -1,4 +1,4 @@
-import { getObjectiveSection } from "../objective"
+import { getObjectiveSection } from "../objective.js"
 
 describe("getObjectiveSection", () => {
 	it("should include proper numbered structure", () => {

@@ -1,7 +1,6 @@
 import { addCustomInstructions } from "../sections/custom-instructions"
-import { getCapabilitiesSection } from "../sections/capabilities"
 import { getRulesSection, getCommandChainOperator } from "../sections/rules"
-import { McpHub } from "@shofer/core"
+import { McpHub, getCapabilitiesSection } from "@shofer/core"
 import * as shellUtils from "../../../utils/shell"
 
 describe("addCustomInstructions", () => {

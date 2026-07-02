@@ -1,7 +1,7 @@
 import * as path from "path"
-import { parseSourceCodeDefinitionsForFile } from "@shofer/core"
-import { ShoferIgnoreController } from "@shofer/core"
-import { taskLog } from "@shofer/core"
+import { parseSourceCodeDefinitionsForFile } from "../services/tree-sitter/index.js"
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController.js"
+import { taskLog } from "../logging/subsystems.js"
 
 /**
  * Checks if a definitions string is actually an error message from tree-sitter
@@ -97,7 +97,7 @@ export async function generateFoldedFileContext(
 	const failedFiles: string[] = []
 
 	for (let i = 0; i < filePaths.length; i++) {
-		const filePath = filePaths[i]
+		const filePath = filePaths[i]!
 		// Resolve to absolute path for tree-sitter
 		const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath)
 
@@ -145,7 +145,7 @@ ${truncatedDefinitions}
 			foldedSections.push(sectionContent)
 			currentCharCount += sectionContent.length
 			result.filesProcessed++
-		} catch (error) {
+		} catch {
 			// Collect failed files for batch logging to reduce noise
 			failedFiles.push(filePath)
 			result.filesSkipped++
