@@ -28,6 +28,7 @@
 		"ps-tree": "^1.2.0",
 		"p-wait-for": "^5.0.2",
 		"safe-stable-stringify": "^2.5.0",
+		"shell-quote": "^1.8.2",
 		"simple-git": "^3.27.0",
 		"uuid": "^11.1.0",
 		"zod": "^3.25.61"
@@ -35,6 +36,7 @@
 	"devDependencies": {
 		"@types/diff": "^5.2.1",
 		"@types/ps-tree": "^1.1.6",
+		"@types/shell-quote": "^1.7.5",
 		"@shofer/config-eslint": "workspace:^",
 		"@shofer/config-typescript": "workspace:^",
 		"@types/node": "^24.1.0",

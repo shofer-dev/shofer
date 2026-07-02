@@ -117,9 +117,10 @@ function parseCommandLine(command: string): string[] {
 	let tokens: ShellToken[]
 	try {
 		tokens = parse(processedCommand) as ShellToken[]
-	} catch (error: any) {
+	} catch (error) {
 		// If shell-quote fails to parse, fall back to simple splitting
-		console.warn("shell-quote parse error:", error.message, "for command:", processedCommand)
+		const message = error instanceof Error ? error.message : String(error)
+		console.warn("shell-quote parse error:", message, "for command:", processedCommand)
 
 		// Simple fallback: split by common operators
 		const fallbackCommands = processedCommand
@@ -165,7 +166,7 @@ function parseCommandLine(command: string): string[] {
 					commands.push(currentCommand.join(" "))
 					currentCommand = []
 				}
-				commands.push(subshells[parseInt(subshellMatch[1])])
+				commands.push(subshells[parseInt(subshellMatch[1]!)]!)
 			} else {
 				currentCommand.push(token)
 			}
@@ -207,17 +208,17 @@ function restorePlaceholders(
 ): string {
 	let result = command
 	// Restore quotes
-	result = result.replace(/__QUOTE_(\d+)__/g, (_, i) => quotes[parseInt(i)])
+	result = result.replace(/__QUOTE_(\d+)__/g, (_, i) => quotes[parseInt(i)]!)
 	// Restore redirections
-	result = result.replace(/__REDIR_(\d+)__/g, (_, i) => redirections[parseInt(i)])
+	result = result.replace(/__REDIR_(\d+)__/g, (_, i) => redirections[parseInt(i)]!)
 	// Restore array indexing expressions
-	result = result.replace(/__ARRAY_(\d+)__/g, (_, i) => arrayIndexing[parseInt(i)])
+	result = result.replace(/__ARRAY_(\d+)__/g, (_, i) => arrayIndexing[parseInt(i)]!)
 	// Restore arithmetic expressions
-	result = result.replace(/__ARITH_(\d+)__/g, (_, i) => arithmeticExpressions[parseInt(i)])
+	result = result.replace(/__ARITH_(\d+)__/g, (_, i) => arithmeticExpressions[parseInt(i)]!)
 	// Restore parameter expansions
-	result = result.replace(/__PARAM_(\d+)__/g, (_, i) => parameterExpansions[parseInt(i)])
+	result = result.replace(/__PARAM_(\d+)__/g, (_, i) => parameterExpansions[parseInt(i)]!)
 	// Restore variable references
-	result = result.replace(/__VAR_(\d+)__/g, (_, i) => variables[parseInt(i)])
-	result = result.replace(/__SUBSH_(\d+)__/g, (_, i) => subshells[parseInt(i)])
+	result = result.replace(/__VAR_(\d+)__/g, (_, i) => variables[parseInt(i)]!)
+	result = result.replace(/__SUBSH_(\d+)__/g, (_, i) => subshells[parseInt(i)]!)
 	return result
 }

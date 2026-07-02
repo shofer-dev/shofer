@@ -11,7 +11,7 @@ import { ShoferAskResponse } from "@shofer/core"
 
 import { getToolGroupForSayTool } from "./tools"
 import { getMcpToolGroup } from "./mcp"
-import { getCommandDecision } from "./commands"
+import { getCommandDecision } from "@shofer/core"
 import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates"
 import { webviewLog } from "@shofer/core"
 
