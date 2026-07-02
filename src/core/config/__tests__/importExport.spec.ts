@@ -63,14 +63,11 @@ vi.mock("os", () => ({
 	homedir: vi.fn(() => "/mock/home"),
 }))
 
-// safeWriteJson is now exported from @shofer/core; partially mock it there
+// safeWriteJson and buildApiHandler are now exported from @shofer/core; partially mock them there.
+// buildApiHandler is mocked to avoid issues with provider instantiation in tests.
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	safeWriteJson: vi.fn(),
-}))
-
-// Mock buildApiHandler to avoid issues with provider instantiation in tests
-vi.mock("../../../api", () => ({
 	buildApiHandler: vi.fn().mockImplementation((config) => {
 		// Return different model info based on the provider and model
 		const getModelInfo = () => {

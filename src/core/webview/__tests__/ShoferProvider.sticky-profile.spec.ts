@@ -96,14 +96,6 @@ vi.mock("../../task/Task", () => ({
 
 vi.mock("../../prompts/sections/custom-instructions")
 
-vi.mock("../../../api", () => ({
-	buildApiHandler: vi.fn().mockReturnValue({
-		getModel: vi.fn().mockReturnValue({
-			id: "claude-3-sonnet",
-		}),
-	}),
-}))
-
 vi.mock("../../../integrations/workspace/WorkspaceTracker", () => ({
 	default: vi.fn().mockImplementation(() => ({
 		initializeFilePaths: vi.fn(),
@@ -132,6 +124,13 @@ vi.mock("@shofer/cloud", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	buildApiHandler: vi.fn().mockReturnValue({
+		getModel: vi.fn().mockReturnValue({
+			id: "claude-3-sonnet",
+		}),
+	}),
+	getModels: vi.fn().mockResolvedValue({}),
+	flushModels: vi.fn(),
 	safeWriteJson: vi.fn(),
 	modes: [
 		{
@@ -159,11 +158,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 vi.mock("../../prompts/system", () => ({
 	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	codeMode: "code",
-}))
-
-vi.mock("../../../api/providers/fetchers/modelCache", () => ({
-	getModels: vi.fn().mockResolvedValue({}),
-	flushModels: vi.fn(),
 }))
 
 vi.mock("../../../integrations/misc/extract-text", () => ({

@@ -53,10 +53,12 @@ vi.mock("vscode", async (importOriginal) => {
 	}
 })
 
-// Mock modelCache getModels/flushModels used by the handler
+// Mock modelCache getModels/flushModels used by the handler.
+// These fetchers are now exported from @shofer/core; partially mock them there.
 const getModelsMock = vi.fn()
 const flushModelsMock = vi.fn()
-vi.mock("../../../api/providers/fetchers/modelCache", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getModels: (...args: any[]) => getModelsMock(...args),
 	flushModels: (...args: any[]) => flushModelsMock(...args),
 }))

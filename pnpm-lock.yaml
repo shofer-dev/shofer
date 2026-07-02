@@ -391,15 +391,27 @@ importers:
 
   packages/core:
     dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^2.0.28
+        version: 2.0.37(zod@3.25.76)
       '@anthropic-ai/sdk':
         specifier: ^0.37.0
         version: 0.37.0
+      '@anthropic-ai/vertex-sdk':
+        specifier: ^0.7.0
+        version: 0.7.0
       '@aws-sdk/client-bedrock-runtime':
+        specifier: ^3.922.0
+        version: 3.922.0
+      '@aws-sdk/credential-providers':
         specifier: ^3.922.0
         version: 3.922.0
       '@google/genai':
         specifier: ^1.29.1
         version: 1.29.1(@modelcontextprotocol/sdk@1.14.0)
+      '@lmstudio/sdk':
+        specifier: ^1.1.1
+        version: 1.2.0
       '@mistralai/mistralai':
         specifier: ^1.9.18
         version: 1.9.18(zod@3.25.76)
@@ -415,6 +427,12 @@ importers:
       ai:
         specifier: ^6.0.75
         version: 6.0.77(zod@3.25.76)
+      ai-sdk-provider-poe:
+        specifier: 2.0.18
+        version: 2.0.18(ai@6.0.77(zod@3.25.76))(zod@3.25.76)
+      axios:
+        specifier: ^1.12.0
+        version: 1.12.0
       diff:
         specifier: ^5.2.0
         version: 5.2.0
@@ -430,6 +448,9 @@ importers:
       fzf:
         specifier: ^0.5.2
         version: 0.5.2
+      google-auth-library:
+        specifier: ^9.15.1
+        version: 9.15.1
       i18next:
         specifier: ^25.0.0
         version: 25.2.1(typescript@5.8.3)
@@ -439,6 +460,12 @@ importers:
       json-stream-stringify:
         specifier: ^3.1.6
         version: 3.1.6
+      node-cache:
+        specifier: ^5.1.2
+        version: 5.1.2
+      ollama:
+        specifier: ^0.5.17
+        version: 0.5.17
       openai:
         specifier: ^5.12.2
         version: 5.12.2(ws@8.20.0)(zod@3.25.76)
@@ -457,6 +484,12 @@ importers:
       safe-stable-stringify:
         specifier: ^2.5.0
         version: 2.5.0
+      sanitize-filename:
+        specifier: ^1.6.3
+        version: 1.6.3
+      semver-compare:
+        specifier: ^1.0.0
+        version: 1.0.0
       shell-quote:
         specifier: ^1.8.2
         version: 1.8.3
@@ -491,9 +524,15 @@ importers:
       '@types/ps-tree':
         specifier: ^1.1.6
         version: 1.1.6
+      '@types/semver-compare':
+        specifier: ^1.0.3
+        version: 1.0.3
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
+      nock:
+        specifier: ^14.0.4
+        version: 14.0.10
       vitest:
         specifier: ^3.2.3
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.2.1)(@vitest/ui@3.2.4)(jiti@2.4.2)(jsdom@26.1.0)(lightningcss@1.30.1)(tsx@4.19.4)(yaml@2.8.0)

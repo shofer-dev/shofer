@@ -4,7 +4,7 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { BaseProvider } from "../../../api/providers/base-provider"
+import { BaseProvider } from "@shofer/core"
 import { ApiMessage } from "@shofer/core"
 import {
 	summarizeConversation,

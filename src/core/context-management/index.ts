@@ -3,7 +3,7 @@ import crypto from "crypto"
 
 import { TelemetryService } from "@shofer/telemetry"
 
-import { ApiHandler, ApiHandlerCreateMessageMetadata } from "../../api"
+import { ApiHandler, ApiHandlerCreateMessageMetadata } from "@shofer/core"
 import { MAX_CONDENSE_THRESHOLD, MIN_CONDENSE_THRESHOLD, summarizeConversation, SummarizeResponse } from "../condense"
 import { ApiMessage } from "@shofer/core"
 import { ANTHROPIC_DEFAULT_MAX_TOKENS } from "@shofer/types"

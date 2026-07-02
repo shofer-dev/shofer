@@ -43,7 +43,7 @@ import {
 
 import { ContextProxy } from "../../core/config/ContextProxy"
 import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
-import { buildApiHandler } from "../../api"
+import { buildApiHandler } from "@shofer/core"
 import { liveMemoryLog as logger } from "@shofer/core"
 import { ShoferIgnoreController } from "@shofer/core"
 

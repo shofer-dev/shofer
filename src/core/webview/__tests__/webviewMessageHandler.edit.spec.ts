@@ -39,7 +39,9 @@ vi.mock("../../task-persistence", () => ({
 	saveTaskMessages: vi.fn(),
 }))
 
-vi.mock("../../../api/providers/fetchers/modelCache", () => ({
+// modelCache fetchers are now exported from @shofer/core; partially mock them there.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getModels: vi.fn(),
 	flushModels: vi.fn(),
 	getModelsFromCache: vi.fn().mockReturnValue(undefined),

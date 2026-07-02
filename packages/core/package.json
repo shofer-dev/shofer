@@ -15,9 +15,20 @@
 		"clean": "rimraf .turbo"
 	},
 	"dependencies": {
+		"@ai-sdk/openai-compatible": "^2.0.28",
 		"@anthropic-ai/sdk": "^0.37.0",
+		"@anthropic-ai/vertex-sdk": "^0.7.0",
 		"@aws-sdk/client-bedrock-runtime": "^3.922.0",
+		"@aws-sdk/credential-providers": "^3.922.0",
 		"@google/genai": "^1.29.1",
+		"@lmstudio/sdk": "^1.1.1",
+		"ai-sdk-provider-poe": "2.0.18",
+		"axios": "^1.12.0",
+		"google-auth-library": "^9.15.1",
+		"node-cache": "^5.1.2",
+		"ollama": "^0.5.17",
+		"sanitize-filename": "^1.6.3",
+		"semver-compare": "^1.0.0",
 		"@mistralai/mistralai": "^1.9.18",
 		"@shofer/telemetry": "workspace:^",
 		"@shofer/types": "workspace:^",
@@ -51,6 +62,8 @@
 		"@shofer/config-typescript": "workspace:^",
 		"@types/node": "^24.1.0",
 		"@types/proper-lockfile": "^4.1.4",
+		"@types/semver-compare": "^1.0.3",
+		"nock": "^14.0.4",
 		"vitest": "^3.2.3"
 	}
 }

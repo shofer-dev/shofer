@@ -17,7 +17,7 @@ import {
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Mode, modes } from "@shofer/core"
-import { buildApiHandler } from "../../api"
+import { buildApiHandler } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
 // Type-safe model migrations mapping

@@ -42,6 +42,9 @@ import { bootstrapLogging, setLogLevel, setLogCategories } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
+import { registerNativeApiHandler } from "@shofer/core"
+import { VsCodeLmHandler } from "./api/providers/vscode-lm"
+import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
 import { getCacheDirectoryPath } from "./utils/storage"
 import { initializeNetworkProxy } from "./utils/networkProxy"
@@ -127,6 +130,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		getDir: async () => getCacheDirectoryPath(ContextProxy.instance.globalStorageUri.fsPath),
 		getDirSync: () => path.join(ContextProxy.instance.globalStorageUri.fsPath, "cache"),
 	})
+
+	// Register the "native" (host-dependent) API handlers that cannot live in
+	// host-agnostic @shofer/core: vscode-lm (VS Code Language Model API) and
+	// openai-codex (extension-owned OAuth). buildApiHandler (in core) looks these
+	// up by provider name; headless callers that never register them get a clear
+	// "requires the VS Code host" error instead of a missing-provider crash.
+	registerNativeApiHandler("vscode-lm", (o) => new VsCodeLmHandler(o))
+	registerNativeApiHandler("openai-codex", (o) => new OpenAiCodexHandler(o))
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)

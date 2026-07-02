@@ -4,7 +4,7 @@ import * as path from "path"
 import { Anthropic } from "@anthropic-ai/sdk"
 import type { ModelInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
-import { BaseProvider } from "../../../api/providers/base-provider"
+import { BaseProvider } from "@shofer/core"
 
 // Mock the tree-sitter module
 vi.mock("../../../services/tree-sitter", () => ({

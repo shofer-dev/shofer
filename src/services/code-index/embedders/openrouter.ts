@@ -12,7 +12,7 @@ import { withValidationErrorHandling, HttpError, formatEmbeddingError } from "..
 import { TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { Mutex } from "async-mutex"
-import { handleOpenAIError } from "../../../api/providers/utils/openai-error-handler"
+import { handleOpenAIError } from "@shofer/core"
 import { codeIndexLog } from "@shofer/core"
 
 // Default provider name when no specific provider is selected

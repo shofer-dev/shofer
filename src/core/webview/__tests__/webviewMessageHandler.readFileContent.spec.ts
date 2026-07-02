@@ -2,8 +2,6 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-vi.mock("../../../api/providers/fetchers/modelCache")
-
 vi.mock("vscode", async (importOriginal) => {
 	const actual: any = await importOriginal()
 	const showInformationMessage = vi.fn()
@@ -46,6 +44,9 @@ vi.mock("fs/promises", () => {
 vi.mock("../../../utils/fs")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getModels: vi.fn(),
+	flushModels: vi.fn(),
+	getModelsFromCache: vi.fn(),
 	arePathsEqual: vi.fn(),
 	getReadablePath: vi.fn(),
 	toRelativePath: vi.fn(),

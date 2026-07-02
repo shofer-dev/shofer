@@ -5,7 +5,7 @@ import type { Mock } from "vitest"
 import { Anthropic } from "@anthropic-ai/sdk"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { ApiHandler } from "../../../api"
+import { ApiHandler } from "@shofer/core"
 import { ApiMessage } from "@shofer/core"
 import { maybeRemoveImageBlocks } from "@shofer/core"
 import {

@@ -1,7 +1,7 @@
 import { getHost } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
 import { defaultModeSlug } from "@shofer/core"
-import { buildApiHandler } from "../../api"
+import { buildApiHandler } from "@shofer/core"
 
 import { SYSTEM_PROMPT } from "../prompts/system"
 import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"

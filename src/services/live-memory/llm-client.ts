@@ -29,7 +29,7 @@ import type OpenAI from "openai"
 
 import type { LiveMemoryConfig } from "@shofer/types"
 
-import { buildApiHandler, type ApiHandler } from "../../api"
+import { buildApiHandler, type ApiHandler } from "@shofer/core"
 import { estimateUsdCost } from "./pricing"
 import { liveMemoryLog as logger } from "@shofer/core"
 

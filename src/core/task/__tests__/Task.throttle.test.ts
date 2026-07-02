@@ -20,6 +20,9 @@ vi.mock("../../protect/ShoferProtectedController")
 vi.mock("../../context-tracking/FileContextTracker")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
+	buildApiHandler: vi.fn(() => ({
+		getModel: () => ({ info: {}, id: "test-model" }),
+	})),
 	ToolRepetitionDetector: class {
 		check() {
 			return { allowExecution: true }
@@ -30,11 +33,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 }))
 
 vi.mock("../../../integrations/editor/DiffViewProvider")
-vi.mock("../../../api", () => ({
-	buildApiHandler: vi.fn(() => ({
-		getModel: () => ({ info: {}, id: "test-model" }),
-	})),
-}))
 
 // Mock TelemetryService
 vi.mock("@shofer/telemetry", () => ({

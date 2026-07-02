@@ -21,6 +21,9 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	const noop = () => {}
 	return {
 		...((await importOriginal()) as Record<string, unknown>),
+		buildApiHandler: vi.fn(() => ({
+			getModel: () => ({ info: {}, id: "test-model" }),
+		})),
 		ToolRepetitionDetector: class {
 			check() {
 				return { allowExecution: true }
@@ -45,12 +48,6 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		scrollLog: { error: noop, info: noop, warn: noop },
 	}
 })
-
-vi.mock("../../../api", () => ({
-	buildApiHandler: vi.fn(() => ({
-		getModel: () => ({ info: {}, id: "test-model" }),
-	})),
-}))
 
 // Mock TelemetryService
 vi.mock("@shofer/telemetry", () => ({

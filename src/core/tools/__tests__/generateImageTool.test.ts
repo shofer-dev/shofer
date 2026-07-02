@@ -7,18 +7,18 @@ import * as pathUtils from "../../../utils/pathUtils"
 import * as fileUtils from "../../../utils/fs"
 import { formatResponse } from "@shofer/core"
 import { EXPERIMENT_IDS } from "../../../shared/experiments"
-import { OpenRouterHandler } from "../../../api/providers/openrouter"
+import { OpenRouterHandler } from "@shofer/core"
 
 // Mock dependencies
 vi.mock("fs/promises")
 vi.mock("../../../utils/pathUtils")
 vi.mock("../../../utils/fs")
-// safeWriteJson is now exported from @shofer/core; partially mock it there
+// safeWriteJson and OpenRouterHandler are now exported from @shofer/core; partially mock them there
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	safeWriteJson: vi.fn(),
+	OpenRouterHandler: vi.fn(),
 }))
-vi.mock("../../../api/providers/openrouter")
 
 describe("generateImageTool", () => {
 	let mockShofer: any

@@ -96,7 +96,8 @@ vi.mock("../../../utils/tts", () => ({
 	setTtsSpeed: vi.fn(),
 }))
 
-vi.mock("../../../api", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	buildApiHandler: vi.fn(),
 }))
 
@@ -254,7 +255,7 @@ describe("ShoferProvider - API Handler Rebuild Guard", () => {
 		}
 
 		// Get the buildApiHandler mock
-		const { buildApiHandler } = await import("../../../api")
+		const { buildApiHandler } = await import("@shofer/core")
 		buildApiHandlerMock = vi.mocked(buildApiHandler)
 
 		// Setup default mock implementation

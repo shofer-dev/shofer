@@ -12,8 +12,8 @@ import { normalizeToolSchema } from "@shofer/core"
 import { ApiStream } from "@shofer/core"
 import { convertToVsCodeLmMessages, extractTextCountFromMessage } from "../transform/vscode-lm-format"
 
-import { BaseProvider } from "./base-provider"
-import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
+import { BaseProvider } from "@shofer/core"
+import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "@shofer/core"
 import { apiLog } from "@shofer/core"
 import { stringifyForLog } from "@shofer/core"
 

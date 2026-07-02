@@ -3,11 +3,12 @@
 import type { ProviderSettings } from "@shofer/types"
 
 import { singleCompletionHandler } from "../single-completion-handler"
-import { buildApiHandler, SingleCompletionHandler } from "../../api"
+import { buildApiHandler, SingleCompletionHandler } from "@shofer/core"
 import { supportPrompt } from "../../shared/support-prompt"
 
 // Mock the API handler
-vi.mock("../../api", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	buildApiHandler: vi.fn(),
 }))
 

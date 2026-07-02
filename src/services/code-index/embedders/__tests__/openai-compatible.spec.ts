@@ -148,8 +148,12 @@ describe("OpenAICompatibleEmbedder", () => {
 				)
 			})
 
+			// `handleOpenAIError` (now in @shofer/core) resolves the message via core's
+			// own i18n instance, which returns the raw key under NODE_ENV=test (core's
+			// documented test-mode convention). Asserting the key confirms the error
+			// handler took the invalid-characters branch.
 			expect(() => new OpenAICompatibleEmbedder(testBaseUrl, invalidApiKey, testModelId)).toThrow(
-				"API key contains invalid characters",
+				"errors.api.invalidKeyInvalidChars",
 			)
 		})
 	})

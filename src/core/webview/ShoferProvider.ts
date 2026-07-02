@@ -96,8 +96,8 @@ import { setPanel } from "../../activate/registerCommands"
 
 import { t } from "@shofer/core"
 
-import { buildApiHandler } from "../../api"
-import { forceFullModelDetailsLoad, hasLoadedFullDetails } from "../../api/providers/fetchers/lmstudio"
+import { buildApiHandler } from "@shofer/core"
+import { forceFullModelDetailsLoad, hasLoadedFullDetails } from "@shofer/core"
 
 import { ContextProxy } from "../config/ContextProxy"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"

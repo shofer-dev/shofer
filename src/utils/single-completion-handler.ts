@@ -1,6 +1,6 @@
 import type { ProviderSettings } from "@shofer/types"
 
-import { buildApiHandler, SingleCompletionHandler } from "../api"
+import { buildApiHandler, SingleCompletionHandler } from "@shofer/core"
 
 /**
  * Enhances a prompt using the configured API without creating a full Shofer instance or task history.
