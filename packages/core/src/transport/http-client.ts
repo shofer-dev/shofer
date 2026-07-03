@@ -11,6 +11,8 @@ import type { AgentApi, ServerEvent } from "@shofer/types"
 export interface ShoferHttpClientOptions {
 	/** Base URL of the server, e.g. `http://127.0.0.1:30099`. */
 	baseUrl: string
+	/** Bearer token sent as `Authorization: Bearer <token>` on every request (when the server requires auth). */
+	token?: string
 	/** Override for tests / non-global fetch. */
 	fetch?: typeof fetch
 }
@@ -18,10 +20,12 @@ export interface ShoferHttpClientOptions {
 export class ShoferHttpClient implements AgentApi {
 	private readonly base: string
 	private readonly doFetch: typeof fetch
+	private readonly authHeaders: Record<string, string>
 
 	constructor(options: ShoferHttpClientOptions) {
 		this.base = `${options.baseUrl.replace(/\/$/, "")}/api/v1`
 		this.doFetch = options.fetch ?? fetch
+		this.authHeaders = options.token ? { authorization: `Bearer ${options.token}` } : {}
 	}
 
 	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
@@ -46,7 +50,7 @@ export class ShoferHttpClient implements AgentApi {
 	private async post(path: string, body: unknown): Promise<unknown> {
 		const res = await this.doFetch(`${this.base}${path}`, {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: { "content-type": "application/json", ...this.authHeaders },
 			body: JSON.stringify(body),
 		})
 		if (!res.ok) throw new Error(`shofer server ${path} → ${res.status}`)
@@ -57,7 +61,10 @@ export class ShoferHttpClient implements AgentApi {
 	private async streamEvents(listener: (event: ServerEvent) => void, signal: AbortSignal): Promise<void> {
 		let res: Response
 		try {
-			res = await this.doFetch(`${this.base}/event`, { headers: { accept: "text/event-stream" }, signal })
+			res = await this.doFetch(`${this.base}/event`, {
+				headers: { accept: "text/event-stream", ...this.authHeaders },
+				signal,
+			})
 		} catch {
 			return // aborted or connection failed
 		}

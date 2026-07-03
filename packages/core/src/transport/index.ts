@@ -10,6 +10,7 @@ import { runAcpAgent } from "./run-acp-agent.js"
 
 export * from "./http-server.js"
 export * from "./http-client.js"
+export * from "./node-connection.js"
 export { ShoferApiAgent } from "./shofer-api-agent.js"
 export * from "./acp-mapping.js"
 export * from "./acp-connection.js"
