@@ -112,11 +112,42 @@ export class NodeRegistry {
 	private readonly hasTokenCache = new Set<string>()
 	private readonly listeners = new Set<() => void>()
 	private defs: ShoferNodeDef[] = []
-	private provider?: NodeProviderHost
+	/** Every attached provider (sidebar + editor-tab). All get `shoferNodes` via `onChange`. */
+	private readonly providers = new Set<NodeProviderHost>()
+	/**
+	 * The provider that RENDERS the current task (Local new-task path + remote
+	 * shadow deltas + focus). Defaults to the first attached provider; a `newTask`
+	 * routed from a specific provider retargets it, so a task started in the editor
+	 * tab renders there (Stage D).
+	 */
+	private renderTarget?: NodeProviderHost
 	/** Per-remote-task render buffers (L2). Local tasks are NEVER shadowed. */
 	private readonly shadows = new Map<string, RemoteTaskShadow>()
 	/** The remote shadow the webview is currently showing (drives the render override). */
 	private focusedShadowId?: string
+
+	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
+	private static _instance: NodeRegistry | undefined
+
+	/**
+	 * The process-wide shared registry. Constructed once (by the sidebar activation,
+	 * which owns the live {@link ShoferAPI}); the editor-tab provider retrieves the
+	 * SAME instance with no args so both webviews share one pool + node state. Pass
+	 * `opts` to lazily construct on first call; call with no args to fetch (or
+	 * `undefined` if not yet constructed).
+	 */
+	static getInstance(opts?: NodeRegistryOptions, deps?: NodeRegistryDeps): NodeRegistry | undefined {
+		if (!NodeRegistry._instance && opts) {
+			NodeRegistry._instance = new NodeRegistry(opts, deps)
+		}
+		return NodeRegistry._instance
+	}
+
+	/** Dispose + clear the shared instance (extension deactivation / test isolation). */
+	static resetInstance(): void {
+		NodeRegistry._instance?.dispose()
+		NodeRegistry._instance = undefined
+	}
 
 	constructor(opts: NodeRegistryOptions, deps: NodeRegistryDeps = {}) {
 		this.context = opts.context
@@ -159,12 +190,22 @@ export class NodeRegistry {
 	}
 
 	/**
-	 * Attach the controller-side provider host (Level 2). The registry needs it to
-	 * run the Local in-process new-task path (bypassing the pool) and to push
-	 * remote-shadow render deltas to the webview. Idempotent; the last attach wins.
+	 * Attach a controller-side provider host (Level 2). Every attached provider
+	 * receives `shoferNodes` state (via its own `onChange` registration). The FIRST
+	 * attached provider also becomes the default render target for the Local
+	 * new-task path + remote shadow deltas; `routeNewTask` retargets it per task.
 	 */
 	attachProvider(provider: NodeProviderHost): void {
-		this.provider = provider
+		this.providers.add(provider)
+		if (!this.renderTarget) this.renderTarget = provider
+	}
+
+	/** Detach a provider (its webview closed). Re-points the render target if needed. */
+	detachProvider(provider: NodeProviderHost): void {
+		this.providers.delete(provider)
+		if (this.renderTarget === provider) {
+			this.renderTarget = this.providers.values().next().value
+		}
 	}
 
 	/** True when at least one *remote* executor is currently assignable (enabled + connected). */
@@ -185,7 +226,13 @@ export class NodeRegistry {
 	 *
 	 * Returns the new task id (or `undefined` if the Local path failed to create).
 	 */
-	async routeNewTask(input: RouteNewTaskInput): Promise<string | undefined> {
+	async routeNewTask(input: RouteNewTaskInput, initiator?: NodeProviderHost): Promise<string | undefined> {
+		// The provider that issued this newTask becomes the render target, so the
+		// task renders in the webview the user started it from (sidebar or tab).
+		if (initiator) {
+			this.providers.add(initiator)
+			this.renderTarget = initiator
+		}
 		const assignable = this.pool.assignableIds()
 		const preferred =
 			input.preferredNodeId && assignable.includes(input.preferredNodeId) ? input.preferredNodeId : undefined
@@ -193,8 +240,8 @@ export class NodeRegistry {
 		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_NODE_ID
 
 		if (owner === LOCAL_NODE_ID) {
-			if (!this.provider) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
-			const taskId = await this.provider.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
+			if (!this.renderTarget) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
+			const taskId = await this.renderTarget.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
 				mode: input.mode,
 				apiConfigName: input.apiConfigName,
 			})
@@ -222,7 +269,7 @@ export class NodeRegistry {
 	focusShadow(taskId: string): void {
 		if (!this.shadows.has(taskId)) return
 		this.focusedShadowId = taskId
-		void this.provider?.postInitState()
+		void this.renderTarget?.postInitState()
 		this.fireChange()
 	}
 
@@ -281,7 +328,7 @@ export class NodeRegistry {
 				shadow.applyMessageDelta(payload.action, payload.message)
 				// Mirror the local gate: only push deltas for the focused shadow.
 				if (this.focusedShadowId === shadow.taskId) {
-					void this.provider?.postMessageToWebview(
+					void this.renderTarget?.postMessageToWebview(
 						payload.action === "created"
 							? { type: "shoferMessageAppended", shoferMessage: payload.message }
 							: { type: "messageUpdated", shoferMessage: payload.message },
@@ -440,7 +487,7 @@ export class NodeRegistry {
 		// the pool never assigned (the pure local-only path, which bypasses the pool)
 		// has no owner → Local. This is what lights `isActive` in buildNodeViews and
 		// the "Executing on remote node" badge in TaskHeader.
-		const focusedTaskId = this.focusedShadowId ?? this.provider?.getCurrentTask()?.taskId
+		const focusedTaskId = this.focusedShadowId ?? this.renderTarget?.getCurrentTask()?.taskId
 		if (!focusedTaskId) return LOCAL_NODE_ID
 		return this.pool.ownerOf(focusedTaskId) ?? LOCAL_NODE_ID
 	}

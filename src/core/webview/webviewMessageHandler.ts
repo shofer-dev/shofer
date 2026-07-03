@@ -856,14 +856,19 @@ export const webviewMessageHandler = async (
 				const shouldRoute =
 					!!registry && (registry.hasEnabledRemote() || typeof message.preferredNodeId === "string")
 				if (shouldRoute) {
-					await registry!.routeNewTask({
-						prompt: messageText,
-						images: resolved.images,
-						mode: message.mode,
-						apiConfigName: message.apiConfigName,
-						worktreeDir,
-						preferredNodeId: message.preferredNodeId,
-					})
+					await registry!.routeNewTask(
+						{
+							prompt: messageText,
+							images: resolved.images,
+							mode: message.mode,
+							apiConfigName: message.apiConfigName,
+							worktreeDir,
+							preferredNodeId: message.preferredNodeId,
+						},
+						// This provider is the render target — the task renders in the
+						// webview (sidebar or editor tab) the user started it from.
+						provider,
+					)
 				} else {
 					// Pre-task mode / API-config seeds chosen in the chat dropdown.
 					// When absent, createTask falls back to the global Settings defaults.

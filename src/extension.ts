@@ -65,6 +65,7 @@ import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "@shofer/core"
 import { CodeIndexManager } from "./services/code-index/manager"
+import { NodeRegistry } from "./core/nodes/NodeRegistry"
 import { GitIndexManager } from "./services/git-index/git-index-manager"
 import { LiveMemoryManager } from "./services/live-memory/manager"
 import { migrateSettings } from "./utils/migrateSettings"
@@ -566,6 +567,7 @@ export async function deactivate() {
 	await McpServerManager.cleanup(extensionContext)
 	LiveMemoryManager.disposeAll()
 	CodeIndexManager.disposeAll()
+	NodeRegistry.resetInstance()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
 }

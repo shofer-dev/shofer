@@ -466,6 +466,12 @@ export const openShoferInNewTab = async ({ context, outputChannel }: Omit<Regist
 
 	await tabProvider.resolveWebviewView(newPanel)
 
+	// Shofer Nodes L2/D: the editor-tab provider shares the same process-wide
+	// NodeRegistry singleton the sidebar constructed, so this webview also receives
+	// node state and can render tasks started here. No-op if the sidebar hasn't
+	// activated the registry yet.
+	tabProvider.attachSharedNodeRegistry()
+
 	// Add listener for visibility changes to notify webview
 	newPanel.onDidChangeViewState(
 		(e) => {

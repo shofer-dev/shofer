@@ -401,6 +401,56 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(state.nodes.find((n) => n.id === "r1")!.isActive).toBe(false)
 	})
 
+	// ── L2/D: shared singleton + multi-provider ──────────────────────────────────
+
+	it("getInstance returns the same shared registry; both attached providers get shoferNodes", async () => {
+		NodeRegistry.resetInstance()
+		const { context } = makeContext()
+		const opts = { context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0" }
+		const a = NodeRegistry.getInstance(opts, { localAgent: makeAgent() })!
+		const b = NodeRegistry.getInstance()! // no args → same instance
+		expect(a).toBe(b)
+
+		const sidebar = makeProviderHost()
+		const tab = makeProviderHost()
+		let sidebarPushes = 0
+		let tabPushes = 0
+		a.onChange(() => sidebarPushes++)
+		a.onChange(() => tabPushes++)
+		a.attachProvider(sidebar)
+		a.attachProvider(tab)
+
+		// A change fires ALL onChange listeners (both webviews get node state).
+		await a.setDisabled(LOCAL_NODE_ID, true)
+		expect(sidebarPushes).toBeGreaterThan(0)
+		expect(tabPushes).toBeGreaterThan(0)
+		NodeRegistry.resetInstance()
+	})
+
+	it("routeNewTask(initiator) retargets the render provider (task renders where it started)", async () => {
+		NodeRegistry.resetInstance()
+		const { context } = makeContext()
+		const registry = NodeRegistry.getInstance(
+			{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0" },
+			{ localAgent: makeAgent() },
+		)!
+		const sidebar = makeProviderHost()
+		const tab = makeProviderHost()
+		registry.attachProvider(sidebar) // sidebar is the default render target
+		registry.attachProvider(tab)
+
+		// Task started from the editor tab → the Local path runs on the TAB provider.
+		await registry.routeNewTask({ prompt: "from tab" }, tab)
+		expect(tab.createManagedTask).toHaveBeenCalledTimes(1)
+		expect(sidebar.createManagedTask).not.toHaveBeenCalled()
+
+		// Detaching the tab re-points the render target back to the sidebar.
+		registry.detachProvider(tab)
+		await registry.routeNewTask({ prompt: "from sidebar" })
+		expect(sidebar.createManagedTask).toHaveBeenCalledTimes(1)
+		NodeRegistry.resetInstance()
+	})
+
 	it("init() auto-connects persisted autoConnect remotes and hydrates hasToken", async () => {
 		const seeded = makeRegistry([{ id: "r1", kind: "remote", label: "box", host: "host:1", autoConnect: true }])
 		seeded.secrets.set("shoferNode.token.r1", "tok")

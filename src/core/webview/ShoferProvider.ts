@@ -198,6 +198,8 @@ export class ShoferProvider
 	public readonly taskManager: TaskManager
 	/** Shofer Nodes registry (Local + remote executors). Set post-construction via {@link initNodeRegistry}. */
 	public nodeRegistry?: NodeRegistry
+	/** Unsubscribe from the shared registry's onChange (cleared on dispose). */
+	private nodeRegistryUnsub?: () => void
 	private taskHistoryStoreInitialized = false
 	private globalStateWriteThroughTimer: ReturnType<typeof setTimeout> | null = null
 	private static readonly GLOBAL_STATE_WRITE_THROUGH_DEBOUNCE_MS = 5000 // 5 seconds
@@ -1146,6 +1148,12 @@ export class ShoferProvider
 
 		this._disposed = true
 
+		// L2/D: detach from the SHARED node registry (do NOT dispose it — other
+		// providers may still be using it). Drop our onChange listener + render slot.
+		this.nodeRegistryUnsub?.()
+		this.nodeRegistryUnsub = undefined
+		this.nodeRegistry?.detachProvider(this)
+
 		// Phase 3: H8 disposables removed
 
 		// Clear all tasks from the stack.
@@ -2007,15 +2015,34 @@ export class ShoferProvider
 	 */
 	public initNodeRegistry(localApi: ShoferAPI, controllerVersion: string): void {
 		if (this.nodeRegistry) return
-		const registry = new NodeRegistry({ context: this.context, localApi, controllerVersion })
+		// L2/D: the registry is a process-wide SHARED singleton. The sidebar
+		// activation (which owns the live ShoferAPI) constructs it; the editor-tab
+		// provider retrieves the same instance via attachSharedNodeRegistry().
+		const registry = NodeRegistry.getInstance({ context: this.context, localApi, controllerVersion })!
+		this.attachNodeRegistry(registry)
+		void registry.init()
+	}
+
+	/**
+	 * Attach to the already-constructed shared {@link NodeRegistry} (editor-tab
+	 * provider path — it has no ShoferAPI of its own). No-op if the singleton isn't
+	 * up yet (sidebar activation hasn't run).
+	 */
+	public attachSharedNodeRegistry(): void {
+		if (this.nodeRegistry) return
+		const registry = NodeRegistry.getInstance()
+		if (!registry) return
+		this.attachNodeRegistry(registry)
+		void this.pushShoferNodesState()
+	}
+
+	/** Wire this provider to a registry: render target + `shoferNodes` push listener. */
+	private attachNodeRegistry(registry: NodeRegistry): void {
 		this.nodeRegistry = registry
-		// L2: the registry drives the Local in-process new-task path + shadow render
-		// through this provider.
 		registry.attachProvider(this)
-		registry.onChange(() => {
+		this.nodeRegistryUnsub = registry.onChange(() => {
 			void this.pushShoferNodesState()
 		})
-		void registry.init()
 	}
 
 	/** Push the current Shofer Nodes state (registry + live status, no secrets) to the webview. */
