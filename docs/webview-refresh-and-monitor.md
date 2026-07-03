@@ -16,9 +16,9 @@ recovery button in Shofer's toolbar overflow menu).
 > originally motivated §15 turned out **not** to be a stuck webview iframe but
 > a V8 OOM in the extension-host process itself (the Node side, not the
 > renderer). When the host runs out of memory, every IPC channel — including
-> this webview's — goes silent at the same time. See
-> [`mem-utilization-profiling.md`](mem-utilization-profiling.md) for the
-> diagnosis and the actual fix surface.
+> this webview's — goes silent at the same time. The fix surface is host-side
+> memory pressure (bounded tool-result blobs, per-message delta IPC instead of
+> full-state pushes), not the renderer.
 >
 > The heartbeat (§5), the `fatal_error` path (§6.2), the auto-reset (§7), and
 > the **Refresh Webview** / **Reload Window** buttons (§8, §14) remain useful
@@ -766,10 +766,9 @@ heap out of memory` at ~2.5 GiB, with `large_object` space dominating the
   `reloadWebviewAction` on the host side can help — the host is the part
   that is broken.
 
-The actual fix surface for that failure mode lives in
-[`mem-utilization-profiling.md`](mem-utilization-profiling.md) (transient
-bloat from conversation-history serialisation, full-state webview pushes,
-LLM request-body assembly, etc.).
+The actual fix surface for that failure mode is host-side memory pressure —
+transient bloat from full-state webview pushes and LLM request-body assembly,
+mitigated by per-message delta IPC and bounded tool-result blobs.
 
 The verified-escalation ladder described below is therefore parked. It is
 still a sound design for a **genuinely renderer-local** failure (Chromium

@@ -2,6 +2,12 @@
 
 Design for the user-initiated terminate/kill of a running command from the chat UI. **The feature is already implemented.** This document captures the existing architecture, data flow, and identifies areas for improvement.
 
+> **Host boundary.** The terminal being killed is a Category I capability behind
+> the `HostTerminals` seam — the default backend is `execa`
+> ([`packages/core/src/terminal`](../packages/core/src/terminal)), with the VS Code
+> integrated terminal as an alternative Category II backend. Termination flows
+> through that seam regardless of which backend the host installed.
+
 ---
 
 ## 1. User-Visible Behavior

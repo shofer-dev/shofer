@@ -11,16 +11,18 @@ Node.js process, intercepting `require("vscode")` to return a mock API layer
 (`@shofer/vscode-shim`) that makes the extension think it's running inside
 VSCode.
 
-> **Toward a clean host boundary (§9).** The shim mocks the _entire_ `vscode`
+> **Toward a clean host boundary (§8).** The shim mocks the _entire_ `vscode`
 > API. The v3-architecture direction is to put what the core actually needs
 > behind narrow, host-agnostic interfaces instead: `HostBridge` in
-> [`packages/types/src/host.ts`](../packages/types/src/host.ts) (notifications +
-> filesystem so far, alongside the already-extracted `MessagePersistencePort`,
-> §5), with in-memory reference impls in
+> [`packages/types/src/host.ts`](../packages/types/src/host.ts) — which now spans
+> the filesystem, `Notifier`, editor, `HostTerminals`/terminal, language services,
+> workspace, config, and env, alongside the SQLite message store (§5) and the
+> HTTP/ACP transport — with in-memory reference impls in
 > [`host-memory.ts`](../packages/types/src/host-memory.ts) for the CLI/tests and a
 > VS Code-backed adapter in the extension. As call sites migrate from `vscode.*`
 > to `HostBridge`, the shim shrinks and the core becomes genuinely
-> `vscode`-free — the gating milestone for the HTTP API/SDK (§11) and ACP (§12).
+> `vscode`-free — the gating milestone for the HTTP API/SDK (§10) and ACP (§11).
+> See [`host-boundary.md`](host-boundary.md) for the seam mechanics.
 
 ```
 ┌─────────────────┐

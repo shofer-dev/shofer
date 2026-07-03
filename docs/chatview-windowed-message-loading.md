@@ -2,10 +2,9 @@
 
 > **Status:** ❌ This **specific approach (H2)** was reverted (2026-05-30) — **but
 > windowed message loading DID ship.** The goal was re-implemented as a simpler,
-> lower-risk design, **H24 / T1.B** (tail-only JSONL read on cold switch), which is
-> live today. See [`performance_optimizations.md` §"H24 (T1.B) implementation
-> details"](performance_optimizations.md#h24-t1b-implementation-details) for the
-> authoritative current design.
+> lower-risk design (tail-only read on cold switch), which is live today. See
+> [`performance_optimizations.md` § "Cold task-switch — windowed loading"](performance_optimizations.md#cold-task-switch--windowed-loading)
+> for the authoritative current design.
 >
 > The two differ:
 >

@@ -9,15 +9,15 @@ The canonical source of truth for the interface is
 [`packages/types/src/api.ts`](../packages/types/src/api.ts); the canonical
 implementation is [`src/extension/api.ts`](../src/extension/api.ts).
 
-> **HTTP/SSE transport (§11).** Today the API is **in-process** (a JS object in
-> the extension host). §11 publishes it over a network boundary so any client —
+> **HTTP/SSE transport (§10).** Today the API is **in-process** (a JS object in
+> the extension host). §10 publishes it over a network boundary so any client —
 > TUI, web app, third-party tool — can drive the agent, and a generated SDK can't
 > drift from it. The transport itself is
 > [`src/server/http-server.ts`](../src/server/http-server.ts): a dependency-free
 > `node:http` server exposing task control over HTTP and a one-way event stream
 > over SSE (`GET /api/v1/event`), driven by an injected `AgentApi`. Wiring
 > `AgentApi` to this `ShoferAPI` (or the headless CLI agent) and generating a
-> typed SDK from the route set is the follow-on; it depends on §9's host-agnostic
+> typed SDK from the route set is the follow-on; it depends on §8's host-agnostic
 > core so the server can run headless.
 
 ## Quick Start

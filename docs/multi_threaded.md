@@ -960,7 +960,7 @@ notifies the main thread, which can trigger `_resetWebview()`.
       `shofer_workers_active` (Gauge, pushed from workers) and
       `shofer_workers_total` (Counter, incremented on spawn).
 
-    See [`docs/prometheus.md`](prometheus.md) for the full metrics specification.
+    See [`docs/otel-metrics.md`](otel-metrics.md) for the full metrics catalog.
 
 ### 9.1 Resolved Decisions
 

@@ -8,7 +8,7 @@
 > headless extension host. 19 tests. The wire framing is implemented directly (the
 > upstream SDK is not in this environment's registry) and is swappable for
 > `@zed-industries/agent-client-protocol` later. Not yet validated against a live
-> ACP client. See `docs/v3_architecture.md` §12.
+> ACP client. See `docs/v3_architecture.md` §11.
 
 ## What ACP is (and isn't)
 

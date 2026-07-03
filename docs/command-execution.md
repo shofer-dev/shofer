@@ -2,6 +2,12 @@
 
 How `execute_command` and `read_command_output` work together — from invocation through output delivery, cancellation, and cleanup.
 
+> **Host boundary.** Terminal execution is a Category I capability: the portable
+> engine in [`packages/core/src/terminal`](../packages/core/src/terminal) (default
+> `execa` backend — `ExecaTerminal` / `ExecaTerminalProcess`) runs behind the
+> `HostTerminals` seam, and the VS Code integrated terminal is a Category II
+> backend the host adapter can supply instead. See [`host-boundary.md`](host-boundary.md).
+
 ---
 
 ## 1. Architecture Overview
