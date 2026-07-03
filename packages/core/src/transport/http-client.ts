@@ -1,4 +1,4 @@
-import type { AgentApi, ServerEvent } from "@shofer/types"
+import type { AgentApi, AskResponse, ServerEvent } from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -38,6 +38,10 @@ export class ShoferHttpClient implements AgentApi {
 
 	async cancelTask(taskId: string): Promise<void> {
 		await this.post(`/task/${encodeURIComponent(taskId)}/cancel`, {})
+	}
+
+	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
 	}
 
 	/** Subscribe to the SSE event stream; returns an unsubscribe fn (aborts the request). */

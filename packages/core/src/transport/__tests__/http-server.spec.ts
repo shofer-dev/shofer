@@ -63,6 +63,7 @@ describe("createRequestHandler (§11)", () => {
 			createTask: vi.fn(async ({ prompt }) => ({ taskId: `task-for-${prompt}` })),
 			sendMessage: vi.fn(async () => {}),
 			cancelTask: vi.fn(async () => {}),
+			respondToAsk: vi.fn(async () => {}),
 			subscribe: vi.fn((l: (e: ServerEvent) => void) => {
 				events.push(l)
 				return () => {
@@ -117,6 +118,29 @@ describe("createRequestHandler (§11)", () => {
 		await run(mockReq("POST", "/api/v1/task/t1/cancel"), c as unknown as ServerResponse)
 		expect(c.statusCode).toBe(202)
 		expect(api.cancelTask).toHaveBeenCalledWith("t1")
+	})
+
+	it("routes an ask response to the agent", async () => {
+		const res = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task/t1/ask", { askResponse: "yesButtonClicked", text: "go", askId: "a1" }),
+			res as unknown as ServerResponse,
+		)
+		expect(res.statusCode).toBe(202)
+		expect(JSON.parse(res.body)).toEqual({ taskId: "t1", answered: true })
+		expect(api.respondToAsk).toHaveBeenCalledWith("t1", {
+			askResponse: "yesButtonClicked",
+			text: "go",
+			images: undefined,
+			askId: "a1",
+		})
+	})
+
+	it("400s an ask response with no askResponse", async () => {
+		const res = mockRes()
+		await run(mockReq("POST", "/api/v1/task/t1/ask", {}), res as unknown as ServerResponse)
+		expect(res.statusCode).toBe(400)
+		expect(api.respondToAsk).not.toHaveBeenCalled()
 	})
 
 	it("streams events over SSE and unsubscribes on close", async () => {

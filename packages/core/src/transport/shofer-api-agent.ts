@@ -1,6 +1,6 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type { AgentApi, ServerEvent } from "@shofer/types"
+import type { AgentApi, AskResponse, ServerEvent } from "@shofer/types"
 
 /**
  * Live {@link AgentApi} backed by the in-process {@link ShoferAPI} (§11).
@@ -42,6 +42,10 @@ export class ShoferApiAgent implements AgentApi {
 	async cancelTask(taskId: string): Promise<void> {
 		void taskId // ShoferAPI is current-task-centric; the id is implied.
 		await this.api.cancelCurrentTask()
+	}
+
+	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
+		await this.api.respondToAsk(taskId, response)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

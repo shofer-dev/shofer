@@ -11,6 +11,7 @@ function makeApi() {
 		createTask: vi.fn(async () => ({ taskId: "t1" })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
+		respondToAsk: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {}

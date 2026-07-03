@@ -17,6 +17,7 @@ function makeAgent(): AgentApi {
 		createTask: vi.fn(async () => ({ taskId: "t" })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
+		respondToAsk: vi.fn(async () => {}),
 		subscribe: vi.fn(() => () => {}),
 	}
 }
@@ -123,6 +124,7 @@ function makeDrivableAgent(taskId: string) {
 		createTask: vi.fn(async () => ({ taskId })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
+		respondToAsk: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {

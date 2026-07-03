@@ -393,6 +393,29 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		await this.sidebarProvider.postMessageToWebview({ type: "invoke", invoke: "sendMessage", text, images })
 	}
 
+	public async respondToAsk(
+		taskId: string,
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
+	): Promise<void> {
+		// Resolve the addressed task (a managed instance, else the current task) and
+		// drive the answer through the same ask-response channel a webview button
+		// takes. This is the executor side of the reverse ask channel: a controller
+		// routes a remote task's approval back here over the transport.
+		const task = this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
+
+		if (!task) {
+			this.log(`[API#respondToAsk] no task for ${taskId}; ask response dropped`)
+			return
+		}
+
+		task.handleWebviewAskResponse(
+			response.askResponse as Parameters<typeof task.handleWebviewAskResponse>[0],
+			response.text,
+			response.images,
+			response.askId,
+		)
+	}
+
 	public deleteQueuedMessage(messageId: string) {
 		const currentTask = this.sidebarProvider.getCurrentTask()
 

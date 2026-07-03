@@ -59,6 +59,7 @@ export interface HttpServerOptions {
  *   POST /api/v1/task                → { prompt, taskId? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
+ *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId? } (interactive approval)
  */
 export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): http.Server {
 	return http.createServer(createRequestHandler(api, opts))
@@ -123,7 +124,7 @@ export function createRequestHandler(
 			return send(res, 201, result)
 		}
 
-		const taskMatch = path.match(new RegExp(`^${base}/task/([^/]+)/(message|cancel)$`))
+		const taskMatch = path.match(new RegExp(`^${base}/task/([^/]+)/(message|cancel|ask)$`))
 		if (method === "POST" && taskMatch) {
 			const taskId = taskMatch[1]!
 			const action = taskMatch[2]!
@@ -132,6 +133,17 @@ export function createRequestHandler(
 				if (typeof body.message !== "string") return send(res, 400, { error: "message is required" })
 				await api.sendMessage(taskId, body.message)
 				return send(res, 202, { taskId, accepted: true })
+			}
+			if (action === "ask") {
+				const body = await readJson(req)
+				if (typeof body.askResponse !== "string") return send(res, 400, { error: "askResponse is required" })
+				await api.respondToAsk(taskId, {
+					askResponse: body.askResponse,
+					text: body.text as string | undefined,
+					images: body.images as string[] | undefined,
+					askId: body.askId as string | undefined,
+				})
+				return send(res, 202, { taskId, answered: true })
 			}
 			await api.cancelTask(taskId)
 			return send(res, 202, { taskId, cancelled: true })

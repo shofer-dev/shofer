@@ -37,6 +37,19 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		expect(fetchMock).toHaveBeenNthCalledWith(2, "http://host:1/api/v1/task/t%201/cancel", expect.anything())
 	})
 
+	it("respondToAsk POSTs the response to the task /ask subroute", async () => {
+		const fetchMock = vi.fn(async () => new Response("", { status: 202 }))
+		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
+		await client.respondToAsk("t 1", { askResponse: "yesButtonClicked", askId: "a1" })
+		expect(fetchMock).toHaveBeenCalledWith(
+			"http://host:1/api/v1/task/t%201/ask",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ askResponse: "yesButtonClicked", askId: "a1" }),
+			}),
+		)
+	})
+
 	it("throws on a non-2xx response", async () => {
 		const fetchMock = vi.fn(async () => new Response("nope", { status: 500 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })

@@ -16,6 +16,7 @@ describe("ShoferApiAgent (§11)", () => {
 			resumeTask: vi.fn(async () => {}),
 			sendMessage: vi.fn(async () => {}),
 			cancelCurrentTask: vi.fn(async () => {}),
+			respondToAsk: vi.fn(async () => {}),
 		}) as unknown as ShoferAPI & EventEmitter
 		return api
 	}
@@ -42,6 +43,16 @@ describe("ShoferApiAgent (§11)", () => {
 		const api = makeApi()
 		await new ShoferApiAgent(api).cancelTask("t1")
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).cancelCurrentTask).toHaveBeenCalled()
+	})
+
+	it("respondToAsk delegates to ShoferAPI.respondToAsk", async () => {
+		const api = makeApi()
+		const agent = new ShoferApiAgent(api)
+		await agent.respondToAsk("t1", { askResponse: "yesButtonClicked", askId: "a1" })
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).respondToAsk).toHaveBeenCalledWith("t1", {
+			askResponse: "yesButtonClicked",
+			askId: "a1",
+		})
 	})
 
 	it("subscribe forwards ShoferAPI events and unsubscribes", () => {

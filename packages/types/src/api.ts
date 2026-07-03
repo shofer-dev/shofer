@@ -61,6 +61,19 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 */
 	sendMessage(message?: string, images?: string[]): Promise<void>
 	/**
+	 * Answers an outstanding `ask` (interactive tool approval / follow-up) on a task.
+	 * Resolves the managed task by id (or the current task when omitted) and drives
+	 * the answer through its ask-response channel — the same path a webview
+	 * approve/deny button takes. Lets a transport (HTTP/SSE) route a remote task's
+	 * approval back to the executor.
+	 * @param taskId The id of the task whose ask is being answered.
+	 * @param response The ask response verb plus optional text/images/askId.
+	 */
+	respondToAsk(
+		taskId: string,
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
+	): Promise<void>
+	/**
 	 * Removes a queued message by ID from the current task's message queue.
 	 * @param messageId The ID of the queued message to remove.
 	 */
