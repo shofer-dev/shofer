@@ -5,8 +5,11 @@ import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { API } from "../extension/api"
 import * as ProfileValidatorMod from "../shared/ProfileValidator"
 
-// Mock Task class used by ShoferProvider to avoid heavy startup
-vi.mock("../core/task/Task", () => {
+// Mock the Task class used by ShoferProvider to avoid heavy startup.
+// Task moved into @shofer/core during the carve-out; ShoferProvider now imports
+// it from the barrel, so we override the barrel export (partial mock keeps the
+// rest of @shofer/core real).
+vi.mock("@shofer/core", async (importOriginal) => {
 	class TaskStub {
 		public taskId: string
 		public instanceId = "inst"
@@ -24,7 +27,7 @@ vi.mock("../core/task/Task", () => {
 		off() {}
 		emit() {}
 	}
-	return { Task: TaskStub }
+	return { ...(await importOriginal<typeof import("@shofer/core")>()), Task: TaskStub }
 })
 
 describe("Single-open-task invariant", () => {
