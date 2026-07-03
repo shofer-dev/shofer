@@ -1,74 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShoferProvider } from "../../webview/ShoferProvider"
 import type { ProviderSettings } from "@shofer/types"
-
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
-vi.mock("../../../extension", () => ({}))
+import { setHost, createInMemoryHost } from "@shofer/types"
 
 // All vi.mock() calls are hoisted to the top of the file by Vitest
-// and are applied before any imports are resolved
+// and are applied before any imports are resolved.
 
-// Mock vscode module before importing Task
-vi.mock("vscode", () => ({
-	workspace: {
-		createFileSystemWatcher: vi.fn(() => ({
-			onDidCreate: vi.fn(),
-			onDidChange: vi.fn(),
-			onDidDelete: vi.fn(),
-			dispose: vi.fn(),
-		})),
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(() => true),
-		})),
-		openTextDocument: vi.fn(),
-		applyEdit: vi.fn(),
-	},
-	RelativePattern: vi.fn((base, pattern) => ({ base, pattern })),
-	window: {
-		createOutputChannel: vi.fn(() => ({
-			appendLine: vi.fn(),
-			dispose: vi.fn(),
-		})),
-		createTextEditorDecorationType: vi.fn(() => ({
-			dispose: vi.fn(),
-		})),
-		showTextDocument: vi.fn(),
-		activeTextEditor: undefined,
-	},
-	Uri: {
-		file: vi.fn((path) => ({ fsPath: path })),
-		parse: vi.fn((str) => ({ toString: () => str })),
-	},
-	Range: vi.fn(),
-	Position: vi.fn(),
-	WorkspaceEdit: vi.fn(() => ({
-		replace: vi.fn(),
-		insert: vi.fn(),
-		delete: vi.fn(),
+// Mock Task's intra-core dependencies via core-RELATIVE paths so the mocks
+// actually intercept (Task calls them through relative imports; a barrel mock
+// of @shofer/core cannot intercept intra-package relative calls).
+vi.mock("../../ignore/ShoferIgnoreController.js")
+vi.mock("../../protect/ShoferProtectedController.js")
+vi.mock("../../context-tracking/FileContextTracker.js")
+vi.mock("../../api/index.js", () => ({
+	buildApiHandler: vi.fn(() => ({
+		getModel: () => ({ info: {}, id: "test-model" }),
 	})),
-	ViewColumn: {
-		One: 1,
-		Two: 2,
-		Three: 3,
+}))
+vi.mock("../../tools/ToolRepetitionDetector.js", () => ({
+	ToolRepetitionDetector: class {
+		check() {
+			return { allowExecution: true }
+		}
 	},
 }))
 
-// Mock other dependencies
-vi.mock("../../services/mcp/McpServerManager", () => ({
-	McpServerManager: {
-		getInstance: vi.fn().mockResolvedValue(null),
-	},
-}))
-
-vi.mock("../../integrations/terminal/TerminalRegistry", () => ({
-	TerminalRegistry: {
-		releaseTerminalsForTask: vi.fn(),
-	},
-}))
-
+// Mock TelemetryService — @shofer/telemetry is a SEPARATE package, so the barrel
+// mock intercepts Task's `import { TelemetryService } from "@shofer/telemetry"`.
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
+		hasInstance: vi.fn(() => true),
 		instance: {
 			captureTaskCreated: vi.fn(),
 			captureTaskRestarted: vi.fn(),
@@ -79,97 +39,31 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-vi.mock("@shofer/cloud", () => ({
-	CloudService: {
-		isEnabled: () => false,
-	},
-}))
-
-// Mock delay to prevent actual delays
-vi.mock("delay", () => ({
-	__esModule: true,
-	default: vi.fn().mockResolvedValue(undefined),
-}))
-
-// Mock p-wait-for to prevent hanging on async conditions
-vi.mock("p-wait-for", () => ({
-	default: vi.fn().mockResolvedValue(undefined),
-}))
-
-// Mock execa
-vi.mock("execa", () => ({
-	execa: vi.fn(),
-}))
-
-// Mock fs/promises
-vi.mock("fs/promises", () => ({
-	mkdir: vi.fn().mockResolvedValue(undefined),
-	writeFile: vi.fn().mockResolvedValue(undefined),
-	appendFile: vi.fn().mockResolvedValue(undefined),
-	rename: vi.fn().mockResolvedValue(undefined),
-	readFile: vi.fn().mockResolvedValue("[]"),
-	unlink: vi.fn().mockResolvedValue(undefined),
-	rmdir: vi.fn().mockResolvedValue(undefined),
-	// H13: jsonlLog.ts uses fs.open for long-lived append handles.
-	open: vi.fn().mockResolvedValue({
-		write: vi.fn().mockResolvedValue(undefined),
-		close: vi.fn().mockResolvedValue(undefined),
-	}),
-}))
-
-// Mock mentions
-vi.mock("../../mentions", () => ({
-	parseMentions: vi.fn().mockImplementation((text) => Promise.resolve({ text, mode: undefined, contentBlocks: [] })),
-	openMention: vi.fn(),
-	getLatestTerminalOutput: vi.fn(),
-}))
-
-// Mock extract-text
-
-// Mock getEnvironmentDetails
-vi.mock("../../environment/getEnvironmentDetails", () => ({
-	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
-}))
-
-// Mock ShoferIgnoreController
-vi.mock("../../ignore/ShoferIgnoreController")
-
-// Mock condense
-vi.mock("../../condense", () => ({
-	summarizeConversation: vi.fn().mockResolvedValue({
-		messages: [],
-		summary: "summary",
-		cost: 0,
-		newContextTokens: 1,
-	}),
-}))
-
-// Mock storage utilities (relocated into @shofer/core)
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-	getTaskDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
-	getSettingsDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
-}))
-
-// Mock fs utilities
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn().mockReturnValue(false),
+// Keep the persist path off SQLite: mock the api-message leaf module that
+// `SqliteMessagePersistence.appendApiMessage` delegates to relatively.
+vi.mock("../../task-persistence/apiMessages.js", () => ({
+	appendApiMessage: vi.fn().mockResolvedValue(undefined),
+	readApiMessages: vi.fn().mockResolvedValue([]),
+	readApiMessagesTail: vi.fn().mockResolvedValue([[], false]),
+	saveApiMessages: vi.fn().mockResolvedValue(undefined),
 }))
 
 // Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works
-import { Task } from "@shofer/core"
+import { Task } from "../Task.js"
 
 describe("Task grounding sources handling", () => {
-	let mockProvider: Partial<ShoferProvider>
+	let mockProvider: any
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
-		// Mock provider with necessary methods
+		vi.clearAllMocks()
+
+		// In-memory host supplies createDiffView (NoopDiffView) + config/fs.
+		setHost(createInMemoryHost())
+
+		// Minimal provider stub (TaskProviderLike shape). `contextProxy.getValue`
+		// returning 0 sets the blob cap to 0, making externalizeMessageContent a
+		// no-op so the test stays off disk.
 		mockProvider = {
 			postInitState: vi.fn().mockResolvedValue(undefined),
 			postConfigUpdate: vi.fn(),
@@ -185,6 +79,9 @@ describe("Task grounding sources handling", () => {
 			log: vi.fn(),
 			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
 			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
+			taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
+			contextProxy: { getValue: vi.fn().mockReturnValue(0) },
 		}
 
 		mockApiConfiguration = {
@@ -196,7 +93,7 @@ describe("Task grounding sources handling", () => {
 	it("should strip grounding sources from assistant message before persisting to API history", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -254,7 +151,7 @@ Sources: [1](https://example.com), [2](https://another.com)
 
 	it("should not modify assistant message when no grounding sources are present", async () => {
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
