@@ -18,7 +18,7 @@ import os from "os"
 import type { CompletionRating, HistoryItem, TaskHandle, WorkflowVizMeta } from "@shofer/types"
 import { ShoferEventName } from "@shofer/types"
 
-import { Task, type TaskOptions } from "../task/Task"
+import { Task, type TaskOptions } from "@shofer/core"
 import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "@shofer/core"

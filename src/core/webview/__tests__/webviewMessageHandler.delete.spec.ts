@@ -3,7 +3,7 @@ import { webviewMessageHandler } from "../webviewMessageHandler"
 import * as vscode from "vscode"
 import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import { ShoferProvider } from "../ShoferProvider"
-import { MessageManager } from "../../message-manager"
+import { MessageManager } from "@shofer/core"
 
 // Mock the saveTaskMessages function
 vi.mock("../../task-persistence", () => ({

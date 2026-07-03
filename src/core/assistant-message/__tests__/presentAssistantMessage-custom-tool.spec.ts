@@ -1,8 +1,8 @@
 // npx vitest src/core/assistant-message/__tests__/presentAssistantMessage-custom-tool.spec.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
-import { presentAssistantMessage } from "../presentAssistantMessage"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
+import { presentAssistantMessage } from "@shofer/core"
 import { validateToolUse } from "@shofer/core"
 
 // Mock dependencies

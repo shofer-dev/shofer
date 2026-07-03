@@ -5,7 +5,7 @@ import { VolumeX, Image, WandSparkles, SendHorizontal, X, ListEnd, Square } from
 
 import type { ExtensionMessage } from "@shofer/types"
 
-import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@shofer/shared/context-mentions"
+import { mentionRegex, mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@shofer/types"
 import { WebviewMessage } from "@shofer/types"
 import { Mode, getAllModes } from "@shofer/types"
 

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest"
-import { Task } from "../../task/Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
-import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "../index"
-import { MessageManager } from "../../message-manager"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
+import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "@shofer/core"
+import { MessageManager } from "@shofer/core"
 import * as vscode from "vscode"
 import { getHost, setHost } from "@shofer/types"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 
 // Mock vscode
 vi.mock("vscode", () => ({

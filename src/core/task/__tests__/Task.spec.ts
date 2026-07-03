@@ -51,11 +51,11 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	}
 })
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
 import { ApiStreamChunk } from "@shofer/core"
-import { ContextProxy } from "../../config/ContextProxy"
-import { processUserContentMentions } from "../../mentions/processUserContentMentions"
+import { ContextProxy } from "../../config/ContextProxy.js"
+import { processUserContentMentions } from "@shofer/core"
 import { MultiSearchReplaceDiffStrategy } from "@shofer/core"
 
 // Mock delay before any imports that might use it

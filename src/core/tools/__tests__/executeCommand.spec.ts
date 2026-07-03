@@ -4,9 +4,9 @@
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { ExecuteCommandOptions } from "../ExecuteCommandTool"
+import { ExecuteCommandOptions } from "@shofer/core"
 import { TerminalRegistry } from "@shofer/core"
-import { Terminal } from "../../../integrations/terminal/Terminal"
+import { Terminal } from "../../../integrations/terminal/Terminal.js"
 import { ExecaTerminal } from "@shofer/core"
 import type { ShoferTerminalCallbacks } from "@shofer/types"
 
@@ -24,7 +24,7 @@ vitest.mock("@shofer/core", async (importOriginal) => ({
 vitest.mock("../../../integrations/terminal/Terminal")
 
 // Import the actual executeCommand function (not mocked)
-import { executeCommandInTerminal } from "../ExecuteCommandTool"
+import { executeCommandInTerminal } from "@shofer/core"
 
 // Tests for the executeCommand function
 describe("executeCommand", () => {

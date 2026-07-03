@@ -47,10 +47,10 @@ vi.mock("vscode", () => ({
 
 // Mock Package module
 
-import { attemptCompletionTool, AttemptCompletionCallbacks } from "../AttemptCompletionTool"
-import { Task } from "../../task/Task"
+import { attemptCompletionTool, AttemptCompletionCallbacks } from "@shofer/core"
+import { Task } from "@shofer/core"
 import * as vscode from "vscode"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 
 describe("attemptCompletionTool", () => {
 	let mockTask: Partial<Task>

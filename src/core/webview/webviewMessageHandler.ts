@@ -64,8 +64,8 @@ import { searchCommits } from "@shofer/core"
 import { exportSettings, importSettingsWithFeedback } from "../config/importExport"
 import { getOpenAiModels } from "@shofer/core"
 import { getVsCodeLmModels } from "../../api/providers/vscode-lm"
-import { openMention } from "../mentions"
-import { resolveImageMentions } from "../mentions/resolveImageMentions"
+import { openMention } from "@shofer/core"
+import { resolveImageMentions } from "@shofer/core"
 import { ShoferIgnoreController } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "@shofer/core"
@@ -1568,7 +1568,7 @@ export const webviewMessageHandler = async (
 			const task = provider.getCurrentTask()
 			if (!task) break
 			try {
-				const { getOriginalContent, getFinalContent } = await import("../file-changes/ChangedFilesService")
+				const { getOriginalContent, getFinalContent } = await import("@shofer/core")
 				const original = (await getOriginalContent(task, relPath)) ?? ""
 				const cwd = getCurrentCwd()
 				if (!cwd) break
@@ -1607,7 +1607,7 @@ export const webviewMessageHandler = async (
 				break
 			}
 			try {
-				const { restoreFile, getFinalContent } = await import("../file-changes/ChangedFilesService")
+				const { restoreFile, getFinalContent } = await import("@shofer/core")
 				// If the file on disk diverges from the last captured "final"
 				// state, the user has manual edits we'd be discarding.
 				const finalContent = await getFinalContent(task, relPath)
@@ -1652,7 +1652,7 @@ export const webviewMessageHandler = async (
 			)
 			if (choice !== t("common:fileChanges.revertConfirmYes")) break
 			try {
-				const { restoreAll } = await import("../file-changes/ChangedFilesService")
+				const { restoreAll } = await import("@shofer/core")
 				await restoreAll(task)
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
@@ -1670,7 +1670,7 @@ export const webviewMessageHandler = async (
 			// (copies final → base, removes final snapshot); it does NOT
 			// modify workspace files, so it's safe to allow while streaming.
 			try {
-				const { acceptFile } = await import("../file-changes/ChangedFilesService")
+				const { acceptFile } = await import("@shofer/core")
 				await acceptFile(task, relPath)
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {
@@ -1685,7 +1685,7 @@ export const webviewMessageHandler = async (
 			// LLM hint: acceptAll only updates internal tracking metadata;
 			// it's safe to allow while streaming (see acceptFile comment above).
 			try {
-				const { acceptAll } = await import("../file-changes/ChangedFilesService")
+				const { acceptAll } = await import("@shofer/core")
 				await acceptAll(task)
 				await provider.pushChangedFilesUpdate()
 			} catch (err) {

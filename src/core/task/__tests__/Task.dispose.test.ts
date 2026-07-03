@@ -1,7 +1,7 @@
 import { ProviderSettings } from "@shofer/types"
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
 // Prevent the transitive import graph from loading extension.ts,
 // which pulls in WorkflowTask (which extends Task — circular).
 vi.mock("../../../extension", () => ({}))

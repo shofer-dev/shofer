@@ -1,4 +1,4 @@
-import { Task } from "../task/Task"
+import { Task } from "@shofer/core"
 import { ShoferProvider } from "./ShoferProvider"
 import { saveTaskMessages } from "../task-persistence"
 import { getHost } from "@shofer/types"

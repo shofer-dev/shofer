@@ -445,6 +445,9 @@ importers:
       chokidar:
         specifier: ^4.0.1
         version: 4.0.3
+      clone-deep:
+        specifier: ^4.0.1
+        version: 4.0.1
       delay:
         specifier: ^6.0.0
         version: 6.0.0
@@ -490,6 +493,9 @@ importers:
       json-stream-stringify:
         specifier: ^3.1.6
         version: 3.1.6
+      lodash.debounce:
+        specifier: ^4.0.8
+        version: 4.0.8
       mammoth:
         specifier: ^1.9.1
         version: 1.9.1
@@ -569,9 +575,15 @@ importers:
       '@shofer/config-typescript':
         specifier: workspace:^
         version: link:../config-typescript
+      '@types/clone-deep':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/diff':
         specifier: ^5.2.1
         version: 5.2.3
+      '@types/lodash.debounce':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: ^24.1.0
         version: 24.2.1

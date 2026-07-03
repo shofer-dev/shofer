@@ -7,7 +7,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	addCustomInstructions: vi.fn().mockResolvedValue("Combined instructions"),
 }))
 
-import { getFullModeDetails } from "../getFullModeDetails"
+import { getFullModeDetails } from "@shofer/core"
 import { modes, addCustomInstructions } from "@shofer/core"
 
 describe("getFullModeDetails", () => {

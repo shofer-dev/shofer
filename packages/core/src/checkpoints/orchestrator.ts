@@ -1,0 +1,383 @@
+import pWaitFor from "p-wait-for"
+import { getHost } from "@shofer/types"
+
+import type { ShoferApiReqInfo } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
+
+import { Task } from "../task/Task.js"
+import { type TaskProviderLike } from "../task-provider/index.js"
+
+import { getWorkspacePath } from "../path/path.js"
+import { checkGitInstalled } from "../utils/git.js"
+import { t } from "../i18n/index.js"
+
+import { getApiMetrics } from "@shofer/types"
+
+import { CheckpointServiceOptions } from "./types.js"
+import { RepoPerTaskCheckpointService } from "./RepoPerTaskCheckpointService.js"
+import { checkpointLog } from "../logging/subsystems.js"
+
+const WARNING_THRESHOLD_MS = 5000
+
+function sendCheckpointInitWarn(task: Task, type?: "WAIT_TIMEOUT" | "INIT_TIMEOUT", timeout?: number) {
+	task.providerRef.deref()?.postMessageToWebview({
+		type: "checkpointInitWarning",
+		checkpointWarning: type && timeout ? { type, timeout } : undefined,
+	})
+}
+
+export async function getCheckpointService(task: Task, { interval = 250 }: { interval?: number } = {}) {
+	if (!task.enableCheckpoints) {
+		return undefined
+	}
+
+	if (task.checkpointService) {
+		return task.checkpointService
+	}
+
+	const provider = task.providerRef.deref()
+
+	// Get checkpoint timeout from task settings (converted to milliseconds)
+	const checkpointTimeoutMs = task.checkpointTimeout * 1000
+
+	const log = (message: string) => {
+		checkpointLog.info(message)
+	}
+
+	try {
+		const workspaceDir = task.workspacePath || getWorkspacePath()
+		const taskCwd = task.cwd
+
+		if (!workspaceDir) {
+			log("[Task#getCheckpointService] workspace folder not found, disabling checkpoints")
+			task.enableCheckpoints = false
+			return undefined
+		}
+
+		const globalStorageDir = provider?.contextProxy.globalStorageUri.fsPath
+
+		if (!globalStorageDir) {
+			log("[Task#getCheckpointService] globalStorageDir not found, disabling checkpoints")
+			task.enableCheckpoints = false
+			return undefined
+		}
+
+		// For embedded worktree tasks, pass the scoped worktree directory
+		// so the shadow git's core.worktree is confined to the worktree
+		// subdirectory instead of the full workspace root.
+		const scopedWorktreeDir = taskCwd && taskCwd !== workspaceDir ? taskCwd : undefined
+
+		const options: CheckpointServiceOptions = {
+			taskId: task.taskId,
+			workspaceDir,
+			shadowDir: globalStorageDir,
+			scopedWorktreeDir,
+			log,
+		}
+
+		if (task.checkpointServiceInitializing) {
+			const checkpointInitStartTime = Date.now()
+			let warningShown = false
+
+			await pWaitFor(
+				() => {
+					const elapsed = Date.now() - checkpointInitStartTime
+
+					// Show warning if we're past the threshold and haven't shown it yet
+					if (!warningShown && elapsed >= WARNING_THRESHOLD_MS) {
+						warningShown = true
+						sendCheckpointInitWarn(task, "WAIT_TIMEOUT", WARNING_THRESHOLD_MS / 1000)
+					}
+
+					checkpointLog.info(
+						`[Task#getCheckpointService] waiting for service to initialize (${Math.round(elapsed / 1000)}s)`,
+					)
+					return !!task.checkpointService && !!task?.checkpointService?.isInitialized
+				},
+				{ interval, timeout: checkpointTimeoutMs },
+			)
+			if (!task?.checkpointService) {
+				sendCheckpointInitWarn(task, "INIT_TIMEOUT", task.checkpointTimeout)
+				task.enableCheckpoints = false
+				return undefined
+			} else {
+				sendCheckpointInitWarn(task)
+			}
+			return task.checkpointService
+		}
+
+		if (!task.enableCheckpoints) {
+			return undefined
+		}
+
+		const service = RepoPerTaskCheckpointService.create(options)
+		task.checkpointServiceInitializing = true
+		await checkGitInstallation(task, service, log, provider)
+		task.checkpointService = service
+		if (task.enableCheckpoints) {
+			sendCheckpointInitWarn(task)
+		}
+		return service
+	} catch (err) {
+		const e = err instanceof Error ? err : new Error(String(err))
+		if (e.name === "TimeoutError" && task.enableCheckpoints) {
+			sendCheckpointInitWarn(task, "INIT_TIMEOUT", task.checkpointTimeout)
+		}
+		log(`[Task#getCheckpointService] ${e.message}`)
+		task.enableCheckpoints = false
+		task.checkpointServiceInitializing = false
+		return undefined
+	}
+}
+
+async function checkGitInstallation(
+	task: Task,
+	service: RepoPerTaskCheckpointService,
+	log: (message: string) => void,
+	provider: TaskProviderLike<Task> | undefined,
+) {
+	try {
+		const gitInstalled = await checkGitInstalled()
+
+		if (!gitInstalled) {
+			log("[Task#getCheckpointService] Git is not installed, disabling checkpoints")
+			task.enableCheckpoints = false
+			task.checkpointServiceInitializing = false
+
+			// Show user-friendly notification
+			const selection = await getHost().notifier.showChoice(
+				t("common:errors.git_not_installed"),
+				[t("common:buttons.learn_more")],
+				{ severity: "warn" },
+			)
+
+			if (selection === t("common:buttons.learn_more")) {
+				await getHost().external.openExternal("https://git-scm.com/downloads")
+			}
+
+			return
+		}
+
+		// Git is installed, proceed with initialization
+		service.on("initialize", () => {
+			task.checkpointServiceInitializing = false
+		})
+
+		service.on("checkpoint", ({ fromHash: from, toHash: to, suppressMessage }) => {
+			try {
+				sendCheckpointInitWarn(task)
+				// Always update the current checkpoint hash in the webview. (The
+				// suppress flag rides the `checkpoint_saved` say message below —
+				// `currentCheckpointUpdated` only carries `text`.)
+				provider?.postMessageToWebview({
+					type: "currentCheckpointUpdated",
+					text: to,
+				})
+
+				// Always create the chat message but include the suppress flag in the payload
+				// so the chatview can choose not to render it while keeping it in history.
+				task.say(
+					"checkpoint_saved",
+					to,
+					undefined,
+					undefined,
+					{ from, to, suppressMessage: !!suppressMessage },
+					undefined,
+					{ isNonInteractive: true },
+				).catch((err) => {
+					log("[Task#getCheckpointService] caught unexpected error in say('checkpoint_saved')")
+					checkpointLog.error(err)
+				})
+			} catch (err) {
+				log("[Task#getCheckpointService] caught unexpected error in on('checkpoint'), disabling checkpoints")
+				checkpointLog.error(err instanceof Error ? err : String(err))
+				task.enableCheckpoints = false
+			}
+		})
+
+		try {
+			await service.initShadowGit()
+		} catch (err) {
+			log(`[Task#getCheckpointService] initShadowGit -> ${err instanceof Error ? err.message : String(err)}`)
+			task.enableCheckpoints = false
+		}
+	} catch (err) {
+		log(
+			`[Task#getCheckpointService] Unexpected error during Git check: ${err instanceof Error ? err.message : String(err)}`,
+		)
+		checkpointLog.error("Git check error:", err)
+		task.enableCheckpoints = false
+		task.checkpointServiceInitializing = false
+	}
+}
+
+export async function checkpointSave(task: Task, force = false, suppressMessage = false) {
+	const service = await getCheckpointService(task)
+
+	if (!service) {
+		return
+	}
+
+	TelemetryService.instance.captureCheckpointCreated(task.taskId)
+
+	// Start the checkpoint process in the background.
+	return service
+		.saveCheckpoint(`Task: ${task.taskId}, Time: ${Date.now()}`, { allowEmpty: force, suppressMessage })
+		.catch((err) => {
+			checkpointLog.error("[Task#checkpointSave] caught unexpected error, disabling checkpoints", err)
+			task.enableCheckpoints = false
+		})
+}
+
+export type CheckpointRestoreOptions = {
+	ts: number
+	commitHash: string
+	mode: "preview" | "restore"
+	operation?: "delete" | "edit" // Optional to maintain backward compatibility
+}
+
+export async function checkpointRestore(
+	task: Task,
+	{ ts, commitHash, mode, operation = "delete" }: CheckpointRestoreOptions,
+) {
+	const service = await getCheckpointService(task)
+
+	if (!service) {
+		return
+	}
+
+	const index = task.shoferMessages.findIndex((m) => m.ts === ts)
+
+	if (index === -1) {
+		return
+	}
+
+	const provider = task.providerRef.deref()
+
+	try {
+		await service.restoreCheckpoint(commitHash)
+		TelemetryService.instance.captureCheckpointRestored(task.taskId)
+		await provider?.postMessageToWebview({ type: "currentCheckpointUpdated", text: commitHash })
+
+		if (mode === "restore") {
+			// Calculate metrics from messages that will be deleted (must be done before rewind)
+			const deletedMessages = task.shoferMessages.slice(index + 1)
+
+			const { totalTokensIn, totalTokensOut, totalCacheWrites, totalCacheReads, totalCost } = getApiMetrics(
+				task.combineMessages(deletedMessages),
+			)
+
+			// Use MessageManager to properly handle context-management events
+			// This ensures orphaned Summary messages and truncation markers are cleaned up
+			await task.messageManager.rewindToTimestamp(ts, {
+				includeTargetMessage: operation === "edit",
+			})
+
+			// Report the deleted API request metrics
+			await task.say(
+				"api_req_deleted",
+				JSON.stringify({
+					tokensIn: totalTokensIn,
+					tokensOut: totalTokensOut,
+					cacheWrites: totalCacheWrites,
+					cacheReads: totalCacheReads,
+					cost: totalCost,
+				} satisfies ShoferApiReqInfo),
+			)
+		}
+
+		// The task is already cancelled by the provider beforehand, but we
+		// need to re-init to get the updated messages.
+		//
+		// This was taken from Shofer's implementation of the checkpoints
+		// feature. The task instance will hang if we don't cancel twice,
+		// so this is currently necessary, but it seems like a complicated
+		// and hacky solution to a problem that I don't fully understand.
+		// I'd like to revisit this in the future and try to improve the
+		// task flow and the communication between the webview and the
+		// `Task` instance.
+		provider?.cancelTask()
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	} catch (err) {
+		checkpointLog.warn("[checkpointRestore] disabling checkpoints for this task")
+		task.enableCheckpoints = false
+	}
+}
+
+export type CheckpointDiffOptions = {
+	ts?: number
+	previousCommitHash?: string
+	commitHash: string
+	/**
+	 * from-init: Compare from the first checkpoint to the selected checkpoint.
+	 * checkpoint: Compare the selected checkpoint to the next checkpoint.
+	 * to-current: Compare the selected checkpoint to the current workspace.
+	 * full: Compare from the first checkpoint to the current workspace.
+	 */
+	mode: "from-init" | "checkpoint" | "to-current" | "full"
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function checkpointDiff(task: Task, { ts, previousCommitHash, commitHash, mode }: CheckpointDiffOptions) {
+	const service = await getCheckpointService(task)
+
+	if (!service) {
+		return
+	}
+
+	TelemetryService.instance.captureCheckpointDiffed(task.taskId)
+
+	let fromHash: string | undefined
+	let toHash: string | undefined
+	let title: string
+
+	const checkpoints = task.shoferMessages.filter(({ say }) => say === "checkpoint_saved").map(({ text }) => text!)
+
+	if (["from-init", "full"].includes(mode) && checkpoints.length < 1) {
+		getHost().notifier.info(t("common:errors.checkpoint_no_first"))
+		return
+	}
+
+	const idx = checkpoints.indexOf(commitHash)
+	switch (mode) {
+		case "checkpoint":
+			fromHash = commitHash
+			toHash = idx !== -1 && idx < checkpoints.length - 1 ? checkpoints[idx + 1] : undefined
+			title = t("common:errors.checkpoint_diff_with_next")
+			break
+		case "from-init":
+			fromHash = checkpoints[0]
+			toHash = commitHash
+			title = t("common:errors.checkpoint_diff_since_first")
+			break
+		case "to-current":
+			fromHash = commitHash
+			toHash = undefined
+			title = t("common:errors.checkpoint_diff_to_current")
+			break
+		case "full":
+			fromHash = checkpoints[0]
+			toHash = undefined
+			title = t("common:errors.checkpoint_diff_since_first")
+			break
+	}
+
+	if (!fromHash) {
+		getHost().notifier.info(t("common:errors.checkpoint_no_previous"))
+		return
+	}
+
+	try {
+		const changes = await service.getDiff({ from: fromHash, to: toHash })
+
+		if (!changes?.length) {
+			getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
+			return
+		}
+
+		await getHost().editor.showMultiFileDiff(title, changes)
+	} catch (err) {
+		checkpointLog.warn("[checkpointDiff] disabling checkpoints for this task", err)
+		task.enableCheckpoints = false
+	}
+}

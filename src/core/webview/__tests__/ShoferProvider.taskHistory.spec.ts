@@ -155,7 +155,7 @@ vi.mock("../../../utils/tts", () => ({
 	setTtsSpeed: vi.fn(),
 }))
 
-vi.mock("../../file-changes/ChangedFilesService", () => ({
+vi.mock("@shofer/core", () => ({
 	getChangedFiles: vi.fn().mockResolvedValue({ taskId: "", entries: [], backend: "none" }),
 	restoreFile: vi.fn().mockResolvedValue(undefined),
 	restoreAll: vi.fn().mockResolvedValue(undefined),
@@ -784,7 +784,7 @@ describe("ShoferProvider Task History Synchronization", () => {
 			)
 
 			// Mock getChangedFiles to return entries with insertions/deletions
-			const { getChangedFiles } = await import("../../file-changes/ChangedFilesService")
+			const { getChangedFiles } = await import("@shofer/core")
 			vi.mocked(getChangedFiles).mockResolvedValue({
 				taskId: "bg-task",
 				entries: [
@@ -840,7 +840,7 @@ describe("ShoferProvider Task History Synchronization", () => {
 			})
 
 			// Mock getChangedFiles to return entries with insertions/deletions
-			const { getChangedFiles } = await import("../../file-changes/ChangedFilesService")
+			const { getChangedFiles } = await import("@shofer/core")
 			vi.mocked(getChangedFiles).mockResolvedValue({
 				taskId: "fg-task",
 				entries: [

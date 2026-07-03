@@ -6,7 +6,7 @@ import { TelemetryService } from "@shofer/telemetry"
 import { getModelId } from "@shofer/types"
 
 import { ContextProxy } from "../../config/ContextProxy"
-import { Task, TaskOptions } from "../../task/Task"
+import { Task, TaskOptions } from "@shofer/core"
 import { ShoferProvider } from "../ShoferProvider"
 
 // Mock setup

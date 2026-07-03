@@ -1,0 +1,90 @@
+import * as path from "path"
+
+import { type ShoferSayTool } from "@shofer/types"
+
+import { Task } from "../task/Task.js"
+import { formatResponse } from "../prompts/responses.js"
+import { listFiles } from "../services/glob/list-files.js"
+import { getReadablePath } from "../path/path.js"
+import { isPathOutsideWorkspace } from "../utils/pathUtils.js"
+import { type ToolUse } from "@shofer/types"
+
+import { BaseTool, ToolCallbacks } from "./BaseTool.js"
+
+interface ListFilesParams {
+	path: string
+	recursive?: boolean
+}
+
+export class ListFilesTool extends BaseTool<"list_files"> {
+	readonly name = "list_files" as const
+
+	async execute(params: ListFilesParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { path: relDirPath, recursive } = params
+		const { askApproval, handleError, pushToolResult } = callbacks
+
+		try {
+			if (!relDirPath) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("list_files")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(await task.sayAndCreateMissingParamError("list_files", "path"))
+				return
+			}
+
+			task.consecutiveMistakeCount = 0
+
+			const absolutePath = path.resolve(task.cwd, relDirPath)
+			const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+
+			const [files, didHitLimit] = await listFiles(absolutePath, recursive || false, 200)
+			const { showShoferIgnoredFiles = false } = (await task.providerRef.deref()?.getState()) ?? {}
+
+			const result = formatResponse.formatFilesList(
+				absolutePath,
+				files,
+				didHitLimit,
+				task.shoferIgnoreController,
+				showShoferIgnoredFiles,
+				task.shoferProtectedController,
+			)
+
+			const sharedMessageProps: ShoferSayTool = {
+				tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
+				path: getReadablePath(task.cwd, relDirPath),
+				isOutsideWorkspace,
+			}
+
+			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: result } satisfies ShoferSayTool)
+			const didApprove = await askApproval("tool", completeMessage)
+
+			if (!didApprove) {
+				return
+			}
+
+			pushToolResult(result)
+		} catch (error) {
+			await handleError("listing files", error instanceof Error ? error : new Error(String(error)))
+		}
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"list_files">): Promise<void> {
+		const relDirPath: string | undefined = block.params.path
+		const recursiveRaw: string | undefined = block.params.recursive
+		const recursive = recursiveRaw?.toLowerCase() === "true"
+
+		const absolutePath = relDirPath ? path.resolve(task.cwd, relDirPath) : task.cwd
+		const isOutsideWorkspace = isPathOutsideWorkspace(absolutePath)
+
+		const sharedMessageProps: ShoferSayTool = {
+			tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
+			path: getReadablePath(task.cwd, relDirPath ?? ""),
+			isOutsideWorkspace,
+		}
+
+		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
+	}
+}
+
+export const listFilesTool = new ListFilesTool()
