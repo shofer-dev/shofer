@@ -32,7 +32,7 @@ export function computeUnifiedDiffStats(diff?: string): DiffStats | null {
 		let removed = 0
 
 		for (const p of patches) {
-			for (const h of (p as any).hunks ?? []) {
+			for (const h of p.hunks ?? []) {
 				for (const l of h.lines ?? []) {
 					const ch = (l as string)[0]
 					if (ch === "+") added++

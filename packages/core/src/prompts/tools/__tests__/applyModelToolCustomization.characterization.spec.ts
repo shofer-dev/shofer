@@ -2,7 +2,7 @@
 
 import type { ModeConfig, ModelInfo } from "@shofer/types"
 
-import { applyModelToolCustomization } from "../filter-tools-for-mode"
+import { applyModelToolCustomization } from "../filter-tools-for-mode.js"
 
 /**
  * Characterization tests for `applyModelToolCustomization` — the per-model tool

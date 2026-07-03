@@ -100,7 +100,7 @@ import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "@shofer/core"
 
 // prompts
 import { formatResponse } from "@shofer/core"
-import { SYSTEM_PROMPT } from "../prompts/system"
+import { SYSTEM_PROMPT } from "@shofer/core"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool"
 
@@ -115,7 +115,7 @@ import { NativeToolCallParser } from "@shofer/core"
 import { manageContext, willManageContext } from "@shofer/core"
 import { aggregateTaskCostsRecursive } from "@shofer/core"
 import type { TaskProviderLike } from "@shofer/core"
-import { MultiSearchReplaceDiffStrategy } from "../diff/strategies/multi-search-replace"
+import { MultiSearchReplaceDiffStrategy } from "@shofer/core"
 import {
 	type ApiMessage,
 	type MessagePersistencePort,

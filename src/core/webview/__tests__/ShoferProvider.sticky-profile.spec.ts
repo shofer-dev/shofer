@@ -94,19 +94,11 @@ vi.mock("../../task/Task", () => ({
 	})),
 }))
 
-vi.mock("../../prompts/sections/custom-instructions")
 
 vi.mock("../../../integrations/workspace/WorkspaceTracker", () => ({
 	default: vi.fn().mockImplementation(() => ({
 		initializeFilePaths: vi.fn(),
 		dispose: vi.fn(),
-	})),
-}))
-
-vi.mock("../../diff/strategies/multi-search-replace", () => ({
-	MultiSearchReplaceDiffStrategy: vi.fn().mockImplementation(() => ({
-		getName: () => "test-strategy",
-		applyDiff: vi.fn(),
 	})),
 }))
 
@@ -124,6 +116,7 @@ vi.mock("@shofer/cloud", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	buildApiHandler: vi.fn().mockReturnValue({
 		getModel: vi.fn().mockReturnValue({
@@ -157,11 +150,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
 	getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
 	defaultModeSlug: "code",
-}))
-
-vi.mock("../../prompts/system", () => ({
-	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
-	codeMode: "code",
 }))
 
 vi.mock("p-wait-for", () => ({

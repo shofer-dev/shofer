@@ -13,7 +13,7 @@ import { getReadablePath } from "@shofer/core"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
-import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "../diff/stats"
+import { convertNewFileToUnifiedDiff, computeDiffStats, sanitizeUnifiedDiff } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

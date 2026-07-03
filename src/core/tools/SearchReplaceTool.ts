@@ -10,7 +10,7 @@ import { formatResponse } from "@shofer/core"
 import { RecordSource } from "@shofer/core"
 import { fileExistsAtPath } from "../../utils/fs"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
-import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
+import { sanitizeUnifiedDiff, computeDiffStats } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

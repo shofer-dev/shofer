@@ -1,7 +1,7 @@
 // npx vitest run core/prompts/tools/__tests__/computeToolAccess.spec.ts
 
-import { getModeBySlug } from "@shofer/core"
-import { computeToolAccess, FEATURE_GATED_TOOLS, type ToolAccessGates } from "../filter-tools-for-mode"
+import { getModeBySlug } from "@shofer/types"
+import { computeToolAccess, FEATURE_GATED_TOOLS, type ToolAccessGates } from "../filter-tools-for-mode.js"
 
 /**
  * §4 unified tool-access decision. computeToolAccess composes mode filtering,

@@ -38,6 +38,8 @@ vi.mock("../../../utils/fs", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	sanitizeUnifiedDiff: vi.fn((diff: string) => diff),
+	computeDiffStats: vi.fn(() => ({ additions: 1, deletions: 1 })),
 	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
 	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
 	formatResponse: {
@@ -45,11 +47,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		shoferIgnoreError: vi.fn((path) => `Access denied: ${path}`),
 		createPrettyPatch: vi.fn(() => "mock-diff"),
 	},
-}))
-
-vi.mock("../../diff/stats", () => ({
-	sanitizeUnifiedDiff: vi.fn((diff) => diff),
-	computeDiffStats: vi.fn(() => ({ additions: 1, deletions: 1 })),
 }))
 
 vi.mock("vscode", () => ({

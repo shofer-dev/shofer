@@ -22,16 +22,22 @@ import type {
 	HostPanel,
 	HostReferencesResult,
 	HostShellExecution,
+	HostState,
 	HostSymbol,
 	HostTerminals,
 	ShoferTerminal,
 	HostWatcher,
 	HostWorkspace,
 	HostWorkspaceEdit,
+	ModeConfig,
+	CustomModePrompts,
+	ModeOverrides,
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
 import { DIFF_VIEW_URI_SCHEME } from "@shofer/types"
+
+import { ensureSettingsDirectoryExists } from "../utils/globalContext"
 
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { Terminal } from "../integrations/terminal/Terminal"
@@ -105,6 +111,24 @@ class NodeFileSystem implements HostFileSystem {
 class VsCodeConfig implements HostConfig {
 	get<T>(section: string, key: string, defaultValue: T): T {
 		return vscode.workspace.getConfiguration(section).get<T>(key, defaultValue)
+	}
+}
+
+// Reads the user's mode customizations from the extension's `globalState`. The
+// context is captured at activation; without it (e.g. unit tests that build a
+// bare host) there are no overrides.
+class VsCodeState implements HostState {
+	constructor(private readonly context?: vscode.ExtensionContext) {}
+
+	async readModeOverrides(): Promise<ModeOverrides> {
+		if (!this.context) {
+			return {}
+		}
+		// Preserve the original side effect: make sure the settings dir exists.
+		await ensureSettingsDirectoryExists(this.context)
+		const customModes = this.context.globalState.get<ModeConfig[]>("customModes") ?? undefined
+		const customModePrompts = this.context.globalState.get<CustomModePrompts>("customModePrompts") ?? undefined
+		return { customModes, customModePrompts }
 	}
 }
 
@@ -451,7 +475,7 @@ class VsCodeEditor implements HostEditor {
 }
 
 /** The VS Code host bridge (extension runtime). */
-export function createVsCodeHost(): HostBridge {
+export function createVsCodeHost(context?: vscode.ExtensionContext): HostBridge {
 	return {
 		notifier: new VsCodeNotifier(),
 		fs: new NodeFileSystem(),
@@ -463,6 +487,7 @@ export function createVsCodeHost(): HostBridge {
 		terminals: new VsCodeTerminals(),
 		external: new VsCodeExternal(),
 		editor: new VsCodeEditor(),
+		state: new VsCodeState(context),
 		createDiffView: (cwd: string, task: DiffViewTaskHandle): DiffView => new DiffViewProvider(cwd, task),
 	}
 }

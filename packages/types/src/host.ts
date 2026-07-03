@@ -17,6 +17,7 @@
 
 import type { DiffView, DiffViewTaskHandle } from "./diff-view.js"
 import type { ShoferTerminal } from "./terminal-provider.js"
+import type { CustomModePrompts, ModeConfig } from "./mode.js"
 
 /** Options for a choice dialog (maps to `vscode.MessageOptions` + severity). */
 export interface NotifyChoiceOptions {
@@ -375,6 +376,30 @@ export interface HostEditor {
 	getWorkspaceProblems(cwd: string, includeMessages: boolean, maxMessages: number): Promise<string>
 }
 
+/**
+ * The user's mode customizations persisted in the front-end's key/value store
+ * (maps to `vscode.ExtensionContext.globalState`'s `customModes` /
+ * `customModePrompts`). Both are optional so a headless host can return `{}`.
+ */
+export interface ModeOverrides {
+	customModes?: ModeConfig[]
+	customModePrompts?: CustomModePrompts
+}
+
+/**
+ * Persisted extension state the core reads while assembling prompts (maps to
+ * `vscode.ExtensionContext.globalState`). A headless host has no such store, so
+ * it returns no overrides and the MODES section falls back to the built-ins.
+ */
+export interface HostState {
+	/**
+	 * Read the user's mode customizations (`customModes` + per-mode
+	 * `customModePrompts`) from the front-end's persisted state. Returns `{}`
+	 * when unset or on a headless host.
+	 */
+	readModeOverrides(): Promise<ModeOverrides>
+}
+
 /** Aggregate host boundary handed to the core. */
 export interface HostBridge {
 	readonly notifier: Notifier
@@ -387,6 +412,7 @@ export interface HostBridge {
 	readonly terminals: HostTerminals
 	readonly external: HostExternal
 	readonly editor: HostEditor
+	readonly state: HostState
 	/**
 	 * Build a fresh, per-edit {@link DiffView} bound to `cwd` and its owning `task`
 	 * (maps to `new DiffViewProvider(cwd, task)` in the VS Code adapter). The

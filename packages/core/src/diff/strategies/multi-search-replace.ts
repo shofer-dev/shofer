@@ -1,10 +1,10 @@
 import { distance } from "fastest-levenshtein"
 
 import { ToolProgressStatus } from "@shofer/types"
+import { ToolUse, DiffStrategy, DiffResult } from "@shofer/types"
 
-import { addLineNumbers, everyLineHasLineNumbers, stripLineNumbers } from "@shofer/core"
-import { ToolUse, DiffStrategy, DiffResult } from "@shofer/core"
-import { normalizeString } from "@shofer/core"
+import { addLineNumbers, everyLineHasLineNumbers, stripLineNumbers } from "../../integrations/misc/extract-text.js"
+import { normalizeString } from "../../utils/text-normalization.js"
 
 const BUFFER_LINES = 40 // Number of extra context lines to show before and after matches
 
@@ -303,9 +303,9 @@ export class MultiSearchReplaceDiffStrategy implements DiffStrategy {
 			  Matches the final ">>>>>>> REPLACE" marker on its own line (and requires a following newline or the end of file).
 		*/
 
-		let matches = [
+		const matches = [
 			...diffContent.matchAll(
-				/(?:^|\n)(?<!\\)<<<<<<< SEARCH>?\s*\n((?:\:start_line:\s*(\d+)\s*\n))?((?:\:end_line:\s*(\d+)\s*\n))?((?<!\\)-------\s*\n)?([\s\S]*?)(?:\n)?(?:(?<=\n)(?<!\\)=======\s*\n)([\s\S]*?)(?:\n)?(?:(?<=\n)(?<!\\)>>>>>>> REPLACE)(?=\n|$)/g,
+				/(?:^|\n)(?<!\\)<<<<<<< SEARCH>?\s*\n((?::start_line:\s*(\d+)\s*\n))?((?::end_line:\s*(\d+)\s*\n))?((?<!\\)-------\s*\n)?([\s\S]*?)(?:\n)?(?:(?<=\n)(?<!\\)=======\s*\n)([\s\S]*?)(?:\n)?(?:(?<=\n)(?<!\\)>>>>>>> REPLACE)(?=\n|$)/g,
 			),
 		]
 
@@ -319,13 +319,13 @@ export class MultiSearchReplaceDiffStrategy implements DiffStrategy {
 		const lineEnding = originalContent.includes("\r\n") ? "\r\n" : "\n"
 		let resultLines = originalContent.split(/\r?\n/)
 		let delta = 0
-		let diffResults: DiffResult[] = []
+		const diffResults: DiffResult[] = []
 		let appliedCount = 0
 		const replacements = matches
 			.map((match) => ({
 				startLine: Number(match[2] ?? 0),
-				searchContent: match[6],
-				replaceContent: match[7],
+				searchContent: match[6] ?? "",
+				replaceContent: match[7] ?? "",
 			}))
 			.sort((a, b) => a.startLine - b.startLine)
 
@@ -343,7 +343,7 @@ export class MultiSearchReplaceDiffStrategy implements DiffStrategy {
 				(everyLineHasLineNumbers(searchContent) && replaceContent.trim() === "")
 
 			if (hasAllLineNumbers && startLine === 0) {
-				startLine = parseInt(searchContent.split("\n")[0].split("|")[0])
+				startLine = parseInt(searchContent.split("\n")[0]!.split("|")[0]!)
 			}
 
 			if (hasAllLineNumbers) {
@@ -377,13 +377,13 @@ export class MultiSearchReplaceDiffStrategy implements DiffStrategy {
 				continue
 			}
 
-			let endLine = replacement.startLine + searchLines.length - 1
+			const endLine = replacement.startLine + searchLines.length - 1
 
 			// Initialize search variables
 			let matchIndex = -1
 			let bestMatchScore = 0
 			let bestMatchContent = ""
-			let searchChunk = searchLines.join("\n")
+			const searchChunk = searchLines.join("\n")
 
 			// Determine search bounds
 			let searchStartIndex = 0

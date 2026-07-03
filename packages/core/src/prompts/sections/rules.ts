@@ -1,6 +1,6 @@
-import type { SystemPromptSettings } from "@shofer/core"
+import type { SystemPromptSettings } from "../types.js"
 
-import { getShell } from "@shofer/core"
+import { getShell } from "../../utils/shell.js"
 
 /**
  * Returns the appropriate command chaining operator based on the user's shell.

@@ -1,12 +1,13 @@
-import { addCustomInstructions } from "../sections/custom-instructions"
-import { getRulesSection, getCommandChainOperator } from "../sections/rules"
-import { McpHub, getCapabilitiesSection } from "@shofer/core"
-import * as shellUtils from "@shofer/core"
+import { addCustomInstructions } from "../sections/custom-instructions.js"
+import { getRulesSection, getCommandChainOperator } from "../sections/rules.js"
+import { getCapabilitiesSection } from "../sections/capabilities.js"
+import type { McpHub } from "../../services/mcp/McpHub.js"
+import * as shellUtils from "../../utils/shell.js"
 
-// getShell was relocated into @shofer/core; mock it there so each test can drive
+// `getShell` lives in core's `utils/shell`; mock it there so each test can drive
 // the returned shell path (previously done via vi.spyOn on the src utils/shell module).
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../utils/shell.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/shell.js")>()),
 	// Default to a real-ish shell so tests that don't drive getShell explicitly
 	// (e.g. the vendor-confidentiality cases) still get a usable value.
 	getShell: vi.fn(() => "/bin/bash"),

@@ -1,4 +1,4 @@
-import type { SkillsManagerLike } from "@shofer/core"
+import type { SkillsManagerLike } from "../../services/skills/skills-registry.js"
 
 /** This section only needs mode-filtered skill discovery, not content lookup. */
 type SkillsSectionManager = Pick<SkillsManagerLike, "getSkillsForMode">
@@ -8,7 +8,7 @@ function escapeXml(value: string): string {
 		.replace(/&/g, "&amp;")
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
-		.replace(/\"/g, "&quot;")
+		.replace(/"/g, "&quot;")
 		.replace(/'/g, "&apos;")
 }
 

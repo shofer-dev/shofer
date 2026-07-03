@@ -1,4 +1,4 @@
-import type { LiveMemoryManagerLike } from "@shofer/core"
+import type { LiveMemoryManagerLike } from "../../services/live-memory/live-memory-registry.js"
 
 /**
  * Generate the Live Memory section for the task agent's system prompt.

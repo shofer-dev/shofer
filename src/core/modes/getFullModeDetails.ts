@@ -1,6 +1,6 @@
 import type { ModeConfig, CustomModePrompts } from "@shofer/types"
 
-import { addCustomInstructions } from "../prompts/sections/custom-instructions"
+import { addCustomInstructions } from "@shofer/core"
 import { getModeBySlug, modes } from "@shofer/core"
 
 /**

@@ -1,4 +1,4 @@
-import { MultiSearchReplaceDiffStrategy } from "../multi-search-replace"
+import { MultiSearchReplaceDiffStrategy } from "../multi-search-replace.js"
 
 describe("MultiSearchReplaceDiffStrategy", () => {
 	describe("validateMarkerSequencing", () => {

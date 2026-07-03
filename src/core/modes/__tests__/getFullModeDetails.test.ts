@@ -2,13 +2,13 @@
 
 import type { ModeConfig } from "@shofer/types"
 
-vi.mock("../../prompts/sections/custom-instructions", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	addCustomInstructions: vi.fn().mockResolvedValue("Combined instructions"),
 }))
 
 import { getFullModeDetails } from "../getFullModeDetails"
-import { modes } from "@shofer/core"
-import { addCustomInstructions } from "../../prompts/sections/custom-instructions"
+import { modes, addCustomInstructions } from "@shofer/core"
 
 describe("getFullModeDetails", () => {
 	beforeEach(() => {

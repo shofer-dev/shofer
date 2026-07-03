@@ -43,15 +43,15 @@ vi.mock("fs/promises", () => ({
 
 // Mock the shofer-config service (now part of @shofer/core; partial-mock only
 // its dir helpers so the rest of the core barrel stays real).
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../../services/shofer-config/index.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../services/shofer-config/index.js")>()),
 	getRooDirectoriesForCwd: mockGetRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd: mockGetAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd: mockGetAgentsDirectoriesForCwd,
 	getGlobalShoferDirectory: mockGetGlobalRooDirectory,
 }))
 
-import { loadRuleFiles, addCustomInstructions } from "../custom-instructions"
+import { loadRuleFiles, addCustomInstructions } from "../custom-instructions.js"
 
 describe("custom-instructions global .shofer support", () => {
 	const mockCwd = "/mock/project"

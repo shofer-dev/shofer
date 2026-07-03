@@ -29,6 +29,7 @@ describe("host-bridge accessor", () => {
 			terminals: base.terminals,
 			external: base.external,
 			editor: base.editor,
+			state: base.state,
 			createDiffView: base.createDiffView,
 		}
 		setHost(host)

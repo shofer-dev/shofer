@@ -5,14 +5,14 @@ vi.mock("os-name", () => ({
 	default: vi.fn(),
 }))
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+vi.mock("../../../utils/shell.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../../utils/shell.js")>()),
 	getShell: vi.fn(() => "/bin/bash"),
 }))
 
-import { getSystemInfoSection } from "../system-info"
+import { getSystemInfoSection } from "../system-info.js"
 import osName from "os-name"
-import { type SubmoduleEntry } from "@shofer/core"
+import { type SubmoduleEntry } from "../../../utils/git-submodules.js"
 
 const mockOsName = osName as unknown as ReturnType<typeof vi.fn>
 

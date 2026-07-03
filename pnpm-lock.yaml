@@ -502,6 +502,9 @@ importers:
       openai:
         specifier: ^5.12.2
         version: 5.12.2(ws@8.20.0)(zod@3.25.76)
+      os-name:
+        specifier: ^6.0.0
+        version: 6.1.0
       p-limit:
         specifier: ^6.2.0
         version: 6.2.0

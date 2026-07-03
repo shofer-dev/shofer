@@ -41,7 +41,6 @@ vi.mock("delay", () => {
 	return { default: delayFn }
 })
 
-vi.mock("../../prompts/sections/custom-instructions")
 
 vi.mock("@modelcontextprotocol/sdk/types.js", () => ({
 	CallToolResultSchema: {},
@@ -164,11 +163,6 @@ vi.mock("../../file-changes/ChangedFilesService", () => ({
 	acceptAll: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock("../../prompts/system", () => ({
-	SYSTEM_PROMPT: vi.fn().mockImplementation(async () => "mocked system prompt"),
-	codeMode: "code",
-}))
-
 vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
 	return {
 		default: vi.fn().mockImplementation(() => ({
@@ -198,6 +192,7 @@ vi.mock("../../task/Task", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	extractTextFromFile: vi.fn().mockResolvedValue("file content"),
 	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
 	getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
@@ -220,13 +215,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	}),
 	getGroupName: vi.fn().mockReturnValue("General Tools"),
 	defaultModeSlug: "code",
-}))
-
-vi.mock("../diff/strategies/multi-search-replace", () => ({
-	MultiSearchReplaceDiffStrategy: vi.fn().mockImplementation(() => ({
-		getName: () => "test-strategy",
-		applyDiff: vi.fn(),
-	})),
 }))
 
 vi.mock("@shofer/cloud", () => ({

@@ -56,7 +56,7 @@ import { ShoferProvider } from "../../webview/ShoferProvider"
 import { ApiStreamChunk } from "@shofer/core"
 import { ContextProxy } from "../../config/ContextProxy"
 import { processUserContentMentions } from "../../mentions/processUserContentMentions"
-import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"
+import { MultiSearchReplaceDiffStrategy } from "@shofer/core"
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({

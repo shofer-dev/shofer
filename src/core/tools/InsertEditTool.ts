@@ -19,7 +19,7 @@ import { isPathOutsideWorkspace } from "@shofer/core"
 import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { fileExistsAtPath } from "../../utils/fs"
 import { formatResponse } from "@shofer/core"
-import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
+import { sanitizeUnifiedDiff, computeDiffStats } from "@shofer/core"
 import { RecordSource } from "@shofer/core"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 

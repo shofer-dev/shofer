@@ -7,20 +7,21 @@ import {
 	type TodoItem,
 	type ToolGroup,
 } from "@shofer/types"
-import { pluginRegistry } from "@shofer/core"
+import { pluginRegistry } from "../plugins/plugin-registry.js"
 
-import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "@shofer/core"
-import { DiffStrategy } from "@shofer/core"
+import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "@shofer/types"
+import { DiffStrategy } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
-import { isEmpty } from "@shofer/core"
+import { isEmpty } from "../utils/object.js"
 
-import { McpHub } from "@shofer/core"
-import { getCodeIndexManagerFactory, getLiveMemoryManagerAccessor } from "@shofer/core"
-import type { SkillsManagerLike } from "@shofer/core"
+import { McpHub } from "../services/mcp/McpHub.js"
+import { getCodeIndexManagerFactory } from "../services/code-index/code-index-registry.js"
+import { getLiveMemoryManagerAccessor } from "../services/live-memory/live-memory-registry.js"
+import type { SkillsManagerLike } from "../services/skills/skills-registry.js"
 
-import { listSubmodules } from "@shofer/core"
+import { listSubmodules } from "../utils/git-submodules.js"
 
-import type { SystemPromptSettings } from "@shofer/core"
+import type { SystemPromptSettings } from "./types.js"
 import {
 	getRulesSection,
 	getSystemInfoSection,
@@ -33,7 +34,7 @@ import {
 	markdownFormattingSection,
 	getSkillsSection,
 	getLiveMemorySection,
-} from "./sections"
+} from "./sections/index.js"
 
 // Helper function to get prompt component, filtering out empty objects
 export function getPromptComponent(
@@ -71,7 +72,7 @@ async function generatePrompt(
 	}
 
 	// Get the full mode config to ensure we have the role definition (used for groups, etc.)
-	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]
+	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]!
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
 	// Effective capability groups: the mode's tools, optionally narrowed by a
@@ -91,10 +92,8 @@ async function generatePrompt(
 	const mcpAllowedByRestriction = capabilityGroups === undefined || capabilityGroups.has("mcp")
 	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
 
-	const codeIndexManager = getCodeIndexManagerFactory()?.(context, cwd)
-
-	// Tool calling is native-only.
-	const effectiveProtocol = "native"
+	// Invoked for its registration side effect; the returned manager is not read here.
+	void getCodeIndexManagerFactory()?.(context, cwd)
 
 	// Per-task context overrides: each defaults to true (enabled) unless
 	// explicitly suppressed via a workflow agent's `.slang` `context { ... }`.
@@ -103,9 +102,9 @@ async function generatePrompt(
 	const includeMcp = settings?.includeMcp ?? true
 
 	const [modesSection, rawSkillsSection] = await Promise.all([
-		// modes.ts is still front-end-coupled (reads `globalState`); cast the opaque
-		// context back to its expected shape at this single boundary (B3).
-		getModesSection(context as Parameters<typeof getModesSection>[0]),
+		// Mode overrides are read through the host `state` capability (VS Code reads
+		// `globalState`; a headless host returns none) — no `context` needed here.
+		getModesSection(),
 		getSkillsSection(skillsManager, mode as string),
 	])
 	const skillsSection = includeSkills ? rawSkillsSection : ""
@@ -182,7 +181,7 @@ export const SYSTEM_PROMPT = async (
 	const promptComponent = getPromptComponent(customModePrompts, mode)
 
 	// Get full mode config from custom modes or fall back to built-in modes
-	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]
+	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]!
 
 	const prompt = await generatePrompt(
 		context,

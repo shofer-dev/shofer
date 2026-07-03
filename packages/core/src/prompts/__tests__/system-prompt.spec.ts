@@ -43,29 +43,24 @@ vi.mock("os-name", () => ({
 
 vi.mock("fs/promises")
 
-import * as vscode from "vscode"
-
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
-
+import { setHost, createInMemoryHost, inMemoryEnv } from "@shofer/types"
 import { ModeConfig } from "@shofer/types"
 
-import { SYSTEM_PROMPT } from "../system"
-import { McpHub } from "@shofer/core"
-import { defaultModeSlug, modes, Mode } from "@shofer/core"
-import "@shofer/core"
-import { addCustomInstructions } from "../sections/custom-instructions"
-import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"
+import { SYSTEM_PROMPT } from "../system.js"
+import type { McpHub } from "../../services/mcp/McpHub.js"
+import { defaultModeSlug, modes, Mode } from "@shofer/types"
 
 // Mock the sections
-vi.mock("../sections/modes", () => ({
+vi.mock("../sections/modes.js", () => ({
 	getModesSection: vi.fn().mockImplementation(async () => `====\n\nMODES\n\n- Test modes section`),
 }))
 
 // Mock the custom instructions
-vi.mock("../sections/custom-instructions", () => {
+vi.mock("../sections/custom-instructions.js", () => {
 	const addCustomInstructions = vi.fn()
 	return {
 		addCustomInstructions,
+		loadRuleFiles: vi.fn().mockResolvedValue(""),
 		__setMockImplementation: (impl: any) => {
 			addCustomInstructions.mockImplementation(impl)
 		},
@@ -73,7 +68,7 @@ vi.mock("../sections/custom-instructions", () => {
 })
 
 // Set up default mock implementation
-const customInstructionsMock = vi.mocked(await import("../sections/custom-instructions"))
+const customInstructionsMock = vi.mocked(await import("../sections/custom-instructions.js"))
 const { __setMockImplementation } = customInstructionsMock as any
 __setMockImplementation(
 	async (
@@ -121,55 +116,27 @@ __setMockImplementation(
 	},
 )
 
-// Mock vscode language
-vi.mock("vscode", () => ({
-	env: {
-		language: "en",
-	},
-	workspace: {
-		workspaceFolders: [{ uri: { fsPath: "/test/path" } }],
-		getWorkspaceFolder: vi.fn().mockReturnValue({ uri: { fsPath: "/test/path" } }),
-	},
-	window: {
-		activeTextEditor: undefined,
-	},
-	EventEmitter: vi.fn().mockImplementation(() => ({
-		event: vi.fn(),
-		fire: vi.fn(),
-		dispose: vi.fn(),
-	})),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+// The shell is read through core's `utils/shell`; pin it so system-info / rules
+// stay deterministic across platforms.
+vi.mock("../../utils/shell.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/shell.js")>()),
 	getShell: () => "/bin/zsh",
 }))
 
-// Create a mock ExtensionContext
+// A minimal opaque provider context — the core only checks it for truthiness and,
+// with the in-memory host, never resolves a code-index manager from it.
 const mockContext = {
 	extensionPath: "/mock/extension/path",
 	globalStoragePath: "/mock/storage/path",
 	storagePath: "/mock/storage/path",
 	logPath: "/mock/log/path",
 	subscriptions: [],
-	workspaceState: {
-		get: () => undefined,
-		update: () => Promise.resolve(),
-	},
 	globalState: {
 		get: () => undefined,
 		update: () => Promise.resolve(),
 		setKeysForSync: () => {},
 	},
-	extensionUri: { fsPath: "/mock/extension/path" },
-	globalStorageUri: { fsPath: "/mock/settings/path" },
-	asAbsolutePath: (relativePath: string) => `/mock/extension/path/${relativePath}`,
-	extension: {
-		packageJSON: {
-			version: "1.0.0",
-		},
-	},
-} as unknown as vscode.ExtensionContext
+} as unknown
 
 // Instead of extending McpHub, create a mock that implements just what we need
 const createMockMcpHub = (withServers: boolean = false): McpHub =>
@@ -207,7 +174,7 @@ describe("SYSTEM_PROMPT", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
-		installVsCodeForwardingHost()
+		setHost(createInMemoryHost())
 	})
 
 	afterEach(async () => {
@@ -276,32 +243,8 @@ describe("SYSTEM_PROMPT", () => {
 	})
 
 	it("should include vscode language in custom instructions", async () => {
-		// Mock vscode.env.language
-		const vscode = vi.mocked(await import("vscode")) as any
-		vscode.env = { language: "es" }
-		// Ensure workspace mock is maintained
-		vscode.workspace = {
-			workspaceFolders: [
-				{
-					uri: {
-						fsPath: "/test/path",
-					},
-				},
-			],
-			getWorkspaceFolder: vi.fn().mockReturnValue({
-				uri: {
-					fsPath: "/test/path",
-				},
-			}),
-		}
-		vscode.window = {
-			activeTextEditor: undefined,
-		}
-		vscode.EventEmitter = vi.fn().mockImplementation(() => ({
-			event: vi.fn(),
-			fire: vi.fn(),
-			dispose: vi.fn(),
-		}))
+		// Drive the host UI language to Spanish for this case.
+		setHost({ ...createInMemoryHost(), env: { ...inMemoryEnv, language: "es" } })
 
 		const prompt = await SYSTEM_PROMPT(
 			mockContext,
@@ -320,31 +263,6 @@ describe("SYSTEM_PROMPT", () => {
 
 		expect(prompt).toContain("Language Preference:")
 		expect(prompt).toContain('You should always speak and think in the "es" language')
-
-		// Reset mock
-		vscode.env = { language: "en" }
-		vscode.workspace = {
-			workspaceFolders: [
-				{
-					uri: {
-						fsPath: "/test/path",
-					},
-				},
-			],
-			getWorkspaceFolder: vi.fn().mockReturnValue({
-				uri: {
-					fsPath: "/test/path",
-				},
-			}),
-		}
-		vscode.window = {
-			activeTextEditor: undefined,
-		}
-		vscode.EventEmitter = vi.fn().mockImplementation(() => ({
-			event: vi.fn(),
-			fire: vi.fn(),
-			dispose: vi.fn(),
-		}))
 	})
 
 	it("should include custom mode role definition at top and instructions at bottom", async () => {
@@ -412,7 +330,7 @@ describe("SYSTEM_PROMPT", () => {
 		// Role definition from promptComponent should be at the top
 		expect(prompt.indexOf("Custom prompt role definition")).toBeLessThan(prompt.indexOf("TOOL USE"))
 		// Should not contain the default mode's role definition
-		expect(prompt).not.toContain(modes[0].roleDefinition)
+		expect(prompt).not.toContain(modes[0]!.roleDefinition)
 	})
 
 	it("should fallback to modeConfig roleDefinition when promptComponent has no roleDefinition", async () => {
@@ -439,7 +357,7 @@ describe("SYSTEM_PROMPT", () => {
 		)
 
 		// Should use the default mode's role definition
-		expect(prompt.indexOf(modes[0].roleDefinition)).toBeLessThan(prompt.indexOf("TOOL USE"))
+		expect(prompt.indexOf(modes[0]!.roleDefinition)).toBeLessThan(prompt.indexOf("TOOL USE"))
 	})
 
 	it("should exclude update_todo_list tool when todoListEnabled is false", async () => {
@@ -569,7 +487,7 @@ describe("SYSTEM_PROMPT", () => {
 		expect(prompt).not.toContain("Examples:")
 
 		// Should still contain role definition and other non-XML sections
-		expect(prompt).toContain(modes[0].roleDefinition)
+		expect(prompt).toContain(modes[0]!.roleDefinition)
 		expect(prompt).toContain("CAPABILITIES")
 		expect(prompt).toContain("RULES")
 		expect(prompt).toContain("SYSTEM INFORMATION")

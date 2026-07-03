@@ -110,7 +110,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	extensionContext = context
 	// §9: install the VS Code host bridge so host-agnostic code reaches the editor
 	// through `getHost()` instead of importing `vscode` directly.
-	setHost(createVsCodeHost())
+	setHost(createVsCodeHost(context))
 	outputChannel = vscode.window.createOutputChannel(Package.outputChannel)
 	// Publish to the dependency-free holder so tools/leaf modules can read it
 	// without importing this entrypoint (avoids the WorkflowTask import cycle).

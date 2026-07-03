@@ -1,4 +1,4 @@
-import { getSkillsSection } from "../skills"
+import { getSkillsSection } from "../skills.js"
 
 describe("getSkillsSection", () => {
 	it("should emit <available_skills> XML with name, description, and location", async () => {

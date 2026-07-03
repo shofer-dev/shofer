@@ -9,9 +9,11 @@ import type {
 	HostDisposable,
 	HostLsp,
 	HostReferencesResult,
+	HostState,
 	HostTerminals,
 	HostWatcher,
 	HostWorkspace,
+	ModeOverrides,
 	Notifier,
 	NotifyChoiceOptions,
 } from "./host.js"
@@ -189,6 +191,13 @@ export class NoopDiffView implements DiffView {
 	}
 }
 
+/** An in-memory `HostState` — no persisted store, so no mode overrides. */
+export class InMemoryState implements HostState {
+	async readModeOverrides(): Promise<ModeOverrides> {
+		return {}
+	}
+}
+
 /** Build an entirely in-memory `HostBridge` (CLI/test default). */
 export function createInMemoryHost(): HostBridge {
 	return {
@@ -202,6 +211,7 @@ export function createInMemoryHost(): HostBridge {
 		terminals: noopTerminals,
 		external: noopExternal,
 		editor: noopEditor,
+		state: new InMemoryState(),
 		createDiffView: () => new NoopDiffView(),
 	}
 }

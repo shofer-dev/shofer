@@ -6,9 +6,11 @@ import type {
 	HostLsp,
 	HostPanel,
 	HostReferencesResult,
+	HostState,
 	HostSymbol,
 	HostWorkspace,
 	HostWorkspaceEdit,
+	ModeOverrides,
 	Notifier,
 	NotifyChoiceOptions,
 } from "./host.js"
@@ -36,7 +38,7 @@ import type {
  */
 
 /** The set of host capabilities that are proxied back to the controller. */
-export type RemoteHostCapability = "notifier" | "lsp" | "workspace" | "external" | "editor"
+export type RemoteHostCapability = "notifier" | "lsp" | "workspace" | "external" | "editor" | "state"
 
 /** Transport for the host-callback channel (executor → controller). */
 export interface HostRpcChannel {
@@ -114,6 +116,14 @@ function remoteWorkspace(channel: HostRpcChannel, local: HostWorkspace): HostWor
 	}
 }
 
+function remoteState(channel: HostRpcChannel): HostState {
+	// Mode overrides live in the controller's persisted `globalState`; the executor
+	// reads them over the channel.
+	return {
+		readModeOverrides: () => channel.invoke("state", "readModeOverrides", []) as Promise<ModeOverrides>,
+	}
+}
+
 function remoteExternal(channel: HostRpcChannel): HostExternal {
 	// Opening a URL is a UI action bound to the controller.
 	return {
@@ -147,6 +157,7 @@ export function createSplitHost({ local, channel }: { local: HostBridge; channel
 		workspace: remoteWorkspace(channel, local.workspace),
 		external: remoteExternal(channel),
 		editor: remoteEditor(channel),
+		state: remoteState(channel),
 		fs: local.fs,
 		config: local.config,
 		env: local.env,

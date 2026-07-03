@@ -1,8 +1,8 @@
 import os from "os"
 import osName from "os-name"
 
-import { getShell } from "@shofer/core"
-import { type SubmoduleEntry, formatSubmoduleBlock } from "@shofer/core"
+import { getShell } from "../../utils/shell.js"
+import { type SubmoduleEntry, formatSubmoduleBlock } from "../../utils/git-submodules.js"
 
 /**
  * Generate the SYSTEM INFORMATION section of the system prompt.
@@ -15,7 +15,7 @@ export function getSystemInfoSection(cwd: string, submoduleInfos?: SubmoduleEntr
 	let osInfo: string
 	try {
 		osInfo = osName()
-	} catch (error) {
+	} catch {
 		// Fallback when os-name fails (e.g., PowerShell not available on Windows)
 		const platform = os.platform()
 		const release = os.release()

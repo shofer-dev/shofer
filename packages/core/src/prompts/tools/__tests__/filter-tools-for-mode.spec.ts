@@ -2,7 +2,7 @@
 
 import type OpenAI from "openai"
 
-import { filterNativeToolsForMode } from "../filter-tools-for-mode"
+import { filterNativeToolsForMode } from "../filter-tools-for-mode.js"
 
 function makeTool(name: string): OpenAI.Chat.ChatCompletionTool {
 	return {

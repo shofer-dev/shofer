@@ -43,27 +43,24 @@ vi.mock("os-name", () => ({
 
 vi.mock("fs/promises")
 
-import * as vscode from "vscode"
-
 import { ModeConfig } from "@shofer/types"
 
-import { SYSTEM_PROMPT } from "../system"
-import { McpHub } from "@shofer/core"
-import { defaultModeSlug, modes, Mode } from "@shofer/core"
-import "@shofer/core"
-import { addCustomInstructions } from "../sections/custom-instructions"
-import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace"
+import { SYSTEM_PROMPT } from "../system.js"
+import type { McpHub } from "../../services/mcp/McpHub.js"
+import { defaultModeSlug, modes, Mode } from "@shofer/types"
+import { addCustomInstructions } from "../sections/custom-instructions.js"
 
 // Mock the sections
-vi.mock("../sections/modes", () => ({
+vi.mock("../sections/modes.js", () => ({
 	getModesSection: vi.fn().mockImplementation(async () => `====\n\nMODES\n\n- Test modes section`),
 }))
 
 // Mock the custom instructions
-vi.mock("../sections/custom-instructions", () => {
+vi.mock("../sections/custom-instructions.js", () => {
 	const addCustomInstructions = vi.fn()
 	return {
 		addCustomInstructions,
+		loadRuleFiles: vi.fn().mockResolvedValue(""),
 		__setMockImplementation: (impl: any) => {
 			addCustomInstructions.mockImplementation(impl)
 		},
@@ -71,7 +68,7 @@ vi.mock("../sections/custom-instructions", () => {
 })
 
 // Set up default mock implementation
-const customInstructionsMock = vi.mocked(await import("../sections/custom-instructions"))
+const customInstructionsMock = vi.mocked(await import("../sections/custom-instructions.js"))
 const { __setMockImplementation } = customInstructionsMock as any
 __setMockImplementation(
 	async (
@@ -118,55 +115,27 @@ __setMockImplementation(
 	},
 )
 
-// Mock vscode language
-vi.mock("vscode", () => ({
-	env: {
-		language: "en",
-	},
-	workspace: {
-		workspaceFolders: [{ uri: { fsPath: "/test/path" } }],
-		getWorkspaceFolder: vi.fn().mockReturnValue({ uri: { fsPath: "/test/path" } }),
-	},
-	window: {
-		activeTextEditor: undefined,
-	},
-	EventEmitter: vi.fn().mockImplementation(() => ({
-		event: vi.fn(),
-		fire: vi.fn(),
-		dispose: vi.fn(),
-	})),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+// The shell is read through core's `utils/shell`; pin it so system-info / rules
+// stay deterministic across platforms.
+vi.mock("../../utils/shell.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/shell.js")>()),
 	getShell: () => "/bin/zsh",
 }))
 
-// Create a mock ExtensionContext
+// A minimal opaque provider context — the core only checks it for truthiness and,
+// with the in-memory host, never resolves a code-index manager from it.
 const mockContext = {
 	extensionPath: "/mock/extension/path",
 	globalStoragePath: "/mock/storage/path",
 	storagePath: "/mock/storage/path",
 	logPath: "/mock/log/path",
 	subscriptions: [],
-	workspaceState: {
-		get: () => undefined,
-		update: () => Promise.resolve(),
-	},
 	globalState: {
 		get: () => undefined,
 		update: () => Promise.resolve(),
 		setKeysForSync: () => {},
 	},
-	extensionUri: { fsPath: "/mock/extension/path" },
-	globalStorageUri: { fsPath: "/mock/settings/path" },
-	asAbsolutePath: (relativePath: string) => `/mock/extension/path/${relativePath}`,
-	extension: {
-		packageJSON: {
-			version: "1.0.0",
-		},
-	},
-} as unknown as vscode.ExtensionContext
+} as unknown
 
 // Instead of extending McpHub, create a mock that implements just what we need
 const createMockMcpHub = (withServers: boolean = false): McpHub =>
@@ -267,12 +236,12 @@ describe("addCustomInstructions", () => {
 	})
 
 	it("should prioritize mode-specific rules for debug mode", async () => {
-		const instructions = await addCustomInstructions("", "", "/test/path", modes[2].slug)
+		const instructions = await addCustomInstructions("", "", "/test/path", modes[2]!.slug)
 		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/debug-mode-rules.snap")
 	})
 
 	it("should prioritize mode-specific rules for architect mode", async () => {
-		const instructions = await addCustomInstructions("", "", "/test/path", modes[1].slug)
+		const instructions = await addCustomInstructions("", "", "/test/path", modes[1]!.slug)
 		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/architect-mode-rules.snap")
 	})
 
@@ -367,8 +336,8 @@ describe("addCustomInstructions", () => {
 		)
 
 		const instructionParts = instructions.split("\n\n")
-		const globalIndex = instructionParts.findIndex((part) => part.includes("First instruction"))
-		const modeSpecificIndex = instructionParts.findIndex((part) => part.includes("Second instruction"))
+		const globalIndex = instructionParts.findIndex((part: string) => part.includes("First instruction"))
+		const modeSpecificIndex = instructionParts.findIndex((part: string) => part.includes("Second instruction"))
 
 		expect(globalIndex).toBeLessThan(modeSpecificIndex)
 		expect(instructions).toMatchFileSnapshot(

@@ -1,12 +1,15 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofer/types"
-import { getGroupName, getModeBySlug, getToolsForMode, resolveToolAlias } from "@shofer/core"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
-import { defaultModeSlug } from "@shofer/core"
-import { buildMcpToolName } from "@shofer/core"
-import type { CodeIndexManagerLike, GitIndexManagerLike, LiveMemoryManagerLike } from "@shofer/core"
-import type { McpHub } from "@shofer/core"
-import { isToolAllowedForMode } from "@shofer/core"
+import { getGroupName, getModeBySlug, getToolsForMode } from "@shofer/types"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
+import { defaultModeSlug } from "@shofer/types"
+import { resolveToolAlias } from "../../tools/tool-aliases.js"
+import { buildMcpToolName } from "../../utils/mcp-name.js"
+import type { CodeIndexManagerLike } from "../../services/code-index/code-index-registry.js"
+import type { GitIndexManagerLike } from "../../services/git-index/git-index-registry.js"
+import type { LiveMemoryManagerLike } from "../../services/live-memory/live-memory-registry.js"
+import type { McpHub } from "../../services/mcp/McpHub.js"
+import { isToolAllowedForMode } from "../../tools/validateToolUse.js"
 
 /**
  * Canonical to aliases map - maps canonical tool name to array of alias names.
@@ -264,6 +267,7 @@ export function filterNativeToolsForMode(
 	experiments: Record<string, boolean> | undefined,
 	codeIndexManager?: CodeIndexManagerLike,
 	gitIndexManager?: GitIndexManagerLike,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
 	liveMemoryManager?: LiveMemoryManagerLike,
@@ -362,6 +366,7 @@ export function isToolAllowedInMode(
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
 	codeIndexManager?: CodeIndexManagerLike,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 ): boolean {
 	const modeSlug = mode ?? defaultModeSlug
@@ -420,6 +425,7 @@ export function getAvailableToolsInGroup(
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
 	codeIndexManager?: CodeIndexManagerLike,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 ): ToolName[] {
 	const toolGroup = TOOL_GROUPS[groupName]
