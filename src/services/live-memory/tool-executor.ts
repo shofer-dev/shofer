@@ -22,7 +22,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 import { Buffer } from "buffer"
 
-import { extractTextFromFile, addLineNumbers } from "../../integrations/misc/extract-text"
+import { extractTextFromFile, addLineNumbers } from "@shofer/core"
 import { regexGrepSearch } from "@shofer/core"
 import { listFiles as globListFiles } from "@shofer/core"
 import { CodeIndexManager } from "../code-index/manager"

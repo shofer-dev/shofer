@@ -58,7 +58,7 @@ import {
 	LiveMemoryLlmClient,
 } from "@shofer/core"
 import { LiveMemoryToolExecutor, LIVE_MEMORY_READ_TOOLS } from "./tool-executor"
-import { getNativeTools } from "../../core/prompts/tools/native-tools"
+import { getNativeTools } from "@shofer/core"
 import type { Anthropic } from "@anthropic-ai/sdk"
 import type OpenAI from "openai"
 

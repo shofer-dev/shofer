@@ -124,6 +124,7 @@ vi.mock("@shofer/cloud", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	buildApiHandler: vi.fn().mockReturnValue({
 		getModel: vi.fn().mockReturnValue({
 			id: "claude-3-sonnet",
@@ -161,10 +162,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 vi.mock("../../prompts/system", () => ({
 	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	codeMode: "code",
-}))
-
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 }))
 
 vi.mock("p-wait-for", () => ({

@@ -13,6 +13,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { parseToolBoolean } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 import { taskLog } from "@shofer/core"
+import { MAX_SUBTASK_RESULT_LENGTH } from "@shofer/core"
 
 interface NewTaskParams {
 	mode: string
@@ -26,8 +27,8 @@ interface NewTaskParams {
 	title?: string
 }
 
-/** Hard safety cap for subtask completion result length, in characters. */
-export const MAX_SUBTASK_RESULT_LENGTH = 100000
+/** Hard safety cap for subtask completion result length, in characters. Re-exported from `@shofer/core`. */
+export { MAX_SUBTASK_RESULT_LENGTH }
 
 /** Default soft result length (characters) when LLM does not provide one. */
 const DEFAULT_SOFT_RESULT_LENGTH = 2000

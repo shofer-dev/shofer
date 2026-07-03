@@ -10,7 +10,7 @@
  */
 
 import { contractToJsonSchema, type OutputSchema } from "@shofer/core"
-import { getNativeTools } from "../../prompts/tools/native-tools"
+import { getNativeTools } from "@shofer/core"
 
 describe("contractToJsonSchema", () => {
 	test("single string field", () => {

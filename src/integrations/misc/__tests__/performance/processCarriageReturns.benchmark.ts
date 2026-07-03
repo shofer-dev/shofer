@@ -1,5 +1,5 @@
 import { applyRunLengthEncoding, truncateOutput } from "@shofer/core"
-import { processCarriageReturns } from "../../extract-text"
+import { processCarriageReturns } from "@shofer/core"
 
 /**
  * Enhanced Benchmark test for terminal output processing functions

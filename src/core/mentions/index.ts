@@ -9,8 +9,8 @@ import { taskLog } from "@shofer/core"
 
 import { getCommitInfo, getWorkingState } from "@shofer/core"
 
-import { extractTextFromFileWithMetadata, type ExtractTextResult } from "../../integrations/misc/extract-text"
-import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
+import { extractTextFromFileWithMetadata, type ExtractTextResult } from "@shofer/core"
+import { DEFAULT_LINE_LIMIT } from "@shofer/core"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
