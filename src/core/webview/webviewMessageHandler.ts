@@ -1571,6 +1571,16 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "checkpointDiff":
+			// Shofer Nodes L2: a shadow (remote) task's checkpoint repo lives in the
+			// EXECUTOR's globalStorage, which the shared-workspace-fs assumption does
+			// NOT cover — so an interactive diff can't resolve on the controller, and
+			// running it against getCurrentTask() would hit the WRONG local task.
+			// Checkpoint markers still DISPLAY; interactive diff is deferred (needs an
+			// executor-side reverse data channel).
+			if (provider.nodeRegistry?.getFocusedShadow()) {
+				getHost().notifier.warn(t("common:errors.checkpoint_remote_unsupported"))
+				break
+			}
 			const result = checkoutDiffPayloadSchema.safeParse(message.payload)
 
 			if (result.success) {
@@ -1579,6 +1589,13 @@ export const webviewMessageHandler = async (
 
 			break
 		case "checkpointRestore": {
+			// See checkpointDiff: interactive restore is deferred for shadow tasks
+			// (the executor owns the checkpoint repo); guard before cancel/restore so
+			// we never restore the wrong local task.
+			if (provider.nodeRegistry?.getFocusedShadow()) {
+				getHost().notifier.warn(t("common:errors.checkpoint_remote_unsupported"))
+				break
+			}
 			const result = checkoutRestorePayloadSchema.safeParse(message.payload)
 
 			if (result.success) {
