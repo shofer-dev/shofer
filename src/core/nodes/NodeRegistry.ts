@@ -49,6 +49,36 @@ export type NodeConnectionFactory = (opts: {
 	controllerVersion: string
 }) => INodeConnection
 
+/**
+ * The minimal slice of {@link ShoferProvider} the registry drives (Level 2). Kept
+ * as an interface so the registry stays unit-testable (tests inject a fake) and
+ * to avoid an import cycle with the provider. `createManagedTask` runs the Local
+ * in-process new-task path and returns the new task id; `getCurrentTask` and
+ * `postMessageToWebview` back the shadow render + focus logic (Stages B/C).
+ */
+export interface NodeProviderHost {
+	createManagedTask(
+		name?: string,
+		text?: string,
+		images?: string[],
+		worktreeDir?: string,
+		seeds?: { mode?: string; apiConfigName?: string },
+	): Promise<string | undefined>
+	getCurrentTask(): { taskId?: string } | undefined
+	postMessageToWebview(message: unknown): Promise<void> | void
+}
+
+/** Options for {@link NodeRegistry.routeNewTask} (the pooled new-task entry point). */
+export interface RouteNewTaskInput {
+	prompt: string
+	images?: string[]
+	mode?: string
+	apiConfigName?: string
+	worktreeDir?: string
+	/** Optional caller-preferred node; honored when enabled+assignable, else round-robin. */
+	preferredNodeId?: string
+}
+
 export interface NodeRegistryOptions {
 	context: vscode.ExtensionContext
 	localApi: ShoferAPI
@@ -75,6 +105,7 @@ export class NodeRegistry {
 	private readonly hasTokenCache = new Set<string>()
 	private readonly listeners = new Set<() => void>()
 	private defs: ShoferNodeDef[] = []
+	private provider?: NodeProviderHost
 
 	constructor(opts: NodeRegistryOptions, deps: NodeRegistryDeps = {}) {
 		this.context = opts.context
@@ -111,6 +142,57 @@ export class NodeRegistry {
 	onChange(cb: () => void): () => void {
 		this.listeners.add(cb)
 		return () => this.listeners.delete(cb)
+	}
+
+	/**
+	 * Attach the controller-side provider host (Level 2). The registry needs it to
+	 * run the Local in-process new-task path (bypassing the pool) and to push
+	 * remote-shadow render deltas to the webview. Idempotent; the last attach wins.
+	 */
+	attachProvider(provider: NodeProviderHost): void {
+		this.provider = provider
+	}
+
+	/** True when at least one *remote* executor is currently assignable (enabled + connected). */
+	hasEnabledRemote(): boolean {
+		return this.pool.assignableIds().some((id) => id !== LOCAL_NODE_ID)
+	}
+
+	/**
+	 * Route a webview new-task through the pool (Level 2 load-balancing).
+	 *
+	 * Owner selection: an enabled+assignable `preferredNodeId` wins; otherwise the
+	 * pool's round-robin (`pickNext`). The **Local** owner takes the IN-PROCESS
+	 * path (`provider.createManagedTask`) and bypasses the pool entirely — the pool
+	 * only records ownership via `assignOwner`. This is the recursion guard: the
+	 * webview→pool→ShoferApiAgent.createTask→api.startNewTask→provider.createTask
+	 * loop can never form for a Local pick. A remote owner dispatches through
+	 * `pool.createTaskOn`, which runs the task on that node.
+	 *
+	 * Returns the new task id (or `undefined` if the Local path failed to create).
+	 */
+	async routeNewTask(input: RouteNewTaskInput): Promise<string | undefined> {
+		const assignable = this.pool.assignableIds()
+		const preferred =
+			input.preferredNodeId && assignable.includes(input.preferredNodeId) ? input.preferredNodeId : undefined
+		// A preferred pick must NOT also advance the round-robin cursor.
+		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_NODE_ID
+
+		if (owner === LOCAL_NODE_ID) {
+			if (!this.provider) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
+			const taskId = await this.provider.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
+				mode: input.mode,
+				apiConfigName: input.apiConfigName,
+			})
+			// Record Local ownership so ownerOf()/activeNodeId() report Local. The
+			// task ran fully in-process — never through the pool's createTask.
+			if (taskId) this.pool.assignOwner(taskId, LOCAL_NODE_ID)
+			return taskId
+		}
+
+		// Remote owner: the node runs the task; we only buffer/render it (Stage B).
+		const { taskId } = await this.pool.createTaskOn(owner, { prompt: input.prompt })
+		return taskId
 	}
 
 	/** Dispatch a webview {@link ShoferNodeRequest}. */

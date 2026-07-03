@@ -2009,6 +2009,9 @@ export class ShoferProvider
 		if (this.nodeRegistry) return
 		const registry = new NodeRegistry({ context: this.context, localApi, controllerVersion })
 		this.nodeRegistry = registry
+		// L2: the registry drives the Local in-process new-task path + shadow render
+		// through this provider.
+		registry.attachProvider(this)
 		registry.onChange(() => {
 			void this.pushShoferNodesState()
 		})
@@ -5351,7 +5354,7 @@ export class ShoferProvider
 		images?: string[],
 		worktreeDir?: string,
 		seeds?: { mode?: string; apiConfigName?: string },
-	): Promise<void> {
+	): Promise<string | undefined> {
 		this.log(
 			`[createManagedTask] Called — name=${name || "(auto)"} ` +
 				`textLen=${text?.length ?? 0} images=${images?.length ?? 0} ` +
@@ -5428,6 +5431,7 @@ export class ShoferProvider
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
 
 			this.debug(`Created managed task: ${managedTask.id} (${managedTask.name})`)
+			return task.taskId
 		} catch (error) {
 			// Restore the old task to the stack if creation failed
 			if (poppedTask) {
@@ -5438,6 +5442,7 @@ export class ShoferProvider
 			getHost().notifier.error(
 				`Failed to create managed task: ${error instanceof Error ? error.message : String(error)}`,
 			)
+			return undefined
 		}
 	}
 

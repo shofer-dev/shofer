@@ -92,11 +92,27 @@ function makeRegistry(seedDefs?: unknown[]) {
 		conns.set(o.baseUrl, c)
 		return c
 	}
+	const localAgent = makeAgent()
 	const registry = new NodeRegistry(
 		{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0" },
-		{ createConnection, localAgent: makeAgent() },
+		{ createConnection, localAgent },
 	)
-	return { registry, globals, secrets, conns }
+	return { registry, globals, secrets, conns, localAgent }
+}
+
+/** A fake {@link NodeProviderHost} recording the in-process Local new-task path. */
+function makeProviderHost() {
+	let seq = 0
+	let currentTaskId: string | undefined
+	const host = {
+		createManagedTask: vi.fn(async () => {
+			currentTaskId = `local-task-${++seq}`
+			return currentTaskId
+		}),
+		getCurrentTask: () => (currentTaskId ? { taskId: currentTaskId } : undefined),
+		postMessageToWebview: vi.fn(async () => {}),
+	}
+	return host
 }
 
 const remoteDef = { id: "r1", kind: "remote" as const, label: "box", host: "host:1", tls: false }
@@ -204,6 +220,63 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.registry.getState().nodes.some((n) => n.id === "r1")).toBe(false)
 		expect(h.secrets.get("shoferNode.token.r1")).toBeUndefined()
 		expect(h.globals.get("shoferNodes.defs")).toEqual([expect.objectContaining({ id: LOCAL_NODE_ID })])
+	})
+
+	// ── L2: routeNewTask + recursion guard ──────────────────────────────────────
+
+	it("routeNewTask on a Local pick runs the IN-PROCESS path exactly once (no re-entry through the pool)", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+
+		// Only Local is registered → owner is always Local.
+		const taskId = await h.registry.routeNewTask({ prompt: "hello" })
+
+		expect(host.createManagedTask).toHaveBeenCalledTimes(1)
+		expect(host.createManagedTask).toHaveBeenCalledWith(undefined, "hello", undefined, undefined, {
+			mode: undefined,
+			apiConfigName: undefined,
+		})
+		// The recursion guard: the pool's Local executor createTask must NEVER be
+		// called (that path leads back through api.startNewTask → provider.createTask).
+		expect(h.localAgent.createTask).not.toHaveBeenCalled()
+		// Ownership is still recorded as Local so activeNodeId() reports Local.
+		expect(taskId).toBe("local-task-1")
+		expect(h.registry.executorPool.ownerOf("local-task-1")).toBe(LOCAL_NODE_ID)
+	})
+
+	it("hasEnabledRemote reflects assignable remotes; a preferredNodeId=local routes in-process", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		expect(h.registry.hasEnabledRemote()).toBe(false)
+
+		// Connect a remote → hasEnabledRemote true.
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: makeAgent() })
+		expect(h.registry.hasEnabledRemote()).toBe(true)
+
+		// preferredNodeId=local pins the task to the in-process path even with a remote present.
+		await h.registry.routeNewTask({ prompt: "pin-local", preferredNodeId: LOCAL_NODE_ID })
+		expect(host.createManagedTask).toHaveBeenCalledTimes(1)
+		expect(h.localAgent.createTask).not.toHaveBeenCalled()
+	})
+
+	it("routeNewTask on a remote owner dispatches through the pool (never the in-process path)", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remoteApi = makeAgent()
+		;(remoteApi.createTask as ReturnType<typeof vi.fn>).mockResolvedValue({ taskId: "r1-task-1" })
+
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remoteApi })
+
+		// Force the remote owner via preferredNodeId (deterministic, no RR dependence).
+		const taskId = await h.registry.routeNewTask({ prompt: "remote-run", preferredNodeId: "r1" })
+		expect(remoteApi.createTask).toHaveBeenCalledWith({ prompt: "remote-run" })
+		expect(host.createManagedTask).not.toHaveBeenCalled()
+		expect(taskId).toBe("r1-task-1")
+		expect(h.registry.executorPool.ownerOf("r1-task-1")).toBe("r1")
 	})
 
 	it("init() auto-connects persisted autoConnect remotes and hydrates hasToken", async () => {

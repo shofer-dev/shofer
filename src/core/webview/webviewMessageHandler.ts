@@ -847,12 +847,31 @@ export const webviewMessageHandler = async (
 					}
 				}
 
-				// Pre-task mode / API-config seeds chosen in the chat dropdown.
-				// When absent, createTask falls back to the global Settings defaults.
-				await provider.createManagedTask(undefined, messageText, resolved.images, worktreeDir, {
-					mode: message.mode,
-					apiConfigName: message.apiConfigName,
-				})
+				// Shofer Nodes L2: route through the executor pool ONLY when there is a
+				// real distributed decision to make — at least one enabled remote node,
+				// or an explicit preferredNodeId. Otherwise (the overwhelmingly common
+				// local-only case) the existing in-process createManagedTask path is
+				// used UNCHANGED, so local behavior is byte-for-byte identical.
+				const registry = provider.nodeRegistry
+				const shouldRoute =
+					!!registry && (registry.hasEnabledRemote() || typeof message.preferredNodeId === "string")
+				if (shouldRoute) {
+					await registry!.routeNewTask({
+						prompt: messageText,
+						images: resolved.images,
+						mode: message.mode,
+						apiConfigName: message.apiConfigName,
+						worktreeDir,
+						preferredNodeId: message.preferredNodeId,
+					})
+				} else {
+					// Pre-task mode / API-config seeds chosen in the chat dropdown.
+					// When absent, createTask falls back to the global Settings defaults.
+					await provider.createManagedTask(undefined, messageText, resolved.images, worktreeDir, {
+						mode: message.mode,
+						apiConfigName: message.apiConfigName,
+					})
+				}
 				// Task created successfully - notify the UI to reset
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 			} catch (error) {

@@ -52,13 +52,52 @@ export class ExecutorPool implements AgentApi {
 		return this.executors.filter((e) => !e.disabled)
 	}
 
-	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+	/**
+	 * Advance the round-robin over the currently-assignable executors and return
+	 * the chosen executor id, WITHOUT dispatching anything. Split out from
+	 * {@link createTask} so a controller can decide the owner up front (e.g. to
+	 * route a Local pick through an in-process path that bypasses the pool) while
+	 * still advancing the load-balancer cursor. Returns `undefined` when no
+	 * executor is assignable.
+	 */
+	pickNext(): string | undefined {
 		const pool = this.assignable()
-		if (pool.length === 0) throw new Error("ExecutorPool: no executor available")
-		const executor = pool[this.roundRobin++ % pool.length]!
+		if (pool.length === 0) return undefined
+		return pool[this.roundRobin++ % pool.length]!.id
+	}
+
+	/** Ids of the executors currently eligible for new-task assignment (enabled). */
+	assignableIds(): string[] {
+		return this.assignable().map((e) => e.id)
+	}
+
+	/**
+	 * Dispatch a new root task to a SPECIFIC executor and record ownership.
+	 * Throws if `id` is not a registered executor. Pairs with {@link pickNext}
+	 * (`createTaskOn(pickNext(), …)`), which is exactly what {@link createTask}
+	 * now does.
+	 */
+	async createTaskOn(id: string, input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+		const executor = this.executors.find((e) => e.id === id)
+		if (!executor) throw new Error(`ExecutorPool: unknown executor ${id}`)
 		const result = await executor.api.createTask(input)
 		this.taskOwner.set(result.taskId, executor.id)
 		return result
+	}
+
+	/**
+	 * Record ownership for a task created OUT OF BAND (not via `createTaskOn`) —
+	 * e.g. the Local bypass, where the controller runs the task in-process and
+	 * only wants `ownerOf` to report the owner. No dispatch happens here.
+	 */
+	assignOwner(taskId: string, executorId: string): void {
+		this.taskOwner.set(taskId, executorId)
+	}
+
+	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+		const id = this.pickNext()
+		if (id === undefined) throw new Error("ExecutorPool: no executor available")
+		return this.createTaskOn(id, input)
 	}
 
 	async sendMessage(taskId: string, message: string): Promise<void> {

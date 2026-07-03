@@ -1050,6 +1050,12 @@ export interface WebviewMessage {
 	worktreePath?: string
 	/** Embedded worktree directory for new tasks scoped to a git worktree subdirectory. */
 	worktreeDir?: string
+	/**
+	 * Shofer Nodes L2: caller-preferred executor for this new task. When enabled +
+	 * assignable it wins owner selection; otherwise the pool round-robins. Carried
+	 * on `newTask`; the picker UI that sets it is optional (L3).
+	 */
+	preferredNodeId?: string
 	/** When true, the host auto-creates a worktree before starting the new task. */
 	autoCreateWorktree?: boolean
 	worktreeBranch?: string

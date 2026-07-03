@@ -99,6 +99,45 @@ describe("ExecutorPool (§13 controller side)", () => {
 		expect(pool.ownerOf(t2.taskId)).toBe("B")
 	})
 
+	it("pickNext advances round-robin without dispatching; createTaskOn dispatches to a specific executor", async () => {
+		const a = makeExecutor("A")
+		const b = makeExecutor("B")
+		const pool = new ExecutorPool()
+		pool.add({ id: a.id, api: a.api })
+		pool.add({ id: b.id, api: b.api })
+
+		// pickNext advances the cursor but dispatches nothing.
+		expect(pool.pickNext()).toBe("A")
+		expect(pool.pickNext()).toBe("B")
+		expect(a.api.createTask).not.toHaveBeenCalled()
+		expect(b.api.createTask).not.toHaveBeenCalled()
+		expect(pool.assignableIds()).toEqual(["A", "B"])
+
+		// createTaskOn dispatches to exactly the named executor and records ownership.
+		const t = await pool.createTaskOn("B", { prompt: "hi" })
+		expect(b.api.createTask).toHaveBeenCalledTimes(1)
+		expect(a.api.createTask).not.toHaveBeenCalled()
+		expect(pool.ownerOf(t.taskId)).toBe("B")
+
+		// createTaskOn on an unknown id throws.
+		await expect(pool.createTaskOn("Z", { prompt: "x" })).rejects.toThrow(/unknown executor/)
+	})
+
+	it("assignOwner records ownership for an out-of-band task (Local bypass) without dispatch", async () => {
+		const a = makeExecutor("A")
+		const pool = new ExecutorPool()
+		pool.add({ id: a.id, api: a.api })
+		pool.assignOwner("local-task-1", "A")
+		expect(pool.ownerOf("local-task-1")).toBe("A")
+		expect(a.api.createTask).not.toHaveBeenCalled()
+	})
+
+	it("pickNext returns undefined when no executor is assignable", () => {
+		const pool = new ExecutorPool()
+		expect(pool.pickNext()).toBeUndefined()
+		expect(pool.assignableIds()).toEqual([])
+	})
+
 	it("round-robins over enabled executors and skips a runtime-disabled one via setDisabled", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
