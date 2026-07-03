@@ -28,9 +28,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	codeParser: {
 		parseFile: vi.fn().mockResolvedValue([]),
 	},
-}))
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	isPathInIgnoredDirectory: vi.fn().mockReturnValue(false),
 }))
 
