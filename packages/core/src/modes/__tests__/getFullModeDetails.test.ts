@@ -1,14 +1,17 @@
-// npx vitest run core/modes/__tests__/getFullModeDetails.test.ts
+// npx vitest run modes/__tests__/getFullModeDetails.test.ts
 
 import type { ModeConfig } from "@shofer/types"
+import { modes } from "@shofer/types"
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+// `addCustomInstructions` is an intra-core sibling reached via a RELATIVE import;
+// only a relative mock (not the `@shofer/core` barrel) can intercept that call.
+vi.mock("../../prompts/sections/custom-instructions.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../prompts/sections/custom-instructions.js")>()),
 	addCustomInstructions: vi.fn().mockResolvedValue("Combined instructions"),
 }))
 
-import { getFullModeDetails } from "@shofer/core"
-import { modes, addCustomInstructions } from "@shofer/core"
+import { getFullModeDetails } from "../getFullModeDetails.js"
+import { addCustomInstructions } from "../../prompts/sections/custom-instructions.js"
 
 describe("getFullModeDetails", () => {
 	beforeEach(() => {

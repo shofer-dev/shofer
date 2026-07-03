@@ -1,23 +1,31 @@
-// npx vitest src/core/assistant-message/__tests__/presentAssistantMessage-custom-tool.spec.ts
+// npx vitest src/assistant-message/__tests__/presentAssistantMessage-custom-tool.spec.ts
 
 import { describe, it, expect, beforeEach, vi } from "vitest"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
-import { presentAssistantMessage } from "@shofer/core"
-import { validateToolUse } from "@shofer/core"
+
+import { setHost, createInMemoryHost } from "@shofer/types"
+
+import { presentAssistantMessage } from "../presentAssistantMessage.js"
+import { validateToolUse } from "../../tools/validateToolUse.js"
+import { customToolRegistry } from "../../custom-tools/custom-tool-registry.js"
 
 // Mock dependencies
 vi.mock("../../task/Task")
 
-// Mock custom tool registry + validateToolUse/isValidToolName — must be done inline
-// without external variable references.
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
+// The subject reaches its custom-tool registry and validator siblings via
+// intra-core RELATIVE imports; only relative mocks (not the `@shofer/core`
+// barrel) can intercept those calls.
+vi.mock("../../tools/validateToolUse.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../tools/validateToolUse.js")>()),
 	validateToolUse: vi.fn(),
 	isValidToolName: vi.fn((toolName: string) =>
 		["read_file", "write_to_file", "ask_followup_question", "attempt_completion", "use_mcp_tool"].includes(
 			toolName,
 		),
 	),
+}))
+
+vi.mock("../../custom-tools/custom-tool-registry.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../custom-tools/custom-tool-registry.js")>()),
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),
@@ -38,13 +46,12 @@ vi.mock("@shofer/telemetry", () => ({
 }))
 
 import { TelemetryService } from "@shofer/telemetry"
-import { customToolRegistry } from "@shofer/core"
 
 describe("presentAssistantMessage - Custom Tool Recording", () => {
 	let mockTask: any
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		setHost(createInMemoryHost())
 		// Reset all mocks
 		vi.clearAllMocks()
 
@@ -118,7 +125,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				name: "my_custom_tool",
 				description: "A custom tool",
 				execute: vi.fn().mockResolvedValue("Custom tool result"),
-			})
+			} as any)
 
 			await presentAssistantMessage(mockTask)
 
@@ -147,7 +154,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				name: "failing_custom_tool",
 				description: "A failing custom tool",
 				execute: vi.fn().mockRejectedValue(new Error("Custom tool execution failed")),
-			})
+			} as any)
 
 			await presentAssistantMessage(mockTask)
 
@@ -255,7 +262,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				name: "my_custom_tool",
 				description: "A custom tool",
 				execute: vi.fn().mockResolvedValue("Should not execute"),
-			})
+			} as any)
 
 			await presentAssistantMessage(mockTask)
 
@@ -266,7 +273,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			// Custom tool should NOT have been executed
 			const getMock = vi.mocked(customToolRegistry.get)
 			if (getMock.mock.results.length > 0) {
-				const customTool = getMock.mock.results[0].value
+				const customTool = getMock.mock.results[0]!.value
 				if (customTool) {
 					expect(customTool.execute).not.toHaveBeenCalled()
 				}
@@ -335,7 +342,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 
 			const validateToolUseMock = vi.mocked(validateToolUse)
 			expect(validateToolUseMock).toHaveBeenCalled()
-			const toolRequirements = validateToolUseMock.mock.calls[0][3]
+			const toolRequirements = validateToolUseMock.mock.calls[0]![3]
 			expect(toolRequirements).toMatchObject({
 				search_and_replace: false,
 				edit: false,
