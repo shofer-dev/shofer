@@ -80,4 +80,31 @@ export class ExecutorPool implements AgentApi {
 		if (!executor) throw new Error(`ExecutorPool: no owner for task ${taskId}`)
 		return executor
 	}
+
+	// ── read / admin accessors (Shofer Nodes L1) ───────────────────────────────
+
+	/** The executor id that owns `taskId`, or `undefined` if the pool never assigned it. */
+	ownerOf(taskId: string): string | undefined {
+		return this.taskOwner.get(taskId)
+	}
+
+	/** Ids of every registered executor (enabled and disabled), in registration order. */
+	ids(): string[] {
+		return this.executors.map((e) => e.id)
+	}
+
+	/** Whether an executor with `id` is currently registered. */
+	has(id: string): boolean {
+		return this.executors.some((e) => e.id === id)
+	}
+
+	/**
+	 * Administratively enable/disable a registered executor. A disabled executor is
+	 * excluded from new-task assignment (round-robin) but stays registered and keeps
+	 * forwarding events for any task it already owns. No-op for an unknown id.
+	 */
+	setDisabled(id: string, disabled: boolean): void {
+		const executor = this.executors.find((e) => e.id === id)
+		if (executor) executor.disabled = disabled
+	}
 }
