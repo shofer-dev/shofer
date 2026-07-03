@@ -1,17 +1,15 @@
 import fs from "fs/promises"
 import * as path from "path"
 
-import * as vscode from "vscode"
 import { isBinaryFile } from "isbinaryfile"
+import { getHost } from "@shofer/types"
 
 import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "../../shared/context-mentions"
 import { taskLog } from "@shofer/core"
 
 import { getCommitInfo, getWorkingState } from "@shofer/core"
 
-import { openFile } from "../../integrations/misc/open-file"
 import { extractTextFromFileWithMetadata, type ExtractTextResult } from "../../integrations/misc/extract-text"
-import { diagnosticsToProblemsString } from "../../integrations/diagnostics"
 import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
 
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
@@ -32,16 +30,16 @@ export async function openMention(cwd: string, mention?: string): Promise<void> 
 		const relPath = unescapeSpaces(mention.slice(1))
 		const absPath = path.resolve(cwd, relPath)
 		if (mention.endsWith("/")) {
-			vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(absPath))
+			await getHost().editor.revealInExplorer(absPath)
 		} else {
-			openFile(absPath)
+			await getHost().editor.openFile(absPath)
 		}
 	} else if (mention === "problems") {
-		vscode.commands.executeCommand("workbench.actions.view.problems")
+		await getHost().editor.focusPanel("problems")
 	} else if (mention === "terminal") {
-		vscode.commands.executeCommand("workbench.action.terminal.focus")
+		await getHost().editor.focusPanel("terminal")
 	} else if (mention.startsWith("http")) {
-		vscode.env.openExternal(vscode.Uri.parse(mention))
+		await getHost().external.openExternal(mention)
 	}
 }
 
@@ -417,18 +415,7 @@ async function getWorkspaceProblems(
 	includeDiagnosticMessages: boolean = true,
 	maxDiagnosticMessages: number = 50,
 ): Promise<string> {
-	const diagnostics = vscode.languages.getDiagnostics()
-	const result = await diagnosticsToProblemsString(
-		diagnostics,
-		[vscode.DiagnosticSeverity.Error, vscode.DiagnosticSeverity.Warning],
-		cwd,
-		includeDiagnosticMessages,
-		maxDiagnosticMessages,
-	)
-	if (!result) {
-		return "No errors or warnings detected."
-	}
-	return result
+	return getHost().editor.getWorkspaceProblems(cwd, includeDiagnosticMessages, maxDiagnosticMessages)
 }
 
 /**
@@ -436,46 +423,7 @@ async function getWorkspaceProblems(
  * @returns The terminal contents as a string
  */
 export async function getLatestTerminalOutput(): Promise<string> {
-	// Store original clipboard content to restore later
-	const originalClipboard = await vscode.env.clipboard.readText()
-
-	try {
-		// Select terminal content
-		await vscode.commands.executeCommand("workbench.action.terminal.selectAll")
-
-		// Copy selection to clipboard
-		await vscode.commands.executeCommand("workbench.action.terminal.copySelection")
-
-		// Clear the selection
-		await vscode.commands.executeCommand("workbench.action.terminal.clearSelection")
-
-		// Get terminal contents from clipboard
-		let terminalContents = (await vscode.env.clipboard.readText()).trim()
-
-		// Check if there's actually a terminal open
-		if (terminalContents === originalClipboard) {
-			return ""
-		}
-
-		// Clean up command separation
-		const lines = terminalContents.split("\n")
-		const lastLine = lines.pop()?.trim()
-
-		if (lastLine) {
-			let i = lines.length - 1
-
-			while (i >= 0 && !lines[i].trim().startsWith(lastLine)) {
-				i--
-			}
-
-			terminalContents = lines.slice(Math.max(i, 0)).join("\n")
-		}
-
-		return terminalContents
-	} finally {
-		// Restore original clipboard content
-		await vscode.env.clipboard.writeText(originalClipboard)
-	}
+	return getHost().editor.readTerminalContents()
 }
 
 // Export processUserContentMentions from its own file

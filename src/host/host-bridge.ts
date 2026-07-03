@@ -10,12 +10,16 @@ import type {
 	HostDisposable,
 	HostDiagnostic,
 	HostDiagnosticSeverity,
+	HostDiffChange,
+	HostEditor,
 	HostEnv,
+	HostExternal,
 	AppInfo,
 	HostFileEdit,
 	HostFileSystem,
 	HostLsp,
 	HostFileWatcher,
+	HostPanel,
 	HostReferencesResult,
 	HostShellExecution,
 	HostSymbol,
@@ -27,10 +31,13 @@ import type {
 	Notifier,
 	NotifyChoiceOptions,
 } from "@shofer/types"
+import { DIFF_VIEW_URI_SCHEME } from "@shofer/types"
 
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { Terminal } from "../integrations/terminal/Terminal"
 import { ShellIntegrationManager } from "../integrations/terminal/ShellIntegrationManager"
+import { openFile } from "../integrations/misc/open-file"
+import { diagnosticsToProblemsString } from "../integrations/diagnostics"
 import { publisher as pkgPublisher, name as pkgName, version as pkgVersion } from "../package.json"
 
 /**
@@ -361,6 +368,88 @@ class VsCodeTerminals implements HostTerminals {
 	}
 }
 
+class VsCodeExternal implements HostExternal {
+	async openExternal(url: string): Promise<void> {
+		await vscode.env.openExternal(vscode.Uri.parse(url))
+	}
+}
+
+class VsCodeEditor implements HostEditor {
+	async revealInExplorer(path: string): Promise<void> {
+		await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(path))
+	}
+	async openFile(path: string): Promise<void> {
+		await openFile(path)
+	}
+	async focusPanel(which: HostPanel): Promise<void> {
+		await vscode.commands.executeCommand(
+			which === "problems" ? "workbench.actions.view.problems" : "workbench.action.terminal.focus",
+		)
+	}
+	async showMultiFileDiff(title: string, changes: HostDiffChange[]): Promise<void> {
+		await vscode.commands.executeCommand(
+			"vscode.changes",
+			title,
+			changes.map((change) => [
+				vscode.Uri.file(change.paths.absolute),
+				vscode.Uri.parse(`${DIFF_VIEW_URI_SCHEME}:${change.paths.relative}`).with({
+					query: Buffer.from(change.content.before ?? "").toString("base64"),
+				}),
+				vscode.Uri.parse(`${DIFF_VIEW_URI_SCHEME}:${change.paths.relative}`).with({
+					query: Buffer.from(change.content.after ?? "").toString("base64"),
+				}),
+			]),
+		)
+	}
+	async readTerminalContents(): Promise<string> {
+		// Store original clipboard content to restore later.
+		const originalClipboard = await vscode.env.clipboard.readText()
+
+		try {
+			// Select terminal content, copy it, then clear the selection.
+			await vscode.commands.executeCommand("workbench.action.terminal.selectAll")
+			await vscode.commands.executeCommand("workbench.action.terminal.copySelection")
+			await vscode.commands.executeCommand("workbench.action.terminal.clearSelection")
+
+			// Get terminal contents from clipboard.
+			let terminalContents = (await vscode.env.clipboard.readText()).trim()
+
+			// Check if there's actually a terminal open.
+			if (terminalContents === originalClipboard) {
+				return ""
+			}
+
+			// Clean up command separation.
+			const lines = terminalContents.split("\n")
+			const lastLine = lines.pop()?.trim()
+
+			if (lastLine) {
+				let i = lines.length - 1
+				while (i >= 0 && !lines[i].trim().startsWith(lastLine)) {
+					i--
+				}
+				terminalContents = lines.slice(Math.max(i, 0)).join("\n")
+			}
+
+			return terminalContents
+		} finally {
+			// Restore original clipboard content.
+			await vscode.env.clipboard.writeText(originalClipboard)
+		}
+	}
+	async getWorkspaceProblems(cwd: string, includeMessages: boolean, maxMessages: number): Promise<string> {
+		const diagnostics = vscode.languages.getDiagnostics()
+		const result = await diagnosticsToProblemsString(
+			diagnostics,
+			[vscode.DiagnosticSeverity.Error, vscode.DiagnosticSeverity.Warning],
+			cwd,
+			includeMessages,
+			maxMessages,
+		)
+		return result || "No errors or warnings detected."
+	}
+}
+
 /** The VS Code host bridge (extension runtime). */
 export function createVsCodeHost(): HostBridge {
 	return {
@@ -372,6 +461,8 @@ export function createVsCodeHost(): HostBridge {
 		workspace: new VsCodeWorkspace(),
 		watcher: new VsCodeWatcher(),
 		terminals: new VsCodeTerminals(),
+		external: new VsCodeExternal(),
+		editor: new VsCodeEditor(),
 		createDiffView: (cwd: string, task: DiffViewTaskHandle): DiffView => new DiffViewProvider(cwd, task),
 	}
 }

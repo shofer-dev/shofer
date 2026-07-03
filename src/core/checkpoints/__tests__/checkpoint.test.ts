@@ -4,6 +4,7 @@ import { ShoferProvider } from "../../webview/ShoferProvider"
 import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "../index"
 import { MessageManager } from "../../message-manager"
 import * as vscode from "vscode"
+import { getHost, setHost } from "@shofer/types"
 import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 
 // Mock vscode
@@ -60,9 +61,16 @@ describe("Checkpoint functionality", () => {
 	let mockProvider: any
 	let mockTask: any
 	let mockCheckpointService: any
+	let mockShowMultiFileDiff: Mock
 
 	beforeEach(async () => {
 		installVsCodeForwardingHost()
+		// The multi-file diff now goes through `getHost().editor.showMultiFileDiff`
+		// (the vscode.changes command lives in the VS Code host adapter). Override
+		// the (no-op) editor with a spy so the diff call can be asserted.
+		mockShowMultiFileDiff = vi.fn().mockResolvedValue(undefined)
+		const baseHost = getHost()
+		setHost({ ...baseHost, editor: { ...baseHost.editor, showMultiFileDiff: mockShowMultiFileDiff } })
 		// Create mock checkpoint service
 		mockCheckpointService = {
 			isInitialized: true,
@@ -76,6 +84,9 @@ describe("Checkpoint functionality", () => {
 		// Create mock provider
 		mockProvider = {
 			context: {
+				globalStorageUri: { fsPath: "/test/storage" },
+			},
+			contextProxy: {
 				globalStorageUri: { fsPath: "/test/storage" },
 			},
 			log: vi.fn(),
@@ -321,11 +332,7 @@ describe("Checkpoint functionality", () => {
 				from: "commit2",
 				to: undefined,
 			})
-			expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-				"vscode.changes",
-				"common:errors.checkpoint_diff_to_current",
-				expect.any(Array),
-			)
+			expect(mockShowMultiFileDiff).toHaveBeenCalledWith("common:errors.checkpoint_diff_to_current", mockChanges)
 		})
 
 		it("should show diff for checkpoint mode with next commit", async () => {
@@ -346,11 +353,7 @@ describe("Checkpoint functionality", () => {
 				from: "commit1",
 				to: "commit2",
 			})
-			expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-				"vscode.changes",
-				"common:errors.checkpoint_diff_with_next",
-				expect.any(Array),
-			)
+			expect(mockShowMultiFileDiff).toHaveBeenCalledWith("common:errors.checkpoint_diff_with_next", mockChanges)
 		})
 
 		it("should find next checkpoint automatically in checkpoint mode", async () => {
@@ -384,7 +387,7 @@ describe("Checkpoint functionality", () => {
 			})
 
 			expect(vscode.window.showInformationMessage).toHaveBeenCalledWith("common:errors.checkpoint_no_changes")
-			expect(vscode.commands.executeCommand).not.toHaveBeenCalled()
+			expect(mockShowMultiFileDiff).not.toHaveBeenCalled()
 		})
 
 		it("should disable checkpoints on error", async () => {

@@ -5,7 +5,32 @@ import type {
 	TaskState,
 	TaskLike,
 	TaskProviderEvents,
+	ManagedTask,
+	TaskManagerEvents,
+	CreateTaskOptions,
+	ShoferSettings,
 } from "@shofer/types"
+
+/**
+ * The (browser+node-safe) slice of the concrete `ContextProxy` the Task-cluster
+ * tools read off the provider. Typed narrowly here so the tools never import the
+ * VS Code-coupled `ContextProxy` class. `globalStorageUri` is modelled as just
+ * its `.fsPath` (a `vscode.Uri` satisfies this structurally).
+ */
+export interface ContextProxyLike {
+	getValue<K extends keyof ShoferSettings>(key: K): ShoferSettings[K]
+	readonly globalStorageUri: { readonly fsPath: string }
+}
+
+/**
+ * The narrow slice of the concrete `TaskHistoryStore` the tools read off the
+ * provider (lookups over the persisted task history). Mirrors the concrete
+ * synchronous cache accessors.
+ */
+export interface TaskHistoryStoreLike {
+	get(taskId: string): HistoryItem | undefined
+	getAll(): HistoryItem[]
+}
 
 // Type-only import: `McpHub` lives in `@shofer/core` (portable, Node-only). The
 // import is `type`-only so it never creates a runtime cycle
@@ -38,10 +63,46 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	/** Opaque host context (a `vscode.ExtensionContext` in the VS Code front-end). */
 	readonly context: unknown
 	readonly taskManager: TaskManagerLike<TTask>
+	/** Narrow settings/storage accessor (the concrete `ContextProxy`). */
+	readonly contextProxy: ContextProxyLike
+	/** Persisted task-history store (narrow read surface). */
+	readonly taskHistoryStore: TaskHistoryStoreLike
 	/** Workspace root the provider is anchored to (used to locate project MCP config). */
 	readonly cwd: string
 
 	getState(): Promise<TaskProviderState>
+
+	/**
+	 * Create (and start) a new task, optionally as a child of `parentTask`.
+	 * Mirrors `ShoferProvider.createTask`.
+	 */
+	createTask(
+		text?: string,
+		images?: string[],
+		parentTask?: TTask,
+		options?: CreateTaskOptions,
+		configuration?: ShoferSettings,
+		cwd?: string,
+	): Promise<TTask>
+	/** Rehydrate a task from a persisted `HistoryItem`. Mirrors `ShoferProvider.createTaskWithHistoryItem`. */
+	createTaskWithHistoryItem(
+		historyItem: HistoryItem & { rootTask?: TTask; parentTask?: TTask },
+		options?: { startTask?: boolean; keepCurrentTask?: boolean; maxMessages?: number },
+	): Promise<TTask>
+	/** Cancel the current (foreground) task. */
+	cancelTask(): Promise<void>
+
+	/** Register a resolver that a blocking foreground child fires on completion. */
+	registerBlockingChildResolver(childTaskId: string, resolver: (result: string) => void): void
+	/**
+	 * Register a peer sync resolver for a recipient task; the returned Promise
+	 * resolves with the recipient's `attempt_completion` result.
+	 */
+	registerPendingSyncResolver(recipientTaskId: string, initiatorTaskId: string): Promise<string>
+	/** Whether a pending sync resolver exists for the given recipient. */
+	hasPendingSyncResolver(recipientTaskId: string): boolean
+	/** Clear a pending sync resolver without firing it (timeout/abort path). */
+	clearPendingSyncResolver(recipientTaskId: string): void
 	/** Returns the provider's MCP hub, or `undefined` when MCP is unavailable. */
 	getMcpHub(): McpHub | undefined
 	/** Ensures the global MCP servers directory exists and returns its path. */
@@ -108,4 +169,23 @@ export interface TaskManagerLike<TTask = TaskLike> {
 	focusTask(taskId: string): Promise<void>
 	/** Set the persisted lifecycle state of a managed task. */
 	setState(targetTaskId: string, state: TaskState): void
+
+	/** Look up the in-memory record for a managed task. */
+	getManagedTask(taskId: string): ManagedTask | undefined
+	/** All managed tasks, most-recently-active first. */
+	getManagedTasks(): ManagedTask[]
+	/** Count of non-terminal, non-idle managed tasks (running or waiting). */
+	countActiveTasks(): number
+	/** Register an existing task as a background managed task. */
+	registerBackgroundTask(task: TTask, name?: string): void
+
+	on<K extends keyof TaskManagerEvents>(
+		event: K,
+		listener: (...args: TaskManagerEvents[K]) => void | Promise<void>,
+	): this
+	off<K extends keyof TaskManagerEvents>(
+		event: K,
+		listener: (...args: TaskManagerEvents[K]) => void | Promise<void>,
+	): this
+	emit<K extends keyof TaskManagerEvents>(event: K, ...args: TaskManagerEvents[K]): boolean
 }

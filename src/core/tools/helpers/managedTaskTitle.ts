@@ -11,7 +11,6 @@
  */
 
 import type { Task } from "../../task/Task"
-import type { ShoferProvider } from "../../webview/ShoferProvider"
 
 /**
  * Returns the managed task's `name` if available, otherwise `undefined`.
@@ -24,5 +23,5 @@ import type { ShoferProvider } from "../../webview/ShoferProvider"
  * Callers MUST NOT substitute the task id here — the UI layer handles fallback.
  */
 export function getManagedTaskTitle(task: Task, taskId: string): string | undefined {
-	return (task.providerRef.deref() as ShoferProvider | undefined)?.taskManager.getManagedTask(taskId)?.name
+	return task.providerRef.deref()?.taskManager.getManagedTask(taskId)?.name
 }

@@ -2,7 +2,9 @@ import type { DiffView, DiffViewSaveResult } from "./diff-view.js"
 import type {
 	HostBridge,
 	HostConfig,
+	HostEditor,
 	HostEnv,
+	HostExternal,
 	HostFileSystem,
 	HostDisposable,
 	HostLsp,
@@ -129,6 +131,21 @@ export const noopTerminals: HostTerminals = {
 	cleanupShellIntegration: () => {},
 }
 
+/** A no-op `HostExternal` (headless: opening a URL does nothing). */
+export const noopExternal: HostExternal = {
+	openExternal: async () => {},
+}
+
+/** A no-op `HostEditor` (no IDE window): UI actions no-op, reads return "". */
+export const noopEditor: HostEditor = {
+	revealInExplorer: async () => {},
+	openFile: async () => {},
+	focusPanel: async () => {},
+	showMultiFileDiff: async () => {},
+	readTerminalContents: async () => "",
+	getWorkspaceProblems: async () => "",
+}
+
 /** A no-op `HostLsp` (no language service): empty diagnostics/references. */
 export const noopLsp: HostLsp = {
 	getDiagnostics: async () => [],
@@ -183,6 +200,8 @@ export function createInMemoryHost(): HostBridge {
 		workspace: noopWorkspace,
 		watcher: noopWatcher,
 		terminals: noopTerminals,
+		external: noopExternal,
+		editor: noopEditor,
 		createDiffView: () => new NoopDiffView(),
 	}
 }

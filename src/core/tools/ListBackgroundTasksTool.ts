@@ -1,7 +1,6 @@
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle"
 import { Task } from "../task/Task"
-import type { ShoferProvider } from "../webview/ShoferProvider"
 import type { ToolUse } from "@shofer/core"
 import type { TaskLifecycle } from "@shofer/types"
 
@@ -18,7 +17,7 @@ interface TaskEntry {
 
 /** Resolve the best-known lifecycle by preferring the live ManagedTask state. */
 function resolveLifecycle(taskId: string, task: Task, persistedLifecycle: TaskLifecycle): TaskLifecycle {
-	const provider = task.providerRef.deref() as ShoferProvider | undefined
+	const provider = task.providerRef.deref()
 	if (!provider) return persistedLifecycle
 
 	const managed = provider.taskManager.getManagedTask(taskId)
@@ -34,7 +33,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 		const scope = params.scope ?? "children"
 		const { askApproval, pushToolResult } = callbacks
 
-		const provider = task.providerRef.deref() as ShoferProvider | undefined
+		const provider = task.providerRef.deref()
 		if (!provider) {
 			pushToolResult("Provider reference lost")
 			return

@@ -1,6 +1,10 @@
 import type {
 	HostBridge,
+	HostDiffChange,
+	HostEditor,
+	HostExternal,
 	HostLsp,
+	HostPanel,
 	HostReferencesResult,
 	HostSymbol,
 	HostWorkspace,
@@ -32,7 +36,7 @@ import type {
  */
 
 /** The set of host capabilities that are proxied back to the controller. */
-export type RemoteHostCapability = "notifier" | "lsp" | "workspace"
+export type RemoteHostCapability = "notifier" | "lsp" | "workspace" | "external" | "editor"
 
 /** Transport for the host-callback channel (executor → controller). */
 export interface HostRpcChannel {
@@ -110,16 +114,39 @@ function remoteWorkspace(channel: HostRpcChannel, local: HostWorkspace): HostWor
 	}
 }
 
+function remoteExternal(channel: HostRpcChannel): HostExternal {
+	// Opening a URL is a UI action bound to the controller.
+	return {
+		openExternal: (url: string) => channel.invoke("external", "openExternal", [url]) as Promise<void>,
+	}
+}
+
+function remoteEditor(channel: HostRpcChannel): HostEditor {
+	const call = (method: string, params: unknown[]) => channel.invoke("editor", method, params)
+	return {
+		revealInExplorer: (path: string) => call("revealInExplorer", [path]) as Promise<void>,
+		openFile: (path: string) => call("openFile", [path]) as Promise<void>,
+		focusPanel: (which: HostPanel) => call("focusPanel", [which]) as Promise<void>,
+		showMultiFileDiff: (title: string, changes: HostDiffChange[]) =>
+			call("showMultiFileDiff", [title, changes]) as Promise<void>,
+		readTerminalContents: () => call("readTerminalContents", []) as Promise<string>,
+		getWorkspaceProblems: (cwd: string, includeMessages: boolean, maxMessages: number) =>
+			call("getWorkspaceProblems", [cwd, includeMessages, maxMessages]) as Promise<string>,
+	}
+}
+
 /**
- * Build a `HostBridge` for a remote executor: notifier/lsp/workspace are proxied to
- * the controller over `channel`; filesystem/config/env/watcher come from the
- * executor-`local` host (which shares the workspace).
+ * Build a `HostBridge` for a remote executor: notifier/lsp/workspace/external/editor
+ * are proxied to the controller over `channel`; filesystem/config/env/watcher come
+ * from the executor-`local` host (which shares the workspace).
  */
 export function createSplitHost({ local, channel }: { local: HostBridge; channel: HostRpcChannel }): HostBridge {
 	return {
 		notifier: remoteNotifier(channel),
 		lsp: remoteLsp(channel),
 		workspace: remoteWorkspace(channel, local.workspace),
+		external: remoteExternal(channel),
+		editor: remoteEditor(channel),
 		fs: local.fs,
 		config: local.config,
 		env: local.env,

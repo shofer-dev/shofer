@@ -27,6 +27,8 @@ describe("host-bridge accessor", () => {
 			workspace: base.workspace,
 			watcher: base.watcher,
 			terminals: base.terminals,
+			external: base.external,
+			editor: base.editor,
 			createDiffView: base.createDiffView,
 		}
 		setHost(host)

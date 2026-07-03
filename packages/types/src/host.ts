@@ -319,6 +319,62 @@ export interface HostTerminals {
 	cleanupShellIntegration(terminalId?: number): void
 }
 
+/** Open external URLs/apps (maps to `vscode.env.openExternal`). */
+export interface HostExternal {
+	/**
+	 * Open a URL/URI in the default external application (maps to
+	 * `vscode.env.openExternal(vscode.Uri.parse(url))`). A headless host no-ops.
+	 */
+	openExternal(url: string): Promise<void>
+}
+
+/**
+ * One file's before/after content for a multi-file diff (host-agnostic). Mirrors
+ * the checkpoint service's `CheckpointDiff` shape so a diff result passes straight
+ * through {@link HostEditor.showMultiFileDiff} without the core knowing about
+ * `vscode.Uri`. `before`/`after` are optional (empty = added/deleted side).
+ */
+export interface HostDiffChange {
+	paths: { relative: string; absolute: string }
+	content: { before?: string; after?: string }
+}
+
+/** A built-in IDE panel that can be focused. */
+export type HostPanel = "problems" | "terminal"
+
+/**
+ * Interactive editor / IDE-shell actions the core reaches for (maps to
+ * `vscode.commands` UI commands, `vscode.window`, and the file/diff openers). A
+ * headless host no-ops the UI actions and returns empty strings for the reads.
+ */
+export interface HostEditor {
+	/** Reveal `path` in the IDE file explorer (maps to the `revealInExplorer` command). */
+	revealInExplorer(path: string): Promise<void>
+	/** Open `path` in an editor tab (maps to the extension's `openFile`). */
+	openFile(path: string): Promise<void>
+	/**
+	 * Focus a built-in panel (maps to `workbench.actions.view.problems` /
+	 * `workbench.action.terminal.focus`).
+	 */
+	focusPanel(which: HostPanel): Promise<void>
+	/**
+	 * Present a multi-file diff titled `title` (maps to the `vscode.changes`
+	 * command; the adapter builds the `vscode.Uri` triples from `changes`).
+	 */
+	showMultiFileDiff(title: string, changes: HostDiffChange[]): Promise<void>
+	/**
+	 * Read the active terminal's visible contents via select-all → copy → restore
+	 * clipboard (maps to the `workbench.action.terminal.*` commands +
+	 * `vscode.env.clipboard`). Returns "" when no terminal is open / on a headless host.
+	 */
+	readTerminalContents(): Promise<string>
+	/**
+	 * Formatted workspace "problems" text for `cwd` (diagnostics rendered to a
+	 * string). A headless host returns "" (no language service).
+	 */
+	getWorkspaceProblems(cwd: string, includeMessages: boolean, maxMessages: number): Promise<string>
+}
+
 /** Aggregate host boundary handed to the core. */
 export interface HostBridge {
 	readonly notifier: Notifier
@@ -329,6 +385,8 @@ export interface HostBridge {
 	readonly workspace: HostWorkspace
 	readonly watcher: HostWatcher
 	readonly terminals: HostTerminals
+	readonly external: HostExternal
+	readonly editor: HostEditor
 	/**
 	 * Build a fresh, per-edit {@link DiffView} bound to `cwd` and its owning `task`
 	 * (maps to `new DiffViewProvider(cwd, task)` in the VS Code adapter). The

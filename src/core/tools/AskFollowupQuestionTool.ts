@@ -1,7 +1,6 @@
 import type { ParamField } from "@shofer/types"
 
 import { Task } from "../task/Task"
-import type { ShoferProvider } from "../webview/ShoferProvider"
 import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
@@ -120,7 +119,7 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// the question via check_task_status / wait_for_task (which show
 			// status "waiting_for_parent" and the question text) and answers
 			// via answer_subtask_question.
-			const provider = task.providerRef?.deref() as ShoferProvider | undefined
+			const provider = task.providerRef?.deref()
 			if (provider && task.parentTaskId && task.isBackgroundTask) {
 				// Finalize the streaming "tool" ChatRow before routing to the
 				// parent. This tool is in the "questions" group and auto-approved

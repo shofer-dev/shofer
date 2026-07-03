@@ -1,12 +1,11 @@
 import pWaitFor from "p-wait-for"
-import * as vscode from "vscode"
-import { getHost, DIFF_VIEW_URI_SCHEME } from "@shofer/types"
+import { getHost } from "@shofer/types"
 
 import type { ShoferApiReqInfo } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 
 import { getWorkspacePath } from "@shofer/core"
 import { checkGitInstalled } from "@shofer/core"
@@ -35,7 +34,7 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 		return task.checkpointService
 	}
 
-	const provider = task.providerRef.deref() as ShoferProvider | undefined
+	const provider = task.providerRef.deref()
 
 	// Get checkpoint timeout from task settings (converted to milliseconds)
 	const checkpointTimeoutMs = task.checkpointTimeout * 1000
@@ -54,7 +53,7 @@ export async function getCheckpointService(task: Task, { interval = 250 }: { int
 			return undefined
 		}
 
-		const globalStorageDir = provider?.context.globalStorageUri.fsPath
+		const globalStorageDir = provider?.contextProxy.globalStorageUri.fsPath
 
 		if (!globalStorageDir) {
 			log("[Task#getCheckpointService] globalStorageDir not found, disabling checkpoints")
@@ -134,7 +133,7 @@ async function checkGitInstallation(
 	task: Task,
 	service: RepoPerTaskCheckpointService,
 	log: (message: string) => void,
-	provider: any,
+	provider: TaskProviderLike<Task> | undefined,
 ) {
 	try {
 		const gitInstalled = await checkGitInstalled()
@@ -152,7 +151,7 @@ async function checkGitInstallation(
 			)
 
 			if (selection === t("common:buttons.learn_more")) {
-				await vscode.env.openExternal(vscode.Uri.parse("https://git-scm.com/downloads"))
+				await getHost().external.openExternal("https://git-scm.com/downloads")
 			}
 
 			return
@@ -166,11 +165,12 @@ async function checkGitInstallation(
 		service.on("checkpoint", ({ fromHash: from, toHash: to, suppressMessage }) => {
 			try {
 				sendCheckpointInitWarn(task)
-				// Always update the current checkpoint hash in the webview, including the suppress flag
+				// Always update the current checkpoint hash in the webview. (The
+				// suppress flag rides the `checkpoint_saved` say message below —
+				// `currentCheckpointUpdated` only carries `text`.)
 				provider?.postMessageToWebview({
 					type: "currentCheckpointUpdated",
 					text: to,
-					suppressMessage: !!suppressMessage,
 				})
 
 				// Always create the chat message but include the suppress flag in the payload
@@ -251,7 +251,7 @@ export async function checkpointRestore(
 		return
 	}
 
-	const provider = task.providerRef.deref() as ShoferProvider | undefined
+	const provider = task.providerRef.deref()
 
 	try {
 		await service.restoreCheckpoint(commitHash)
@@ -372,19 +372,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 			return
 		}
 
-		await vscode.commands.executeCommand(
-			"vscode.changes",
-			title,
-			changes.map((change) => [
-				vscode.Uri.file(change.paths.absolute),
-				vscode.Uri.parse(`${DIFF_VIEW_URI_SCHEME}:${change.paths.relative}`).with({
-					query: Buffer.from(change.content.before ?? "").toString("base64"),
-				}),
-				vscode.Uri.parse(`${DIFF_VIEW_URI_SCHEME}:${change.paths.relative}`).with({
-					query: Buffer.from(change.content.after ?? "").toString("base64"),
-				}),
-			]),
-		)
+		await getHost().editor.showMultiFileDiff(title, changes)
 	} catch (err) {
 		checkpointLog.warn("[checkpointDiff] disabling checkpoints for this task", err)
 		task.enableCheckpoints = false
