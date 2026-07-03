@@ -1,19 +1,17 @@
-// cd src && npx vitest run core/task/__tests__/Task.persistence.spec.ts
+// npx vitest run src/task/__tests__/Task.persistence.spec.ts
 
 import * as os from "os"
 import * as path from "path"
-import * as vscode from "vscode"
 
-import type { GlobalState, ProviderSettings } from "@shofer/types"
+import { describe, it, expect, beforeEach, vi } from "vitest"
+import type { ProviderSettings, TaskProviderLike } from "@shofer/types"
+import { setHost, createInMemoryHost } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
-vi.mock("../../../extension", () => ({}))
-
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { ContextProxy } from "../../config/ContextProxy.js"
+// Task and its persistence deps live in @shofer/core and are imported via
+// intra-package RELATIVE sub-paths (…/task-persistence/PersistencePort.js, etc.),
+// so a barrel `vi.mock("@shofer/core")` cannot intercept them. We stub the
+// concrete relative modules Task imports instead.
 
 // ─── Hoisted mocks ───────────────────────────────────────────────────────────
 
@@ -81,11 +79,11 @@ vi.mock("p-wait-for", () => ({
 	default: mockPWaitFor,
 }))
 
-vi.mock("../../task-persistence", () => {
-	// §5: Task reads/writes through the SQLite-backed MessagePersistencePort. This
-	// mock backend delegates to the same mock
-	// functions (with the original arg shape) so existing call assertions on
-	// mockSaveApiMessages/etc. still hold.
+// §5: Task reads/writes through the SQLite-backed MessagePersistencePort, which
+// it instantiates via `new SqliteMessagePersistence(...)` imported from
+// `../task-persistence/PersistencePort.js`. This mock backend delegates to the
+// hoisted mock fns (with the original arg shape) so the call assertions hold.
+vi.mock("../../task-persistence/PersistencePort.js", () => {
 	class MockBackend {
 		appendApiMessage(taskId: string, message: unknown) {
 			return mockAppendApiMessage({ message, taskId, globalStoragePath: "" })
@@ -115,108 +113,45 @@ vi.mock("../../task-persistence", () => {
 			return Promise.resolve()
 		}
 	}
-	return {
-		saveApiMessages: mockSaveApiMessages,
-		saveTaskMessages: mockSaveTaskMessages,
-		appendApiMessage: mockAppendApiMessage,
-		appendTaskMessage: mockAppendTaskMessage,
-		readApiMessages: mockReadApiMessages,
-		readTaskMessages: mockReadTaskMessages,
-		taskMetadata: mockTaskMetadata,
-		SqliteMessagePersistence: MockBackend,
-		TaskHistoryStore: vi.fn().mockImplementation(() => ({
-			initialize: vi.fn().mockResolvedValue(undefined),
-			dispose: vi.fn(),
-			get: vi.fn(),
-			getAll: vi.fn().mockReturnValue([]),
-			upsert: vi.fn().mockResolvedValue([]),
-			delete: vi.fn().mockResolvedValue(undefined),
-			deleteMany: vi.fn().mockResolvedValue(undefined),
-			reconcile: vi.fn().mockResolvedValue(undefined),
-			initialized: Promise.resolve(),
-		})),
-	}
+	return { SqliteMessagePersistence: MockBackend }
 })
 
-vi.mock("vscode", () => {
-	const mockDisposable = { dispose: vi.fn() }
-	const mockEventEmitter = { event: vi.fn(), fire: vi.fn() }
-	const mockTextDocument = { uri: { fsPath: "/mock/workspace/path/file.ts" } }
-	const mockTextEditor = { document: mockTextDocument }
-	const mockTab = { input: { uri: { fsPath: "/mock/workspace/path/file.ts" } } }
-	const mockTabGroup = { tabs: [mockTab] }
-
-	return {
-		TabInputTextDiff: vi.fn(),
-		CodeActionKind: {
-			QuickFix: { value: "quickfix" },
-			RefactorRewrite: { value: "refactor.rewrite" },
-		},
-		window: {
-			createTextEditorDecorationType: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-			visibleTextEditors: [mockTextEditor],
-			tabGroups: {
-				all: [mockTabGroup],
-				close: vi.fn(),
-				onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })),
-			},
-			showErrorMessage: vi.fn(),
-		},
-		workspace: {
-			workspaceFolders: [
-				{
-					uri: { fsPath: "/mock/workspace/path" },
-					name: "mock-workspace",
-					index: 0,
-				},
-			],
-			createFileSystemWatcher: vi.fn(() => ({
-				onDidCreate: vi.fn(() => mockDisposable),
-				onDidDelete: vi.fn(() => mockDisposable),
-				onDidChange: vi.fn(() => mockDisposable),
-				dispose: vi.fn(),
-			})),
-			fs: {
-				stat: vi.fn().mockResolvedValue({ type: 1 }),
-			},
-			onDidSaveTextDocument: vi.fn(() => mockDisposable),
-			getConfiguration: vi.fn(() => ({ get: (_key: string, defaultValue: unknown) => defaultValue })),
-		},
-		env: {
-			uriScheme: "vscode",
-			language: "en",
-		},
-		EventEmitter: vi.fn().mockImplementation(() => mockEventEmitter),
-		Disposable: {
-			from: vi.fn(),
-		},
-		TabInputText: vi.fn(),
-	}
-})
-
-vi.mock("../../mentions", () => ({
-	parseMentions: vi.fn().mockImplementation((text) => {
-		return Promise.resolve({ text: `processed: ${text}`, mode: undefined, contentBlocks: [] })
-	}),
-	openMention: vi.fn(),
-	getLatestTerminalOutput: vi.fn(),
+vi.mock("../../task-persistence/taskMetadata.js", () => ({
+	taskMetadata: mockTaskMetadata,
 }))
 
-vi.mock("../../environment/getEnvironmentDetails", () => ({
-	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
-}))
-
-vi.mock("../../ignore/ShoferIgnoreController")
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
+vi.mock("../../condense/index.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	summarizeConversation: vi.fn().mockResolvedValue({
 		messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
 		summary: "summary",
 		cost: 0,
 		newContextTokens: 1,
 	}),
+}))
+
+// Noop ignore controller so constructing a Task doesn't spin up the real file watcher.
+vi.mock("../../ignore/ShoferIgnoreController.js", () => ({
+	ShoferIgnoreController: class {
+		validateAccess() {
+			return true
+		}
+		validateCommand() {
+			return undefined
+		}
+		filterPaths(paths: string[]) {
+			return paths
+		}
+		getInstructions() {
+			return undefined
+		}
+		async initialize() {}
+		dispose() {}
+	},
+}))
+
+vi.mock("../../utils/storage.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getTaskDirectoryPath: vi
 		.fn()
 		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
@@ -225,72 +160,44 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
 }))
 
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn().mockReturnValue(false),
-}))
+// Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works.
+import { Task } from "@shofer/core"
 
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
 describe("Task persistence", () => {
-	let mockProvider: ShoferProvider & Record<string, any>
+	let mockProvider: TaskProviderLike & Record<string, any>
 	let mockApiConfig: ProviderSettings
-	let mockOutputChannel: vscode.OutputChannel
-	let mockExtensionContext: vscode.ExtensionContext
 
 	beforeEach(() => {
 		vi.clearAllMocks()
 
+		setHost(createInMemoryHost())
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])
 		}
 
 		const storageUri = { fsPath: path.join(os.tmpdir(), "test-storage") }
 
-		mockExtensionContext = {
-			globalState: {
-				get: vi.fn().mockImplementation((_key: keyof GlobalState) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			globalStorageUri: storageUri,
-			workspaceState: {
-				get: vi.fn().mockImplementation((_key) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			secrets: {
-				get: vi.fn().mockImplementation((_key) => Promise.resolve(undefined)),
-				store: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				delete: vi.fn().mockImplementation((_key) => Promise.resolve()),
-			},
-			extensionUri: { fsPath: "/mock/extension/path" },
-			extension: { packageJSON: { version: "1.0.0" } },
-		} as unknown as vscode.ExtensionContext
-
-		mockOutputChannel = {
-			appendLine: vi.fn(),
-			append: vi.fn(),
-			clear: vi.fn(),
-			show: vi.fn(),
-			hide: vi.fn(),
-			dispose: vi.fn(),
-		} as unknown as vscode.OutputChannel
-
-		mockProvider = new ShoferProvider(
-			mockExtensionContext,
-			mockOutputChannel,
-			"sidebar",
-			new ContextProxy(mockExtensionContext),
-		) as ShoferProvider & Record<string, any>
+		// Plain provider stub typed as TaskProviderLike — never import concrete
+		// src classes (ShoferProvider/ContextProxy) into a core test.
+		mockProvider = {
+			context: { globalStorageUri: storageUri },
+			getState: vi.fn().mockResolvedValue({}),
+			log: vi.fn(),
+			on: vi.fn(),
+			off: vi.fn(),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
+			postTaskStateUpdate: vi.fn(),
+			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
+		} as unknown as TaskProviderLike & Record<string, any>
 
 		mockApiConfig = {
 			apiProvider: "anthropic",
 			apiModelId: "claude-3-5-sonnet-20241022",
 			apiKey: "test-api-key",
 		}
-
-		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.updateTaskHistory = vi.fn().mockResolvedValue(undefined)
 	})
 
 	// ── saveApiConversationHistory (via retrySaveApiConversationHistory) ──
@@ -300,7 +207,7 @@ describe("Task persistence", () => {
 			mockSaveApiMessages.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -325,7 +232,7 @@ describe("Task persistence", () => {
 				.mockRejectedValueOnce(new Error("fail 3"))
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -347,7 +254,7 @@ describe("Task persistence", () => {
 			mockSaveApiMessages.mockRejectedValueOnce(new Error("fail 1")).mockResolvedValueOnce(undefined) // succeeds on 2nd try
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -367,7 +274,7 @@ describe("Task persistence", () => {
 			mockSaveApiMessages.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -395,7 +302,7 @@ describe("Task persistence", () => {
 		// saveShoferMessages no longer compacts — it just refreshes task metadata.
 		it("returns true on success", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -408,7 +315,7 @@ describe("Task persistence", () => {
 			mockTaskMetadata.mockRejectedValueOnce(new Error("metadata error"))
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -425,7 +332,7 @@ describe("Task persistence", () => {
 			mockAppendApiMessage.mockRejectedValueOnce(new Error("disk full"))
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -457,7 +364,7 @@ describe("Task persistence", () => {
 			mockAppendApiMessage.mockResolvedValueOnce(undefined)
 
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
