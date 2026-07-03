@@ -17,11 +17,30 @@ export interface ServerEvent {
 	[key: string]: unknown
 }
 
+/** A reply to an outstanding `ask` (interactive tool approval / follow-up). */
+export interface AskResponse {
+	/** The ask-response verb (e.g. `yesButtonClicked`, `noButtonClicked`, `messageResponse`). */
+	askResponse: string
+	/** Optional free-text the user typed alongside the response. */
+	text?: string
+	/** Optional image data URIs attached to the response. */
+	images?: string[]
+	/** The id of the ask being answered (routes to the correct outstanding ask). */
+	askId?: string
+}
+
 /** The agent control plane a transport drives. */
 export interface AgentApi {
 	createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }>
 	sendMessage(taskId: string, message: string): Promise<void>
 	cancelTask(taskId: string): Promise<void>
+	/**
+	 * Answer a task's outstanding `ask` (interactive tool approval / follow-up).
+	 * This is the reverse of the `ask` events streamed via {@link subscribe}: the
+	 * front-end drives an approval back to the owning executor, so a remote task's
+	 * approvals round-trip exactly like a local task's.
+	 */
+	respondToAsk(taskId: string, response: AskResponse): Promise<void>
 	/** Subscribe to the agent event stream; returns an unsubscribe fn. */
 	subscribe(listener: (event: ServerEvent) => void): () => void
 }

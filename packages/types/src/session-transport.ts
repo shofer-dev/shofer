@@ -1,4 +1,4 @@
-import type { AgentApi, ServerEvent } from "./agent-api.js"
+import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
 import type { HostBridge } from "./host.js"
 import { type HostRpcChannel, type RemoteHostCapability, dispatchHostCall } from "./host-rpc.js"
 
@@ -23,6 +23,7 @@ export type SessionClientFrame =
 	| { t: "cmd"; id: number; method: "createTask"; input: { prompt: string; taskId?: string } }
 	| { t: "cmd"; id: number; method: "sendMessage"; taskId: string; message: string }
 	| { t: "cmd"; id: number; method: "cancelTask"; taskId: string }
+	| { t: "cmd"; id: number; method: "respondToAsk"; taskId: string; response: AskResponse }
 	/** Reply to a host-callback request. */
 	| { t: "hostResult"; id: number; result?: unknown; error?: string }
 
@@ -88,6 +89,7 @@ export function serveSession({
 			if (frame.method === "createTask") result = await api.createTask(frame.input)
 			else if (frame.method === "sendMessage") await api.sendMessage(frame.taskId, frame.message)
 			else if (frame.method === "cancelTask") await api.cancelTask(frame.taskId)
+			else if (frame.method === "respondToAsk") await api.respondToAsk(frame.taskId, frame.response)
 			send({ t: "result", id: frame.id, result })
 		} catch (e) {
 			send({ t: "result", id: frame.id, error: errMsg(e) })
@@ -139,6 +141,9 @@ export function connectSession({
 		},
 		cancelTask: async (taskId) => {
 			await command((id) => ({ t: "cmd", id, method: "cancelTask", taskId }))
+		},
+		respondToAsk: async (taskId, response) => {
+			await command((id) => ({ t: "cmd", id, method: "respondToAsk", taskId, response }))
 		},
 		subscribe: (listener) => {
 			listeners.add(listener)

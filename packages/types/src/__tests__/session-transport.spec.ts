@@ -15,6 +15,7 @@ function makeExecutorApi() {
 		createTask: vi.fn(async (input) => ({ taskId: `task-for-${input.prompt}` })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
+		respondToAsk: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {}
@@ -39,6 +40,17 @@ describe("session transport (controller ↔ executor)", () => {
 		const result = await controller.api.createTask({ prompt: "hello" })
 		expect(result).toEqual({ taskId: "task-for-hello" })
 		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello" })
+	})
+
+	it("round-trips respondToAsk across the link", async () => {
+		const { api } = makeExecutorApi()
+		const { controller } = wire(createInMemoryHost(), api)
+		await controller.api.respondToAsk("t1", { askResponse: "yesButtonClicked", text: "ok", askId: "a1" })
+		expect(api.respondToAsk).toHaveBeenCalledWith("t1", {
+			askResponse: "yesButtonClicked",
+			text: "ok",
+			askId: "a1",
+		})
 	})
 
 	it("streams executor events to controller subscribers", async () => {

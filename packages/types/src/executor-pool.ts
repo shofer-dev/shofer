@@ -1,4 +1,4 @@
-import type { AgentApi, ServerEvent } from "./agent-api.js"
+import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
 
 /**
  * Executor pool — the controller side of distributed execution (v3 architecture §13).
@@ -106,6 +106,10 @@ export class ExecutorPool implements AgentApi {
 
 	async cancelTask(taskId: string): Promise<void> {
 		await this.owner(taskId).api.cancelTask(taskId)
+	}
+
+	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
+		await this.owner(taskId).api.respondToAsk(taskId, response)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

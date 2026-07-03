@@ -11,6 +11,7 @@ function makeExecutor(id: string) {
 		createTask: vi.fn(async () => ({ taskId: `${id}-task-${++seq}` })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
+		respondToAsk: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {
@@ -40,6 +41,13 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 		await pool.cancelTask(t2.taskId)
 		expect(b.api.cancelTask).toHaveBeenCalledWith("B-task-1")
+
+		await pool.respondToAsk(t1.taskId, { askResponse: "yesButtonClicked", askId: "a1" })
+		expect(a.api.respondToAsk).toHaveBeenCalledWith("A-task-1", {
+			askResponse: "yesButtonClicked",
+			askId: "a1",
+		})
+		expect(b.api.respondToAsk).not.toHaveBeenCalled()
 	})
 
 	it("merges executor event streams, tagging each with executorId", async () => {
