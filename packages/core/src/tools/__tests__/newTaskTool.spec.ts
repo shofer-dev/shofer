@@ -1,7 +1,7 @@
 // npx vitest core/tools/__tests__/newTaskTool.spec.ts
 
 import type { AskApproval, HandleError, NativeToolArgs, ToolUse } from "@shofer/types"
-import { setHost, createInMemoryHost, type HostBridge } from "@shofer/types"
+import { setHost, createInMemoryHost, InMemoryConfig, type HostBridge } from "@shofer/types"
 
 // After the v3 carve-out the tool + its intra-core deps (formatResponse,
 // parseMarkdownChecklist) live inside @shofer/core and call each other via RELATIVE
@@ -106,7 +106,8 @@ const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 let host: HostBridge
 
 /** Drive the `newTaskRequireTodos` setting the tool reads via getHost().config.get. */
-const setRequireTodos = (value: boolean) => host.config.set(Package.name, "newTaskRequireTodos", value)
+const setRequireTodos = (value: boolean) =>
+	(host.config as InMemoryConfig).set(Package.name, "newTaskRequireTodos", value)
 
 describe("newTaskTool", () => {
 	beforeEach(() => {

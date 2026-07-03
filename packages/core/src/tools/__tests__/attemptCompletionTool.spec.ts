@@ -1,5 +1,5 @@
 import { ShoferEventName, TodoItem, type AttemptCompletionToolUse } from "@shofer/types"
-import { setHost, createInMemoryHost, type HostBridge } from "@shofer/types"
+import { setHost, createInMemoryHost, InMemoryConfig, type HostBridge } from "@shofer/types"
 
 // After the v3 carve-out the tool + its deps (formatResponse, getOutputChannel,
 // TelemetryService) all live inside @shofer/core and call each other via RELATIVE
@@ -30,7 +30,7 @@ vi.mock("@shofer/telemetry", () => ({
 
 import { attemptCompletionTool, type AttemptCompletionCallbacks } from "../AttemptCompletionTool.js"
 import { Package } from "../../shared/package.js"
-import type { Task } from "../task/Task.js"
+import type { Task } from "../../task/Task.js"
 
 describe("attemptCompletionTool", () => {
 	let host: HostBridge
@@ -43,7 +43,7 @@ describe("attemptCompletionTool", () => {
 
 	/** Set the `preventCompletionWithOpenTodos` config the tool reads via getHost(). */
 	const setPreventCompletion = (value: boolean) =>
-		host.config.set(Package.name, "preventCompletionWithOpenTodos", value)
+		(host.config as InMemoryConfig).set(Package.name, "preventCompletionWithOpenTodos", value)
 
 	beforeEach(() => {
 		host = createInMemoryHost()

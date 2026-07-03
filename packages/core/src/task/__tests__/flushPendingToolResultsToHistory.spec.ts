@@ -132,7 +132,7 @@ describe("flushPendingToolResultsToHistory", () => {
 		expect(task.apiConversationHistory.length).toBe(1)
 
 		// Check user message with tool result
-		const userMessage = task.apiConversationHistory[0]
+		const userMessage = task.apiConversationHistory[0]!
 		expect(userMessage.role).toBe("user")
 		expect(Array.isArray(userMessage.content)).toBe(true)
 		expect((userMessage.content as any[])[0].type).toBe("tool_result")
@@ -187,7 +187,7 @@ describe("flushPendingToolResultsToHistory", () => {
 		await task.flushPendingToolResultsToHistory()
 
 		// Check user message has both tool results
-		const userMessage = task.apiConversationHistory[0]
+		const userMessage = task.apiConversationHistory[0]!
 		expect(Array.isArray(userMessage.content)).toBe(true)
 		expect((userMessage.content as any[]).length).toBe(2)
 		expect((userMessage.content as any[])[0].tool_use_id).toBe("tool-1")
@@ -251,7 +251,7 @@ describe("flushPendingToolResultsToHistory", () => {
 
 		// Should still save the message
 		expect(task.apiConversationHistory.length).toBe(1)
-		expect((task.apiConversationHistory[0].content as any[])[0].tool_use_id).toBe("tool-skip-wait")
+		expect((task.apiConversationHistory[0]!.content as any[])[0].tool_use_id).toBe("tool-skip-wait")
 	})
 
 	it("should wait for assistantMessageSavedToHistory when flag is false", async () => {
