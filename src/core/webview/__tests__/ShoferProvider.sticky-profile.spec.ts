@@ -67,7 +67,30 @@ vi.mock("vscode", () => ({
 // Create a counter for unique task IDs.
 let taskIdCounter = 0
 
-vi.mock("../../task/Task", () => ({
+vi.mock("../../../integrations/workspace/WorkspaceTracker", () => ({
+	default: vi.fn().mockImplementation(() => ({
+		initializeFilePaths: vi.fn(),
+		dispose: vi.fn(),
+	})),
+}))
+
+vi.mock("@shofer/cloud", () => ({
+	CloudService: {
+		hasInstance: vi.fn().mockReturnValue(true),
+		get instance() {
+			return {
+				isAuthenticated: vi.fn().mockReturnValue(false),
+			}
+		},
+	},
+	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
+}))
+
+// NOTE: Task moved into @shofer/core during the v3 carve-out. ShoferProvider (the SUT)
+// constructs Task internally via the @shofer/core barrel, so the Task mock lives here
+// (formerly vi.mock("../../task/Task")). The old relative path no longer intercepts.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	Task: vi.fn().mockImplementation((options) => ({
 		taskId: options.taskId || `test-task-id-${++taskIdCounter}`,
 		saveShoferMessages: vi.fn(),
@@ -92,30 +115,6 @@ vi.mock("../../task/Task", () => ({
 		historyPreloaded: true,
 		startFromHistory: vi.fn().mockResolvedValue(undefined),
 	})),
-}))
-
-
-vi.mock("../../../integrations/workspace/WorkspaceTracker", () => ({
-	default: vi.fn().mockImplementation(() => ({
-		initializeFilePaths: vi.fn(),
-		dispose: vi.fn(),
-	})),
-}))
-
-vi.mock("@shofer/cloud", () => ({
-	CloudService: {
-		hasInstance: vi.fn().mockReturnValue(true),
-		get instance() {
-			return {
-				isAuthenticated: vi.fn().mockReturnValue(false),
-			}
-		},
-	},
-	getShoferApiUrl: vi.fn().mockReturnValue("https://app.shofer.dev"),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	buildApiHandler: vi.fn().mockReturnValue({
