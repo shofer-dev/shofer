@@ -155,14 +155,6 @@ vi.mock("../../../utils/tts", () => ({
 	setTtsSpeed: vi.fn(),
 }))
 
-vi.mock("@shofer/core", () => ({
-	getChangedFiles: vi.fn().mockResolvedValue({ taskId: "", entries: [], backend: "none" }),
-	restoreFile: vi.fn().mockResolvedValue(undefined),
-	restoreAll: vi.fn().mockResolvedValue(undefined),
-	acceptFile: vi.fn().mockResolvedValue(undefined),
-	acceptAll: vi.fn().mockResolvedValue(undefined),
-}))
-
 vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
 	return {
 		default: vi.fn().mockImplementation(() => ({
@@ -172,7 +164,12 @@ vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
 	}
 })
 
-vi.mock("../../task/Task", () => ({
+// NOTE: Task + getChangedFiles/restore*/accept* moved into @shofer/core during the v3
+// carve-out. There must be a SINGLE vi.mock("@shofer/core") — a second one silently
+// clobbers the first — so all of these (formerly a standalone @shofer/core mock and
+// vi.mock("../../task/Task")) live in this one partial barrel mock.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	Task: vi.fn().mockImplementation((options: any) => ({
 		api: undefined,
 		abortTask: vi.fn(),
@@ -188,10 +185,11 @@ vi.mock("../../task/Task", () => ({
 		taskId: options?.historyItem?.id || "test-task-id",
 		emit: vi.fn(),
 	})),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
+	getChangedFiles: vi.fn().mockResolvedValue({ taskId: "", entries: [], backend: "none" }),
+	restoreFile: vi.fn().mockResolvedValue(undefined),
+	restoreAll: vi.fn().mockResolvedValue(undefined),
+	acceptFile: vi.fn().mockResolvedValue(undefined),
+	acceptAll: vi.fn().mockResolvedValue(undefined),
 	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	extractTextFromFile: vi.fn().mockResolvedValue("file content"),
 	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
