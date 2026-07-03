@@ -70,29 +70,6 @@ vi.mock("vscode", () => {
 	}
 })
 
-vi.mock("../../task/Task", () => ({
-	Task: vi.fn().mockImplementation(() => ({
-		api: undefined,
-		abortTask: vi.fn(),
-		handleWebviewAskResponse: vi.fn(),
-		shoferMessages: [],
-		apiConversationHistory: [],
-		overwriteShoferMessages: vi.fn(),
-		overwriteApiConversationHistory: vi.fn(),
-		getTaskNumber: vi.fn().mockReturnValue(0),
-		setTaskNumber: vi.fn(),
-		setParentTask: vi.fn(),
-		setRootTask: vi.fn(),
-		taskId: "test-task-id",
-		emit: vi.fn(),
-		preloadShoferMessages: vi.fn().mockResolvedValue(undefined),
-		messagesReady: Promise.resolve(),
-		historyPreloaded: true,
-		isHistoryPreloaded: true,
-		on: vi.fn(),
-		startFromHistory: vi.fn(),
-	})),
-}))
 vi.mock("../../config/ContextProxy", () => ({
 	ContextProxy: {
 		getInstance: vi.fn(() => ({
@@ -118,8 +95,32 @@ vi.mock("../../../services/marketplace")
 vi.mock("../../../integrations/workspace/WorkspaceTracker")
 vi.mock("../../config/ProviderSettingsManager")
 vi.mock("../../config/CustomModesManager")
+// NOTE: Task moved into @shofer/core during the v3 carve-out. Both ShoferProvider (the
+// SUT) and this test reference Task through the @shofer/core barrel, so the Task mock
+// lives here (formerly vi.mock("../../task/Task")). The old relative path is dead.
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	Task: vi.fn().mockImplementation(() => ({
+		api: undefined,
+		abortTask: vi.fn(),
+		handleWebviewAskResponse: vi.fn(),
+		shoferMessages: [],
+		apiConversationHistory: [],
+		overwriteShoferMessages: vi.fn(),
+		overwriteApiConversationHistory: vi.fn(),
+		getTaskNumber: vi.fn().mockReturnValue(0),
+		setTaskNumber: vi.fn(),
+		setParentTask: vi.fn(),
+		setRootTask: vi.fn(),
+		taskId: "test-task-id",
+		emit: vi.fn(),
+		preloadShoferMessages: vi.fn().mockResolvedValue(undefined),
+		messagesReady: Promise.resolve(),
+		historyPreloaded: true,
+		isHistoryPreloaded: true,
+		on: vi.fn(),
+		startFromHistory: vi.fn(),
+	})),
 	getWorkspacePath: vi.fn().mockReturnValue("/test/workspace"),
 	// embeddingModels moved into @shofer/core (was `../../../shared/embeddingModels`).
 	EMBEDDING_MODEL_PROFILES: [],
