@@ -1,11 +1,12 @@
-import { parseMentions } from "@shofer/core"
-import { getSlashCommand } from "@shofer/core"
+import { parseMentions } from "../index.js"
+import { getCommand as getSlashCommand } from "../../services/command/commands.js"
 
-// Mock the dependencies — the slash-command loader now lives in @shofer/core
-// (relocated from src/services/command/commands, re-exported as getSlashCommand).
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	getSlashCommand: vi.fn(),
+// Mock the slash-command loader. parseMentions calls it via a RELATIVE import
+// (../../services/command/commands.js), so we intercept that module directly —
+// a barrel (@shofer/core) mock cannot reach an intra-core relative call.
+vi.mock("../../services/command/commands.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../services/command/commands.js")>()),
+	getCommand: vi.fn(),
 }))
 
 const mockGetCommand = vi.mocked(getSlashCommand)
