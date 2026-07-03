@@ -2,12 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { runSlashCommandTool } from "../RunSlashCommandTool"
 import { Task } from "../../task/Task"
 import { formatResponse } from "@shofer/core"
-import { getCommand, getCommandNames } from "../../../services/command/commands"
+import { getSlashCommand, getCommandNames } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
-// Mock dependencies
-vi.mock("../../../services/command/commands", () => ({
-	getCommand: vi.fn(),
+// Mock dependencies — the slash-command loader/name helpers were relocated into
+// @shofer/core (loader re-exported as getSlashCommand).
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	getSlashCommand: vi.fn(),
 	getCommandNames: vi.fn(),
 }))
 
@@ -76,7 +78,7 @@ describe("runSlashCommandTool", () => {
 			},
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(undefined)
+		vi.mocked(getSlashCommand).mockResolvedValue(undefined)
 		vi.mocked(getCommandNames).mockResolvedValue(["init", "test", "deploy"])
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
@@ -119,7 +121,7 @@ describe("runSlashCommandTool", () => {
 			}),
 		})
 
-		vi.mocked(getCommand).mockResolvedValue(undefined)
+		vi.mocked(getSlashCommand).mockResolvedValue(undefined)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -187,7 +189,7 @@ Use skill workflow`,
 			}),
 		})
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -222,7 +224,7 @@ Command content`,
 			description: "Initialize the project",
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 		mockCallbacks.askApproval.mockResolvedValue(false)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
@@ -250,7 +252,7 @@ Command content`,
 			description: "Analyze codebase and create AGENTS.md",
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -297,7 +299,7 @@ Initialize project content here`,
 			argumentHint: "test type or focus area",
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -332,7 +334,7 @@ Run tests with specific focus`,
 			filePath: "~/.shofer/commands/deploy.md",
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -384,7 +386,7 @@ Deploy application to production`,
 		}
 
 		const error = new Error("Test error")
-		vi.mocked(getCommand).mockRejectedValue(error)
+		vi.mocked(getSlashCommand).mockRejectedValue(error)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -402,7 +404,7 @@ Deploy application to production`,
 			},
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(undefined)
+		vi.mocked(getSlashCommand).mockResolvedValue(undefined)
 		vi.mocked(getCommandNames).mockResolvedValue([])
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
@@ -432,7 +434,7 @@ Deploy application to production`,
 			filePath: "<built-in:init>",
 		}
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -470,7 +472,7 @@ Deploy application to production`,
 			handleModeSwitch: mockHandleModeSwitch,
 		})
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -517,7 +519,7 @@ Start debugging the application`,
 			handleModeSwitch: mockHandleModeSwitch,
 		})
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 
@@ -554,7 +556,7 @@ Start debugging the application`,
 			handleModeSwitch: vi.fn(),
 		})
 
-		vi.mocked(getCommand).mockResolvedValue(mockCommand)
+		vi.mocked(getSlashCommand).mockResolvedValue(mockCommand)
 
 		await runSlashCommandTool.handle(mockTask as Task, block, mockCallbacks)
 

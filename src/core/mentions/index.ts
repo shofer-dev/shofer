@@ -15,8 +15,8 @@ import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
 import { FileContextTracker } from "../context-tracking/FileContextTracker"
 
 import { ShoferIgnoreController } from "@shofer/core"
-import { getCommand, type Command } from "../../services/command/commands"
-import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../../services/skills/skillInvocation"
+import { getSlashCommand, type Command } from "@shofer/core"
+import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "@shofer/core"
 import type { SkillContent } from "@shofer/types"
 import { webviewLog } from "@shofer/core"
 
@@ -129,7 +129,7 @@ export async function parseMentions(
 	const commandExistenceChecks = await Promise.all(
 		Array.from(uniqueCommandNames).map(async (commandName) => {
 			try {
-				const command = await getCommand(cwd, commandName)
+				const command = await getSlashCommand(cwd, commandName)
 				if (command) {
 					return { commandName, command, skillContent: null }
 				}

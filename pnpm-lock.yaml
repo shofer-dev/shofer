@@ -475,6 +475,9 @@ importers:
       google-auth-library:
         specifier: ^9.15.1
         version: 9.15.1
+      gray-matter:
+        specifier: ^4.0.3
+        version: 4.0.3
       i18next:
         specifier: ^25.0.0
         version: 25.2.1(typescript@5.8.3)

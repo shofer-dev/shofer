@@ -200,7 +200,7 @@ function getLinuxTerminalConfig() {
 function normalizeShellPath(path: string | string[] | undefined): string | null {
 	if (!path) return null
 	if (Array.isArray(path)) {
-		return path.length > 0 ? path[0] : null
+		return path.length > 0 ? path[0]! : null
 	}
 	return path
 }

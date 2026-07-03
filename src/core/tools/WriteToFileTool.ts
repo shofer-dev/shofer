@@ -6,7 +6,7 @@ import { type ShoferSayTool, DEFAULT_WRITE_DELAY_MS } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
+import { RecordSource } from "@shofer/core"
 import { fileExistsAtPath, createDirectoriesForFile } from "../../utils/fs"
 import { stripLineNumbers, everyLineHasLineNumbers } from "../../integrations/misc/extract-text"
 import { getReadablePath } from "@shofer/core"

@@ -137,7 +137,8 @@ vi.mock("vscode", () => ({
 	})),
 }))
 
-vi.mock("../../../utils/shell", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getShell: () => "/bin/zsh",
 }))
 

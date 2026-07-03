@@ -1,10 +1,14 @@
 import { parseMentions } from "../core/mentions"
-import { getCommand } from "../services/command/commands"
+import { getSlashCommand } from "@shofer/core"
 
-// Mock the dependencies
-vi.mock("../services/command/commands")
+// Mock the dependencies — the slash-command loader now lives in @shofer/core
+// (relocated from src/services/command/commands, re-exported as getSlashCommand).
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	getSlashCommand: vi.fn(),
+}))
 
-const mockGetCommand = vi.mocked(getCommand)
+const mockGetCommand = vi.mocked(getSlashCommand)
 
 describe("Command Mentions", () => {
 	beforeEach(() => {

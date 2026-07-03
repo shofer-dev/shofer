@@ -15,10 +15,6 @@ vi.mock("../../../integrations/openai-codex/rate-limits", () => ({
 	fetchOpenAiCodexRateLimitInfo: vi.fn(),
 }))
 
-vi.mock("../../../services/command/commands", () => ({
-	getCommands: vi.fn(),
-}))
-
 vi.mock("@anthropic-ai/vertex-sdk", () => ({
 	AnthropicVertex: vi.fn(),
 }))
@@ -41,7 +37,7 @@ import type { ModelRecord } from "@shofer/types"
 import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
 import { getModels } from "@shofer/core"
-import { getCommands } from "../../../services/command/commands"
+import { getCommands } from "@shofer/core"
 const { openAiCodexOAuthManager } = await import("../../../integrations/openai-codex/oauth")
 const { fetchOpenAiCodexRateLimitInfo } = await import("../../../integrations/openai-codex/rate-limits")
 
@@ -142,6 +138,7 @@ import type { ModeConfig } from "@shofer/types"
 vi.mock("../../../utils/fs")
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	getCommands: vi.fn(),
 	getModels: vi.fn(),
 	flushModels: vi.fn(),
 	arePathsEqual: vi.fn(),

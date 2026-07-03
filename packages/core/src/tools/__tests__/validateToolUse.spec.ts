@@ -3,10 +3,10 @@
 import { describe, it, expect } from "vitest"
 import type { ModeConfig } from "@shofer/types"
 
-import { modes } from "@shofer/core"
-import { TOOL_GROUPS } from "@shofer/core"
+import { modes } from "@shofer/types"
+import { TOOL_GROUPS } from "@shofer/types"
 
-import { validateToolUse, isToolAllowedForMode } from "../validateToolUse"
+import { validateToolUse, isToolAllowedForMode } from "../validateToolUse.js"
 
 const codeMode = modes.find((m) => m.slug === "code")?.slug || "code"
 const architectMode = modes.find((m) => m.slug === "architect")?.slug || "architect"

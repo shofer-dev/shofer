@@ -1,6 +1,6 @@
 import * as path from "path"
 
-import { getCommands, getCommand, getCommandNames } from "../services/command/commands"
+import { getCommands, getCommand, getCommandNames } from "../commands.js"
 
 describe("Command Integration Tests", () => {
 	const testWorkspaceDir = path.join(__dirname, "../../")
@@ -38,7 +38,7 @@ describe("Command Integration Tests", () => {
 		const commands = await getCommands(testWorkspaceDir)
 
 		if (commands.length > 0) {
-			const firstCommand = commands[0]
+			const firstCommand = commands[0]!
 			const loadedCommand = await getCommand(testWorkspaceDir, firstCommand.name)
 
 			expect(loadedCommand).toBeDefined()

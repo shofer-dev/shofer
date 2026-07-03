@@ -1,16 +1,12 @@
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { getCommand, getCommandNames } from "../../services/command/commands"
+import { getSlashCommand, getCommandNames } from "@shofer/core"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
 import type { TaskProviderLike, SkillsManagerLike } from "@shofer/core"
 import { getModeBySlug } from "@shofer/core"
-import {
-	buildSkillApprovalMessage,
-	buildSkillResult,
-	resolveSkillContentForMode,
-} from "../../services/skills/skillInvocation"
+import { buildSkillApprovalMessage, buildSkillResult, resolveSkillContentForMode } from "@shofer/core"
 
 interface RunSlashCommandParams {
 	command: string
@@ -53,7 +49,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 			task.consecutiveMistakeCount = 0
 
 			// Get the command from the commands service
-			const command = await getCommand(task.cwd, commandName)
+			const command = await getSlashCommand(task.cwd, commandName)
 
 			if (!command) {
 				const currentMode = await task.getTaskMode()

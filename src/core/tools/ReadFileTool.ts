@@ -17,7 +17,7 @@ import { isLegacyReadFileParams, type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task"
 import { formatResponse } from "@shofer/core"
-import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
+import { RecordSource } from "@shofer/core"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
 import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../integrations/misc/extract-text"

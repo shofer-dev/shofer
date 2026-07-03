@@ -159,7 +159,7 @@ export const webviewMessageHandler = async (
 	}
 
 	const getDiscoveredCommands = async (): Promise<SlashCommand[]> => {
-		const { getCommands } = await import("../../services/command/commands")
+		const { getCommands } = await import("@shofer/core")
 		const commands = await getCommands(getCurrentCwd())
 
 		const commandList: SlashCommand[] = commands.map((command) => ({
@@ -3628,8 +3628,8 @@ export const webviewMessageHandler = async (
 		case "openCommandFile": {
 			try {
 				if (message.text) {
-					const { getCommand } = await import("../../services/command/commands")
-					const command = await getCommand(getCurrentCwd(), message.text)
+					const { getSlashCommand } = await import("@shofer/core")
+					const command = await getSlashCommand(getCurrentCwd(), message.text)
 
 					if (command && command.filePath) {
 						openFile(command.filePath)
@@ -3648,8 +3648,8 @@ export const webviewMessageHandler = async (
 		case "deleteCommand": {
 			try {
 				if (message.text && message.values?.source) {
-					const { getCommand } = await import("../../services/command/commands")
-					const command = await getCommand(getCurrentCwd(), message.text)
+					const { getSlashCommand } = await import("@shofer/core")
+					const command = await getSlashCommand(getCurrentCwd(), message.text)
 
 					if (command && command.filePath) {
 						// Delete the command file
@@ -3765,7 +3765,7 @@ export const webviewMessageHandler = async (
 				openFile(filePath)
 
 				// Refresh commands list
-				const { getCommands } = await import("../../services/command/commands")
+				const { getCommands } = await import("@shofer/core")
 				const commands = await getCommands(getCurrentCwd() || "")
 				const commandList = commands.map((command) => ({
 					name: command.name,

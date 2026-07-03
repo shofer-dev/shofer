@@ -34,6 +34,7 @@
 		"ai-sdk-provider-poe": "2.0.18",
 		"axios": "^1.12.0",
 		"google-auth-library": "^9.15.1",
+		"gray-matter": "^4.0.3",
 		"get-folder-size": "^5.0.0",
 		"node-cache": "^5.1.2",
 		"ollama": "^0.5.17",

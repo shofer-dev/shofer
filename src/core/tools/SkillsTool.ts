@@ -3,11 +3,7 @@ import type { TaskProviderLike, SkillsManagerLike } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
-import {
-	buildSkillApprovalMessage,
-	buildSkillResult,
-	resolveSkillContentForMode,
-} from "../../services/skills/skillInvocation"
+import { buildSkillApprovalMessage, buildSkillResult, resolveSkillContentForMode } from "@shofer/core"
 
 interface SkillParams {
 	skill: string

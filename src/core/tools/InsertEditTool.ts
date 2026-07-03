@@ -20,7 +20,7 @@ import { validateWorktreePath } from "../../utils/worktreePathGuard"
 import { fileExistsAtPath } from "../../utils/fs"
 import { formatResponse } from "@shofer/core"
 import { sanitizeUnifiedDiff, computeDiffStats } from "../diff/stats"
-import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
+import { RecordSource } from "@shofer/core"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"

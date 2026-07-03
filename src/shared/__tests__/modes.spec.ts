@@ -6,7 +6,7 @@ import type { ModeConfig, PromptComponent } from "@shofer/types"
 vi.mock("vscode")
 
 import { FileRestrictionError, modes, getModeSelection } from "@shofer/core"
-import { isToolAllowedForMode } from "../../core/tools/validateToolUse"
+import { isToolAllowedForMode } from "@shofer/core"
 
 describe("isToolAllowedForMode", () => {
 	const customModes: ModeConfig[] = [

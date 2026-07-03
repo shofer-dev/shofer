@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import * as path from "path"
 
-import { getCommand, getCommands } from "../commands"
+import { getCommand, getCommands } from "../commands.js"
 
 // Mock fs and path modules
 vi.mock("fs/promises")
@@ -11,7 +11,7 @@ vi.mock("fs/promises")
 // from `__tests__/` never resolved to the real module, so it was always a no-op;
 // preserving that behaviour keeps the fixtures — anchored on the real cwd/home
 // paths — valid now that shofer-config lives in @shofer/core.)
-vi.mock("../built-in-commands", () => ({
+vi.mock("../built-in-commands.js", () => ({
 	getBuiltInCommands: vi.fn(() => Promise.resolve([])),
 	getBuiltInCommand: vi.fn(() => Promise.resolve(undefined)),
 	getBuiltInCommandNames: vi.fn(() => Promise.resolve([])),

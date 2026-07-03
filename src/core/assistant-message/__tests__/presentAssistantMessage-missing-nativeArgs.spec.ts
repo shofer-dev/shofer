@@ -8,7 +8,8 @@ import { presentAssistantMessage } from "../presentAssistantMessage"
 // presentAssistantMessage-unknown-tool.spec.ts
 // ---------------------------------------------------------------------------
 vi.mock("../../task/Task")
-vi.mock("../../tools/validateToolUse", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	validateToolUse: vi.fn(),
 	isValidToolName: vi.fn(() => true), // all tool names are "known"
 }))

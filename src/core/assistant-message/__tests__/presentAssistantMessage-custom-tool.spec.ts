@@ -3,22 +3,21 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
 import { presentAssistantMessage } from "../presentAssistantMessage"
-import { validateToolUse } from "../../tools/validateToolUse"
+import { validateToolUse } from "@shofer/core"
 
 // Mock dependencies
 vi.mock("../../task/Task")
-vi.mock("../../tools/validateToolUse", () => ({
+
+// Mock custom tool registry + validateToolUse/isValidToolName — must be done inline
+// without external variable references.
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	validateToolUse: vi.fn(),
 	isValidToolName: vi.fn((toolName: string) =>
 		["read_file", "write_to_file", "ask_followup_question", "attempt_completion", "use_mcp_tool"].includes(
 			toolName,
 		),
 	),
-}))
-
-// Mock custom tool registry - must be done inline without external variable references
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),

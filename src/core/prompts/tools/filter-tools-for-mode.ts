@@ -6,7 +6,7 @@ import { defaultModeSlug } from "@shofer/core"
 import { buildMcpToolName } from "@shofer/core"
 import type { CodeIndexManagerLike, GitIndexManagerLike, LiveMemoryManagerLike } from "@shofer/core"
 import type { McpHub } from "@shofer/core"
-import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
+import { isToolAllowedForMode } from "@shofer/core"
 
 /**
  * Canonical to aliases map - maps canonical tool name to array of alias names.

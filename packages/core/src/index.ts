@@ -244,3 +244,20 @@ export * from "./worktree/index.js"
 export * from "./i18n/index.js"
 // The default i18next instance for consumers that call `i18n.t(...)` directly.
 export { default as i18n } from "./i18n/index.js"
+// Host-agnostic leaves relocated from the VS Code `src` tree (Task-cluster A.3-2).
+export * from "./utils/shell.js"
+export * from "./services/skills/skillInvocation.js"
+export * from "./tools/validateToolUse.js"
+export * from "./context-tracking/FileContextTrackerTypes.js"
+// Slash-command loader/service. NOTE: the loader's `getCommand(cwd, name)` collides
+// with the VS Code command-id builder `getCommand(id)` already exported from
+// ./utils/commands.js — re-export it here aliased as `getSlashCommand`.
+export {
+	getCommand as getSlashCommand,
+	getCommands,
+	getCommandNames,
+	getCommandNameFromFile,
+	isMarkdownFile,
+	type Command,
+} from "./services/command/commands.js"
+export { getBuiltInCommands, getBuiltInCommand, getBuiltInCommandNames } from "./services/command/built-in-commands.js"

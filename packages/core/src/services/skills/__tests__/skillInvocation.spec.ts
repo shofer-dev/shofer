@@ -1,5 +1,5 @@
-import { resolveSkillContentForMode, buildSkillApprovalMessage, buildSkillResult } from "../skillInvocation"
-import type { SkillLookup } from "../skillInvocation"
+import { resolveSkillContentForMode, buildSkillApprovalMessage, buildSkillResult } from "../skillInvocation.js"
+import type { SkillLookup } from "../skillInvocation.js"
 import type { SkillContent } from "@shofer/types"
 
 describe("skillInvocation", () => {

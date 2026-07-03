@@ -1,7 +1,16 @@
 import { addCustomInstructions } from "../sections/custom-instructions"
 import { getRulesSection, getCommandChainOperator } from "../sections/rules"
 import { McpHub, getCapabilitiesSection } from "@shofer/core"
-import * as shellUtils from "../../../utils/shell"
+import * as shellUtils from "@shofer/core"
+
+// getShell was relocated into @shofer/core; mock it there so each test can drive
+// the returned shell path (previously done via vi.spyOn on the src utils/shell module).
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	// Default to a real-ish shell so tests that don't drive getShell explicitly
+	// (e.g. the vendor-confidentiality cases) still get a usable value.
+	getShell: vi.fn(() => "/bin/bash"),
+}))
 
 describe("addCustomInstructions", () => {
 	it("adds vscode language to custom instructions", async () => {
@@ -114,39 +123,37 @@ describe("getRulesSection", () => {
 
 describe("getCommandChainOperator", () => {
 	it("returns && for bash shell", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/bash")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/bash")
 		expect(getCommandChainOperator()).toBe("&&")
 	})
 
 	it("returns && for zsh shell", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/zsh")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/zsh")
 		expect(getCommandChainOperator()).toBe("&&")
 	})
 
 	it("returns ; for PowerShell", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue(
-			"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-		)
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
 		expect(getCommandChainOperator()).toBe(";")
 	})
 
 	it("returns ; for PowerShell Core (pwsh)", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("C:\\Program Files\\PowerShell\\7\\pwsh.exe")
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Program Files\\PowerShell\\7\\pwsh.exe")
 		expect(getCommandChainOperator()).toBe(";")
 	})
 
 	it("returns && for cmd.exe", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("C:\\Windows\\System32\\cmd.exe")
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\cmd.exe")
 		expect(getCommandChainOperator()).toBe("&&")
 	})
 
 	it("returns && for Git Bash on Windows", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("C:\\Program Files\\Git\\bin\\bash.exe")
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Program Files\\Git\\bin\\bash.exe")
 		expect(getCommandChainOperator()).toBe("&&")
 	})
 
 	it("returns && for WSL bash", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/bash")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/bash")
 		expect(getCommandChainOperator()).toBe("&&")
 	})
 })
@@ -159,7 +166,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("uses && for Unix shells in command chaining example", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/bash")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/bash")
 		const result = getRulesSection(cwd)
 
 		expect(result).toContain("cd (path to project) && (command")
@@ -168,9 +175,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("uses ; for PowerShell in command chaining example", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue(
-			"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-		)
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
 		const result = getRulesSection(cwd)
 
 		expect(result).toContain("cd (path to project) ; (command")
@@ -178,7 +183,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("uses && for cmd.exe in command chaining example", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("C:\\Windows\\System32\\cmd.exe")
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\cmd.exe")
 		const result = getRulesSection(cwd)
 
 		expect(result).toContain("cd (path to project) && (command")
@@ -186,9 +191,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("includes Unix utility guidance for PowerShell", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue(
-			"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-		)
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
 		const result = getRulesSection(cwd)
 
 		expect(result).toContain("IMPORTANT: When using PowerShell, avoid Unix-specific utilities")
@@ -199,7 +202,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("includes Unix utility guidance for cmd.exe", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("C:\\Windows\\System32\\cmd.exe")
+		vi.mocked(shellUtils.getShell).mockReturnValue("C:\\Windows\\System32\\cmd.exe")
 		const result = getRulesSection(cwd)
 
 		expect(result).toContain("IMPORTANT: When using cmd.exe, avoid Unix-specific utilities")
@@ -210,7 +213,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("does not include Unix utility guidance for Unix shells", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/bash")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/bash")
 		const result = getRulesSection(cwd)
 
 		expect(result).not.toContain("IMPORTANT: When using PowerShell")
@@ -219,7 +222,7 @@ describe("getRulesSection shell-aware command chaining", () => {
 	})
 
 	it("does not include note for Unix shells", () => {
-		vi.spyOn(shellUtils, "getShell").mockReturnValue("/bin/zsh")
+		vi.mocked(shellUtils.getShell).mockReturnValue("/bin/zsh")
 		const result = getRulesSection(cwd)
 
 		expect(result).not.toContain("Note: Using")

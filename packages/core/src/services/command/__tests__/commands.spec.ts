@@ -1,10 +1,4 @@
-import {
-	getCommands,
-	getCommand,
-	getCommandNames,
-	getCommandNameFromFile,
-	isMarkdownFile,
-} from "../services/command/commands"
+import { getCommands, getCommand, getCommandNames, getCommandNameFromFile, isMarkdownFile } from "../commands.js"
 
 describe("Command Utilities", () => {
 	const testCwd = "/test/project"

@@ -7,7 +7,8 @@ import { Task } from "../../task/Task"
 
 // Mock dependencies
 vi.mock("../../task/Task")
-vi.mock("../../tools/validateToolUse", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	validateToolUse: vi.fn(),
 	isValidToolName: vi.fn((toolName: string) =>
 		["read_file", "write_to_file", "ask_followup_question", "attempt_completion", "use_mcp_tool"].includes(

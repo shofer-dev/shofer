@@ -21,7 +21,7 @@ describe("Native Tools Filtering by Mode", () => {
 			}
 
 			// Import the functions we need to test
-			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
+			const { isToolAllowedForMode } = await import("@shofer/core")
 			const { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/core")
 			const { getGroupName } = await import("@shofer/core")
 
@@ -94,7 +94,7 @@ describe("Native Tools Filtering by Mode", () => {
 				tools: ["read"] as const,
 			}
 
-			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
+			const { isToolAllowedForMode } = await import("@shofer/core")
 
 			// Mode with MCP group should allow use_mcp_tool
 			expect(isToolAllowedForMode("use_mcp_tool", "test-mode-with-mcp", [modeWithMcp])).toBe(true)
@@ -111,7 +111,7 @@ describe("Native Tools Filtering by Mode", () => {
 				tools: [] as const, // No tools at all
 			}
 
-			const { isToolAllowedForMode } = await import("../../tools/validateToolUse")
+			const { isToolAllowedForMode } = await import("@shofer/core")
 			const { ALWAYS_AVAILABLE_TOOLS } = await import("@shofer/core")
 
 			// Always-available tools should work even with no groups

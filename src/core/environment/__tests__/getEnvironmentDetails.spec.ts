@@ -6,7 +6,7 @@ import type { Mock } from "vitest"
 
 import { getEnvironmentDetails } from "../getEnvironmentDetails"
 import { getFullModeDetails } from "../../modes/getFullModeDetails"
-import { isToolAllowedForMode } from "../../tools/validateToolUse"
+import { isToolAllowedForMode } from "@shofer/core"
 import { getApiMetrics } from "@shofer/core"
 import { listFiles } from "@shofer/core"
 import { TerminalRegistry } from "@shofer/core"
@@ -57,6 +57,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		getWorkspacePathForContext: vi.fn(),
 		formatResponse: { ...orig.formatResponse, formatFilesList: vi.fn() },
 		getGitStatus: vi.fn(),
+		isToolAllowedForMode: vi.fn(),
 		TerminalRegistry: {
 			getBackgroundTerminals: vi.fn(() => []),
 			getTerminals: vi.fn(() => []),
@@ -65,7 +66,6 @@ vi.mock("@shofer/core", async (importOriginal) => {
 		},
 	}
 })
-vi.mock("../../tools/validateToolUse")
 
 describe("getEnvironmentDetails", () => {
 	const mockCwd = "/test/path"

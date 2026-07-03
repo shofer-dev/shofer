@@ -2,9 +2,9 @@ import fs from "fs/promises"
 import * as path from "path"
 import { Dirent } from "fs"
 import matter from "gray-matter"
-import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "@shofer/core"
-import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands"
-import { configLog } from "@shofer/core"
+import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
+import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
+import { configLog } from "../../logging/subsystems.js"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops

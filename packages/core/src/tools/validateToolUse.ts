@@ -1,10 +1,10 @@
 import type { ToolName, ModeConfig, ExperimentId, GroupOptions, GroupEntry } from "@shofer/types"
 import { toolNames as validToolNames } from "@shofer/types"
-import { customToolRegistry } from "@shofer/core"
+import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
 
-import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "@shofer/core"
+import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "@shofer/types"
 import { EXPERIMENT_IDS } from "@shofer/types"
-import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
+import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
 
 /**
  * Check whether a tool name belongs to a tool from a private provider
@@ -14,8 +14,8 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
  * they are tightly coupled to their owning extension's internal orchestration
  * and reject invocations from outside callers.
  */
-import { isPrivateLmTool } from "@shofer/core"
-import { taskLog } from "@shofer/core"
+import { isPrivateLmTool } from "./private-tool-registry.js"
+import { taskLog } from "../logging/subsystems.js"
 
 /**
  * Checks if a tool name is a valid, known tool.
@@ -159,6 +159,7 @@ const MUTATION_GATING_PARAMS: Record<string, string[]> = {
  * resolve through this function rather than inferring intent from coincidental
  * param names.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- tool params are heterogeneous, accessed by name below
 function getMutatedPaths(tool: string, toolParams: Record<string, any>): string[] {
 	switch (tool) {
 		case "write_to_file":
@@ -279,7 +280,8 @@ export function isToolAllowedForMode(
 	modeSlug: string,
 	customModes: ModeConfig[],
 	toolRequirements?: Record<string, boolean>,
-	toolParams?: Record<string, any>, // All tool parameters
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- All tool parameters are heterogeneous
+	toolParams?: Record<string, any>,
 	experiments?: Record<string, boolean>,
 	includedTools?: string[], // Opt-in tools explicitly included (e.g., from modelInfo)
 ): boolean {
@@ -303,6 +305,7 @@ export function isToolAllowedForMode(
 	}
 
 	// Always allow these tools (unless explicitly disabled above)
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ALWAYS_AVAILABLE_TOOLS is a narrower tuple; tool is an arbitrary string
 	if (ALWAYS_AVAILABLE_TOOLS.includes(tool as any)) {
 		return true
 	}
@@ -364,11 +367,11 @@ export function isToolAllowedForMode(
 		}
 
 		// Check if the tool is in the group's regular tools
-		const isRegularTool = groupConfig.tools.includes(resolvedTool)
+		const isRegularTool = groupConfig.tools.includes(resolvedTool as ToolName)
 
 		// Check if the tool is a custom tool that has been explicitly included
 		const isCustomTool =
-			groupConfig.customTools?.includes(resolvedTool) && resolvedIncludedTools?.includes(resolvedTool)
+			groupConfig.customTools?.includes(resolvedTool as ToolName) && resolvedIncludedTools?.includes(resolvedTool)
 
 		// If the tool isn't in regular tools and isn't an included custom tool, continue to next group
 		if (!isRegularTool && !isCustomTool) {

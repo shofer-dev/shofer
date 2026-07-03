@@ -1,6 +1,6 @@
 import type { SystemPromptSettings } from "@shofer/core"
 
-import { getShell } from "../../../utils/shell"
+import { getShell } from "@shofer/core"
 
 /**
  * Returns the appropriate command chaining operator based on the user's shell.

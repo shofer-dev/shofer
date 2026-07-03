@@ -1,7 +1,7 @@
 import os from "os"
 import osName from "os-name"
 
-import { getShell } from "../../../utils/shell"
+import { getShell } from "@shofer/core"
 import { type SubmoduleEntry, formatSubmoduleBlock } from "@shofer/core"
 
 /**
