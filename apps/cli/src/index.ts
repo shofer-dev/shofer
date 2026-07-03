@@ -147,6 +147,7 @@ program
 	.option("-k, --api-key <key>", "API key for the LLM provider")
 	.option("--provider <provider>", "API provider (defaults to openrouter)")
 	.option("-m, --model <model>", "Model to use")
+	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
 	.option("-d, --debug", "Enable debug output", false)
 	.action(
 		async (options: {
@@ -157,6 +158,7 @@ program
 			apiKey?: string
 			provider?: string
 			model?: string
+			token?: string
 			debug?: boolean
 		}) => {
 			await serve(options)

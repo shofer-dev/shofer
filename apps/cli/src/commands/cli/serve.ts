@@ -18,6 +18,8 @@ export interface ServeOptions {
 	provider?: string
 	model?: string
 	debug?: boolean
+	/** Bearer token required on `/api/v1/*`. Falls back to `SHOFER_NODE_TOKEN`. */
+	token?: string
 }
 
 /**
@@ -31,6 +33,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 	const provider = (options.provider ?? "openrouter") as SupportedProvider
 	const port = Number.parseInt(options.port ?? "30099", 10)
 	const host = options.host ?? "127.0.0.1"
+	const token = options.token ?? process.env.SHOFER_NODE_TOKEN
 
 	const hostOptions: ExtensionHostOptions = {
 		mode: "code",
@@ -50,8 +53,8 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 
 	const extHost = new ExtensionHost(hostOptions)
 	await extHost.activate()
-	const server = extHost.serve({ port, host })
-	console.error(`[shofer] serving on http://${host}:${port}`)
+	const server = extHost.serve({ port, host, token })
+	console.error(`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""}`)
 
 	await new Promise<void>((resolve) => {
 		const shutdown = () => server.close(() => resolve())

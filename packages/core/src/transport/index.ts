@@ -3,6 +3,7 @@ import type { Readable, Writable } from "node:stream"
 
 import type { ShoferAPI } from "@shofer/types"
 
+import { Package } from "../shared/package.js"
 import { ShoferApiAgent } from "./shofer-api-agent.js"
 import { createHttpServer } from "./http-server.js"
 import { runAcpAgent } from "./run-acp-agent.js"
@@ -19,8 +20,14 @@ export { runAcpAgent } from "./run-acp-agent.js"
  * Start the HTTP/SSE server over a live {@link ShoferAPI} and begin listening. The
  * single entrypoint the `shofer serve` command calls. Returns the listening server.
  */
-export function serveHttpOverShoferApi(api: ShoferAPI, opts: { port: number; host?: string }): Server {
-	const server = createHttpServer(new ShoferApiAgent(api))
+export function serveHttpOverShoferApi(
+	api: ShoferAPI,
+	opts: { port: number; host?: string; token?: string; version?: string },
+): Server {
+	const server = createHttpServer(new ShoferApiAgent(api), {
+		token: opts.token,
+		version: opts.version ?? Package.version,
+	})
 	server.listen(opts.port, opts.host)
 	return server
 }

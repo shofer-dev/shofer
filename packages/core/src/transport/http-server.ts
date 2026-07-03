@@ -34,24 +34,45 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
+/** Options for the HTTP/SSE server (auth + version handshake, §Shofer Nodes L1). */
+export interface HttpServerOptions {
+	/**
+	 * Optional bearer token. When set, every `/api/v1/*` route requires
+	 * `Authorization: Bearer <token>` (→ `401` when missing/wrong). `/health`
+	 * stays open (liveness only). Unset → no auth (loopback/dev default).
+	 */
+	token?: string
+	/**
+	 * The controller/agent build version this executor reports. Surfaced on the
+	 * open `/health` and the authed `/whoami` so a controller can enforce that
+	 * node and controller run the exact same shofer version before connecting.
+	 */
+	version?: string
+}
+
 /**
  * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
  * `/health`):
- *   GET  /health                     → liveness
+ *   GET  /health                     → liveness + version (open)
+ *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream
  *   POST /api/v1/task                → { prompt, taskId? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  */
-export function createHttpServer(api: AgentApi): http.Server {
-	return http.createServer(createRequestHandler(api))
+export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): http.Server {
+	return http.createServer(createRequestHandler(api, opts))
 }
 
 /**
  * The request handler (exported for testing without a real socket).
  */
-export function createRequestHandler(api: AgentApi): (req: http.IncomingMessage, res: http.ServerResponse) => void {
+export function createRequestHandler(
+	api: AgentApi,
+	opts: HttpServerOptions = {},
+): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
+	const { token, version } = opts
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -64,8 +85,22 @@ export function createRequestHandler(api: AgentApi): (req: http.IncomingMessage,
 		const path = url.pathname
 		const method = req.method ?? "GET"
 
+		// Open liveness probe — never gated by the bearer token.
 		if (method === "GET" && path === "/health") {
-			return send(res, 200, { status: "ok", version: API_VERSION })
+			return send(res, 200, { ok: true, version })
+		}
+
+		// Bearer-token gate for the entire versioned API surface.
+		if (token && (path === base || path.startsWith(`${base}/`))) {
+			const header = req.headers["authorization"]
+			if (header !== `Bearer ${token}`) {
+				return send(res, 401, { error: "unauthorized" })
+			}
+		}
+
+		// Authed liveness+version+auth check in a single round-trip.
+		if (method === "GET" && path === `${base}/whoami`) {
+			return send(res, 200, { version })
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
