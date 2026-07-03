@@ -202,10 +202,6 @@ vi.mock("../../mentions", () => ({
 	getLatestTerminalOutput: vi.fn(),
 }))
 
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-}))
-
 vi.mock("../../environment/getEnvironmentDetails", () => ({
 	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
 }))
@@ -214,6 +210,7 @@ vi.mock("../../ignore/ShoferIgnoreController")
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	summarizeConversation: vi.fn().mockResolvedValue({
 		messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
 		summary: "summary",

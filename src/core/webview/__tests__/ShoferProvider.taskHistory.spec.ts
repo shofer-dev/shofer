@@ -196,12 +196,9 @@ vi.mock("../../task/Task", () => ({
 	})),
 }))
 
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue("file content"),
-}))
-
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	extractTextFromFile: vi.fn().mockResolvedValue("file content"),
 	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
 	getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
 	getStorageBasePath: vi.fn().mockImplementation((defaultPath: string) => defaultPath),

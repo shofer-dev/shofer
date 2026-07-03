@@ -2,7 +2,7 @@ import { distance } from "fastest-levenshtein"
 
 import { ToolProgressStatus } from "@shofer/types"
 
-import { addLineNumbers, everyLineHasLineNumbers, stripLineNumbers } from "../../../integrations/misc/extract-text"
+import { addLineNumbers, everyLineHasLineNumbers, stripLineNumbers } from "@shofer/core"
 import { ToolUse, DiffStrategy, DiffResult } from "@shofer/core"
 import { normalizeString } from "@shofer/core"
 

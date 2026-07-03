@@ -5,7 +5,7 @@ import type { MockedFunction } from "vitest"
 import { fileExistsAtPath, createDirectoriesForFile } from "../../../utils/fs"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
-import { everyLineHasLineNumbers, stripLineNumbers } from "../../../integrations/misc/extract-text"
+import { everyLineHasLineNumbers, stripLineNumbers } from "@shofer/core"
 import { ToolUse, ToolResponse } from "@shofer/core"
 import { writeToFileTool } from "../WriteToFileTool"
 
@@ -32,16 +32,6 @@ vi.mock("../../../utils/fs", () => ({
 
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
-	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
-	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
-	formatResponse: {
-		toolError: vi.fn((msg) => `Error: ${msg}`),
-		shoferIgnoreError: vi.fn((path) => `Access denied: ${path}`),
-		createPrettyPatch: vi.fn(() => "mock-diff"),
-	},
-}))
-
-vi.mock("../../../integrations/misc/extract-text", () => ({
 	everyLineHasLineNumbers: vi.fn().mockReturnValue(false),
 	stripLineNumbers: vi.fn().mockImplementation((content) => content),
 	addLineNumbers: vi.fn().mockImplementation((content: string) =>
@@ -50,6 +40,13 @@ vi.mock("../../../integrations/misc/extract-text", () => ({
 			.map((line: string, i: number) => `${i + 1} | ${line}`)
 			.join("\n"),
 	),
+	isPathOutsideWorkspace: vi.fn().mockReturnValue(false),
+	getReadablePath: vi.fn().mockReturnValue("test/path.txt"),
+	formatResponse: {
+		toolError: vi.fn((msg) => `Error: ${msg}`),
+		shoferIgnoreError: vi.fn((path) => `Access denied: ${path}`),
+		createPrettyPatch: vi.fn(() => "mock-diff"),
+	},
 }))
 
 vi.mock("vscode", () => ({

@@ -125,9 +125,6 @@ vi.mock("../../mentions", () => ({
 }))
 
 // Mock extract-text
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-}))
 
 // Mock getEnvironmentDetails
 vi.mock("../../environment/getEnvironmentDetails", () => ({
@@ -150,6 +147,7 @@ vi.mock("../../condense", () => ({
 // Mock storage utilities (relocated into @shofer/core)
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
+	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	getTaskDirectoryPath: vi
 		.fn()
 		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),

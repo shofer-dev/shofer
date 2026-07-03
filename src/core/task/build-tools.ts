@@ -10,7 +10,7 @@ import type { TaskProviderLike } from "@shofer/core"
 import { getRooDirectoriesForCwd } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory, getLiveMemoryManagerAccessor } from "@shofer/core"
 
-import { getNativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
+import { getNativeTools, getMcpServerTools } from "@shofer/core"
 import { filterNativeToolsForMode, filterMcpToolsForMode } from "../prompts/tools/filter-tools-for-mode"
 import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode, resolveToolAlias } from "@shofer/core"
 

@@ -481,9 +481,15 @@ importers:
       ignore:
         specifier: ^7.0.3
         version: 7.0.5
+      isbinaryfile:
+        specifier: ^5.0.2
+        version: 5.0.4
       json-stream-stringify:
         specifier: ^3.1.6
         version: 3.1.6
+      mammoth:
+        specifier: ^1.9.1
+        version: 1.9.1
       node-cache:
         specifier: ^5.1.2
         version: 5.1.2
@@ -502,6 +508,9 @@ importers:
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
+      pdf-parse:
+        specifier: ^1.1.1
+        version: 1.1.1
       pretty-bytes:
         specifier: ^7.0.0
         version: 7.0.0

@@ -19,6 +19,7 @@ import { ContextProxy } from "../../config/ContextProxy"
 // Mock @shofer/core
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
+	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 	// Noop controller so constructing a Task doesn't spin up the real file watcher.
 	ShoferIgnoreController: class {
 		validateAccess() {
@@ -141,10 +142,6 @@ vi.mock("../../mentions", () => ({
 	}),
 	openMention: vi.fn(),
 	getLatestTerminalOutput: vi.fn(),
-}))
-
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
 }))
 
 vi.mock("../../environment/getEnvironmentDetails", () => ({

@@ -20,9 +20,9 @@ import { formatResponse } from "@shofer/core"
 import { RecordSource } from "../context-tracking/FileContextTrackerTypes"
 import { isPathOutsideWorkspace } from "@shofer/core"
 import { getReadablePath } from "@shofer/core"
-import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../integrations/misc/extract-text"
-import { readWithIndentation, readWithSlice } from "../../integrations/misc/indentation-reader"
-import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file"
+import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "@shofer/core"
+import { readWithIndentation, readWithSlice } from "@shofer/core"
+import { DEFAULT_LINE_LIMIT } from "@shofer/core"
 import type { ToolUse, PushToolResult } from "@shofer/core"
 
 import {

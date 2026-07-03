@@ -18,14 +18,9 @@ import { isBinaryFile } from "isbinaryfile"
 
 import { readFileTool, ReadFileTool } from "../ReadFileTool"
 import { formatResponse } from "@shofer/core"
-import {
-	validateImageForProcessing,
-	processImageFile,
-	isSupportedImageFormat,
-	ImageMemoryTracker,
-} from "@shofer/core"
-import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "../../../integrations/misc/extract-text"
-import { readWithIndentation, readWithSlice } from "../../../integrations/misc/indentation-reader"
+import { validateImageForProcessing, processImageFile, isSupportedImageFormat, ImageMemoryTracker } from "@shofer/core"
+import { extractTextFromFile, addLineNumbers, getSupportedBinaryFormats } from "@shofer/core"
+import { readWithIndentation, readWithSlice } from "@shofer/core"
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +40,8 @@ vi.mock("fs/promises", () => ({
 
 vi.mock("isbinaryfile")
 
-vi.mock("../../../integrations/misc/extract-text", () => ({
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	extractTextFromFile: vi.fn(),
 	addLineNumbers: vi.fn().mockImplementation((text: string, startLine = 1) => {
 		if (!text) return ""
@@ -53,15 +49,8 @@ vi.mock("../../../integrations/misc/extract-text", () => ({
 		return lines.map((line, i) => `${startLine + i} | ${line}`).join("\n")
 	}),
 	getSupportedBinaryFormats: vi.fn(() => [".pdf", ".docx", ".ipynb"]),
-}))
-
-vi.mock("../../../integrations/misc/indentation-reader", () => ({
 	readWithIndentation: vi.fn(),
 	readWithSlice: vi.fn(),
-}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	DEFAULT_MAX_IMAGE_FILE_SIZE_MB: 5,
 	DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB: 20,
 	isSupportedImageFormat: vi.fn(),

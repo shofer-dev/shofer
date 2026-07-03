@@ -121,6 +121,7 @@ vi.mock("@shofer/core", async (importOriginal) => {
 	const builtins = [{ slug: "code", name: "Code Mode", roleDefinition: "code", tools: ["read", "write"] }]
 	return {
 		...original,
+		extractTextFromFile: vi.fn().mockResolvedValue(""),
 		buildApiHandler: vi.fn().mockReturnValue({
 			getModel: vi.fn().mockReturnValue({ id: "claude-3-sonnet" }),
 		}),
@@ -141,10 +142,6 @@ vi.mock("@shofer/core", async (importOriginal) => {
 vi.mock("../../prompts/system", () => ({
 	SYSTEM_PROMPT: vi.fn().mockResolvedValue("mocked system prompt"),
 	codeMode: "code",
-}))
-
-vi.mock("../../../integrations/misc/extract-text", () => ({
-	extractTextFromFile: vi.fn().mockResolvedValue(""),
 }))
 
 vi.mock("p-wait-for", () => ({
