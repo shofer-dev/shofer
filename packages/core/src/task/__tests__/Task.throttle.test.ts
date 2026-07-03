@@ -1,42 +1,33 @@
 import { ShoferEventName, ProviderSettings, TokenUsage, ToolUsage } from "@shofer/types"
+import { setHost, createInMemoryHost } from "@shofer/types"
+import { hasToolUsageChanged, hasTokenUsageChanged } from "@shofer/types"
 
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { hasToolUsageChanged, hasTokenUsageChanged } from "@shofer/core"
-import { appendTaskMessage } from "../../task-persistence"
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in WorkflowTask (which extends Task — circular).
-vi.mock("../../../extension", () => ({}))
+import { Task } from "../Task.js"
+import { appendTaskMessage } from "../../task-persistence/taskMessages.js"
 
-// Mock dependencies
-vi.mock("../../webview/ShoferProvider")
-vi.mock("../../../integrations/terminal/TerminalRegistry", () => ({
-	TerminalRegistry: {
-		releaseTerminalsForTask: vi.fn(),
-	},
-}))
-vi.mock("../../ignore/ShoferIgnoreController")
-vi.mock("../../protect/ShoferProtectedController")
-vi.mock("../../context-tracking/FileContextTracker")
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
+// Mock Task's intra-core dependencies via core-RELATIVE paths (a barrel mock of
+// @shofer/core cannot intercept Task's intra-package relative imports).
+vi.mock("../../ignore/ShoferIgnoreController.js")
+vi.mock("../../protect/ShoferProtectedController.js")
+vi.mock("../../context-tracking/FileContextTracker.js")
+vi.mock("../../api/index.js", () => ({
 	buildApiHandler: vi.fn(() => ({
 		getModel: () => ({ info: {}, id: "test-model" }),
 	})),
+}))
+vi.mock("../../tools/ToolRepetitionDetector.js", () => ({
 	ToolRepetitionDetector: class {
 		check() {
 			return { allowExecution: true }
 		}
 	},
-	taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
-	webviewLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }))
 
-vi.mock("../../../integrations/editor/DiffViewProvider")
-
-// Mock TelemetryService
+// Mock TelemetryService — @shofer/telemetry is a SEPARATE package, so the barrel
+// mock intercepts Task's `import { TelemetryService } from "@shofer/telemetry"`.
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
+		hasInstance: vi.fn(() => true),
 		instance: {
 			captureTaskCreated: vi.fn(),
 			captureTaskRestarted: vi.fn(),
@@ -44,70 +35,45 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-// Mock task persistence to avoid disk writes
-vi.mock("../../task-persistence", () => {
-	// §5: Task persists through the MessagePersistencePort. The H29 throttling test
-	// spies on the module's `appendTaskMessage`, so the mock backend delegates to
-	// the same fn (other methods are no-ops here).
-	const appendTaskMessage = vi.fn().mockResolvedValue(undefined)
-	class MockBackend {
-		appendApiMessage() {
-			return Promise.resolve()
-		}
-		readApiMessages() {
-			return Promise.resolve([])
-		}
-		readApiMessagesTail() {
-			return Promise.resolve([[], false])
-		}
-		saveApiMessages() {
-			return Promise.resolve()
-		}
-		appendTaskMessage(taskId: string, message: unknown) {
-			return appendTaskMessage({ message, taskId, globalStoragePath: "" })
-		}
-		readTaskMessages() {
-			return Promise.resolve([])
-		}
-		readTaskMessagesTail() {
-			return Promise.resolve([[], false])
-		}
-		saveTaskMessages() {
-			return Promise.resolve()
-		}
-		disposeAppendHandleForTask() {
-			return Promise.resolve()
-		}
-	}
-	return {
-		readApiMessages: vi.fn().mockResolvedValue([]),
-		saveApiMessages: vi.fn().mockResolvedValue(undefined),
-		appendApiMessage: vi.fn().mockResolvedValue(undefined),
-		readTaskMessages: vi.fn().mockResolvedValue([]),
-		saveTaskMessages: vi.fn().mockResolvedValue(undefined),
-		appendTaskMessage,
-		SqliteMessagePersistence: MockBackend,
-		taskMetadata: vi.fn().mockResolvedValue({
-			historyItem: {
-				id: "test-task-id",
-				number: 1,
-				task: "Test task",
-				ts: Date.now(),
-				totalCost: 0.01,
-				tokensIn: 100,
-				tokensOut: 50,
-			},
-			tokenUsage: {
-				totalTokensIn: 100,
-				totalTokensOut: 50,
-				totalCost: 0.01,
-				contextTokens: 150,
-				totalCacheWrites: 0,
-				totalCacheReads: 0,
-			},
-		}),
-	}
-})
+// Mock the task-persistence leaf modules Task reaches through
+// `SqliteMessagePersistence` (which imports these free functions relatively).
+// This keeps the tests off disk/SQLite. The H29 test spies on the real
+// `appendTaskMessage` fn that `SqliteMessagePersistence.appendTaskMessage`
+// delegates to — it is the SAME vi.fn the test imports above.
+vi.mock("../../task-persistence/taskMessages.js", () => ({
+	appendTaskMessage: vi.fn().mockResolvedValue(undefined),
+	readTaskMessages: vi.fn().mockResolvedValue([]),
+	readTaskMessagesTail: vi.fn().mockResolvedValue([[], false]),
+	saveTaskMessages: vi.fn().mockResolvedValue(undefined),
+	disposeAppendHandleForTask: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../task-persistence/apiMessages.js", () => ({
+	appendApiMessage: vi.fn().mockResolvedValue(undefined),
+	readApiMessages: vi.fn().mockResolvedValue([]),
+	readApiMessagesTail: vi.fn().mockResolvedValue([[], false]),
+	saveApiMessages: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("../../task-persistence/taskMetadata.js", () => ({
+	taskMetadata: vi.fn().mockResolvedValue({
+		historyItem: {
+			id: "test-task-id",
+			number: 1,
+			task: "Test task",
+			ts: Date.now(),
+			totalCost: 0.01,
+			tokensIn: 100,
+			tokensOut: 50,
+		},
+		tokenUsage: {
+			totalTokensIn: 100,
+			totalTokensOut: 50,
+			totalCost: 0.01,
+			contextTokens: 150,
+			totalCacheWrites: 0,
+			totalCacheReads: 0,
+		},
+	}),
+}))
 
 describe("Task token usage throttling", () => {
 	let mockProvider: any
@@ -118,6 +84,7 @@ describe("Task token usage throttling", () => {
 		// Reset all mocks
 		vi.clearAllMocks()
 		vi.useFakeTimers()
+		setHost(createInMemoryHost())
 
 		// Mock provider
 		mockProvider = {
@@ -141,7 +108,7 @@ describe("Task token usage throttling", () => {
 
 		// Create task instance without starting it
 		task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider,
 			apiConfiguration: mockApiConfiguration,
 			startTask: false,
 		})
@@ -189,7 +156,7 @@ describe("Task token usage throttling", () => {
 	})
 
 	test("should throttle subsequent emissions within 2 seconds", async () => {
-		const { taskMetadata } = await import("../../task-persistence")
+		const { taskMetadata } = await import("../../task-persistence/taskMetadata.js")
 		let callCount = 0
 
 		// Mock to return different token usage on each call
@@ -330,7 +297,7 @@ describe("Task token usage throttling", () => {
 	})
 
 	test("should update tokenUsageSnapshot when throttled emission occurs", async () => {
-		const { taskMetadata } = await import("../../task-persistence")
+		const { taskMetadata } = await import("../../task-persistence/taskMetadata.js")
 		let callCount = 0
 
 		// Mock to return different token usage on each call
@@ -399,7 +366,7 @@ describe("Task token usage throttling", () => {
 	})
 
 	test("should not emit if token usage has not changed even after throttle period", async () => {
-		const { taskMetadata } = await import("../../task-persistence")
+		const { taskMetadata } = await import("../../task-persistence/taskMetadata.js")
 
 		// Mock taskMetadata to return same token usage
 		const constantTokenUsage: TokenUsage = {
@@ -458,7 +425,7 @@ describe("Task token usage throttling", () => {
 	})
 
 	test("should emit when tool usage changes even if token usage is the same", async () => {
-		const { taskMetadata } = await import("../../task-persistence")
+		const { taskMetadata } = await import("../../task-persistence/taskMetadata.js")
 
 		// Mock taskMetadata to return same token usage
 		const constantTokenUsage: TokenUsage = {
@@ -701,6 +668,7 @@ describe("Task H29 partial-append throttling", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
+		setHost(createInMemoryHost())
 		mockProvider = {
 			context: { globalStorageUri: { fsPath: "/test/path" } },
 			getState: vi.fn().mockResolvedValue({ mode: "code" }),
@@ -710,7 +678,7 @@ describe("Task H29 partial-append throttling", () => {
 			taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
 		}
 		task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider,
 			apiConfiguration: { apiProvider: "anthropic", apiKey: "test-key" } as ProviderSettings,
 			startTask: false,
 		})

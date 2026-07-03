@@ -1,57 +1,32 @@
 import { ProviderSettings } from "@shofer/types"
+import { setHost, createInMemoryHost } from "@shofer/types"
 
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in WorkflowTask (which extends Task — circular).
-vi.mock("../../../extension", () => ({}))
+import { Task } from "../Task.js"
 
-// Mock dependencies
-vi.mock("../../webview/ShoferProvider")
-vi.mock("../../../integrations/terminal/TerminalRegistry", () => ({
-	TerminalRegistry: {
-		releaseTerminalsForTask: vi.fn(),
+// Mock Task's intra-core dependencies via core-RELATIVE paths so the mocks
+// actually intercept (Task calls them through relative imports; a barrel
+// mock of @shofer/core cannot intercept intra-package relative calls).
+vi.mock("../../ignore/ShoferIgnoreController.js")
+vi.mock("../../protect/ShoferProtectedController.js")
+vi.mock("../../context-tracking/FileContextTracker.js")
+vi.mock("../../api/index.js", () => ({
+	buildApiHandler: vi.fn(() => ({
+		getModel: () => ({ info: {}, id: "test-model" }),
+	})),
+}))
+vi.mock("../../tools/ToolRepetitionDetector.js", () => ({
+	ToolRepetitionDetector: class {
+		check() {
+			return { allowExecution: true }
+		}
 	},
 }))
-vi.mock("../../ignore/ShoferIgnoreController")
-vi.mock("../../protect/ShoferProtectedController")
-vi.mock("../../context-tracking/FileContextTracker")
-vi.mock("../../../integrations/editor/DiffViewProvider")
-vi.mock("@shofer/core", async (importOriginal) => {
-	const noop = () => {}
-	return {
-		...((await importOriginal()) as Record<string, unknown>),
-		buildApiHandler: vi.fn(() => ({
-			getModel: () => ({ info: {}, id: "test-model" }),
-		})),
-		ToolRepetitionDetector: class {
-			check() {
-				return { allowExecution: true }
-			}
-		},
-		taskLog: { error: vi.fn(), info: vi.fn(), warn: vi.fn(), debug: vi.fn() },
-		webviewLog: { error: noop, info: noop, warn: noop },
-		apiLog: { error: noop, info: noop, warn: noop },
-		codeIndexLog: { error: noop, info: noop, warn: noop },
-		configLog: { error: noop, info: noop, warn: noop },
-		utilLog: { error: noop, info: noop, warn: noop },
-		fsLog: { error: noop, info: noop, warn: noop },
-		gitLog: { error: noop, info: noop, warn: noop },
-		checkpointLog: { error: noop, info: noop, warn: noop },
-		liveMemoryLog: { error: noop, info: noop, warn: noop },
-		mcpLog: { error: noop, info: noop, warn: noop },
-		skillsLog: { error: noop, info: noop, warn: noop },
-		marketplaceLog: { error: noop, info: noop, warn: noop },
-		metricsLog: { error: noop, info: noop, warn: noop },
-		workflowLog: { error: noop, info: noop, warn: noop },
-		i18nLog: { error: noop, info: noop, warn: noop },
-		scrollLog: { error: noop, info: noop, warn: noop },
-	}
-})
 
-// Mock TelemetryService
+// Mock TelemetryService — @shofer/telemetry is a SEPARATE package, so the
+// barrel mock does intercept Task's `import { TelemetryService } from "@shofer/telemetry"`.
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
+		hasInstance: vi.fn(() => true),
 		instance: {
 			captureTaskCreated: vi.fn(),
 			captureTaskRestarted: vi.fn(),
@@ -67,6 +42,9 @@ describe("Task dispose method", () => {
 	beforeEach(() => {
 		// Reset all mocks
 		vi.clearAllMocks()
+
+		// In-memory host supplies createDiffView (NoopDiffView) + config/fs.
+		setHost(createInMemoryHost())
 
 		// Mock provider
 		mockProvider = {
@@ -85,7 +63,7 @@ describe("Task dispose method", () => {
 
 		// Create task instance without starting it
 		task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider,
 			apiConfiguration: mockApiConfiguration,
 			startTask: false,
 		})

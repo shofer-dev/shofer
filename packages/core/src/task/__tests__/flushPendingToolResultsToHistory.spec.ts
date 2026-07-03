@@ -1,66 +1,52 @@
-// npx vitest run core/task/__tests__/flushPendingToolResultsToHistory.spec.ts
+// npx vitest run src/task/__tests__/flushPendingToolResultsToHistory.spec.ts
 
 import * as os from "os"
 import * as path from "path"
-import * as vscode from "vscode"
 
-import type { GlobalState, ProviderSettings } from "@shofer/types"
-import { TelemetryService } from "@shofer/telemetry"
+import type { ProviderSettings } from "@shofer/types"
+import { setHost, createInMemoryHost } from "@shofer/types"
 
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
-vi.mock("../../../extension", () => ({}))
+import { Task } from "../Task.js"
 
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { ContextProxy } from "../../config/ContextProxy.js"
-
-// Mock delay before any imports that might use it
-vi.mock("delay", () => ({
-	__esModule: true,
-	default: vi.fn().mockResolvedValue(undefined),
+// Mock Task's intra-core dependencies via core-RELATIVE paths so the mocks
+// actually intercept (Task calls them through relative imports; a barrel mock
+// of @shofer/core cannot intercept intra-package relative calls).
+vi.mock("../../ignore/ShoferIgnoreController.js")
+vi.mock("../../protect/ShoferProtectedController.js")
+vi.mock("../../context-tracking/FileContextTracker.js")
+vi.mock("../../api/index.js", () => ({
+	buildApiHandler: vi.fn(() => ({
+		getModel: () => ({ info: {}, id: "test-model" }),
+	})),
+}))
+vi.mock("../../tools/ToolRepetitionDetector.js", () => ({
+	ToolRepetitionDetector: class {
+		check() {
+			return { allowExecution: true }
+		}
+	},
 }))
 
-vi.mock("execa", () => ({
-	execa: vi.fn(),
+// Mock TelemetryService — @shofer/telemetry is a SEPARATE package, so the barrel
+// mock intercepts Task's `import { TelemetryService } from "@shofer/telemetry"`.
+vi.mock("@shofer/telemetry", () => ({
+	TelemetryService: {
+		hasInstance: vi.fn(() => true),
+		instance: {
+			captureTaskCreated: vi.fn(),
+			captureTaskRestarted: vi.fn(),
+		},
+	},
 }))
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-	summarizeConversation: vi.fn().mockResolvedValue({
-		messages: [{ role: "user", content: [{ type: "text", text: "continued" }], ts: Date.now() }],
-		summary: "summary",
-		cost: 0,
-		newContextTokens: 1,
-	}),
-	safeWriteJson: vi.fn().mockResolvedValue(undefined),
-	getTaskDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
-	getSettingsDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
+// Keep the flush path off SQLite: mock the api-message leaf module that
+// `SqliteMessagePersistence.appendApiMessage` delegates to relatively.
+vi.mock("../../task-persistence/apiMessages.js", () => ({
+	appendApiMessage: vi.fn().mockResolvedValue(undefined),
+	readApiMessages: vi.fn().mockResolvedValue([]),
+	readApiMessagesTail: vi.fn().mockResolvedValue([[], false]),
+	saveApiMessages: vi.fn().mockResolvedValue(undefined),
 }))
-
-vi.mock("fs/promises", async (importOriginal) => {
-	const actual = (await importOriginal()) as Record<string, any>
-	const mockFunctions = {
-		mkdir: vi.fn().mockResolvedValue(undefined),
-		writeFile: vi.fn().mockResolvedValue(undefined),
-		appendFile: vi.fn().mockResolvedValue(undefined),
-		rename: vi.fn().mockResolvedValue(undefined),
-		readFile: vi.fn().mockResolvedValue("[]"),
-		unlink: vi.fn().mockResolvedValue(undefined),
-		rmdir: vi.fn().mockResolvedValue(undefined),
-	}
-
-	return {
-		...actual,
-		...mockFunctions,
-		default: mockFunctions,
-	}
-})
 
 const { mockPWaitFor } = vi.hoisted(() => {
 	return { mockPWaitFor: vi.fn().mockImplementation(async () => Promise.resolve()) }
@@ -70,148 +56,38 @@ vi.mock("p-wait-for", () => ({
 	default: mockPWaitFor,
 }))
 
-vi.mock("vscode", () => {
-	const mockDisposable = { dispose: vi.fn() }
-	const mockEventEmitter = { event: vi.fn(), fire: vi.fn() }
-	const mockTextDocument = { uri: { fsPath: "/mock/workspace/path/file.ts" } }
-	const mockTextEditor = { document: mockTextDocument }
-	const mockTab = { input: { uri: { fsPath: "/mock/workspace/path/file.ts" } } }
-	const mockTabGroup = { tabs: [mockTab] }
-
-	return {
-		TabInputTextDiff: vi.fn(),
-		CodeActionKind: {
-			QuickFix: { value: "quickfix" },
-			RefactorRewrite: { value: "refactor.rewrite" },
-		},
-		window: {
-			createTextEditorDecorationType: vi.fn().mockReturnValue({
-				dispose: vi.fn(),
-			}),
-			visibleTextEditors: [mockTextEditor],
-			tabGroups: {
-				all: [mockTabGroup],
-				close: vi.fn(),
-				onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })),
-			},
-			showErrorMessage: vi.fn(),
-		},
-		workspace: {
-			workspaceFolders: [
-				{
-					uri: { fsPath: "/mock/workspace/path" },
-					name: "mock-workspace",
-					index: 0,
-				},
-			],
-			createFileSystemWatcher: vi.fn(() => ({
-				onDidCreate: vi.fn(() => mockDisposable),
-				onDidDelete: vi.fn(() => mockDisposable),
-				onDidChange: vi.fn(() => mockDisposable),
-				dispose: vi.fn(),
-			})),
-			fs: {
-				stat: vi.fn().mockResolvedValue({ type: 1 }),
-			},
-			onDidSaveTextDocument: vi.fn(() => mockDisposable),
-			getConfiguration: vi.fn(() => ({ get: (key: string, defaultValue: any) => defaultValue })),
-		},
-		env: {
-			uriScheme: "vscode",
-			language: "en",
-		},
-		EventEmitter: vi.fn().mockImplementation(() => mockEventEmitter),
-		Disposable: {
-			from: vi.fn(),
-		},
-		TabInputText: vi.fn(),
-	}
-})
-
-vi.mock("../../mentions", () => ({
-	parseMentions: vi.fn().mockImplementation((text) => {
-		return Promise.resolve({ text: `processed: ${text}`, mode: undefined, contentBlocks: [] })
-	}),
-	openMention: vi.fn(),
-	getLatestTerminalOutput: vi.fn(),
-}))
-
-vi.mock("../../environment/getEnvironmentDetails", () => ({
-	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
-}))
-
-vi.mock("../../ignore/ShoferIgnoreController")
-
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn().mockReturnValue(false),
-}))
-
 describe("flushPendingToolResultsToHistory", () => {
 	let mockProvider: any
 	let mockApiConfig: ProviderSettings
-	let mockOutputChannel: any
-	let mockExtensionContext: vscode.ExtensionContext
 
 	beforeEach(() => {
-		if (!TelemetryService.hasInstance()) {
-			TelemetryService.createInstance([])
+		vi.clearAllMocks()
+
+		// In-memory host supplies createDiffView (NoopDiffView) + config/fs.
+		setHost(createInMemoryHost())
+
+		// Minimal provider stub (TaskProviderLike shape): the flush path only
+		// touches the provider for globalStoragePath and the blob cap. Returning
+		// a blob cap of 0 makes externalizeMessageContent a no-op, keeping the
+		// test off disk entirely.
+		mockProvider = {
+			context: {
+				globalStorageUri: { fsPath: path.join(os.tmpdir(), "test-storage") },
+			},
+			getState: vi.fn().mockResolvedValue({ mode: "code", currentApiConfigName: "default" }),
+			log: vi.fn(),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
+			updateTaskHistory: vi.fn().mockResolvedValue(undefined),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
+			taskManager: { getFocusedTaskId: vi.fn().mockReturnValue(undefined) },
+			contextProxy: { getValue: vi.fn().mockReturnValue(0) },
 		}
-
-		const storageUri = {
-			fsPath: path.join(os.tmpdir(), "test-storage"),
-		}
-
-		mockExtensionContext = {
-			globalState: {
-				get: vi.fn().mockImplementation((key: keyof GlobalState) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			globalStorageUri: storageUri,
-			workspaceState: {
-				get: vi.fn().mockImplementation((_key) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			secrets: {
-				get: vi.fn().mockImplementation((_key) => Promise.resolve(undefined)),
-				store: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				delete: vi.fn().mockImplementation((_key) => Promise.resolve()),
-			},
-			extensionUri: {
-				fsPath: "/mock/extension/path",
-			},
-			extension: {
-				packageJSON: {
-					version: "1.0.0",
-				},
-			},
-		} as unknown as vscode.ExtensionContext
-
-		mockOutputChannel = {
-			appendLine: vi.fn(),
-			append: vi.fn(),
-			clear: vi.fn(),
-			show: vi.fn(),
-			hide: vi.fn(),
-			dispose: vi.fn(),
-		}
-
-		mockProvider = new ShoferProvider(
-			mockExtensionContext,
-			mockOutputChannel,
-			"sidebar",
-			new ContextProxy(mockExtensionContext),
-		) as any
 
 		mockApiConfig = {
 			apiProvider: "anthropic",
 			apiModelId: "claude-3-5-sonnet-20241022",
 			apiKey: "test-api-key",
 		}
-
-		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.updateTaskHistory = vi.fn().mockResolvedValue(undefined)
 	})
 
 	it("should not save anything when userMessageContent is empty", async () => {
