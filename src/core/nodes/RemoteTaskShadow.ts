@@ -1,4 +1,4 @@
-import type { HistoryItem, ShoferMessage } from "@shofer/types"
+import type { HistoryItem, ShoferMessage, TokenUsage } from "@shofer/types"
 
 /**
  * Lifecycle state of a remote-owned task, as observed from the controller side.
@@ -34,6 +34,12 @@ export class RemoteTaskShadow {
 	error?: string
 	/** The reduced-but-real conversation, driven by the remote `Message` stream. */
 	messages: ShoferMessage[] = []
+	/**
+	 * Latest authoritative token usage from the remote's `TaskTokenUsageUpdated`
+	 * feed. Surfaced in the synthetic header summary so the controller's token
+	 * meter / cost display reflect the remote task (full-fidelity rendering, L2).
+	 */
+	tokenUsage?: TokenUsage
 
 	constructor(opts: { taskId: string; executorId: string; nodeLabel: string; prompt?: string }) {
 		this.taskId = opts.taskId
@@ -76,6 +82,11 @@ export class RemoteTaskShadow {
 		this.error = errorType
 	}
 
+	/** Record the latest token usage from the remote's `TaskTokenUsageUpdated` feed. */
+	setTokenUsage(usage: TokenUsage): void {
+		this.tokenUsage = usage
+	}
+
 	/** First non-empty user/prompt text, for the header summary. */
 	private summaryText(): string {
 		if (this.prompt) return this.prompt
@@ -85,19 +96,22 @@ export class RemoteTaskShadow {
 
 	/**
 	 * A synthetic {@link HistoryItem}-shaped summary for `currentTaskItem`. Token
-	 * counts and cost are zeroed — the remote's token meter references the remote
-	 * FS/usage and is intentionally NOT surfaced for shadow tasks (L2 disables the
-	 * token meter / diffs / checkpoints for remote-owned tasks).
+	 * counts and cost mirror the remote's authoritative usage (shared-fs L2: the
+	 * remote task renders at full fidelity, so its token meter / cost surface just
+	 * like a local task's). Zeroed until the first `TaskTokenUsageUpdated` arrives.
 	 */
 	toTaskItem(): HistoryItem {
+		const usage = this.tokenUsage
 		return {
 			id: this.taskId,
 			number: 0,
 			ts: this.createdAt,
 			task: this.summaryText(),
-			tokensIn: 0,
-			tokensOut: 0,
-			totalCost: 0,
+			tokensIn: usage?.totalTokensIn ?? 0,
+			tokensOut: usage?.totalTokensOut ?? 0,
+			cacheReads: usage?.totalCacheReads,
+			cacheWrites: usage?.totalCacheWrites,
+			totalCost: usage?.totalCost ?? 0,
 		}
 	}
 }

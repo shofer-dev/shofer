@@ -23,6 +23,9 @@ const FORWARDED_EVENTS = [
 	ShoferEventName.TaskError,
 	ShoferEventName.Message,
 	ShoferEventName.TaskModeSwitched,
+	// Full-fidelity remote rendering (Shofer Nodes L2): the controller's token/context
+	// meter + TaskHeader summary need authoritative token usage from the executor.
+	ShoferEventName.TaskTokenUsageUpdated,
 ] as const
 
 export class ShoferApiAgent implements AgentApi {

@@ -10,6 +10,7 @@ import {
 	type ShoferNodeRequest,
 	type ShoferNodeView,
 	type ShoferNodesState,
+	type TokenUsage,
 	ExecutorPool,
 	LOCAL_NODE_ID,
 	ShoferEventName,
@@ -356,6 +357,16 @@ export class NodeRegistry {
 							? { type: "shoferMessageAppended", shoferMessage: payload.message }
 							: { type: "messageUpdated", shoferMessage: payload.message },
 					)
+				}
+				return
+			}
+			case ShoferEventName.TaskTokenUsageUpdated: {
+				const shadow = this.shadows.get(args[0] as string)
+				const usage = args[1] as TokenUsage | undefined
+				if (shadow && usage) {
+					shadow.setTokenUsage(usage)
+					// Refresh the header/token summary for the focused shadow.
+					if (this.focusedShadowId === shadow.taskId) void this.renderTarget?.postInitState()
 				}
 				return
 			}

@@ -369,6 +369,34 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.registry.isShadow("local-task-99")).toBe(false)
 	})
 
+	it("carries remote token usage onto the shadow's header summary (full-fidelity meter)", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+
+		// Before any usage event, the summary is zeroed.
+		expect(h.registry.getFocusedShadow()!.toTaskItem()).toMatchObject({ tokensIn: 0, tokensOut: 0, totalCost: 0 })
+
+		remote.emit({
+			type: ShoferEventName.TaskTokenUsageUpdated,
+			args: [
+				taskId,
+				{ totalTokensIn: 1200, totalTokensOut: 340, totalCost: 0.05, contextTokens: 1540 },
+				{},
+			],
+		})
+
+		expect(h.registry.getFocusedShadow()!.toTaskItem()).toMatchObject({
+			tokensIn: 1200,
+			tokensOut: 340,
+			totalCost: 0.05,
+		})
+	})
+
 	it("drops Local-tagged pool events (no shadow, no webview render posts)", async () => {
 		// A registry whose LOCAL agent is drivable, so we can emit a Local-tagged event.
 		const { context } = makeContext()
