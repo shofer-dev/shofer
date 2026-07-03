@@ -56,7 +56,7 @@ import { webviewMessageHandler } from "../webviewMessageHandler"
 import type { ShoferProvider } from "../ShoferProvider"
 import type { ShoferMessage } from "@shofer/types"
 import type { ApiMessage } from "@shofer/core"
-import { MessageManager } from "../../message-manager"
+import { MessageManager } from "@shofer/core"
 
 describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 	let mockShoferProvider: ShoferProvider

@@ -276,3 +276,20 @@ export {
 	type Command,
 } from "./services/command/commands.js"
 export { getBuiltInCommands, getBuiltInCommand, getBuiltInCommandNames } from "./services/command/built-in-commands.js"
+
+// ── Task-cluster Chunk C: the relocated agent-loop strongly-connected component ──
+// Task + build-tools + the 56 tools + presentAssistantMessage + getEnvironmentDetails
+// + FileContextTracker + mentions + ChangedFilesService + message-manager +
+// getFullModeDetails. These now live in @shofer/core; the barrel surfaces them for
+// the VS Code `src` consumers (ShoferProvider / TaskManager / workflow / webview).
+export * from "./task/Task.js"
+export * from "./task/build-tools.js"
+export * from "./tools/index.js"
+export * from "./assistant-message/presentAssistantMessage.js"
+export * from "./environment/getEnvironmentDetails.js"
+export * from "./context-tracking/FileContextTracker.js"
+export * from "./file-changes/ChangedFilesService.js"
+export * from "./message-manager/index.js"
+export * from "./mentions/index.js"
+export * from "./mentions/resolveImageMentions.js"
+export * from "./modes/getFullModeDetails.js"

@@ -162,7 +162,7 @@ vi.mock("../../../utils/fs", () => ({
 }))
 
 // Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works
-import { Task } from "../Task"
+import { Task } from "@shofer/core"
 
 describe("Task reasoning preservation", () => {
 	let mockProvider: Partial<ShoferProvider>

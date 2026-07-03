@@ -15,7 +15,7 @@ import type {
 } from "@shofer/types"
 import { ShoferEventName, isTerminalLifecycle, IDLE_TASK_STATE } from "@shofer/types"
 
-import type { Task } from "../../core/task/Task"
+import type { Task } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { incTaskCreated, incTaskCompleted, incTaskErrored } from "@shofer/core"

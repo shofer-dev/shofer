@@ -1,0 +1,103 @@
+import { Task } from "../task/Task.js"
+import { type TaskProviderLike } from "../task-provider/index.js"
+import { type SkillsManagerLike } from "../services/skills/skills-registry.js"
+import { formatResponse } from "../prompts/responses.js"
+import { BaseTool, ToolCallbacks } from "./BaseTool.js"
+import { type ToolUse } from "@shofer/types"
+import { buildSkillApprovalMessage, buildSkillResult, resolveSkillContentForMode } from "../services/skills/skillInvocation.js"
+
+interface SkillParams {
+	skill: string
+	args?: string
+}
+
+export class SkillsTool extends BaseTool<"skills"> {
+	readonly name = "skills" as const
+
+	async execute(params: SkillParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+		const { skill: skillName, args } = params
+		const { askApproval, handleError, pushToolResult } = callbacks
+
+		try {
+			// Validate skill name parameter
+			if (!skillName) {
+				task.consecutiveMistakeCount++
+				task.recordToolError("skills")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(await task.sayAndCreateMissingParamError("skills", "skill"))
+				return
+			}
+
+			task.consecutiveMistakeCount = 0
+
+			// Check if skill is already loaded — reloading is a no-op
+			if (task.loadedSkills.has(skillName)) {
+				pushToolResult(`Skill '${skillName}' is already loaded (no-op).`)
+				return
+			}
+
+			// Get SkillsManager from provider
+			const provider = task.providerRef.deref() as TaskProviderLike | undefined
+			const skillsManager = provider?.getSkillsManager() as SkillsManagerLike | undefined
+
+			if (!skillsManager) {
+				task.recordToolError("skills")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(formatResponse.toolError("Skills Manager not available"))
+				return
+			}
+
+			// Get current mode for skill resolution (per-task, not global)
+			const currentMode = await task.getTaskMode()
+
+			// Fetch skill content
+			const skillContent = await resolveSkillContentForMode(skillsManager, skillName, currentMode)
+
+			if (!skillContent) {
+				// Get available skills for error message
+				const availableSkills = skillsManager.getSkillsForMode(currentMode)
+				const skillNames = availableSkills.map((s) => s.name)
+
+				task.recordToolError("skills")
+				task.didToolFailInCurrentTurn = true
+				pushToolResult(
+					formatResponse.toolError(
+						`Skill '${skillName}' not found. Available skills: ${skillNames.join(", ") || "(none)"}`,
+					),
+				)
+				return
+			}
+
+			// Build approval message
+			const toolMessage = buildSkillApprovalMessage(skillName, args, skillContent)
+
+			const didApprove = await askApproval("tool", toolMessage)
+
+			if (!didApprove) {
+				return
+			}
+
+			// Record that this skill has been loaded for this task
+			task.loadedSkills.set(skillName, skillContent.path)
+
+			pushToolResult(buildSkillResult(skillName, args, skillContent))
+		} catch (error) {
+			await handleError("executing skill", error as Error)
+		}
+	}
+
+	override async handlePartial(task: Task, block: ToolUse<"skills">): Promise<void> {
+		const skillName: string | undefined = block.params.skill
+		const args: string | undefined = block.params.args
+
+		const partialMessage = JSON.stringify({
+			tool: "skills",
+			skill: skillName,
+			args: args,
+		})
+
+		await task.ask("tool", partialMessage, block.partial).catch(() => {})
+	}
+}
+
+export const skillsTool = new SkillsTool()

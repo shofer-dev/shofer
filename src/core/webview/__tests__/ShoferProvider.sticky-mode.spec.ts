@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import { TelemetryService } from "@shofer/telemetry"
 import { ShoferProvider } from "../ShoferProvider"
 import { ContextProxy } from "../../config/ContextProxy"
-import { Task } from "../../task/Task"
+import { Task } from "@shofer/core"
 import type { HistoryItem, ProviderName } from "@shofer/types"
 
 vi.mock("vscode", () => ({

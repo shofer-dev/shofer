@@ -117,10 +117,10 @@ const mockShofer = {
 }
 
 // Import the class to test AFTER mocks are set up
-import { newTaskTool } from "../NewTaskTool"
+import { newTaskTool } from "@shofer/core"
 import { getModeBySlug } from "@shofer/core"
 import * as vscode from "vscode"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 
 /**
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.

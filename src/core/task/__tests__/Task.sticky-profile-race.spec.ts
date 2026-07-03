@@ -8,8 +8,8 @@ import type { ProviderSettings } from "@shofer/types"
 // which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
 vi.mock("../../../extension", () => ({}))
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
 
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {

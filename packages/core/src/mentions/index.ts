@@ -1,0 +1,433 @@
+import fs from "fs/promises"
+import * as path from "path"
+
+import { isBinaryFile } from "isbinaryfile"
+import { getHost } from "@shofer/types"
+
+import { mentionRegexGlobal, commandRegexGlobal, unescapeSpaces } from "@shofer/types"
+import { taskLog } from "../logging/subsystems.js"
+
+import { getCommitInfo, getWorkingState } from "../utils/git.js"
+
+import { extractTextFromFileWithMetadata, type ExtractTextResult } from "../integrations/misc/extract-text.js"
+import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file.js"
+
+import { FileContextTracker } from "../context-tracking/FileContextTracker.js"
+
+import { ShoferIgnoreController } from "../ignore/ShoferIgnoreController.js"
+import { getCommand as getSlashCommand, type Command } from "../services/command/commands.js"
+import { buildSkillResult, resolveSkillContentForMode, type SkillLookup } from "../services/skills/skillInvocation.js"
+import type { SkillContent } from "@shofer/types"
+import { webviewLog } from "../logging/subsystems.js"
+
+export async function openMention(cwd: string, mention?: string): Promise<void> {
+	if (!mention) {
+		return
+	}
+
+	if (mention.startsWith("/")) {
+		// Slice off the leading slash and unescape any spaces in the path
+		const relPath = unescapeSpaces(mention.slice(1))
+		const absPath = path.resolve(cwd, relPath)
+		if (mention.endsWith("/")) {
+			await getHost().editor.revealInExplorer(absPath)
+		} else {
+			await getHost().editor.openFile(absPath)
+		}
+	} else if (mention === "problems") {
+		await getHost().editor.focusPanel("problems")
+	} else if (mention === "terminal") {
+		await getHost().editor.focusPanel("terminal")
+	} else if (mention.startsWith("http")) {
+		await getHost().external.openExternal(mention)
+	}
+}
+
+/**
+ * Represents a content block generated from an @ mention.
+ * These are returned separately from the user's text to enable
+ * proper formatting as distinct message blocks.
+ */
+export interface MentionContentBlock {
+	type: "file" | "folder" | "url" | "diagnostics" | "git_changes" | "git_commit" | "terminal" | "command"
+	/** Path for file/folder mentions */
+	path?: string
+	/** The content to display */
+	content: string
+	/** Metadata about truncation (for files) */
+	metadata?: {
+		totalLines: number
+		returnedLines: number
+		wasTruncated: boolean
+		linesShown?: [number, number]
+	}
+}
+
+export interface ParseMentionsResult {
+	/** User's text with @ mentions replaced by clean path references */
+	text: string
+	/** Separate content blocks for each mention (file content, URLs, etc.) */
+	contentBlocks: MentionContentBlock[]
+	slashCommandHelp?: string
+	mode?: string // Mode from the first slash command that has one
+	/**
+	 * Skills that were resolved and inlined via slash-style mentions
+	 * (`/skill-name`). Maps skill name → SKILL.md absolute path. The caller
+	 * is responsible for recording these into `Task.loadedSkills` so the
+	 * SkillsButton popover can show them as loaded.
+	 */
+	loadedSkills?: Record<string, string>
+}
+
+/**
+ * Formats file content to look like a read_file tool result.
+ * Includes Gemini-style truncation warning when content is truncated.
+ */
+function formatFileReadResult(filePath: string, result: ExtractTextResult): string {
+	const header = `[read_file for '${filePath}']`
+
+	if (result.wasTruncated && result.linesShown) {
+		const [start, end] = result.linesShown
+		const nextOffset = end + 1
+		return `${header}
+IMPORTANT: File content truncated.
+Status: Showing lines ${start}-${end} of ${result.totalLines} total lines.
+To read more: Use the read_file tool with offset=${nextOffset} and limit=${DEFAULT_LINE_LIMIT}.
+
+File: ${filePath}
+${result.content}`
+	}
+
+	return `${header}
+File: ${filePath}
+${result.content}`
+}
+
+export async function parseMentions(
+	text: string,
+	cwd: string,
+	fileContextTracker?: FileContextTracker,
+	shoferIgnoreController?: ShoferIgnoreController,
+	showShoferIgnoredFiles: boolean = false,
+	includeDiagnosticMessages: boolean = true,
+	maxDiagnosticMessages: number = 50,
+	skillsManager?: SkillLookup,
+	currentMode: string = "code",
+): Promise<ParseMentionsResult> {
+	const mentions: Set<string> = new Set()
+	const validCommands: Map<string, Command> = new Map()
+	const validSkills: Map<string, SkillContent> = new Map()
+	const contentBlocks: MentionContentBlock[] = []
+	let commandMode: string | undefined // Track mode from the first slash command that has one
+
+	taskLog.debug("[DEBUG parseMentions] start")
+	// First pass: check which command mentions exist and cache the results
+	const commandMatches = Array.from(text.matchAll(commandRegexGlobal))
+	taskLog.debug(`[DEBUG parseMentions] commandMatches=${commandMatches.length}`)
+	const uniqueCommandNames = new Set(commandMatches.map(([, commandName]) => commandName!))
+
+	const commandExistenceChecks = await Promise.all(
+		Array.from(uniqueCommandNames).map(async (commandName) => {
+			try {
+				const command = await getSlashCommand(cwd, commandName)
+				if (command) {
+					return { commandName, command, skillContent: null }
+				}
+
+				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
+				webviewLog.info(
+					`[parseMentions] skill lookup: name="${commandName}" skillsManager=${!!skillsManager} found=${!!skillContent} mode=${currentMode}`,
+				)
+				return { commandName, command: undefined, skillContent }
+			} catch (error) {
+				// If there's an error checking command existence, treat it as non-existent
+				webviewLog.info(`[parseMentions] skill lookup ERROR: name="${commandName}" error=${error}`)
+				return { commandName, command: undefined, skillContent: null }
+			}
+		}),
+	)
+
+	// Store valid commands for later use and capture the first mode found
+	for (const { commandName, command, skillContent } of commandExistenceChecks) {
+		if (command) {
+			validCommands.set(commandName, command)
+			// Capture the mode from the first command that has one
+			if (!commandMode && command.mode) {
+				commandMode = command.mode
+			}
+			continue
+		}
+
+		if (skillContent) {
+			validSkills.set(commandName, skillContent)
+		}
+	}
+
+	// Only replace text for commands that actually exist (keep "see below" for commands)
+	taskLog.debug("[DEBUG parseMentions] about to replace command text")
+	let parsedText = text
+	for (const [match, commandName] of commandMatches) {
+		if (validCommands.has(commandName!) || validSkills.has(commandName!)) {
+			parsedText = parsedText.replace(match!, `Command '${commandName}' (see below for command content)`)
+		}
+	}
+
+	// Second pass: handle regular mentions - replace with clean references
+	// Content will be provided as separate blocks that look like read_file results
+	taskLog.debug("[DEBUG parseMentions] about to replace mentions in text")
+	parsedText = parsedText.replace(mentionRegexGlobal, (match, mention) => {
+		mentions.add(mention)
+		if (mention.startsWith("http")) {
+			return `'${mention}'`
+		} else if (mention.startsWith("/")) {
+			// Clean path reference - no "see below" since we format like tool results
+			const mentionPath = mention.slice(1)
+			return mentionPath.endsWith("/") ? `'${mentionPath}'` : `'${mentionPath}'`
+		} else if (mention === "problems") {
+			return `Workspace Problems (see below for diagnostics)`
+		} else if (mention === "git-changes") {
+			return `Working directory changes (see below for details)`
+		} else if (/^[a-f0-9]{7,40}$/.test(mention)) {
+			return `Git commit '${mention}' (see below for commit info)`
+		} else if (mention === "terminal") {
+			return `Terminal Output (see below for output)`
+		}
+		return match
+	})
+	taskLog.debug(`[DEBUG parseMentions] mentions count=${mentions.size}`)
+
+	for (const mention of mentions) {
+		taskLog.debug(`[DEBUG parseMentions] processing mention="${mention}"`)
+		if (mention.startsWith("/")) {
+			const mentionPath = mention.slice(1)
+			try {
+				const fileResult = await getFileOrFolderContentWithMetadata(
+					mentionPath,
+					cwd,
+					shoferIgnoreController,
+					showShoferIgnoredFiles,
+					fileContextTracker,
+				)
+				contentBlocks.push(fileResult)
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : String(error)
+				contentBlocks.push({
+					type: mention.endsWith("/") ? "folder" : "file",
+					path: mentionPath,
+					content: `[read_file for '${mentionPath}']\nError: ${errorMsg}`,
+				})
+			}
+		} else if (mention === "problems") {
+			try {
+				const problems = await getWorkspaceProblems(cwd, includeDiagnosticMessages, maxDiagnosticMessages)
+				parsedText += `\n\n<workspace_diagnostics>\n${problems}\n</workspace_diagnostics>`
+			} catch (error) {
+				parsedText += `\n\n<workspace_diagnostics>\nError fetching diagnostics: ${error instanceof Error ? error.message : String(error)}\n</workspace_diagnostics>`
+			}
+		} else if (mention === "git-changes") {
+			try {
+				const workingState = await getWorkingState(cwd)
+				parsedText += `\n\n<git_working_state>\n${workingState}\n</git_working_state>`
+			} catch (error) {
+				parsedText += `\n\n<git_working_state>\nError fetching working state: ${error instanceof Error ? error.message : String(error)}\n</git_working_state>`
+			}
+		} else if (/^[a-f0-9]{7,40}$/.test(mention)) {
+			try {
+				const commitInfo = await getCommitInfo(mention, cwd)
+				parsedText += `\n\n<git_commit hash="${mention}">\n${commitInfo}\n</git_commit>`
+			} catch (error) {
+				parsedText += `\n\n<git_commit hash="${mention}">\nError fetching commit info: ${error instanceof Error ? error.message : String(error)}\n</git_commit>`
+			}
+		} else if (mention === "terminal") {
+			try {
+				const terminalOutput = await getLatestTerminalOutput()
+				parsedText += `\n\n<terminal_output>\n${terminalOutput}\n</terminal_output>`
+			} catch (error) {
+				parsedText += `\n\n<terminal_output>\nError fetching terminal output: ${error instanceof Error ? error.message : String(error)}\n</terminal_output>`
+			}
+		}
+	}
+
+	// Process valid command mentions using cached results
+	let slashCommandHelp = ""
+	for (const [commandName, command] of validCommands) {
+		try {
+			let commandOutput = ""
+			if (command.description) {
+				commandOutput += `Description: ${command.description}\n\n`
+			}
+			commandOutput += command.content
+			slashCommandHelp += `\n\n<command name="${commandName}">\n${commandOutput}\n</command>`
+		} catch (error) {
+			slashCommandHelp += `\n\n<command name="${commandName}">\nError loading command '${commandName}': ${error instanceof Error ? error.message : String(error)}\n</command>`
+		}
+	}
+
+	const loadedSkills: Record<string, string> = {}
+	for (const [skillName, skillContent] of validSkills) {
+		slashCommandHelp += `\n\n${buildSkillResult(skillName, undefined, skillContent)}`
+		loadedSkills[skillName] = skillContent.path
+	}
+
+	return {
+		text: parsedText,
+		contentBlocks,
+		mode: commandMode,
+		slashCommandHelp: slashCommandHelp.trim() || undefined,
+		loadedSkills: Object.keys(loadedSkills).length > 0 ? loadedSkills : undefined,
+	}
+}
+
+/**
+ * Gets file or folder content and returns it as a MentionContentBlock
+ * formatted to look like a read_file tool result.
+ */
+async function getFileOrFolderContentWithMetadata(
+	mentionPath: string,
+	cwd: string,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	shoferIgnoreController?: any,
+	showShoferIgnoredFiles: boolean = false,
+	fileContextTracker?: FileContextTracker,
+): Promise<MentionContentBlock> {
+	const unescapedPath = unescapeSpaces(mentionPath)
+	const absPath = path.resolve(cwd, unescapedPath)
+	const isFolder = mentionPath.endsWith("/")
+
+	try {
+		const stats = await fs.stat(absPath)
+
+		if (stats.isFile()) {
+			// Avoid trying to include image binary content as text context.
+			// Image mentions are handled separately via image attachment flow.
+			const isBinary = await isBinaryFile(absPath).catch(() => false)
+			if (isBinary) {
+				return {
+					type: "file",
+					path: mentionPath,
+					content: `[read_file for '${mentionPath}']\nNote: Binary file omitted from context.`,
+				}
+			}
+			if (shoferIgnoreController && !shoferIgnoreController.validateAccess(unescapedPath)) {
+				return {
+					type: "file",
+					path: mentionPath,
+					content: `[read_file for '${mentionPath}']\nNote: File is ignored by .shoferignore.`,
+				}
+			}
+			try {
+				const result = await extractTextFromFileWithMetadata(absPath)
+
+				// Track file context
+				if (fileContextTracker) {
+					await fileContextTracker.trackFileContext(mentionPath, "file_mentioned")
+				}
+
+				return {
+					type: "file",
+					path: mentionPath,
+					content: formatFileReadResult(mentionPath, result),
+					metadata: {
+						totalLines: result.totalLines,
+						returnedLines: result.returnedLines,
+						wasTruncated: result.wasTruncated,
+						linesShown: result.linesShown,
+					},
+				}
+			} catch (error) {
+				const errorMsg = error instanceof Error ? error.message : String(error)
+				return {
+					type: "file",
+					path: mentionPath,
+					content: `[read_file for '${mentionPath}']\nError: ${errorMsg}`,
+				}
+			}
+		} else if (stats.isDirectory()) {
+			const entries = await fs.readdir(absPath, { withFileTypes: true })
+			let folderListing = ""
+			const fileReadResults: string[] = []
+			const LOCK_SYMBOL = "🔒"
+
+			for (let index = 0; index < entries.length; index++) {
+				const entry = entries[index]!
+				const isLast = index === entries.length - 1
+				const linePrefix = isLast ? "└── " : "├── "
+				const entryPath = path.join(absPath, entry.name)
+
+				let isIgnored = false
+				if (shoferIgnoreController) {
+					isIgnored = !shoferIgnoreController.validateAccess(entryPath)
+				}
+
+				if (isIgnored && !showShoferIgnoredFiles) {
+					continue
+				}
+
+				const displayName = isIgnored ? `${LOCK_SYMBOL} ${entry.name}` : entry.name
+
+				if (entry.isFile()) {
+					folderListing += `${linePrefix}${displayName}\n`
+					if (!isIgnored) {
+						const filePath = path.join(mentionPath, entry.name)
+						const absoluteFilePath = path.resolve(absPath, entry.name)
+						try {
+							const isBinary = await isBinaryFile(absoluteFilePath).catch(() => false)
+							if (!isBinary) {
+								const result = await extractTextFromFileWithMetadata(absoluteFilePath)
+								fileReadResults.push(formatFileReadResult(filePath.toPosix(), result))
+							}
+						// eslint-disable-next-line @typescript-eslint/no-unused-vars
+						} catch (error) {
+							// Skip files that can't be read
+						}
+					}
+				} else if (entry.isDirectory()) {
+					folderListing += `${linePrefix}${displayName}/\n`
+				} else {
+					folderListing += `${linePrefix}${displayName}\n`
+				}
+			}
+
+			// Format folder content similar to read_file output
+			let content = `[read_file for folder '${mentionPath}']\nFolder listing:\n${folderListing}`
+			if (fileReadResults.length > 0) {
+				content += `\n\n--- File Contents ---\n\n${fileReadResults.join("\n\n")}`
+			}
+
+			return {
+				type: "folder",
+				path: mentionPath,
+				content,
+			}
+		} else {
+			return {
+				type: isFolder ? "folder" : "file",
+				path: mentionPath,
+				content: `[read_file for '${mentionPath}']\nError: Unable to read (not a file or directory)`,
+			}
+		}
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : String(error)
+		throw new Error(`Failed to access path "${mentionPath}": ${errorMsg}`)
+	}
+}
+
+async function getWorkspaceProblems(
+	cwd: string,
+	includeDiagnosticMessages: boolean = true,
+	maxDiagnosticMessages: number = 50,
+): Promise<string> {
+	return getHost().editor.getWorkspaceProblems(cwd, includeDiagnosticMessages, maxDiagnosticMessages)
+}
+
+/**
+ * Gets the contents of the active terminal
+ * @returns The terminal contents as a string
+ */
+export async function getLatestTerminalOutput(): Promise<string> {
+	return getHost().editor.readTerminalContents()
+}
+
+// Export processUserContentMentions from its own file
+export { processUserContentMentions } from "./processUserContentMentions.js"
+export type { ProcessUserContentMentionsResult } from "./processUserContentMentions.js"

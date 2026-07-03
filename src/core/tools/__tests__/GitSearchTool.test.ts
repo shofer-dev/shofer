@@ -1,5 +1,5 @@
-import { GitSearchTool } from "../GitSearchTool"
-import { GitIndexManager } from "../../../services/git-index/git-index-manager"
+import { GitSearchTool } from "@shofer/core"
+import { GitIndexManager } from "../../../services/git-index/git-index-manager.js"
 
 vi.mock("../../../services/git-index/git-index-manager", () => ({
 	GitIndexManager: {

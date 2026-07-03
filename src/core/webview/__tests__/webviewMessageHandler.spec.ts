@@ -171,7 +171,7 @@ vi.mock("../../mentions/resolveImageMentions", () => ({
 	})),
 }))
 
-import { resolveImageMentions } from "../../mentions/resolveImageMentions"
+import { resolveImageMentions } from "@shofer/core"
 
 describe("webviewMessageHandler - requestLmStudioModels", () => {
 	beforeEach(() => {

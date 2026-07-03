@@ -1,7 +1,7 @@
 // npx vitest core/task/__tests__/grace-retry-errors.spec.ts
 
 import * as os from "os"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host"
+import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 import * as path from "path"
 import * as vscode from "vscode"
 
@@ -12,9 +12,9 @@ import { TelemetryService } from "@shofer/telemetry"
 // which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
 vi.mock("../../../extension", () => ({}))
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
-import { ContextProxy } from "../../config/ContextProxy"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
+import { ContextProxy } from "../../config/ContextProxy.js"
 
 // Mock @shofer/core
 vi.mock("@shofer/core", async (importOriginal) => ({

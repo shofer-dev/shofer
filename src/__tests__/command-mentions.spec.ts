@@ -1,4 +1,4 @@
-import { parseMentions } from "../core/mentions"
+import { parseMentions } from "@shofer/core"
 import { getSlashCommand } from "@shofer/core"
 
 // Mock the dependencies — the slash-command loader now lives in @shofer/core

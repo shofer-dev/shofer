@@ -1,7 +1,7 @@
 import { ShoferEventName, ProviderSettings, TokenUsage, ToolUsage } from "@shofer/types"
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
 import { hasToolUsageChanged, hasTokenUsageChanged } from "@shofer/core"
 import { appendTaskMessage } from "../../task-persistence"
 // Prevent the transitive import graph from loading extension.ts,

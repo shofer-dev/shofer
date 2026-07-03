@@ -102,7 +102,7 @@ import { forceFullModelDetailsLoad, hasLoadedFullDetails } from "@shofer/core"
 import { ContextProxy } from "../config/ContextProxy"
 import { ProviderSettingsManager } from "../config/ProviderSettingsManager"
 import { CustomModesManager } from "../config/CustomModesManager"
-import { Task } from "../task/Task"
+import { Task } from "@shofer/core"
 import type { WorkflowTask } from "../workflow/WorkflowTask"
 
 import { webviewMessageHandler } from "./webviewMessageHandler"
@@ -2071,7 +2071,7 @@ export class ShoferProvider
 				if (!task) return
 
 				try {
-					const { getChangedFiles } = await import("../file-changes/ChangedFilesService")
+					const { getChangedFiles } = await import("@shofer/core")
 					const payload = await getChangedFiles(task)
 					this.debug(
 						`[ShoferProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,

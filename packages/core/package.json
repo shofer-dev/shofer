@@ -33,6 +33,7 @@
 		"async-mutex": "^0.5.0",
 		"axios": "^1.12.0",
 		"chokidar": "^4.0.1",
+		"clone-deep": "^4.0.1",
 		"delay": "^6.0.0",
 		"diff": "^5.2.0",
 		"esbuild": "^0.25.0",
@@ -48,6 +49,7 @@
 		"ignore": "^7.0.3",
 		"isbinaryfile": "^5.0.2",
 		"json-stream-stringify": "^3.1.6",
+		"lodash.debounce": "^4.0.8",
 		"mammoth": "^1.9.1",
 		"node-cache": "^5.1.2",
 		"ollama": "^0.5.17",
@@ -74,7 +76,9 @@
 		"zod": "^3.25.61"
 	},
 	"devDependencies": {
+		"@types/clone-deep": "^4.0.4",
 		"@types/diff": "^5.2.1",
+		"@types/lodash.debounce": "^4.0.9",
 		"@types/ps-tree": "^1.1.6",
 		"@types/shell-quote": "^1.7.5",
 		"@shofer/config-eslint": "workspace:^",

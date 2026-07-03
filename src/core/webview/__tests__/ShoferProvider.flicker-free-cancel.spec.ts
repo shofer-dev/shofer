@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 vi.mock("../../../extension", () => ({}))
 
 import { ShoferProvider } from "../ShoferProvider"
-import { Task } from "../../task/Task"
+import { Task } from "@shofer/core"
 import { ContextProxy } from "../../config/ContextProxy"
 import type { ProviderSettings, HistoryItem } from "@shofer/types"
 

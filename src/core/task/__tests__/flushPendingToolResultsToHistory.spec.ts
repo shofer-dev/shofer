@@ -11,9 +11,9 @@ import { TelemetryService } from "@shofer/telemetry"
 // which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
 vi.mock("../../../extension", () => ({}))
 
-import { Task } from "../Task"
-import { ShoferProvider } from "../../webview/ShoferProvider"
-import { ContextProxy } from "../../config/ContextProxy"
+import { Task } from "@shofer/core"
+import { ShoferProvider } from "../../webview/ShoferProvider.js"
+import { ContextProxy } from "../../config/ContextProxy.js"
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
