@@ -1,60 +1,17 @@
 // npx vitest core/tools/__tests__/newTaskTool.spec.ts
 
-import type { AskApproval, HandleError, NativeToolArgs, ToolUse } from "@shofer/core"
+import type { AskApproval, HandleError, NativeToolArgs, ToolUse } from "@shofer/types"
+import { setHost, createInMemoryHost, type HostBridge } from "@shofer/types"
 
-// Mock vscode module
-vi.mock("vscode", () => ({
-	workspace: {
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(),
-		})),
-	},
-}))
+// After the v3 carve-out the tool + its intra-core deps (formatResponse,
+// parseMarkdownChecklist) live inside @shofer/core and call each other via RELATIVE
+// imports, so a barrel `vi.mock("@shofer/core")` can no longer intercept them. The tool
+// now reads its VS Code setting via `getHost().config.get(Package.name, …)` and resolves
+// modes via the real `getModeBySlug` / `parseMarkdownChecklist` — drive those directly.
 
-// Mock Package module
-
-// Mock other modules first - these are hoisted to the top
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	Package: {
-		name: "shofer",
-		publisher: "shofer",
-		version: "1.0.0",
-		outputChannel: "Shofer",
-	},
-	getModeBySlug: vi.fn(),
-	defaultModeSlug: "code",
-	formatResponse: {
-		toolError: vi.fn((msg: string) => `Tool Error: ${msg}`),
-	},
-}))
-
-vi.mock("../updateTodoListTool", () => ({
-	parseMarkdownChecklist: vi.fn((md: string) => {
-		// Simple mock implementation
-		const lines = md.split("\n").filter((line) => line.trim())
-		return lines.map((line, index) => {
-			let status = "pending"
-			let content = line
-
-			if (line.includes("[x]") || line.includes("[X]")) {
-				status = "completed"
-				content = line.replace(/^\[x\]\s*/i, "")
-			} else if (line.includes("[-]") || line.includes("[~]")) {
-				status = "in_progress"
-				content = line.replace(/^\[-\]\s*/, "").replace(/^\[~\]\s*/, "")
-			} else {
-				content = line.replace(/^\[\s*\]\s*/, "")
-			}
-
-			return {
-				id: `todo-${index}`,
-				content,
-				status,
-			}
-		})
-	}),
-}))
+// Import the tool + collaborators core-relative.
+import { newTaskTool } from "../NewTaskTool.js"
+import { Package } from "../../shared/package.js"
 
 // Provider method mocks — shared across describe blocks
 const mockCreateTask = vi.fn().mockResolvedValue({ taskId: "child-1" })
@@ -116,12 +73,6 @@ const mockShofer = {
 	},
 }
 
-// Import the class to test AFTER mocks are set up
-import { newTaskTool } from "@shofer/core"
-import { getModeBySlug } from "@shofer/core"
-import * as vscode from "vscode"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
-
 /**
  * Wraps a block with nativeArgs for the BaseTool.handle() native-args path.
  * `is_background` is forwarded so the tool's boolean normalisation runs correctly.
@@ -151,17 +102,18 @@ const withNativeArgs = (block: ToolUse<"new_task">): ToolUse<"new_task"> => {
 	}
 }
 
+/** Active in-memory host — the tool reads its VS Code setting via getHost().config. */
+let host: HostBridge
+
+/** Drive the `newTaskRequireTodos` setting the tool reads via getHost().config.get. */
+const setRequireTodos = (value: boolean) => host.config.set(Package.name, "newTaskRequireTodos", value)
+
 describe("newTaskTool", () => {
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		host = createInMemoryHost()
+		setHost(host)
 		vi.clearAllMocks()
 		mockAskApproval.mockResolvedValue(true)
-		vi.mocked(getModeBySlug).mockReturnValue({
-			slug: "code",
-			name: "Code Mode",
-			roleDefinition: "Test role definition",
-			tools: ["execute", "read", "write"],
-		})
 		mockShofer.consecutiveMistakeCount = 0
 		mockShofer.didToolFailInCurrentTurn = false
 		mockShofer.isPaused = false
@@ -176,11 +128,7 @@ describe("newTaskTool", () => {
 		mockGetTaskWithId.mockResolvedValue({
 			historyItem: { id: "mock-parent-task-id", status: "active", childIds: [] },
 		})
-		// Default: VSCode setting is disabled
-		const mockGet = vi.fn().mockReturnValue(false)
-		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-			get: mockGet,
-		} as any)
+		// Default: setting is disabled (in-memory host returns the default false).
 	})
 
 	it("should correctly un-escape \\\\@ to \\@ in the message passed to the new task", async () => {
@@ -455,10 +403,7 @@ describe("newTaskTool", () => {
 
 	describe("VSCode setting: newTaskRequireTodos", () => {
 		it("should NOT require todos when VSCode setting is disabled (default)", async () => {
-			const mockGet = vi.fn().mockReturnValue(false)
-			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-				get: mockGet,
-			} as any)
+			setRequireTodos(false)
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -495,10 +440,7 @@ describe("newTaskTool", () => {
 		})
 
 		it("should REQUIRE todos when VSCode setting is enabled", async () => {
-			const mockGet = vi.fn().mockReturnValue(true)
-			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-				get: mockGet,
-			} as any)
+			setRequireTodos(true)
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -526,10 +468,7 @@ describe("newTaskTool", () => {
 		})
 
 		it("should work with todos when VSCode setting is enabled", async () => {
-			const mockGet = vi.fn().mockReturnValue(true)
-			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-				get: mockGet,
-			} as any)
+			setRequireTodos(true)
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -571,10 +510,7 @@ describe("newTaskTool", () => {
 		})
 
 		it("should work with empty todos string when VSCode setting is enabled", async () => {
-			const mockGet = vi.fn().mockReturnValue(true)
-			vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-				get: mockGet,
-			} as any)
+			setRequireTodos(true)
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -610,11 +546,7 @@ describe("newTaskTool", () => {
 		})
 
 		it("should check VSCode setting with Package.name configuration key", async () => {
-			const mockGet = vi.fn().mockReturnValue(false)
-			const mockGetConfiguration = vi.fn().mockReturnValue({
-				get: mockGet,
-			} as any)
-			vi.mocked(vscode.workspace.getConfiguration).mockImplementation(mockGetConfiguration)
+			const getSpy = vi.spyOn(host.config, "get")
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -633,19 +565,18 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("shofer")
-			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
+			// The tool reads the setting via getHost().config.get(Package.name, key, default).
+			expect(getSpy).toHaveBeenCalledWith("shofer", "newTaskRequireTodos", false)
 		})
 
-		it("should use current Package.name value (shofer-nightly) when accessing VSCode configuration", async () => {
-			const mockGet = vi.fn().mockReturnValue(false)
-			const mockGetConfiguration = vi.fn().mockReturnValue({
-				get: mockGet,
-			} as any)
-			vi.mocked(vscode.workspace.getConfiguration).mockImplementation(mockGetConfiguration)
-
-			const pkg = await import("@shofer/core")
-			;(pkg.Package as any).name = "shofer-nightly"
+		it("should use current Package.name value (shofer-nightly) when accessing host configuration", async () => {
+			// Package.name resolves against the active host's appInfo — swap it to nightly.
+			host = {
+				...createInMemoryHost(),
+				env: { ...host.env, appInfo: { ...host.env.appInfo, name: "shofer-nightly" } },
+			}
+			setHost(host)
+			const getSpy = vi.spyOn(host.config, "get")
 
 			const block: ToolUse<"new_task"> = {
 				type: "tool_use",
@@ -664,8 +595,7 @@ describe("newTaskTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(mockGetConfiguration).toHaveBeenCalledWith("shofer-nightly")
-			expect(mockGet).toHaveBeenCalledWith("newTaskRequireTodos", false)
+			expect(getSpy).toHaveBeenCalledWith("shofer-nightly", "newTaskRequireTodos", false)
 		})
 	})
 })
@@ -679,21 +609,13 @@ describe("softResultLength and softTimeoutSec defaults", () => {
 	 */
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		host = createInMemoryHost()
+		setHost(host)
 		vi.clearAllMocks()
 		mockAskApproval.mockResolvedValue(true)
-		vi.mocked(getModeBySlug).mockReturnValue({
-			slug: "code",
-			name: "Code Mode",
-			roleDefinition: "Test role definition",
-			tools: ["execute", "read", "write"],
-		})
 		mockShofer.consecutiveMistakeCount = 0
 		mockShofer.didToolFailInCurrentTurn = false
 		mockCreateTask.mockResolvedValue({ taskId: "child-1" })
-		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-			get: vi.fn().mockReturnValue(false),
-		} as any)
 	})
 
 	it("applies defaults when softResultLength and softTimeoutSec are missing from nativeArgs", async () => {
@@ -857,15 +779,7 @@ describe("newTaskTool delegation flow", () => {
 			},
 		}
 
-		vi.mocked(getModeBySlug).mockReturnValue({
-			slug: "code",
-			name: "Code Mode",
-			roleDefinition: "Test role definition",
-			tools: ["execute", "read", "write"],
-		})
-		vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-			get: vi.fn().mockReturnValue(false),
-		} as any)
+		setHost(createInMemoryHost())
 
 		const block: ToolUse<"new_task"> = {
 			type: "tool_use",
