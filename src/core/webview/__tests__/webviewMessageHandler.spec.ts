@@ -146,6 +146,13 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	toRelativePath: vi.fn(),
 	getWorkspacePath: vi.fn(),
 	getWorkspacePathForContext: vi.fn(),
+	// resolveImageMentions moved into @shofer/core during the v3 carve-out; the SUT
+	// imports it from the barrel, so it must be mocked here (formerly
+	// vi.mock("../../mentions/resolveImageMentions")).
+	resolveImageMentions: vi.fn(async ({ text, images }: { text: string; images?: string[] }) => ({
+		text,
+		images: [...(images ?? []), "data:image/png;base64,from-mention"],
+	})),
 	t: vi.fn((key: string, args?: Record<string, any>) => {
 		// For the delete confirmation with rules, we need to return the interpolated string
 		if (key === "common:confirmation.delete_custom_mode_with_rules" && args) {
@@ -163,13 +170,6 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 	}),
 }))
 vi.mock("../../../utils/globalContext")
-
-vi.mock("../../mentions/resolveImageMentions", () => ({
-	resolveImageMentions: vi.fn(async ({ text, images }: { text: string; images?: string[] }) => ({
-		text,
-		images: [...(images ?? []), "data:image/png;base64,from-mention"],
-	})),
-}))
 
 import { resolveImageMentions } from "@shofer/core"
 
