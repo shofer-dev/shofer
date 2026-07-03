@@ -8,6 +8,7 @@
 
 import { writeFileSync, mkdirSync } from "fs"
 import { dirname } from "path"
+import { RING_BUFFER_CAPACITY, TASK_RING_CAPACITY, MAX_TASK_BUFFERS } from "../constants.js"
 import type { LogSink } from "./types.js"
 import {
 	CompactTransportConfig,
@@ -42,19 +43,9 @@ function formatHumanLine(entry: CompactLogEntry): string {
 	return `${ts} ${level} ${ctx}${entry.m}${data}`
 }
 
-/** Maximum number of recent human-readable log lines kept in memory. */
-const RING_BUFFER_CAPACITY = 5000
-
-/** Maximum number of log lines retained per task in the per-task buffers. */
-const TASK_RING_CAPACITY = 2000
-
-/**
- * Maximum number of distinct tasks whose log buffers are retained at once.
- * Bounds memory when many tasks run over a session; the oldest task buffer is
- * evicted when a new task exceeds this cap. Explicit `clearTaskLogs()` on task
- * disposal keeps this from being hit in normal use.
- */
-const MAX_TASK_BUFFERS = 64
+// Tunable in-memory buffer caps live in the central constants registry.
+// See RING_BUFFER_CAPACITY / TASK_RING_CAPACITY / MAX_TASK_BUFFERS in
+// `../constants.js` for their meaning and rationale.
 
 /**
  * Implements the compact logging transport using VS Code Output Channel.

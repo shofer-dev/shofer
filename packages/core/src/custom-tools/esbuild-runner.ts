@@ -12,6 +12,8 @@
 import path from "path"
 import fs from "fs"
 import { builtinModules } from "module"
+
+import { ESBUILD_PROJECT_ROOT_MAX_DEPTH } from "../constants.js"
 import { fileURLToPath } from "url"
 import { execa } from "execa"
 
@@ -80,7 +82,7 @@ export interface EsbuildOptions {
  * so we don't need special pnpm handling.
  */
 function findEsbuildWasmScript(startDir: string): string | null {
-	const maxDepth = 10
+	const maxDepth = ESBUILD_PROJECT_ROOT_MAX_DEPTH
 	let currentDir = path.resolve(startDir)
 	const root = path.parse(currentDir).root
 

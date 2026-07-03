@@ -103,6 +103,16 @@ import { getWorkspacePath } from "../path/path.js"
 import { sanitizeToolUseId } from "../utils/tool-id.js"
 import { getTaskDirectoryPath } from "../utils/storage.js"
 import { BlobStore, DEFAULT_BLOB_CAP_BYTES } from "../blob-store/BlobStore.js"
+import {
+	MAX_EXPONENTIAL_BACKOFF_SECONDS,
+	DEFAULT_USAGE_COLLECTION_TIMEOUT_MS,
+	FORCED_CONTEXT_REDUCTION_PERCENT,
+	MAX_CONTEXT_WINDOW_RETRIES,
+	MCP_READY_DEADLINE_MS,
+	TASK_TOKEN_USAGE_EMIT_INTERVAL_MS,
+	TASK_SAVE_DEBOUNCE_INTERVAL_MS,
+	TASK_PARTIAL_APPEND_THROTTLE_MS,
+} from "../constants.js"
 
 // prompts
 import { formatResponse } from "../prompts/responses.js"
@@ -148,12 +158,20 @@ import { mergeConsecutiveApiMessages } from "./mergeConsecutiveApiMessages.js"
 import { taskLog } from "../logging/subsystems.js"
 import { runWithLogTaskContext } from "../logging/logContext.js"
 import { time } from "../utils/perf.js"
-import { recordLlmDuration, incLlmCalls, incLlmErrors, incLlmCost, incLlmTokens, classifyLlmError } from "../metrics/registry.js"
+import {
+	recordLlmDuration,
+	incLlmCalls,
+	incLlmErrors,
+	incLlmCost,
+	incLlmTokens,
+	classifyLlmError,
+} from "../metrics/registry.js"
 
-const MAX_EXPONENTIAL_BACKOFF_SECONDS = 600 // 10 minutes
-const DEFAULT_USAGE_COLLECTION_TIMEOUT_MS = 5000 // 5 seconds
-const FORCED_CONTEXT_REDUCTION_PERCENT = 75 // Keep 75% of context (remove 25%) on context window errors
-const MAX_CONTEXT_WINDOW_RETRIES = 3 // Maximum retries for context window errors
+// Tunable retry / timeout / context-recovery knobs are centralised in
+// `../constants.js`. See MAX_EXPONENTIAL_BACKOFF_SECONDS,
+// DEFAULT_USAGE_COLLECTION_TIMEOUT_MS, FORCED_CONTEXT_REDUCTION_PERCENT,
+// MAX_CONTEXT_WINDOW_RETRIES, MCP_READY_DEADLINE_MS, and the TASK_* throttle
+// intervals there.
 
 export interface TaskOptions extends CreateTaskOptions {
 	provider: TaskProviderLike<Task>
@@ -845,8 +863,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// Tool Usage Cache
 	private toolUsageSnapshot?: ToolUsage
 
-	// Token Usage Throttling - Debounced emit function
-	private readonly TOKEN_USAGE_EMIT_INTERVAL_MS = 2000 // 2 seconds
+	// Token Usage Throttling - Debounced emit function (see ../constants.js)
+	private readonly TOKEN_USAGE_EMIT_INTERVAL_MS = TASK_TOKEN_USAGE_EMIT_INTERVAL_MS
 	private debouncedEmitTokenUsage: ReturnType<typeof debounce>
 
 	// Save Debouncing — reduces write amplification during streaming.
@@ -856,7 +874,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// reducing the fsync+rename rate. Flush at turn boundaries (ask/say
 	// completion, abort) guarantees persistence at every observable
 	// checkpoint.
-	private static readonly SAVE_DEBOUNCE_INTERVAL_MS = 250
+	private static readonly SAVE_DEBOUNCE_INTERVAL_MS = TASK_SAVE_DEBOUNCE_INTERVAL_MS
 	private _debouncedSaveShoferMessages: ReturnType<typeof debounce>
 
 	// H29 — Throttle per-chunk partial-message appends. A streamed message is
@@ -865,7 +883,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// (dedupe keeps the latest), so appending every one is wasted write +
 	// compaction churn. Partial updates are appended at most once per interval;
 	// finalized messages always append so the canonical value is durable.
-	private static readonly PARTIAL_APPEND_THROTTLE_MS = 250
+	private static readonly PARTIAL_APPEND_THROTTLE_MS = TASK_PARTIAL_APPEND_THROTTLE_MS
 	private _lastPartialAppendTs = 0
 
 	// H2.bis — Incremental token-usage caching.
@@ -3393,7 +3411,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// non-responsive HTTP/SSE endpoint), so a misbehaving server could otherwise
 			// hang task startup indefinitely. The MCP-tool-count warning is informational
 			// only, so we cap the wait and skip the warning if the hub isn't ready in time.
-			const MCP_READY_DEADLINE_MS = 12_000
+			// Deadline value lives in ../constants.js.
 			const mcpHubFactory = getMcpHubFactory()
 			const mcpHub = await Promise.race([
 				mcpHubFactory ? mcpHubFactory(provider) : Promise.resolve(undefined),
@@ -6104,7 +6122,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				// If we reach here without continuing, return false (will always be false for now)
 				return false
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			} catch (error) {
 				// This should never happen since the only thing that can throw an
 				// error is the attemptApiRequest, which is wrapped in a try catch
@@ -7305,9 +7323,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return checkpointSave(this, force, suppressMessage)
 	}
 
-	private buildCleanConversationHistory(
-		messages: ApiMessage[],
-	): Array<
+	private buildCleanConversationHistory(messages: ApiMessage[]): Array<
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		Anthropic.Messages.MessageParam | { type: "reasoning"; encrypted_content: string; id?: string; summary?: any[] }
 	> {
@@ -7368,7 +7384,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						role: "assistant",
 						content: assistantContent,
 						reasoning_details: msgWithDetails.reasoning_details,
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					} as any)
 
 					continue
