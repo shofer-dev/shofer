@@ -90,23 +90,14 @@ vi.mock("../../../utils/tts", () => ({
 	setTtsSpeed: vi.fn(),
 }))
 
+// NOTE: Task moved into @shofer/core during the v3 carve-out. Both ShoferProvider
+// (the SUT) and this test import Task through the @shofer/core barrel, so the Task
+// mock lives here in the partial barrel mock (formerly vi.mock("../../task/Task")).
 vi.mock("@shofer/core", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@shofer/core")>()),
 	getSettingsDirectoryPath: vi.fn().mockResolvedValue("/test/settings/path"),
 	getTaskDirectoryPath: vi.fn().mockResolvedValue("/test/task/path"),
 	buildApiHandler: vi.fn(),
-}))
-
-vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
-	return {
-		default: vi.fn().mockImplementation(() => ({
-			initializeFilePaths: vi.fn(),
-			dispose: vi.fn(),
-		})),
-	}
-})
-
-vi.mock("../../task/Task", () => ({
 	Task: vi.fn().mockImplementation((options) => {
 		let _taskApiConfigName: string | undefined = undefined
 		const mockTask = {
@@ -138,6 +129,15 @@ vi.mock("../../task/Task", () => ({
 		return mockTask
 	}),
 }))
+
+vi.mock("../../../integrations/workspace/WorkspaceTracker", () => {
+	return {
+		default: vi.fn().mockImplementation(() => ({
+			initializeFilePaths: vi.fn(),
+			dispose: vi.fn(),
+		})),
+	}
+})
 
 vi.mock("@shofer/cloud", () => ({
 	CloudService: {
