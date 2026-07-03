@@ -465,7 +465,22 @@ export class NodeRegistry {
 	}
 
 	getState(): ShoferNodesState {
-		return { nodes: this.buildNodeViews(), activeNodeId: this.activeNodeId() }
+		return {
+			nodes: this.buildNodeViews(),
+			activeNodeId: this.activeNodeId(),
+			blockedRemoteAsk: this.blockedRemoteAsk(),
+		}
+	}
+
+	/**
+	 * When the focused remote shadow is blocked on a non-auto-approved ask, describe
+	 * it for the webview notice. Interactive remote approvals are out of scope (L3),
+	 * so we surface the block instead of hanging on dead approve/deny buttons.
+	 */
+	private blockedRemoteAsk(): ShoferNodesState["blockedRemoteAsk"] {
+		const shadow = this.getFocusedShadow()
+		if (!shadow?.blockedOnAsk) return undefined
+		return { nodeId: shadow.executorId, nodeLabel: shadow.nodeLabel, text: shadow.blockedAskText }
 	}
 
 	/** The pool the controller drives (Level 2 routes task creation through it). */

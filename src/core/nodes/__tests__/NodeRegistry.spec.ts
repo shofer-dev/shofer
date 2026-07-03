@@ -372,6 +372,8 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 
 		const shadow = h.registry.getFocusedShadow()!
 		expect(shadow.blockedOnAsk).toBe(true)
+		// The blocked ask is surfaced in the pushed nodes state (never hangs).
+		expect(h.registry.getState().blockedRemoteAsk).toMatchObject({ nodeId: "r1", nodeLabel: "box" })
 	})
 
 	// ── L2: dynamic activeNodeId + focus swaps ───────────────────────────────────

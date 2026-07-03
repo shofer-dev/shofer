@@ -3908,13 +3908,17 @@ export class ShoferProvider
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
 			hasMoreShoferMessages: focusedShadow ? false : (currentTask?.hasMoreShoferMessages ?? false),
-			currentTaskTodos: currentTask?.todoList || [],
-			messageQueue: currentTask?.messageQueueService?.messages ?? [],
+			// L2/E: a remote shadow's todos/queue live on the remote — never surface
+			// the local task's here.
+			currentTaskTodos: focusedShadow ? [] : currentTask?.todoList || [],
+			messageQueue: focusedShadow ? [] : (currentTask?.messageQueueService?.messages ?? []),
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
 			ttsSpeed: ttsSpeed ?? 1.0,
-			enableCheckpoints: enableCheckpoints ?? true,
+			// L2/E: checkpoints reference the REMOTE filesystem — disable the
+			// checkpoint UI entirely for a remote-owned (shadow) task.
+			enableCheckpoints: focusedShadow ? false : (enableCheckpoints ?? true),
 			checkpointTimeout: checkpointTimeout ?? DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 			shouldShowAnnouncement:
 				telemetrySetting !== "unset" && lastShownAnnouncementId !== this.latestAnnouncementId,
