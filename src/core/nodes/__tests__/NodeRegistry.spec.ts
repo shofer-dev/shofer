@@ -74,7 +74,10 @@ class FakeConn implements INodeConnection {
 		this.disconnect()
 	}
 	/** Test helper: transition and (optionally) set the live api. */
-	drive(status: ShoferNodeConnState, extra: Partial<Pick<FakeConn, "api" | "latencyMs" | "agentVersion" | "error">> = {}): void {
+	drive(
+		status: ShoferNodeConnState,
+		extra: Partial<Pick<FakeConn, "api" | "latencyMs" | "agentVersion" | "error">> = {},
+	): void {
 		Object.assign(this, extra)
 		this.set(status)
 	}
@@ -325,9 +328,14 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		// created → shoferMessageAppended
 		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "created", message: msg(1) }] })
 		// updated → messageUpdated
-		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "updated", message: msg(1, { text: "m1!" }) }] })
+		remote.emit({
+			type: ShoferEventName.Message,
+			args: [{ taskId, action: "updated", message: msg(1, { text: "m1!" }) }],
+		})
 
-		const posts = host.postMessageToWebview.mock.calls.map((c) => c[0] as { type: string; shoferMessage: { ts: number; text?: string } })
+		const posts = host.postMessageToWebview.mock.calls.map(
+			(c) => c[0] as { type: string; shoferMessage: { ts: number; text?: string } },
+		)
 		const renderPosts = posts.filter((p) => p.type === "shoferMessageAppended" || p.type === "messageUpdated")
 		expect(renderPosts).toEqual([
 			{ type: "shoferMessageAppended", shoferMessage: msg(1) },
@@ -373,14 +381,17 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		registry.attachProvider(host)
 
 		// Even a Message tagged with the Local executor must be ignored by the demux.
-		localDrivable.emit({ type: ShoferEventName.Message, args: [{ taskId: "local-1", action: "created", message: msg(1) }] })
+		localDrivable.emit({
+			type: ShoferEventName.Message,
+			args: [{ taskId: "local-1", action: "created", message: msg(1) }],
+		})
 		localDrivable.emit({ type: ShoferEventName.TaskCompleted, args: ["local-1"] })
 
 		expect(host.postMessageToWebview).not.toHaveBeenCalled()
 		expect(registry.getFocusedShadow()).toBeUndefined()
 	})
 
-	it("surfaces a non-auto-approved remote ask as blockedOnAsk (never hangs)", async () => {
+	it("buffers a non-auto-approved remote ask + mirrors it to the webview (interactive approval)", async () => {
 		const host = makeProviderHost()
 		h.registry.attachProvider(host)
 		const remote = makeDrivableAgent("r1-task-1")
@@ -388,16 +399,19 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		await h.registry.connect("r1")
 		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
 		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+		host.postMessageToWebview.mockClear()
 
-		remote.emit({
-			type: ShoferEventName.Message,
-			args: [{ taskId, action: "created", message: msg(2, { type: "ask", ask: "command", autoApproved: false }) }],
-		})
+		const askMessage = msg(2, { type: "ask", ask: "command", autoApproved: false })
+		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "created", message: askMessage }] })
 
+		// The ask is buffered like any other message (no "blocked" dead-end) and
+		// mirrored to the webview so it can render normal approve/deny buttons.
 		const shadow = h.registry.getFocusedShadow()!
-		expect(shadow.blockedOnAsk).toBe(true)
-		// The blocked ask is surfaced in the pushed nodes state (never hangs).
-		expect(h.registry.getState().blockedRemoteAsk).toMatchObject({ nodeId: "r1", nodeLabel: "box" })
+		expect(shadow.messages).toContainEqual(askMessage)
+		expect(host.postMessageToWebview).toHaveBeenCalledWith({
+			type: "shoferMessageAppended",
+			shoferMessage: askMessage,
+		})
 	})
 
 	// ── L2: dynamic activeNodeId + focus swaps ───────────────────────────────────

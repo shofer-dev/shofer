@@ -149,18 +149,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		pendingWorktreeDir,
 		setPendingWorktreeDir,
 		hasMoreShoferMessages,
-		shoferNodes,
 		preferredNodeId,
 	} = useExtensionState()
-
-	// Shofer Nodes L2/E: is the focused task running on a REMOTE node? Remote tasks
-	// run auto-approve on the remote's own settings — the controller can neither
-	// approve nor answer their asks, so approve/deny buttons must be suppressed.
-	const activeRemoteNode = (() => {
-		const active = shoferNodes?.nodes.find((n) => n.isActive)
-		return active && active.kind === "remote" ? active : undefined
-	})()
-	const blockedRemoteAsk = shoferNodes?.blockedRemoteAsk
 
 	// Show a WarningRow when the user sends a message with a retired provider.
 	const [showRetiredProviderWarning, setShowRetiredProviderWarning] = useState(false)
@@ -2524,24 +2514,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									</StandardTooltip>
 								</div>
 							)}
-							{/* L2/E: a remote task's asks are auto-approved on the node — surface
-							     an affordance (or a "cannot respond" notice when it is blocked on a
-							     non-auto-approved ask) INSTEAD of dead approve/deny buttons. */}
-							{activeRemoteNode && (
-								<div className="mb-1 px-[15px] py-1.5 text-xs text-vscode-descriptionForeground flex items-center gap-1.5">
-									<span className="codicon codicon-server" />
-									{blockedRemoteAsk ? (
-										<span className="text-vscode-errorForeground">
-											Cannot respond to a remote ask on {blockedRemoteAsk.nodeLabel}
-											{blockedRemoteAsk.text ? `: ${blockedRemoteAsk.text}` : ""} — interactive
-											remote approvals are not supported.
-										</span>
-									) : (
-										<span>Auto-approved on {activeRemoteNode.label}</span>
-									)}
-								</div>
-							)}
-							{(primaryButtonText || secondaryButtonText) && !activeRemoteNode && (
+							{/* Shofer Nodes: a remote (shadow) task's asks now round-trip to the
+							     executor over the reverse ask channel, so it presents the SAME
+							     approve/deny buttons as a local task (auto-approved asks stay
+							     button-less via the existing autoApproved flag). */}
+							{(primaryButtonText || secondaryButtonText) && (
 								<div className="flex h-9 items-center mb-1 px-[15px]">
 									{primaryButtonText && (
 										<StandardTooltip

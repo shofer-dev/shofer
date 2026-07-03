@@ -34,15 +34,6 @@ export class RemoteTaskShadow {
 	error?: string
 	/** The reduced-but-real conversation, driven by the remote `Message` stream. */
 	messages: ShoferMessage[] = []
-	/**
-	 * True once a NON-auto-approved `ask` was observed. Remote tasks run
-	 * auto-approve (the remote's own settings); an interactive ask cannot be
-	 * answered from the controller (that is L3), so we surface it as a visible
-	 * "cannot respond to remote ask" state rather than hanging silently.
-	 */
-	blockedOnAsk = false
-	/** The text of the ask we are blocked on (for the notice), when known. */
-	blockedAskText?: string
 
 	constructor(opts: { taskId: string; executorId: string; nodeLabel: string; prompt?: string }) {
 		this.taskId = opts.taskId
@@ -55,17 +46,16 @@ export class RemoteTaskShadow {
 	 * Apply a `Message` delta from the remote feed.
 	 * - `created` → append (dedupe by `ts`; a redelivered create updates in place).
 	 * - `updated` → in-place update by `ts` (append if we never saw the create).
-	 * Detects a non-auto-approvable ask and flips {@link blockedOnAsk}.
+	 *
+	 * A non-auto-approved `ask` is buffered like any other message: the webview
+	 * renders the normal approve/deny affordance and the answer round-trips to the
+	 * executor via the reverse ask channel (NodeRegistry.respondToAsk).
 	 */
 	applyMessageDelta(action: "created" | "updated", message: ShoferMessage): void {
 		const idx = this.messages.findIndex((m) => m.ts === message.ts)
 		if (idx === -1) this.messages.push(message)
 		else this.messages[idx] = message
 
-		if (message.type === "ask" && !message.partial && !message.autoApproved) {
-			this.blockedOnAsk = true
-			this.blockedAskText = message.text
-		}
 		if (this.status === "created") this.status = "running"
 	}
 

@@ -75,27 +75,10 @@ export interface ShoferNodeView extends ShoferNodeDef {
 	hasToken?: boolean
 }
 
-/**
- * A remote-owned task that raised an `ask` which the controller CANNOT answer
- * (interactive remote approvals are L3). Surfaced so the webview shows a visible
- * "cannot respond to remote ask" notice instead of hanging on dead buttons.
- */
-export interface BlockedRemoteAsk {
-	nodeId: string
-	nodeLabel: string
-	/** The ask prompt text, when the remote provided one. */
-	text?: string
-}
-
 /** Full nodes snapshot the extension pushes to the webview. */
 export interface ShoferNodesState {
 	nodes: ShoferNodeView[]
 	activeNodeId: string
-	/**
-	 * Set when the focused remote task is blocked on a non-auto-approved ask. The
-	 * webview renders a notice; the controller never silently hangs.
-	 */
-	blockedRemoteAsk?: BlockedRemoteAsk
 }
 
 /** Webview → extension request (carried in `WebviewMessage.shoferNode`). */

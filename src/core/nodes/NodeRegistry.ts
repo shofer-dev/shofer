@@ -241,10 +241,16 @@ export class NodeRegistry {
 
 		if (owner === LOCAL_NODE_ID) {
 			if (!this.renderTarget) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
-			const taskId = await this.renderTarget.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
-				mode: input.mode,
-				apiConfigName: input.apiConfigName,
-			})
+			const taskId = await this.renderTarget.createManagedTask(
+				undefined,
+				input.prompt,
+				input.images,
+				input.worktreeDir,
+				{
+					mode: input.mode,
+					apiConfigName: input.apiConfigName,
+				},
+			)
 			// Record Local ownership so ownerOf()/activeNodeId() report Local. The
 			// task ran fully in-process — never through the pool's createTask.
 			if (taskId) this.pool.assignOwner(taskId, LOCAL_NODE_ID)
@@ -342,7 +348,6 @@ export class NodeRegistry {
 					| undefined
 				if (!payload?.taskId || !payload.message) return
 				const shadow = this.ensureShadow(payload.taskId, executorId)
-				const wasBlocked = shadow.blockedOnAsk
 				shadow.applyMessageDelta(payload.action, payload.message)
 				// Mirror the local gate: only push deltas for the focused shadow.
 				if (this.focusedShadowId === shadow.taskId) {
@@ -352,9 +357,6 @@ export class NodeRegistry {
 							: { type: "messageUpdated", shoferMessage: payload.message },
 					)
 				}
-				// A newly-detected non-auto-approvable ask changes the node view
-				// (surface the "cannot respond to remote ask" state) — re-push nodes.
-				if (!wasBlocked && shadow.blockedOnAsk) this.fireChange()
 				return
 			}
 			case ShoferEventName.TaskCompleted: {
@@ -486,19 +488,7 @@ export class NodeRegistry {
 		return {
 			nodes: this.buildNodeViews(),
 			activeNodeId: this.activeNodeId(),
-			blockedRemoteAsk: this.blockedRemoteAsk(),
 		}
-	}
-
-	/**
-	 * When the focused remote shadow is blocked on a non-auto-approved ask, describe
-	 * it for the webview notice. Interactive remote approvals are out of scope (L3),
-	 * so we surface the block instead of hanging on dead approve/deny buttons.
-	 */
-	private blockedRemoteAsk(): ShoferNodesState["blockedRemoteAsk"] {
-		const shadow = this.getFocusedShadow()
-		if (!shadow?.blockedOnAsk) return undefined
-		return { nodeId: shadow.executorId, nodeLabel: shadow.nodeLabel, text: shadow.blockedAskText }
 	}
 
 	/** The pool the controller drives (Level 2 routes task creation through it). */
