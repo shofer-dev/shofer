@@ -1,88 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import type { ShoferProvider } from "../../webview/ShoferProvider"
-import type { ProviderSettings, ModelInfo } from "@shofer/types"
-
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
-vi.mock("../../../extension", () => ({}))
+import type { ProviderSettings, ModelInfo, TaskProviderLike } from "@shofer/types"
+import { setHost, createInMemoryHost } from "@shofer/types"
+import { TelemetryService } from "@shofer/telemetry"
 
 // All vi.mock() calls are hoisted to the top of the file by Vitest
-// and are applied before any imports are resolved
+// and are applied before any imports are resolved.
+//
+// Task and its deps all live in @shofer/core and call each other via intra-package
+// RELATIVE imports, so a barrel `vi.mock("@shofer/core")` cannot intercept them.
+// We stub Task's concrete relative-imported deps instead.
 
-// Mock vscode module before importing Task
-vi.mock("vscode", () => ({
-	workspace: {
-		createFileSystemWatcher: vi.fn(() => ({
-			onDidCreate: vi.fn(),
-			onDidChange: vi.fn(),
-			onDidDelete: vi.fn(),
-			dispose: vi.fn(),
-		})),
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(() => true),
-		})),
-		openTextDocument: vi.fn(),
-		applyEdit: vi.fn(),
-	},
-	RelativePattern: vi.fn((base, pattern) => ({ base, pattern })),
-	window: {
-		createOutputChannel: vi.fn(() => ({
-			appendLine: vi.fn(),
-			dispose: vi.fn(),
-		})),
-		createTextEditorDecorationType: vi.fn(() => ({
-			dispose: vi.fn(),
-		})),
-		showTextDocument: vi.fn(),
-		activeTextEditor: undefined,
-	},
-	Uri: {
-		file: vi.fn((path) => ({ fsPath: path })),
-		parse: vi.fn((str) => ({ toString: () => str })),
-	},
-	Range: vi.fn(),
-	Position: vi.fn(),
-	WorkspaceEdit: vi.fn(() => ({
-		replace: vi.fn(),
-		insert: vi.fn(),
-		delete: vi.fn(),
-	})),
-	ViewColumn: {
-		One: 1,
-		Two: 2,
-		Three: 3,
+// Noop ignore controller so constructing a Task doesn't spin up the real file watcher.
+vi.mock("../../ignore/ShoferIgnoreController.js", () => ({
+	ShoferIgnoreController: class {
+		validateAccess() {
+			return true
+		}
+		validateCommand() {
+			return undefined
+		}
+		filterPaths(paths: string[]) {
+			return paths
+		}
+		getInstructions() {
+			return undefined
+		}
+		async initialize() {}
+		dispose() {}
 	},
 }))
 
-// Mock other dependencies
-vi.mock("../../services/mcp/McpServerManager", () => ({
-	McpServerManager: {
-		getInstance: vi.fn().mockResolvedValue(null),
-	},
-}))
-
-vi.mock("../../integrations/terminal/TerminalRegistry", () => ({
-	TerminalRegistry: {
-		releaseTerminalsForTask: vi.fn(),
-	},
-}))
-
-vi.mock("@shofer/telemetry", () => ({
-	TelemetryService: {
-		instance: {
-			captureTaskCreated: vi.fn(),
-			captureTaskRestarted: vi.fn(),
-			captureConversationMessage: vi.fn(),
-			captureLlmCompletion: vi.fn(),
-			captureConsecutiveMistakeError: vi.fn(),
-		},
-	},
-}))
-
-vi.mock("@shofer/cloud", () => ({
-	CloudService: {
-		isEnabled: () => false,
-	},
+// Storage path helpers (relocated into @shofer/core/utils/storage).
+vi.mock("../../utils/storage.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
+	getTaskDirectoryPath: vi
+		.fn()
+		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
+	getSettingsDirectoryPath: vi
+		.fn()
+		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
 }))
 
 // Mock delay to prevent actual delays
@@ -117,59 +73,21 @@ vi.mock("fs/promises", () => ({
 	}),
 }))
 
-// Mock mentions
-vi.mock("../../mentions", () => ({
-	parseMentions: vi.fn().mockImplementation((text) => Promise.resolve({ text, mode: undefined, contentBlocks: [] })),
-	openMention: vi.fn(),
-	getLatestTerminalOutput: vi.fn(),
-}))
-
-// Mock extract-text
-
-// Mock getEnvironmentDetails
-vi.mock("../../environment/getEnvironmentDetails", () => ({
-	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
-}))
-
-// Mock ShoferIgnoreController
-vi.mock("../../ignore/ShoferIgnoreController")
-
-// Mock condense
-vi.mock("../../condense", () => ({
-	summarizeConversation: vi.fn().mockResolvedValue({
-		messages: [],
-		summary: "summary",
-		cost: 0,
-		newContextTokens: 1,
-	}),
-}))
-
-// Mock storage utilities (relocated into @shofer/core)
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-	getTaskDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
-	getSettingsDirectoryPath: vi
-		.fn()
-		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
-}))
-
-// Mock fs utilities
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn().mockReturnValue(false),
-}))
-
 // Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works
 import { Task } from "@shofer/core"
 
 describe("Task reasoning preservation", () => {
-	let mockProvider: Partial<ShoferProvider>
+	let mockProvider: Partial<TaskProviderLike>
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
-		// Mock provider with necessary methods
+		setHost(createInMemoryHost())
+		if (!TelemetryService.hasInstance()) {
+			TelemetryService.createInstance([])
+		}
+
+		// Plain provider stub typed as TaskProviderLike — never import concrete
+		// src classes (ShoferProvider) into a core test.
 		mockProvider = {
 			postInitState: vi.fn().mockResolvedValue(undefined),
 			postConfigUpdate: vi.fn(),
@@ -196,7 +114,7 @@ describe("Task reasoning preservation", () => {
 	it("should append reasoning to assistant message when preserveReasoning is true", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -263,7 +181,7 @@ describe("Task reasoning preservation", () => {
 	it("should NOT append reasoning to assistant message when preserveReasoning is false", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -321,7 +239,7 @@ describe("Task reasoning preservation", () => {
 	it("should handle empty reasoning message gracefully when preserveReasoning is true", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -375,7 +293,7 @@ describe("Task reasoning preservation", () => {
 	it("should handle undefined preserveReasoning (defaults to false)", async () => {
 		// Create a task instance
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -419,7 +337,7 @@ describe("Task reasoning preservation", () => {
 
 	it("should embed encrypted reasoning as first assistant content block", async () => {
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
@@ -465,7 +383,7 @@ describe("Task reasoning preservation", () => {
 
 	it("should store plain text reasoning from streaming for all providers", async () => {
 		const task = new Task({
-			provider: mockProvider as ShoferProvider,
+			provider: mockProvider as any,
 			apiConfiguration: mockApiConfiguration,
 			task: "Test task",
 			startTask: false,
