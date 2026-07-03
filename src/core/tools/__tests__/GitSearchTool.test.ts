@@ -1,4 +1,4 @@
-import { GitSearchTool } from "@shofer/core"
+import { GitSearchTool, setGitIndexManagerFactory } from "@shofer/core"
 import { GitIndexManager } from "../../../services/git-index/git-index-manager.js"
 
 vi.mock("../../../services/git-index/git-index-manager", () => ({
@@ -83,6 +83,14 @@ describe("GitSearchTool time-range filtering", () => {
 			searchIndex: mockSearchIndex,
 		}
 		vi.mocked(GitIndexManager.getInstance).mockReturnValue(mockManager as any)
+		// GitSearchTool (relocated into @shofer/core) reaches the manager through the
+		// host-registered factory seam, exactly as src/extension.ts wires it at
+		// activation. Register the same bridge here so the getInstance mock above is
+		// actually exercised; without it the factory is unset and the tool throws
+		// "GitIndexManager is not available" before ever producing a result.
+		setGitIndexManagerFactory((context, workspacePath) =>
+			GitIndexManager.getInstance(context as any, workspacePath),
+		)
 		vi.clearAllMocks()
 	})
 
