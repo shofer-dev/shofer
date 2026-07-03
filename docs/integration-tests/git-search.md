@@ -6,7 +6,7 @@
 > [`src/services/git-index/git-history-orchestrator.ts`](../src/services/git-index/git-history-orchestrator.ts),
 > [`src/services/git-index/processors/git-log-extractor.ts`](../src/services/git-index/processors/git-log-extractor.ts),
 > [`src/services/git-index/processors/git-watcher.ts`](../src/services/git-index/processors/git-watcher.ts),
-> [`src/core/tools/GitSearchTool.ts`](../src/core/tools/GitSearchTool.ts)
+> [`packages/core/src/tools/GitSearchTool.ts`](../packages/core/src/tools/GitSearchTool.ts)
 
 ## Prerequisites
 

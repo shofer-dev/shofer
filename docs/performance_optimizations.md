@@ -32,7 +32,7 @@ Because per-message writes are cheap, the debounced `saveShoferMessages`
 via `_refreshTaskMetadata`; it does not rewrite the message store. Metadata
 token accounting is O(1): a running `_tokenBearingMessageCount` is maintained at
 the mutation sites and feeds a `_cachedTokenUsage`, so a save never re-walks the
-whole array. See [`Task.ts`](../src/core/task/Task.ts).
+whole array. See [`Task.ts`](../packages/core/src/task/Task.ts).
 
 ## Host↔webview IPC — per-message deltas, not full snapshots
 
@@ -115,5 +115,5 @@ checkpoint writes overlap.
 
 Within a task, the system-prompt base and the tools array are cached
 (`_cachedSystemPromptBase` / `_getOrBuildTools` in
-[`Task.ts`](../src/core/task/Task.ts)) and rebuilt only when their inputs change
+[`Task.ts`](../packages/core/src/task/Task.ts)) and rebuilt only when their inputs change
 (mode/config change, context management), rather than reassembled on every turn.

@@ -19,7 +19,7 @@ Shofer supports three tool integration patterns. Choose the one that fits your u
 | 1   | Tool Schema (`packages/core/src/prompts/tools/native-tools/`)   | ✅                       |
 | 2   | `toolNames` array (`packages/types/src/tool.ts`)                | ✅                       |
 | 3   | `TOOL_GROUPS` (`packages/types/src/tool.ts`)                    | ✅                       |
-| 4   | Tool Handler — `BaseTool` subclass (`src/core/tools/`)          | ✅                       |
+| 4   | Tool Handler — `BaseTool` subclass (`packages/core/src/tools/`) | ✅                       |
 | 5   | Message Router (`presentAssistantMessage.ts`)                   | ✅                       |
 | 6   | `NativeToolArgs` type (`src/shared/tools.ts`)                   | ✅                       |
 | 7   | `NativeToolCallParser` — 2 switch cases                         | ✅                       |
@@ -129,7 +129,7 @@ If you skip this step, the tool will silently bypass `fileRegex` restrictions �
 
 ## Step 4: Tool Handler
 
-Create a handler class in `src/core/tools/` extending `BaseTool<TName>`:
+Create a handler class in `packages/core/src/tools/` extending `BaseTool<TName>`:
 
 ```typescript
 import { type ShoferSayTool } from "@shofer/types"

@@ -8,7 +8,7 @@
 > [`src/services/live-memory/context-window.ts`](../src/services/live-memory/context-window.ts),
 > [`src/services/live-memory/llm-client.ts`](../src/services/live-memory/llm-client.ts),
 > [`src/services/live-memory/tool-executor.ts`](../src/services/live-memory/tool-executor.ts),
-> [`src/core/tools/AskLiveMemoryTool.ts`](../src/core/tools/AskLiveMemoryTool.ts),
+> [`packages/core/src/tools/AskLiveMemoryTool.ts`](../packages/core/src/tools/AskLiveMemoryTool.ts),
 > [`src/core/webview/LiveMemoryChatProvider.ts`](../src/core/webview/LiveMemoryChatProvider.ts)
 
 ## Prerequisites
@@ -60,10 +60,10 @@ chat history. The Live Memory chat panel shows the Q&A pair.
 
 **Goal:** Verify the agent loads specified files into context.
 
-1. Ask: "What does the file `src/core/tools/BaseTool.ts` export?" with
-   `contextFiles: ["src/core/tools/BaseTool.ts"]`.
+1. Ask: "What does the file `packages/core/src/tools/BaseTool.ts` export?" with
+   `contextFiles: ["packages/core/src/tools/BaseTool.ts"]`.
 2. Verify the answer references the file's actual exports.
-3. Open the Live Memory popover: confirm `src/core/tools/BaseTool.ts`
+3. Open the Live Memory popover: confirm `packages/core/src/tools/BaseTool.ts`
    appears in the "Files in context" list with a non-zero `tokenEstimate`.
 
 **Expected:** The file is loaded into context and the answer is file-accurate.

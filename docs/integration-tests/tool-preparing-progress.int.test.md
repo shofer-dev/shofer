@@ -4,7 +4,7 @@
 > Implementation: [`llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts),
 > [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts),
 > [`stream.ts`](../src/api/transform/stream.ts),
-> [`Task.ts`](../src/core/task/Task.ts),
+> [`Task.ts`](../packages/core/src/task/Task.ts),
 > [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)
 
 ## Scenarios

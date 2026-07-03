@@ -5,7 +5,7 @@
 > Implementation: [`context-management/index.ts`](../src/core/context-management/index.ts),
 > [`condense/index.ts`](../src/core/condense/index.ts),
 > [`condense/foldedFileContext.ts`](../src/core/condense/foldedFileContext.ts),
-> [`Task.ts`](../src/core/task/Task.ts)
+> [`Task.ts`](../packages/core/src/task/Task.ts)
 
 ## Scenarios
 

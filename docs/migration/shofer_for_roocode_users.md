@@ -55,7 +55,7 @@ Previously, the codebase supported only one task at a time — starting a new ta
 
 ### Architecture
 
-- [`new_task`](../../src/core/tools/NewTaskTool.ts) creates an independent `Task` instance.
+- [`new_task`](../../packages/core/src/tools/NewTaskTool.ts) creates an independent `Task` instance.
 - Each task runs its own `_runTaskLoop`, making independent API calls to the LLM.
 - The [`TaskManager`](../../src/services/task-manager/TaskManager.ts) orchestrates lifecycle: create, pause, resume, abort, rehydrate.
 - Task state is persisted to disk so tasks survive extension reloads and VS Code restarts.
@@ -72,15 +72,15 @@ Previously, `new_task` only spawned synchronous children — the parent waited u
 
 ### What Was Built
 
-| Feature                                                                    | Description                                                                                                                          |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **`is_background` parameter**                                              | `new_task` accepts `is_background: true`. The child runs concurrently; the parent continues immediately.                             |
-| [`check_task_status`](../../src/core/tools/CheckTaskStatusTool.ts)         | Query the current status of any background task by its task ID.                                                                      |
-| [`wait_for_task`](../../src/core/tools/WaitForTaskTool.ts)                 | Block until one or more background tasks reach a terminal state. Supports `all`/`any` wait strategies and multiple task IDs.         |
-| [`list_background_tasks`](../../src/core/tools/ListBackgroundTasksTool.ts) | List all background child tasks with their current status.                                                                           |
-| **Abort propagation**                                                      | Canceling a parent task propagates abort to all background children.                                                                 |
-| **Parent mode inheritance**                                                | Background children inherit the parent's mode unless explicitly overridden.                                                          |
-| **UI rows**                                                                | Async tool calls (`wait_for_task`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges. |
+| Feature                                                                             | Description                                                                                                                          |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **`is_background` parameter**                                                       | `new_task` accepts `is_background: true`. The child runs concurrently; the parent continues immediately.                             |
+| [`check_task_status`](../../packages/core/src/tools/CheckTaskStatusTool.ts)         | Query the current status of any background task by its task ID.                                                                      |
+| [`wait_for_task`](../../packages/core/src/tools/WaitForTaskTool.ts)                 | Block until one or more background tasks reach a terminal state. Supports `all`/`any` wait strategies and multiple task IDs.         |
+| [`list_background_tasks`](../../packages/core/src/tools/ListBackgroundTasksTool.ts) | List all background child tasks with their current status.                                                                           |
+| **Abort propagation**                                                               | Canceling a parent task propagates abort to all background children.                                                                 |
+| **Parent mode inheritance**                                                         | Background children inherit the parent's mode unless explicitly overridden.                                                          |
+| **UI rows**                                                                         | Async tool calls (`wait_for_task`, `check_task_status`, `list_background_tasks`) render as descriptive chat rows with status badges. |
 
 ### Example Orchestration Pattern
 
@@ -105,15 +105,15 @@ Previously, `ask_followup_question` from a background child was escalated to the
 
 ### What Was Built
 
-| Feature                                                                        | Description                                                                                                                                                               |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Subtask question routing to parent**                                         | `ask_followup_question` from background children is routed to the **parent task** instead of the user. The parent surfaces pending questions through `check_task_status`. |
-| [`answer_subtask_question`](../../src/core/tools/AnswerSubtaskQuestionTool.ts) | Answer a pending question from a background child. The parent evaluates and provides a response, unblocking the child.                                                    |
-| [`cancel_tasks`](../../src/core/tools/CancelTasksTool.ts)                      | Stop one or more background children by task ID. Already-completed children are unaffected.                                                                               |
-| **`include_activity` parameter**                                               | `check_task_status` now accepts `include_activity: true` to return the child's most recent tool calls and messages — showing what it's currently working on.              |
-| **Abort on parent completion**                                                 | Background children are automatically aborted when the parent task completes, preventing orphaned runaway tasks.                                                          |
-| **Dedicated `alwaysAllowSubtasks` toggle**                                     | `cancel_tasks` and `answer_subtask_question` share the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`.                          |
-| **Waiting lifecycle**                                                          | Tasks blocked inside `wait_for_task` transition to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`.                     |
+| Feature                                                                                 | Description                                                                                                                                                               |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Subtask question routing to parent**                                                  | `ask_followup_question` from background children is routed to the **parent task** instead of the user. The parent surfaces pending questions through `check_task_status`. |
+| [`answer_subtask_question`](../../packages/core/src/tools/AnswerSubtaskQuestionTool.ts) | Answer a pending question from a background child. The parent evaluates and provides a response, unblocking the child.                                                    |
+| [`cancel_tasks`](../../packages/core/src/tools/CancelTasksTool.ts)                      | Stop one or more background children by task ID. Already-completed children are unaffected.                                                                               |
+| **`include_activity` parameter**                                                        | `check_task_status` now accepts `include_activity: true` to return the child's most recent tool calls and messages — showing what it's currently working on.              |
+| **Abort on parent completion**                                                          | Background children are automatically aborted when the parent task completes, preventing orphaned runaway tasks.                                                          |
+| **Dedicated `alwaysAllowSubtasks` toggle**                                              | `cancel_tasks` and `answer_subtask_question` share the `alwaysAllowSubtasks` auto-approval toggle alongside `new_task` and `attempt_completion`.                          |
+| **Waiting lifecycle**                                                                   | Tasks blocked inside `wait_for_task` transition to a distinct `waiting` state — visible in the TaskSelector, separate from both `idle` and `running`.                     |
 
 <!-- 📸 TODO: screenshot of `check_task_status` row showing pending question from a background child -->
 
@@ -127,15 +127,15 @@ Previously, all MCP tool calls were synchronous and blocking. The agent had to w
 
 ### What Was Built
 
-| Feature                                                                       | Description                                                                                                                                               |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`call_mcp_tool_async`](../../src/core/tools/CallMcpToolAsyncTool.ts)**     | Fire-and-forget MCP tool invocation. Returns immediately with a `call_id`.                                                                                |
-| **[`check_mcp_call_status`](../../src/core/tools/CheckMcpCallStatusTool.ts)** | Non-blocking status check for a previously-started async call. Returns `running`, `completed`, `error`, or `cancelled`.                                   |
-| **[`wait_for_mcp_call`](../../src/core/tools/WaitForMcpCallTool.ts)**         | Block until one or more async calls complete. Supports `all`/`any` wait strategies like `wait_for_task`.                                                  |
-| **Async badge in ChatRow**                                                    | Async MCP calls display a distinctive **async badge** in the chat UI, making it clear which calls are in-flight vs completed.                             |
-| **Delete-on-read trimming**                                                   | Completed async call results are automatically trimmed from the API history after being read by the LLM, preventing context bloat from large MCP results. |
-| **Waiting lifecycle for MCP wait**                                            | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside `wait_for_task`.                   |
-| **Telemetry for async MCP**                                                   | Async MCP usage is tracked separately from synchronous MCP calls, with dedicated telemetry events for call initiation, completion, and errors.            |
+| Feature                                                                                | Description                                                                                                                                               |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`call_mcp_tool_async`](../../packages/core/src/tools/CallMcpToolAsyncTool.ts)**     | Fire-and-forget MCP tool invocation. Returns immediately with a `call_id`.                                                                                |
+| **[`check_mcp_call_status`](../../packages/core/src/tools/CheckMcpCallStatusTool.ts)** | Non-blocking status check for a previously-started async call. Returns `running`, `completed`, `error`, or `cancelled`.                                   |
+| **[`wait_for_mcp_call`](../../packages/core/src/tools/WaitForMcpCallTool.ts)**         | Block until one or more async calls complete. Supports `all`/`any` wait strategies like `wait_for_task`.                                                  |
+| **Async badge in ChatRow**                                                             | Async MCP calls display a distinctive **async badge** in the chat UI, making it clear which calls are in-flight vs completed.                             |
+| **Delete-on-read trimming**                                                            | Completed async call results are automatically trimmed from the API history after being read by the LLM, preventing context bloat from large MCP results. |
+| **Waiting lifecycle for MCP wait**                                                     | When the task calls `wait_for_mcp_call`, it transitions to the `waiting` state — visible in the TaskSelector alongside `wait_for_task`.                   |
+| **Telemetry for async MCP**                                                            | Async MCP usage is tracked separately from synchronous MCP calls, with dedicated telemetry events for call initiation, completion, and errors.            |
 
 <!-- 📸 TODO: screenshot of ChatRow showing async MCP badge and completion state -->
 
@@ -209,28 +209,28 @@ See [`drag_n_drop.md`](../drag_n_drop.md) for the full design.
 
 Twenty native tools are listed below — see [`native_tools.md`](../native_tools.md) for the complete reference of all 50+ tools.
 
-| Tool                                                                       | Description                                                                                                                                                                                     |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`lsp_search`](../../src/core/tools/LspSearchTool.ts)                      | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
-| [`create_new_workspace`](../../src/core/tools/CreateNewWorkspaceTool.ts)   | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
-| [`fetch_web_page`](../../src/core/tools/FetchWebPageTool.ts)               | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
-| [`execute_command`](../../src/core/tools/ExecuteCommandTool.ts)            | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
-| [`list_files`](../../src/core/tools/ListFilesTool.ts)                      | List directory contents with recursive option.                                                                                                                                                  |
-| [`grep_search`](../../src/core/tools/GrepSearchTool.ts)                    | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](../grep_search-tool.md).                                                |
-| **[`rag_search`](../../src/core/tools/RagSearchTool.ts)**                  | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches. See §18.                                                                                    |
-| **[`git_search`](../../src/core/tools/GitSearchTool.ts)**                  | Semantic search over git commit history — discover _why_ and _when_ changes were made. See §18.                                                                                                 |
-| [`read_file`](../../src/core/tools/ReadFileTool.ts)                        | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
-| [`write_to_file`](../../src/core/tools/WriteToFileTool.ts)                 | Write complete file content, with automatic directory creation.                                                                                                                                 |
-| [`apply_diff`](../../src/core/tools/ApplyDiffTool.ts)                      | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
-| [`insert_edit`](../../src/core/tools/InsertEditTool.ts)                    | Insert text at a specific line/column position.                                                                                                                                                 |
-| [`rename_symbol`](../../src/core/tools/RenameSymbolTool.ts)                | Rename a symbol and all its references via LSP.                                                                                                                                                 |
-| [`list_code_usages`](../../src/core/tools/ListCodeUsagesTool.ts)           | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
-| **[`read_command_output`](../../src/core/tools/ReadCommandOutputTool.ts)** | Retrieve full output from commands that were truncated in the chat. Supports read mode (offset/limit) and search mode (grep-like filtering).                                                    |
-| **[`sed`](../../src/core/tools/SedTool.ts)**                               | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
-| **[`file`](../../src/core/tools/FileTool.ts)**                             | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
-| **[`set_task_title`](../../src/core/tools/SetTaskTitleTool.ts)**           | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
-| [`skills`](../../src/core/tools/SkillsTool.ts)                             | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
-| **[`give_feedback`](../../src/core/tools/GiveFeedbackTool.ts)**            | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
+| Tool                                                                                | Description                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`lsp_search`](../../packages/core/src/tools/LspSearchTool.ts)                      | Search the codebase for symbols (functions, classes, variables) using VS Code's Language Server Protocol workspace symbol provider. Falls back to text search when no LSP is available.         |
+| [`create_new_workspace`](../../packages/core/src/tools/CreateNewWorkspaceTool.ts)   | Create a new workspace/project directory with optional subdirectories.                                                                                                                          |
+| [`fetch_web_page`](../../packages/core/src/tools/FetchWebPageTool.ts)               | Download and extract text content from web pages, with optional content filtering.                                                                                                              |
+| [`execute_command`](../../packages/core/src/tools/ExecuteCommandTool.ts)            | Run CLI commands with configurable working directory and timeout.                                                                                                                               |
+| [`list_files`](../../packages/core/src/tools/ListFilesTool.ts)                      | List directory contents with recursive option.                                                                                                                                                  |
+| [`grep_search`](../../packages/core/src/tools/GrepSearchTool.ts)                    | Regex/literal search across files with context display (using VS Code's native search API). See [`grep_search-tool.md`](../grep_search-tool.md).                                                |
+| **[`rag_search`](../../packages/core/src/tools/RagSearchTool.ts)**                  | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches. See §18.                                                                                    |
+| **[`git_search`](../../packages/core/src/tools/GitSearchTool.ts)**                  | Semantic search over git commit history — discover _why_ and _when_ changes were made. See §18.                                                                                                 |
+| [`read_file`](../../packages/core/src/tools/ReadFileTool.ts)                        | Read file contents with offset/limit and indentation-based extraction modes.                                                                                                                    |
+| [`write_to_file`](../../packages/core/src/tools/WriteToFileTool.ts)                 | Write complete file content, with automatic directory creation.                                                                                                                                 |
+| [`apply_diff`](../../packages/core/src/tools/ApplyDiffTool.ts)                      | Apply precise, targeted modifications using search/replace blocks.                                                                                                                              |
+| [`insert_edit`](../../packages/core/src/tools/InsertEditTool.ts)                    | Insert text at a specific line/column position.                                                                                                                                                 |
+| [`rename_symbol`](../../packages/core/src/tools/RenameSymbolTool.ts)                | Rename a symbol and all its references via LSP.                                                                                                                                                 |
+| [`list_code_usages`](../../packages/core/src/tools/ListCodeUsagesTool.ts)           | Find all references/usages of a symbol via LSP.                                                                                                                                                 |
+| **[`read_command_output`](../../packages/core/src/tools/ReadCommandOutputTool.ts)** | Retrieve full output from commands that were truncated in the chat. Supports read mode (offset/limit) and search mode (grep-like filtering).                                                    |
+| **[`sed`](../../packages/core/src/tools/SedTool.ts)**                               | Regex find-and-replace on workspace files with capture group backreferences. Fully integrated with file change tracking.                                                                        |
+| **[`file`](../../packages/core/src/tools/FileTool.ts)**                             | Filesystem operations: `rm` (delete file/directory) and `mv` (move/rename). Integrated with file change tracking. Approval labels show subcommand-specific names ("Remove File" / "Move File"). |
+| **[`set_task_title`](../../packages/core/src/tools/SetTaskTitleTool.ts)**           | Allows the model to set a descriptive, human-readable title for the current task. Displayed in the TaskSelector and task header.                                                                |
+| [`skills`](../../packages/core/src/tools/SkillsTool.ts)                             | Load a skill by name into the task context. Integrated with mention-based loading (`/skill-name`) and loaded-skills tracking.                                                                   |
+| **[`give_feedback`](../../packages/core/src/tools/GiveFeedbackTool.ts)**            | Promoted to a **native always-available tool** — accessible regardless of mode settings.                                                                                                        |
 
 <!-- 📸 TODO: screenshot of `lsp_search` results in chat -->
 
@@ -296,12 +296,12 @@ The mode system was extended with scoped tool groups, per-task mode binding, and
 
 ### What Was Built
 
-| Feature                                                                    | Description                                                                                                                                                                                                             |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Scoped group entries**                                                   | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `grep_search` specifically. See [`tool_access.md`](../tool_access.md). |
-| **Per-task mode binding**                                                  | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                   |
-| **Sticky mode across focus switches**                                      | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                         |
-| **[`switch_mode`](../../src/core/tools/SwitchModeTool.ts) scoped to task** | Mode switching via `switch_mode` is now isolated to the calling task — it never leaks across concurrent tasks. Each task's mode is independently scoped and persisted.                                                  |
+| Feature                                                                             | Description                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Scoped group entries**                                                            | Mode groups now support `allowed`/`denied` lists per group, enabling fine-grained control. Example: a mode can allow `read` group tools but deny `grep_search` specifically. See [`tool_access.md`](../tool_access.md). |
+| **Per-task mode binding**                                                           | Each task has its own mode, sticky for its lifetime. Switching tasks restores that task's mode. Starting a new task lets you choose a different mode without affecting running tasks.                                   |
+| **Sticky mode across focus switches**                                               | Re-focusing a task restores its mode. The mode selector always reflects the active task's mode.                                                                                                                         |
+| **[`switch_mode`](../../packages/core/src/tools/SwitchModeTool.ts) scoped to task** | Mode switching via `switch_mode` is now isolated to the calling task — it never leaks across concurrent tasks. Each task's mode is independently scoped and persisted.                                                  |
 
 <!-- 📸 TODO: screenshot of mode selector dropdown showing scoped group configuration -->
 
@@ -387,17 +387,17 @@ The pipeline was substantially hardened in the Shofer fork to handle edge cases,
 
 ### What Was Built
 
-| Feature                                                   | Description                                                                                                                                                                                                                                                |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`rag_search`](../../src/core/tools/RagSearchTool.ts)** | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches.                                                                                                                                                        |
-| **[`git_search`](../../src/core/tools/GitSearchTool.ts)** | Semantic search over git commit history (commit messages only). Discover _why_ and _when_ changes were made, not just _what_.                                                                                                                              |
-| **`GitIgnoreFilter` oracle**                              | Replaced flat `.gitignore` parsing with `git ls-files -z --cached --others --exclude-standard`, honoring nested `.gitignore` files, `.git/info/exclude`, and global `core.excludesfile`. A file watcher auto-refreshes the filter on `.gitignore` changes. |
-| **Submodule-aware scanning**                              | Both the code-index file scanner and git-history watcher descend into submodules declared in `.gitmodules`, ensuring files inside nested repos are indexed.                                                                                                |
-| **Per-segment deduplication**                             | Incremental indexing uses `deletePointsByIds` at the segment level, preventing duplicate embeddings when files are re-indexed.                                                                                                                             |
-| **Stat-only fast-path**                                   | Startup reconciliation uses `stat()`-only mtime+size comparison for a fast path, dramatically reducing indexer startup on large workspaces.                                                                                                                |
-| **Per-provider concurrency lane**                         | Embedder providers share a module-scoped concurrency limiter keyed by `(provider, endpoint)`, preventing N-workspace reindex storms from tripping rate limits.                                                                                             |
-| **Cumulative diagnostics**                                | Settings panel surfaces cumulative file/commit counts and last-indexed diagnostics, giving users visibility into indexer state.                                                                                                                            |
-| **Branch-aware git indexing**                             | `git_search` can be scoped to a specific branch via the `codebaseIndexGitBranch` setting; the watcher reports the live branch for the working tree.                                                                                                        |
+| Feature                                                            | Description                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`rag_search`](../../packages/core/src/tools/RagSearchTool.ts)** | Semantic code search using embedded vectors. Finds files by meaning rather than exact text matches.                                                                                                                                                        |
+| **[`git_search`](../../packages/core/src/tools/GitSearchTool.ts)** | Semantic search over git commit history (commit messages only). Discover _why_ and _when_ changes were made, not just _what_.                                                                                                                              |
+| **`GitIgnoreFilter` oracle**                                       | Replaced flat `.gitignore` parsing with `git ls-files -z --cached --others --exclude-standard`, honoring nested `.gitignore` files, `.git/info/exclude`, and global `core.excludesfile`. A file watcher auto-refreshes the filter on `.gitignore` changes. |
+| **Submodule-aware scanning**                                       | Both the code-index file scanner and git-history watcher descend into submodules declared in `.gitmodules`, ensuring files inside nested repos are indexed.                                                                                                |
+| **Per-segment deduplication**                                      | Incremental indexing uses `deletePointsByIds` at the segment level, preventing duplicate embeddings when files are re-indexed.                                                                                                                             |
+| **Stat-only fast-path**                                            | Startup reconciliation uses `stat()`-only mtime+size comparison for a fast path, dramatically reducing indexer startup on large workspaces.                                                                                                                |
+| **Per-provider concurrency lane**                                  | Embedder providers share a module-scoped concurrency limiter keyed by `(provider, endpoint)`, preventing N-workspace reindex storms from tripping rate limits.                                                                                             |
+| **Cumulative diagnostics**                                         | Settings panel surfaces cumulative file/commit counts and last-indexed diagnostics, giving users visibility into indexer state.                                                                                                                            |
+| **Branch-aware git indexing**                                      | `git_search` can be scoped to a specific branch via the `codebaseIndexGitBranch` setting; the watcher reports the live branch for the working tree.                                                                                                        |
 
 <!-- 📸 TODO: screenshot of RAG Indexer settings panel showing file/commit counts and diagnostics -->
 
@@ -446,7 +446,7 @@ These are deliberate design decisions that changed the default behavior or appea
 
 ## 22. Live Memory
 
-The **Live Memory** is a persistent, long-lived, read-only LLM companion that accumulates codebase knowledge across tasks — surviving task completion and VS Code restarts. It runs on a **separate, cost-optimized model with a large context window**, and is exposed to tasks via the [`ask_live_memory`](../../src/core/tools/AskLiveMemoryTool.ts) native tool.
+The **Live Memory** is a persistent, long-lived, read-only LLM companion that accumulates codebase knowledge across tasks — surviving task completion and VS Code restarts. It runs on a **separate, cost-optimized model with a large context window**, and is exposed to tasks via the [`ask_live_memory`](../../packages/core/src/tools/AskLiveMemoryTool.ts) native tool.
 
 Previously, every task had to load its own context from scratch. There was no mechanism for sharing codebase knowledge between tasks, and repetitive file reads burned tokens.
 
@@ -477,10 +477,10 @@ Previously, Roo-Code relied on the user manually executing standard IDE-level re
 
 ### What Was Built
 
-| Feature                                                              | Description                                                                                                                                                 |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **[`rename_symbol`](../../src/core/tools/RenameSymbolTool.ts)**      | Rename a symbol and all its references across the entire dependency graph via LSP. The agent can systematically refactor without manual editor interaction. |
-| **[`list_code_usages`](../../src/core/tools/ListCodeUsagesTool.ts)** | Find all references/usages of a symbol at a specific position via LSP, enabling the agent to understand impact before refactoring.                          |
+| Feature                                                                       | Description                                                                                                                                                 |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`rename_symbol`](../../packages/core/src/tools/RenameSymbolTool.ts)**      | Rename a symbol and all its references across the entire dependency graph via LSP. The agent can systematically refactor without manual editor interaction. |
+| **[`list_code_usages`](../../packages/core/src/tools/ListCodeUsagesTool.ts)** | Find all references/usages of a symbol at a specific position via LSP, enabling the agent to understand impact before refactoring.                          |
 
 ---
 

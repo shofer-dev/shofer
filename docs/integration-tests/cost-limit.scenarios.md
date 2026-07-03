@@ -2,9 +2,9 @@
 
 > Feature docs: [`docs/cost-calculation-and-limits.md`](../docs/cost-calculation-and-limits.md),
 > [`docs/user-manual/cost-limit.md`](../docs/user-manual/cost-limit.md)
-> Implementation: [`Task.ts`](../src/core/task/Task.ts),
+> Implementation: [`Task.ts`](../packages/core/src/task/Task.ts),
 > [`aggregateTaskCosts.ts`](../src/core/webview/aggregateTaskCosts.ts),
-> [`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts),
+> [`NewTaskTool.ts`](../packages/core/src/tools/NewTaskTool.ts),
 > [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx),
 > [`BudgetLimitDialog.tsx`](../webview-ui/src/components/chat/BudgetLimitDialog.tsx)
 

@@ -6,7 +6,7 @@
 > [`src/services/code-index/orchestrator.ts`](../src/services/code-index/orchestrator.ts),
 > [`src/services/code-index/processors/scanner.ts`](../src/services/code-index/processors/scanner.ts),
 > [`src/services/code-index/processors/file-watcher.ts`](../src/services/code-index/processors/file-watcher.ts),
-> [`src/core/tools/RagSearchTool.ts`](../src/core/tools/RagSearchTool.ts)
+> [`packages/core/src/tools/RagSearchTool.ts`](../packages/core/src/tools/RagSearchTool.ts)
 
 ## Prerequisites
 

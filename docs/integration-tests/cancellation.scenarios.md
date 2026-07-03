@@ -2,7 +2,7 @@
 
 > Feature doc: [`docs/cancellation.md`](../docs/cancellation.md)
 > User manual: [`docs/user-manual/stop-button.md`](../docs/user-manual/stop-button.md)
-> Implementation: [`Task.ts`](../src/core/task/Task.ts) (abortTask, cancelAndProcessQueuedMessages, \_taskAbortController),
+> Implementation: [`Task.ts`](../packages/core/src/task/Task.ts) (abortTask, cancelAndProcessQueuedMessages, \_taskAbortController),
 > [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx) (canStop, handleStopTask),
 > [`McpHub.ts`](../src/services/mcp/McpHub.ts) (callTool, readResource with signal),
 > [`mcp-server/mcp.go`](../../mcp-server/internal/handlers/mcp.go) (in-flight registry, handleCancelledNotification)
