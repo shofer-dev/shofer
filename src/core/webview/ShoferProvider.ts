@@ -3916,9 +3916,11 @@ export class ShoferProvider
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
 			ttsSpeed: ttsSpeed ?? 1.0,
-			// L2/E: checkpoints reference the REMOTE filesystem — disable the
-			// checkpoint UI entirely for a remote-owned (shadow) task.
-			enableCheckpoints: focusedShadow ? false : (enableCheckpoints ?? true),
+			// Shofer Nodes L2 (shared-fs): the remote executor's workspace is mounted
+			// at the SAME paths on the controller, so a shadow task's checkpoint
+			// markers/diffs resolve identically — render the checkpoint UI just like
+			// a local task's.
+			enableCheckpoints: enableCheckpoints ?? true,
 			checkpointTimeout: checkpointTimeout ?? DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 			shouldShowAnnouncement:
 				telemetrySetting !== "unset" && lastShownAnnouncementId !== this.latestAnnouncementId,

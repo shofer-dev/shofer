@@ -252,7 +252,7 @@ const TaskHeader = ({
 						</div>
 					</div>
 				</div>
-				{!isTaskExpanded && contextWindow > 0 && !activeRemoteNode && (
+				{!isTaskExpanded && contextWindow > 0 && (
 					<div
 						className="flex items-center justify-between text-sm text-muted-foreground/70"
 						onClick={(e) => e.stopPropagation()}>
@@ -450,7 +450,7 @@ const TaskHeader = ({
 						<div className="pt-3 mt-2 -mx-2.5 px-2.5 border-t border-vscode-sideBar-background">
 							<table className="w-full text-sm">
 								<tbody>
-									{contextWindow > 0 && !activeRemoteNode && (
+									{contextWindow > 0 && (
 										<tr>
 											<th
 												className="font-medium text-left align-top w-1 whitespace-nowrap pr-3 h-[24px]"
