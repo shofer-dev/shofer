@@ -159,6 +159,13 @@
 	"onboarding": "What would you like to do?",
 	"selectMode": "Select mode for interaction",
 	"selectApiConfig": "Select API configuration",
+	"selectNode": "Select which node runs the next task",
+	"nodeSelector": {
+		"title": "Run on",
+		"auto": "Auto",
+		"autoDescription": "Round-robin across available nodes",
+		"unavailable": "not available"
+	},
 	"workflow": "Workflow",
 	"workflowReadonly": "Workflow name (read-only)",
 	"workflowStarting": "Starting workflow…",

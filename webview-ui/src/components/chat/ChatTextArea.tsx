@@ -27,6 +27,7 @@ import { StandardTooltip } from "@src/components/ui"
 import Thumbnails from "../common/Thumbnails"
 import { ModeSelector } from "./ModeSelector"
 import { ApiConfigSelector } from "./ApiConfigSelector"
+import { NodeSelector } from "./NodeSelector"
 import { AutoApproveDropdown } from "./AutoApproveDropdown"
 import { WorktreeIndicator } from "./WorktreeIndicator"
 import { CommandsButton } from "./CommandsButton"
@@ -1574,6 +1575,10 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							allGroups={isWorkflow}
 							triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink"
 						/>
+						{/* Where the next new task runs — only visible with ≥1 remote node. */}
+						{!isWorkflow && (
+							<NodeSelector triggerClassName="min-w-[28px] text-ellipsis overflow-hidden flex-shrink" />
+						)}
 						<WorktreeIndicator />
 						{!isWorkflow && <CommandsButton />}
 						{!isWorkflow && <SkillsButton />}

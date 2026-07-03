@@ -150,6 +150,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setPendingWorktreeDir,
 		hasMoreShoferMessages,
 		shoferNodes,
+		preferredNodeId,
 	} = useExtensionState()
 
 	// Shofer Nodes L2/E: is the focused task running on a REMOTE node? Remote tasks
@@ -1154,6 +1155,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						// Settings defaults when absent.
 						mode,
 						apiConfigName: currentApiConfigName,
+						// Node picked in the composer. Undefined = "Auto": omit it so
+						// NodeRegistry.routeNewTask round-robins. Sticky across tasks,
+						// like mode/apiConfigName above.
+						preferredNodeId: preferredNodeId ?? undefined,
 					})
 					if (pendingWorktreeDir) setPendingWorktreeDir(null)
 				} else if (shoferAskRef.current) {
@@ -1235,6 +1240,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			setPendingWorktreeDir,
 			mode,
 			currentApiConfigName,
+			preferredNodeId,
 		], // messagesRef and shoferAskRef are stable
 	)
 

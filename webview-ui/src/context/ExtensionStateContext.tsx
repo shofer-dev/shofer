@@ -181,6 +181,15 @@ export interface ExtensionStateContextType extends ExtensionState {
 	pendingWorktreeDir: string | null
 	setPendingWorktreeDir: (value: string | null) => void
 	/**
+	 * Webview-only: which Shofer Node the NEXT new task should run on. `undefined`
+	 * means "Auto" — round-robin — and the `newTask` post omits `preferredNodeId`
+	 * entirely (letting the host's NodeRegistry.routeNewTask pick). Set by the
+	 * chat-composer NodeSelector; sticky across tasks, like the mode/API-config
+	 * selectors beside it. Not persisted across reloads and not synced to the host.
+	 */
+	preferredNodeId: string | undefined
+	setPreferredNodeId: (value: string | undefined) => void
+	/**
 	 * When true, the user explicitly chose "Current branch" to opt out of
 	 * worktree isolation. Used to distinguish from "never chose anything"
 	 * (where auto-create worktree should fire).
@@ -358,6 +367,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
 	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
+	// Webview-only "run the next task on this node" selection (undefined = Auto).
+	const [preferredNodeId, setPreferredNodeId] = useState<string | undefined>(undefined)
 	const [worktreeExplicitOptOut, setWorktreeExplicitOptOut] = useState(false)
 	const [pendingWorkflowName, setPendingWorkflowName] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
@@ -867,6 +878,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				setState((prevState) => ({ ...prevState, includeTaskHistoryInEnhance: value })),
 			pendingWorktreeDir,
 			setPendingWorktreeDir,
+			preferredNodeId,
+			setPreferredNodeId,
 			worktreeExplicitOptOut,
 			setWorktreeExplicitOptOut,
 			pendingWorkflowName,
@@ -902,6 +915,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			skills,
 			loadedSkills,
 			pendingWorktreeDir,
+			preferredNodeId,
 			worktreeExplicitOptOut,
 			pendingWorkflowName,
 			setApiConfiguration,
