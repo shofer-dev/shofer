@@ -57,6 +57,15 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	setProviderProfile(name: string): Promise<void>
 	/** Returns the Category II skills manager (typed opaquely in the core). */
 	getSkillsManager(): unknown
+	/** Resolve a filesystem path to a webview-safe URI string (for image tools). */
+	convertToWebviewUri(filePath: string): string
+	/** Rename a managed task in the provider's task history. */
+	renameManagedTask(taskId: string, name: string): void
+	/**
+	 * Schedule a debounced "changed files" refresh for the given task's
+	 * FileChangesPanel. Optional: headless hosts have no such panel.
+	 */
+	scheduleChangedFilesUpdate?(taskId: string): void
 	postTaskStateUpdate(
 		updates: Partial<
 			Pick<
@@ -97,4 +106,6 @@ export interface TaskManagerLike<TTask = TaskLike> {
 	getTaskState(taskId: string): TaskState | undefined
 	waitForPendingPersist(taskId: string): Promise<void>
 	focusTask(taskId: string): Promise<void>
+	/** Set the persisted lifecycle state of a managed task. */
+	setState(targetTaskId: string, state: TaskState): void
 }

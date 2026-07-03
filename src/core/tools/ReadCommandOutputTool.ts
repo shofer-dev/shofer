@@ -5,7 +5,7 @@ import { Task } from "../task/Task"
 import { getTaskDirectoryPath } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 
 /** Default byte limit for read operations (40KB) */
 const DEFAULT_LIMIT = 40 * 1024 // 40KB default limit
@@ -123,8 +123,9 @@ export class ReadCommandOutputTool extends BaseTool<"read_command_output"> {
 
 		try {
 			// Get the task directory path
-			const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
-			const globalStoragePath = provider?.context?.globalStorageUri?.fsPath
+			const provider = (await task.providerRef.deref()) as TaskProviderLike | undefined
+			const globalStoragePath = (provider?.context as { globalStorageUri?: { fsPath?: string } } | undefined)
+				?.globalStorageUri?.fsPath
 
 			if (!globalStoragePath) {
 				const errorMsg = "Unable to access command output storage. Global storage path is not available."

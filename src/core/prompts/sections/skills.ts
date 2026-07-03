@@ -1,6 +1,7 @@
-import type { SkillsManager } from "../../../services/skills/SkillsManager"
+import type { SkillsManagerLike } from "@shofer/core"
 
-type SkillsManagerLike = Pick<SkillsManager, "getSkillsForMode">
+/** This section only needs mode-filtered skill discovery, not content lookup. */
+type SkillsSectionManager = Pick<SkillsManagerLike, "getSkillsForMode">
 
 function escapeXml(value: string): string {
 	return value
@@ -20,7 +21,7 @@ function escapeXml(value: string): string {
  * @param currentMode - The current mode slug (e.g., 'code', 'architect')
  */
 export async function getSkillsSection(
-	skillsManager: SkillsManagerLike | undefined,
+	skillsManager: SkillsSectionManager | undefined,
 	currentMode: string | undefined,
 ): Promise<string> {
 	if (!skillsManager || !currentMode) return ""

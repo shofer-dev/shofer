@@ -5,10 +5,12 @@ import { getCommand, getCommands } from "../commands"
 
 // Mock fs and path modules
 vi.mock("fs/promises")
-vi.mock("../shofer-config", () => ({
-	getGlobalShoferDirectory: vi.fn(() => "/mock/global/.shofer"),
-	getProjectShoferDirectoryForCwd: vi.fn(() => "/mock/project/.shofer"),
-}))
+// NOTE: this suite intentionally does NOT mock shofer-config's dir helpers — it
+// exercises the real `getGlobalShoferDirectory` / `getProjectShoferDirectoryForCwd`
+// against the mocked `fs`. (The pre-move mock targeted `../shofer-config`, which
+// from `__tests__/` never resolved to the real module, so it was always a no-op;
+// preserving that behaviour keeps the fixtures — anchored on the real cwd/home
+// paths — valid now that shofer-config lives in @shofer/core.)
 vi.mock("../built-in-commands", () => ({
 	getBuiltInCommands: vi.fn(() => Promise.resolve([])),
 	getBuiltInCommand: vi.fn(() => Promise.resolve(undefined)),

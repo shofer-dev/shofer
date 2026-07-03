@@ -84,18 +84,14 @@ vi.mock("vscode", () => ({
 const GLOBAL_ROO_DIR = p(HOME_DIR, ".shofer")
 const GLOBAL_AGENTS_DIR = p(HOME_DIR, ".agents")
 
-// Mock shofer-config
-vi.mock("../../shofer-config", () => ({
+// Mock i18n + shofer-config (both now live in @shofer/core)
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getGlobalShoferDirectory: () => GLOBAL_ROO_DIR,
 	getGlobalAgentsDirectory: () => GLOBAL_AGENTS_DIR,
 	getProjectAgentsDirectoryForCwd: (cwd: string) => p(cwd, ".agents"),
 	directoryExists: mockDirectoryExists,
 	fileExists: mockFileExists,
-}))
-
-// Mock i18n
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
 	t: (key: string, params?: Record<string, any>) => {
 		const translations: Record<string, string> = {
 			"skills:errors.name_length": `Skill name must be 1-${params?.maxLength} characters (got ${params?.length})`,

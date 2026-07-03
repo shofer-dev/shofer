@@ -1,14 +1,14 @@
 import path from "path"
 
 import { Task } from "../task/Task"
-import { CodeIndexManager } from "../../services/code-index/manager"
+import { getCodeIndexManagerFactory } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import { VectorStoreSearchResult } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { RAG_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "@shofer/core"
 
 interface RagSearchParams {
@@ -59,12 +59,12 @@ export class RagSearchTool extends BaseTool<"rag_search"> {
 		task.consecutiveMistakeCount = 0
 
 		try {
-			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
+			const context = (task.providerRef.deref() as TaskProviderLike | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}
 
-			const manager = CodeIndexManager.getInstance(context)
+			const manager = getCodeIndexManagerFactory()?.(context)
 
 			if (!manager) {
 				throw new Error("CodeIndexManager is not available.")

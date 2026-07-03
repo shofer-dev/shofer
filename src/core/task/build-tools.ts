@@ -6,15 +6,16 @@ import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer
 import { toolGroupsSchema, getHost } from "@shofer/types"
 import { customToolRegistry, formatNative, pluginRegistry, setPrivateToolInvokeMap } from "@shofer/core"
 
-import type { ShoferProvider } from "../webview/ShoferProvider"
-import { getRooDirectoriesForCwd } from "../../services/shofer-config/index.js"
+import type { TaskProviderLike } from "@shofer/core"
+import { getRooDirectoriesForCwd } from "@shofer/core"
+import { getCodeIndexManagerFactory, getGitIndexManagerFactory, getLiveMemoryManagerAccessor } from "@shofer/core"
 
 import { getNativeTools, getMcpServerTools } from "../prompts/tools/native-tools"
 import { filterNativeToolsForMode, filterMcpToolsForMode } from "../prompts/tools/filter-tools-for-mode"
 import { defaultModeSlug, getGroupName, getModeBySlug, getToolsForMode, resolveToolAlias } from "@shofer/core"
 
 interface BuildToolsOptions {
-	provider: ShoferProvider
+	provider: TaskProviderLike
 	cwd: string
 	mode: string | undefined
 	customModes: ModeConfig[] | undefined
@@ -310,14 +311,12 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 
 	const mcpHub = provider.getMcpHub()
 
-	const { CodeIndexManager } = await import("../../services/code-index/manager")
-	const codeIndexManager = CodeIndexManager.getInstance(provider.context, cwd)
-
-	const { GitIndexManager } = await import("../../services/git-index/git-index-manager")
-	const gitIndexManager = GitIndexManager.getInstance(provider.context, cwd)
-
-	const { LiveMemoryManager } = await import("../../services/live-memory/manager")
-	const liveMemoryManager = LiveMemoryManager.getInstance(provider.context, cwd)
+	// Category II managers are reached through their host registries (Chunk B): the
+	// concrete singletons live in VS Code `src`; a headless host leaves the registry
+	// unset and the features are simply off.
+	const codeIndexManager = getCodeIndexManagerFactory()?.(provider.context, cwd)
+	const gitIndexManager = getGitIndexManagerFactory()?.(provider.context, cwd)
+	const liveMemoryManager = getLiveMemoryManagerAccessor()?.getInstance(provider.context, cwd)
 
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,

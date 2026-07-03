@@ -8,10 +8,9 @@ import { getTaskDirectoryPath } from "@shofer/core"
 import { GlobalFileNames } from "@shofer/core"
 import { fileExistsAtPath } from "../../utils/fs"
 import fs from "fs/promises"
-import { ContextProxy } from "../config/ContextProxy"
 import type { FileMetadataEntry, RecordSource, TaskMetadata } from "./FileContextTrackerTypes"
-import { ShoferProvider } from "../webview/ShoferProvider"
-import { LiveMemoryManager } from "../../services/live-memory/manager"
+import type { TaskProviderLike } from "@shofer/core"
+import { getLiveMemoryManagerAccessor } from "@shofer/core"
 import { taskLog } from "@shofer/core"
 
 /**
@@ -42,7 +41,7 @@ export interface FileSnapshot {
 // If a file is modified outside of Shofer, we detect and track this change to prevent stale context.
 export class FileContextTracker {
 	readonly taskId: string
-	private providerRef: WeakRef<ShoferProvider>
+	private providerRef: WeakRef<TaskProviderLike>
 
 	// File tracking and watching
 	private fileWatchers = new Map<string, HostFileWatcher>()
@@ -50,7 +49,7 @@ export class FileContextTracker {
 	private recentlyEditedByRoo = new Set<string>()
 	private checkpointPossibleFiles = new Set<string>()
 
-	constructor(provider: ShoferProvider, taskId: string) {
+	constructor(provider: TaskProviderLike, taskId: string) {
 		this.providerRef = new WeakRef(provider)
 		this.taskId = taskId
 	}
@@ -112,25 +111,30 @@ export class FileContextTracker {
 		}
 	}
 
-	public getContextProxy(): ContextProxy | undefined {
+	/**
+	 * Resolves the extension's global-storage path from the (opaque) provider
+	 * context — the same derivation `Task` performs — so this tracker needs no
+	 * `ContextProxy` value import and stays portable into `@shofer/core`. Returns
+	 * `""` when the provider (or its context) is unavailable; callers treat an
+	 * empty path as "no storage" (best-effort).
+	 */
+	private getGlobalStoragePath(): string {
 		const provider = this.providerRef.deref()
 		if (!provider) {
-			taskLog.error("ShoferProvider reference is no longer valid")
-			return undefined
+			taskLog.error("Task provider reference is no longer valid")
+			return ""
 		}
-		const context = provider.contextProxy
-
-		if (!context) {
-			taskLog.error("Context is not available")
-			return undefined
+		const fsPath = (provider.context as { globalStorageUri?: { fsPath?: string } })?.globalStorageUri?.fsPath
+		if (!fsPath) {
+			taskLog.error("Global storage path is not available")
+			return ""
 		}
-
-		return context
+		return fsPath
 	}
 
 	// Gets task metadata from storage
 	async getTaskMetadata(taskId: string): Promise<TaskMetadata> {
-		const globalStoragePath = this.getContextProxy()?.globalStorageUri.fsPath ?? ""
+		const globalStoragePath = this.getGlobalStoragePath()
 		const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
 		const filePath = path.join(taskDir, GlobalFileNames.taskMetadata)
 		try {
@@ -146,7 +150,7 @@ export class FileContextTracker {
 	// Saves task metadata to storage
 	async saveTaskMetadata(taskId: string, metadata: TaskMetadata) {
 		try {
-			const globalStoragePath = this.getContextProxy()!.globalStorageUri.fsPath
+			const globalStoragePath = this.getGlobalStoragePath()
 			const taskDir = await getTaskDirectoryPath(globalStoragePath, taskId)
 			const filePath = path.join(taskDir, GlobalFileNames.taskMetadata)
 			await safeWriteJson(filePath, metadata)
@@ -352,7 +356,7 @@ export class FileContextTracker {
 	 */
 	private _notifyLiveMemory(filePath: string): void {
 		try {
-			const managers = LiveMemoryManager.getAllInstances()
+			const managers = getLiveMemoryManagerAccessor()?.getAllInstances() ?? []
 			for (const mgr of managers) {
 				mgr.notifyFileModified(filePath)
 			}
@@ -370,7 +374,7 @@ export class FileContextTracker {
 	 * directories. Created on demand by callers that write into them.
 	 */
 	private async getSnapshotDirs(): Promise<{ originals: string; finals: string } | undefined> {
-		const storage = this.getContextProxy()?.globalStorageUri.fsPath
+		const storage = this.getGlobalStoragePath()
 		if (!storage) return undefined
 		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
 		return {
@@ -415,7 +419,7 @@ export class FileContextTracker {
 	 * `final/` directories (for file copies, not metadata).
 	 */
 	private async getWorkingDirs(): Promise<{ base: string; final: string } | undefined> {
-		const storage = this.getContextProxy()?.globalStorageUri.fsPath
+		const storage = this.getGlobalStoragePath()
 		if (!storage) return undefined
 		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
 		return {

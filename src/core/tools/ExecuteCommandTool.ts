@@ -19,7 +19,7 @@ import { Package } from "@shofer/core"
 import { t } from "@shofer/core"
 import { getTaskDirectoryPath } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import {
 	getWorktreeCommandWarning,
 	getWorktreeSandboxPrefix,
@@ -115,7 +115,7 @@ export class ExecuteCommandTool extends BaseTool<"execute_command"> {
 			}
 
 			const executionId = task.lastMessageTs?.toString() ?? Date.now().toString()
-			const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
+			const provider = (await task.providerRef.deref()) as TaskProviderLike | undefined
 			const providerState = await provider?.getState()
 
 			// Force execa backend for sandboxed worktree tasks so the sandbox
@@ -256,10 +256,12 @@ export async function executeCommandInTerminal(
 	let hasAskedForCommandOutput = false
 
 	const terminalProvider = terminalShellIntegrationDisabled ? "execa" : "vscode"
-	const provider = (await task.providerRef.deref()) as ShoferProvider | undefined
+	const provider = (await task.providerRef.deref()) as TaskProviderLike | undefined
 
-	// Get global storage path for persisted output artifacts
-	const globalStoragePath = provider?.context?.globalStorageUri?.fsPath
+	// Get global storage path for persisted output artifacts. `context` is opaque
+	// on TaskProviderLike; cast to the storage-path shape at the boundary.
+	const globalStoragePath = (provider?.context as { globalStorageUri?: { fsPath?: string } } | undefined)
+		?.globalStorageUri?.fsPath
 	let interceptor: OutputInterceptor | undefined
 
 	// Create OutputInterceptor if we have storage available

@@ -1,4 +1,4 @@
-import type { LiveMemoryManager } from "../../../services/live-memory/manager"
+import type { LiveMemoryManagerLike } from "@shofer/core"
 
 /**
  * Generate the Live Memory section for the task agent's system prompt.
@@ -12,7 +12,7 @@ import type { LiveMemoryManager } from "../../../services/live-memory/manager"
  * @param cwd - Current workspace directory path
  * @param liveMemoryManager - The LiveMemoryManager instance (optional)
  */
-export function getLiveMemorySection(cwd: string, liveMemoryManager?: LiveMemoryManager): string {
+export function getLiveMemorySection(cwd: string, liveMemoryManager?: LiveMemoryManagerLike): string {
 	if (!liveMemoryManager || !liveMemoryManager.isLiveMemoryAvailable) {
 		return ""
 	}

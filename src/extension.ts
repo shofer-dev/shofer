@@ -44,6 +44,7 @@ import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
 import { registerNativeApiHandler } from "@shofer/core"
 import { setMcpHubFactory } from "@shofer/core"
+import { setCodeIndexManagerFactory, setGitIndexManagerFactory, setLiveMemoryManagerAccessor } from "@shofer/core"
 import { VsCodeLmHandler } from "./api/providers/vscode-lm"
 import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
@@ -157,6 +158,22 @@ export async function activate(context: vscode.ExtensionContext) {
 			provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
 		),
 	)
+
+	// Register the host accessors the portable Task core / FileContextTracker use to
+	// reach the Category II code-index, git-index and live-memory managers (Chunk B).
+	// The concrete singletons need a vscode.ExtensionContext (cast back here at the
+	// boundary); headless hosts leave these unset and the features degrade to off.
+	setCodeIndexManagerFactory((context, workspacePath) =>
+		CodeIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
+	)
+	setGitIndexManagerFactory((context, workspacePath) =>
+		GitIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
+	)
+	setLiveMemoryManagerAccessor({
+		getInstance: (context, workspacePath) =>
+			LiveMemoryManager.getInstance(context as vscode.ExtensionContext, workspacePath),
+		getAllInstances: () => LiveMemoryManager.getAllInstances(),
+	})
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)

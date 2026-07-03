@@ -1,7 +1,7 @@
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
@@ -110,7 +110,7 @@ export class WaitForMcpCallTool extends BaseTool<"wait_for_mcp_call"> {
 			// does not strand the task in `waiting` forever. The taskManager
 			// reference is optional — in unit tests / non-provider contexts
 			// (e.g. CLI) the state transition is skipped.
-			const taskManager = (task.providerRef.deref() as ShoferProvider | undefined)?.taskManager
+			const taskManager = (task.providerRef.deref() as TaskProviderLike | undefined)?.taskManager
 			taskManager?.setState(task.taskId, { lifecycle: "waiting" })
 
 			try {

@@ -16,7 +16,7 @@ import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { OpenRouterHandler } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { t } from "@shofer/core"
 
 export class GenerateImageTool extends BaseTool<"generate_image"> {
@@ -26,7 +26,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 		const { prompt, path: relPath, image: inputImagePath } = params
 		const { handleError, pushToolResult, askApproval } = callbacks
 
-		const provider = task.providerRef.deref() as ShoferProvider | undefined
+		const provider = task.providerRef.deref() as TaskProviderLike | undefined
 		const state = await provider?.getState()
 		const isImageGenerationEnabled = experiments.isEnabled(
 			state?.experiments ?? {},

@@ -4,8 +4,8 @@ import * as vscode from "vscode"
 import matter from "gray-matter"
 
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
-import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "../shofer-config"
-import { directoryExists, fileExists } from "../shofer-config"
+import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "@shofer/core"
+import { directoryExists, fileExists } from "@shofer/core"
 import { SkillMetadata, SkillContent } from "@shofer/types"
 import { modes, getAllModes } from "@shofer/core"
 import {

@@ -41,8 +41,10 @@ vi.mock("fs/promises", () => ({
 	},
 }))
 
-// Mock the shofer-config service
-vi.mock("../../../../services/shofer-config", () => ({
+// Mock the shofer-config service (now part of @shofer/core; partial-mock only
+// its dir helpers so the rest of the core barrel stays real).
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
 	getRooDirectoriesForCwd: mockGetRooDirectoriesForCwd,
 	getAllRooDirectoriesForCwd: mockGetAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd: mockGetAgentsDirectoriesForCwd,

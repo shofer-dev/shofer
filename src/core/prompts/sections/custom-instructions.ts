@@ -13,7 +13,7 @@ import {
 	getAllRooDirectoriesForCwd,
 	getAgentsDirectoriesForCwd,
 	getGlobalShoferDirectory,
-} from "../../../services/shofer-config"
+} from "@shofer/core"
 
 /**
  * Safely read a file and return its trimmed content

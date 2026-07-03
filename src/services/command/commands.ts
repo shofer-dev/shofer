@@ -2,7 +2,7 @@ import fs from "fs/promises"
 import * as path from "path"
 import { Dirent } from "fs"
 import matter from "gray-matter"
-import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config"
+import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "@shofer/core"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands"
 import { configLog } from "@shofer/core"
 

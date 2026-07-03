@@ -1,7 +1,7 @@
 import type { McpExecutionStatus, McpToolCallResponse, ToolName } from "@shofer/types"
 
 import type { Task } from "../../task/Task"
-import type { ShoferProvider } from "../../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import { t } from "@shofer/core"
 import { toolNamesMatch } from "@shofer/core"
@@ -34,7 +34,7 @@ export async function validateMcpToolExists(
 	callingToolName: ToolName = "use_mcp_tool",
 ): Promise<McpToolValidationResult> {
 	try {
-		const provider = task.providerRef.deref() as ShoferProvider | undefined
+		const provider = task.providerRef.deref() as TaskProviderLike | undefined
 		const mcpHub = provider?.getMcpHub()
 
 		if (!mcpHub) {
@@ -227,7 +227,7 @@ export async function runMcpToolCall(
 	})
 
 	// Pass task.taskId as conversationId so mcp-server can track the conversation
-	const toolResult = await (task.providerRef.deref() as ShoferProvider | undefined)
+	const toolResult = await (task.providerRef.deref() as TaskProviderLike | undefined)
 		?.getMcpHub()
 		?.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)
 
@@ -276,7 +276,7 @@ export async function runMcpToolCall(
  * Posts an MCP execution status update to the webview.
  */
 async function sendExecutionStatus(task: Task, status: McpExecutionStatus): Promise<void> {
-	const clineProvider = task.providerRef.deref() as ShoferProvider | undefined
+	const clineProvider = task.providerRef.deref() as TaskProviderLike | undefined
 	clineProvider?.postMessageToWebview({
 		type: "mcpExecutionStatus",
 		text: JSON.stringify(status),

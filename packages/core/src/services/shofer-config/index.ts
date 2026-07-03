@@ -3,6 +3,8 @@ import * as os from "os"
 import fs from "fs/promises"
 import * as childProcess from "child_process"
 import * as readline from "readline"
+import { getHost } from "@shofer/types"
+import { getBinPath } from "../../ripgrep/index.js"
 
 /**
  * Gets the global .shofer directory path based on the current platform
@@ -114,6 +116,7 @@ export async function directoryExists(dirPath: string): Promise<boolean> {
 	try {
 		const stat = await fs.stat(dirPath)
 		return stat.isDirectory()
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} catch (error: any) {
 		// Only catch expected "not found" errors
 		if (error.code === "ENOENT" || error.code === "ENOTDIR") {
@@ -131,6 +134,7 @@ export async function fileExists(filePath: string): Promise<boolean> {
 	try {
 		const stat = await fs.stat(filePath)
 		return stat.isFile()
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} catch (error: any) {
 		// Only catch expected "not found" errors
 		if (error.code === "ENOENT" || error.code === "ENOTDIR") {
@@ -147,6 +151,7 @@ export async function fileExists(filePath: string): Promise<boolean> {
 export async function readFileIfExists(filePath: string): Promise<string | null> {
 	try {
 		return await fs.readFile(filePath, "utf-8")
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} catch (error: any) {
 		// Only catch expected "not found" errors
 		if (error.code === "ENOENT" || error.code === "ENOTDIR" || error.code === "EISDIR") {
@@ -193,17 +198,15 @@ export async function readFileIfExists(filePath: string): Promise<string | null>
  */
 export async function discoverSubfolderRooDirectories(cwd: string): Promise<string[]> {
 	try {
-		// Dynamic import to avoid vscode dependency at module load time
-		// (file-search.ts → vscode, which is unavailable in the webview context).
 		// We only need the ripgrep binary locator here, not executeRipgrep — the
 		// latter caps results at 500, which is wrong for `.shofer/` discovery
 		// in repos where the root .shofer/ holds large generated content
 		// (e.g. agent worktree snapshots). When the cap fires, every result is
 		// from the root .shofer/ (which we discard anyway via the
 		// rootShoferDir filter below) and no subfolder .shofer/ ever surfaces.
-		const { getBinPath } = await import("@shofer/core")
-		const vscode = await import("vscode")
-		const rgPath = await getBinPath(vscode.env.appRoot)
+		// The app root (for the bundled ripgrep binary) comes from the host seam
+		// so this module stays vscode-free and portable into @shofer/core.
+		const rgPath = await getBinPath(getHost().env.appRoot)
 		if (!rgPath) {
 			return []
 		}
@@ -239,7 +242,7 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 				const rel = path.relative(cwd, line)
 				const match = rel.match(/^(.+?)[/\\]\.shofer(?:[/\\]|$)/)
 				if (match) {
-					shoferDirs.add(path.join(cwd, match[1], ".shofer"))
+					shoferDirs.add(path.join(cwd, match[1]!, ".shofer"))
 				}
 			})
 
@@ -258,7 +261,7 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 		})
 
 		return Array.from(shoferDirs).sort()
-	} catch (error) {
+	} catch {
 		// If discovery fails (e.g., ripgrep not available), return empty array
 		return []
 	}

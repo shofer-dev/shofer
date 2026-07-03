@@ -11,7 +11,7 @@ import { type ModeConfig, type PromptComponent, customModesSettingsSchema, modeC
 
 import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
-import { getGlobalShoferDirectory } from "../../services/shofer-config"
+import { getGlobalShoferDirectory } from "@shofer/core"
 import { configLog as logger } from "@shofer/core"
 import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"

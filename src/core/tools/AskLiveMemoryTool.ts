@@ -1,10 +1,10 @@
 import { Task } from "../task/Task"
-import { LiveMemoryManager } from "../../services/live-memory/manager"
+import { getLiveMemoryManagerAccessor } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { liveMemoryLog as logger } from "@shofer/core"
 
 const LOG_PREFIX = "[AskLiveMemoryTool]"
@@ -65,12 +65,12 @@ export class AskLiveMemoryTool extends BaseTool<"ask_live_memory"> {
 		task.consecutiveMistakeCount = 0
 
 		try {
-			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
+			const context = (task.providerRef.deref() as TaskProviderLike | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}
 
-			const manager = LiveMemoryManager.getInstance(context, workspacePath)
+			const manager = getLiveMemoryManagerAccessor()?.getInstance(context, workspacePath)
 
 			if (!manager) {
 				throw new Error("LiveMemoryManager is not available.")

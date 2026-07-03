@@ -1,12 +1,12 @@
 import { Task } from "../task/Task"
-import { GitIndexManager } from "../../services/git-index/git-index-manager"
+import { getGitIndexManagerFactory } from "@shofer/core"
 import { getWorkspacePath } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
-import type { GitSearchResult } from "../../services/git-index/interfaces/git"
+import type { GitSearchResult } from "@shofer/core"
 import type { ToolUse } from "@shofer/core"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike } from "@shofer/core"
 import { GIT_SEARCH_CAP, resolveMaxResults, formatTruncationHeader } from "@shofer/core"
 
 interface GitSearchParams {
@@ -61,12 +61,12 @@ export class GitSearchTool extends BaseTool<"git_search"> {
 
 			task.consecutiveMistakeCount = 0
 
-			const context = (task.providerRef.deref() as ShoferProvider | undefined)?.context
+			const context = (task.providerRef.deref() as TaskProviderLike | undefined)?.context
 			if (!context) {
 				throw new Error("Extension context is not available.")
 			}
 
-			const manager = GitIndexManager.getInstance(context, workspacePath)
+			const manager = getGitIndexManagerFactory()?.(context, workspacePath)
 
 			if (!manager) {
 				throw new Error("GitIndexManager is not available for this workspace.")

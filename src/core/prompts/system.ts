@@ -1,5 +1,3 @@
-import type * as vscode from "vscode"
-
 import { getHost } from "@shofer/types"
 
 import {
@@ -17,8 +15,8 @@ import { formatLanguage } from "@shofer/types"
 import { isEmpty } from "@shofer/core"
 
 import { McpHub } from "@shofer/core"
-import { CodeIndexManager } from "../../services/code-index/manager"
-import { SkillsManager } from "../../services/skills/SkillsManager"
+import { getCodeIndexManagerFactory, getLiveMemoryManagerAccessor } from "@shofer/core"
+import type { SkillsManagerLike } from "@shofer/core"
 
 import { listSubmodules } from "@shofer/core"
 
@@ -51,7 +49,7 @@ export function getPromptComponent(
 }
 
 async function generatePrompt(
-	context: vscode.ExtensionContext,
+	context: unknown,
 	cwd: string,
 	supportsComputerUse: boolean,
 	mode: Mode,
@@ -66,7 +64,7 @@ async function generatePrompt(
 	settings?: SystemPromptSettings,
 	todoList?: TodoItem[],
 	modelId?: string,
-	skillsManager?: SkillsManager,
+	skillsManager?: SkillsManagerLike,
 ): Promise<string> {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")
@@ -93,7 +91,7 @@ async function generatePrompt(
 	const mcpAllowedByRestriction = capabilityGroups === undefined || capabilityGroups.has("mcp")
 	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
 
-	const codeIndexManager = CodeIndexManager.getInstance(context, cwd)
+	const codeIndexManager = getCodeIndexManagerFactory()?.(context, cwd)
 
 	// Tool calling is native-only.
 	const effectiveProtocol = "native"
@@ -105,20 +103,21 @@ async function generatePrompt(
 	const includeMcp = settings?.includeMcp ?? true
 
 	const [modesSection, rawSkillsSection] = await Promise.all([
-		getModesSection(context),
+		// modes.ts is still front-end-coupled (reads `globalState`); cast the opaque
+		// context back to its expected shape at this single boundary (B3).
+		getModesSection(context as Parameters<typeof getModesSection>[0]),
 		getSkillsSection(skillsManager, mode as string),
 	])
 	const skillsSection = includeSkills ? rawSkillsSection : ""
 
-	// Resolve the LiveMemoryManager lazily to avoid circular-import issues
-	// (system.ts ↔ Task.ts ↔ build-tools.ts ↔ LiveMemoryManager).
+	// Resolve the LiveMemoryManager through its host registry (Chunk B). Headless
+	// hosts leave the accessor unset, so the section is simply omitted.
 	let liveMemorySection = ""
 	try {
-		const { LiveMemoryManager: aam } = await import("../../services/live-memory/manager")
-		const liveMemoryManager = aam.getInstance(context, cwd)
+		const liveMemoryManager = getLiveMemoryManagerAccessor()?.getInstance(context, cwd)
 		liveMemorySection = getLiveMemorySection(cwd, liveMemoryManager)
 	} catch {
-		// Manager not yet wired or import failed; omit the section silently.
+		// Manager not yet wired or unavailable; omit the section silently.
 	}
 
 	// Tools catalog is not included in the system prompt.
@@ -158,7 +157,7 @@ ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", 
 }
 
 export const SYSTEM_PROMPT = async (
-	context: vscode.ExtensionContext,
+	context: unknown,
 	cwd: string,
 	supportsComputerUse: boolean,
 	mcpHub?: McpHub,
@@ -173,7 +172,7 @@ export const SYSTEM_PROMPT = async (
 	settings?: SystemPromptSettings,
 	todoList?: TodoItem[],
 	modelId?: string,
-	skillsManager?: SkillsManager,
+	skillsManager?: SkillsManagerLike,
 ): Promise<string> => {
 	if (!context) {
 		throw new Error("Extension context is required for generating system prompt")

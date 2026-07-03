@@ -4,8 +4,7 @@ import { getGroupName, getModeBySlug, getToolsForMode, resolveToolAlias } from "
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/core"
 import { defaultModeSlug } from "@shofer/core"
 import { buildMcpToolName } from "@shofer/core"
-import type { CodeIndexManager } from "../../../services/code-index/manager"
-import type { GitIndexManager } from "../../../services/git-index/git-index-manager"
+import type { CodeIndexManagerLike, GitIndexManagerLike, LiveMemoryManagerLike } from "@shofer/core"
 import type { McpHub } from "@shofer/core"
 import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
 
@@ -263,11 +262,11 @@ export function filterNativeToolsForMode(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManager,
-	gitIndexManager?: GitIndexManager,
+	codeIndexManager?: CodeIndexManagerLike,
+	gitIndexManager?: GitIndexManagerLike,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
-	liveMemoryManager?: import("../../../services/live-memory/manager").LiveMemoryManager,
+	liveMemoryManager?: LiveMemoryManagerLike,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
 	const modeSlug = mode ?? defaultModeSlug
@@ -362,7 +361,7 @@ export function isToolAllowedInMode(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManager,
+	codeIndexManager?: CodeIndexManagerLike,
 	settings?: Record<string, any>,
 ): boolean {
 	const modeSlug = mode ?? defaultModeSlug
@@ -420,7 +419,7 @@ export function getAvailableToolsInGroup(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManager,
+	codeIndexManager?: CodeIndexManagerLike,
 	settings?: Record<string, any>,
 ): ToolName[] {
 	const toolGroup = TOOL_GROUPS[groupName]

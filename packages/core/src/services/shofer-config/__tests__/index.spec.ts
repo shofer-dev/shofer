@@ -29,14 +29,16 @@ vi.mock("child_process", () => ({
 }))
 
 // Mock the ripgrep binary locator
-vi.mock("../../ripgrep", () => ({
+// The SUT imports `getBinPath` from the core ripgrep module (one level higher than
+// this service dir), so the mock specifier must resolve there to intercept it.
+vi.mock("../../../ripgrep", () => ({
 	getBinPath: mockGetBinPath,
 }))
 
-// Mock vscode (only env.appRoot is needed in this module)
-vi.mock("vscode", () => ({
-	env: { appRoot: "/mock/vscode" },
-}))
+// The app root (for the bundled ripgrep binary) now comes from the host seam
+// (`getHost().env.appRoot`), not a lazy `vscode` import — so this module is
+// portable into @shofer/core and the test needs no `vscode` mock. `getBinPath`
+// is mocked above, so the actual app-root value is irrelevant here.
 
 /**
  * Helper: drive the mocked rg child process with a fixed list of file paths.
@@ -76,7 +78,7 @@ import {
 	getAgentsDirectoriesForCwd,
 	discoverSubfolderRooDirectories,
 	loadConfiguration,
-} from "../index"
+} from "../index.js"
 
 describe("ShoferConfigService", () => {
 	beforeEach(() => {

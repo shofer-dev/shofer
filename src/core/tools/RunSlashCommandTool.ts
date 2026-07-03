@@ -4,7 +4,7 @@ import { getCommand, getCommandNames } from "../../services/command/commands"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "@shofer/core"
-import type { ShoferProvider } from "../webview/ShoferProvider"
+import type { TaskProviderLike, SkillsManagerLike } from "@shofer/core"
 import { getModeBySlug } from "@shofer/core"
 import {
 	buildSkillApprovalMessage,
@@ -25,7 +25,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 		const { askApproval, handleError, pushToolResult } = callbacks
 
 		// Check if run slash command experiment is enabled
-		const provider = task.providerRef.deref() as ShoferProvider | undefined
+		const provider = task.providerRef.deref() as TaskProviderLike | undefined
 		const state = await provider?.getState()
 		const isRunSlashCommandEnabled = experiments.isEnabled(
 			state?.experiments ?? {},
@@ -57,7 +57,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 
 			if (!command) {
 				const currentMode = await task.getTaskMode()
-				const skillsManager = provider?.getSkillsManager()
+				const skillsManager = provider?.getSkillsManager() as SkillsManagerLike | undefined
 				const skillContent = await resolveSkillContentForMode(skillsManager, commandName, currentMode)
 
 				if (skillContent) {
@@ -110,7 +110,7 @@ export class RunSlashCommandTool extends BaseTool<"run_slash_command"> {
 
 			// Switch mode if specified in the command frontmatter
 			if (command.mode) {
-				const provider = task.providerRef.deref() as ShoferProvider | undefined
+				const provider = task.providerRef.deref() as TaskProviderLike | undefined
 				const targetMode = getModeBySlug(command.mode, (await provider?.getState())?.customModes)
 				if (targetMode) {
 					// Scope the mode switch to this task so it doesn't leak

@@ -13,7 +13,10 @@ import { getFullModeDetails } from "../modes/getFullModeDetails"
 import { getApiMetrics } from "@shofer/core"
 import { listFiles } from "@shofer/core"
 import { TerminalRegistry } from "@shofer/core"
-import { Terminal } from "../../integrations/terminal/Terminal"
+// `compressTerminalOutput` is a static on the portable `BaseTerminal` (the VS Code
+// `Terminal` merely inherits it), so use it directly and keep this Task-closure
+// module free of the `src` Terminal value import.
+import { BaseTerminal } from "@shofer/core"
 import { arePathsEqual } from "@shofer/core"
 import { formatResponse } from "@shofer/core"
 import { getGitStatus } from "@shofer/core"
@@ -104,7 +107,7 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 			let newOutput = TerminalRegistry.getUnretrievedOutput(busyTerminal.id)
 
 			if (newOutput) {
-				newOutput = Terminal.compressTerminalOutput(newOutput)
+				newOutput = BaseTerminal.compressTerminalOutput(newOutput)
 				terminalDetails += `\n### New Output\n${newOutput}`
 			}
 		}
@@ -132,7 +135,7 @@ export async function getEnvironmentDetails(shofer: Task, includeFileDetails: bo
 				let output = process.getUnretrievedOutput()
 
 				if (output) {
-					output = Terminal.compressTerminalOutput(output)
+					output = BaseTerminal.compressTerminalOutput(output)
 					terminalOutputs.push(`Command: \`${process.command}\`\n${output}`)
 				}
 			}
