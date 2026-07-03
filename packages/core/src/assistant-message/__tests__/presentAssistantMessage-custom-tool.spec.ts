@@ -273,7 +273,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			// Custom tool should NOT have been executed
 			const getMock = vi.mocked(customToolRegistry.get)
 			if (getMock.mock.results.length > 0) {
-				const customTool = getMock.mock.results[0].value
+				const customTool = getMock.mock.results[0]!.value
 				if (customTool) {
 					expect(customTool.execute).not.toHaveBeenCalled()
 				}
@@ -342,7 +342,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 
 			const validateToolUseMock = vi.mocked(validateToolUse)
 			expect(validateToolUseMock).toHaveBeenCalled()
-			const toolRequirements = validateToolUseMock.mock.calls[0][3]
+			const toolRequirements = validateToolUseMock.mock.calls[0]![3]
 			expect(toolRequirements).toMatchObject({
 				search_and_replace: false,
 				edit: false,
