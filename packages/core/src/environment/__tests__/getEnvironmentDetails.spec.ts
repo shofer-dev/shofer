@@ -1,34 +1,21 @@
-// npx vitest core/environment/__tests__/getEnvironmentDetails.spec.ts
+// npx vitest environment/__tests__/getEnvironmentDetails.spec.ts
 
 import pWaitFor from "p-wait-for"
 import delay from "delay"
 import type { Mock } from "vitest"
 
-import { getEnvironmentDetails } from "@shofer/core"
-import { getFullModeDetails } from "@shofer/core"
-import { isToolAllowedForMode } from "@shofer/core"
-import { getApiMetrics } from "@shofer/core"
-import { listFiles } from "@shofer/core"
-import { TerminalRegistry } from "@shofer/core"
-import { Terminal } from "../../../integrations/terminal/Terminal.js"
-import { arePathsEqual } from "@shofer/core"
-import { FileContextTracker } from "@shofer/core"
-import { ApiHandler } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { ShoferIgnoreController } from "@shofer/core"
-import { formatResponse } from "@shofer/core"
-import { getGitStatus } from "@shofer/core"
-import { Task } from "@shofer/core"
+import { setHost, createInMemoryHost } from "@shofer/types"
 
-vi.mock("vscode", () => ({
-	window: {
-		tabGroups: { all: [], onDidChangeTabs: vi.fn() },
-		visibleTextEditors: [],
-	},
-	env: {
-		language: "en-US",
-	},
-}))
+import { getEnvironmentDetails } from "../getEnvironmentDetails.js"
+import { getFullModeDetails } from "../../modes/getFullModeDetails.js"
+import { listFiles } from "../../services/glob/list-files.js"
+import { TerminalRegistry } from "../../terminal/TerminalRegistry.js"
+import { BaseTerminal } from "../../terminal/BaseTerminal.js"
+import { arePathsEqual } from "../../path/path.js"
+import { formatResponse } from "../../prompts/responses.js"
+import { getGitStatus } from "../../utils/git.js"
+import { getApiMetrics } from "@shofer/types"
+import type { Task } from "../../task/Task.js"
 
 vi.mock("p-wait-for", () => ({
 	default: vi.fn(),
@@ -42,29 +29,53 @@ vi.mock("execa", () => ({
 	execa: vi.fn(),
 }))
 
-vi.mock("../../modes/getFullModeDetails")
-vi.mock("../../../integrations/terminal/Terminal")
-vi.mock("@shofer/core", async (importOriginal) => {
-	const orig = await importOriginal<typeof import("@shofer/core")>()
-	return {
-		...orig,
-		listFiles: vi.fn(),
-		getApiMetrics: vi.fn(),
-		arePathsEqual: vi.fn(),
-		getReadablePath: vi.fn(),
-		toRelativePath: vi.fn(),
-		getWorkspacePath: vi.fn(),
-		getWorkspacePathForContext: vi.fn(),
-		formatResponse: { ...orig.formatResponse, formatFilesList: vi.fn() },
-		getGitStatus: vi.fn(),
-		isToolAllowedForMode: vi.fn(),
-		TerminalRegistry: {
-			getBackgroundTerminals: vi.fn(() => []),
-			getTerminals: vi.fn(() => []),
-			getUnretrievedOutput: vi.fn(() => ""),
-			isProcessHot: vi.fn(() => false),
-		},
-	}
+// The subject collaborates with these siblings via intra-core RELATIVE imports;
+// only a relative mock (not the `@shofer/core` barrel) can intercept those calls.
+vi.mock("../../modes/getFullModeDetails.js", () => ({
+	getFullModeDetails: vi.fn(),
+}))
+
+vi.mock("../../services/glob/list-files.js", () => ({
+	listFiles: vi.fn(),
+}))
+
+vi.mock("../../terminal/TerminalRegistry.js", () => ({
+	TerminalRegistry: {
+		getBackgroundTerminals: vi.fn(() => []),
+		getTerminals: vi.fn(() => []),
+		getUnretrievedOutput: vi.fn(() => ""),
+		isProcessHot: vi.fn(() => false),
+	},
+}))
+
+vi.mock("../../terminal/BaseTerminal.js", () => ({
+	BaseTerminal: {
+		compressTerminalOutput: vi.fn((output: string) => output),
+	},
+}))
+
+// `path.js` also augments String.prototype with `toPosix`; keep the original and
+// override only `arePathsEqual`.
+vi.mock("../../path/path.js", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("../../path/path.js")>()
+	return { ...orig, arePathsEqual: vi.fn() }
+})
+
+vi.mock("../../prompts/responses.js", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("../../prompts/responses.js")>()
+	return { ...orig, formatResponse: { ...orig.formatResponse, formatFilesList: vi.fn() } }
+})
+
+vi.mock("../../utils/git.js", () => ({
+	getGitStatus: vi.fn(),
+}))
+
+// `getApiMetrics` lives in `@shofer/types` (a cross-package barrel the subject
+// imports by specifier), so this package-level mock DOES intercept it. Keep the
+// real host registry (`setHost`/`getHost`/`createInMemoryHost`) intact.
+vi.mock("@shofer/types", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("@shofer/types")>()
+	return { ...orig, getApiMetrics: vi.fn() }
 })
 
 describe("getEnvironmentDetails", () => {
@@ -85,6 +96,8 @@ describe("getEnvironmentDetails", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+
+		setHost(createInMemoryHost())
 
 		mockState = {
 			terminalOutputLineLimit: 100,
@@ -109,7 +122,7 @@ describe("getEnvironmentDetails", () => {
 			getTaskMode: vi.fn().mockResolvedValue("code"),
 			fileContextTracker: {
 				getAndClearRecentlyModifiedFiles: vi.fn().mockReturnValue([]),
-			} as unknown as FileContextTracker,
+			} as any,
 			shoferIgnoreController: {
 				filterPaths: vi.fn((paths: string[]) => paths.join("\n")),
 				cwd: mockCwd,
@@ -122,17 +135,17 @@ describe("getEnvironmentDetails", () => {
 				addToIgnore: vi.fn(),
 				removeFromIgnore: vi.fn(),
 				dispose: vi.fn(),
-			} as unknown as ShoferIgnoreController,
+			} as any,
 			shoferMessages: [],
 			api: {
 				getModel: vi.fn().mockReturnValue({ id: "test-model", info: { contextWindow: 100000 } }),
 				createMessage: vi.fn(),
 				countTokens: vi.fn(),
-			} as unknown as ApiHandler,
+			} as any,
 			providerRef: {
 				deref: vi.fn().mockReturnValue(mockProvider),
 				[Symbol.toStringTag]: "WeakRef",
-			} as unknown as WeakRef<ShoferProvider>,
+			} as any,
 		}
 
 		// Mock other dependencies.
@@ -142,11 +155,10 @@ describe("getEnvironmentDetails", () => {
 			roleDefinition: "You are a code assistant",
 			customInstructions: "Custom instructions",
 		})
-		;(isToolAllowedForMode as Mock).mockReturnValue(true)
 		;(listFiles as Mock).mockResolvedValue([["file1.ts", "file2.ts"], false])
 		;(formatResponse.formatFilesList as Mock).mockReturnValue("file1.ts\nfile2.ts")
 		;(arePathsEqual as Mock).mockReturnValue(false)
-		;(Terminal.compressTerminalOutput as Mock).mockImplementation((output: string) => output)
+		;(BaseTerminal.compressTerminalOutput as Mock).mockImplementation((output: string) => output)
 		;(TerminalRegistry.getTerminals as Mock).mockReturnValue([])
 		;(TerminalRegistry.getBackgroundTerminals as Mock).mockReturnValue([])
 		;(TerminalRegistry.isProcessHot as Mock).mockReturnValue(false)
