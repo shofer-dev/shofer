@@ -39,7 +39,7 @@ vi.mock("delay", () => ({
 	default: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { Task } from "@shofer/core"
+import { Task } from "../Task.js"
 
 setHost(createInMemoryHost())
 if (!TelemetryService.hasInstance()) {
