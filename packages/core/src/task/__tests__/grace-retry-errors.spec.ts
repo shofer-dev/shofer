@@ -1,26 +1,19 @@
-// npx vitest core/task/__tests__/grace-retry-errors.spec.ts
+// npx vitest src/task/__tests__/grace-retry-errors.spec.ts
 
 import * as os from "os"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 import * as path from "path"
-import * as vscode from "vscode"
 
-import type { GlobalState, ProviderSettings } from "@shofer/types"
+import { describe, it, expect, beforeEach, vi } from "vitest"
+import type { ProviderSettings } from "@shofer/types"
+import { setHost, createInMemoryHost, type TaskProviderLike } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-// Prevent the transitive import graph from loading extension.ts,
-// which pulls in ContextDropZoneProvider (which extends vscode.TreeItem).
-vi.mock("../../../extension", () => ({}))
+// Mock Task's intra-core deps via core-RELATIVE paths. The barrel mock
+// (`vi.mock("@shofer/core")`) cannot intercept Task's own relative imports, so
+// we stub the concrete modules Task imports instead.
 
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { ContextProxy } from "../../config/ContextProxy.js"
-
-// Mock @shofer/core
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	extractTextFromFile: vi.fn().mockResolvedValue("Mock file content"),
-	// Noop controller so constructing a Task doesn't spin up the real file watcher.
+// Noop ignore controller so constructing a Task doesn't spin up the real file watcher.
+vi.mock("../../ignore/ShoferIgnoreController.js", () => ({
 	ShoferIgnoreController: class {
 		validateAccess() {
 			return true
@@ -37,6 +30,10 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		async initialize() {}
 		dispose() {}
 	},
+}))
+
+vi.mock("../../utils/storage.js", async (importOriginal) => ({
+	...((await importOriginal()) as Record<string, unknown>),
 	getTaskDirectoryPath: vi
 		.fn()
 		.mockImplementation((globalStoragePath, taskId) => Promise.resolve(`${globalStoragePath}/tasks/${taskId}`)),
@@ -45,14 +42,13 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 		.mockImplementation((globalStoragePath) => Promise.resolve(`${globalStoragePath}/settings`)),
 }))
 
-// Mock delay before any imports that might use it
 vi.mock("delay", () => ({
 	__esModule: true,
 	default: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock("execa", () => ({
-	execa: vi.fn(),
+vi.mock("p-wait-for", () => ({
+	default: vi.fn().mockImplementation(async () => Promise.resolve()),
 }))
 
 vi.mock("fs/promises", async (importOriginal) => {
@@ -74,159 +70,42 @@ vi.mock("fs/promises", async (importOriginal) => {
 	}
 })
 
-vi.mock("p-wait-for", () => ({
-	default: vi.fn().mockImplementation(async () => Promise.resolve()),
-}))
-
-vi.mock("vscode", () => {
-	const mockDisposable = { dispose: vi.fn() }
-	const mockEventEmitter = { event: vi.fn(), fire: vi.fn() }
-	const mockTextDocument = { uri: { fsPath: "/mock/workspace/path/file.ts" } }
-	const mockTextEditor = { document: mockTextDocument }
-	const mockTab = { input: { uri: { fsPath: "/mock/workspace/path/file.ts" } } }
-	const mockTabGroup = { tabs: [mockTab] }
-
-	return {
-		TabInputTextDiff: vi.fn(),
-		CodeActionKind: {
-			QuickFix: { value: "quickfix" },
-			RefactorRewrite: { value: "refactor.rewrite" },
-		},
-		window: {
-			createTextEditorDecorationType: vi.fn().mockReturnValue({
-				dispose: vi.fn(),
-			}),
-			visibleTextEditors: [mockTextEditor],
-			tabGroups: {
-				all: [mockTabGroup],
-				close: vi.fn(),
-				onDidChangeTabs: vi.fn(() => ({ dispose: vi.fn() })),
-			},
-			showErrorMessage: vi.fn(),
-		},
-		workspace: {
-			workspaceFolders: [
-				{
-					uri: { fsPath: "/mock/workspace/path" },
-					name: "mock-workspace",
-					index: 0,
-				},
-			],
-			createFileSystemWatcher: vi.fn(() => ({
-				onDidCreate: vi.fn(() => mockDisposable),
-				onDidDelete: vi.fn(() => mockDisposable),
-				onDidChange: vi.fn(() => mockDisposable),
-				dispose: vi.fn(),
-			})),
-			fs: {
-				stat: vi.fn().mockResolvedValue({ type: 1 }),
-			},
-			onDidSaveTextDocument: vi.fn(() => mockDisposable),
-			getConfiguration: vi.fn(() => ({ get: (key: string, defaultValue: any) => defaultValue })),
-		},
-		env: {
-			uriScheme: "vscode",
-			language: "en",
-		},
-		EventEmitter: vi.fn().mockImplementation(() => mockEventEmitter),
-		Disposable: {
-			from: vi.fn(),
-		},
-		TabInputText: vi.fn(),
-	}
-})
-
-vi.mock("../../mentions", () => ({
-	parseMentions: vi.fn().mockImplementation((text) => {
-		return Promise.resolve({ text: `processed: ${text}`, mode: undefined, contentBlocks: [] })
-	}),
-	openMention: vi.fn(),
-	getLatestTerminalOutput: vi.fn(),
-}))
-
-vi.mock("../../environment/getEnvironmentDetails", () => ({
-	getEnvironmentDetails: vi.fn().mockResolvedValue(""),
-}))
-
-vi.mock("../../ignore/ShoferIgnoreController")
-
-vi.mock("../../../utils/fs", () => ({
-	fileExistsAtPath: vi.fn().mockImplementation(() => false),
-}))
+import { Task } from "@shofer/core"
 
 describe("Grace Retry Error Handling", () => {
-	let mockProvider: any
+	let mockProvider: TaskProviderLike
 	let mockApiConfig: ProviderSettings
-	let mockOutputChannel: any
-	let mockExtensionContext: vscode.ExtensionContext
 
 	beforeEach(() => {
-		installVsCodeForwardingHost()
+		setHost(createInMemoryHost())
 		if (!TelemetryService.hasInstance()) {
 			TelemetryService.createInstance([])
 		}
 
-		const storageUri = {
-			fsPath: path.join(os.tmpdir(), "test-storage"),
-		}
+		const storageUri = { fsPath: path.join(os.tmpdir(), "test-storage") }
 
-		mockExtensionContext = {
-			globalState: {
-				get: vi.fn().mockImplementation((_key: keyof GlobalState) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			globalStorageUri: storageUri,
-			workspaceState: {
-				get: vi.fn().mockImplementation((_key) => undefined),
-				update: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				keys: vi.fn().mockReturnValue([]),
-			},
-			secrets: {
-				get: vi.fn().mockImplementation((_key) => Promise.resolve(undefined)),
-				store: vi.fn().mockImplementation((_key, _value) => Promise.resolve()),
-				delete: vi.fn().mockImplementation((_key) => Promise.resolve()),
-			},
-			extensionUri: {
-				fsPath: "/mock/extension/path",
-			},
-			extension: {
-				packageJSON: {
-					version: "1.0.0",
-				},
-			},
-		} as unknown as vscode.ExtensionContext
-
-		mockOutputChannel = {
-			appendLine: vi.fn(),
-			append: vi.fn(),
-			clear: vi.fn(),
-			show: vi.fn(),
-			hide: vi.fn(),
-			dispose: vi.fn(),
-		}
-
-		mockProvider = new ShoferProvider(
-			mockExtensionContext,
-			mockOutputChannel,
-			"sidebar",
-			new ContextProxy(mockExtensionContext),
-		) as any
+		// Plain provider stub typed as TaskProviderLike — never import concrete
+		// src classes (ShoferProvider/ContextProxy) into a core test.
+		mockProvider = {
+			context: { globalStorageUri: storageUri },
+			getState: vi.fn().mockResolvedValue({}),
+			log: vi.fn(),
+			postMessageToWebview: vi.fn().mockResolvedValue(undefined),
+			postTaskStateUpdate: vi.fn(),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
+		} as unknown as TaskProviderLike
 
 		mockApiConfig = {
 			apiProvider: "anthropic",
 			apiModelId: "claude-3-5-sonnet-20241022",
 			apiKey: "test-api-key",
 		}
-
-		mockProvider.postMessageToWebview = vi.fn().mockResolvedValue(undefined)
-		mockProvider.getState = vi.fn().mockResolvedValue({})
 	})
 
 	describe("consecutiveNoAssistantMessagesCount", () => {
 		it("should initialize to 0", () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -237,7 +116,7 @@ describe("Grace Retry Error Handling", () => {
 
 		it("should reset to 0 when abortTask is called", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -256,7 +135,7 @@ describe("Grace Retry Error Handling", () => {
 
 		it("should reset consecutiveNoToolUseCount when abortTask is called", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -280,7 +159,7 @@ describe("Grace Retry Error Handling", () => {
 	describe("consecutiveNoToolUseCount", () => {
 		it("should initialize to 0", () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -293,7 +172,7 @@ describe("Grace Retry Error Handling", () => {
 	describe("Grace Retry Pattern", () => {
 		it("should not show error on first failure (grace retry)", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -317,7 +196,7 @@ describe("Grace Retry Error Handling", () => {
 
 		it("should show error after 2 consecutive failures", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -341,7 +220,7 @@ describe("Grace Retry Error Handling", () => {
 
 		it("should show error on third consecutive failure", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -367,7 +246,7 @@ describe("Grace Retry Error Handling", () => {
 	describe("Counter Reset on Success", () => {
 		it("should be able to simulate counter reset when valid content is received", () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -389,7 +268,7 @@ describe("Grace Retry Error Handling", () => {
 
 		it("should reset counter when tool uses are present", () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -413,7 +292,7 @@ describe("Grace Retry Error Handling", () => {
 	describe("Error Marker", () => {
 		it("should use MODEL_NO_ASSISTANT_MESSAGES marker for error display", async () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
@@ -436,7 +315,7 @@ describe("Grace Retry Error Handling", () => {
 	describe("Parallel with noToolsUsed error handling", () => {
 		it("should have separate counters for noToolsUsed and noAssistantMessages", () => {
 			const task = new Task({
-				provider: mockProvider,
+				provider: mockProvider as any,
 				apiConfiguration: mockApiConfig,
 				task: "test task",
 				startTask: false,
