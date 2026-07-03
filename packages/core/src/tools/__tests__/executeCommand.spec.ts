@@ -1,30 +1,36 @@
 //
-// Tests the ExecuteCommand tool itself vs calling the tool where the tool is mocked.
+// Tests the executeCommandInTerminal function directly (the tool's terminal-execution
+// core), driving the terminal via a stubbed TerminalRegistry.
 //
 import * as path from "path"
 import * as fs from "fs/promises"
 
-import { ExecuteCommandOptions } from "@shofer/core"
-import { TerminalRegistry } from "@shofer/core"
-import { Terminal } from "../../../integrations/terminal/Terminal.js"
-import { ExecaTerminal } from "@shofer/core"
+import { setHost, createInMemoryHost } from "@shofer/types"
 import type { ShoferTerminalCallbacks } from "@shofer/types"
 
 // Mock fs to control directory existence checks
 vitest.mock("fs/promises")
 
-// TerminalRegistry + ExecaTerminal now live in @shofer/core; mock them there.
-vitest.mock("@shofer/core", async (importOriginal) => ({
+// After the v3 carve-out the tool + TerminalRegistry both live inside @shofer/core and
+// call each other via RELATIVE imports, so a barrel `vi.mock("@shofer/core")` can no
+// longer intercept the registry. Mock it core-relative instead. TelemetryService is a
+// sibling package, so it is still mocked by name. The vscode-backed `Terminal` and
+// `ExecaTerminal` classes are not imported here — the tests only need a terminal-shaped
+// stub object (with the methods they override), which TerminalRegistry hands back.
+vitest.mock("../../terminal/TerminalRegistry.js", async (importOriginal) => ({
 	...((await importOriginal()) as Record<string, unknown>),
 	TerminalRegistry: { getOrCreateTerminal: vitest.fn() },
-	ExecaTerminal: vitest.fn(),
+}))
+vitest.mock("@shofer/telemetry", () => ({
+	TelemetryService: {
+		instance: { captureShellIntegrationError: vitest.fn() },
+		hasInstance: () => false,
+	},
 }))
 
-// Mock the vscode-backed Terminal class (still Cat II in src)
-vitest.mock("../../../integrations/terminal/Terminal")
-
-// Import the actual executeCommand function (not mocked)
-import { executeCommandInTerminal } from "@shofer/core"
+// Import the actual executeCommand function (not mocked) + the mocked registry.
+import { executeCommandInTerminal, type ExecuteCommandOptions } from "../ExecuteCommandTool.js"
+import { TerminalRegistry } from "../../terminal/TerminalRegistry.js"
 
 // Tests for the executeCommand function
 describe("executeCommand", () => {
@@ -35,6 +41,7 @@ describe("executeCommand", () => {
 
 	beforeEach(() => {
 		vitest.clearAllMocks()
+		setHost(createInMemoryHost())
 
 		// Mock fs.access to simulate directory existence
 		;(fs.access as any).mockResolvedValue(undefined)
@@ -119,9 +126,14 @@ describe("executeCommand", () => {
 		})
 
 		it("should use terminal.getCurrentWorkingDirectory() for VSCode Terminal with shell integration", async () => {
-			// Setup: Mock VSCode Terminal instance
-			const vscodeTerminal = new Terminal(1, undefined, "/test/project")
-			const mockVSCodeTerminal = vscodeTerminal as any
+			// Setup: a VSCode-terminal-shaped stub (the real Terminal class is a
+			// src-only, vscode-backed Cat II type not available to core tests).
+			const mockVSCodeTerminal = {
+				provider: "vscode",
+				id: 1,
+				initialCwd: "/test/project",
+				show: vitest.fn(),
+			} as any
 
 			// Mock shell integration providing different cwd
 			mockVSCodeTerminal.terminal = {
@@ -157,9 +169,13 @@ describe("executeCommand", () => {
 		})
 
 		it("should use terminal.getCurrentWorkingDirectory() for ExecaTerminal (always returns initialCwd)", async () => {
-			// Setup: Mock ExecaTerminal instance
-			const execaTerminal = new ExecaTerminal(1, "/test/project")
-			const mockExecaTerminal = execaTerminal as any
+			// Setup: an ExecaTerminal-shaped stub (always reports its initialCwd).
+			const mockExecaTerminal = {
+				provider: "execa",
+				id: 1,
+				initialCwd: "/test/project",
+				show: vitest.fn(),
+			} as any
 
 			// ExecaTerminal always returns initialCwd
 			mockExecaTerminal.getCurrentWorkingDirectory = vitest.fn().mockReturnValue("/test/project")
