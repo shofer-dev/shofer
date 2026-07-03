@@ -56,10 +56,10 @@ vi.mock("../../condense/index.js", async (importOriginal) => ({
 	}),
 }))
 
-import { Task } from "@shofer/core"
-import { ApiStreamChunk } from "@shofer/core"
-import { processUserContentMentions } from "@shofer/core"
-import { MultiSearchReplaceDiffStrategy } from "@shofer/core"
+import { Task } from "../Task.js"
+import type { ApiStreamChunk } from "../../api/transform/stream.js"
+import { processUserContentMentions } from "../../mentions/processUserContentMentions.js"
+import { MultiSearchReplaceDiffStrategy } from "../../diff/strategies/multi-search-replace.js"
 
 // Mock delay before any imports that might use it
 vi.mock("delay", () => ({
@@ -1994,8 +1994,8 @@ describe("pushToolResultToUserContent", () => {
 
 		expect(added).toBe(true)
 		expect(task.userMessageContent).toHaveLength(3)
-		expect(task.userMessageContent[0].type).toBe("text")
-		expect(task.userMessageContent[1].type).toBe("image")
+		expect(task.userMessageContent[0]!.type).toBe("text")
+		expect(task.userMessageContent[1]!.type).toBe("image")
 		expect(task.userMessageContent[2]).toEqual(toolResult)
 	})
 })

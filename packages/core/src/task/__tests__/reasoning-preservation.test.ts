@@ -74,10 +74,10 @@ vi.mock("fs/promises", () => ({
 }))
 
 // Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works
-import { Task } from "@shofer/core"
+import { Task } from "../Task.js"
 
 describe("Task reasoning preservation", () => {
-	let mockProvider: Partial<TaskProviderLike>
+	let mockProvider: any
 	let mockApiConfiguration: ProviderSettings
 
 	beforeEach(() => {
@@ -168,12 +168,12 @@ describe("Task reasoning preservation", () => {
 
 		// Verify the API conversation history contains the message with reasoning
 		expect(task.apiConversationHistory).toHaveLength(1)
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toContain("<think>")
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toContain("</think>")
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toContain(
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toContain("<think>")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toContain("</think>")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toContain(
 			"Here is my response to your question.",
 		)
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toContain(
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toContain(
 			"Let me think about this step by step. First, I need to...",
 		)
 	})
@@ -230,10 +230,10 @@ describe("Task reasoning preservation", () => {
 
 		// Verify the API conversation history does NOT contain reasoning
 		expect(task.apiConversationHistory).toHaveLength(1)
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toBe(
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toBe(
 			"Here is my response to your question.",
 		)
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).not.toContain("<think>")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).not.toContain("<think>")
 	})
 
 	it("should handle empty reasoning message gracefully when preserveReasoning is true", async () => {
@@ -286,8 +286,8 @@ describe("Task reasoning preservation", () => {
 		})
 
 		// Verify the message doesn't contain reasoning tags
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toBe("Here is my response.")
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).not.toContain("<think>")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toBe("Here is my response.")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).not.toContain("<think>")
 	})
 
 	it("should handle undefined preserveReasoning (defaults to false)", async () => {
@@ -331,8 +331,8 @@ describe("Task reasoning preservation", () => {
 		})
 
 		// Verify reasoning was NOT prepended (undefined defaults to false)
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).toBe("Here is my response.")
-		expect((task.apiConversationHistory[0].content[0] as { text: string }).text).not.toContain("<think>")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).toBe("Here is my response.")
+		expect((task.apiConversationHistory[0]!.content[0] as { text: string }).text).not.toContain("<think>")
 	})
 
 	it("should embed encrypted reasoning as first assistant content block", async () => {

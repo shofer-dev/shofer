@@ -161,7 +161,7 @@ vi.mock("../../utils/storage.js", async (importOriginal) => ({
 }))
 
 // Import Task AFTER all vi.mock() calls - Vitest hoists mocks so this works.
-import { Task } from "@shofer/core"
+import { Task } from "../Task.js"
 
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
@@ -290,7 +290,7 @@ describe("Task persistence", () => {
 
 			expect(mockSaveApiMessages).toHaveBeenCalledTimes(1)
 			// §5: SQLite write — the live message array is passed (no JSONL snapshot).
-			const callArgs = mockSaveApiMessages.mock.calls[0][0]
+			const callArgs = mockSaveApiMessages.mock.calls[0]![0]
 			expect(callArgs.messages).toEqual(task.apiConversationHistory)
 		})
 	})

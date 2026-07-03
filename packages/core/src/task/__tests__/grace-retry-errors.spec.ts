@@ -70,7 +70,7 @@ vi.mock("fs/promises", async (importOriginal) => {
 	}
 })
 
-import { Task } from "@shofer/core"
+import { Task } from "../Task.js"
 
 describe("Grace Retry Error Handling", () => {
 	let mockProvider: TaskProviderLike
