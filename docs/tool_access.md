@@ -46,7 +46,7 @@ would be no allow source for it to subtract from.
 ## Decision rule
 
 For any tool `t` and any mode `m`, the runtime decision (in
-[`src/core/tools/validateToolUse.ts`](../src/core/tools/validateToolUse.ts))
+[`packages/core/src/tools/validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts))
 is:
 
 ```
@@ -197,10 +197,10 @@ short-circuits.
 ## Where this is enforced
 
 - **Runtime enforcement (per tool call):**
-  [`src/core/tools/validateToolUse.ts`](../src/core/tools/validateToolUse.ts)
+  [`packages/core/src/tools/validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts)
   — the source of truth for the decision rule above.
 - **System-prompt tool listing (materialization):**
-  [`src/core/prompts/tools/filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts)
+  [`packages/core/src/prompts/tools/filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts)
   — `computeToolAccess()` is the single source of truth for which tools are
   _available_ (§4). It composes, as one ordered decision, the three historically
   separate systems: (1) mode → groups → tools (gated by the `validateToolUse`
@@ -216,7 +216,7 @@ short-circuits.
 
 ## Related tests
 
-- [`src/core/tools/__tests__/validateToolUse.spec.ts`](../src/core/tools/__tests__/validateToolUse.spec.ts)
+- [`packages/core/src/tools/__tests__/validateToolUse.spec.ts`](../packages/core/src/tools/__tests__/validateToolUse.spec.ts)
   pins the decision rule, including:
     - allows from `tools_allowed` whitelist alone (no `tools`),
     - additive OR semantics when both `tools` and `tools_allowed` are set,
@@ -238,7 +238,7 @@ Zod "either tools or tools_allowed" constraint.
 
 The check order documented in §Decision rule describes
 deny → tools_allowed → groups → false. The actual implementation in
-[`isToolAllowedForMode()`](../src/core/tools/validateToolUse.ts:200) has a
+[`isToolAllowedForMode()`](../packages/core/src/tools/validateToolUse.ts:200) has a
 fast-path before any of those checks: `ALWAYS_AVAILABLE_TOOLS` (comprising
 `attempt_completion`, `wait_for_message`, `update_todo_list`, `run_slash_command`, `skills`,
 `set_task_title`, `give_feedback`, `list_background_tasks`, and

@@ -7,14 +7,14 @@ Where the two differ, this document wins.
 
 > **Source of truth**
 >
-> - Lexer: [`src/core/workflow/slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)
-> - Parser: [`src/core/workflow/slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)
-> - AST types: [`src/core/workflow/slang-ast.ts`](../src/core/workflow/slang-ast.ts)
-> - Public API: [`src/core/workflow/slang-parser.ts`](../src/core/workflow/slang-parser.ts) (`parseSlang`, `validateSlangAST`)
-> - Static analysis: [`src/core/workflow/slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)
-> - Interpreter VM (compiler + `advanceAgent` + `MAX_CONTROL_FLOW_STEPS`): [`src/core/workflow/slang-interpreter.ts`](../src/core/workflow/slang-interpreter.ts)
-> - Runtime types (`FlowState`, `AgentState`, `FlowStatus`): [`src/core/workflow/slang-types.ts`](../src/core/workflow/slang-types.ts)
-> - Round-based orchestrator: [`src/core/workflow/WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)
+> - Lexer: [`packages/core/src/workflow/slang-lexer.ts`](../packages/core/src/workflow/slang-lexer.ts)
+> - Parser: [`packages/core/src/workflow/slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts)
+> - AST types: [`packages/core/src/workflow/slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)
+> - Public API: [`packages/core/src/workflow/slang-parser.ts`](../packages/core/src/workflow/slang-parser.ts) (`parseSlang`, `validateSlangAST`)
+> - Static analysis: [`packages/core/src/workflow/slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts)
+> - Interpreter VM (compiler + `advanceAgent` + `MAX_CONTROL_FLOW_STEPS`): [`packages/core/src/workflow/slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts)
+> - Runtime types (`FlowState`, `AgentState`, `FlowStatus`): [`packages/core/src/workflow/slang-types.ts`](../packages/core/src/workflow/slang-types.ts)
+> - Round-based orchestrator: [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)
 > - Worked examples: [`.shofer/workflows/`](../../../.shofer/workflows/) (`hello-world.slang`, `test-slang-basics.slang`)
 
 ## Table of Contents
@@ -296,9 +296,9 @@ agent <Name> {
 
 `tools:` narrows the spawned agent Task to the listed [ToolGroup](#10-tool-groups-categories)
 names. It is threaded from the AST through
-[`WorkflowTask.spawnAgentTask()`](../src/core/workflow/WorkflowTask.ts) →
+[`WorkflowTask.spawnAgentTask()`](../packages/core/src/workflow/WorkflowTask.ts) →
 `createTask({ agentToolGroups })` → `Task` →
-[`build-tools.ts`](../src/core/task/build-tools.ts) `restrictToolsToDeclaredGroups()`,
+[`build-tools.ts`](../packages/core/src/task/build-tools.ts) `restrictToolsToDeclaredGroups()`,
 which is applied **after** the mode's own tool filtering. Semantics:
 
 - **Restriction only — never a grant.** The declared groups are _intersected_
@@ -371,7 +371,7 @@ Unknown keys inside the block are silently ignored (forward-compatible).
 
 By convention, meta fields appear **before** the operations. Note this is **not
 enforced** by the parser — the agent-body loop in
-[`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)
+[`slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts)
 accepts meta fields and operations interleaved in any order — but writing them
 first is strongly recommended for readability.
 
@@ -720,7 +720,7 @@ On success:
 
 ## Static Analysis (Warnings)
 
-`validateSlangAST()` (→ `analyzeFlow()` in [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts))
+`validateSlangAST()` (→ `analyzeFlow()` in [`slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts))
 returns human-readable diagnostics. None block execution, but a well-formed flow
 should produce **zero** warnings. Checks:
 
@@ -784,7 +784,7 @@ to exactly one Shofer Task for its lifetime — resumed (not recreated) across
 stakes, preserving conversation history.
 
 Flow status values (the complete `FlowStatus` union in
-[`slang-types.ts`](../src/core/workflow/slang-types.ts)): `running` | `converged` |
+[`slang-types.ts`](../packages/core/src/workflow/slang-types.ts)): `running` | `converged` |
 `budget_exceeded` | `escalated` | `deadlock` | `error` | `aborted`. (`aborted` is
 set by `abortTask()` when the user stops the flow.)
 
@@ -917,26 +917,26 @@ rationale and a couple of items that are observations rather than fixes.
 
 ### Doc Inaccuracies Corrected Inline
 
-| Location              | Was                                                                                           | Now                                                                                                                                                                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Source-of-truth links | all used `../../src/...` → resolves to nonexistent `extensions/src/...`                       | `../src/...` (the extension root is one level up from `docs/`)                                                                                                                                                       |
-| Worked-examples path  | `../../../../.shofer/workflows/` (one `../` too many)                                         | `../../../.shofer/workflows/`                                                                                                                                                                                        |
-| Worked-examples files | `feature-test.slang`, `implement-feature.slang` — neither exists in `.shofer/workflows/`      | the actual files are `hello-world.slang` and `test-slang-basics.slang`                                                                                                                                               |
-| Flow status union     | listed 6 values, omitting `aborted`                                                           | full `FlowStatus` is 7 values incl. `aborted` ([`slang-types.ts`](../src/core/workflow/slang-types.ts))                                                                                                              |
-| Runtime budget prose  | "Budgets (`rounds`, `tokens`) are enforced…" — omitted `time`, contradicting the budget table | all three (`tokens`, `rounds`, `time`) are enforced (round-loop condition + mid-round checks in [`WorkflowTask`](../src/core/workflow/WorkflowTask.ts))                                                              |
-| Budget defaults prose | "both limits default to unlimited"                                                            | all **three** budget types default to unlimited (0)                                                                                                                                                                  |
-| EBNF `agent_meta`     | omitted `peers:`                                                                              | added `peers : '[' agentref … ']'` (parsed at [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) lines 304–324)                                                                             |
-| Agent meta ordering   | "must appear **before** the operations"                                                       | convention only — the parser accepts meta/operations interleaved                                                                                                                                                     |
-| Retry exhaustion      | "After `MAX_RETRIES` (3) consecutive failures, marked `error`"                                | check is `retryCount > MAX_RETRIES` after a pre-increment ⇒ error on the **4th** failure (3 re-prompts)                                                                                                              |
-| Source-of-truth list  | attributed the whole runtime to `WorkflowTask.ts`                                             | added [`slang-interpreter.ts`](../src/core/workflow/slang-interpreter.ts) (the pure VM: `compileAgentProgram`, `advanceAgent`, `MAX_CONTROL_FLOW_STEPS`) and [`slang-types.ts`](../src/core/workflow/slang-types.ts) |
+| Location              | Was                                                                                           | Now                                                                                                                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source-of-truth links | all used `../../src/...` → resolves to nonexistent `extensions/src/...`                       | `../src/...` (the extension root is one level up from `docs/`)                                                                                                                                                                         |
+| Worked-examples path  | `../../../../.shofer/workflows/` (one `../` too many)                                         | `../../../.shofer/workflows/`                                                                                                                                                                                                          |
+| Worked-examples files | `feature-test.slang`, `implement-feature.slang` — neither exists in `.shofer/workflows/`      | the actual files are `hello-world.slang` and `test-slang-basics.slang`                                                                                                                                                                 |
+| Flow status union     | listed 6 values, omitting `aborted`                                                           | full `FlowStatus` is 7 values incl. `aborted` ([`slang-types.ts`](../packages/core/src/workflow/slang-types.ts))                                                                                                                       |
+| Runtime budget prose  | "Budgets (`rounds`, `tokens`) are enforced…" — omitted `time`, contradicting the budget table | all three (`tokens`, `rounds`, `time`) are enforced (round-loop condition + mid-round checks in [`WorkflowTask`](../packages/core/src/workflow/WorkflowTask.ts))                                                                       |
+| Budget defaults prose | "both limits default to unlimited"                                                            | all **three** budget types default to unlimited (0)                                                                                                                                                                                    |
+| EBNF `agent_meta`     | omitted `peers:`                                                                              | added `peers : '[' agentref … ']'` (parsed at [`slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts) lines 304–324)                                                                                      |
+| Agent meta ordering   | "must appear **before** the operations"                                                       | convention only — the parser accepts meta/operations interleaved                                                                                                                                                                       |
+| Retry exhaustion      | "After `MAX_RETRIES` (3) consecutive failures, marked `error`"                                | check is `retryCount > MAX_RETRIES` after a pre-increment ⇒ error on the **4th** failure (3 re-prompts)                                                                                                                                |
+| Source-of-truth list  | attributed the whole runtime to `WorkflowTask.ts`                                             | added [`slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts) (the pure VM: `compileAgentProgram`, `advanceAgent`, `MAX_CONTROL_FLOW_STEPS`) and [`slang-types.ts`](../packages/core/src/workflow/slang-types.ts) |
 
 ### Verified Correct (no change needed)
 
 - **Reserved keywords** (§3) match the lexer's `KEYWORDS` map exactly (37 entries).
 - **`AgentStatus`** values (`idle | running | committed | blocked | error`, §10) match
-  [`slang-types.ts`](../src/core/workflow/slang-types.ts) exactly.
+  [`slang-types.ts`](../packages/core/src/workflow/slang-types.ts) exactly.
 - **`MAX_CONTROL_FLOW_STEPS = 10_000`** (§7) matches the constant in
-  [`slang-interpreter.ts`](../src/core/workflow/slang-interpreter.ts).
+  [`slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts).
 - **`context { ... }` is now parsed and wired** (§15) — the agent-body loop
   recognizes a `context` block with any boolean keys, leading
   colon optional) and stores it on `AgentMeta.context`. (Previously `context`
@@ -946,8 +946,8 @@ rationale and a couple of items that are observations rather than fixes.
 
 ### Observations / Possible Improvements (code, not doc)
 
-| #   | Where                                                                       | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts) `analyzeFlow` | The orphan-output check (`stakesToAgents && !awaitedAgents.has(name) && !stakesToOut`) excludes `-> @all` from `stakesToAgents`, so an agent whose only output is a `@all` broadcast is **never** evaluated by this warning. A broadcast that no agent actually `await`s therefore goes unreported (a quiet false-negative gap), whereas the same dangling output via a concrete `-> @Peer` would warn. Consider treating `@all` as a producer for completeness. |
-| 2   | Agent meta `context:`                                                       | All `context` knobs are now fully wired — `spawnAgentTask` threads `agentContext` into `createTask()`, resolving each key via `?? globalDefault` and gating the corresponding system-prompt component in [`system.ts`](../src/core/prompts/system.ts) and [`custom-instructions.ts`](../src/core/prompts/sections/custom-instructions.ts). See [context { ... }](#context--) for the full key table.                                                             |
-| 3   | `escalate` target                                                           | `EscalateOp.target` is the agent ref without `@`; the interpreter logs `target                                                                                                                                                                                                                                                                                                                                                                                   |     | "Human"`. The spec only shows `escalate @Human` — worth stating explicitly whether non-`@Human`escalation targets are meaningful, since the runtime always treats the reply as mail from`@Human`. |
+| #   | Where                                                                                | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [`slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts) `analyzeFlow` | The orphan-output check (`stakesToAgents && !awaitedAgents.has(name) && !stakesToOut`) excludes `-> @all` from `stakesToAgents`, so an agent whose only output is a `@all` broadcast is **never** evaluated by this warning. A broadcast that no agent actually `await`s therefore goes unreported (a quiet false-negative gap), whereas the same dangling output via a concrete `-> @Peer` would warn. Consider treating `@all` as a producer for completeness. |
+| 2   | Agent meta `context:`                                                                | All `context` knobs are now fully wired — `spawnAgentTask` threads `agentContext` into `createTask()`, resolving each key via `?? globalDefault` and gating the corresponding system-prompt component in [`system.ts`](../packages/core/src/prompts/system.ts) and [`custom-instructions.ts`](../packages/core/src/prompts/sections/custom-instructions.ts). See [context { ... }](#context--) for the full key table.                                           |
+| 3   | `escalate` target                                                                    | `EscalateOp.target` is the agent ref without `@`; the interpreter logs `target                                                                                                                                                                                                                                                                                                                                                                                   |     | "Human"`. The spec only shows `escalate @Human` — worth stating explicitly whether non-`@Human`escalation targets are meaningful, since the runtime always treats the reply as mail from`@Human`. |

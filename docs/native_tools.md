@@ -3,7 +3,7 @@
 Complete reference for all native tools available in Shofer, their mode availability, and current status.
 
 > **Defining a tool.** Native tools are defined once as a Zod schema via
-> `defineNativeTool` (`src/core/prompts/tools/native-tools/defineNativeTool.ts`),
+> `defineNativeTool` (`packages/core/src/prompts/tools/native-tools/defineNativeTool.ts`),
 > from which the OpenAI function definition and the static argument type are
 > derived (schema-as-contract). A golden-snapshot test locks each tool's schema.
 > See [`adding-new-tools.md`](adding-new-tools.md) for the full procedure.
@@ -735,7 +735,7 @@ The optional `feedback` parameter captures concrete observations about tooling o
 
 A thin convenience **alias for `attempt_completion`**. It lets the agent yield as a self-declared terminal state — same effect as `attempt_completion` (emits `TaskCompleted`, sets `task.abort`, returns control) — without having to formulate a full result. Intended **specifically for waiting on an inter-task message**: after sending a message to a peer (`send_message_to_task`), call `wait_for_message` to yield, and you are automatically resumed when a reply/message arrives. To wait for a fixed amount of time (an external process, a rate-limit window) rather than a message, use [`sleep`](#sleep) instead.
 
-The handler ([`WaitTool.ts`](../src/core/tools/WaitTool.ts)) maps the params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. `rating` is **required** (it covers the work completed so far); `reason` is optional and defaults to `"waiting"`. The handler keeps a defensive `"well"` fallback for the rating only for providers that don't enforce strict schemas (mirroring `attempt_completion`, which defaults a missing rating to `"poor"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
+The handler ([`WaitTool.ts`](../packages/core/src/tools/WaitTool.ts)) maps the params onto `attempt_completion` and delegates to its handler, so all terminal/delegation/peer-sync logic lives in one place: `reason → result`, `rating → rating`. `rating` is **required** (it covers the work completed so far); `reason` is optional and defaults to `"waiting"`. The handler keeps a defensive `"well"` fallback for the rating only for providers that don't enforce strict schemas (mirroring `attempt_completion`, which defaults a missing rating to `"poor"`). The router mirrors `attempt_completion`'s `didExecuteAttemptCompletion` duplicate-completion guard. No auto-approval / `ChatRow` wiring is needed because `attempt_completion` never prompts — it renders via `say("completion_result", …)`.
 
 | Param    | Type           | Required | Description                                                                                        |
 | -------- | -------------- | :------: | -------------------------------------------------------------------------------------------------- |
@@ -881,7 +881,7 @@ During a source-verification pass, the following factual inaccuracies were found
 - **`access_mcp_resource` feature gate**: Marked 🔒 ("Requires MCP resources") — this is a deployment dependency, not a code-level feature flag. The tool works whenever MCP servers expose resources. The gate indicator may overstate the restriction.
 - **`generate_image` parameters**: The feature-gated tools table lists `generate_image` but the detail section is omitted. If the tool is permanently gated, a brief parameter summary would still help readers understand its interface.
 - ~~**Orchestrator mode groups**~~: ✅ removed. There is **no** Orchestrator (or Ask) mode in `DEFAULT_MODES` — those rows were stale RooCode-isms. The six built-in modes are `code`, `architect`, `debug`, `code-search`, `web-search`, `reviewer` (see [§ Mode Availability](#mode-availability)). "Orchestrator" is a separate API-consumer **extension** (`extensions/orchestrator/`), not a mode.
-- **`new_task` `task_id` parameter**: Present in [`NewTaskParams`](../src/core/tools/NewTaskTool.ts) but not documented in the parameter table. Used internally for resumption.
+- **`new_task` `task_id` parameter**: Present in [`NewTaskParams`](../packages/core/src/tools/NewTaskTool.ts) but not documented in the parameter table. Used internally for resumption.
 - **`read_file` description text**: The File Operations summary table says "Read file contents with line range" — this under-sells the tool, which supports two reading modes (slice + indentation with full parameterization). Consider updating to reflect the richer capability.
 
 ### Areas for future improvement

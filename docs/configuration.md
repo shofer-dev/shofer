@@ -146,7 +146,7 @@ USD amounts. Without this setting, only token counts are available.
 ### Message storage (§5)
 
 A task's conversation/UI messages are stored in **SQLite** (`node:sqlite`) — see
-[`message-store.ts`](../src/core/task-persistence/message-store.ts) and the
+[`message-store.ts`](../packages/core/src/task-persistence/message-store.ts) and the
 `SqliteMessagePersistence` adapter. Rows are keyed by `(task_id, kind, ts)` with
 last-write-wins per `ts`. This replaced the prior flat-file (JSONL) layer and its
 performance machinery (debounced saves, append logs, tail-window reads,
@@ -343,7 +343,7 @@ find-replace accident (`command` with `com`→`dev` becomes `devmand`). The
 runtime, however, reads `shofer.commandExecutionTimeout` /
 `shofer.commandTimeoutAllowlist` via
 `vscode.workspace.getConfiguration("shofer").get(...)`
-([`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)). So the
+([`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)). So the
 registered setting (default/range/description) was dead and the key the
 runtime actually reads had no UI/schema row. The `package.json` keys were
 renamed to `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist`,
@@ -398,7 +398,7 @@ absent:
 ### `newTaskRequireTodos` — wired up (earlier "dead config" note was wrong)
 
 This setting **is** consumed:
-[`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts) reads
+[`NewTaskTool.ts`](../packages/core/src/tools/NewTaskTool.ts) reads
 `getConfiguration("shofer").get<boolean>("newTaskRequireTodos", false)` and,
 when true, rejects `new_task` calls lacking a `todos` parameter. (The previous
 revision of this gap claimed zero references — it was stale.)

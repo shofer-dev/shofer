@@ -45,8 +45,8 @@ LLM calls execute_command(command, cwd?, timeout?)
 | `cwd`     | `string \| null` |    –     | Working directory; relative paths resolved from `task.cwd`; absent = `task.cwd` |
 | `timeout` | `number \| null` |    –     | Agent-side soft timeout in **seconds** (see §4.2)                               |
 
-**Schema definition:** [`src/core/prompts/tools/native-tools/execute_command.ts`](../src/core/prompts/tools/native-tools/execute_command.ts)
-**Tool handler:** [`src/core/tools/ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)
+**Schema definition:** [`packages/core/src/prompts/tools/native-tools/execute_command.ts`](../packages/core/src/prompts/tools/native-tools/execute_command.ts)
+**Tool handler:** [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)
 
 ### Prompt contract (what the LLM is told)
 
@@ -166,7 +166,7 @@ This flows through:
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
 | UI click      | [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)                                                                                               | 178-181           |
 | IPC handler   | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                                                                                                     | 939-941           |
-| Task dispatch | [`Task.ts`](../src/core/task/Task.ts)                                                                                                                                          | 2611-2616         |
+| Task dispatch | [`Task.ts`](../packages/core/src/task/Task.ts)                                                                                                                                 | 2611-2616         |
 | Terminal kill | [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts) (VS Code) or [`ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts) (execa) | 259-263 / 163-219 |
 
 **Kill mechanism:**
@@ -182,7 +182,7 @@ When the LLM is in a `command_output` ask (the "Kill Command" secondary button),
 
 ### 5.3 Global Stop Button
 
-**Source:** [`Task.ts`](../src/core/task/Task.ts:3555-3558)
+**Source:** [`Task.ts`](../packages/core/src/task/Task.ts:3555-3558)
 
 When the user clicks the global **Stop** button:
 
@@ -221,7 +221,7 @@ The OctagonX stop button in [`CommandExecution.tsx`](../webview-ui/src/component
 
 **Bug 1: `task.terminalProcess` is unconditionally cleared.**
 
-Source: [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts:494-498)
+Source: [`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts:494-498)
 
 ```typescript
 } finally {
@@ -347,7 +347,7 @@ executionId?: string  // populated when abort originates from CommandExecution
 
 ##### Layer 3: Backend — Preserve `task.terminalProcess` and Fix `TerminalProcess.abort()`
 
-**File A:** [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)
+**File A:** [`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)
 
 Guard the `task.terminalProcess = undefined` line so it only clears the reference when the command actually completed or was killed:
 
@@ -422,7 +422,7 @@ Webview receives "exited" status → OctagonX button disappears, exit badge appe
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
 | [`CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx) | Show button for all alive states; pass `executionId`             | Low — UI-visibility change only               |
 | [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)     | Add optional `executionId` field                                 | Low — optional, backward-compatible           |
-| [`ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)               | Guard `task.terminalProcess = undefined` with `!runInBackground` | Medium — must not leak process references     |
+| [`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)      | Guard `task.terminalProcess = undefined` with `!runInBackground` | Medium — must not leak process references     |
 | [`TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)          | Remove `isListening` guard from `abort()`                        | Low — harmless no-op if no process is running |
 
 ##### Cleanup Considerations
@@ -435,8 +435,8 @@ When the task ends (user stops it, task completes), the global `abortTask()` pat
 
 ## 6. `read_command_output` — Retrieving Truncated Output
 
-**Schema definition:** [`src/core/prompts/tools/native-tools/read_command_output.ts`](../src/core/prompts/tools/native-tools/read_command_output.ts)
-**Tool handler:** [`src/core/tools/ReadCommandOutputTool.ts`](../src/core/tools/ReadCommandOutputTool.ts)
+**Schema definition:** [`packages/core/src/prompts/tools/native-tools/read_command_output.ts`](../packages/core/src/prompts/tools/native-tools/read_command_output.ts)
+**Tool handler:** [`packages/core/src/tools/ReadCommandOutputTool.ts`](../packages/core/src/tools/ReadCommandOutputTool.ts)
 
 ### 6.1 Parameters
 
@@ -503,7 +503,7 @@ The terminal provider is chosen based on the `terminalShellIntegrationDisabled` 
 | Worktree task on **Linux**         | Execa (forced)   | Sandboxed via `shofer-sandbox`   | SIGKILL + `psTree` for child processes |
 | Worktree task on **macOS/Windows** | User's setting   | Advisory warning in approval     | Per backend                            |
 
-If the VS Code terminal throws a [`ShellIntegrationError`](../src/core/tools/ExecuteCommandTool.ts:25), the tool automatically retries with execa (without requiring the user to change settings).
+If the VS Code terminal throws a [`ShellIntegrationError`](../packages/core/src/tools/ExecuteCommandTool.ts:25), the tool automatically retries with execa (without requiring the user to change settings).
 
 ### 7.1 Worktree Shell Sandboxing (Linux)
 
@@ -521,23 +521,23 @@ The sandbox wrapper is the **outermost** process: `shofer-sandbox <worktree-dir>
 
 ## 8. Key Files
 
-| File                                                                                                                          | Role                                                                |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`src/core/prompts/tools/native-tools/execute_command.ts`](../src/core/prompts/tools/native-tools/execute_command.ts)         | OpenAI function-calling schema for `execute_command`                |
-| [`src/core/tools/ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)                                             | Tool handler: validation, approval, timeout, terminal orchestration |
-| [`src/core/prompts/tools/native-tools/read_command_output.ts`](../src/core/prompts/tools/native-tools/read_command_output.ts) | OpenAI function-calling schema for `read_command_output`            |
-| [`src/core/tools/ReadCommandOutputTool.ts`](../src/core/tools/ReadCommandOutputTool.ts)                                       | Tool handler: artifact reads, search, pagination                    |
-| [`src/integrations/terminal/OutputInterceptor.ts`](../src/integrations/terminal/OutputInterceptor.ts)                         | Head/tail buffer, spill-to-disk, preview formatting                 |
-| [`src/integrations/terminal/TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)                             | VS Code shell-integration terminal process                          |
-| [`src/integrations/terminal/ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts)                   | Execa fallback terminal process                                     |
-| [`src/integrations/terminal/TerminalRegistry.ts`](../src/integrations/terminal/TerminalRegistry.ts)                           | Terminal lifecycle management                                       |
-| [`src/utils/worktreePathGuard.ts`](../src/utils/worktreePathGuard.ts)                                                         | Worktree sandbox prefix resolution (`getWorktreeSandboxPrefix`)     |
-| [`sandbox/main.go`](../sandbox/main.go)                                                                                       | Landlock/bwrap sandbox wrapper binary (Go, static-linked)           |
-| [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                                                           | Task-level abort (Stop button → `terminalProcess.abort()`)          |
-| [`webview-ui/src/components/chat/CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)               | UI: command output display + OctagonX abort button                  |
-| [`webview-ui/src/components/chat/ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                               | UI: Reject button → terminal abort                                  |
-| [`packages/types/src/terminal.ts`](../packages/types/src/terminal.ts)                                                         | `PersistedCommandOutput` type + `TERMINAL_PREVIEW_BYTES`            |
-| [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                           | `terminalOutputPreviewSize` setting                                 |
+| File                                                                                                                                            | Role                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`packages/core/src/prompts/tools/native-tools/execute_command.ts`](../packages/core/src/prompts/tools/native-tools/execute_command.ts)         | OpenAI function-calling schema for `execute_command`                |
+| [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)                                             | Tool handler: validation, approval, timeout, terminal orchestration |
+| [`packages/core/src/prompts/tools/native-tools/read_command_output.ts`](../packages/core/src/prompts/tools/native-tools/read_command_output.ts) | OpenAI function-calling schema for `read_command_output`            |
+| [`packages/core/src/tools/ReadCommandOutputTool.ts`](../packages/core/src/tools/ReadCommandOutputTool.ts)                                       | Tool handler: artifact reads, search, pagination                    |
+| [`src/integrations/terminal/OutputInterceptor.ts`](../src/integrations/terminal/OutputInterceptor.ts)                                           | Head/tail buffer, spill-to-disk, preview formatting                 |
+| [`src/integrations/terminal/TerminalProcess.ts`](../src/integrations/terminal/TerminalProcess.ts)                                               | VS Code shell-integration terminal process                          |
+| [`src/integrations/terminal/ExecaTerminalProcess.ts`](../src/integrations/terminal/ExecaTerminalProcess.ts)                                     | Execa fallback terminal process                                     |
+| [`src/integrations/terminal/TerminalRegistry.ts`](../src/integrations/terminal/TerminalRegistry.ts)                                             | Terminal lifecycle management                                       |
+| [`src/utils/worktreePathGuard.ts`](../src/utils/worktreePathGuard.ts)                                                                           | Worktree sandbox prefix resolution (`getWorktreeSandboxPrefix`)     |
+| [`sandbox/main.go`](../sandbox/main.go)                                                                                                         | Landlock/bwrap sandbox wrapper binary (Go, static-linked)           |
+| [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)                                                                           | Task-level abort (Stop button → `terminalProcess.abort()`)          |
+| [`webview-ui/src/components/chat/CommandExecution.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)                                 | UI: command output display + OctagonX abort button                  |
+| [`webview-ui/src/components/chat/ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                                 | UI: Reject button → terminal abort                                  |
+| [`packages/types/src/terminal.ts`](../packages/types/src/terminal.ts)                                                                           | `PersistedCommandOutput` type + `TERMINAL_PREVIEW_BYTES`            |
+| [`packages/types/src/global-settings.ts`](../packages/types/src/global-settings.ts)                                                             | `terminalOutputPreviewSize` setting                                 |
 
 ---
 

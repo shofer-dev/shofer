@@ -71,7 +71,7 @@ Third-party MCP servers define their own input schemas with `additionalPropertie
 
 ### Why `task.taskId`?
 
-Shofer does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Shofer uses [`task.taskId`](../src/core/task/Task.ts:195) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
+Shofer does not use VS Code's chat participant API (it renders its own webview), so VS Code's native `request.sessionId` is not available. Instead, Shofer uses [`task.taskId`](../packages/core/src/task/Task.ts:195) — a UUID v7 generated per conversation — as the `conversationId`. This provides the same conversation-scoped correlation that VS Code's native MCP client would provide via `vscode.conversationId`.
 
 ### Key holding `vscode.conversationId`
 
@@ -83,13 +83,13 @@ The key name `vscode.conversationId` is used to match VS Code's established conv
 
 ## Component Reference
 
-| Component               | File                                                                                                                                                                | Role                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| UseMcpToolTool / shared | [`src/core/tools/UseMcpToolTool.ts`](../src/core/tools/UseMcpToolTool.ts) and [`src/core/tools/mcp/use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts:199) | Passes `task.taskId` to `McpHub.callTool()` via `runMcpToolCall`         |
-| McpHub                  | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts:1853)                                                                                                  | Injects `_meta["vscode.conversationId"]` into MCP request params         |
-| mcp-server handler      | [`mcp-server/internal/handlers/mcp.go`](../../mcp-server/internal/handlers/mcp.go:344)                                                                              | Extracts and validates `conversationId` from `_meta` in `handleToolCall` |
-| mcp-server backend      | [`mcp-server/internal/services/backend.go`](../../mcp-server/internal/services/backend.go:178)                                                                      | Forwards as `conversation_id` to tools-backend                           |
-| IDs documentation       | [`docs/IDs.md`](../../docs/IDs.md)                                                                                                                                  | System-wide ID architecture overview                                     |
+| Component               | File                                                                                                                                                                                                    | Role                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| UseMcpToolTool / shared | [`packages/core/src/tools/UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts) and [`packages/core/src/tools/mcp/use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts:199) | Passes `task.taskId` to `McpHub.callTool()` via `runMcpToolCall`         |
+| McpHub                  | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts:1853)                                                                                                                                      | Injects `_meta["vscode.conversationId"]` into MCP request params         |
+| mcp-server handler      | [`mcp-server/internal/handlers/mcp.go`](../../mcp-server/internal/handlers/mcp.go:344)                                                                                                                  | Extracts and validates `conversationId` from `_meta` in `handleToolCall` |
+| mcp-server backend      | [`mcp-server/internal/services/backend.go`](../../mcp-server/internal/services/backend.go:178)                                                                                                          | Forwards as `conversation_id` to tools-backend                           |
+| IDs documentation       | [`docs/IDs.md`](../../docs/IDs.md)                                                                                                                                                                      | System-wide ID architecture overview                                     |
 
 ## Compatibility
 
@@ -99,11 +99,11 @@ All compliant MCP servers accept the `_meta` field per the MCP specification. Se
 
 ### Cross-document inconsistency with `IDs.md`
 
-[`docs/IDs.md`](../../docs/IDs.md) states that `conversationId` comes from "VS Code's internal session ID, available as `request.sessionId`" and is "Generated by: VS Code chat framework". This is incorrect — Shofer does not use VS Code's chat participant API (it renders its own webview). Shofer uses [`task.taskId`](../src/core/task/Task.ts:195) instead. `IDs.md` needs a separate audit to reflect the actual Shofer-specific architecture.
+[`docs/IDs.md`](../../docs/IDs.md) states that `conversationId` comes from "VS Code's internal session ID, available as `request.sessionId`" and is "Generated by: VS Code chat framework". This is incorrect — Shofer does not use VS Code's chat participant API (it renders its own webview). Shofer uses [`task.taskId`](../packages/core/src/task/Task.ts:195) instead. `IDs.md` needs a separate audit to reflect the actual Shofer-specific architecture.
 
 ### Architecture diagram label
 
-The architecture diagram at line 13 labels the two extension-host boxes as `UseMcpToolTool.ts` and `McpHub.ts`. The actual `callTool` invocation with `task.taskId` happens in [`use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts:199) (called by `UseMcpToolTool`). The diagram could be updated to show `runMcpToolCall` (in `use-mcp-shared.ts`) instead of `UseMcpToolTool.ts` to accurately reflect the call chain.
+The architecture diagram at line 13 labels the two extension-host boxes as `UseMcpToolTool.ts` and `McpHub.ts`. The actual `callTool` invocation with `task.taskId` happens in [`use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts:199) (called by `UseMcpToolTool`). The diagram could be updated to show `runMcpToolCall` (in `use-mcp-shared.ts`) instead of `UseMcpToolTool.ts` to accurately reflect the call chain.
 
 ### Async MCP path not covered
 

@@ -180,7 +180,7 @@ customModes:
 >
 > `tools_allowed` is additive (whitelist on top of tools). `tools_denied`
 > takes precedence over both `tools_allowed` and groups. Both are evaluated
-> in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts).
+> in [`isToolAllowedForMode`](../packages/core/src/tools/validateToolUse.ts).
 
 ### 2b. Extension Global Storage — User settings (`custom_modes.yaml`)
 
@@ -298,7 +298,7 @@ servers are re-read and connections re-established.
 ### 3b. MCP Tool Visibility
 
 MCP tools have their own visibility pipeline parallel to native tools, in
-[`filterMcpToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts):
+[`filterMcpToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts):
 
 - Gated by per-tool group assignment (`McpHub.getMcpToolMetadata`)
 - Per-server `disabledTools` list in `mcp_settings.json`
@@ -465,7 +465,7 @@ User edits .shofer/shofermodes
 
 ### How Both Are Combined
 
-From [`system.ts`](../src/core/prompts/system.ts:65):
+From [`system.ts`](../packages/core/src/prompts/system.ts:65):
 
 ```typescript
 // Get mode config with overrides
@@ -486,7 +486,7 @@ ${getObjectiveSection()}
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions, cwd, mode, {...})}`
 ```
 
-From [`custom-instructions.ts`](../src/core/prompts/sections/custom-instructions.ts:449):
+From [`custom-instructions.ts`](../packages/core/src/prompts/sections/custom-instructions.ts:449):
 
 ```typescript
 // Global instructions come first, then mode-specific
@@ -678,8 +678,8 @@ debugging "why is tool X being asked / why is tool X invisible?" issues.
 ### Visibility pipeline (what the LLM sees)
 
 The final list of tools sent to the LLM is computed by
-[`buildNativeToolsArray`](../src/core/task/build-tools.ts) →
-[`filterNativeToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts):
+[`buildNativeToolsArray`](../packages/core/src/task/build-tools.ts) →
+[`filterNativeToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts):
 
 ```
 all native tools
@@ -694,7 +694,7 @@ all native tools
 ```
 
 MCP tools follow a parallel pipeline via
-[`filterMcpToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts),
+[`filterMcpToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts),
 gated by per-tool group assignment (`McpHub.getMcpToolMetadata`) and the
 per-server `disabledTools` list in `mcp_settings.json`.
 
@@ -708,13 +708,13 @@ per-server `disabledTools` list in `mcp_settings.json`.
 
 `ALWAYS_AVAILABLE_TOOLS` (defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts))
 bypasses mode/group restrictions — but **not** `disabledTools`. The execution-time
-guard in [`isToolAllowedForMode`](../src/core/tools/validateToolUse.ts) honors
+guard in [`isToolAllowedForMode`](../packages/core/src/tools/validateToolUse.ts) honors
 `toolRequirements` (built from `disabledTools`) before the always-available check.
 
 ### Auto-approval pipeline (whether the user is asked)
 
 Auto-approval is decided by
-[`checkAutoApproval`](../src/core/auto-approval/index.ts) and operates on
+[`checkAutoApproval`](../packages/core/src/auto-approval/index.ts) and operates on
 `(mode.tools ∋ groupForTool, All toggle for that group, isProtected)`. It is
 **independent** of `disabledTools`: if a tool is visible _and_ the matching All
 toggle is on for the tool's group, the action is auto-approved.
@@ -726,7 +726,7 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 ### Diagnostics
 
 - The exact tool catalog sent to the LLM is logged on every API request from
-  [`Task.attemptApiRequest`](../src/core/task/Task.ts):
+  [`Task.attemptApiRequest`](../packages/core/src/task/Task.ts):
 
     ```
     [tools] sending N tool(s) to LLM (mode=code): tool_a, tool_b, ...
@@ -736,7 +736,7 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 
 - If the model still calls a tool that has been removed by `disabledTools`
   (typically a hallucination from training data),
-  [`validateToolUse`](../src/core/tools/validateToolUse.ts) throws a distinct
+  [`validateToolUse`](../packages/core/src/tools/validateToolUse.ts) throws a distinct
   error so the model stops retrying:
 
     ```

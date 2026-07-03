@@ -102,9 +102,9 @@ None of the table rows carry a "verified on" annotation. Line numbers drift as s
 
 Items 2–4 in the "What ContextLength Drives" section lack file/line references, making them impossible to verify without grepping the codebase. Items that could benefit from references:
 
-- Item 2: [`context-management/index.ts`](extensions/shofer/src/core/context-management/index.ts)
-- Item 3: [`getModelMaxOutputTokens()`](extensions/shofer/src/core/task/Task.ts) (search for `getModelMaxOutputTokens`)
-- Item 4: [`context-management/index.ts:68`](extensions/shofer/src/core/context-management/index.ts:68) (`truncateConversation`)
+- Item 2: [`context-management/index.ts`](extensions/shofer/packages/core/src/context-management/index.ts)
+- Item 3: [`getModelMaxOutputTokens()`](extensions/shofer/packages/core/src/task/Task.ts) (search for `getModelMaxOutputTokens`)
+- Item 4: [`context-management/index.ts:68`](extensions/shofer/packages/core/src/context-management/index.ts:68) (`truncateConversation`)
 
 ### 7. Verification command assumes running service
 

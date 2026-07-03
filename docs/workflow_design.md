@@ -2,8 +2,8 @@
 
 Design for the **Workflow** abstraction in Shofer: a container for coordinated Tasks executed by a formal, non-LLM-driven executor following a `.slang` specification.
 
-> **Implementation Status**: ✅ Slang parser (vendored from @riktar/slang, MIT) — [`src/core/workflow/slang-lexer.ts`](../../extensions/shofer/src/core/workflow/slang-lexer.ts), [`slang-parser-upstream.ts`](../../extensions/shofer/src/core/workflow/slang-parser-upstream.ts), [`slang-resolver.ts`](../../extensions/shofer/src/core/workflow/slang-resolver.ts)  
-> ✅ WorkflowTask class — [`src/core/workflow/WorkflowTask.ts`](../../extensions/shofer/src/core/workflow/WorkflowTask.ts)  
+> **Implementation Status**: ✅ Slang parser (vendored from @riktar/slang, MIT) — [`packages/core/src/workflow/slang-lexer.ts`](../../extensions/shofer/packages/core/src/workflow/slang-lexer.ts), [`slang-parser-upstream.ts`](../../extensions/shofer/packages/core/src/workflow/slang-parser-upstream.ts), [`slang-resolver.ts`](../../extensions/shofer/packages/core/src/workflow/slang-resolver.ts)  
+> ✅ WorkflowTask class — [`packages/core/src/workflow/WorkflowTask.ts`](../../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts)  
 > ✅ .slang file discovery (`discoverWorkflows()`)  
 > ✅ `+` button dropdown (QuickPick: New Task / New Workflow → workflow picker) — [`registerCommands.ts`](../../extensions/shofer/src/activate/registerCommands.ts#L82)  
 > ✅ `escalate @Human` support  
@@ -14,7 +14,7 @@ Design for the **Workflow** abstraction in Shofer: a container for coordinated T
 > ✅ Example workflow — [`.shofer/workflows/implement-feature.slang`](../../.shofer/workflows/implement-feature.slang)  
 > ✅ Least-privilege peer scope (`knownPeers` default-deny — `SendMessageToTaskTool`, `WaitForTaskTool`, `CheckTaskStatusTool`, `ListBackgroundTasksTool`)  
 > ✅ Declared peers in slang (`peers: [@Ref]` meta field — `slang-ast.ts`, parser, resolver, `WorkflowTask.spawnAgentTask`)  
-> ✅ Event-driven `waitForStakes` (shared [`wait-for-task-helper.ts`](../src/core/workflow/wait-for-task-helper.ts) with `WaitForTaskTool`)  
+> ✅ Event-driven `waitForStakes` (shared [`wait-for-task-helper.ts`](../packages/core/src/workflow/wait-for-task-helper.ts) with `WaitForTaskTool`)  
 > ✅ Question-routing relay (`WorkflowTask.relayChildQuestion` + `waitForTasksEventDriven`)  
 > 🔜 **Deferred**: Welcome View Redesign (Section §"Welcome View Redesign" below)  
 > 🔜 **Deferred**: TaskSelector/HistoryView WorkflowTask-aware adaptations
@@ -374,7 +374,7 @@ flow "implement-feature" (feature: "string") {
 
 ### The Core Insight: Workflow IS a Task (for Convenience & Reusability)
 
-The Workflow **is** a Shofer [`Task`](../src/core/task/Task.ts) — but its **loop is slang-driven, not LLM-driven**. It is a task for convenience: it reuses `backgroundChildren`, `HistoryItem` persistence, `TaskManager` lifecycle, `TaskSelector` hierarchy, `abortTask()`, and cost tracking. But it has no mode, no system prompt, and makes zero LLM API calls.
+The Workflow **is** a Shofer [`Task`](../packages/core/src/task/Task.ts) — but its **loop is slang-driven, not LLM-driven**. It is a task for convenience: it reuses `backgroundChildren`, `HistoryItem` persistence, `TaskManager` lifecycle, `TaskSelector` hierarchy, `abortTask()`, and cost tracking. But it has no mode, no system prompt, and makes zero LLM API calls.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -430,7 +430,7 @@ The Workflow **is** a Shofer [`Task`](../src/core/task/Task.ts) — but its **lo
 | **Persistence & restore**     | `HistoryItem` already persists task state. The `.slang` source and `FlowState` are stored as additional fields. On restart, the Workflow Task resumes from the last checkpoint.  |
 | **Abort & cleanup**           | `Task.abortBackgroundChildren()` already propagates cancel to all children. Stopping the Workflow Task stops everything.                                                         |
 | **Cost tracking**             | `HistoryItem.totalCost` already aggregates descendant costs. Each agent Task tracks its own cost; the Workflow sees the sum.                                                     |
-| **No new "executor" service** | The "executor" is the Workflow Task's [`slangLoop()`](../src/core/task/Task.ts) method — no separate process, no new service class hierarchy.                                    |
+| **No new "executor" service** | The "executor" is the Workflow Task's [`slangLoop()`](../packages/core/src/task/Task.ts) method — no separate process, no new service class hierarchy.                           |
 
 ### Key Design Decisions
 
@@ -733,8 +733,8 @@ Each knob controls a specific category of ambient context injected into the agen
 > `.slang` parser → `slang-ast.ts` `AgentMeta.context` →
 > `WorkflowTask.spawnAgentTask()` → `createTask({ agentContext })` →
 > `Task.agentContext` → `SystemPromptSettings` →
-> gating in [`system.ts`](../src/core/prompts/system.ts) (skills, system-info, MCP) and
-> [`custom-instructions.ts`](../src/core/prompts/sections/custom-instructions.ts)
+> gating in [`system.ts`](../packages/core/src/prompts/system.ts) (skills, system-info, MCP) and
+> [`custom-instructions.ts`](../packages/core/src/prompts/sections/custom-instructions.ts)
 > (mode-rules, user-rules, agents-md, subfolder-rules).
 
 ## Reusable Code from `@riktar/slang`
@@ -977,7 +977,7 @@ This means earlier `stake` results are visible in the Task's message history as 
 ## Question Routing & the Executor (`ask_followup_question` / `answer_subtask_question`)
 
 `ask_followup_question` has a single routing gate in
-[`AskFollowupQuestionTool`](../src/core/tools/AskFollowupQuestionTool.ts):
+[`AskFollowupQuestionTool`](../packages/core/src/tools/AskFollowupQuestionTool.ts):
 
 ```ts
 if (provider && task.parentTaskId && task.isBackgroundTask) {
@@ -1015,7 +1015,7 @@ respond to a sync message.
 
 Both tools are **kept exactly as-is**. The only addition is
 `WorkflowTask.relayChildQuestion`, called from the `onNeedsParentInput` callback of
-[`waitForTasksEventDriven`](../src/core/workflow/wait-for-task-helper.ts):
+[`waitForTasksEventDriven`](../packages/core/src/workflow/wait-for-task-helper.ts):
 
 1. An agent calls `ask_followup_question`. The existing gate routes it to the
    WorkflowTask: `setPendingParentQuestion(…)` registers the promise,
@@ -1242,10 +1242,10 @@ grant sibling access — the default is deny.**
 
 Call sites updated to enforce the gate unconditionally (guard changed from
 `if (task.knownPeers && !task.knownPeers.has(id))` to `if (!task.knownPeers || !task.knownPeers.has(id))`):
-[`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts),
-[`WaitForTaskTool`](../src/core/tools/WaitForTaskTool.ts),
-[`CheckTaskStatusTool`](../src/core/tools/CheckTaskStatusTool.ts),
-[`ListBackgroundTasksTool`](../src/core/tools/ListBackgroundTasksTool.ts).
+[`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts),
+[`WaitForTaskTool`](../packages/core/src/tools/WaitForTaskTool.ts),
+[`CheckTaskStatusTool`](../packages/core/src/tools/CheckTaskStatusTool.ts),
+[`ListBackgroundTasksTool`](../packages/core/src/tools/ListBackgroundTasksTool.ts).
 
 ### Declared peers in slang (`peers: [@Ref]`)
 
@@ -1287,11 +1287,11 @@ never told to message peers they cannot reach.
 
 **Implementation files:**
 
-- [`slang-ast.ts`](../src/core/workflow/slang-ast.ts) — `AgentMeta.peers?: string[]`
-- [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts) — `peers: [@A, @B]` Ident-lookahead branch in `parseAgentDecl`
-- [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts) — static validation: concrete agents only, no wildcards
-- [`WorkflowTask.spawnAgentTask`](../src/core/workflow/WorkflowTask.ts) — sets `knownPeers` from declared peers + back-fill
-- [`WorkflowTask.getPeerResources`](../src/core/workflow/WorkflowTask.ts) — reads `meta.peers` as the sole authoritative source
+- [`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts) — `AgentMeta.peers?: string[]`
+- [`slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts) — `peers: [@A, @B]` Ident-lookahead branch in `parseAgentDecl`
+- [`slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts) — static validation: concrete agents only, no wildcards
+- [`WorkflowTask.spawnAgentTask`](../packages/core/src/workflow/WorkflowTask.ts) — sets `knownPeers` from declared peers + back-fill
+- [`WorkflowTask.getPeerResources`](../packages/core/src/workflow/WorkflowTask.ts) — reads `meta.peers` as the sole authoritative source
 
 ---
 
@@ -1299,20 +1299,20 @@ never told to message peers they cannot reach.
 
 ### Core Engine — Slang Parser + Workflow Executor
 
-All under [`src/core/workflow/`](../src/core/workflow/):
+All under [`packages/core/src/workflow/`](../packages/core/src/workflow/):
 
-| File                                                                                    | Purpose                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                               | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry                                                                               |
-| [`slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                                 | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                                                                                              |
-| [`slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)             | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                                                                                                         |
-| [`slang-parser.ts`](../src/core/workflow/slang-parser.ts)                               | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                                                                                              |
-| [`slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                           | Dependency graph, deadlock detection, static analysis warnings                                                                                                                                                                                 |
-| [`slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                     | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                                                                                                     |
-| [`slang-types.ts`](../src/core/workflow/slang-types.ts)                                 | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                                                                                                |
-| [`index.ts`](../src/core/workflow/index.ts)                                             | Barrel export                                                                                                                                                                                                                                  |
-| [`__tests__/slang-parser.test.ts`](../src/core/workflow/__tests__/slang-parser.test.ts) | Unit tests for the Slang parser                                                                                                                                                                                                                |
-| [`wait-for-task-helper.ts`](../src/core/workflow/wait-for-task-helper.ts)               | Shared event-driven wait helper — extracted from `WaitForTaskTool`; called by both the tool and `WorkflowTask.waitForStakes`. Handles `managedTask:completed`, `managedTask:error`, `managedTask:needs-parent-input` with AbortSignal timeout. |
+| File                                                                                             | Purpose                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)                               | **Main executor** — `slangLoop()` (round-based VM), agent dispatch/spawn/resume, stake routing, mailbox, escalate, converge/budget, output validation with retry                                                                               |
+| [`slang-lexer.ts`](../packages/core/src/workflow/slang-lexer.ts)                                 | Lexer (vendored `@riktar/slang`, MIT) — tokenizes `.slang` source                                                                                                                                                                              |
+| [`slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts)             | Parser (vendored, ~750 lines) — produces typed AST with error recovery                                                                                                                                                                         |
+| [`slang-parser.ts`](../packages/core/src/workflow/slang-parser.ts)                               | Public API — `parseSlang()`, `validateSlangAST()`                                                                                                                                                                                              |
+| [`slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts)                           | Dependency graph, deadlock detection, static analysis warnings                                                                                                                                                                                 |
+| [`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)                                     | AST type definitions (`FlowDecl`, `AgentDecl`, `StakeOp`, `AwaitOp`, etc.)                                                                                                                                                                     |
+| [`slang-types.ts`](../packages/core/src/workflow/slang-types.ts)                                 | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                                                                                                                                                |
+| [`index.ts`](../packages/core/src/workflow/index.ts)                                             | Barrel export                                                                                                                                                                                                                                  |
+| [`__tests__/slang-parser.test.ts`](../packages/core/src/workflow/__tests__/slang-parser.test.ts) | Unit tests for the Slang parser                                                                                                                                                                                                                |
+| [`wait-for-task-helper.ts`](../packages/core/src/workflow/wait-for-task-helper.ts)               | Shared event-driven wait helper — extracted from `WaitForTaskTool`; called by both the tool and `WorkflowTask.waitForStakes`. Handles `managedTask:completed`, `managedTask:error`, `managedTask:needs-parent-input` with AbortSignal timeout. |
 
 ### Extension Host Integration
 

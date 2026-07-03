@@ -6,7 +6,7 @@ How `send_message_to_task` with `wait=false` delivers peer notifications to a ru
 
 ## Design
 
-Async peer messages (`wait=false`) use a **dedicated FIFO queue** ([`peerNotificationQueue`](../src/core/task/Task.ts:224–230)) that is completely independent of the user-message queue ([`MessageQueueService`](../src/core/message-queue/MessageQueueService.ts)). This separation ensures:
+Async peer messages (`wait=false`) use a **dedicated FIFO queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts:224–230)) that is completely independent of the user-message queue ([`MessageQueueService`](../packages/core/src/message-queue/MessageQueueService.ts)). This separation ensures:
 
 - Async notifications are **not** treated as user turns (they don't trigger `cancelAndProcessQueuedMessages`)
 - Notifications are injected **once** into the system prompt at the start of the next agent loop iteration
@@ -62,7 +62,7 @@ targetState.peerNotificationQueue.push({
 
 ## Key Components
 
-### 1. `PeerNotification` type ([`Task.ts:207`](../src/core/task/Task.ts:207))
+### 1. `PeerNotification` type ([`Task.ts:207`](../packages/core/src/task/Task.ts:207))
 
 ```typescript
 export interface PeerNotification {
@@ -73,14 +73,14 @@ export interface PeerNotification {
 }
 ```
 
-### 2. `peerNotificationQueue` ([`Task.ts:230`](../src/core/task/Task.ts:230))
+### 2. `peerNotificationQueue` ([`Task.ts:230`](../packages/core/src/task/Task.ts:230))
 
 - Type: `PeerNotification[]`
-- Lives on each [`Task`](../src/core/task/Task.ts) instance
-- Separate from [`MessageQueueService`](../src/core/message-queue/MessageQueueService.ts) (which handles user messages and sync prompts)
+- Lives on each [`Task`](../packages/core/src/task/Task.ts) instance
+- Separate from [`MessageQueueService`](../packages/core/src/message-queue/MessageQueueService.ts) (which handles user messages and sync prompts)
 - **No event emission on push** — no `stateChanged`, no `TaskUserMessage`, no wake-up
 
-### 3. Enqueue ([`SendMessageToTaskTool.ts:255–261`](../src/core/tools/SendMessageToTaskTool.ts:255))
+### 3. Enqueue ([`SendMessageToTaskTool.ts:255–261`](../packages/core/src/tools/SendMessageToTaskTool.ts:255))
 
 ```typescript
 // Async mode: fire-and-forget
@@ -94,11 +94,11 @@ if (targetState) {
 }
 ```
 
-The push only succeeds when there's a live [`targetState`](../src/core/task/Task.ts) (the recipient is running and has an in-memory Task instance). If the recipient exists only in persisted history (idle/completed), the message is silently dropped — this is a [documented gap](#gaps).
+The push only succeeds when there's a live [`targetState`](../packages/core/src/task/Task.ts) (the recipient is running and has an in-memory Task instance). If the recipient exists only in persisted history (idle/completed), the message is silently dropped — this is a [documented gap](#gaps).
 
-### 4. Injection into system prompt ([`Task.ts:5588–5628`](../src/core/task/Task.ts:5588))
+### 4. Injection into system prompt ([`Task.ts:5588–5628`](../packages/core/src/task/Task.ts:5588))
 
-Each agent loop iteration calls [`getSystemPrompt()`](../src/core/task/Task.ts:5457) before making an API request. The function:
+Each agent loop iteration calls [`getSystemPrompt()`](../packages/core/src/task/Task.ts:5457) before making an API request. The function:
 
 1. Checks `this.peerNotificationQueue.length > 0` (line 5592)
 2. Formats each notification as a `PEER MESSAGE` block (lines 5596–5599):
@@ -125,12 +125,12 @@ The drain emits, for each notification, `task.say("peer_message", JSON.stringify
 
 Sync messages (`wait=true`) use a completely different path:
 
-- Enqueued via [`MessageQueueService.addMessage()`](../src/core/message-queue/MessageQueueService.ts:36)
+- Enqueued via [`MessageQueueService.addMessage()`](../packages/core/src/message-queue/MessageQueueService.ts:36)
 - Triggers `cancelAndProcessQueuedMessages()` to interrupt the current loop
 - Delivered as an annotated user turn with `PEER PROMPT` header
 - The sender blocks on a [`pendingSyncResolver`](../src/core/webview/ShoferProvider.ts:185) until the recipient calls `attempt_completion`
 
-See [`SendMessageToTaskTool.ts:156–246`](../src/core/tools/SendMessageToTaskTool.ts:156) for the sync implementation.
+See [`SendMessageToTaskTool.ts:156–246`](../packages/core/src/tools/SendMessageToTaskTool.ts:156) for the sync implementation.
 
 ---
 
@@ -194,10 +194,10 @@ A notification pushed mid-loop (while the recipient is processing a tool) gets p
 
 ## Related Files
 
-| File                                                                                        | Role                                                                               |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`Task.ts`](../src/core/task/Task.ts)                                                       | Defines `PeerNotification`, `peerNotificationQueue`; drains in `getSystemPrompt()` |
-| [`SendMessageToTaskTool.ts`](../src/core/tools/SendMessageToTaskTool.ts)                    | Enqueues notifications in async branch; sync branch uses `MessageQueueService`     |
-| [`MessageQueueService.ts`](../src/core/message-queue/MessageQueueService.ts)                | User-message queue (not used by async peer notifications)                          |
-| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                | Manages `pendingSyncResolver` for sync path                                        |
-| [`send_message_to_task.ts`](../src/core/prompts/tools/native-tools/send_message_to_task.ts) | Tool prompt description                                                            |
+| File                                                                                                 | Role                                                                               |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                                       | Defines `PeerNotification`, `peerNotificationQueue`; drains in `getSystemPrompt()` |
+| [`SendMessageToTaskTool.ts`](../packages/core/src/tools/SendMessageToTaskTool.ts)                    | Enqueues notifications in async branch; sync branch uses `MessageQueueService`     |
+| [`MessageQueueService.ts`](../packages/core/src/message-queue/MessageQueueService.ts)                | User-message queue (not used by async peer notifications)                          |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                         | Manages `pendingSyncResolver` for sync path                                        |
+| [`send_message_to_task.ts`](../packages/core/src/prompts/tools/native-tools/send_message_to_task.ts) | Tool prompt description                                                            |

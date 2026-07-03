@@ -36,7 +36,7 @@ It covers three tightly coupled subsystems:
 │  - per-task input state  │                                       │
 └──────────────────────────┘                                       ▼
                                               ┌────────────────────────────────┐
-                                              │  Task (src/core/task/Task.ts)  │
+                                              │  Task (packages/core/src/task/Task.ts)  │
                                               │  - messageQueueService         │
                                               │  - handleWebviewAskResponse()  │
                                               │  - processQueuedMessages()     │
@@ -297,12 +297,12 @@ changes but always sees the latest text.
 
 ## Files
 
-- [src/core/message-queue/MessageQueueService.ts](../src/core/message-queue/MessageQueueService.ts) —
+- [packages/core/src/message-queue/MessageQueueService.ts](../packages/core/src/message-queue/MessageQueueService.ts) —
   per-Task FIFO queue; `addMessage` / `prependMessage` / `dequeueMessage`
   / `removeMessage` / `updateMessage` / `isEmpty` / `dispose`. Each
   mutation emits `"stateChanged"` with the full `QueuedMessage[]` so
   the webview can re-render the queued-message bubbles reactively.
-- [src/core/task/Task.ts](../src/core/task/Task.ts) —
+- [packages/core/src/task/Task.ts](../packages/core/src/task/Task.ts) —
   `messageQueueService` ownership, `handleWebviewAskResponse`,
   `processQueuedMessages`, `cancelAndProcessQueuedMessages`,
   `_softCancelForQueuedMessage`, the `ask()` abort observation.
@@ -327,7 +327,7 @@ This section captures deficiencies discovered during the 2026-05-20
 factual review. They are not immediate correctness problems but
 represent missing coverage that future write-ups should address.
 
-1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](extensions/shofer/src/core/message-queue/MessageQueueService.ts:41)
+1. **Undocumented `QueuedMessage` shape.** The [`MessageQueueService`](extensions/shofer/packages/core/src/message-queue/MessageQueueService.ts:41)
    wraps each message as `{ id: string (uuidv4), timestamp: number,
 text: string, images?: string[] }`. The `timestamp` and `id` fields
    are never mentioned in this doc; the `id` is relevant because
@@ -337,7 +337,7 @@ text: string, images?: string[] }`. The `timestamp` and `id` fields
 2. **Undocumented methods: `removeMessage`, `updateMessage`, `isEmpty`.**
    Only `addMessage` / `prependMessage` / `dequeueMessage` appear in the
    diagram and the FIFO section. `isEmpty()` is the predicate used by
-   [`AttemptCompletionTool`](extensions/shofer/src/core/tools/AttemptCompletionTool.ts)
+   [`AttemptCompletionTool`](extensions/shofer/packages/core/src/tools/AttemptCompletionTool.ts)
    per the Terminal-State Queue-Drain Rule. `removeMessage` and
    `updateMessage` support the host-side edit/delete message flow.
 
@@ -372,7 +372,7 @@ text: string, images?: string[] }`. The `timestamp` and `id` fields
    `currentRequestAbortController.abort()`, `_taskAbortController.abort()`,
    `_cleanupOrphanedToolUses()`, and `_taskAbortController` replacement
    steps that exist in the real
-   [`cancelAndProcessQueuedMessages`](extensions/shofer/src/core/task/Task.ts:5923).
+   [`cancelAndProcessQueuedMessages`](extensions/shofer/packages/core/src/task/Task.ts:5923).
    Add these steps or label the diagram as simplified.
 
 8. **No mention of `webviewMessageHandler` routing.** The `queueMessage`

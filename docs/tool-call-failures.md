@@ -4,11 +4,11 @@
 
 **Related files:**
 
-- [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — main tool dispatch and error routing
-- [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — pre-execution validation (name, mode, disabled)
-- [`Task.ts`](../src/core/task/Task.ts) — `consecutiveMistakeCount`, `recordToolError`, `sayAndCreateMissingParamError`
-- [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — streaming arg construction
-- [`ToolRepetitionDetector.ts`](../src/core/tools/ToolRepetitionDetector.ts) — identical-consecutive-call detection
+- [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — main tool dispatch and error routing
+- [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — pre-execution validation (name, mode, disabled)
+- [`Task.ts`](../packages/core/src/task/Task.ts) — `consecutiveMistakeCount`, `recordToolError`, `sayAndCreateMissingParamError`
+- [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts) — streaming arg construction
+- [`ToolRepetitionDetector.ts`](../packages/core/src/tools/ToolRepetitionDetector.ts) — identical-consecutive-call detection
 
 ---
 
@@ -65,7 +65,7 @@ Stage F — Escalation (after tool returns)
 
 > Invalid tool call: missing tool_use.id. XML tool calls are no longer supported. Remove any XML tool markup (e.g. \<read_file\>...\</read_file\>) and use native tool calling instead.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `case "tool_use"` guard at L368
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — `case "tool_use"` guard at L368
 
 **Effect:**
 
@@ -89,7 +89,7 @@ Stage F — Escalation (after tool returns)
 
 Where `\<details\>` is ` Parser error: <parseError>` when the parser captured a specific failure (via `NativeToolCallParser.consumeLastParseError()`), otherwise the fallback ` This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`; and `\<receivedParams\>` is ` Received partial params: <json>.` when partial params exist.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L572-608 (message construction L578-586)
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — L572-608 (message construction L578-586)
 
 **Effect:**
 
@@ -105,7 +105,7 @@ Where `\<details\>` is ` Parser error: <parseError>` when the parser captured a 
 
 ### A3. Valid JSON but Required Fields Missing (vscode-lm XML Leak)
 
-**Trigger:** A vscode-lm model (particularly composite `shofer/*` models via `LanguageModelToolCallPart`) emits structurally valid JSON but embeds a trailing `<parameter name="..." string="true">VALUE` XML suffix inside one of the string values instead of as a separate JSON key. Example: `{"diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">extensions/shofer/src/core/workflow/WorkflowTask.ts"}`. `JSON.parse()` succeeds because the `<parameter>` text is just literal content inside the diff string. The parser's `apply_diff` guard `(args.path !== undefined || ...)` then fails because `args.path` is `undefined`.
+**Trigger:** A vscode-lm model (particularly composite `shofer/*` models via `LanguageModelToolCallPart`) emits structurally valid JSON but embeds a trailing `<parameter name="..." string="true">VALUE` XML suffix inside one of the string values instead of as a separate JSON key. Example: `{"diff": "...SEARCH/REPLACE content...\n<parameter name=\"path\" string=\"true\">extensions/shofer/packages/core/src/workflow/WorkflowTask.ts"}`. `JSON.parse()` succeeds because the `<parameter>` text is just literal content inside the diff string. The parser's `apply_diff` guard `(args.path !== undefined || ...)` then fails because `args.path` is `undefined`.
 
 **Error message:**
 
@@ -113,7 +113,7 @@ Where `\<details\>` is ` Parser error: <parseError>` when the parser captured a 
 
 This is the literal string thrown by `parseToolCall()`. It reaches the chat as the `Parser error:` portion of the missing-`nativeArgs` envelope described in A2 (the `apply_diff` guard fails on the missing `path`, so `nativeArgs` is never produced and the call falls through to the A2 path).
 
-**Location:** [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) — `parseToolCall()` `apply_diff` case at L1249–1276, error thrown at L1776–1779, XML leak recovery helper `extractPathFromXMLLeak()` at L343–353 (JSDoc from L329)
+**Location:** [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts) — `parseToolCall()` `apply_diff` case at L1249–1276, error thrown at L1776–1779, XML leak recovery helper `extractPathFromXMLLeak()` at L343–353 (JSDoc from L329)
 
 **Effect:**
 
@@ -134,7 +134,7 @@ This is the literal string thrown by `parseToolCall()`. It reaches the chat as t
 
 > Unknown tool "\<name\>". This tool does not exist. Please use one of the available tools: \<comma-separated tool list\>.
 
-**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `isValidToolName()` at L61-64
+**Location:** [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — `isValidToolName()` at L61-64
 
 **Effect:**
 
@@ -154,7 +154,7 @@ This is the literal string thrown by `parseToolCall()`. It reaches the chat as t
 
 > Tool "\<name\>" has been disabled by the user in Settings → Tools and is not available in any mode. Do not attempt to call it again. Use a different tool to accomplish the task.
 
-**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — L76-86
+**Location:** [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — L76-86
 
 **Effect:**
 
@@ -173,7 +173,7 @@ This is the literal string thrown by `parseToolCall()`. It reaches the chat as t
 
 > Tool "\<name\>" is not allowed in \<mode\> mode.
 
-**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — L99-101
+**Location:** [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — L99-101
 
 **Effect:**
 
@@ -196,7 +196,7 @@ When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only 
 
 **Type:** `FileRestrictionError` (custom error class — message defined in [`modes.ts`](../src/shared/modes.ts) L180-188)
 
-**Location:** [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts) — `doesFileMatchRegex` at L252-260, `FileRestrictionError` thrown at L402-409
+**Location:** [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts) — `doesFileMatchRegex` at L252-260, `FileRestrictionError` thrown at L402-409
 
 **Effect:**
 
@@ -217,7 +217,7 @@ When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only 
 
 **Notable:** The detector triggers an ask (`"tool_repetition"`) before emitting the error, so the user can provide guidance inline.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — L858-905
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — L858-905
 
 **Effect:**
 
@@ -240,7 +240,7 @@ When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only 
 - **All subsequent tool calls in the same turn are skipped** with:
     > Skipping tool \<description\> due to user rejecting a previous tool.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `askApproval` callback at L713-755, rejection path at L726-736; skip path at L545-561
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — `askApproval` callback at L713-755, rejection path at L726-736; skip path at L545-561
 
 **Recovery:** The tool result contains the rejection. The LLM receives it and can try a different approach in the next turn.
 
@@ -254,7 +254,7 @@ When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only 
 
 > Shofer tried to use \<tool\> without value for required parameter '\<param\>'. Retrying...
 
-**Location:** [`Task.sayAndCreateMissingParamError`](../src/core/task/Task.ts) — L3096 (message at L3099-3101)
+**Location:** [`Task.sayAndCreateMissingParamError`](../packages/core/src/task/Task.ts) — L3096 (message at L3099-3101)
 
 **Effect:**
 
@@ -277,7 +277,7 @@ When no `tool` is supplied the prefix is instead `This mode (\<mode\>) can only 
 
 Where \<action\> is the `action` parameter passed to `handleError`.
 
-**Location:** [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) — `handleError` callback at L759
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — `handleError` callback at L759
 
 **Effect:**
 
@@ -293,9 +293,9 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 **Trigger:** A write tool targets a file matching `ShoferProtectedController.PROTECTED_PATTERNS` or excluded by `.shoferignore`.
 
-**Files covered by `PROTECTED_PATTERNS`:** `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the exact array at [`ShoferProtectedController.ts`](../src/core/protect/ShoferProtectedController.ts) L16-23). The separate `.shoferignore` exclusion is enforced by the ignore-controller pipeline, **not** by `PROTECTED_PATTERNS`; `.shofermodes` / `.shoferrules*` are not in the protected list.
+**Files covered by `PROTECTED_PATTERNS`:** `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the exact array at [`ShoferProtectedController.ts`](../packages/core/src/protect/ShoferProtectedController.ts) L16-23). The separate `.shoferignore` exclusion is enforced by the ignore-controller pipeline, **not** by `PROTECTED_PATTERNS`; `.shofermodes` / `.shoferrules*` are not in the protected list.
 
-**Location:** [`ShoferProtectedController.ts`](../src/core/protect/ShoferProtectedController.ts)
+**Location:** [`ShoferProtectedController.ts`](../packages/core/src/protect/ShoferProtectedController.ts)
 
 **Effect:**
 
@@ -314,7 +314,7 @@ Where \<action\> is the `action` parameter passed to `handleError`.
 
 > "mistake_limit_reached" ask type — user is prompted for guidance.
 
-**Location:** [`Task.ts`](../src/core/task/Task.ts) — `recursivelyMakeShoferRequests`: mistake-limit gate at L4219-4220, `mistake_limit_reached` ask at L4239
+**Location:** [`Task.ts`](../packages/core/src/task/Task.ts) — `recursivelyMakeShoferRequests`: mistake-limit gate at L4219-4220, `mistake_limit_reached` ask at L4239
 
 **Effect:**
 

@@ -20,7 +20,7 @@ Peer messaging enables:
 
 ## Scope: Same Root Task
 
-Peer communication is scoped to tasks sharing the same [`rootTaskId`](parallelism.md#task). A task's `rootTaskId` is immutable — set at construction from [`TaskOptions.rootTask?.taskId`](../src/core/task/Task.ts:732) and persisted in [`HistoryItem`](../packages/types/src/history.ts). The root task (created directly by the user, no `rootTaskId`) is eligible for peer messaging — it can message any task in its tree using its own `taskId` as the effective root. Sub-tasks require `knownPeers` grants.
+Peer communication is scoped to tasks sharing the same [`rootTaskId`](parallelism.md#task). A task's `rootTaskId` is immutable — set at construction from [`TaskOptions.rootTask?.taskId`](../packages/core/src/task/Task.ts:732) and persisted in [`HistoryItem`](../packages/types/src/history.ts). The root task (created directly by the user, no `rootTaskId`) is eligible for peer messaging — it can message any task in its tree using its own `taskId` as the effective root. Sub-tasks require `knownPeers` grants.
 
 The [`TaskManager`](../src/services/task-manager/TaskManager.ts) already maintains the centralized registry of all live tasks (`activeTasks` and `managedTasks` maps). Peer tools query this registry filtered by `rootTaskId`, removing the `backgroundChildren` gating that limits current tools to direct children only.
 
@@ -81,7 +81,7 @@ Existing tool (always available, auto-approved). Extended with an optional `scop
 
 ## `check_task_status` — Gate Relaxed
 
-Currently gated at [`CheckTaskStatusTool.ts:41`](../src/core/tools/CheckTaskStatusTool.ts:41) via `task.backgroundChildren.get(task_id)`. This rejects any task ID that isn't a direct child.
+Currently gated at [`CheckTaskStatusTool.ts:41`](../packages/core/src/tools/CheckTaskStatusTool.ts:41) via `task.backgroundChildren.get(task_id)`. This rejects any task ID that isn't a direct child.
 
 ### Change
 
@@ -103,7 +103,7 @@ The opt-in `peer_task_ids` scope (if set on the caller) is checked at step 2 —
 
 ## `wait_for_task` — Gate Relaxed
 
-Same principle as `check_task_status`. Currently gated at [`WaitForTaskTool.ts:49`](../src/core/tools/WaitForTaskTool.ts:49) via `task.backgroundChildren.get(id)`.
+Same principle as `check_task_status`. Currently gated at [`WaitForTaskTool.ts:49`](../packages/core/src/tools/WaitForTaskTool.ts:49) via `task.backgroundChildren.get(id)`.
 
 ### Change
 
@@ -208,7 +208,7 @@ The async/sync flag is a **sender-side** property (does the sender block?). The 
 | Recipient state at send time                           | Delivery form (same for async **and** sync)                                                                                                                                                                                                        |
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `running` (live instance, mid-turn)                    | **System-prompt injection** for async (non-intrusive notification); **annotated user-turn** for sync (urgent). This is the _only_ row where async and sync differ in form, because there is already an in-flight turn to attach a notification to. |
-| Not busy — `completed` / `idle` / `paused` (resumable) | **Explicit annotated user-turn** enqueued via the recipient's [`MessageQueueService`](../src/core/task/Task.ts:573), which wakes/resumes the task. Async and sync are identical here.                                                              |
+| Not busy — `completed` / `idle` / `paused` (resumable) | **Explicit annotated user-turn** enqueued via the recipient's [`MessageQueueService`](../packages/core/src/task/Task.ts:573), which wakes/resumes the task. Async and sync are identical here.                                                     |
 | `error` (terminal, unrecoverable)                      | **Reject** for both modes — the tool returns `Error: Task <task_id> has errored.` An errored task cannot be meaningfully resumed, and the sender should know its recipient is broken rather than assume silent delivery.                           |
 | No live instance AND no resumable history              | **Reject** for both modes — `Error: Task <task_id> is not reachable.`                                                                                                                                                                              |
 
@@ -224,7 +224,7 @@ Sync adds **sender-side blocking** on top of the same recipient delivery model. 
 
 1. **Pre-check reachability** (Recipient delivery model). If the peer is in the `error` row or has no live instance and no resumable history, reject synchronously — never start the timeout clock for an undeliverable message.
 2. **Timeout clock starts** once the message is queued, driven by an `AbortSignal`-backed timer (per the repo Cooperative Cancellation Rule) rather than a bare `setTimeout` reject.
-3. The message is delivered as an **annotated user-turn** through the recipient's existing [`MessageQueueService`](../src/core/task/Task.ts:573), preserving sender metadata. Routing through the queue (instead of writing directly into the message array out-of-band) reuses the existing drain/`Task.ask()` machinery and avoids the dropped-message failure modes the Webview Send-Path Rule was written to prevent. **Capture the `QueuedMessage.id` returned by [`addMessage()`](../src/core/message-queue/MessageQueueService.ts:36)** so the sender can retract the prompt later. The queued user-turn reads:
+3. The message is delivered as an **annotated user-turn** through the recipient's existing [`MessageQueueService`](../packages/core/src/task/Task.ts:573), preserving sender metadata. Routing through the queue (instead of writing directly into the message array out-of-band) reuses the existing drain/`Task.ask()` machinery and avoids the dropped-message failure modes the Webview Send-Path Rule was written to prevent. **Capture the `QueuedMessage.id` returned by [`addMessage()`](../packages/core/src/message-queue/MessageQueueService.ts:36)** so the sender can retract the prompt later. The queued user-turn reads:
 
     ```
     PEER PROMPT from task <sender_task_id> ("<sender_title>"):
@@ -251,7 +251,7 @@ Sync adds **sender-side blocking** on top of the same recipient delivery model. 
     >
     > Sync is naturally suited to idle/completed peers and dedicated responders; sync-messaging a busy worker is a sharp tool. See [Sync response routing](#sync-response-routing-initiator-addressed) for the plumbing.
 
-7. **On timeout or sender abort:** the `AbortSignal` fires and the sender attempts to retract the prompt via [`messageQueueService.removeMessage(id)`](../src/core/message-queue/MessageQueueService.ts:78) using the id captured in step 3:
+7. **On timeout or sender abort:** the `AbortSignal` fires and the sender attempts to retract the prompt via [`messageQueueService.removeMessage(id)`](../packages/core/src/message-queue/MessageQueueService.ts:78) using the id captured in step 3:
 
     - **Still enqueued** (`removeMessage` returns `true`): the prompt is pulled from the queue and never reaches the recipient.
     - **Already consumed** (`removeMessage` returns `false`): `Task.ask()` already dequeued it and the recipient has seen the user-turn. It cannot be un-sent; if the recipient later replies, that reply is discarded because the sender's blocking call is gone.
@@ -272,8 +272,8 @@ A sync request blocks its **initiator** until the recipient's next `attempt_comp
 
 **Existing plumbing (parent/child only).** Today the blocking-result path is:
 
-- [`NewTaskTool`](../src/core/tools/NewTaskTool.ts:277) registers a resolver via `provider.registerBlockingChildResolver(child.taskId, resolve)` and `await`s the promise. The map [`blockingChildResolvers: Map<childTaskId, (result) => void>`](../src/core/webview/ShoferProvider.ts:180) is keyed by the **completing task's id** — already relationship-agnostic.
-- On completion, [`AttemptCompletionTool.execute`](../src/core/tools/AttemptCompletionTool.ts:168) gates on `if (task.parentTaskId)` and calls [`resumeBlockingParent({ parentTaskId: task.parentTaskId, childTaskId, completionResult })`](../src/core/webview/ShoferProvider.ts:4518), which fires the resolver **and** rewrites `parentTaskId`'s history (`awaitingChildId`/`completedByChildId`) **and pops the child off `shoferStack`** to reveal the parent below it.
+- [`NewTaskTool`](../packages/core/src/tools/NewTaskTool.ts:277) registers a resolver via `provider.registerBlockingChildResolver(child.taskId, resolve)` and `await`s the promise. The map [`blockingChildResolvers: Map<childTaskId, (result) => void>`](../src/core/webview/ShoferProvider.ts:180) is keyed by the **completing task's id** — already relationship-agnostic.
+- On completion, [`AttemptCompletionTool.execute`](../packages/core/src/tools/AttemptCompletionTool.ts:168) gates on `if (task.parentTaskId)` and calls [`resumeBlockingParent({ parentTaskId: task.parentTaskId, childTaskId, completionResult })`](../src/core/webview/ShoferProvider.ts:4518), which fires the resolver **and** rewrites `parentTaskId`'s history (`awaitingChildId`/`completedByChildId`) **and pops the child off `shoferStack`** to reveal the parent below it.
 
 The resolver map already routes correctly to an arbitrary waiter; only the `parentTaskId` gate in `attempt_completion` and the stack/history bookkeeping in `resumeBlockingParent` assume the waiter is the structural parent sitting directly below the recipient in `shoferStack`.
 
@@ -295,7 +295,7 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 > **What this means in practice:**
 >
 > - Spawning a child with `peer_task_ids=[B]` lets the child send messages **TO** B, discover B in `list_background_tasks(scope="peers")`, and check B's status — **and** the reverse edge is mirrored onto B, so B can send to / discover / check the child too.
-> - This is enforced at grant time in [`NewTaskTool`](../src/core/tools/NewTaskTool.ts): the child's `taskId` is added to each granted peer's `knownPeers` (live instance) and persisted onto the peer's history row, so it survives restarts.
+> - This is enforced at grant time in [`NewTaskTool`](../packages/core/src/tools/NewTaskTool.ts): the child's `taskId` is added to each granted peer's `knownPeers` (live instance) and persisted onto the peer's history row, so it survives restarts.
 > - **Receiving a PEER MESSAGE from a task still does NOT auto-add that task to your `knownPeers` set.** Only an explicit `peer_task_ids` grant (or being someone's parent/child) creates an edge. But because grants are now symmetric, any peer you were _granted_ can already reach you — so the old "I messaged them, they can't reply" footgun no longer occurs for grant-created edges.
 >
 > **Why symmetric:** spawn-time grants can only name tasks that already exist, so a grant is _necessarily_ one-directional at the moment it is written (the later sibling references the earlier one). Mirroring the edge turns that single expressible grant into a working conversation channel. See [Symmetric peering](#symmetric-peering-bidirectional-grants) below.
@@ -315,7 +315,7 @@ The resolver map already routes correctly to an arbitrary waiter; only the `pare
 
 ## `peer_task_ids` on `new_task` — Opt-in Scope Restrictor
 
-New optional parameter on [`NewTaskParams`](../src/core/tools/NewTaskTool.ts:16):
+New optional parameter on [`NewTaskParams`](../packages/core/src/tools/NewTaskTool.ts:16):
 
 | Param           | Type             | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --------------- | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -329,9 +329,9 @@ When set, the spawned child's `Task` instance stores `knownPeers: Set<string>` c
 - The parent's `taskId` (always allowed)
 - Any task the child itself spawns via `new_task` (dynamically added)
 
-This grant is **seeded at construction** via `CreateTaskOptions.initialKnownPeers` (`NewTaskTool` computes the child's grant set _before_ `createTask`), and the live `knownPeers` is persisted onto `HistoryItem.peerIds` on every metadata save and rehydrated on restart (see [`Task` constructor](../src/core/task/Task.ts:887)). Seeding at construction is what lets the child's **first** persisted row already carry `peerIds` — replacing the old post-spawn `updateTaskHistory({ peerIds })` write, which raced the child's not-yet-created history row and failed with "Task not found".
+This grant is **seeded at construction** via `CreateTaskOptions.initialKnownPeers` (`NewTaskTool` computes the child's grant set _before_ `createTask`), and the live `knownPeers` is persisted onto `HistoryItem.peerIds` on every metadata save and rehydrated on restart (see [`Task` constructor](../packages/core/src/task/Task.ts:887)). Seeding at construction is what lets the child's **first** persisted row already carry `peerIds` — replacing the old post-spawn `updateTaskHistory({ peerIds })` write, which raced the child's not-yet-created history row and failed with "Task not found".
 
-The "dynamically added" union member is mutated in the [`NewTaskTool`](../src/core/tools/NewTaskTool.ts) handler: when a task with a non-`undefined` `knownPeers` spawns a child, the new child's `taskId` is added to the spawner's `knownPeers` at spawn time. (Spawned children are also tracked in `backgroundChildIds`, but `knownPeers` is the scope-authority for peer tools and must be updated explicitly.)
+The "dynamically added" union member is mutated in the [`NewTaskTool`](../packages/core/src/tools/NewTaskTool.ts) handler: when a task with a non-`undefined` `knownPeers` spawns a child, the new child's `taskId` is added to the spawner's `knownPeers` at spawn time. (Spawned children are also tracked in `backgroundChildIds`, but `knownPeers` is the scope-authority for peer tools and must be updated explicitly.)
 
 #### Symmetric peering (bidirectional grants)
 
@@ -341,7 +341,7 @@ Rationale and limits:
 
 - **Why:** a spawn-time grant can only name an already-existing task, so it is unavoidably expressed one-directionally (the later sibling references the earlier). Mirroring turns that single grant into a usable two-way conversation channel.
 - **Not transitive:** only the explicit edge is mirrored. A parent holding both Alpha and Beta does not connect them; spawn the later sibling with `peer_task_ids=[earlierSibling]`.
-- **Safety:** symmetry changes _reachability_, not _blocking semantics_. The sync-messaging deadlock guard (fail-fast on busy targets, [`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts)) and sync timeouts are lifecycle-based and unaffected. The only residual is behavioral async ping-pong, bounded by per-turn/cost limits (a hop/TTL cap on relayed messages is a possible future hardening).
+- **Safety:** symmetry changes _reachability_, not _blocking semantics_. The sync-messaging deadlock guard (fail-fast on busy targets, [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts)) and sync timeouts are lifecycle-based and unaffected. The only residual is behavioral async ping-pong, bounded by per-turn/cost limits (a hop/TTL cap on relayed messages is a possible future hardening).
 
 `peer_task_ids` values SHOULD be validated at spawn time: each listed id must correspond to an existing task sharing the spawner's `rootTaskId`. Unknown ids are rejected (fail loud) rather than silently producing an over-restrictive scope that fails opaquely on a later `send_message_to_task`.
 
@@ -357,7 +357,7 @@ Delivery form is chosen by the recipient's runtime state, **not** by the async/s
 
 ### Form A: System-prompt injection (busy recipient, async only)
 
-Used only when the recipient is mid-turn **and** the message is async. The message rides along in the recipient's system prompt on the next API call — modeled after the existing subtask-constraints injection at [`Task.ts:5493`](../src/core/task/Task.ts:5493).
+Used only when the recipient is mid-turn **and** the message is async. The message rides along in the recipient's system prompt on the next API call — modeled after the existing subtask-constraints injection at [`Task.ts:5493`](../packages/core/src/task/Task.ts:5493).
 
 Key properties:
 
@@ -368,7 +368,7 @@ Key properties:
 
 ### Form B: Annotated user-turn (sync, or any non-busy recipient)
 
-Used for **all** sync messages, and for **any** message (async or sync) to a non-busy recipient (`completed`/`idle`/`paused`). The message enters the recipient's input as an explicit user-turn via the **same `queueMessage` → `Task.ask()` drain path** that user-typed messages use — concretely [`messageQueueService.addMessage(text, images)`](../src/core/message-queue/MessageQueueService.ts:36) (the enqueue behind the `queueMessage` webview message at [`webviewMessageHandler.ts:3560`](../src/core/webview/webviewMessageHandler.ts:3560)), drained by [`Task.ask()`](../src/core/task/Task.ts:2191). This deliberately reuses the existing, well-tested queue/ask machinery rather than writing into the message array out-of-band, and it wakes/resumes the task if needed. This signals urgency — the recipient's LLM treats it as an immediate task, like user input.
+Used for **all** sync messages, and for **any** message (async or sync) to a non-busy recipient (`completed`/`idle`/`paused`). The message enters the recipient's input as an explicit user-turn via the **same `queueMessage` → `Task.ask()` drain path** that user-typed messages use — concretely [`messageQueueService.addMessage(text, images)`](../packages/core/src/message-queue/MessageQueueService.ts:36) (the enqueue behind the `queueMessage` webview message at [`webviewMessageHandler.ts:3560`](../src/core/webview/webviewMessageHandler.ts:3560)), drained by [`Task.ask()`](../packages/core/src/task/Task.ts:2191). This deliberately reuses the existing, well-tested queue/ask machinery rather than writing into the message array out-of-band, and it wakes/resumes the task if needed. This signals urgency — the recipient's LLM treats it as an immediate task, like user input.
 
 ```
 [user] PEER PROMPT from task task-2 ("Analyze auth module"):
@@ -380,7 +380,7 @@ For sync, the recipient answers by calling **`attempt_completion`**, whose resul
 
 ### Injection / enqueue site
 
-Form A injection happens during system prompt construction, near the subtask-constraints flow at [`Task.ts:5493`](../src/core/task/Task.ts:5493). **Important:** that block is guarded by `if (this.parentTaskId)`. Peer eligibility is keyed on `rootTaskId`, **not** `parentTaskId`, so the peer-message injection MUST run **independently of that guard** (a peer can be eligible without the constraints branch firing). Treat the peer block as its own append step.
+Form A injection happens during system prompt construction, near the subtask-constraints flow at [`Task.ts:5493`](../packages/core/src/task/Task.ts:5493). **Important:** that block is guarded by `if (this.parentTaskId)`. Peer eligibility is keyed on `rootTaskId`, **not** `parentTaskId`, so the peer-message injection MUST run **independently of that guard** (a peer can be eligible without the constraints branch firing). Treat the peer block as its own append step.
 
 Form B never touches the system prompt — it is enqueued as a user-turn via `messageQueueService.addMessage()` (the `queueMessage` path) and drained by `Task.ask()`.
 
@@ -440,7 +440,7 @@ Message queue (Form B) — reuses the queueMessage/Task.ask() path
 
 ## Data Model Additions
 
-### `Task` class ([`Task.ts`](../src/core/task/Task.ts:199))
+### `Task` class ([`Task.ts`](../packages/core/src/task/Task.ts:199))
 
 ```typescript
 /**
@@ -475,7 +475,7 @@ interface PendingPeerMessage {
 
 Sync (`wait = true`) request/response state is **not** carried on `PendingPeerMessage`. Per the repo Cooperative Cancellation Rule, the sender's blocking wait is driven by an `AbortSignal`-backed timer: the sender creates an `AbortController`, races the response promise against `signal`, and on abort/timeout removes the still-queued Form B message from the recipient's `messageQueueService` and rejects the promise. The response itself arrives via the recipient's **`attempt_completion`** result, routed to the **initiator** of the prompt (peer or parent) through the initiator-addressed result-resolver (see [Sync response routing](#sync-response-routing-initiator-addressed)) — no bespoke `resolveFn`/`rejectFn`/`setTimeout` plumbing on the message object, and no reply `send_message_to_task`.
 
-### `NewTaskParams` ([`NewTaskTool.ts:16`](../src/core/tools/NewTaskTool.ts:16))
+### `NewTaskParams` ([`NewTaskTool.ts:16`](../packages/core/src/tools/NewTaskTool.ts:16))
 
 ```typescript
 interface NewTaskParams {
@@ -486,7 +486,7 @@ interface NewTaskParams {
 
 ### `HistoryItem`
 
-Peer grants **are** persisted via `HistoryItem.peerIds` (plus `rootTaskId` / `parentTaskId` / `backgroundChildIds` for the tree structure). `peerIds` is written on every metadata save from the live `knownPeers` authority (see [`_refreshTaskMetadata`](../src/core/task/Task.ts)), so a freshly-spawned task's row carries the grant from its first save and it survives restarts.
+Peer grants **are** persisted via `HistoryItem.peerIds` (plus `rootTaskId` / `parentTaskId` / `backgroundChildIds` for the tree structure). `peerIds` is written on every metadata save from the live `knownPeers` authority (see [`_refreshTaskMetadata`](../packages/core/src/task/Task.ts)), so a freshly-spawned task's row carries the grant from its first save and it survives restarts.
 
 ---
 
@@ -497,7 +497,7 @@ On extension restart:
 1. `TaskManager.restoreManagedTasks()` rehydrates the managed-task map from persisted history.
 2. Tasks are re-created with their `rootTaskId` from `HistoryItem`.
 3. `pendingPeerMessages` are **not** persisted — undelivered Form A notifications are lost across restarts. This is acceptable: the sender's sync call would have aborted on timeout, and async notifications are fire-and-forget by nature.
-4. `knownPeers` grants **survive restarts** (as of Shofer v1.0.86). The live `knownPeers` set is a runtime construct, but its contents are persisted onto `HistoryItem.peerIds` on every metadata save (derived from `knownPeers` in [`_refreshTaskMetadata`](../src/core/task/Task.ts)). On restore, the [`Task` constructor](../src/core/task/Task.ts:887) rehydrates `knownPeers` from `peerIds ∪ childIds ∪ backgroundChildIds`. A freshly-spawned task is seeded at construction via `CreateTaskOptions.initialKnownPeers` (set by `NewTaskTool` / `WorkflowTask.spawnAgentTask`), so its first persisted `peerIds` already carries the grant — there is no longer a post-spawn `updateTaskHistory({ peerIds })` write by the spawner (which previously failed with "Task not found" because the child's row did not exist yet, and left the grant runtime-only).
+4. `knownPeers` grants **survive restarts** (as of Shofer v1.0.86). The live `knownPeers` set is a runtime construct, but its contents are persisted onto `HistoryItem.peerIds` on every metadata save (derived from `knownPeers` in [`_refreshTaskMetadata`](../packages/core/src/task/Task.ts)). On restore, the [`Task` constructor](../packages/core/src/task/Task.ts:887) rehydrates `knownPeers` from `peerIds ∪ childIds ∪ backgroundChildIds`. A freshly-spawned task is seeded at construction via `CreateTaskOptions.initialKnownPeers` (set by `NewTaskTool` / `WorkflowTask.spawnAgentTask`), so its first persisted `peerIds` already carries the grant — there is no longer a post-spawn `updateTaskHistory({ peerIds })` write by the spawner (which previously failed with "Task not found" because the child's row did not exist yet, and left the grant runtime-only).
 
 ---
 
@@ -525,7 +525,7 @@ Resolved by the [Recipient delivery model](#recipient-delivery-model) at send ti
 
 ### Target task has no active instance
 
-When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../src/core/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../src/core/workflow/WorkflowTask.ts:859). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
+When the target has no live `Task` instance but **resumable persisted history** (non-`error` lifecycle), the [`SendMessageToTaskTool`](../packages/core/src/tools/SendMessageToTaskTool.ts) handler **rehydrates** the target via [`provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })`](../src/core/webview/ShoferProvider.ts:1490) — the same pattern used by [`WorkflowTask.resumeAgentTask`](../packages/core/src/workflow/WorkflowTask.ts:859). The freshly rehydrated instance gets a live `MessageQueueService` and the message is enqueued/queued normally.
 
 - **Sync** — always delivered as Form B (annotated user-turn + `cancelAndProcessQueuedMessages` wake). The sender blocks until the recipient's `attempt_completion` or timeout.
 - **Async to a non-busy peer** (`completed`/`idle`/`paused`) — delivered as Form B (annotated user-turn + wake).
@@ -535,7 +535,7 @@ If there is **neither** a live instance **nor** resumable persisted history, **b
 
 ### Sender aborts while waiting for sync response
 
-The `send_message_to_task` tool handler's abort path fires the `AbortSignal`, which calls [`messageQueueService.removeMessage(id)`](../src/core/message-queue/MessageQueueService.ts:78) for the still-queued Form B message and rejects the pending response promise. If `removeMessage` returns `false` the recipient already consumed the prompt and is composing a response; that response is silently discarded (the sender is gone).
+The `send_message_to_task` tool handler's abort path fires the `AbortSignal`, which calls [`messageQueueService.removeMessage(id)`](../packages/core/src/message-queue/MessageQueueService.ts:78) for the still-queued Form B message and rejects the pending response promise. If `removeMessage` returns `false` the recipient already consumed the prompt and is composing a response; that response is silently discarded (the sender is gone).
 
 ### User prompts a task involved in a sync exchange
 
@@ -547,9 +547,9 @@ The human user can prompt or resume any task at any time; this must not perturb 
 
 ### `ask_followup_question` from a task in a peer exchange
 
-**Routing rule:** `ask_followup_question` routes to the task's **parent** only when the parent is _able to answer_; otherwise it surfaces to the **user**. "Able to answer" means the parent is running its own agent loop (it can pick up the question and call `answer_subtask_question`) — **not** hard-suspended awaiting this child. Today's gate in [`AskFollowupQuestionTool`](../src/core/tools/AskFollowupQuestionTool.ts:56), `task.parentTaskId && task.isBackgroundTask`, already encodes exactly this and is **correct as-is**:
+**Routing rule:** `ask_followup_question` routes to the task's **parent** only when the parent is _able to answer_; otherwise it surfaces to the **user**. "Able to answer" means the parent is running its own agent loop (it can pick up the question and call `answer_subtask_question`) — **not** hard-suspended awaiting this child. Today's gate in [`AskFollowupQuestionTool`](../packages/core/src/tools/AskFollowupQuestionTool.ts:56), `task.parentTaskId && task.isBackgroundTask`, already encodes exactly this and is **correct as-is**:
 
-- **Background (async) subtask** → parent is alive and supervising → route the question **up to the parent**. The parent discovers it via the `managedTask:needs-parent-input` event (surfaced through `check_task_status` / `wait_for_task` as `waiting_for_parent`) and answers with `answer_subtask_question` → [`resolvePendingParentQuestion`](../src/core/task/Task.ts:3376).
+- **Background (async) subtask** → parent is alive and supervising → route the question **up to the parent**. The parent discovers it via the `managedTask:needs-parent-input` event (surfaced through `check_task_status` / `wait_for_task` as `waiting_for_parent`) and answers with `answer_subtask_question` → [`resolvePendingParentQuestion`](../packages/core/src/task/Task.ts:3376).
 - **Foreground/blocking subtask** → parent is **hard-suspended** inside the `new_task` await and cannot answer → routing the question there would **deadlock** (child waits for the parent's answer; parent waits for the child's completion). So the question correctly **falls through to the user**. `isBackgroundTask === false` is the proxy for "parent is blocked."
 - **Root task** (no `parentTaskId`) → user, by definition.
 

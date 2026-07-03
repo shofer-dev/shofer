@@ -303,13 +303,13 @@ The exporters receive these via [`ShoferProvider.getTaskWithId()`](../src/core/w
 
 ### How Per-Call Metadata Is Captured
 
-The JSON exporter reads per-call metadata from `api_req_started` ShoferMessages (`ShoferApiReqInfo` written in [`Task.ts`](../src/core/task/Task.ts)), parsed as `UiApiReqStartedPayload`. The three representations — `ShoferApiReqInfo` (write), `UiApiReqStartedPayload` (read/parse), `JsonExportCall` (export output) — must stay in lock-step; adding a field to one without the others silently drops that field from exports.
+The JSON exporter reads per-call metadata from `api_req_started` ShoferMessages (`ShoferApiReqInfo` written in [`Task.ts`](../packages/core/src/task/Task.ts)), parsed as `UiApiReqStartedPayload`. The three representations — `ShoferApiReqInfo` (write), `UiApiReqStartedPayload` (read/parse), `JsonExportCall` (export output) — must stay in lock-step; adding a field to one without the others silently drops that field from exports.
 
 **Token Estimation Trigger:** The char/4 fallback in [`estimateTokens()`](../src/integrations/misc/export-json.ts:140) fires when `calls.every(c => c.inputTokens === 0 && c.outputTokens === 0)` — i.e., whenever ALL calls have zero tokens, regardless of cause (all error-only calls, or a provider that emits usage but the capture failed).
 
 ### Wire Traffic Capture
 
-Before each `this.api.createMessage()` call in [`attemptApiRequest()`](../src/core/task/Task.ts), a JSON snapshot is captured containing:
+Before each `this.api.createMessage()` call in [`attemptApiRequest()`](../packages/core/src/task/Task.ts), a JSON snapshot is captured containing:
 
 - Model ID and API protocol
 - System prompt length + truncated head (first 500 chars)
@@ -319,7 +319,7 @@ Before each `this.api.createMessage()` call in [`attemptApiRequest()`](../src/co
 
 The snapshot is stored via:
 
-1. [`snapshotWireRequest()`](../src/core/task/Task.ts) merges the wire request JSON into the last `api_req_started` ShoferMessage
+1. [`snapshotWireRequest()`](../packages/core/src/task/Task.ts) merges the wire request JSON into the last `api_req_started` ShoferMessage
 2. The message is persisted to `ui_messages.jsonl` via the append/compaction save path
 3. The JSON export reads it as `wireRequest` and surfaces it as-is
 
@@ -348,7 +348,7 @@ Capture points:
 | `attemptApiRequest` first-chunk catch            | Provider errors, context window exceeded, connection failures | `snapshotApiReqError(this.buildApiReqError(error))`                               |
 | `recursivelyMakeShoferRequests` mid-stream catch | Stream interruption, tool execution failures                  | `snapshotApiReqError(this.buildApiReqError(error))` — only for non-user-cancelled |
 
-Both capture points call [`snapshotApiReqError()`](../src/core/task/Task.ts) which merges the structured error into the last `api_req_started` ShoferMessage, then persisted to `ui_messages.jsonl`.
+Both capture points call [`snapshotApiReqError()`](../packages/core/src/task/Task.ts) which merges the structured error into the last `api_req_started` ShoferMessage, then persisted to `ui_messages.jsonl`.
 
 ### Implementation Files
 

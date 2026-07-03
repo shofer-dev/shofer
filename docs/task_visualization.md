@@ -518,17 +518,17 @@ interface TaskInteractionPayload {
 
 ## Key Files
 
-| File                                                                                     | Role                                                                                                                                                          |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Task.ts`](../src/core/task/Task.ts)                                                    | Timeline origin; request span lifecycle + idempotent `emitApiReqFinished`; `_markStreamProgress` (TTFB + gen-start); `abortTask` flush; `emitTaskInteraction` |
-| [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts) | Tool span capture (incl. `waitsForTask`) at the `pushToolResult` chokepoint; `maybeRecordTaskInteraction`                                                     |
-| [`message.ts`](../packages/types/src/message.ts)                                         | Zod schemas: `apiRequestFinishedPayloadSchema`, `toolSpanSchema`, `taskInteractionPayloadSchema`; `shoferSays`                                                |
-| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                             | `getTaskInteractions(rootTaskId)` — host-side aggregation for the Sequence view                                                                               |
-| [`TaskTreeView.tsx`](../webview-ui/src/components/chat/TaskTreeView.tsx)                 | Tree hierarchy React component                                                                                                                                |
-| [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx)         | Sequence lifeline diagram (v1)                                                                                                                                |
-| [`TaskTraceView.tsx`](../webview-ui/src/components/chat/TaskTraceView.tsx)               | Waterfall SVG React component (phase-segmented bars, collapsed-time axis)                                                                                     |
-| [`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStatsView.tsx)               | Active-time donut breakdown                                                                                                                                   |
-| [`useSvgPanZoom.ts`](../webview-ui/src/hooks/useSvgPanZoom.ts)                           | Shared drag-pan + cursor-anchored wheel zoom for Trace & Sequence                                                                                             |
+| File                                                                                              | Role                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                                    | Timeline origin; request span lifecycle + idempotent `emitApiReqFinished`; `_markStreamProgress` (TTFB + gen-start); `abortTask` flush; `emitTaskInteraction` |
+| [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) | Tool span capture (incl. `waitsForTask`) at the `pushToolResult` chokepoint; `maybeRecordTaskInteraction`                                                     |
+| [`message.ts`](../packages/types/src/message.ts)                                                  | Zod schemas: `apiRequestFinishedPayloadSchema`, `toolSpanSchema`, `taskInteractionPayloadSchema`; `shoferSays`                                                |
+| [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                      | `getTaskInteractions(rootTaskId)` — host-side aggregation for the Sequence view                                                                               |
+| [`TaskTreeView.tsx`](../webview-ui/src/components/chat/TaskTreeView.tsx)                          | Tree hierarchy React component                                                                                                                                |
+| [`TaskSequenceView.tsx`](../webview-ui/src/components/chat/TaskSequenceView.tsx)                  | Sequence lifeline diagram (v1)                                                                                                                                |
+| [`TaskTraceView.tsx`](../webview-ui/src/components/chat/TaskTraceView.tsx)                        | Waterfall SVG React component (phase-segmented bars, collapsed-time axis)                                                                                     |
+| [`TaskStatsView.tsx`](../webview-ui/src/components/chat/TaskStatsView.tsx)                        | Active-time donut breakdown                                                                                                                                   |
+| [`useSvgPanZoom.ts`](../webview-ui/src/hooks/useSvgPanZoom.ts)                                    | Shared drag-pan + cursor-anchored wheel zoom for Trace & Sequence                                                                                             |
 
 ## Gaps & Areas for Improvement
 

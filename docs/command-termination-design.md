@@ -102,7 +102,7 @@ The `"abort"` operation kills the running command. The `"continue"` operation (u
 | Button click         | [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx)  | 170-186                     | Posts `terminalOperation: "abort"`                                           |
 | ChatView Kill button | [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx)                  | 1304-1305                   | Posts `terminalOperation: "abort"` on secondary button                       |
 | IPC handler          | [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)        | 1008-1011                   | Routes to `task.handleTerminalOperation()`                                   |
-| Task dispatch        | [`Task.ts`](src/core/task/Task.ts)                                             | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                                             |
+| Task dispatch        | [`Task.ts`](packages/core/src/task/Task.ts)                                    | `handleTerminalOperation()` | Calls `terminalProcess?.abort()`                                             |
 | VS Code kill         | [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts)           | 259-263                     | Sends `\x03` (Ctrl+C) via `terminal.sendText()`                              |
 | Execa kill           | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts) | `abort()`                   | `terminateProcessTree(pid)` — SIGTERM→grace→SIGKILL over the tree (§6)       |
 | Process termination  | [`utils/process-termination.ts`](src/utils/process-termination.ts)             | `terminateProcessTree`      | Reusable SIGTERM→SIGKILL escalation over a process tree (injectable, tested) |
@@ -169,7 +169,7 @@ wrapper shell PID, then updates to the child command's PID).
 When the user clicks the global **Stop** button, the flow is:
 
 1. [`ShoferProvider.cancelTask()`](src/core/webview/ShoferProvider.ts) → `cancelAndProcessQueuedMessages()`
-2. If the task is running, calls [`task.abortTask()`](src/core/task/Task.ts) which includes:
+2. If the task is running, calls [`task.abortTask()`](packages/core/src/task/Task.ts) which includes:
     ```typescript
     this.terminalProcess?.abort()
     ```
@@ -205,7 +205,7 @@ From [`packages/types/src/terminal.ts`](packages/types/src/terminal.ts):7-32:
 
 The `"terminated"` status distinguishes user-initiated kills (the inline Abort/Kill
 Command button) from natural exits and from user timeouts. It is emitted by
-`onShellExecutionComplete` when [`Task.userTerminatedCommand`](src/core/task/Task.ts)
+`onShellExecutionComplete` when [`Task.userTerminatedCommand`](packages/core/src/task/Task.ts)
 is set — a flag raised by `handleTerminalOperation("abort")` and cleared when the
 next command starts or completes. The user-timeout path aborts the process
 directly (not via `handleTerminalOperation`), so it keeps its own `"timeout"`
@@ -290,7 +290,7 @@ A `"terminated"` variant was added to `CommandExecutionStatus` (`commandExecutio
 | [`CommandExecution.tsx`](webview-ui/src/components/chat/CommandExecution.tsx:170-186)  | OctagonX button + click handler                                                             |
 | [`ChatView.tsx`](webview-ui/src/components/chat/ChatView.tsx:1304-1305)                | Kill Command button during `command_output` ask                                             |
 | [`webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts:1008-1011)      | IPC routing for `terminalOperation`                                                         |
-| [`Task.ts`](src/core/task/Task.ts)                                                     | `handleTerminalOperation()` dispatch + `abortTask()` — both call `terminalProcess?.abort()` |
+| [`Task.ts`](packages/core/src/task/Task.ts)                                            | `handleTerminalOperation()` dispatch + `abortTask()` — both call `terminalProcess?.abort()` |
 | [`TerminalProcess.ts`](src/integrations/terminal/TerminalProcess.ts:259-263)           | VS Code SIGINT kill (`\x03`)                                                                |
 | [`ExecaTerminalProcess.ts`](src/integrations/terminal/ExecaTerminalProcess.ts:163-221) | Execa SIGKILL + process tree kill                                                           |
 | [`TerminalRegistry.ts`](src/integrations/terminal/TerminalRegistry.ts:77-119)          | Shell execution end event → exit code interpretation                                        |

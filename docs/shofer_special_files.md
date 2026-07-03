@@ -47,14 +47,14 @@ When a file is blocked by `.shofer/shoferignore`, read-tool results omit the fil
 and write/execute tools return an error indicating the path is ignored.
 The exact wording varies by tool; the controller itself only exposes boolean
 access checks and a formatted instructions block via
-[`getInstructions()`](../src/core/ignore/ShoferIgnoreController.ts)
+[`getInstructions()`](../packages/core/src/ignore/ShoferIgnoreController.ts)
 (surfaces `🔒`-badged entries for blocked files).
 
 A UI setting ("Show .shofer/shoferignore'd files in lists and searches") controls
 whether ignored files appear with a 🔒 badge or are hidden entirely from
 file listings.
 
-Implementation: [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
+Implementation: [`ShoferIgnoreController`](../packages/core/src/ignore/ShoferIgnoreController.ts)
 
 ---
 
@@ -316,7 +316,7 @@ global content.
 | **Status** | Reserved for future use |
 
 Reserved filename for future write-protection overrides. Currently defined in
-the [`ShoferProtectedController`](../src/core/protect/ShoferProtectedController.ts)
+the [`ShoferProtectedController`](../packages/core/src/protect/ShoferProtectedController.ts)
 protected patterns list but not yet loaded or used by any subsystem.
 
 ---
@@ -421,7 +421,7 @@ These files cannot be modified by the LLM without explicit user approval
 | `.shoferprotected`     | `.shoferprotected` (reserved; the pattern is active today)      |
 | `AGENTS.md`            | `AGENTS.md`, `AGENT.md`                                         |
 
-Implementation: [`ShoferProtectedController.PROTECTED_PATTERNS`](../src/core/protect/ShoferProtectedController.ts) — the literal list is `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the `.shofer/shoferignore` and `.shofer/shofermodes` rows above are subsumed by `.shofer/**`). There is **no** `.shoferrules*` entry.
+Implementation: [`ShoferProtectedController.PROTECTED_PATTERNS`](../packages/core/src/protect/ShoferProtectedController.ts) — the literal list is `.shofer/**`, `.vscode/**`, `*.code-workspace`, `.shoferprotected`, `AGENTS.md`, `AGENT.md` (the `.shofer/shoferignore` and `.shofer/shofermodes` rows above are subsumed by `.shofer/**`). There is **no** `.shoferrules*` entry.
 
 ---
 
@@ -454,7 +454,7 @@ wording. Replaced with a factual description of the controller's API.
 
 ### 2. `ShoferIgnoreController` — ✅ NOT dead code (this gap was stale)
 
-The 2026-05-20 audit claimed [`ShoferIgnoreController`](../src/core/ignore/ShoferIgnoreController.ts)
+The 2026-05-20 audit claimed [`ShoferIgnoreController`](../packages/core/src/ignore/ShoferIgnoreController.ts)
 was never imported. It is now a **central, widely-used** component (wired after that
 audit): instantiated in `Task.ts` (every task gets one via `new ShoferIgnoreController(this.cwd)`),
 the code indexer (`manager.ts`, `scanner.ts`, `file-watcher.ts`), the live memory

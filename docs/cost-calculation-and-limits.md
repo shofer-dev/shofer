@@ -48,12 +48,12 @@ TaskHeader (total cost display)
 
 | File                                                                                      | Role                                                                                                              |
 | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [`Task.ts`](../src/core/task/Task.ts)                                                     | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`                            |
+| [`Task.ts`](../packages/core/src/task/Task.ts)                                            | Emits `api_req_started`, accumulates usage during streaming, calls `updateApiReqMsg()`                            |
 | [`consolidateTokenUsage.ts`](../packages/core/src/message-utils/consolidateTokenUsage.ts) | Aggregates all `api_req_started` and `condense_context` messages into a `TokenUsage` total                        |
 | [`ChatRow.tsx`](../webview-ui/src/components/chat/ChatRow.tsx)                            | Renders (or hides) the per-request `api_req_started` row in the chat                                              |
 | [`TaskHeader.tsx`](../webview-ui/src/components/chat/TaskHeader.tsx)                      | Displays the aggregated total cost                                                                                |
 | [`cost.ts`](../src/shared/cost.ts)                                                        | Provider-specific pricing functions (`calculateApiCostAnthropic`, `calculateApiCostOpenAI`, `applyCustomPricing`) |
-| [`api/index.ts`](../src/api/index.ts)                                                     | `buildApiHandler` — wraps `getModel()` to apply `customPricing` overrides when set                                |
+| [`api/index.ts`](../packages/core/src/api/index.ts)                                       | `buildApiHandler` — wraps `getModel()` to apply `customPricing` overrides when set                                |
 | [`provider-settings.ts`](../packages/types/src/provider-settings.ts)                      | `customPricing` schema field on `baseProviderSettingsSchema`                                                      |
 
 ### Step-by-Step
@@ -324,7 +324,7 @@ four configurable fields are:
 handler's `getModel()` with a thin closure:
 
 ```ts
-// src/api/index.ts
+// packages/core/src/api/index.ts
 raw.getModel = () => {
 	const m = rawGetModel() // auto-discovered
 	return { id: m.id, info: applyCustomPricing(m.info, customPricing) }
@@ -569,7 +569,7 @@ through real money with no upper bound.
 #### Where the check fires
 
 Two chokepoints inside the streaming loop in
-[`Task.ts`](../src/core/task/Task.ts), both `await`ed so the abort
+[`Task.ts`](../packages/core/src/task/Task.ts), both `await`ed so the abort
 flag is observed before the next chunk is yielded — otherwise we'd
 keep burning tokens past the cap for the remainder of the stream.
 
@@ -593,7 +593,7 @@ fired on every `usage` chunk during the main streaming loop:
    `calculateApiCost{Anthropic,OpenAI}` math `updateApiReqMsg` uses for
    the persisted `cost` field. This is what makes the tight cap enforce
    _regardless of which backend serves the traffic_ — see
-   [`estimateRequestCostUsd`](../src/core/task/Task.ts) and the
+   [`estimateRequestCostUsd`](../packages/core/src/task/Task.ts) and the
    [Backend Coverage Matrix](#backend-coverage-matrix).
 3. Bypass if `_costLimitBypassed`,
    `_costLimitEnforcementFiredForRequest`, or no snapshot.
@@ -685,7 +685,7 @@ automated / eval / headless scenarios where there is no user to show
 errors to and hanging streams should be left to time out on their own.
 
 A third chokepoint guards `new_task` in
-[`NewTaskTool.ts`](../src/core/tools/NewTaskTool.ts): before
+[`NewTaskTool.ts`](../packages/core/src/tools/NewTaskTool.ts): before
 constructing the child, walk to the root, aggregate costs, and refuse
 with a tool error if `aggregated.totalCost >= limit.maxUsd`.
 
@@ -708,7 +708,7 @@ with a tool error if `aggregated.totalCost >= limit.maxUsd`.
 #### Persistence & restore
 
 - `costLimit` round-trips through
-  [`taskMetadata.ts`](../src/core/task-persistence/taskMetadata.ts)
+  [`taskMetadata.ts`](../packages/core/src/task-persistence/taskMetadata.ts)
   alongside `totalCost`.
 - The `Task` constructor restores `historyItem.costLimit` **only
   when `parentTask` is unset**, enforcing the "single source of
@@ -756,7 +756,7 @@ spentUsd, action, modelId})` emits the
 - [x] Persistence round-trip via `taskMetadata.ts`.
 - [x] Telemetry event.
 - [x] Unit tests: parent-walk semantics + recursive cost aggregation
-      ([`cost-limit.spec.ts`](../src/core/task/__tests__/cost-limit.spec.ts)).
+      ([`cost-limit.spec.ts`](../packages/core/src/task/__tests__/cost-limit.spec.ts)).
 
 ### Bug fixes since 3.53.0
 
@@ -820,7 +820,7 @@ limit=0.01`. Pairs with `llm-router` 0.8.9 (forces
   with no pricing info (then nothing fires — by design we only cap real,
   priced spend). New unit tests lock the fallback contract
   (positive estimate for priced models, `0` for unpriced) in
-  [`cost-limit.spec.ts`](../src/core/task/__tests__/cost-limit.spec.ts).
+  [`cost-limit.spec.ts`](../packages/core/src/task/__tests__/cost-limit.spec.ts).
   See the [Backend Coverage Matrix](#backend-coverage-matrix) and
   [Known Gaps by backend](#known-gaps-by-backend) for the full
   per-backend picture, including the residual llm-router-side gaps

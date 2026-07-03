@@ -181,33 +181,33 @@ These are added to [`packages/types/src/codebase-index.ts`](../packages/types/sr
 
 **Files to create:**
 
-| File                                                     | Purpose                                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------------------ | -------- | ------- | ----- |
-| `src/services/git-index/interfaces/git.ts`               | `GitCommitBlock`, `IGitLogExtractor`, `IGitWatcher`, `IGitSearchService` |
-| `src/services/git-index/processors/git-log-extractor.ts` | `GitLogExtractor`: runs `git log`, parses output                         |
-| `src/services/git-index/processors/git-watcher.ts`       | Stub (no-op in Phase 1, implemented in Phase 2)                          |
-| `src/services/git-index/git-cache-manager.ts`            | `GitCacheManager`: per-commit SHA-256 hash cache                         |
-| `src/services/git-index/git-state-manager.ts`            | `GitHistoryStateManager`: Standby                                        | Indexing | Indexed | Error |
-| `src/services/git-index/git-search-service.ts`           | `GitSearchService`: embed query → Qdrant search                          |
-| `src/services/git-index/git-index-manager.ts`            | `GitIndexManager`: singleton, orchestrates lifecycle                     |
-| `src/core/tools/GitSearchTool.ts`                        | `GitSearchTool`: `BaseTool<"git_search">` handler                        |
-| `src/core/prompts/tools/native-tools/git_search.ts`      | Tool schema definition                                                   |
+| File                                                         | Purpose                                                                  |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------ | -------- | ------- | ----- |
+| `src/services/git-index/interfaces/git.ts`                   | `GitCommitBlock`, `IGitLogExtractor`, `IGitWatcher`, `IGitSearchService` |
+| `src/services/git-index/processors/git-log-extractor.ts`     | `GitLogExtractor`: runs `git log`, parses output                         |
+| `src/services/git-index/processors/git-watcher.ts`           | Stub (no-op in Phase 1, implemented in Phase 2)                          |
+| `src/services/git-index/git-cache-manager.ts`                | `GitCacheManager`: per-commit SHA-256 hash cache                         |
+| `src/services/git-index/git-state-manager.ts`                | `GitHistoryStateManager`: Standby                                        | Indexing | Indexed | Error |
+| `src/services/git-index/git-search-service.ts`               | `GitSearchService`: embed query → Qdrant search                          |
+| `src/services/git-index/git-index-manager.ts`                | `GitIndexManager`: singleton, orchestrates lifecycle                     |
+| `packages/core/src/tools/GitSearchTool.ts`                   | `GitSearchTool`: `BaseTool<"git_search">` handler                        |
+| `packages/core/src/prompts/tools/native-tools/git_search.ts` | Tool schema definition                                                   |
 
 **Files to modify:**
 
-| File                                                    | Change                                                                                                                                                |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/types/src/tool.ts`                            | Add `"git_search"` to `toolNames`, `TOOL_GROUPS` (`read` group), and `TOOL_DISPLAY_NAMES`                                                             |
-| `packages/types/src/codebase-index.ts`                  | Add git-specific config fields to Zod schema                                                                                                          |
-| `packages/types/src/vscode-extension-host.ts`           | Add `"gitSearch"` to `ShoferSayTool.tool` union                                                                                                       |
-| `src/shared/tools.ts`                                   | Add `git_search` to `NativeToolArgs` type                                                                                                             |
-| `src/core/prompts/tools/native-tools/index.ts`          | Import + register `gitSearch` tool schema                                                                                                             |
-| `src/core/task/build-tools.ts`                          | Import `GitIndexManager`, pass to filter                                                                                                              |
-| `src/core/prompts/tools/filter-tools-for-mode.ts`       | Accept `gitIndexManager` param; conditionally exclude `git_search` when not configured (mirrors the `rag_search` / `codeIndexManager` gating pattern) |
-| `src/core/assistant-message/presentAssistantMessage.ts` | Add dispatch case (mirrors `rag_search`)                                                                                                              |
-| `src/core/assistant-message/NativeToolCallParser.ts`    | Add switch cases for `git_search`                                                                                                                     |
-| `src/core/auto-approval/tools.ts`                       | Add `gitSearch: "git_search"` to auto-approved tools                                                                                                  |
-| `src/extension.ts`                                      | Initialize `GitIndexManager` per workspace (mirrors `CodeIndexManager` initialization)                                                                |
+| File                                                             | Change                                                                                                                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/types/src/tool.ts`                                     | Add `"git_search"` to `toolNames`, `TOOL_GROUPS` (`read` group), and `TOOL_DISPLAY_NAMES`                                                             |
+| `packages/types/src/codebase-index.ts`                           | Add git-specific config fields to Zod schema                                                                                                          |
+| `packages/types/src/vscode-extension-host.ts`                    | Add `"gitSearch"` to `ShoferSayTool.tool` union                                                                                                       |
+| `src/shared/tools.ts`                                            | Add `git_search` to `NativeToolArgs` type                                                                                                             |
+| `packages/core/src/prompts/tools/native-tools/index.ts`          | Import + register `gitSearch` tool schema                                                                                                             |
+| `packages/core/src/task/build-tools.ts`                          | Import `GitIndexManager`, pass to filter                                                                                                              |
+| `packages/core/src/prompts/tools/filter-tools-for-mode.ts`       | Accept `gitIndexManager` param; conditionally exclude `git_search` when not configured (mirrors the `rag_search` / `codeIndexManager` gating pattern) |
+| `packages/core/src/assistant-message/presentAssistantMessage.ts` | Add dispatch case (mirrors `rag_search`)                                                                                                              |
+| `packages/core/src/assistant-message/NativeToolCallParser.ts`    | Add switch cases for `git_search`                                                                                                                     |
+| `packages/core/src/auto-approval/tools.ts`                       | Add `gitSearch: "git_search"` to auto-approved tools                                                                                                  |
+| `src/extension.ts`                                               | Initialize `GitIndexManager` per workspace (mirrors `CodeIndexManager` initialization)                                                                |
 
 **Key design decisions:**
 
@@ -311,19 +311,19 @@ All inputs must bind to `cachedState` (Settings View Pattern — see `AGENTS.md`
 
 Following the [adding-new-tools.md](adding-new-tools.md) 11-step checklist:
 
-| #   | Location                                                | Item                                      |
-| --- | ------------------------------------------------------- | ----------------------------------------- |
-| 1   | `src/core/prompts/tools/native-tools/git_search.ts`     | Tool schema                               |
-| 2   | `packages/types/src/tool.ts`                            | Add `"git_search"` to `toolNames`         |
-| 3   | `packages/types/src/tool.ts`                            | Add to `TOOL_GROUPS` (`read` group)       |
-| 4   | `src/core/tools/GitSearchTool.ts`                       | `BaseTool<"git_search">` handler          |
-| 5   | `src/core/assistant-message/presentAssistantMessage.ts` | Dispatch case + `toolDescription()` case  |
-| 6   | `src/shared/tools.ts`                                   | `NativeToolArgs` type entry               |
-| 7   | `src/core/assistant-message/NativeToolCallParser.ts`    | 2 switch cases (partial + complete)       |
-| 8   | `packages/types/src/vscode-extension-host.ts`           | `ShoferSayTool.tool` union                |
-| 9   | `webview-ui/src/components/chat/ChatRow.tsx`            | ChatRow rendering case                    |
-| 10  | `src/core/auto-approval/tools.ts`                       | Auto-approval entry (mirrors `ragSearch`) |
-| 11  | `webview-ui/src/i18n/locales/en/chat.json`              | i18n strings                              |
+| #   | Location                                                         | Item                                      |
+| --- | ---------------------------------------------------------------- | ----------------------------------------- |
+| 1   | `packages/core/src/prompts/tools/native-tools/git_search.ts`     | Tool schema                               |
+| 2   | `packages/types/src/tool.ts`                                     | Add `"git_search"` to `toolNames`         |
+| 3   | `packages/types/src/tool.ts`                                     | Add to `TOOL_GROUPS` (`read` group)       |
+| 4   | `packages/core/src/tools/GitSearchTool.ts`                       | `BaseTool<"git_search">` handler          |
+| 5   | `packages/core/src/assistant-message/presentAssistantMessage.ts` | Dispatch case + `toolDescription()` case  |
+| 6   | `src/shared/tools.ts`                                            | `NativeToolArgs` type entry               |
+| 7   | `packages/core/src/assistant-message/NativeToolCallParser.ts`    | 2 switch cases (partial + complete)       |
+| 8   | `packages/types/src/vscode-extension-host.ts`                    | `ShoferSayTool.tool` union                |
+| 9   | `webview-ui/src/components/chat/ChatRow.tsx`                     | ChatRow rendering case                    |
+| 10  | `packages/core/src/auto-approval/tools.ts`                       | Auto-approval entry (mirrors `ragSearch`) |
+| 11  | `webview-ui/src/i18n/locales/en/chat.json`                       | i18n strings                              |
 
 ---
 
@@ -361,7 +361,7 @@ _These items were identified during verification of this document against the li
 
 8. ~~**`GitWatcher` described as "stub in Phase 1"**~~ — ✅ fixed: the architecture tree now reflects the implemented Phase 2 `setInterval`/`git log --since` watcher (`git-watcher.ts`, ~199 lines).
 
-9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts:417) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
+9. **`toolDescription()` case is trivial** — the doc references a `toolDescription()` switch case in the integration checklist, but the actual implementation in [`presentAssistantMessage.ts`](packages/core/src/assistant-message/presentAssistantMessage.ts:417) is a one-liner: `` `[${block.name} for '${block.params.query}']` ``. Any new parameter added to the tool must also update this string, but the doc doesn't call this out.
 
 10. **No coverage of submodule-aware scanning** — the git-index subsystem descends into submodules (via `listSubmoduleDisplayPaths()` in [`git-history-orchestrator.ts`](src/services/git-index/git-history-orchestrator.ts)), but this is not documented.
 

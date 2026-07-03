@@ -14,25 +14,25 @@ Shofer supports three tool integration patterns. Choose the one that fits your u
 
 ## Native Tool Checklist (11 steps)
 
-| #   | Location                                               | Always required?         |
-| --- | ------------------------------------------------------ | ------------------------ |
-| 1   | Tool Schema (`src/core/prompts/tools/native-tools/`)   | ✅                       |
-| 2   | `toolNames` array (`packages/types/src/tool.ts`)       | ✅                       |
-| 3   | `TOOL_GROUPS` (`packages/types/src/tool.ts`)           | ✅                       |
-| 4   | Tool Handler — `BaseTool` subclass (`src/core/tools/`) | ✅                       |
-| 5   | Message Router (`presentAssistantMessage.ts`)          | ✅                       |
-| 6   | `NativeToolArgs` type (`src/shared/tools.ts`)          | ✅                       |
-| 7   | `NativeToolCallParser` — 2 switch cases                | ✅                       |
-| 8   | `ShoferSayTool` type (`vscode-extension-host.ts`)      | If tool shows UI         |
-| 9   | `ChatRow` webview rendering                            | If tool shows UI         |
-| 10  | Auto-approval registration                             | If tool is auto-approved |
-| 11  | i18n strings (`chat.json`)                             | If tool shows UI         |
+| #   | Location                                                        | Always required?         |
+| --- | --------------------------------------------------------------- | ------------------------ |
+| 1   | Tool Schema (`packages/core/src/prompts/tools/native-tools/`)   | ✅                       |
+| 2   | `toolNames` array (`packages/types/src/tool.ts`)                | ✅                       |
+| 3   | `TOOL_GROUPS` (`packages/types/src/tool.ts`)                    | ✅                       |
+| 4   | Tool Handler — `BaseTool` subclass (`packages/core/src/tools/`) | ✅                       |
+| 5   | Message Router (`presentAssistantMessage.ts`)                   | ✅                       |
+| 6   | `NativeToolArgs` type (`src/shared/tools.ts`)                   | ✅                       |
+| 7   | `NativeToolCallParser` — 2 switch cases                         | ✅                       |
+| 8   | `ShoferSayTool` type (`vscode-extension-host.ts`)               | If tool shows UI         |
+| 9   | `ChatRow` webview rendering                                     | If tool shows UI         |
+| 10  | Auto-approval registration                                      | If tool is auto-approved |
+| 11  | i18n strings (`chat.json`)                                      | If tool shows UI         |
 
 ---
 
 ## Step 1: Tool Schema
 
-Create a schema file in `src/core/prompts/tools/native-tools/`. Define the tool
+Create a schema file in `packages/core/src/prompts/tools/native-tools/`. Define the tool
 **once** as a Zod schema via the `defineNativeTool` helper (schema-as-contract —
 see [`tool-registration-interface.md`](tool-registration-interface.md)). The
 OpenAI function definition and the static argument type are both derived from the
@@ -115,7 +115,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 If the tool should bypass mode filtering entirely, add it to `ALWAYS_AVAILABLE_TOOLS` instead. Also add a display name in `TOOL_DISPLAY_NAMES`.
 
-**For `write`-group tools only:** you must also register the tool in the fileRegex enforcement contracts in [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts). Three data structures must be updated:
+**For `write`-group tools only:** you must also register the tool in the fileRegex enforcement contracts in [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts). Three data structures must be updated:
 
 | Structure                | What to add                                                                                                                            | Why                                                                                                    |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -125,11 +125,11 @@ If the tool should bypass mode filtering entirely, add it to `ALWAYS_AVAILABLE_T
 
 If you skip this step, the tool will silently bypass `fileRegex` restrictions — just like `sed`, `file`, `create_directory`, `create_new_workspace`, and `generate_image` did before `getMutatedPaths` was introduced (commit `c81acab0c`).
 
-> **TOOL_GROUPS drives mode filtering and the tools UI** — but it is _not_ the single source of truth for auto-approval. The `read`, `write`, `execute`, `browser`, and `questions` groups _are_ group-driven (via `getToolGroupForSayTool` in [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)), so adding a tool there is enough. The `subtasks`, `mode`, and `mcp` groups use **separate hardcoded camelCase allowlists** inside `checkAutoApproval()` in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts) — a new tool in any of those three groups MUST also be added to the relevant list there, or it will fall through to the default "ask" branch and prompt the user even when the matching `alwaysAllow*` toggle is on. See Step 10 below.
+> **TOOL_GROUPS drives mode filtering and the tools UI** — but it is _not_ the single source of truth for auto-approval. The `read`, `write`, `execute`, `browser`, and `questions` groups _are_ group-driven (via `getToolGroupForSayTool` in [`packages/core/src/auto-approval/tools.ts`](../packages/core/src/auto-approval/tools.ts)), so adding a tool there is enough. The `subtasks`, `mode`, and `mcp` groups use **separate hardcoded camelCase allowlists** inside `checkAutoApproval()` in [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts) — a new tool in any of those three groups MUST also be added to the relevant list there, or it will fall through to the default "ask" branch and prompt the user even when the matching `alwaysAllow*` toggle is on. See Step 10 below.
 
 ## Step 4: Tool Handler
 
-Create a handler class in `src/core/tools/` extending `BaseTool<TName>`:
+Create a handler class in `packages/core/src/tools/` extending `BaseTool<TName>`:
 
 ```typescript
 import { type ShoferSayTool } from "@shofer/types"
@@ -198,7 +198,7 @@ export const myTool = new MyTool()
 
 ## Step 5: Message Router
 
-In [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts):
+In [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts):
 
 **5a.** Import the tool:
 
@@ -237,7 +237,7 @@ export type NativeToolArgs = {
 
 ## Step 7: NativeToolCallParser
 
-In [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts), add cases in **both** `createPartialToolUse()` and `parseToolCall()`. Both switch statements must stay in sync. Helper methods: `this.coerceOptionalNumber()`, `this.coerceOptionalBoolean()`.
+In [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts), add cases in **both** `createPartialToolUse()` and `parseToolCall()`. Both switch statements must stay in sync. Helper methods: `this.coerceOptionalNumber()`, `this.coerceOptionalBoolean()`.
 
 ## Step 8–9: ShoferSayTool + ChatRow
 
@@ -245,22 +245,22 @@ In [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParse
 
 ## Step 10: Auto-Approval
 
-Auto-approval decisions happen in `checkAutoApproval()` in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts), dispatched on the `ask` kind that the tool posts:
+Auto-approval decisions happen in `checkAutoApproval()` in [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts), dispatched on the `ask` kind that the tool posts:
 
-| Ask kind           | Used by                                                      | How the tool is matched                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `"tool"`           | Most native tools (handler calls `askApproval("tool", …)`)   | `JSON.parse(text).tool` (camelCase, e.g. `"newTask"`) is matched against per-group branches. For `read`/`write`/`browser` the branch resolves the group via `getToolGroupForSayTool` ([`tools.ts`](../src/core/auto-approval/tools.ts)) — **purely group-driven**. For `subtasks`/`mode`/MCP-status tools the branch uses a **hardcoded camelCase allowlist** that must be edited directly. |
-| `"command"`        | `execute_command`                                            | Gated by `alwaysAllowExecute` + the allow/deny command lists.                                                                                                                                                                                                                                                                                                                               |
-| `"use_mcp_server"` | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async` | `JSON.parse(text).type` must be `"use_mcp_tool"` or `"access_mcp_resource"`; gated by `alwaysAllowMcp` (plus `alwaysAllowUncategorized` for tools not in a configured MCP server group).                                                                                                                                                                                                    |
-| `"followup"`       | `ask_followup_question`                                      | Gated by `alwaysAllowFollowupQuestions` + `followupAutoApproveTimeoutMs`.                                                                                                                                                                                                                                                                                                                   |
+| Ask kind           | Used by                                                      | How the tool is matched                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"tool"`           | Most native tools (handler calls `askApproval("tool", …)`)   | `JSON.parse(text).tool` (camelCase, e.g. `"newTask"`) is matched against per-group branches. For `read`/`write`/`browser` the branch resolves the group via `getToolGroupForSayTool` ([`tools.ts`](../packages/core/src/auto-approval/tools.ts)) — **purely group-driven**. For `subtasks`/`mode`/MCP-status tools the branch uses a **hardcoded camelCase allowlist** that must be edited directly. |
+| `"command"`        | `execute_command`                                            | Gated by `alwaysAllowExecute` + the allow/deny command lists.                                                                                                                                                                                                                                                                                                                                        |
+| `"use_mcp_server"` | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async` | `JSON.parse(text).type` must be `"use_mcp_tool"` or `"access_mcp_resource"`; gated by `alwaysAllowMcp` (plus `alwaysAllowUncategorized` for tools not in a configured MCP server group).                                                                                                                                                                                                             |
+| `"followup"`       | `ask_followup_question`                                      | Gated by `alwaysAllowFollowupQuestions` + `followupAutoApproveTimeoutMs`.                                                                                                                                                                                                                                                                                                                            |
 
 **Decision matrix for a new tool:**
 
-- **`read` / `write` / `execute` / `browser` group, `ask:"tool"`** — no auto-approval code changes needed beyond Step 3. Make sure the camelCase → snake_case entry exists in `SAY_TOOL_TO_NATIVE_NAME` in [`tools.ts`](../src/core/auto-approval/tools.ts) so `getToolGroupForSayTool` can resolve the group.
+- **`read` / `write` / `execute` / `browser` group, `ask:"tool"`** — no auto-approval code changes needed beyond Step 3. Make sure the camelCase → snake_case entry exists in `SAY_TOOL_TO_NATIVE_NAME` in [`tools.ts`](../packages/core/src/auto-approval/tools.ts) so `getToolGroupForSayTool` can resolve the group.
 - **`subtasks` group, `ask:"tool"`** — add the camelCase name to the `["newTask", "finishTask", "cancelTasks", "answerSubtaskQuestion"]` allowlist (gated by `alwaysAllowSubtasks`) **or** to the unconditional `["waitForTask", "checkTaskStatus", "listBackgroundTasks"]` list if it is a purely informational query that mutates nothing.
 - **`mode` group, `ask:"tool"`** — add to the `switchMode` branch gated by `alwaysAllowModeSwitch`.
 - **MCP status/management tool with `ask:"tool"`** — add to the unconditional `["checkMcpCallStatus", "waitForMcpCall"]` list if purely informational.
-- **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../src/core/tools/CallMcpToolAsyncTool.ts)).
+- **MCP invocation with `ask:"use_mcp_server"`** — the payload's `type` field MUST be `"use_mcp_tool"` or `"access_mcp_resource"`; any other value falls through to the default `ask` branch and the `alwaysAllowMcp` toggle will not apply. Pattern for async invocations: post `type: "use_mcp_tool"` plus an `async: true` flag (see [`CallMcpToolAsyncTool.ts`](../packages/core/src/tools/CallMcpToolAsyncTool.ts)).
 - **Unconditionally auto-approved (no toggle)** — add the camelCase name to the appropriate "approve" list near the top of the `ask === "tool"` branch. The branch has two separate lists: the `["updateTodoList", "skills", "setTaskTitle", "giveFeedback"]` unconditional-approve block, and the `["findFiles", "viewImage", "fetchWebPage", …]` informational read-only block. Pick the one that matches the tool's intent.
 - **New toggle needed** — add a new `alwaysAllow*` setting following the pattern in [`auto_approval.md`](auto_approval.md), then add a new branch in `checkAutoApproval`.
 
@@ -277,11 +277,11 @@ Add label strings to [`webview-ui/src/i18n/locales/en/chat.json`](../webview-ui/
 
 For tools registered by a separate VS Code extension:
 
-| #   | Location                                            | Description                                                                                                                                  |
-| --- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Extension's `package.json`                          | Add `toolGroups` config mapping each tool name → ToolGroup                                                                                   |
-| 2   | [`build-tools.ts`](../src/core/task/build-tools.ts) | Tool group resolved automatically by `resolvePrivateToolGroup()` via `shofer.privateToolProviders` + `shofer.<providerId>.toolGroups` config |
-| 3   | [`tool.ts`](../packages/types/src/tool.ts)          | Ensure the ToolGroup exists in the enum                                                                                                      |
+| #   | Location                                                     | Description                                                                                                                                  |
+| --- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Extension's `package.json`                                   | Add `toolGroups` config mapping each tool name → ToolGroup                                                                                   |
+| 2   | [`build-tools.ts`](../packages/core/src/task/build-tools.ts) | Tool group resolved automatically by `resolvePrivateToolGroup()` via `shofer.privateToolProviders` + `shofer.<providerId>.toolGroups` config |
+| 3   | [`tool.ts`](../packages/types/src/tool.ts)                   | Ensure the ToolGroup exists in the enum                                                                                                      |
 
 See [`tool-categories.md`](tool-categories.md) § "External LM Tools" for the full reference and examples.
 
@@ -299,7 +299,7 @@ that lets the agent yield as a self-declared terminal state without formulating 
 full result. The agent may pass optional `rating` / `reason`; the handler maps
 `reason → result`, defaults `rating → "well"`, and calls
 `attemptCompletionTool.execute(...)` so **all** terminal/delegation/peer-sync
-logic stays in one place. See [`WaitTool.ts`](../src/core/tools/WaitTool.ts).
+logic stays in one place. See [`WaitTool.ts`](../packages/core/src/tools/WaitTool.ts).
 
 Checklist deltas for a delegating alias:
 
@@ -337,7 +337,7 @@ Checklist deltas for a delegating alias:
 
 ## Mode Filtering
 
-Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts). The mode's `tools` array determines which ToolGroup categories are available. `ALWAYS_AVAILABLE_TOOLS` bypass mode filtering entirely. See [`tool_access.md`](tool_access.md) for the complete decision rule.
+Tools are filtered per-mode via [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts). The mode's `tools` array determines which ToolGroup categories are available. `ALWAYS_AVAILABLE_TOOLS` bypass mode filtering entirely. See [`tool_access.md`](tool_access.md) for the complete decision rule.
 
 ---
 
@@ -356,7 +356,7 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 ### Checklist gaps (items not in the 11-step list but needed in practice)
 
-- **`WRITE_MUTATOR_TOOLS` / `MUTATION_GATING_PARAMS` / `getMutatedPaths()` (in [`validateToolUse.ts`](../src/core/tools/validateToolUse.ts))**: Every new `write`-group tool that mutates filesystem paths MUST be registered in all three structures. This was discovered during the `fileRegex` bypass audit (commit `c81acab0c`), which found that `sed`, `file`, `create_directory`, `create_new_workspace`, and `generate_image` each silently bypassed mode file restrictions because the old `EDIT_OPERATION_PARAMS` param-name heuristic didn't cover them. The `getMutatedPaths()` contract is the single source of truth for "which paths does this tool touch?" — any future path-based policy check should resolve through it rather than inferring intent from coincidental param names. Step 3 now includes a dedicated table documenting the three registration points.
+- **`WRITE_MUTATOR_TOOLS` / `MUTATION_GATING_PARAMS` / `getMutatedPaths()` (in [`validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts))**: Every new `write`-group tool that mutates filesystem paths MUST be registered in all three structures. This was discovered during the `fileRegex` bypass audit (commit `c81acab0c`), which found that `sed`, `file`, `create_directory`, `create_new_workspace`, and `generate_image` each silently bypassed mode file restrictions because the old `EDIT_OPERATION_PARAMS` param-name heuristic didn't cover them. The `getMutatedPaths()` contract is the single source of truth for "which paths does this tool touch?" — any future path-based policy check should resolve through it rather than inferring intent from coincidental param names. Step 3 now includes a dedicated table documenting the three registration points.
 
 - **`getMutatedPaths()` is param-derived, so multi-file tools are only partially covered**: `fileRegex` enforcement runs in `isToolAllowedForMode` **before** the tool executes, using only the call params. For tools whose full mutated set is computed at execution time, `getMutatedPaths()` can only return what the params reveal. `rename_symbol` is the live example: it applies a VS Code `WorkspaceEdit` across **every** file referencing the symbol, but the params expose only the declaration `path`, so `fileRegex` validates that one file and a restricted mode could still mutate referencing files outside its regex. The full fix is execution-time enforcement inside the tool (e.g. `RenameSymbolTool.execute()` re-checking each affected path against the mode `fileRegex` after the `WorkspaceEdit` resolves); see the `TODO` in `getMutatedPaths()`. Any future tool with an LSP/codemod-style fan-out has the same limitation.
 
@@ -364,7 +364,7 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 - **`TOOL_DISPLAY_NAMES`** (in [`tool.ts`](../packages/types/src/tool.ts)): Mentioned in a sentence under Step 3 but not listed as its own checklist row. Every tool needs a human-readable display name here — it drives the tools-UI panel and auto-approval setting labels. Without it the tool is unnamed in the SettingsView.
 
-- **`SAY_TOOL_TO_NATIVE_NAME`** (in [`tools.ts`](../src/core/auto-approval/tools.ts)): The camelCase → snake_case mapping used by `getToolGroupForSayTool()`. A tool in the `read` / `write` / `execute` / `browser` group that uses `ask:"tool"` MUST have an entry here. Step 10 mentions this in prose but it's easy to miss. Without it, auto-approval falls through to `"ask"` even with the toggle on.
+- **`SAY_TOOL_TO_NATIVE_NAME`** (in [`tools.ts`](../packages/core/src/auto-approval/tools.ts)): The camelCase → snake_case mapping used by `getToolGroupForSayTool()`. A tool in the `read` / `write` / `execute` / `browser` group that uses `ask:"tool"` MUST have an entry here. Step 10 mentions this in prose but it's easy to miss. Without it, auto-approval falls through to `"ask"` even with the toggle on.
 
 - **`toolParamNames`** (in [`src/shared/tools.ts`](../src/shared/tools.ts)): If a tool introduces a new parameter name not already in the `toolParamNames` const array, it must be added there. This array is used as a validation whitelist in `NativeToolCallParser.parseToolCall()` — any parameter not in the list triggers an `"Unknown parameter 'X' for tool 'Y'"` warning and is **silently dropped** (via `continue`), so the tool never receives it. Every tool parameter defined in `NativeToolArgs` (Step 6) that isn't already in `toolParamNames` MUST be added here, or the parameter won't reach the handler. Discovered during `send_message_to_task` implementation: `timeout_sec` was omitted from `toolParamNames` and would have been silently dropped by the parser had it not been caught at type-check time. Discovered again during `peer_task_ids` audit: `peer_task_ids` was declared in `NewTaskParams` interface and consumed by the handler, but missing from `toolParamNames` — the parser would have silently dropped any LLM-supplied `peer_task_ids`. Discovered a third time during `list_background_tasks` `scope` parameter audit: `scope` was missing from `toolParamNames` and the `parseToolCall()` switch case was hardcoded to `{}`, causing `scope="peers"` calls to silently fall back to `children`.
 
@@ -390,8 +390,8 @@ This section tracks known gaps, undocumented steps, and design warts in the nati
 
 The auto-approval system requires 4 separate code locations for full integration of a tool that uses `ask:"tool"` and belongs to `subtasks`, `mode`, or `mcp`:
 
-1. [`checkAutoApproval()`](../src/core/auto-approval/index.ts) — the hardcoded per-group camelCase allowlists
-2. [`SAY_TOOL_TO_NATIVE_NAME`](../src/core/auto-approval/tools.ts) — the camelCase → snake_case mapping
+1. [`checkAutoApproval()`](../packages/core/src/auto-approval/index.ts) — the hardcoded per-group camelCase allowlists
+2. [`SAY_TOOL_TO_NATIVE_NAME`](../packages/core/src/auto-approval/tools.ts) — the camelCase → snake_case mapping
 3. [`TOOL_GROUPS`](../packages/types/src/tool.ts) — the snake_case → group mapping
 4. Handler code — constructing the `ShoferSayTool.tool` camelCase string
 

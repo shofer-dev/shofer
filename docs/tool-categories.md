@@ -43,7 +43,7 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 
 ### 2. External LM Tools — Declared by the Extension That Registers Them
 
-Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via [`filterPrivateToolsForMode`](../src/core/prompts/tools/filter-tools-for-mode.ts) in `filter-tools-for-mode.ts`.
+Extensions that register language model tools via `vscode.lm.registerTool()` declare each tool's group in their **VS Code configuration** under a `toolGroups` property. Shofer reads this configuration at runtime via [`filterPrivateToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts) in `filter-tools-for-mode.ts`.
 
 | Extension               | Config namespace                  | Tool prefix |
 | ----------------------- | --------------------------------- | ----------- |
@@ -61,7 +61,7 @@ Extensions that register language model tools via `vscode.lm.registerTool()` dec
 }
 ```
 
-Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGroups` config). Their group is inferred by the `browser_` prefix in [`getToolGroupForSayTool()`](../src/core/auto-approval/tools.ts), which maps `browser_*` → `"browser"` and `ide_*` → `"execute"` as a fallback.
+Browser tools (`browser_*`) are registered as an MCP server (not via a `toolGroups` config). Their group is inferred by the `browser_` prefix in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts), which maps `browser_*` → `"browser"` and `ide_*` → `"execute"` as a fallback.
 
 ### 3. MCP Tools — Server Declaration + User Override
 
@@ -134,7 +134,7 @@ For example, a mode with `tools: ["read", "mcp"]` exposes:
 
 1. Add a `toolGroups` configuration contribution in the extension's `package.json` mapping each tool name to its group (see `arkware.vscodeTools.toolGroups` for the existing pattern)
 2. Ensure the group exists as a valid [`ToolGroup`](../packages/types/src/tool.ts) value
-3. For prefix-based automatic classification (used by browser tools), the `browser_` prefix maps to `"browser"` and `ide_` prefix maps to `"execute"` in [`getToolGroupForSayTool()`](../src/core/auto-approval/tools.ts)
+3. For prefix-based automatic classification (used by browser tools), the `browser_` prefix maps to `"browser"` and `ide_` prefix maps to `"execute"` in [`getToolGroupForSayTool()`](../packages/core/src/auto-approval/tools.ts)
 
 ## Gaps, Issues & Areas for Improvement
 
@@ -144,9 +144,9 @@ This section tracks known deficiencies in this document and in the tool-group sy
 
 - **No coverage of `TOOL_ALIASES`**: The [`TOOL_ALIASES`](../packages/types/src/tool.ts) constant maps deprecated tool names to canonical ones (e.g., `write_file` → `write_to_file`, `search_and_replace` → `edit`). This document does not explain how aliases interact with tool groups — aliased tools inherit the group of their canonical form.
 - **No coverage of `customTools`**: The `write` group has a `customTools` array (`["edit", "search_replace", "edit_file", "apply_patch"]`). These are legacy/alias edit tools that receive special handling in the parser. The document does not explain what `customTools` means or how they differ from regular `tools`.
-- **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed. All three filters live in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts).
+- **No coverage of `filterPrivateToolsForMode`**: The document mentions `filterNativeToolsForMode` and `filterMcpToolsForMode` (implicitly), but the third filter — `filterPrivateToolsForMode` (for extension-registered private tools like `ide_*`) — is not discussed. All three filters live in [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts).
 - **No discussion of how `uncategorized` actually gates access**: The `uncategorized` group is listed as a fallback, but the document does not explain that a mode must explicitly include `"uncategorized"` in its `tools` array for uncategorized tools to be available. Currently only `code` and `debug` include it; `architect`, `code-search`, `web-search`, and `reviewer` do not.
-- **Missing external-tool group resolution detail**: External LM tools (`ide_*` from `arkware-vscode-tools`) get their groups from `arkware.vscodeTools.toolGroups` in `package.json`, processed by `filterPrivateToolsForMode`. For auto-approval, `getToolGroupForSayTool()` in [`auto-approval/tools.ts`](../src/core/auto-approval/tools.ts) falls back to prefix-based inference (`ide_*` → `"execute"`, `browser_*` → `"browser"`). These two resolution paths are not documented on the same page.
+- **Missing external-tool group resolution detail**: External LM tools (`ide_*` from `arkware-vscode-tools`) get their groups from `arkware.vscodeTools.toolGroups` in `package.json`, processed by `filterPrivateToolsForMode`. For auto-approval, `getToolGroupForSayTool()` in [`auto-approval/tools.ts`](../packages/core/src/auto-approval/tools.ts) falls back to prefix-based inference (`ide_*` → `"execute"`, `browser_*` → `"browser"`). These two resolution paths are not documented on the same page.
 
 ### Source-of-truth risks
 
@@ -164,6 +164,6 @@ This section tracks known deficiencies in this document and in the tool-group sy
 
 - [ToolGroup Type Definitions](../packages/types/src/tool.ts)
 - [Mode Configuration](../packages/types/src/mode.ts)
-- [External Tool Resolution](../src/core/task/build-tools.ts)
+- [External Tool Resolution](../packages/core/src/task/build-tools.ts)
 - [MCP Hub — Tool Metadata](../src/services/mcp/McpHub.ts)
-- [Auto-Approval Tool Group Inference](../src/core/auto-approval/tools.ts)
+- [Auto-Approval Tool Group Inference](../packages/core/src/auto-approval/tools.ts)

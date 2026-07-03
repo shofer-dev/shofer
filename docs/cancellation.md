@@ -22,7 +22,7 @@ to run until their server-side timeout expires.
 │  Webview (ChatView)   │ ─────────────────────────────┐
 └───────────────────────┘                              ▼
                                           ┌───────────────────────────┐
-                                          │  Task (src/core/task)     │
+                                          │  Task (packages/core/src/task)     │
                                           │  - _taskAbortController   │
                                           │  - get abortSignal()      │
                                           │  - abortTask()            │
@@ -79,7 +79,7 @@ if (currentTaskRuntimeState?.lifecycle === "running") return true
 
 This guarantees that **Stop is always visible while the agent is doing work**.
 
-### 2. Task — [`Task.ts`](../src/core/task/Task.ts)
+### 2. Task — [`Task.ts`](../packages/core/src/task/Task.ts)
 
 `Task` owns a single `AbortController` whose `signal` lives for the whole task:
 
@@ -109,13 +109,13 @@ The two MCP tool classes thread the signal differently — note the indirection
 for `callTool` (see the "MCP Call-Site Indirection Rule" in `AGENTS.md`):
 
 - **Tool calls** go through the shared helper
-  [`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:232), **not** the tool
+  [`runMcpToolCall`](../packages/core/src/tools/mcp/use-mcp-shared.ts:232), **not** the tool
   classes directly. `UseMcpToolTool.ts` and `CallMcpToolAsyncTool.ts` both delegate
   to it, and it is where the signal is actually passed:
   `mcpHub.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)`.
   A reader sent to `UseMcpToolTool.ts` will find no direct `mcpHub.callTool` there.
 - **Resource reads** are called directly in
-  [`accessMcpResourceTool.ts`](../src/core/tools/accessMcpResourceTool.ts:56):
+  [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts:56):
   `mcpHub.readResource(server, uri, undefined, task.abortSignal)`.
 
 ### 4. McpHub — [`McpHub.ts`](../src/services/mcp/McpHub.ts)
@@ -204,7 +204,7 @@ harmless no-op because `cleanup` has removed the entry.
 ### 1. Tool call site indirection — ✅ resolved
 
 §3 now documents the indirection: `callTool` is threaded by the shared
-[`runMcpToolCall`](../src/core/tools/mcp/use-mcp-shared.ts:232) helper (which
+[`runMcpToolCall`](../packages/core/src/tools/mcp/use-mcp-shared.ts:232) helper (which
 `UseMcpToolTool` and `CallMcpToolAsyncTool` delegate to), while `readResource` is
 called directly in `accessMcpResourceTool.ts`.
 
@@ -212,7 +212,7 @@ called directly in `accessMcpResourceTool.ts`.
 
 The cancellation flow diagram and end-to-end sequence only cover synchronous MCP
 tool calls through `mcpHub.callTool()`. However, `Task.abortTask()` at
-[`Task.ts:2887-2901`](../src/core/task/Task.ts:2887) also handles async MCP tool
+[`Task.ts:2887-2901`](../packages/core/src/task/Task.ts:2887) also handles async MCP tool
 calls (`mcpAsyncCalls`) with per-call `AbortController` instances, capturing
 cancellation telemetry via `captureMcpAsyncCallCancelled`. This path is not documented.
 
@@ -228,7 +228,7 @@ the mechanism that prevents the task from being destroyed during Send Now is opa
 
 The cancellation flow is scoped to MCP tool calls. The same `task.abortSignal`
 is also relevant for LLM API calls (via `currentRequestAbortController` at
-[`Task.ts:5356`](../src/core/task/Task.ts:5356)) and other long-running operations
+[`Task.ts:5356`](../packages/core/src/task/Task.ts:5356)) and other long-running operations
 subscribed to the signal. The doc does not mention these.
 
 ### 5. End-to-end sequence only describes Stop, not Send Now

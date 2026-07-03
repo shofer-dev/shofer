@@ -176,14 +176,14 @@ within the submodule directory are restored.
 
 ## Impact on File Changes Panel
 
-The File Changes Panel ([`ChangedFilesService`](../src/core/file-changes/ChangedFilesService.ts))
+The File Changes Panel ([`ChangedFilesService`](../packages/core/src/file-changes/ChangedFilesService.ts))
 uses a single per-task working-directory backend with **no git dependency**. It stores
 verbatim file copies under `<taskDir>/base/<relPath>` (original state at first edit)
 and `<taskDir>/final/<relPath>` (last Shofer-produced state, for Redo).
 
 The backend is independent of the shadow-git checkpoint service — it works identically
 in every workspace type, whether or not a git repo exists and whether or not nested
-`.git` directories are present. The file list is driven by [`FileContextTracker`](../src/core/context-tracking/FileContextTracker.ts),
+`.git` directories are present. The file list is driven by [`FileContextTracker`](../packages/core/src/context-tracking/FileContextTracker.ts),
 which records every file Shofer edits via `getFilesEditedByRoo()`.
 
 Checkpoints (shadow git) and file-changes (per-task working directory) serve different
@@ -205,8 +205,8 @@ bearing on the file-changes panel — it always used the working-directory backe
 
 - [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) — checkpoint implementation
 - [`RepoPerTaskCheckpointService.ts`](../src/services/checkpoints/RepoPerTaskCheckpointService.ts) — per-task shadow git instance (extends `ShadowCheckpointService`)
-- [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts) — file changes panel (working-directory backend, no git dependency)
-- [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
+- [`ChangedFilesService.ts`](../packages/core/src/file-changes/ChangedFilesService.ts) — file changes panel (working-directory backend, no git dependency)
+- [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
 - [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
 
 ## Open Issues

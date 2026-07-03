@@ -8,7 +8,7 @@ This document describes the **complete** set of changes needed to add a new upst
 
 ```
 User → Settings UI (webview) → ProviderSettings (Zod schema)
-     → buildApiHandler() dispatch → Handler class (src/api/providers/)
+     → buildApiHandler() dispatch → Handler class (packages/core/src/api/providers/)
      → upstream API                     (most common — direct HTTPS)
      → llm-router (Go proxy) → upstream (proxy-based providers only)
 ```
@@ -19,7 +19,7 @@ Providers that talk directly to the upstream API (no proxy) skip the llm-router 
 
 ## How to Use This Guide
 
-Each step below is **mandatory** unless marked "(if applicable)." Steps are numbered 1–34. The DeepSeek provider at [`src/api/providers/deepseek.ts`](../src/api/providers/deepseek.ts) is the canonical reference implementation.
+Each step below is **mandatory** unless marked "(if applicable)." Steps are numbered 1–34. The DeepSeek provider at [`packages/core/src/api/providers/deepseek.ts`](../packages/core/src/api/providers/deepseek.ts) is the canonical reference implementation.
 
 ---
 
@@ -207,11 +207,11 @@ Add to the `MODELS_BY_PROVIDER` record (~line 577–662):
 
 ## Layer 3: API Handler
 
-> Files: `src/api/providers/`, `src/api/index.ts`
+> Files: `packages/core/src/api/providers/`, `packages/core/src/api/index.ts`
 
 ### 14. Create the handler class
 
-Create `src/api/providers/<name>.ts`. Choose the appropriate base class:
+Create `packages/core/src/api/providers/<name>.ts`. Choose the appropriate base class:
 
 | If your provider...           | Extend                         |
 | ----------------------------- | ------------------------------ |
@@ -268,7 +268,7 @@ This is standard practice across all existing providers (see Anthropic, Bedrock,
 
 ### 16. Register in the providers barrel
 
-In [`src/api/providers/index.ts`](../src/api/providers/index.ts):
+In [`packages/core/src/api/providers/index.ts`](../packages/core/src/api/providers/index.ts):
 
 ```typescript
 export { <Name>Handler } from "./<name>"
@@ -276,7 +276,7 @@ export { <Name>Handler } from "./<name>"
 
 ### 17. Add to the dispatch switch
 
-In [`src/api/index.ts`](../src/api/index.ts):
+In [`packages/core/src/api/index.ts`](../packages/core/src/api/index.ts):
 
 ```typescript
 import { <Name>Handler } from "./providers"
@@ -290,8 +290,8 @@ case "<name>":
 
 If the provider is in `dynamicProviders` or `localProviders`:
 
-1. Create `src/api/providers/fetchers/<name>.ts`
-2. Add a case to `fetchModelsFromProvider()` in [`src/api/providers/fetchers/modelCache.ts`](../src/api/providers/fetchers/modelCache.ts) (~line 60–101)
+1. Create `packages/core/src/api/providers/fetchers/<name>.ts`
+2. Add a case to `fetchModelsFromProvider()` in [`packages/core/src/api/providers/fetchers/modelCache.ts`](../packages/core/src/api/providers/fetchers/modelCache.ts) (~line 60–101)
 3. For public providers (no API key needed), add to `initializeModelCacheRefresh()` (~line 231–234)
 
 **Most new providers skip this step** — it's only for providers that need their model list fetched from a remote endpoint.
@@ -497,7 +497,7 @@ If the provider goes through llm-router (the backend proxy), additional steps ar
 
 ### 34. Create handler unit test
 
-Create `src/api/providers/__tests__/<name>.spec.ts`. Mock `@shofer/telemetry`:
+Create `packages/core/src/api/providers/__tests__/<name>.spec.ts`. Mock `@shofer/telemetry`:
 
 ```typescript
 vi.mock("@shofer/telemetry", () => ({
@@ -534,10 +534,10 @@ Mark each item off as you go:
 
 ### Layer 3 — API Handler
 
-- [ ]   14. Create `src/api/providers/<name>.ts`
+- [ ]   14. Create `packages/core/src/api/providers/<name>.ts`
 - [ ]   15. Add `TelemetryService.instance.captureException()` in error paths
-- [ ]   16. Export from `src/api/providers/index.ts`
-- [ ]   17. Import + add case to `buildApiHandler()` in `src/api/index.ts`
+- [ ]   16. Export from `packages/core/src/api/providers/index.ts`
+- [ ]   17. Import + add case to `buildApiHandler()` in `packages/core/src/api/index.ts`
 - [ ]   18. Add model fetcher (dynamic/local providers only)
 
 ### Layer 4 — Webview UI
@@ -566,7 +566,7 @@ Mark each item off as you go:
 
 ### Layer 7 — Tests
 
-- [ ]   34. Create `src/api/providers/__tests__/<name>.spec.ts`
+- [ ]   34. Create `packages/core/src/api/providers/__tests__/<name>.spec.ts`
 
 ### Verification
 

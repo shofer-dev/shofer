@@ -61,7 +61,7 @@ Shofer never commits into the user's own git repository. Instead it maintains a 
 
 | File                                                                                                                      | Role                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [`src/core/checkpoints/index.ts`](../src/core/checkpoints/index.ts)                                                       | Public API: `getCheckpointService`, `checkpointSave`, `checkpointRestore`, `checkpointDiff`           |
+| [`packages/core/src/checkpoints/index.ts`](../packages/core/src/checkpoints/index.ts)                                     | Public API: `getCheckpointService`, `checkpointSave`, `checkpointRestore`, `checkpointDiff`           |
 | [`src/services/checkpoints/ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts)           | Abstract base class: `initShadowGit`, `saveCheckpoint`, `restoreCheckpoint`, `getDiff`, `getDiffStat` |
 | [`src/services/checkpoints/RepoPerTaskCheckpointService.ts`](../src/services/checkpoints/RepoPerTaskCheckpointService.ts) | Concrete subclass; `static create()` factory wires the per-task path                                  |
 | [`src/services/checkpoints/excludes.ts`](../src/services/checkpoints/excludes.ts)                                         | `getExcludePatterns(workspaceDir)` — builds `.git/info/exclude` content                               |
@@ -292,7 +292,7 @@ In all cases Shofer continues operating normally — checkpoints are a best-effo
 
 ## Relationship to File Changes Panel
 
-The **File Changes Panel** ([`ChangedFilesService`](../src/core/file-changes/ChangedFilesService.ts)) is a completely separate system:
+The **File Changes Panel** ([`ChangedFilesService`](../packages/core/src/file-changes/ChangedFilesService.ts)) is a completely separate system:
 
 | Aspect         | Checkpoints (shadow git)                   | File Changes Panel (working-directory)                              |
 | -------------- | ------------------------------------------ | ------------------------------------------------------------------- |

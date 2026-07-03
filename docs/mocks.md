@@ -1,7 +1,7 @@
 # Mock Providers (`mock` and `fake-ai`)
 
-Shofer ships two _faux providers_ — [`mock`](../src/api/providers/mock.ts) and
-[`fake-ai`](../src/api/providers/fake-ai.ts) — that let the agent loop run
+Shofer ships two _faux providers_ — [`mock`](../packages/core/src/api/providers/mock.ts) and
+[`fake-ai`](../packages/core/src/api/providers/fake-ai.ts) — that let the agent loop run
 without a real LLM. Neither makes external inference calls nor requires API
 credentials. Together they appear in the `fauxProviders` array in
 [`provider-settings.ts`](../packages/types/src/provider-settings.ts:97).
@@ -20,7 +20,7 @@ credentials. Together they appear in the `fauxProviders` array in
 
 ## 1. `mock` Provider
 
-[`MockHandler`](../src/api/providers/mock.ts:200) is a self-contained mock that
+[`MockHandler`](../packages/core/src/api/providers/mock.ts:200) is a self-contained mock that
 returns canned responses, emits realistic streaming chunks, and replays
 multi-turn tool-call sequences. It is the primary driver of Shofer's automated
 functional test suite.
@@ -292,7 +292,7 @@ useful in test scenarios:
 
 ## 2. `fake-ai` Provider
 
-[`FakeAIHandler`](../src/api/providers/fake-ai.ts:43) is a **pure proxy** — it
+[`FakeAIHandler`](../packages/core/src/api/providers/fake-ai.ts:43) is a **pure proxy** — it
 contains no response logic of its own. Every method delegates to an externally
 injected `FakeAI` object. This makes it the extensibility hook for plugins and
 custom AI backends.
@@ -330,7 +330,7 @@ API configuration.
 Provider configurations are persisted in VS Code global state. When a config is
 serialized and later rehydrated, the `FakeAI` object loses its methods (only
 plain JSON survives). To handle this, `FakeAIHandler` maintains a module-scoped
-`Map<string, FakeAI>` ([line 41](../src/api/providers/fake-ai.ts:41)):
+`Map<string, FakeAI>` ([line 41](../packages/core/src/api/providers/fake-ai.ts:41)):
 
 1. The caller creates a `FakeAI` object with a unique `id` and injects it into
    the API config as `{ apiProvider: "fake-ai", fakeAi: <the object> }`.
@@ -420,13 +420,13 @@ bash todos/cli-tests/test_cli.sh
 
 ## 4. Reference Files
 
-| File                                                                                    | Role                                                 |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [`src/api/providers/mock.ts`](../src/api/providers/mock.ts)                             | Mock provider implementation                         |
-| [`src/api/providers/fake-ai.ts`](../src/api/providers/fake-ai.ts)                       | FakeAI proxy/delegation handler                      |
-| [`packages/types/src/provider-settings.ts`](../packages/types/src/provider-settings.ts) | `fauxProviders` array, `FakeAI` schema, `mockSchema` |
-| [`src/shared/checkExistApiConfig.ts`](../src/shared/checkExistApiConfig.ts)             | Credential skip for `fake-ai` and `mock`             |
-| [`apps/cli/src/commands/cli/run.ts`](../apps/cli/src/commands/cli/run.ts)               | CLI API-key exemption for `mock`                     |
-| [`todos/test_cli.md`](../../todos/test_cli.md)                                          | Test scenario specifications                         |
-| [`todos/cli-tests/test_cli.sh`](../../todos/cli-tests/test_cli.sh)                      | Executable test suite                                |
-| [`todos/cli-tests/mock_llm_server.py`](../../todos/cli-tests/mock_llm_server.py)        | Alternative: HTTP mock server (OpenAI-compatible)    |
+| File                                                                                          | Role                                                 |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [`packages/core/src/api/providers/mock.ts`](../packages/core/src/api/providers/mock.ts)       | Mock provider implementation                         |
+| [`packages/core/src/api/providers/fake-ai.ts`](../packages/core/src/api/providers/fake-ai.ts) | FakeAI proxy/delegation handler                      |
+| [`packages/types/src/provider-settings.ts`](../packages/types/src/provider-settings.ts)       | `fauxProviders` array, `FakeAI` schema, `mockSchema` |
+| [`src/shared/checkExistApiConfig.ts`](../src/shared/checkExistApiConfig.ts)                   | Credential skip for `fake-ai` and `mock`             |
+| [`apps/cli/src/commands/cli/run.ts`](../apps/cli/src/commands/cli/run.ts)                     | CLI API-key exemption for `mock`                     |
+| [`todos/test_cli.md`](../../todos/test_cli.md)                                                | Test scenario specifications                         |
+| [`todos/cli-tests/test_cli.sh`](../../todos/cli-tests/test_cli.sh)                            | Executable test suite                                |
+| [`todos/cli-tests/mock_llm_server.py`](../../todos/cli-tests/mock_llm_server.py)              | Alternative: HTTP mock server (OpenAI-compatible)    |

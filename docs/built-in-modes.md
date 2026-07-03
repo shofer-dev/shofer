@@ -180,7 +180,7 @@ Resolution order:
 
 ## 8. Mode × Tool Filtering: `filterNativeToolsForMode()`
 
-**File:** [`src/core/prompts/tools/filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts:225-339)
+**File:** [`packages/core/src/prompts/tools/filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts:225-339)
 
 This function produces the actual tool catalog sent to the LLM. It applies
 runtime filters on top of the mode's group-based tool set:
@@ -202,7 +202,7 @@ runtime filters on top of the mode's group-based tool set:
 
 ## 9. Execution-Time Validation: `validateToolUse()`
 
-**File:** [`src/core/tools/validateToolUse.ts`](../src/core/tools/validateToolUse.ts:50-101)
+**File:** [`packages/core/src/tools/validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts:50-101)
 
 Even after `filterNativeToolsForMode()` removes tools from the LLM's catalog,
 execution-time validation provides a defense-in-depth layer. The validation chain:
@@ -276,13 +276,13 @@ definitions (role, group assignments, custom instructions) see the source.
 
 ## 12. File Index
 
-| File                                                                                                    | Role                                                                                                           |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)                                           | `DEFAULT_MODES` definition, `ModeConfig` type + schema                                                         |
-| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                           | `TOOL_GROUPS`, `ALWAYS_AVAILABLE_TOOLS`, `TOOL_ALIASES`, `toolNames`, `TOOL_DISPLAY_NAMES`                     |
-| [`src/shared/modes.ts`](../src/shared/modes.ts)                                                         | `modes` re-export, `getModeBySlug()`, `getToolsForMode()`, `getAllModes()`, helper functions                   |
-| [`src/shared/tools.ts`](../src/shared/tools.ts)                                                         | Re-exports tool metadata from `@shofer/types`                                                                  |
-| [`src/core/modes/getFullModeDetails.ts`](../src/core/modes/getFullModeDetails.ts)                       | Host-only full mode resolution with prompt overrides + file-loaded rules                                       |
-| [`src/core/prompts/tools/filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts) | LLM tool catalog filtering (`filterNativeToolsForMode`)                                                        |
-| [`src/core/tools/validateToolUse.ts`](../src/core/tools/validateToolUse.ts)                             | Execution-time tool access validation (`validateToolUse`, `isToolAllowedForMode`)                              |
-| [`src/core/task/build-tools.ts`](../src/core/task/build-tools.ts)                                       | Tool catalog assembly (calls `filterNativeToolsForMode`, `filterMcpToolsForMode`, `filterPrivateToolsForMode`) |
+| File                                                                                                                      | Role                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)                                                             | `DEFAULT_MODES` definition, `ModeConfig` type + schema                                                         |
+| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                                             | `TOOL_GROUPS`, `ALWAYS_AVAILABLE_TOOLS`, `TOOL_ALIASES`, `toolNames`, `TOOL_DISPLAY_NAMES`                     |
+| [`src/shared/modes.ts`](../src/shared/modes.ts)                                                                           | `modes` re-export, `getModeBySlug()`, `getToolsForMode()`, `getAllModes()`, helper functions                   |
+| [`src/shared/tools.ts`](../src/shared/tools.ts)                                                                           | Re-exports tool metadata from `@shofer/types`                                                                  |
+| [`src/core/modes/getFullModeDetails.ts`](../src/core/modes/getFullModeDetails.ts)                                         | Host-only full mode resolution with prompt overrides + file-loaded rules                                       |
+| [`packages/core/src/prompts/tools/filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts) | LLM tool catalog filtering (`filterNativeToolsForMode`)                                                        |
+| [`packages/core/src/tools/validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts)                             | Execution-time tool access validation (`validateToolUse`, `isToolAllowedForMode`)                              |
+| [`packages/core/src/task/build-tools.ts`](../packages/core/src/task/build-tools.ts)                                       | Tool catalog assembly (calls `filterNativeToolsForMode`, `filterMcpToolsForMode`, `filterPrivateToolsForMode`) |

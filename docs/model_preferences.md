@@ -27,7 +27,7 @@ Not explicitly set in code — uses default tool set.
 
 ### OpenAI (via OpenRouter/Requesty)
 
-Applied in [`src/api/providers/utils/router-tool-preferences.ts`](../src/api/providers/utils/router-tool-preferences.ts:16):
+Applied in [`packages/core/src/api/providers/utils/router-tool-preferences.ts`](../packages/core/src/api/providers/utils/router-tool-preferences.ts:16):
 
 ```typescript
 if (modelId.includes("openai")) {
@@ -44,7 +44,7 @@ if (modelId.includes("openai")) {
 
 ### Gemini (Native Provider)
 
-Applied in [`src/api/providers/gemini.ts`](../src/api/providers/gemini.ts:357):
+Applied in [`packages/core/src/api/providers/gemini.ts`](../packages/core/src/api/providers/gemini.ts:357):
 
 ```typescript
 {
@@ -61,7 +61,7 @@ Applied in [`src/api/providers/gemini.ts`](../src/api/providers/gemini.ts:357):
 
 ### Vertex AI (Native Provider)
 
-Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:28):
+Applied in [`packages/core/src/api/providers/vertex.ts`](../packages/core/src/api/providers/vertex.ts:28):
 
 ```typescript
 {
@@ -81,7 +81,7 @@ Applied in [`src/api/providers/vertex.ts`](../src/api/providers/vertex.ts:28):
 ## Shofer Cloud (API-Configured)
 
 > **⚠️ NOT CURRENTLY WIRED.** This section describes a path that is **not live** in
-> the current codebase. The resolution helper [`resolveVersionedSettings`](../src/api/providers/fetchers/versionedSettings.ts)
+> the current codebase. The resolution helper [`resolveVersionedSettings`](../packages/core/src/api/providers/fetchers/versionedSettings.ts)
 > exists and is unit-tested, but it has **no production callers** (only its own spec
 > references it), and the Shofer Cloud API that would fetch these settings does **not
 > exist** in this fork (see [`cloud.md`](cloud.md)). Treat the mechanisms below as the
@@ -121,7 +121,7 @@ Version-keyed settings for client-specific behavior:
 }
 ```
 
-**Resolution logic** (from [`src/api/providers/fetchers/versionedSettings.ts`](../src/api/providers/fetchers/versionedSettings.ts:1)):
+**Resolution logic** (from [`packages/core/src/api/providers/fetchers/versionedSettings.ts`](../packages/core/src/api/providers/fetchers/versionedSettings.ts:1)):
 
 1. Find the highest version key ≤ current client version
 2. If found, use those settings exclusively
@@ -142,7 +142,7 @@ Version-keyed settings for client-specific behavior:
 
 ## How Tool Filtering Works
 
-The filtering pipeline in [`src/core/prompts/tools/filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts:225):
+The filtering pipeline in [`packages/core/src/prompts/tools/filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts:225):
 
 1. **Mode groups** — Collect tools from the mode's allowed groups (e.g., `read`, `edit`, `command`, `mcp`)
 2. **Always-available** — Add tools from `ALWAYS_AVAILABLE_TOOLS`
@@ -172,13 +172,13 @@ They are only available when explicitly included via `modelInfo.includedTools`.
 
 This section records deficiencies discovered during the May 2026 verification review. Revisit when the tool-preference subsystem changes.
 
-1. **Code example is a pedagogic simplification, not byte-for-byte source.** The OpenAI router prefs block (lines 32–37) shows a literal `if` with bare `excludedTools: […]` / `includedTools: […]` syntax. The actual source in [`router-tool-preferences.ts`](../src/api/providers/utils/router-tool-preferences.ts:22-26) uses spread-into-Set deduplication (`[...new Set([...(result.excludedTools||[]), "apply_diff", "write_to_file"])]`). The simplified version is clearer for human readers but won't match a grep of the codebase. Consider adding a note that the code is "simplified for clarity" or showing the real source verbatim.
+1. **Code example is a pedagogic simplification, not byte-for-byte source.** The OpenAI router prefs block (lines 32–37) shows a literal `if` with bare `excludedTools: […]` / `includedTools: […]` syntax. The actual source in [`router-tool-preferences.ts`](../packages/core/src/api/providers/utils/router-tool-preferences.ts:22-26) uses spread-into-Set deduplication (`[...new Set([...(result.excludedTools||[]), "apply_diff", "write_to_file"])]`). The simplified version is clearer for human readers but won't match a grep of the codebase. Consider adding a note that the code is "simplified for clarity" or showing the real source verbatim.
 
 2. **Missing coverage of other native providers.** The doc covers Gemini, Vertex, and OpenAI-via-router but doesn't mention Anthropic, DeepSeek, Ollama, or VS Code LM providers. If any of those gain tool preferences, this doc will silently go stale. Add a section or an explicit note that "these providers currently apply no tool preferences."
 
 3. **Shofer Cloud fetcher does not exist — the path is dead.** ✅ resolved: there is no file that calls `resolveVersionedSettings` in production (only its spec references it), and the Shofer Cloud API that would supply these settings is absent from this fork (see [`cloud.md`](cloud.md)). The "Shofer Cloud (API-Configured)" section is now marked NOT WIRED. If the cloud path is ever revived, wire `resolveVersionedSettings` into the model-info fetch and update both docs.
 
-4. **`disabledTools` setting not mentioned.** The filter pipeline in [`filter-tools-for-mode.ts`](../src/core/prompts/tools/filter-tools-for-mode.ts:310) also supports a `disabledTools` array that removes tools regardless of mode groups or model preferences. This is a user-facing knob orthogonal to the model-preference mechanism and should be documented.
+4. **`disabledTools` setting not mentioned.** The filter pipeline in [`filter-tools-for-mode.ts`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts:310) also supports a `disabledTools` array that removes tools regardless of mode groups or model preferences. This is a user-facing knob orthogonal to the model-preference mechanism and should be documented.
 
 5. **`edit.customTools` source not linked.** The Legacy/Custom Edit Tools table lists `edit_file`, `search_replace`, and `apply_patch` as being in `edit.customTools` but doesn't link to the `TOOL_GROUPS` constant where `edit` group's `customTools` array is actually defined. Add a link to [`packages/types/src/tool.ts`](../packages/types/src/tool.ts).
 

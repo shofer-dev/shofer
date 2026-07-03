@@ -823,9 +823,9 @@ notifies the main thread, which can trigger `_resetWebview()`.
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
 | [`src/extension.ts`](../src/extension.ts)                                                   | Extension activation, singleton creation         |
 | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)               | Webview lifecycle, state management (5187 LOC)   |
-| [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                         | Agent loop, LLM streaming, ask system (7040 LOC) |
+| [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)                       | Agent loop, LLM streaming, ask system (7040 LOC) |
 | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) | Webview→Host message dispatch (4447 LOC)         |
-| [`src/api/index.ts`](../src/api/index.ts)                                                   | API handler factory                              |
+| [`packages/core/src/api/index.ts`](../packages/core/src/api/index.ts)                       | API handler factory                              |
 | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts)                               | MCP tool execution                               |
 | [`src/services/code-index/manager.ts`](../src/services/code-index/manager.ts)               | Code indexing (query path)                       |
 

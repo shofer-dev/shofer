@@ -80,7 +80,7 @@ Implemented in [`SkillsManager.ts`](src/services/skills/SkillsManager.ts):
 
 ### What's Included by Default
 
-Only metadata is included in the system prompt ([`skills.ts`](src/core/prompts/sections/skills.ts)):
+Only metadata is included in the system prompt ([`skills.ts`](packages/core/src/prompts/sections/skills.ts)):
 
 ```xml
 <available_skills>
@@ -105,9 +105,9 @@ The system prompt includes instructions telling the model to:
 
 The `skills` native tool loads skill instructions into context:
 
-| Tool                                                      | Purpose                                       |
-| --------------------------------------------------------- | --------------------------------------------- |
-| [`skills`](src/core/prompts/tools/native-tools/skills.ts) | Load a skill's full instructions into context |
+| Tool                                                               | Purpose                                       |
+| ------------------------------------------------------------------ | --------------------------------------------- |
+| [`skills`](packages/core/src/prompts/tools/native-tools/skills.ts) | Load a skill's full instructions into context |
 
 ### `skills`
 
@@ -118,7 +118,7 @@ The `skills` native tool loads skill instructions into context:
 }
 ```
 
-**Handler** ([`SkillsTool.ts`](src/core/tools/SkillsTool.ts)):
+**Handler** ([`SkillsTool.ts`](packages/core/src/tools/SkillsTool.ts)):
 
 1. Validates `skill` parameter
 2. Checks `task.loadedSkills` — if already loaded, returns `"Skill 'X' is already loaded (no-op)."`
@@ -140,7 +140,7 @@ Source: project
 
 ## Loaded Skill Tracking
 
-Each `Task` maintains a [`loadedSkills: Map<string, string>`](src/core/task/Task.ts:549) — skill name → absolute SKILL.md path.
+Each `Task` maintains a [`loadedSkills: Map<string, string>`](packages/core/src/task/Task.ts:549) — skill name → absolute SKILL.md path.
 
 ### Lifecycle
 
@@ -240,11 +240,11 @@ This section documents discovered gaps between the documentation and the actual 
 
 Three distinct files share the name `skills.ts`, disambiguated only by parenthetical suffixes in the Key Files table:
 
-| File                                            | Actual Role                                    |
-| ----------------------------------------------- | ---------------------------------------------- |
-| `src/shared/skills.ts`                          | Shared types (`SkillMetadata`, `SkillContent`) |
-| `src/core/prompts/sections/skills.ts`           | System prompt section generator                |
-| `src/core/prompts/tools/native-tools/skills.ts` | Native tool schema (default export)            |
+| File                                                     | Actual Role                                    |
+| -------------------------------------------------------- | ---------------------------------------------- |
+| `src/shared/skills.ts`                                   | Shared types (`SkillMetadata`, `SkillContent`) |
+| `packages/core/src/prompts/sections/skills.ts`           | System prompt section generator                |
+| `packages/core/src/prompts/tools/native-tools/skills.ts` | Native tool schema (default export)            |
 
 This naming collision makes `grep` and cross-reference harder than necessary. Consider renaming to `skillTypes.ts`, `skillPromptSection.ts`, `skillToolSchema.ts`.
 
@@ -264,7 +264,7 @@ The `SkillMetadata` type ([`skills.ts`](src/shared/skills.ts:11-14)) includes a 
 
 ### Mention-Loaded Skills
 
-The doc mentions "Skills inserted via `/skill-name` in messages also trigger loading" but does not explain the mechanism. When a user types `/my-skill` in chat, `processUserContentMentions()` (in [`Task.ts`](src/core/task/Task.ts:135)) parses the mention, resolves the skill, and populates `loadedSkills` **before** the task loop starts — bypassing the `skills` tool entirely. This path is used for the "Send Now" flow (see comment at [`Task.ts`](src/core/task/Task.ts:6008-6010)).
+The doc mentions "Skills inserted via `/skill-name` in messages also trigger loading" but does not explain the mechanism. When a user types `/my-skill` in chat, `processUserContentMentions()` (in [`Task.ts`](packages/core/src/task/Task.ts:135)) parses the mention, resolves the skill, and populates `loadedSkills` **before** the task loop starts — bypassing the `skills` tool entirely. This path is used for the "Send Now" flow (see comment at [`Task.ts`](packages/core/src/task/Task.ts:6008-6010)).
 
 ### Approval UX
 
@@ -292,13 +292,13 @@ The validation flow after frontmatter parsing includes these steps (in order), b
 
 | File                                                                            | Purpose                                                                                                                                                        |
 | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Task.ts`](src/core/task/Task.ts:549)                                          | `loadedSkills` Map, condense clearing                                                                                                                          |
-| [`SkillsTool.ts`](src/core/tools/SkillsTool.ts)                                 | Handler: no-op check, tracking, approval                                                                                                                       |
+| [`Task.ts`](packages/core/src/task/Task.ts:549)                                 | `loadedSkills` Map, condense clearing                                                                                                                          |
+| [`SkillsTool.ts`](packages/core/src/tools/SkillsTool.ts)                        | Handler: no-op check, tracking, approval                                                                                                                       |
 | [`SkillsManager.ts`](src/services/skills/SkillsManager.ts)                      | Discovery (`discoverSkills`, `getSkillsMetadata`, `getSkillsForMode`, `getSkillContent`), lifecycle (`createSkill`, `deleteSkill`, `moveSkill`), file watching |
 | [`skillInvocation.ts`](src/services/skills/skillInvocation.ts)                  | Content loading, result formatting                                                                                                                             |
 | [`skills.ts`](src/shared/skills.ts)                                             | Type definitions (`SkillMetadata`, `SkillContent`)                                                                                                             |
-| [`skills.ts` (prompt)](src/core/prompts/sections/skills.ts)                     | System prompt section generation                                                                                                                               |
-| [`skills.ts`](src/core/prompts/tools/native-tools/skills.ts)                    | Native tool schema                                                                                                                                             |
+| [`skills.ts` (prompt)](packages/core/src/prompts/sections/skills.ts)            | System prompt section generation                                                                                                                               |
+| [`skills.ts`](packages/core/src/prompts/tools/native-tools/skills.ts)           | Native tool schema                                                                                                                                             |
 | [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts)           | IPC handlers (requestSkills, create, delete, move)                                                                                                             |
 | [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)           | Popover UI with loaded/unloaded split + refresh                                                                                                                |
 | [`ExtensionStateContext.tsx`](webview-ui/src/context/ExtensionStateContext.tsx) | `loadedSkills` state management                                                                                                                                |

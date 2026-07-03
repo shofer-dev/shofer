@@ -85,7 +85,7 @@ Found 12 results.
    43 |     for (let i = 0; i < items.length; i++) {
    44 |         sum += items[i]
 
-## src/api/handlers.ts
+## packages/core/src/api/handlers.ts
    88 |     const data = await fetchData()
 >  89 |     // TODO: Add error handling
    90 |     return processData(data)
@@ -171,13 +171,13 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 ## Implementation
 
-| File                                                                                                                         | Status                           |
-| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| [`src/core/tools/GrepSearchTool.ts`](extensions/shofer/src/core/tools/GrepSearchTool.ts)                                     | ✅ Implemented (ripgrep backend) |
-| [`src/core/prompts/tools/native-tools/grep_search.ts`](extensions/shofer/src/core/prompts/tools/native-tools/grep_search.ts) | ✅ Schema (unchanged)            |
-| [`src/core/prompts/tools/native-tools/index.ts`](extensions/shofer/src/core/prompts/tools/native-tools/index.ts)             | ✅ Registered                    |
-| [`src/core/assistant-message/NativeToolCallParser.ts`](extensions/shofer/src/core/assistant-message/NativeToolCallParser.ts) | ✅ Maps all 10 params            |
-| [`src/core/tools/__tests__/GrepSearchTool.spec.ts`](extensions/shofer/src/core/tools/__tests__/GrepSearchTool.spec.ts)       | ✅ Updated for ripgrep           |
+| File                                                                                                                                           | Status                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| [`packages/core/src/tools/GrepSearchTool.ts`](extensions/shofer/packages/core/src/tools/GrepSearchTool.ts)                                     | ✅ Implemented (ripgrep backend) |
+| [`packages/core/src/prompts/tools/native-tools/grep_search.ts`](extensions/shofer/packages/core/src/prompts/tools/native-tools/grep_search.ts) | ✅ Schema (unchanged)            |
+| [`packages/core/src/prompts/tools/native-tools/index.ts`](extensions/shofer/packages/core/src/prompts/tools/native-tools/index.ts)             | ✅ Registered                    |
+| [`packages/core/src/assistant-message/NativeToolCallParser.ts`](extensions/shofer/packages/core/src/assistant-message/NativeToolCallParser.ts) | ✅ Maps all 10 params            |
+| [`packages/core/src/tools/__tests__/GrepSearchTool.spec.ts`](extensions/shofer/packages/core/src/tools/__tests__/GrepSearchTool.spec.ts)       | ✅ Updated for ripgrep           |
 
 ### Files NOT Modified
 
@@ -187,13 +187,13 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 ## Gaps, Issues & Improvement Areas
 
-1. **Parser accepts `pattern` as a fallback for `query`.** Some models (notably when also using `sed`/`find_files`, which both use `pattern`) confabulate `pattern` as the parameter name for `grep_search`. The schema declares only `query` (keeping the API surface clean and consistent with `rag_search`/`lsp_search`/`git_search`), but the parser in [`NativeToolCallParser.ts`](../src/core/assistant-message/NativeToolCallParser.ts) silently falls back to `pattern` when `query` is missing — the same pattern used for [`fileTypes ?? file_pattern`](../src/core/assistant-message/NativeToolCallParser.ts:567). This is a parser-level resilience measure, not a schema alias.
+1. **Parser accepts `pattern` as a fallback for `query`.** Some models (notably when also using `sed`/`find_files`, which both use `pattern`) confabulate `pattern` as the parameter name for `grep_search`. The schema declares only `query` (keeping the API surface clean and consistent with `rag_search`/`lsp_search`/`git_search`), but the parser in [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts) silently falls back to `pattern` when `query` is missing — the same pattern used for [`fileTypes ?? file_pattern`](../packages/core/src/assistant-message/NativeToolCallParser.ts:567). This is a parser-level resilience measure, not a schema alias.
 
 2. ~~Trade-offs table `.shofer/shoferignore` row is stale.~~ — ✅ resolved: the trade-offs table now reads "Native `--ignore-file` flag + post-filter safety net", reflecting the dual exclusion strategy (native rg `--ignore-file` in `buildRipgrepArgs` + the `execute()` post-filter backstop).
 
 3. **Ripgrep CLI Mapping code example is simplified.** The code block at §Ripgrep CLI Mapping omits the `--ignore-file` argument that `buildRipgrepArgs` adds when `.shofer/shoferignore` is loaded. It also omits the `directoryPath` → `resolvedPath` (absolute) conversion. These are acceptable simplifications for a conceptual mapping, but they differ from the actual source.
 
-4. **Output format example match-line padding off by one space.** The code at [`formatResults`](../src/core/tools/GrepSearchTool.ts:489-491) produces `${prefix} ${paddedNum}` where `paddedNum` is `String(lineNum).padStart(4, " ")`. For match lines this yields `>   42 |` (3 spaces between `>` and the number). The doc example shows `>  42 |` (2 spaces). The format spec says "4-digit padded" which is correct; the example drifted.
+4. **Output format example match-line padding off by one space.** The code at [`formatResults`](../packages/core/src/tools/GrepSearchTool.ts:489-491) produces `${prefix} ${paddedNum}` where `paddedNum` is `String(lineNum).padStart(4, " ")`. For match lines this yields `>   42 |` (3 spaces between `>` and the number). The doc example shows `>  42 |` (2 spaces). The format spec says "4-digit padded" which is correct; the example drifted.
 
 5. **"No results" message inconsistency across error paths.** When ripgrep executes successfully but produces no hits, the tool returns `No results found for: <query>`. When ripgrep itself errors (binary missing, spawn failure), the tool returns `"Search failed: Could not find ripgrep binary"` for missing binary OR `No results found for: <query>` for generic spawn errors (line 383). The doc only documents the `No results found for: <query>` message — the binary-missing message is an undocumented variant.
 
@@ -201,4 +201,4 @@ Defaults: `isRegex=true`, `caseSensitive=false`, `wholeWord=false`, `fileTypes=n
 
 7. ~~OpenAI schema `required` array marks all 10 params as required.~~ — **This gap note was wrong** (it described an older/imagined schema). The actual `grep_search.ts` disables `strict` and declares `required: ["path", "query"]` only; the optional params are genuinely optional, consistent with the body's "strict mode is intentionally disabled" and the Advisory Parameter Defaults Rule. No discrepancy.
 
-8. **Cross-reference to related tools not present.** The doc does not mention sibling search tools (`rag_search`, `git_search`) that share the same result-cap infrastructure via [`searchCap.ts`](../src/core/tools/helpers/searchCap.ts). Users choosing between `grep_search`, `rag_search`, and `git_search` would benefit from a brief comparison. The shared `formatTruncationHeader` ensures consistent header wording, which is an intentional design decision worth noting.
+8. **Cross-reference to related tools not present.** The doc does not mention sibling search tools (`rag_search`, `git_search`) that share the same result-cap infrastructure via [`searchCap.ts`](../packages/core/src/tools/helpers/searchCap.ts). Users choosing between `grep_search`, `rag_search`, and `git_search` would benefit from a brief comparison. The shared `formatTruncationHeader` ensures consistent header wording, which is an intentional design decision worth noting.

@@ -45,7 +45,7 @@ images per message reached") rather than the generic "Add images" label.
 
 ## Model-Aware Gating
 
-Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
+Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../packages/core/src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
 
 For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `shofer.router.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `shofer-router` extension ([`shofer-router/src/main.ts`](../../shofer-router/src/main.ts)), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
 
@@ -138,19 +138,19 @@ Internally, Shofer uses Anthropic's content block format as the canonical repres
 
 Shofer converts the internal Anthropic-format image blocks to each provider's expected format:
 
-| Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                         |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Anthropic**            | `image` content block (native)                                                                                                                                                    | No transformation needed                                                   |
-| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                                                                                                                  | [`openai-format.ts`](../../src/api/transform/openai-format.ts)             |
-| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                                                                                                                                 | [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts) |
-| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                                                                                                                          | [`ai-sdk.ts`](../../src/api/transform/ai-sdk.ts)                           |
-| **VS Code LM**           | `vscode.LanguageModelDataPart.image(bytes, mime)` for user messages; text placeholder fallback when the API surface is unavailable or for image blocks nested inside tool results | [`vscode-lm-format.ts`](../../src/api/transform/vscode-lm-format.ts)       |
-| **Gemini**               | Native multimodal support via Google AI SDK                                                                                                                                       | [`gemini-format.ts`](../../src/api/transform/gemini-format.ts)             |
-| **Bedrock**              | Native Converse API image blocks                                                                                                                                                  | [`bedrock.ts`](../../src/api/providers/bedrock.ts)                         |
+| Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Anthropic**            | `image` content block (native)                                                                                                                                                    | No transformation needed                                                                 |
+| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                                                                                                                  | [`openai-format.ts`](../../packages/core/src/api/transform/openai-format.ts)             |
+| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                                                                                                                                 | [`responses-api-input.ts`](../../packages/core/src/api/transform/responses-api-input.ts) |
+| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                                                                                                                          | [`ai-sdk.ts`](../../packages/core/src/api/transform/ai-sdk.ts)                           |
+| **VS Code LM**           | `vscode.LanguageModelDataPart.image(bytes, mime)` for user messages; text placeholder fallback when the API surface is unavailable or for image blocks nested inside tool results | [`vscode-lm-format.ts`](../../src/api/transform/vscode-lm-format.ts)                     |
+| **Gemini**               | Native multimodal support via Google AI SDK                                                                                                                                       | [`gemini-format.ts`](../../packages/core/src/api/transform/gemini-format.ts)             |
+| **Bedrock**              | Native Converse API image blocks                                                                                                                                                  | [`bedrock.ts`](../../packages/core/src/api/providers/bedrock.ts)                         |
 
 ### Non-Vision Models
 
-When the model does NOT support images, the [`image-cleaning.ts`](../../src/api/transform/image-cleaning.ts) module converts image blocks to text placeholders before sending to the provider:
+When the model does NOT support images, the [`image-cleaning.ts`](../../packages/core/src/api/transform/image-cleaning.ts) module converts image blocks to text placeholders before sending to the provider:
 
 ```
 [Referenced image in conversation]
@@ -162,7 +162,7 @@ This prevents API errors while preserving the conversational context that images
 
 When the model supports images, the system prompt includes guidance about image handling in tool descriptions:
 
-- [`read_file` tool prompt](../../src/core/prompts/tools/native-tools/read_file.ts) includes `supportsImages` parameter
+- [`read_file` tool prompt](../../packages/core/src/prompts/tools/native-tools/read_file.ts) includes `supportsImages` parameter
 - Native tools accept a `supportsImages` option in their constructor
 - The tool prompt dynamically adapts to show/hide image-related capabilities
 
@@ -214,7 +214,7 @@ Upstream AI provider
 
 ## Multi-Turn Image Handling
 
-Images from previous user turns are preserved in the conversation history (`apiConversationHistory`). When a model supports images, past user images are included in subsequent API requests as part of the message history. When a model does NOT support images (e.g., after switching from a vision model to a non-vision model), image blocks are converted to `[Referenced image in conversation]` placeholders via [`maybeRemoveImageBlocks`](../../src/api/transform/image-cleaning.ts).
+Images from previous user turns are preserved in the conversation history (`apiConversationHistory`). When a model supports images, past user images are included in subsequent API requests as part of the message history. When a model does NOT support images (e.g., after switching from a vision model to a non-vision model), image blocks are converted to `[Referenced image in conversation]` placeholders via [`maybeRemoveImageBlocks`](../../packages/core/src/api/transform/image-cleaning.ts).
 
 ## Image Generation
 
@@ -224,7 +224,7 @@ Image generation uses provider-specific endpoints (not the chat completions API)
 
 ## `view_image` Tool (Model-Initiated Image Reading)
 
-While the sections above describe the **user → model** image flow (user pastes/drops/picks an image), the [`view_image`](../../src/core/tools/ViewImageTool.ts) native tool handles the **model → disk** direction: the AI reads an image file from the workspace to include it in its own content for visual analysis.
+While the sections above describe the **user → model** image flow (user pastes/drops/picks an image), the [`view_image`](../../packages/core/src/tools/ViewImageTool.ts) native tool handles the **model → disk** direction: the AI reads an image file from the workspace to include it in its own content for visual analysis.
 
 ### What It Does
 
@@ -288,7 +288,7 @@ Upstream AI provider visually analyzes the image
 
 ### Streaming (`handlePartial`)
 
-During streaming, the tool uses [`hasPathStabilized(filePath)`](../../src/core/tools/BaseTool.ts) to gate against mid-stream path truncation. Once the path is stable, it posts a partial `"tool"` ask so the user sees a "Viewing image…" placeholder in the chat before the file is read.
+During streaming, the tool uses [`hasPathStabilized(filePath)`](../../packages/core/src/tools/BaseTool.ts) to gate against mid-stream path truncation. Once the path is stable, it posts a partial `"tool"` ask so the user sees a "Viewing image…" placeholder in the chat before the file is read.
 
 ### Tool Group & Auto-Approval
 
@@ -317,12 +317,12 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 | [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx)                                               | Image thumbnail display with delete                      |
 | [`ImageViewer.tsx`](../webview-ui/src/components/common/ImageViewer.tsx)                                             | Full-size image viewer (generated images)                |
 | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                                     | Image state management, `MAX_IMAGES_PER_MESSAGE`         |
-| [`ViewImageTool.ts`](../../src/core/tools/ViewImageTool.ts)                                                          | `view_image` native tool: model reads image files        |
-| [`view_image.ts`](../../src/core/prompts/tools/native-tools/view_image.ts)                                           | JSON Schema for `view_image` tool                        |
-| [`resolveImageMentions.ts`](../../src/core/mentions/resolveImageMentions.ts)                                         | Image mention resolution                                 |
-| [`image-cleaning.ts`](../../src/api/transform/image-cleaning.ts)                                                     | Removal/conversion of image blocks for non-vision models |
-| [`openai-format.ts`](../../src/api/transform/openai-format.ts)                                                       | Image block → OpenAI `image_url` conversion              |
-| [`responses-api-input.ts`](../../src/api/transform/responses-api-input.ts)                                           | Image block → Responses API `input_image` conversion     |
+| [`ViewImageTool.ts`](../../packages/core/src/tools/ViewImageTool.ts)                                                 | `view_image` native tool: model reads image files        |
+| [`view_image.ts`](../../packages/core/src/prompts/tools/native-tools/view_image.ts)                                  | JSON Schema for `view_image` tool                        |
+| [`resolveImageMentions.ts`](../../packages/core/src/mentions/resolveImageMentions.ts)                                | Image mention resolution                                 |
+| [`image-cleaning.ts`](../../packages/core/src/api/transform/image-cleaning.ts)                                       | Removal/conversion of image blocks for non-vision models |
+| [`openai-format.ts`](../../packages/core/src/api/transform/openai-format.ts)                                         | Image block → OpenAI `image_url` conversion              |
+| [`responses-api-input.ts`](../../packages/core/src/api/transform/responses-api-input.ts)                             | Image block → Responses API `input_image` conversion     |
 | [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts)                                                | Live Memory's metadata-only `_viewImage` variant         |
 | [`ChatView.preserve-images.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatView.preserve-images.spec.tsx) | Test suite for image preservation behavior               |
 | [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)                         | Test suite for textarea image behavior                   |
@@ -332,7 +332,7 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 - **Fixed: Pasted/dropped images silently dropped from queued ("Send Now") messages** —
   When an image was attached and sent while the model was busy or had just finished, the
   message was queued and later drained by
-  [`cancelAndProcessQueuedMessages`](../src/core/task/Task.ts) (the "Send Now"/interrupt
+  [`cancelAndProcessQueuedMessages`](../packages/core/src/task/Task.ts) (the "Send Now"/interrupt
   path). It added the message to the chat UI **with** the image (via
   `say("user_feedback", text, images)`) but rebuilt the LLM payload from `queued.text`
   **only** — the image block was never appended, so a vision model received text but no
@@ -341,7 +341,7 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
   _queued_, not when sent directly (which goes through the ask-response path that already
   appends images). Now appends `...formatResponse.imageBlocks(queued.images)` to the
   task-loop content, matching `startTask` and the ask-response paths. Regression test:
-  [`cancel-queued-message-images.spec.ts`](../src/core/task/__tests__/cancel-queued-message-images.spec.ts).
+  [`cancel-queued-message-images.spec.ts`](../packages/core/src/task/__tests__/cancel-queued-message-images.spec.ts).
 
 - **Fixed: Phantom setting name `maxReadFileImageSize`** (line 207) — The actual settings are
   [`maxImageFileSize`](../packages/types/src/global-settings.ts:170) (per-file MB limit, default 5) and
@@ -357,13 +357,13 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 - **Flow diagram simplifications** — The "Image Sending Flow" diagram mentions
   `Task.addMessage(role: "user", content: [...])` and `possiblyRemoveImageBlocks` as
   distinct steps. The actual implementation routes through
-  [`messageQueueService.addMessage()`](../src/core/message-queue/MessageQueueService.ts:36)
+  [`messageQueueService.addMessage()`](../packages/core/src/message-queue/MessageQueueService.ts:36)
   and the provider-specific transform modules. The diagram is conceptually correct but uses
   simplified function names that don't correspond to exact source identifiers.
 
 - **Missing coverage** — The doc describes three image input methods (paste, drag-drop, file picker)
   but does not cover image `@`-mention resolution (the `@`-mention flow that resolves file paths
-  to image data URLs via [`resolveImageMentions`](../src/core/mentions/resolveImageMentions.ts:60)).
+  to image data URLs via [`resolveImageMentions`](../packages/core/src/mentions/resolveImageMentions.ts:60)).
   Changelog references this feature (v3.39.0) but the main body doesn't document how it works.
 
 - **Poe provider** — The changelog entry for v3.52.0 references "Poe provider support" as a

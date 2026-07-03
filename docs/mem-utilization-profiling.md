@@ -102,7 +102,7 @@ identifies the actual culprit.
 ### 3.1 Conversation history serialisation
 
 `Task.saveApiConversationHistory()` and `Task.saveShoferMessages()` in
-[`src/core/task/Task.ts`](../src/core/task/Task.ts) call `JSON.stringify` on
+[`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts) call `JSON.stringify` on
 the whole array of messages before writing to disk. For a long task with
 many tool outputs (full file contents, browser-tool HTML dumps, MCP
 responses), the array can serialise to 50–500 MiB. During `JSON.stringify`
@@ -131,7 +131,7 @@ no streaming-in counterpart. For a 200K-token context with inline tool
 results, a single send is commonly 20–80 MiB. The SDK keeps the raw bytes
 on the heap until the request resolves.
 
-If any provider implementation under [`src/api/providers/`](../src/api/providers/)
+If any provider implementation under [`packages/core/src/api/providers/`](../packages/core/src/api/providers/)
 does its own `JSON.stringify(messages)` before handing to the SDK, the peak
 doubles.
 
@@ -280,7 +280,7 @@ inline portion and externalise the rest:
   `<shofer-blob sha256="…" bytes="…"/>`.
 - The UI resolves blob refs on demand; the LLM call expands them only when
   the message is part of the outgoing context window, and even then the
-  truncation policy in [`src/core/sliding-window/`](../src/core/sliding-window/)
+  truncation policy in [`packages/core/src/sliding-window/`](../packages/core/src/sliding-window/)
   may already drop them.
 
 This addresses §3.1, §3.3, §3.5, §3.7, and §3.10 in one stroke because they
@@ -296,11 +296,11 @@ SDK only accepts a JS object, do the serialisation lazily via a wrapping
 ### 4.5 Eliminate `+=` accumulation in streaming providers
 
 > **Status — Implemented in `bd831cac1` (shofer v0.26.1).** All providers
-> in [`src/api/providers/`](../src/api/providers/) now push chunks into an
+> in [`packages/core/src/api/providers/`](../packages/core/src/api/providers/) now push chunks into an
 > array and emit a single `chunks.join("")` at end-of-stream; no
 > quadratic-growth `accumulated += chunk` paths remain.
 
-Audit every provider in [`src/api/providers/`](../src/api/providers/) for
+Audit every provider in [`packages/core/src/api/providers/`](../packages/core/src/api/providers/) for
 `accumulated += chunk` and equivalent patterns; replace with `chunks.push`
 and a single `chunks.join("")` at the end (one allocation, no quadratic
 growth). Even better, yield each chunk to the consumer instead of
@@ -329,7 +329,7 @@ Addresses §3.6.
 > `shoferMcpMaxResponseBytes` (default 1 MiB, `0` disables) is read by
 > `Task.getMcpMaxResponseBytes()` and threaded through
 > `processMcpToolContent` and `runMcpToolCall` (in
-> [`src/core/tools/mcp/use-mcp-shared.ts`](../src/core/tools/mcp/use-mcp-shared.ts))
+> [`packages/core/src/tools/mcp/use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts))
 > plus the three `UseMcpToolTool` / `CheckMcpCallStatusTool` /
 > `WaitForMcpCallTool` call sites. Truncation is UTF-8-boundary-safe
 > (trailing U+FFFD bytes stripped) and appends a banner pointing the
@@ -624,10 +624,10 @@ work today.
 
 | File                                                                                                   | Role                                                                   |
 | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| [`src/core/task/Task.ts`](../src/core/task/Task.ts)                                                    | `saveApiConversationHistory`, `saveShoferMessages` — the §3.1 culprits |
+| [`packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)                                  | `saveApiConversationHistory`, `saveShoferMessages` — the §3.1 culprits |
 | [`src/utils/safeWriteJson.ts`](../src/utils/safeWriteJson.ts)                                          | Shared JSON write path used by the persistence layer                   |
 | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                          | `postStateToWebview` and skinnier variants — the §3.2 culprit          |
-| [`src/api/providers/`](../src/api/providers/)                                                          | LLM provider implementations — §3.3, §3.4                              |
+| [`packages/core/src/api/providers/`](../packages/core/src/api/providers/)                              | LLM provider implementations — §3.3, §3.4                              |
 | [`src/services/code-index/processors/`](../src/services/code-index/processors/)                        | Batch readers / embedders — §3.6                                       |
 | [`src/services/helper-agent/context-window.ts`](../src/services/helper-agent/context-window.ts)        | Helper-agent prompt assembly — §3.8                                    |
 | [`src/activate/registerCommands.ts`](../src/activate/registerCommands.ts)                              | `shofer.heapSnapshot` command (§5.2)                                   |

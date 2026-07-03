@@ -68,7 +68,7 @@
   and `postTaskStateUpdate` exist on `ShoferProvider` and are the live IPC
   surface; the old `postStateToWebview*` variants are gone.
 - `shoferMessageAppended` is the sole streaming delta path
-  ([`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1903) `addToShoferMessages`,
+  ([`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L1903) `addToShoferMessages`,
   gated on `getFocusedTaskId() === taskId || getCurrentTask()?.taskId === taskId`).
 - `UV_THREADPOOL_SIZE = "16"` is set at the top of
   [`extension.ts`](extensions/shofer/src/extension.ts#L12) before any `fs` import (H5.a).
@@ -128,7 +128,7 @@ Three distinct task-switch paths are dispatched from
   `else` branch →
   [`showTaskWithId(taskId, { keepCurrentTask: true })`](extensions/shofer/src/core/webview/ShoferProvider.ts#L4983)
   → full rehydrate:
-  [`preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3192)
+  [`preloadShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L3192)
   (two parallel reads + `JSON.parse` of both files via `getSavedShoferMessages` /
   `getSavedApiConversationHistory`, then a cheap pure-JS sanitize), `Task`
   construction, `resumeTaskFromHistory`, then `postInitState()`. The rehydrated
@@ -161,7 +161,7 @@ consolidation — if those dominated, warm re-switch would also be slow.
 
 Coarse wall-time instrumentation already exists via the
 [`time()`](extensions/shofer/src/utils/perf.ts#L75) helper:
-[`preloadShoferMessages`](extensions/shofer/src/core/task/Task.ts#L3193),
+[`preloadShoferMessages`](extensions/shofer/packages/core/src/task/Task.ts#L3193),
 `saveShoferMessages`, and
 [`postInitState`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3063)
 each report to a Prometheus histogram and, when `process.env.DEBUG` is set, log
@@ -283,7 +283,7 @@ between simdjson and a tail-read.
 
 ### 1. `preloadShoferMessages()` — Redundant Re-Read on Every Task Switch
 
-[`Task.preloadShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L3192) is called from
+[`Task.preloadShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L3192) is called from
 [`ShoferProvider.createTaskWithHistoryItem()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L1467)
 every time the user switches to a task. **(H1 + H3 resolved in pre-2026-05-21.)** The
 current implementation performs parallel `shoferMessages` + `apiConversationHistory` reads
@@ -307,19 +307,19 @@ void this.overwriteShoferMessages(modifiedShoferMessages).catch(...)
 >   path.
 
 Persistence is now append-only JSONL
-([`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts),
-[`jsonlLog.ts`](extensions/shofer/src/core/task-persistence/jsonlLog.ts)).
+([`taskMessages.ts`](extensions/shofer/packages/core/src/task-persistence/taskMessages.ts),
+[`jsonlLog.ts`](extensions/shofer/packages/core/src/task-persistence/jsonlLog.ts)).
 
 - **New and mutated messages** are written via **O(1) `appendTaskMessage`** →
-  `appendJsonLine()` at the [`addToShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1851)
-  and [`updateShoferMessage()`](extensions/shofer/src/core/task/Task.ts#L1926)
+  `appendJsonLine()` at the [`addToShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L1851)
+  and [`updateShoferMessage()`](extensions/shofer/packages/core/src/task/Task.ts#L1926)
   call sites — one line per mutation, no clone, no full-array serialize.
-- The debounced [`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1970)
+- The debounced [`saveShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L1970)
   (H0, 250 ms trailing) now only calls `_refreshTaskMetadata()` (lightweight
   HistoryItem derivation) — it does **not** rewrite the JSONL log. The streaming
   hot path is a debounced metadata refresh, not a full file write.
 - **Compaction** (`writeJsonLines`, tmp→rename) runs only at turn boundaries via
-  [`_flushSaveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L2111),
+  [`_flushSaveShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L2111),
   `dispose`, `abortTask`, and `overwriteShoferMessages`. Per-chunk appends are
   O(1); full rewrites are bounded to ~once per turn.
 - The read path collapses duplicates with `dedupeByKey(m => m.ts)`, preserving
@@ -355,7 +355,7 @@ for the long-tail of >10 MB conversations.
 
 ### 5. Task History Index Grows Unboundedly
 
-[`TaskHistoryStore.writeIndex()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L398)
+[`TaskHistoryStore.writeIndex()`](extensions/shofer/packages/core/src/task-persistence/TaskHistoryStore.ts#L398)
 writes the full `HistoryItem[]` into `_index.json` on every mutation (with 2 s debounce).
 The index grows linearly with task count. Negligible until ~1,000+ tasks.
 
@@ -365,7 +365,7 @@ The index grows linearly with task count. Negligible until ~1,000+ tasks.
 
 ### 🔴 H0: Coalesce / Debounce `saveShoferMessages` During Streaming
 
-**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1970)
+**Target file:** [`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L1970)
 
 The save fires on every streamed chunk. Coalesce trailing edits with a short debounce
 (e.g., 100–250 ms) so a burst of streaming updates collapses to a single write.
@@ -385,7 +385,7 @@ deactivation, and on abort. Make the debounce interval a setting (typed via
 
 ### 🔴 H1: Eliminate the Unnecessary Re-Read in `preloadShoferMessages()`
 
-**Target file:** [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3154)
+**Target file:** [`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L3154)
 
 **Pre-fix code (now resolved):**
 
@@ -423,7 +423,7 @@ meaningful slice of the preload cost.
 ### 🔴 H3: Parallelize `preloadShoferMessages()` I/O
 
 `shoferMessages` and `apiConversationHistory` are independent files. **Resolved:**
-the current implementation at [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3158)
+the current implementation at [`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L3158)
 reads both in parallel via `Promise.all` and publishes the sanitized array in-memory
 without a round-trip re-read.
 
@@ -452,8 +452,8 @@ IPC structured-clone path — biggest win for users with large histories.
 
 **Target files:**
 
-- [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L3154) — `preloadShoferMessages()`
-- [`taskMessages.ts`](extensions/shofer/src/core/task-persistence/taskMessages.ts) — new `readTaskMessagesWindowed`
+- [`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L3154) — `preloadShoferMessages()`
+- [`taskMessages.ts`](extensions/shofer/packages/core/src/task-persistence/taskMessages.ts) — new `readTaskMessagesWindowed`
 - [`ChatView.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatView.tsx) — sentinel + scroll-to-load
 - [`ShoferProvider.ts`](extensions/shofer/src/core/webview/ShoferProvider.ts) — state push
 - [`vscode-extension-host.ts`](extensions/shofer/packages/types/src/vscode-extension-host.ts) — new IPC variants
@@ -508,7 +508,7 @@ flows, checkpoint restore). Unit-test the invariant.
 ### 🟡 H6: Sync `JSON.stringify` Snapshot Instead of `structuredClone`
 
 **Superseded by the JSONL-append migration.** The current implementation at
-[`saveShoferMessages()`](extensions/shofer/src/core/task/Task.ts#L1970) uses
+[`saveShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L1970) uses
 `serializeJsonLines(this.shoferMessages)` (sync snapshot) and writes atomically via
 `writeJsonLines`. This is only called at compaction boundaries (turn end, dispose, abort,
 overwrite). On the streaming hot path, `appendTaskMessage` → `appendJsonLine()` is O(1)
@@ -636,9 +636,9 @@ Allowed/denied commands are recomputed fresh in
 > references** in `src/` — they were removed by incremental messaging. The H9
 > goal (avoid wasteful state pushes for background tasks) is achieved by the
 > current architecture: the `shoferMessageAppended` delta path at
-> [`Task.ts`](extensions/shofer/src/core/task/Task.ts#L1903) already gates on
+> [`Task.ts`](extensions/shofer/packages/core/src/task/Task.ts#L1903) already gates on
 > `getFocusedTaskId() === taskId || getCurrentTask()?.taskId === taskId`,
-> [`updateShoferMessage()`](extensions/shofer/src/core/task/Task.ts#L1926)
+> [`updateShoferMessage()`](extensions/shofer/packages/core/src/task/Task.ts#L1926)
 > gates on the same dual check, and the stream-start/stream-completion
 > skinny-push blocks that H9 would have gated were removed entirely by the IPC
 > protocol refinement.
@@ -666,17 +666,17 @@ protocol level.
 
 ### Current focus-gated streaming paths
 
-| Path                                    | Gate                            | Location                                                                          |
-| --------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
-| `shoferMessageAppended` delta           | Dual focus/current check        | [`Task.ts:1903`](extensions/shofer/src/core/task/Task.ts#L1903)                   |
-| `messageUpdated` delta                  | Dual focus/current check        | [`Task.ts:1939`](extensions/shofer/src/core/task/Task.ts#L1939)                   |
-| `_refreshTaskMetadata` (debounced)      | ✅ Always fires for persistence | [`Task.ts:2020`](extensions/shofer/src/core/task/Task.ts#L2020) — H0-debounced    |
-| `_flushSaveShoferMessages` (compaction) | ✅ Always fires for persistence | [`Task.ts:2111`](extensions/shofer/src/core/task/Task.ts#L2111) — turn boundaries |
+| Path                                    | Gate                            | Location                                                                                   |
+| --------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
+| `shoferMessageAppended` delta           | Dual focus/current check        | [`Task.ts:1903`](extensions/shofer/packages/core/src/task/Task.ts#L1903)                   |
+| `messageUpdated` delta                  | Dual focus/current check        | [`Task.ts:1939`](extensions/shofer/packages/core/src/task/Task.ts#L1939)                   |
+| `_refreshTaskMetadata` (debounced)      | ✅ Always fires for persistence | [`Task.ts:2020`](extensions/shofer/packages/core/src/task/Task.ts#L2020) — H0-debounced    |
+| `_flushSaveShoferMessages` (compaction) | ✅ Always fires for persistence | [`Task.ts:2111`](extensions/shofer/packages/core/src/task/Task.ts#L2111) — turn boundaries |
 
 ### Save path note
 
 The H0-debounced
-[`_debouncedSaveShoferMessages`](extensions/shofer/src/core/task/Task.ts#L703)
+[`_debouncedSaveShoferMessages`](extensions/shofer/packages/core/src/task/Task.ts#L703)
 fires for all tasks — this is intentional, as background task messages must
 survive VS Code restarts. The debounce interval is 250 ms trailing. If profiling
 shows disk I/O from concurrent background saves is a bottleneck, further
@@ -776,7 +776,7 @@ H2 only becomes worthwhile once the steady-state quadratic is gone.
 
 ### 🟡 H11: Incremental Token-Bearing Message Count ✅ Done (2026-06-10)
 
-**Target:** [`Task._countTokenBearingMessages()`](extensions/shofer/src/core/task/Task.ts#L2092)
+**Target:** [`Task._countTokenBearingMessages()`](extensions/shofer/packages/core/src/task/Task.ts#L2092)
 
 H2.bis cached the _result_ of token accounting in `_cachedTokenUsage`, keyed on
 `_tokenBearingMessageCount`. But the cache-validity check still calls
@@ -818,8 +818,8 @@ flows (mirror the H2.bis test).
 ### 🟡 H12: Threshold-Triggered JSONL Compaction ✅ Done (2026-06-10)
 
 **Targets:**
-[`saveTaskMessages()`](extensions/shofer/src/core/task-persistence/taskMessages.ts#L113),
-[`Task._flushSaveShoferMessages()`](extensions/shofer/src/core/task/Task.ts)
+[`saveTaskMessages()`](extensions/shofer/packages/core/src/task-persistence/taskMessages.ts#L113),
+[`Task._flushSaveShoferMessages()`](extensions/shofer/packages/core/src/task/Task.ts)
 
 Compaction (`writeJsonLines` → `serializeJsonLines(entire array)` + tmp + rename)
 runs **unconditionally at every turn boundary**. For an n-message task that is an
@@ -843,7 +843,7 @@ compaction on `dispose`/`deactivate` so idle tasks settle to a compact form.
 
 ### 🟢 H13: Reuse Append Handle + Memoized `mkdir` ✅ Done (2026-06-10)
 
-**Target:** [`appendJsonLine()`](extensions/shofer/src/core/task-persistence/jsonlLog.ts#L103)
+**Target:** [`appendJsonLine()`](extensions/shofer/packages/core/src/task-persistence/jsonlLog.ts#L103)
 
 Every append currently does:
 
@@ -931,9 +931,9 @@ even though its inputs are stable across the turn.
 
 #### 🟡 H15: Cache the Assembled System Prompt ✅ Done (2026-06-10)
 
-**Target:** [`Task.getSystemPrompt()`](extensions/shofer/src/core/task/Task.ts) →
+**Target:** [`Task.getSystemPrompt()`](extensions/shofer/packages/core/src/task/Task.ts) →
 `SYSTEM_PROMPT` →
-[`addCustomInstructions`](extensions/shofer/src/core/prompts/sections/custom-instructions.ts)
+[`addCustomInstructions`](extensions/shofer/packages/core/src/prompts/sections/custom-instructions.ts)
 
 **Implemented:** `getSystemPrompt()` memoizes the assembled base prompt in
 `_cachedSystemPromptBase`, keyed on `_cachedSystemPromptKey` — a `|`-joined
@@ -963,7 +963,7 @@ mode/MCP changes or the prompt goes stale.
 
 #### 🟢 H16: Dedupe the Per-Request Tool-Array Build ✅ Done (2026-06-10)
 
-**Target:** [`buildNativeToolsArrayWithRestrictions`](extensions/shofer/src/core/task/build-tools.ts),
+**Target:** [`buildNativeToolsArrayWithRestrictions`](extensions/shofer/packages/core/src/task/build-tools.ts),
 called twice per `attemptApiRequest` (context-management metadata + the actual
 call) with identical `(mode, cwd, experiments, apiConfiguration, disabledTools,
 modelInfo)`. Internally it enumerates MCP tools + normalizes schemas, and (if
@@ -981,7 +981,7 @@ main-request call site go through the cache, so the build runs once per
 #### 🟢 H17: Sidestep the Per-Request MCP-Connect Wait ✅ Done (2026-06-10)
 
 **Target:** the `pWaitFor` MCP-connected gate on the system-prompt path in
-[`Task.getSystemPrompt()`](extensions/shofer/src/core/task/Task.ts).
+[`Task.getSystemPrompt()`](extensions/shofer/packages/core/src/task/Task.ts).
 
 Benign when connected, but it is a per-request gate (up to ~10s) that H15's
 caching would also sidestep. Fold into H15 rather than fixing standalone.
@@ -1109,7 +1109,7 @@ inside a `useMemo` rather than rebuilt inline each render.
 > Durability cost: a hard crash mid-stream loses ≤250 ms of the in-progress
 > (non-resumable) response; graceful `abortTask` / turn-boundary flushes still
 > compact the full in-memory value. Locked by a throttle test in
-> [`Task.throttle.test.ts`](extensions/shofer/src/core/task/__tests__/Task.throttle.test.ts).
+> [`Task.throttle.test.ts`](extensions/shofer/packages/core/src/task/__tests__/Task.throttle.test.ts).
 >
 > Considered and rejected: **final-only** (append nothing until finalization) —
 > bigger write reduction but loses all mid-stream durability and live on-disk
@@ -1124,7 +1124,7 @@ inside a `useMemo` rather than rebuilt inline each render.
 > for the public-API caller. Covered by the `TaskHistoryStore` suites.
 
 **Targets:**
-[`TaskHistoryStore.getAll()`](extensions/shofer/src/core/task-persistence/TaskHistoryStore.ts#L142),
+[`TaskHistoryStore.getAll()`](extensions/shofer/packages/core/src/task-persistence/TaskHistoryStore.ts#L142),
 [`getStateToPostToWebview()`](extensions/shofer/src/core/webview/ShoferProvider.ts#L3590)
 
 `getAll()` rebuilds and re-sorts the entire history on **every** call:
@@ -1207,7 +1207,7 @@ update — mirror the `ts`/`taskId` guards used by the message deltas.
 > suites.
 
 **Target:**
-[`Task.attemptApiRequest()`](extensions/shofer/src/core/task/Task.ts#L6579)
+[`Task.attemptApiRequest()`](extensions/shofer/packages/core/src/task/Task.ts#L6579)
 build block:
 
 ```typescript

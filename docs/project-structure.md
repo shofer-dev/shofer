@@ -10,24 +10,38 @@ Shofer is a VS Code extension that provides an AI coding assistant. It uses a pn
 
 ```
 extensions/shofer/
-├── src/                          # Main extension source (shofer package)
+├── src/                          # VS Code extension (Category II adapters only)
 │   ├── activate/                 # Extension activation & command registration
+│   ├── host/
+│   │   └── host-bridge.ts        # getHost() impl: Category I interfaces over the vscode API
 │   ├── core/
-│   │   ├── task/                 # Task execution logic
-│   │   │   └── Task.ts           # Main Task class - runs LLM conversations
 │   │   └── webview/
-│   │       ├── ShoferProvider.ts  # Main provider - manages tasks, state, webview
+│   │       ├── ShoferProvider.ts  # Main provider (implements TaskProviderLike) - manages tasks, state, webview
 │   │       └── webviewMessageHandler.ts  # Handles messages from webview
+│   ├── api/providers/            # vscode-lm.ts, openai-codex.ts (VS Code-only providers)
 │   ├── services/
 │   │   └── task-manager/
-│   │       └── TaskManager.ts    # Parallel task management
+│   │       └── TaskManager.ts    # Parallel task management (implements TaskManagerLike)
 │   └── package.json              # Extension manifest (version here)
 ├── packages/
-│   ├── types/                    # Shared TypeScript types
+│   ├── core/                     # @shofer/core — the host-agnostic agent core
 │   │   └── src/
+│   │       ├── task/Task.ts      # Main Task class - runs LLM conversations (moved out of src)
+│   │       ├── tools/            # All 56 native tool implementations + defineNativeTool
+│   │       ├── api/              # 35 providers + transform + buildApiHandler + native-handler-registry
+│   │       ├── prompts/          # system.ts + sections + native-tool descriptions
+│   │       ├── assistant-message/ # presentAssistantMessage + native tool-call parser
+│   │       ├── condense/ context-management/ context-tracking/ workflow/ …
+│   │       ├── services/         # tree-sitter, code-index engine, mcp (McpHub), …
+│   │       └── transport/        # HTTP/SSE server + ACP stack (serveHttpOverShoferApi, runAcpAgentOverShoferApi)
+│   ├── types/                    # @shofer/types — vscode-free shared types + host seams
+│   │   └── src/
+│   │       ├── host.ts           # Category I host interfaces (HostFileSystem, HostEditor, …)
+│   │       ├── host-registry.ts  # getHost() / setHost()
+│   │       ├── host-rpc.ts session-transport.ts executor-pool.ts  # distributed-execution substrate
 │   │       ├── history.ts        # HistoryItem, TaskNotification schemas
 │   │       └── vscode-extension-host.ts  # ExtensionState interface
-│   └── ...                       # Other shared packages
+│   └── ...                       # Other shared packages (telemetry, ipc, …)
 ├── webview-ui/                   # React webview (vscode-webview package)
 │   └── src/
 │       ├── components/chat/
@@ -42,9 +56,11 @@ extensions/shofer/
 
 ## Key Components
 
-### Task.ts (`src/core/task/Task.ts`)
+### Task.ts (`packages/core/src/task/Task.ts`)
 
-The main task execution class that:
+Lives in the host-agnostic `@shofer/core` package (moved out of `src/` in the v3
+carve-out); reaches the editor only through `getHost()` + registries. The main task
+execution class that:
 
 - Manages LLM conversation loop
 - Emits events for state changes (TaskStarted, TaskInteractive, TaskIdle, etc.)
@@ -195,15 +211,15 @@ Issues discovered during factual-accuracy verification of this document.
 The tree shows a simplified subset of the monorepo. Missing from the diagram:
 
 - `packages/types/src/events.ts` — ShoferEventName enum (TaskStarted, TaskCompleted, etc.), referenced in Key Components.
-- `packages/core/` — shared worktree, task-history, custom-tools, debug-log, and message-utils packages.
+- `packages/core/` — `@shofer/core`, the host-agnostic agent core (`Task`, all 56 tools, `api/`, prompts, condense, context-management, tree-sitter, the code-index engine, slang/workflow, McpHub, transport/ACP, …). Reaches the editor only via `getHost()` + registries.
 - `packages/telemetry/` — TelemetryService, PostHogTelemetryClient.
 - `packages/ipc/` — IPC client/server for CLI ↔ extension communication.
-- `src/core/tools/` — 15+ native tool implementations (ApplyDiffTool.ts, AskLiveMemoryTool.ts, AttemptCompletionTool.ts, etc.).
-- `src/core/auto-approval/` — AutoApprovalHandler, per-group approval policies.
-- `src/services/code-index/` — RAG codebase indexing (embedders, file-watcher, git-ignore-filter).
-- `src/services/live-memory/` — persistent LLM-based codebase Q&A service.
-- `src/services/mcp/` — MCP server hub and server manager.
-- `src/services/skills/` — skills discovery, caching, and lifecycle management.
+- `packages/core/src/tools/` — all 56 native tool implementations (ApplyDiffTool.ts, AskLiveMemoryTool.ts, AttemptCompletionTool.ts, etc.) + `defineNativeTool`.
+- `packages/core/src/auto-approval/` — AutoApprovalHandler, per-group approval policies.
+- code-index — **split**: the engine (embedders/interfaces/vector-store/parser) is in `packages/core/src/services/code-index/`; the VS Code `CodeIndexManager`/orchestrator/scanner stay in `src/services/code-index/` behind a core-side registry.
+- live-memory — leaves in `packages/core/src/services/live-memory/`; the VS Code manager stays in `src` behind a registry.
+- MCP — `McpHub` is in `packages/core/src/services/mcp/`; `McpServerManager` (Category II) stays in `src/services/mcp/`.
+- skills — engine in `packages/core`; the VS Code manager stays in `src/services/skills/` behind a registry.
 - `webview-ui/src/components/chat/` — ~50+ React components, not just the 3 listed.
 
 ### Task events section is incomplete

@@ -49,7 +49,7 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 
 ### Lifecycle
 
-- **Creation:** `getTaskDirectoryPath(globalStoragePath, taskId)` in [`storage.ts`](../src/utils/storage.ts) creates the per-task directory. [`FileContextTracker.captureOriginal()`](../src/core/context-tracking/FileContextTracker.ts) writes `base/<relPath>` + `originals/<sha1>.json` on first Shofer edit (idempotent). [`captureFinal()`](../src/core/context-tracking/FileContextTracker.ts) writes `final/<relPath>` + `finals/<sha1>.json` after every Shofer write.
+- **Creation:** `getTaskDirectoryPath(globalStoragePath, taskId)` in [`storage.ts`](../src/utils/storage.ts) creates the per-task directory. [`FileContextTracker.captureOriginal()`](../packages/core/src/context-tracking/FileContextTracker.ts) writes `base/<relPath>` + `originals/<sha1>.json` on first Shofer edit (idempotent). [`captureFinal()`](../packages/core/src/context-tracking/FileContextTracker.ts) writes `final/<relPath>` + `finals/<sha1>.json` after every Shofer write.
 - **Retention (when they are _not_ deleted):** The per-task copies are **not** freed on task completion, abort, or `dispose()` (which only disposes the file watchers — `FileContextTracker.dispose()`), nor on extension restart. They **persist for as long as the task exists in history**, so the panel / click-to-diff / revert / redo keep working when the task is later revisited or resumed. They are removed only by the deletion paths below. There is **no** pruning, LRU, TTL, or size cap (see [No snapshot size limit](#no-snapshot-size-limit)), and a checkpoint restore does **not** clear them (see [Checkpoint restore interaction](#checkpoint-restore-interaction-stalls-basefinal-cleanup)).
 - **Deletion (whole directory):** When the user deletes a task, [`ShoferProvider.deleteTaskWithId()`](../src/core/webview/ShoferProvider.ts) removes the entire `<globalStorage>/tasks/<taskId>/` directory with `fs.rm({ recursive: true, force: true })` (ShoferProvider.ts ~3197) and deletes the shadow git branch `shofer-<taskId>`. This is the **only** place the whole working directory is removed, and it **cascades** — every subtask id in the delete set has its own task directory (and shadow repo) removed too. This is the normal way the copies are freed.
 - **Partial deletion (per file):** `removeFinalSnapshot()` deletes an individual file's `final/` + `finals/` entry when the user **accepts** a change, and `overwriteOriginalBase()` promotes that file's content into `base/` as the new baseline. Separately, when a tool **deletes** a tracked file, `captureFinal()` removes the now-stale `final/` copy and records the final snapshot as `absent`.
@@ -91,7 +91,7 @@ underlying files on disk. The click-to-diff view likewise compares `base` ↔ `f
 ## Unified source of truth
 
 All consumers go through one async API exported from
-[`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts).
+[`ChangedFilesService.ts`](../packages/core/src/file-changes/ChangedFilesService.ts).
 
 ```ts
 type ChangedFileEntry = {
@@ -184,19 +184,19 @@ without `captureOriginal` will appear in the panel but diff won't work.
 
 ### Fully tracked (both `captureOriginal` + `trackFileContext("shofer_edited")`)
 
-| Tool                                                                                                                      | Mechanism                                                                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`apply_diff`](../src/core/tools/ApplyDiffTool.ts), `write_to_file`, `edit`, `edit_file`, `apply_patch`, `search_replace` | Via [`DiffViewProvider`](../src/integrations/editor/DiffViewProvider.ts) — `open()` captures original before mutation, `saveDirectly()` when `preventFocusDisruption` is enabled |
-| [`file`](../src/core/tools/FileTool.ts) (`rm`/`mv`)                                                                       | Manual — captures originals for source (and destination for `mv`), then `trackFileContext("shofer_edited")` for each path                                                        |
-| [`insert_edit`](../src/core/tools/InsertEditTool.ts)                                                                      | Manual — reads file content for `captureOriginal`, then `trackFileContext("shofer_edited")` after `WorkspaceEdit`                                                                |
-| [`sed`](../src/core/tools/SedTool.ts)                                                                                     | Manual — reads file before regex replacement for `captureOriginal`, then `trackFileContext("shofer_edited")` after write                                                         |
-| [`rename_symbol`](../src/core/tools/RenameSymbolTool.ts)                                                                  | Manual — reads each LSP-affected file for `captureOriginal` before rename, then `trackFileContext("shofer_edited")` after                                                        |
+| Tool                                                                                                                               | Mechanism                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`apply_diff`](../packages/core/src/tools/ApplyDiffTool.ts), `write_to_file`, `edit`, `edit_file`, `apply_patch`, `search_replace` | Via [`DiffViewProvider`](../src/integrations/editor/DiffViewProvider.ts) — `open()` captures original before mutation, `saveDirectly()` when `preventFocusDisruption` is enabled |
+| [`file`](../packages/core/src/tools/FileTool.ts) (`rm`/`mv`)                                                                       | Manual — captures originals for source (and destination for `mv`), then `trackFileContext("shofer_edited")` for each path                                                        |
+| [`insert_edit`](../packages/core/src/tools/InsertEditTool.ts)                                                                      | Manual — reads file content for `captureOriginal`, then `trackFileContext("shofer_edited")` after `WorkspaceEdit`                                                                |
+| [`sed`](../packages/core/src/tools/SedTool.ts)                                                                                     | Manual — reads file before regex replacement for `captureOriginal`, then `trackFileContext("shofer_edited")` after write                                                         |
+| [`rename_symbol`](../packages/core/src/tools/RenameSymbolTool.ts)                                                                  | Manual — reads each LSP-affected file for `captureOriginal` before rename, then `trackFileContext("shofer_edited")` after                                                        |
 
 ### Partial (tracks final but not original — diff won't work)
 
-| Tool                                                       | Gap                                                                                                                                      |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [`generate_image`](../src/core/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, click-to-diff is disabled (`!hasOriginalContent`) |
+| Tool                                                                | Gap                                                                                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`generate_image`](../packages/core/src/tools/GenerateImageTool.ts) | Calls `trackFileContext("shofer_edited")` but no `captureOriginal` — appears in panel, click-to-diff is disabled (`!hasOriginalContent`) |
 
 > **Why not just add `captureOriginal`?** The snapshot infrastructure is
 > **text/utf8-oriented**: `buildSnapshotFromContent` only ever produces the
@@ -366,8 +366,8 @@ The shadow-git checkpoint service itself is **preserved** — it still powers us
 
 | File                                                                                   | Role                                                                                                                                                            |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ChangedFilesService.ts`](../src/core/file-changes/ChangedFilesService.ts)            | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `acceptFile`, `acceptAll`                                  |
-| [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts)          | Snapshot capture: `captureOriginal`, `captureFinal`, `getBaseContent`, `getFinalContent`, `overwriteOriginalBase`, `removeFinalSnapshot`, `getFilesEditedByRoo` |
+| [`ChangedFilesService.ts`](../packages/core/src/file-changes/ChangedFilesService.ts)   | Public API: `getChangedFiles`, `getOriginalContent`, `getFinalContent`, `restoreFile`, `restoreAll`, `acceptFile`, `acceptAll`                                  |
+| [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) | Snapshot capture: `captureOriginal`, `captureFinal`, `getBaseContent`, `getFinalContent`, `overwriteOriginalBase`, `removeFinalSnapshot`, `getFilesEditedByRoo` |
 | [`FileChangesPanel.tsx`](../webview-ui/src/components/chat/FileChangesPanel.tsx)       | Webview UI: scrollable file list with diff/revert/accept buttons                                                                                                |
 | [`DiffViewProvider.ts`](../src/integrations/editor/DiffViewProvider.ts)                | Edit infrastructure: `open()` and `saveDirectly()` both call `captureOriginal` before mutation                                                                  |
 | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)             | `changedFiles/*` IPC handlers                                                                                                                                   |
@@ -405,11 +405,11 @@ i18next instance loads the `common` namespace, not `chat`.
 ### Legacy naming
 
 - `FileContextTracker.getFilesEditedByRoo()` retains the old "Roo" name. Renaming to `getFilesEditedByShofer()` would align with the rebranding.
-- The internal `recentlyEditedByRoo` set in [`FileContextTracker.ts`](../src/core/context-tracking/FileContextTracker.ts) still carries the legacy name.
+- The internal `recentlyEditedByRoo` set in [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) still carries the legacy name.
 
 ### No test coverage for ChangedFilesService
 
-There is no `__tests__/` directory under `src/core/file-changes/`. The service handles snapshot hashing, unified diff computation, absent/add/delete state derivation, and the accept/revert flow — all of which would benefit from unit tests against known fixtures.
+There is no `__tests__/` directory under `packages/core/src/file-changes/`. The service handles snapshot hashing, unified diff computation, absent/add/delete state derivation, and the accept/revert flow — all of which would benefit from unit tests against known fixtures.
 
 ### `shofer-original:` content provider is an anonymous class
 

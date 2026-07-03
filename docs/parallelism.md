@@ -12,7 +12,7 @@ Parallelism is exposed to the LLM via the `new_task` tool, which can spawn child
 
 ### Task
 
-A **Task** ([`extensions/shofer/src/core/task/Task.ts`](../src/core/task/Task.ts)) is an active in-process conversation instance. It owns the API loop, tool execution, message history, and an in-memory `backgroundChildren` map tracking async child tasks it has spawned. Multiple `Task` instances can be alive concurrently.
+A **Task** ([`extensions/shofer/packages/core/src/task/Task.ts`](../packages/core/src/task/Task.ts)) is an active in-process conversation instance. It owns the API loop, tool execution, message history, and an in-memory `backgroundChildren` map tracking async child tasks it has spawned. Multiple `Task` instances can be alive concurrently.
 
 ### HistoryItem
 
@@ -159,7 +159,7 @@ Rationale: `"waiting"` tasks (blocked on `wait_for_task` or sync `send_message_t
 
 ### Enforcement in `new_task`
 
-The limit is enforced as a gate inside [`NewTaskTool.execute()`](../src/core/tools/NewTaskTool.ts), **after** mode/message/todos validation but **before** the cost-limit check and task creation. This ensures cheap failures (no cost computation, no task instantiation).
+The limit is enforced as a gate inside [`NewTaskTool.execute()`](../packages/core/src/tools/NewTaskTool.ts), **after** mode/message/todos validation but **before** the cost-limit check and task creation. This ensures cheap failures (no cost computation, no task instantiation).
 
 ```typescript
 const maxParallel = provider.contextProxy.getValue("maxParallelTasks")
@@ -438,7 +438,7 @@ If a background child aborts (error, user intervention), the parent is **not** a
 
 ## Auto-Approval
 
-Background task orchestration tools are registered as always-approved in [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts):
+Background task orchestration tools are registered as always-approved in [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts):
 
 | Tool                      | Reason                                                                                             |
 | ------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -550,13 +550,13 @@ Discovered during source-code verification. These are areas where the documentat
 
 1. **`blockingChildResolvers` mechanism**: The sync `new_task` flow relies on `ShoferProvider.blockingChildResolvers` — a `Map<childTaskId, resolveFn>` set by `NewTaskTool.execute()` before the child runs. When the child calls `attempt_completion`, `resumeBlockingParent()` fires the resolver to unblock the parent's suspended `NewTaskTool.execute()`. This resolver-registration protocol is not described in the doc.
 
-2. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](src/core/task/Task.ts:276) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
+2. **`cleanupBackgroundChildren()` on Task**: [`Task.cleanupBackgroundChildren()`](packages/core/src/task/Task.ts:276) reaps dead children whose instances are no longer alive in `TaskManager`, consulting persisted history for final status. This method exists but has no corresponding documentation.
 
 3. **`TaskManager` events consumed by tools**: `wait_for_task` listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events to implement its event-driven (non-polling) blocking. `check_task_status` consults `managedTasks` map for live state. Neither tool's event dependency is documented.
 
 4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:194) with fields `{ question, suggestions }`. The parent-question routing flow (steps 1–6 in §"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
 
-5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../src/core/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../src/core/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
+5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../packages/core/src/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
 
 ### Observability Gaps
 

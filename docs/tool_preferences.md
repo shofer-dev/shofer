@@ -58,7 +58,7 @@ carries them into `ModelInfo`.
 ### (a) `shofer` provider → `llm-router`
 
 - **In path:** when Shofer is configured with the Shofer cloud/provider. The
-  provider (`src/api/providers/shofer.ts`, extends `OpenRouterHandler`) fetches an
+  provider (`packages/core/src/api/providers/shofer.ts`, extends `OpenRouterHandler`) fetches an
   OpenRouter-compatible `/v1/models` from **llm-router**
   (`http://localhost:30081/v1` by default).
 - **SoT:** the **llm-router** Go service (in the `arkware.ai` monorepo, not a
@@ -70,7 +70,7 @@ carries them into `ModelInfo`.
 - **Transport:** `/v1/models` emits top-level `included_tools` / `excluded_tools`
   on each model (`internal/types/models.go` `Model`).
 - **Into ModelInfo:** the OpenRouter fetcher
-  ([`src/api/providers/fetchers/openrouter.ts`](../src/api/providers/fetchers/openrouter.ts))
+  ([`packages/core/src/api/providers/fetchers/openrouter.ts`](../packages/core/src/api/providers/fetchers/openrouter.ts))
   parses those fields (`modelRouterBaseModelSchema`) and maps them onto
   `ModelInfo.includedTools` / `excludedTools` in `parseOpenRouterModel`. The
   client-side `applyRouterToolPreferences` may then union family defaults on top
@@ -85,7 +85,7 @@ carries them into `ModelInfo`.
   `minimax.ts → includedTools:["search_and_replace"]`,
   `openai-codex.ts → ["apply_patch"]`, `xai.ts → ["search_replace"]`), plus the
   dynamic-router family rule in
-  [`src/api/providers/utils/router-tool-preferences.ts`](../src/api/providers/utils/router-tool-preferences.ts)
+  [`packages/core/src/api/providers/utils/router-tool-preferences.ts`](../packages/core/src/api/providers/utils/router-tool-preferences.ts)
   (`applyRouterToolPreferences`, applied for OpenRouter/Requesty/Unbound).
 - This is the only path that already carried tool preferences before the
   audit; (a) and (c) were brought up to parity.

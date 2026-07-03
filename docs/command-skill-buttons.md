@@ -7,14 +7,14 @@ Components:
 [`SkillsButton.tsx`](webview-ui/src/components/chat/SkillsButton.tsx)
 
 Backend:
-[`Task.ts:549`](src/core/task/Task.ts:549) — loadedSkills tracking,
-[`SkillsTool.ts`](src/core/tools/SkillsTool.ts) — reload no-op,
+[`Task.ts:549`](packages/core/src/task/Task.ts:549) — loadedSkills tracking,
+[`SkillsTool.ts`](packages/core/src/tools/SkillsTool.ts) — reload no-op,
 [`skillsMessageHandler.ts`](src/core/webview/skillsMessageHandler.ts) — IPC
 
 Tests:
 [`CommandsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/CommandsButton.spec.tsx),
 [`SkillsButton.spec.tsx`](webview-ui/src/components/chat/__tests__/SkillsButton.spec.tsx),
-[`skillsTool.spec.ts`](src/core/tools/__tests__/skillsTool.spec.ts),
+[`skillsTool.spec.ts`](packages/core/src/tools/__tests__/skillsTool.spec.ts),
 [`skillsMessageHandler.spec.ts`](src/core/webview/__tests__/skillsMessageHandler.spec.ts)
 
 i18n: [`quickAccess.json`](webview-ui/src/i18n/locales/en/quickAccess.json)

@@ -4,14 +4,14 @@
 
 ## What Does Exist (verified)
 
-| Location                                                                                           | Purpose                                                                                                        |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | Base telemetry client + PostHog client                                                                         |
-| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type only                                                                              |
-| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class (no Shofer-specific handler)                                               |
-| [`src/api/providers/shofer.ts`](src/api/providers/shofer.ts)                                       | `ShoferHandler` — thin `OpenRouterHandler` subclass for a **local llm-router** (see §"Shofer Router Provider") |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`                                                    |
-| [`website/`](website/)                                                                             | Astro marketing/product pages (accurate)                                                                       |
+| Location                                                                                                   | Purpose                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`packages/telemetry/src/`](packages/telemetry/src/)                                                       | Base telemetry client + PostHog client                                                                         |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                                 | `OrganizationAllowList` type only                                                                              |
+| [`packages/core/src/api/providers/router-provider.ts`](packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class (no Shofer-specific handler)                                               |
+| [`packages/core/src/api/providers/shofer.ts`](packages/core/src/api/providers/shofer.ts)                   | `ShoferHandler` — thin `OpenRouterHandler` subclass for a **local llm-router** (see §"Shofer Router Provider") |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts)         | Fetches modes/MCPs from `{SHOFER_API_URL}/api/marketplace/`                                                    |
+| [`website/`](website/)                                                                                     | Astro marketing/product pages (accurate)                                                                       |
 
 This document provides a comprehensive overview of all cloud-related features in the Shofer extension, covering the cloud service architecture, authentication, settings synchronization, telemetry, task sharing, bridge connectivity, the Shofer Router provider, cloud profile management, image generation, MDM enforcement, and the web UI components.
 
@@ -69,13 +69,13 @@ This document provides a comprehensive overview of all cloud-related features in
 
 The cloud-related code that actually exists lives in:
 
-| Location                                                                                           | Purpose                                                             |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [`packages/telemetry/src/`](packages/telemetry/src/)                                               | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
-| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` type                                        |
-| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class                                 |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Marketplace mode/MCP fetching from cloud                            |
-| [`website/`](website/)                                                                             | Astro web app (marketing + product pages)                           |
+| Location                                                                                                   | Purpose                                                             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [`packages/telemetry/src/`](packages/telemetry/src/)                                                       | `BaseTelemetryClient`, `TelemetryService`, `PostHogTelemetryClient` |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                                 | `OrganizationAllowList` type                                        |
+| [`packages/core/src/api/providers/router-provider.ts`](packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class                                 |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts)         | Marketplace mode/MCP fetching from cloud                            |
+| [`website/`](website/)                                                                                     | Astro web app (marketing + product pages)                           |
 
 ---
 
@@ -89,7 +89,7 @@ The sections below describe cloud features from the upstream codebase. **None of
 - `webview-ui/src/components/settings/providers/ShoferBalanceDisplay.tsx`
 - `src/services/mdm/MdmService.ts`
 
-> **Exception — `src/api/providers/shofer.ts` DOES exist**, but it is **not** the
+> **Exception — `packages/core/src/api/providers/shofer.ts` DOES exist**, but it is **not** the
 > upstream cloud `RooHandler` described in §"Shofer Router Provider" below. It is a
 > thin `OpenRouterHandler` subclass targeting a **locally-running llm-router**. See
 > the rewritten §"Shofer Router Provider" for the actual implementation.
@@ -291,13 +291,13 @@ type ShareVisibility = "organization" | "public"
 
 ## Task Sync (Cloud Message Recording)
 
-Task sync is the mechanism that records conversation messages to the Shofer Cloud for later viewing, sharing, and history. It is implemented in [`Task.ts`](src/core/task/Task.ts).
+Task sync is the mechanism that records conversation messages to the Shofer Cloud for later viewing, sharing, and history. It is implemented in [`Task.ts`](packages/core/src/task/Task.ts).
 
 **How it works:**
 
 1. Each non-partial assistant message added to the conversation triggers a check: [`CloudService.isEnabled()`](packages/cloud/src/CloudService.ts:424).
 2. If enabled, [`CloudService.instance.captureEvent()`](packages/cloud/src/CloudService.ts:308) is called with a `TASK_MESSAGE` telemetry event containing the message and task metadata.
-3. A [`cloudSyncedMessageTimestamps`](src/core/task/Task.ts:547) Set prevents duplicate syncing.
+3. A [`cloudSyncedMessageTimestamps`](packages/core/src/task/Task.ts:547) Set prevents duplicate syncing.
 4. On task resume, the Set is repopulated from existing messages to avoid re-syncing.
 
 **Toggles:**
@@ -334,13 +334,13 @@ The `creditBalance()` method (GET `/api/extension/credit-balance`) returns a num
 
 ## Shofer Router Provider
 
-**File:** [`src/api/providers/shofer.ts`](../src/api/providers/shofer.ts) — **this file exists and is current.**
+**File:** [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts) — **this file exists and is current.**
 
 > The upstream cloud `RooHandler` (Shofer Cloud proxy at `api.shofer.dev`, session-token
 > auth, dynamic model loading, cloud image generation) does **not** exist here. What
 > follows describes the **actual** `ShoferHandler`.
 
-The actual `ShoferHandler` extends [`OpenRouterHandler`](../src/api/providers/openrouter.ts)
+The actual `ShoferHandler` extends [`OpenRouterHandler`](../packages/core/src/api/providers/openrouter.ts)
 and is designed for connecting Shofer to a **locally-running llm-router** instance
 (default base URL `http://localhost:30081/v1`), not a hosted cloud proxy. It behaves
 identically to OpenRouter except for three deliberate differences:
@@ -565,14 +565,14 @@ The Astro app at [`website/`](website/) hosts marketing and product pages:
 
 ## Summary of Key Files
 
-> **⚠️** Almost all files in the legacy summary below do not exist in this codebase. Files from the upstream `packages/cloud/` package, `src/api/providers/shofer.ts`, `src/services/mdm/MdmService.ts`, and all `webview-ui/src/components/cloud/` components have been removed.
+> **⚠️** Almost all files in the legacy summary below do not exist in this codebase. Files from the upstream `packages/cloud/` package, `packages/core/src/api/providers/shofer.ts`, `src/services/mdm/MdmService.ts`, and all `webview-ui/src/components/cloud/` components have been removed.
 
 **Files that DO exist (verified):**
 
-| File                                                                                               | Actual Purpose                      |
-| -------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| [`packages/telemetry/src/BaseTelemetryClient.ts`](packages/telemetry/src/BaseTelemetryClient.ts)   | Abstract base for telemetry clients |
-| [`packages/telemetry/src/TelemetryService.ts`](packages/telemetry/src/TelemetryService.ts)         | Telemetry orchestrator (PostHog)    |
-| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                         | `OrganizationAllowList` schema      |
-| [`src/api/providers/router-provider.ts`](src/api/providers/router-provider.ts)                     | Generic `RouterProvider` base class |
-| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts) | Marketplace mode/MCP fetching       |
+| File                                                                                                       | Actual Purpose                      |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| [`packages/telemetry/src/BaseTelemetryClient.ts`](packages/telemetry/src/BaseTelemetryClient.ts)           | Abstract base for telemetry clients |
+| [`packages/telemetry/src/TelemetryService.ts`](packages/telemetry/src/TelemetryService.ts)                 | Telemetry orchestrator (PostHog)    |
+| [`packages/types/src/organization.ts`](packages/types/src/organization.ts)                                 | `OrganizationAllowList` schema      |
+| [`packages/core/src/api/providers/router-provider.ts`](packages/core/src/api/providers/router-provider.ts) | Generic `RouterProvider` base class |
+| [`src/services/marketplace/RemoteConfigLoader.ts`](src/services/marketplace/RemoteConfigLoader.ts)         | Marketplace mode/MCP fetching       |

@@ -140,7 +140,7 @@ channel:
 
 The [`vscode-tools` `package.json`](../../vscode-tools/package.json) contributes its
 private-tool-provider defaults under the `arkware.privateToolProviders` config key, but
-[`build-tools.ts`](../src/core/task/build-tools.ts:107-108) reads from
+[`build-tools.ts`](../packages/core/src/task/build-tools.ts:107-108) reads from
 `shofer.privateToolProviders`. Since these are different VS Code configuration
 namespaces, the defaults set in `vscode-tools/package.json` are never visible to
 shofer's discovery loop. The user must set `shofer.privateToolProviders` explicitly in
@@ -175,7 +175,7 @@ VS Code cannot provide IntelliSense / autocomplete for the `getDefinitionsComman
 in the first code block (lines 14–41) is aspirational — shofer should contribute it so
 that users get editor assistance.
 
-### Missing coverage of external tool invocation in [`presentAssistantMessage.ts`](../src/core/assistant-message/presentAssistantMessage.ts)
+### Missing coverage of external tool invocation in [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
 
 The document describes the discovery pipeline (`getDefinitionsCommand` → `getPrivateLmToolMeta()`
 → `resolvePrivateToolGroup()` → `_privateToolInvokeMap`) but does not cover how
@@ -186,7 +186,7 @@ documented alongside discovery.
 
 ### Error handling in `getPrivateLmToolMeta()`
 
-[`getPrivateLmToolMeta()`](../src/core/task/build-tools.ts:106) silently catches and
+[`getPrivateLmToolMeta()`](../packages/core/src/task/build-tools.ts:106) silently catches and
 discards errors from `vscode.commands.executeCommand(providerCfg.getDefinitionsCommand)`
 (line 140). A provider whose command throws (extension not installed, activation
 failed) is silently skipped with no user feedback or telemetry. This makes

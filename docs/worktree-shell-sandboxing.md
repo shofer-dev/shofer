@@ -11,9 +11,9 @@
 > [`getWorktreeCommandWarning()`](extensions/shofer/src/utils/worktreePathGuard.ts:152) (now macOS/Windows-only),
 > [`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:63),
 > [`isEmbeddedWorktreeTask()`](extensions/shofer/src/utils/worktreePathGuard.ts:38),
-> [`shellQuote()`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:29) +
-> sandbox prefix application at [`ExecuteCommandTool.ts:136`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:136),
-> the rename-boundary guard at [`RenameSymbolTool.ts:141`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:141), and
+> [`shellQuote()`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:29) +
+> sandbox prefix application at [`ExecuteCommandTool.ts:136`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:136),
+> the rename-boundary guard at [`RenameSymbolTool.ts:141`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:141), and
 > the wrapper binary [`sandbox/main.go`](extensions/shofer/sandbox/main.go) + [`sandbox/main_test.go`](extensions/shofer/sandbox/main_test.go).
 >
 > **Known gap:** the committed binary [`sandbox/shofer-sandbox`](extensions/shofer/sandbox/shofer-sandbox)
@@ -29,11 +29,11 @@ advisory warning is a best-effort placeholder that does not prevent escape.
 
 Additionally, `rename_symbol` (LSP rename) could escape worktree boundaries because the LSP rename
 provider operates on the entire workspace. **This is now fixed** (Phase 3 ✅): in addition to the
-source-file guard at [`RenameSymbolTool.execute()`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:70),
+source-file guard at [`RenameSymbolTool.execute()`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:70),
 the handler enumerates every affected file via `workspaceEdit.entries()` and runs each through
 [`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62) **before** applying the
 edit; if any affected path is outside the worktree, the whole rename is blocked (strict Option A) — see
-[`RenameSymbolTool.ts:139-150`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:139). (Note: this is
+[`RenameSymbolTool.ts:139-150`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:139). (Note: this is
 worktree-boundary enforcement; mode-level `fileRegex` restrictions for `rename_symbol` remain
 source-path-derived — see [`adding-new-tools.md`](adding-new-tools.md).)
 
@@ -85,16 +85,16 @@ calls. This means:
 - On **macOS/Windows**: keep VS Code terminal + current advisory warning (no kernel sandbox available)
 
 The execa path is already the fallback when shell integration fails
-([`ShellIntegrationError`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:25)).
+([`ShellIntegrationError`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:25)).
 
 **How the backend is actually selected.** In
-[`executeCommandInTerminal()`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:207) the
+[`executeCommandInTerminal()`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:207) the
 backend is chosen by `terminalShellIntegrationDisabled ? "execa" : "vscode"`, and that flag comes
-from provider state at [`ExecuteCommandTool.ts:85`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:85).
+from provider state at [`ExecuteCommandTool.ts:85`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:85).
 To force execa for a worktree task we pass `terminalShellIntegrationDisabled: true` into the
 `ExecuteCommandOptions` for that call rather than reading it from provider state. The terminal is
 then created via `TerminalRegistry.getOrCreateTerminal(workingDir, taskId, "execa")` at
-[`ExecuteCommandTool.ts:374`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:374).
+[`ExecuteCommandTool.ts:374`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:374).
 
 **Where the sandbox prefix is applied.** `ExecaTerminalProcess.run()` invokes the command with
 `` execa({ shell, cwd, … })`${command}` `` at
@@ -123,7 +123,7 @@ A dedicated wrapper binary (Go, shipped with the extension) that:
 4. If no landlock but `bwrap` available: bind-mounts the worktree + git metadata paths + `/tmp` + `/dev/null` as writable, then `exec`s the target command
 5. If neither: exits with an error (shouldn't happen on Linux)
 
-The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts) handler:
+The [`ExecuteCommandTool.ts`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts) handler:
 
 1. Checks `isEmbeddedWorktreeTask(task)`
 2. If true: forces the execa backend, prepends the sandbox wrapper to the command
@@ -133,15 +133,15 @@ The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandToo
 
 | File                                            | Change                                                                                                                                            | Status |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `src/core/tools/ExecuteCommandTool.ts`          | Force execa + wrap command via `shellQuote()` into `<wrapper> <worktree> -- /bin/sh -c '<cmd>'`                                                   | ✅     |
+| `packages/core/src/tools/ExecuteCommandTool.ts` | Force execa + wrap command via `shellQuote()` into `<wrapper> <worktree> -- /bin/sh -c '<cmd>'`                                                   | ✅     |
 | `src/utils/worktreePathGuard.ts`                | Added `getWorktreeSandboxPrefix()` (existence check + lazy output-channel diagnostic); repurposed `getWorktreeCommandWarning()` for macOS/Windows | ✅     |
-| `src/core/tools/RenameSymbolTool.ts`            | Validate every `affectedRelPaths` entry against the worktree boundary before `applyEdit`                                                          | ✅     |
+| `packages/core/src/tools/RenameSymbolTool.ts`   | Validate every `affectedRelPaths` entry against the worktree boundary before `applyEdit`                                                          | ✅     |
 | `sandbox/main.go` + `sandbox/main_test.go`      | Landlock (ABI-negotiated) + bwrap wrapper + git worktree metadata discovery; 10 Go tests (5 unit + 5 git-resolution)                              | ✅     |
 | `src/utils/__tests__/worktreePathGuard.test.ts` | 5 unit tests for `getWorktreeSandboxPrefix`                                                                                                       | ✅     |
 
 > **Design deviation:** the original plan threaded a sandbox-prefix parameter through
 > `ExecaTerminalProcess`. The implementation instead bakes the wrapper into the `effectiveCommand`
-> string at [`ExecuteCommandTool.ts:136`](extensions/shofer/src/core/tools/ExecuteCommandTool.ts:136),
+> string at [`ExecuteCommandTool.ts:136`](extensions/shofer/packages/core/src/tools/ExecuteCommandTool.ts:136),
 > so `ExecaTerminalProcess` was left unchanged. Functionally equivalent; the wrapper is the outermost
 > process via `<wrapper> … -- /bin/sh -c '<cmd>'`.
 
@@ -150,15 +150,15 @@ The [`ExecuteCommandTool.ts`](extensions/shofer/src/core/tools/ExecuteCommandToo
 > The design below describes the approach that was **implemented** in Phase 3. The
 > per-affected-path worktree check is live at `RenameSymbolTool.ts:139-150`.
 
-[`RenameSymbolTool`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:32) calls
+[`RenameSymbolTool`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:32) calls
 `vscode.executeDocumentRenameProvider`, which operates on the entire workspace. The source-file guard
-[`validateWorktreePath(task, filePath)`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:70)
+[`validateWorktreePath(task, filePath)`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:70)
 only validates the **source** file's location, so the downstream-effects check below was added on top.
 
 The handler already enumerates every affected file: the loop at
-[`RenameSymbolTool.ts:127`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:127) iterates
+[`RenameSymbolTool.ts:127`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:127) iterates
 `workspaceEdit.entries()` and collects `affectedRelPaths`/`affectedDisplayPaths` **before** the edit
-is applied at [`RenameSymbolTool.ts:155`](extensions/shofer/src/core/tools/RenameSymbolTool.ts:155)
+is applied at [`RenameSymbolTool.ts:155`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:155)
 (`vscode.workspace.applyEdit`). The validation slots in cleanly between those two points.
 
 Approach: after building `affectedRelPaths` (before `captureOriginal` / `applyEdit`), run each path

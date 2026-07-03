@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+      <!-- /TOC -->
 
 ---
 
@@ -683,23 +683,23 @@ if (!wasPreviouslyOptedIn && isOptedIn) {
 
 ### Extension Host (`src/`)
 
-| File                                                                                                         | Integration                                                                                                                       |
-| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| [`extension.ts`](src/extension.ts)                                                                           | Initializes `TelemetryService` and registers `PostHogTelemetryClient`                                                             |
-| [`core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts)                                       | Implements `TelemetryPropertiesProvider.getTelemetryProperties()`; registers as provider; CSP allows `*.posthog.com`              |
-| [`core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)                         | Handles `telemetrySetting` message from webview; calls `updateTelemetryState`                                                     |
-| [`core/task/Task.ts`](src/core/task/Task.ts)                                                                 | Emits task lifecycle events, tool usage, LLM completions, budget exceeded, consecutive mistakes, tool result ID validation errors |
-| [`core/condense/index.ts`](src/core/condense/index.ts)                                                       | Emits `CONTEXT_CONDENSED` with automatic trigger and custom prompt flags                                                          |
-| [`core/context-management/index.ts`](src/core/context-management/index.ts)                                   | Emits `SLIDING_WINDOW_TRUNCATION`                                                                                                 |
-| [`core/checkpoints/index.ts`](src/core/checkpoints/index.ts)                                                 | Emits `CHECKPOINT_CREATED`, `CHECKPOINT_DIFFED`, `CHECKPOINT_RESTORED`                                                            |
-| [`core/config/importExport.ts`](src/core/config/importExport.ts)                                             | Emits telemetry for settings export/import                                                                                        |
-| [`core/config/ProviderSettingsManager.ts`](src/core/config/ProviderSettingsManager.ts)                       | Tracks provider settings changes                                                                                                  |
-| [`core/webview/messageEnhancer.ts`](src/core/webview/messageEnhancer.ts)                                     | Emits `PROMPT_ENHANCED`                                                                                                           |
-| [`core/assistant-message/presentAssistantMessage.ts`](src/core/assistant-message/presentAssistantMessage.ts) | Emits `CONSECUTIVE_MISTAKE_ERROR` for tool repetition                                                                             |
-| [`core/assistant-message/NativeToolCallParser.ts`](src/core/assistant-message/NativeToolCallParser.ts)       | Emits `READ_FILE_LEGACY_FORMAT_USED` for legacy read_file format                                                                  |
-| [`core/tools/AttemptCompletionTool.ts`](src/core/tools/AttemptCompletionTool.ts)                             | Emits `TASK_COMPLETED`                                                                                                            |
-| [`core/tools/ApplyDiffTool.ts`](src/core/tools/ApplyDiffTool.ts)                                             | Emits `DIFF_APPLICATION_ERROR`                                                                                                    |
-| [`core/tools/ExecuteCommandTool.ts`](src/core/tools/ExecuteCommandTool.ts)                                   | Emits `SHELL_INTEGRATION_ERROR`                                                                                                   |
+| File                                                                                                                  | Integration                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [`extension.ts`](src/extension.ts)                                                                                    | Initializes `TelemetryService` and registers `PostHogTelemetryClient`                                                             |
+| [`core/webview/ShoferProvider.ts`](src/core/webview/ShoferProvider.ts)                                                | Implements `TelemetryPropertiesProvider.getTelemetryProperties()`; registers as provider; CSP allows `*.posthog.com`              |
+| [`core/webview/webviewMessageHandler.ts`](src/core/webview/webviewMessageHandler.ts)                                  | Handles `telemetrySetting` message from webview; calls `updateTelemetryState`                                                     |
+| [`core/task/Task.ts`](packages/core/src/task/Task.ts)                                                                 | Emits task lifecycle events, tool usage, LLM completions, budget exceeded, consecutive mistakes, tool result ID validation errors |
+| [`core/condense/index.ts`](packages/core/src/condense/index.ts)                                                       | Emits `CONTEXT_CONDENSED` with automatic trigger and custom prompt flags                                                          |
+| [`core/context-management/index.ts`](packages/core/src/context-management/index.ts)                                   | Emits `SLIDING_WINDOW_TRUNCATION`                                                                                                 |
+| [`core/checkpoints/index.ts`](packages/core/src/checkpoints/index.ts)                                                 | Emits `CHECKPOINT_CREATED`, `CHECKPOINT_DIFFED`, `CHECKPOINT_RESTORED`                                                            |
+| [`core/config/importExport.ts`](src/core/config/importExport.ts)                                                      | Emits telemetry for settings export/import                                                                                        |
+| [`core/config/ProviderSettingsManager.ts`](src/core/config/ProviderSettingsManager.ts)                                | Tracks provider settings changes                                                                                                  |
+| [`core/webview/messageEnhancer.ts`](src/core/webview/messageEnhancer.ts)                                              | Emits `PROMPT_ENHANCED`                                                                                                           |
+| [`core/assistant-message/presentAssistantMessage.ts`](packages/core/src/assistant-message/presentAssistantMessage.ts) | Emits `CONSECUTIVE_MISTAKE_ERROR` for tool repetition                                                                             |
+| [`core/assistant-message/NativeToolCallParser.ts`](packages/core/src/assistant-message/NativeToolCallParser.ts)       | Emits `READ_FILE_LEGACY_FORMAT_USED` for legacy read_file format                                                                  |
+| [`core/tools/AttemptCompletionTool.ts`](packages/core/src/tools/AttemptCompletionTool.ts)                             | Emits `TASK_COMPLETED`                                                                                                            |
+| [`core/tools/ApplyDiffTool.ts`](packages/core/src/tools/ApplyDiffTool.ts)                                             | Emits `DIFF_APPLICATION_ERROR`                                                                                                    |
+| [`core/tools/ExecuteCommandTool.ts`](packages/core/src/tools/ExecuteCommandTool.ts)                                   | Emits `SHELL_INTEGRATION_ERROR`                                                                                                   |
 
 ### Code Indexing Service
 

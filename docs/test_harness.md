@@ -103,7 +103,7 @@ cd /home/alsterg/Projects/arkware.ai/extensions/shofer/apps/cli
 
 ### Provider modes
 
-The mock ([`src/api/providers/mock.ts`](../src/api/providers/mock.ts)) ships
+The mock ([`packages/core/src/api/providers/mock.ts`](../packages/core/src/api/providers/mock.ts)) ships
 built-in scenarios for every marker used by the CLI/API scenarios below
 (`DEEPSEEK_OK`, `STREAM_OK`, `API_OK`, `TASK_ONE`, `SELECTOR_TEST`, `BANANA`, …),
 including multi-turn scenarios that emit real tool calls for the tool-use cases

@@ -54,7 +54,7 @@ The `vscode-shim` layer provides:
 - **Webview bridge** — mock webview that pipes `postMessage` through
   `window.__extensionHost.emit("extensionWebviewMessage", message)`
 - **Command execution** — routes to `execa` subprocesses instead of VSCode
-  Terminal ([`ExecuteCommandTool.ts:207`](../src/core/tools/ExecuteCommandTool.ts:207))
+  Terminal ([`ExecuteCommandTool.ts:207`](../packages/core/src/tools/ExecuteCommandTool.ts:207))
 - **MCP** — full McpHub support, auto-approved in non-interactive mode
 
 The extension source has zero `ROO_CLI_RUNTIME` gating — every tool (edit,
@@ -253,7 +253,7 @@ pnpm --filter @shofer/cli dev \
 
 ### Shofer Router provider (local llm-router)
 
-The `shofer` provider ([`src/api/providers/shofer.ts`](../src/api/providers/shofer.ts)) is designed for
+The `shofer` provider ([`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)) is designed for
 connecting to a locally-running llm-router instance. It wraps the OpenRouter
 handler and auto-injects a UUID v7 `conversation_id` into every request body
 (llm-router requires this field).
@@ -365,7 +365,7 @@ auto-approves all interactive asks (tool, command, MCP, followup). In
 ### File Change Tracking
 
 Command execution in CLI mode uses `execa` subprocesses
-([`ExecuteCommandTool.ts:207`](../src/core/tools/ExecuteCommandTool.ts:207))
+([`ExecuteCommandTool.ts:207`](../packages/core/src/tools/ExecuteCommandTool.ts:207))
 instead of VSCode Terminal. File edits go through the real filesystem via
 `vscode-shim`'s `FileSystemAPI` and `WorkspaceAPI.applyEdit()`.
 
@@ -382,10 +382,10 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 | [`apps/cli/src/commands/cli/stdin-stream.ts`](../apps/cli/src/commands/cli/stdin-stream.ts)                           | NDJSON stdin command parsing and dispatching              |
 | [`apps/cli/src/lib/utils/provider.ts`](../apps/cli/src/lib/utils/provider.ts)                                         | Maps CLI provider flags to ShoferSettings                 |
 | [`apps/cli/src/ui/App.tsx`](../apps/cli/src/ui/App.tsx)                                                               | Ink-based TUI application component                       |
-| [`src/api/providers/shofer.ts`](../src/api/providers/shofer.ts)                                                       | Shofer Router provider (conversation_id injection)        |
+| [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)                           | Shofer Router provider (conversation_id injection)        |
 | [`packages/types/src/cli.ts`](../packages/types/src/cli.ts)                                                           | Stdin command and stream-json event schemas               |
 | [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | vscode mock factory                                       |
-| [`src/core/tools/ExecuteCommandTool.ts`](../src/core/tools/ExecuteCommandTool.ts)                                     | Command execution (fallback to execa in CLI)              |
+| [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)                   | Command execution (fallback to execa in CLI)              |
 
 ## CLI via ShoferAPI — Extended Capabilities
 

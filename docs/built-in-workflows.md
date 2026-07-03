@@ -35,7 +35,7 @@ files through discovery, validation, and task creation:
               (.shofer/workflows/*.slang     ← project, highest priority)
     │
     └── discoverWorkflows(workspacePath)
-        │  (src/core/workflow/WorkflowTask.ts:1340)
+        │  (packages/core/src/workflow/WorkflowTask.ts:1340)
         │
         ├── loadFromDir(builtinDir)   → built-in workflows
         ├── loadFromDir(globalDir)    → global user workflows
@@ -86,7 +86,7 @@ Each `.slang` file contains exactly one `flow` declaration with optional
 `title`, `description`, and `icon` meta fields, plus one or more `agent` blocks.
 The `flow` name serves as the machine identifier; `title` provides the
 human-readable label shown in the UI. The AST types are defined in
-[`slang-ast.ts`](../src/core/workflow/slang-ast.ts) — `FlowDecl` carries
+[`slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts) — `FlowDecl` carries
 `name`, `params`, `title`, `description`, `icon`, and `body`; each `AgentDecl`
 carries `meta` (with `role`, `model`, `tools`, `retry`, `peers`) and
 `operations`.
@@ -97,7 +97,7 @@ For the full language specification, see [`slang_specs.md`](slang_specs.md).
 
 ## 3. Workflow Discovery: `discoverWorkflows()`
 
-**File:** [`src/core/workflow/WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts:1340-1367)
+**File:** [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts:1340-1367)
 
 The single entry point for workflow discovery. Returns a `Map<string, string>`
 of flow name → `.slang` source content. Priority order (lowest to highest):
@@ -106,15 +106,15 @@ of flow name → `.slang` source content. Priority order (lowest to highest):
 2. **Global** — `~/.shofer/workflows/` (per-user)
 3. **Project** — `.shofer/workflows/` (per-workspace, highest priority)
 
-Each directory is loaded by the private helper [`loadFromDir()`](../src/core/workflow/WorkflowTask.ts:1354), which reads
+Each directory is loaded by the private helper [`loadFromDir()`](../packages/core/src/workflow/WorkflowTask.ts:1354), which reads
 all `.slang` files and inserts them into the map keyed by filename minus the
 `.slang` extension. Later layers overwrite earlier ones on name collision.
 
-**Barrel export:** [`src/core/workflow/index.ts`](../src/core/workflow/index.ts:44)
+**Barrel export:** [`packages/core/src/workflow/index.ts`](../packages/core/src/workflow/index.ts:44)
 
 ### 3.1 Validation
 
-**File:** [`src/core/workflow/validate-slang.ts`](../src/core/workflow/validate-slang.ts:39)
+**File:** [`packages/core/src/workflow/validate-slang.ts`](../packages/core/src/workflow/validate-slang.ts:39)
 
 `validateSlangProgram(source)` parses a `.slang` source string and runs static
 analysis (`validateSlangAST`). Returns a `SlangValidationResult` with:
@@ -156,8 +156,8 @@ The webview requests the list of discovered workflows. The handler:
 The user picks a workflow card → the handler:
 
 1. Re-discovers workflows to get the latest `.slang` source.
-2. Creates a [`WorkflowTask`](../src/core/workflow/WorkflowTask.ts) via
-   [`createWorkflowTask()`](../src/core/workflow/WorkflowTask.ts:1249).
+2. Creates a [`WorkflowTask`](../packages/core/src/workflow/WorkflowTask.ts) via
+   [`createWorkflowTask()`](../packages/core/src/workflow/WorkflowTask.ts:1249).
 3. Pops the current task to the background (parallel execution) without
    aborting it.
 4. Pushes the `WorkflowTask` onto the stack and starts it.
@@ -171,16 +171,16 @@ The user picks a workflow card → the handler:
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang)                                         | Built-in Debug workflow `.slang` source                                                                               |
 | [`src/media/workflows/implement-feature.slang`](../src/media/workflows/implement-feature.slang)                 | Built-in Implement a Feature workflow `.slang` source                                                                 |
-| [`src/core/workflow/WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts)                                     | `WorkflowTask` class, `slangLoop()`, `discoverWorkflows()`, `createWorkflowTask()`, `createWorkflowTaskFromHistory()` |
-| [`src/core/workflow/index.ts`](../src/core/workflow/index.ts)                                                   | Barrel export for the workflow module                                                                                 |
-| [`src/core/workflow/slang-ast.ts`](../src/core/workflow/slang-ast.ts)                                           | AST type definitions (`FlowDecl`, `AgentDecl`, `AgentMeta`, `Operation`, etc.)                                        |
-| [`src/core/workflow/slang-parser.ts`](../src/core/workflow/slang-parser.ts)                                     | Public API — `parseSlang()`, `validateSlangAST()`                                                                     |
-| [`src/core/workflow/slang-parser-upstream.ts`](../src/core/workflow/slang-parser-upstream.ts)                   | Vendored parser from `@riktar/slang` (MIT)                                                                            |
-| [`src/core/workflow/slang-lexer.ts`](../src/core/workflow/slang-lexer.ts)                                       | Lexer (vendored)                                                                                                      |
-| [`src/core/workflow/slang-resolver.ts`](../src/core/workflow/slang-resolver.ts)                                 | Dependency graph, deadlock detection, static analysis warnings                                                        |
-| [`src/core/workflow/slang-types.ts`](../src/core/workflow/slang-types.ts)                                       | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                       |
-| [`src/core/workflow/validate-slang.ts`](../src/core/workflow/validate-slang.ts)                                 | `validateSlangProgram()` — parse + validate in one call                                                               |
-| [`src/core/workflow/wait-for-task-helper.ts`](../src/core/workflow/wait-for-task-helper.ts)                     | Shared event-driven wait helper (used by both `WaitForTaskTool` and `WorkflowTask.waitForStakes`)                     |
+| [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)                   | `WorkflowTask` class, `slangLoop()`, `discoverWorkflows()`, `createWorkflowTask()`, `createWorkflowTaskFromHistory()` |
+| [`packages/core/src/workflow/index.ts`](../packages/core/src/workflow/index.ts)                                 | Barrel export for the workflow module                                                                                 |
+| [`packages/core/src/workflow/slang-ast.ts`](../packages/core/src/workflow/slang-ast.ts)                         | AST type definitions (`FlowDecl`, `AgentDecl`, `AgentMeta`, `Operation`, etc.)                                        |
+| [`packages/core/src/workflow/slang-parser.ts`](../packages/core/src/workflow/slang-parser.ts)                   | Public API — `parseSlang()`, `validateSlangAST()`                                                                     |
+| [`packages/core/src/workflow/slang-parser-upstream.ts`](../packages/core/src/workflow/slang-parser-upstream.ts) | Vendored parser from `@riktar/slang` (MIT)                                                                            |
+| [`packages/core/src/workflow/slang-lexer.ts`](../packages/core/src/workflow/slang-lexer.ts)                     | Lexer (vendored)                                                                                                      |
+| [`packages/core/src/workflow/slang-resolver.ts`](../packages/core/src/workflow/slang-resolver.ts)               | Dependency graph, deadlock detection, static analysis warnings                                                        |
+| [`packages/core/src/workflow/slang-types.ts`](../packages/core/src/workflow/slang-types.ts)                     | Runtime state types (`FlowState`, `AgentState`, `MailboxEntry`) + serialization                                       |
+| [`packages/core/src/workflow/validate-slang.ts`](../packages/core/src/workflow/validate-slang.ts)               | `validateSlangProgram()` — parse + validate in one call                                                               |
+| [`packages/core/src/workflow/wait-for-task-helper.ts`](../packages/core/src/workflow/wait-for-task-helper.ts)   | Shared event-driven wait helper (used by both `WaitForTaskTool` and `WorkflowTask.waitForStakes`)                     |
 | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)                     | `listWorkflows` and `createWorkflow` IPC handlers                                                                     |
 | [`src/core/webview/ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                                   | `createTask()` — spawns agent Tasks with `initialMode`; `_restoreWorkflowTask()`                                      |
 | [`src/core/webview/SlangEditorProvider.ts`](../src/core/webview/SlangEditorProvider.ts)                         | Custom editor for `.slang` files (opens as editor tab)                                                                |

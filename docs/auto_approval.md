@@ -3,7 +3,7 @@
 Complete reference for how tool auto-approval works in Shofer. This document describes
 the decision flow, the available categories/toggles, and which tools fall under each category.
 
-Source: [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)
+Source: [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts)
 
 ---
 
@@ -69,7 +69,7 @@ either harmless meta-operations or purely informational queries against in-memor
 
 A **question directed at another task** is always auto-approved. `ask_followup_question`
 only reaches the `tool` ask path here when a background child routes its question **up to
-its parent** (see [`AskFollowupQuestionTool`](../src/core/tools/AskFollowupQuestionTool.ts) —
+its parent** (see [`AskFollowupQuestionTool`](../packages/core/src/tools/AskFollowupQuestionTool.ts) —
 the `task.parentTaskId && task.isBackgroundTask` branch calls
 `askApproval("tool", { tool: "askFollowupQuestion", … })`). No human is interrupted: the
 parent fields the question and answers via `answer_subtask_question`. Gating it behind a user
@@ -111,7 +111,7 @@ or network and mutate nothing:
 > and returns immediately. The **sync** (`wait: true`) form blocks the caller on the
 > target's reply and is gated behind `alwaysAllowSubtasks`, like the other
 > control-plane subtask tools. See the `sendMessageToTask` branch in
-> [`checkAutoApproval`](../src/core/auto-approval/index.ts).
+> [`checkAutoApproval`](../packages/core/src/auto-approval/index.ts).
 
 ### Lightweight Read-Only Tools
 
@@ -257,9 +257,9 @@ approval, regardless of `allowedCommands` or `deniedCommands` configuration.
 The **master gate** for auto-approving MCP tool calls and resource access — if it is
 off, every MCP call prompts. When it is on, `use_mcp_tool` calls go through a second,
 **per-group** gate that mirrors the per-group control applied to native tools:
-[`getMcpToolGroup()`](../src/core/auto-approval/mcp.ts) resolves the tool's group (user
+[`getMcpToolGroup()`](../packages/core/src/auto-approval/mcp.ts) resolves the tool's group (user
 override in `mcp.json` → server-declared → default `"uncategorized"`) and the shared
-`GROUP_GATE` table in [`auto-approval/group-gates.ts`](../src/core/auto-approval/group-gates.ts)
+`GROUP_GATE` table in [`auto-approval/group-gates.ts`](../packages/core/src/auto-approval/group-gates.ts)
 maps it to the toggle that must **also** be enabled:
 
 | Resolved group  | Required toggle (in addition to `alwaysAllowMcp`) |
@@ -305,10 +305,10 @@ the toggle alone does not auto-approve — the user is still asked.
 
 These are **separate concepts**:
 
-| Concept                  | Defined in                                                              | What it controls                                     |
-| ------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------- |
-| `ALWAYS_AVAILABLE_TOOLS` | [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)           | Which tools the model can _see and use_ in any mode  |
-| Auto-approval            | [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts) | Whether a tool invocation requires user confirmation |
+| Concept                  | Defined in                                                                                | What it controls                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `ALWAYS_AVAILABLE_TOOLS` | [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                             | Which tools the model can _see and use_ in any mode  |
+| Auto-approval            | [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts) | Whether a tool invocation requires user confirmation |
 
 A tool being in `ALWAYS_AVAILABLE_TOOLS` does **not** mean it's auto-approved. For example,
 `send_message_to_task` (sync mode) is always available but still requires the
@@ -321,7 +321,7 @@ toggle is on.
 
 ## Cost & Request Limits
 
-In addition to per-tool approval, the [`AutoApprovalHandler`](../src/core/auto-approval/AutoApprovalHandler.ts)
+In addition to per-tool approval, the [`AutoApprovalHandler`](../packages/core/src/auto-approval/AutoApprovalHandler.ts)
 tracks consecutive API requests and cumulative cost (`allowedMaxRequests`, `allowedMaxCost`).
 When either limit is exceeded, the user is prompted regardless of per-tool toggle state.
 
@@ -329,22 +329,22 @@ When either limit is exceeded, the user is prompted regardless of per-tool toggl
 
 ## Related Files
 
-| File                                                                                                | Purpose                                                                 |
-| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`src/core/auto-approval/index.ts`](../src/core/auto-approval/index.ts)                             | Main decision logic                                                     |
-| [`src/core/auto-approval/group-gates.ts`](../src/core/auto-approval/group-gates.ts)                 | `GROUP_GATE` single-source per-group gating + `isGroupAutoApproved`     |
-| [`src/core/auto-approval/tools.ts`](../src/core/auto-approval/tools.ts)                             | `getToolGroupForSayTool` (+ deprecated `isReadOnlyToolAction` etc.)     |
-| [`src/core/auto-approval/mcp.ts`](../src/core/auto-approval/mcp.ts)                                 | MCP tool group resolution (`getMcpToolGroup`, `isMcpToolUncategorized`) |
-| [`src/core/auto-approval/commands.ts`](../src/core/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                                   |
-| [`src/core/auto-approval/AutoApprovalHandler.ts`](../src/core/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                                           |
-| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                       | `ALWAYS_AVAILABLE_TOOLS`, tool groups                                   |
+| File                                                                                                                  | Purpose                                                                 |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts)                             | Main decision logic                                                     |
+| [`packages/core/src/auto-approval/group-gates.ts`](../packages/core/src/auto-approval/group-gates.ts)                 | `GROUP_GATE` single-source per-group gating + `isGroupAutoApproved`     |
+| [`packages/core/src/auto-approval/tools.ts`](../packages/core/src/auto-approval/tools.ts)                             | `getToolGroupForSayTool` (+ deprecated `isReadOnlyToolAction` etc.)     |
+| [`packages/core/src/auto-approval/mcp.ts`](../packages/core/src/auto-approval/mcp.ts)                                 | MCP tool group resolution (`getMcpToolGroup`, `isMcpToolUncategorized`) |
+| [`packages/core/src/auto-approval/commands.ts`](../packages/core/src/auto-approval/commands.ts)                       | Command allowlist/denylist evaluation                                   |
+| [`packages/core/src/auto-approval/AutoApprovalHandler.ts`](../packages/core/src/auto-approval/AutoApprovalHandler.ts) | Cost & request limit tracking                                           |
+| [`packages/types/src/tool.ts`](../packages/types/src/tool.ts)                                                         | `ALWAYS_AVAILABLE_TOOLS`, tool groups                                   |
 
 ---
 
 ## Gaps, Issues & Improvement Areas
 
-_Discovered during the 2026-05-20 verification review against source at [`index.ts`](../src/core/auto-approval/index.ts) (rev ffde35c) and
-[`tools.ts`](../src/core/auto-approval/tools.ts)._
+_Discovered during the 2026-05-20 verification review against source at [`index.ts`](../packages/core/src/auto-approval/index.ts) (rev ffde35c) and
+[`tools.ts`](../packages/core/src/auto-approval/tools.ts)._
 
 ### Documentation Gaps (Corrected)
 
@@ -394,7 +394,7 @@ _Discovered during the 2026-05-20 verification review against source at [`index.
     rather than "non-blocking." The two may diverge if additional asks are added to `autoApprovableAsks`.
 
 11. **No test coverage reference** — the auto-approval system has tests (e.g.,
-    [`auto-approval/__tests__/`](../src/core/auto-approval/__tests__/) if it exists) but the
+    [`auto-approval/__tests__/`](../packages/core/src/auto-approval/__tests__/) if it exists) but the
     doc doesn't link to them. Adding test references would help developers verify behavior.
 
 12. **Multiple independent lists of unconditionally-approved tools** — the `index.ts` code

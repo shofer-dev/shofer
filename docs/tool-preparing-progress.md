@@ -2,8 +2,8 @@
 
 > Source: [`../../extensions/llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts)
 > Source: [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)
-> Source: [`src/api/transform/stream.ts`](src/api/transform/stream.ts)
-> Source: [`src/core/task/Task.ts`](src/core/task/Task.ts)
+> Source: [`packages/core/src/api/transform/stream.ts`](packages/core/src/api/transform/stream.ts)
+> Source: [`packages/core/src/task/Task.ts`](packages/core/src/task/Task.ts)
 > Source: [`webview-ui/src/components/chat/ChatRow.tsx`](webview-ui/src/components/chat/ChatRow.tsx)
 
 When tools stream large arguments (e.g., multi-KB `write_to_file` payloads),
@@ -99,9 +99,9 @@ The row renders only while `message.partial === true` and a valid JSON payload
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | [`extensions/llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts) | Replace announcement + dot heartbeat with `buildPreparingMarker()` emitting `\x00`-delimited markers on first name and every 5s |
 | [`packages/types/src/message.ts`](packages/types/src/message.ts)                                                         | Add `"tool_preparing"` to `shoferSays` / `ShoferSay` union                                                                      |
-| [`src/api/transform/stream.ts`](src/api/transform/stream.ts)                                                             | Add `ApiStreamToolPreparingChunk` interface and union member                                                                    |
+| [`packages/core/src/api/transform/stream.ts`](packages/core/src/api/transform/stream.ts)                                 | Add `ApiStreamToolPreparingChunk` interface and union member                                                                    |
 | [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)                                                       | Detect `\x00tool_preparing\x00…` via regex in `LanguageModelThinkingPart`, yield `tool_preparing` chunk                         |
-| [`src/core/task/Task.ts`](src/core/task/Task.ts)                                                                         | Add `case "tool_preparing"` in stream consumer, posts partial via `say("tool_preparing", …, true)`                              |
+| [`packages/core/src/task/Task.ts`](packages/core/src/task/Task.ts)                                                       | Add `case "tool_preparing"` in stream consumer, posts partial via `say("tool_preparing", …, true)`                              |
 | [`webview-ui/src/components/chat/ChatRow.tsx`](webview-ui/src/components/chat/ChatRow.tsx)                               | Render inline row with spinner, monospace tool name, and formatted byte count                                                   |
 | [`webview-ui/src/i18n/locales/en/chat.json`](webview-ui/src/i18n/locales/en/chat.json)                                   | Add `toolPreparing.preparing` key                                                                                               |
 
