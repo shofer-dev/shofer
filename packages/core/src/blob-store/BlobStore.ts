@@ -25,8 +25,12 @@ import { createHash } from "crypto"
 
 import { utilLog } from "../logging/subsystems.js"
 
-/** Default inline cap (bytes). Overridable via `shoferBlobCapBytes` setting. */
-export const DEFAULT_BLOB_CAP_BYTES = 2048
+/**
+ * Default inline cap (bytes). Overridable via `shoferBlobCapBytes` setting.
+ * The tunable default now lives in `../constants.js`; re-exported here so
+ * existing importers of this module are unchanged.
+ */
+export { DEFAULT_BLOB_CAP_BYTES } from "../constants.js"
 
 /**
  * Regular expression matching a single blob reference token. Uses `g` so

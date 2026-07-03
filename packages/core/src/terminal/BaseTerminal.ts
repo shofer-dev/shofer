@@ -1,3 +1,4 @@
+import { TERMINAL_OUTPUT_LINE_LIMIT, TERMINAL_OUTPUT_CHARACTER_LIMIT } from "../constants.js"
 import { truncateOutput, applyRunLengthEncoding } from "../text/output-truncation.js"
 
 import { webviewLog } from "../logging/subsystems.js"
@@ -281,12 +282,13 @@ export abstract class BaseTerminal implements ShoferTerminal {
 	 * @returns The compressed terminal output
 	 */
 	public static compressTerminalOutput(input: string): string {
-		// Hardcoded UI display limits - these prevent unbounded memory growth
-		// in the chat display, separate from the LLM context limits
-		const LINE_LIMIT = 500
-		const CHARACTER_LIMIT = 50_000
-
-		return truncateOutput(applyRunLengthEncoding(input), LINE_LIMIT, CHARACTER_LIMIT)
+		// UI display limits (see ../constants.js) — these prevent unbounded memory
+		// growth in the chat display, separate from the LLM context limits.
+		return truncateOutput(
+			applyRunLengthEncoding(input),
+			TERMINAL_OUTPUT_LINE_LIMIT,
+			TERMINAL_OUTPUT_CHARACTER_LIMIT,
+		)
 	}
 
 	/**

@@ -10,10 +10,11 @@
  * the message (capped at 8 KB per arg to prevent large-object allocation).
  */
 
+import { LOG_MAX_ARG_BYTES } from "../constants.js"
 import { ILogger, LogMeta, CompactLogEntry, LogLevel } from "./types.js"
 import { CompactTransport } from "./CompactTransport.js"
 
-const MAX_ARG_BYTES = 8 * 1024
+const MAX_ARG_BYTES = LOG_MAX_ARG_BYTES
 
 /** Format a single extra argument into a string suitable for log output. */
 function fmtArg(arg: unknown): string {

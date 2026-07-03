@@ -1,3 +1,4 @@
+import { LOG_MAX_ARG_BYTES } from "../constants.js"
 import type { OutputChannelLike } from "./outputChannel.js"
 
 export type LogFunction = (...args: unknown[]) => void
@@ -15,8 +16,11 @@ export type LogFunction = (...args: unknown[]) => void
  * cap because they pre-stringify before the logger sees a single string —
  * those sites have to be size-capped at the call site (see
  * `stringifyForLog` below).
+ *
+ * The tunable value lives in the central constants registry as
+ * `LOG_MAX_ARG_BYTES`; aliased here to preserve the local call sites.
  */
-const MAX_LOG_ARG_BYTES = 8 * 1024
+const MAX_LOG_ARG_BYTES = LOG_MAX_ARG_BYTES
 
 /**
  * JSON.stringify a value with a hard byte cap suitable for log lines.

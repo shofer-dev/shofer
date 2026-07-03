@@ -12,6 +12,8 @@ import { promisify } from "util"
 
 import ignore, { type Ignore } from "ignore"
 
+import { WORKTREE_POLL_INTERVAL_MS } from "../constants.js"
+
 import type { WorktreeIncludeStatus } from "./types.js"
 
 /**
@@ -341,7 +343,7 @@ export class WorktreeIncludeService {
 		})
 
 		// Poll progress while copying
-		const pollInterval = 500 // Poll every 500ms
+		const pollInterval = WORKTREE_POLL_INTERVAL_MS // see ../constants.js
 		let polling = true
 
 		const pollProgress = async () => {
