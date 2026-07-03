@@ -1,24 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { generateImageTool } from "@shofer/core"
-import { ToolUse } from "@shofer/core"
-import { Task } from "@shofer/core"
 import * as fs from "fs/promises"
-import { isPathOutsideWorkspace } from "@shofer/core"
-import * as fileUtils from "../../../utils/fs.js"
-import { formatResponse } from "@shofer/core"
-import { EXPERIMENT_IDS } from "@shofer/types"
-import { OpenRouterHandler } from "@shofer/core"
+import { EXPERIMENT_IDS, type ToolUse } from "@shofer/types"
 
-// Mock dependencies
+// After the v3 carve-out the tool + its intra-core deps live inside @shofer/core and
+// call each other via RELATIVE imports — a barrel `vi.mock("@shofer/core")` can no
+// longer intercept them. Mock the collaborators core-relative instead.
 vi.mock("fs/promises")
-vi.mock("../../../utils/fs")
-// safeWriteJson, OpenRouterHandler and isPathOutsideWorkspace are exported from @shofer/core; partially mock them there
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	safeWriteJson: vi.fn(),
-	OpenRouterHandler: vi.fn(),
+vi.mock("../../fs/fs.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../fs/fs.js")>()),
+	fileExistsAtPath: vi.fn(),
+}))
+vi.mock("../../utils/pathUtils.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../utils/pathUtils.js")>()),
 	isPathOutsideWorkspace: vi.fn(),
 }))
+vi.mock("../../api/providers/openrouter.js", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../../api/providers/openrouter.js")>()),
+	OpenRouterHandler: vi.fn(),
+}))
+
+import { generateImageTool } from "../GenerateImageTool.js"
+import type { Task } from "../../task/Task.js"
+import { fileExistsAtPath } from "../../fs/fs.js"
+import { isPathOutsideWorkspace } from "../../utils/pathUtils.js"
+import { formatResponse } from "../../prompts/responses.js"
+import { OpenRouterHandler } from "../../api/providers/openrouter.js"
 
 describe("generateImageTool", () => {
 	let mockShofer: any
@@ -65,7 +71,7 @@ describe("generateImageTool", () => {
 		mockPushToolResult = vi.fn()
 
 		// Mock file system operations
-		vi.mocked(fileUtils.fileExistsAtPath).mockResolvedValue(true)
+		vi.mocked(fileExistsAtPath).mockResolvedValue(true)
 		vi.mocked(fs.readFile).mockResolvedValue(Buffer.from("fake-image-data"))
 		vi.mocked(fs.mkdir).mockResolvedValue(undefined)
 		vi.mocked(fs.writeFile).mockResolvedValue(undefined)
@@ -317,7 +323,7 @@ describe("generateImageTool", () => {
 
 	describe("input image validation", () => {
 		it("should handle non-existent input image", async () => {
-			vi.mocked(fileUtils.fileExistsAtPath).mockResolvedValue(false)
+			vi.mocked(fileExistsAtPath).mockResolvedValue(false)
 
 			const block: ToolUse = {
 				type: "tool_use",
