@@ -898,6 +898,19 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
+				// Shofer Nodes: a remote shadow task's ask is answered over the pool
+				// (reverse ask channel → executor), NOT the in-process path. The
+				// webview posts the shadow's taskId as message.taskId (currentTaskItem.id).
+				if (message.taskId && provider.nodeRegistry?.isShadow(message.taskId)) {
+					await provider.nodeRegistry.respondToAsk(message.taskId, {
+						askResponse: message.askResponse!,
+						text: messageText,
+						images: resolved.images,
+						askId: message.askId,
+					})
+					break
+				}
+
 				// Route to the correct task instance when the webview supplies a
 				// taskId — prevents task-switch races where a response meant for
 				// task A lands on task B and is silently dropped.

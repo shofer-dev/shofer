@@ -339,6 +339,28 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(shadow.messages).toEqual([msg(1, { text: "m1!" })])
 	})
 
+	it("routes respondToAsk for a shadow task to the owning executor (reverse ask channel)", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+		expect(h.registry.isShadow(taskId!)).toBe(true)
+
+		await h.registry.respondToAsk(taskId!, { askResponse: "yesButtonClicked", text: "ok", askId: "a1" })
+		expect(remote.api.respondToAsk).toHaveBeenCalledWith("r1-task-1", {
+			askResponse: "yesButtonClicked",
+			text: "ok",
+			askId: "a1",
+		})
+
+		// A local task is never a shadow.
+		expect(h.registry.isShadow("local-task-99")).toBe(false)
+	})
+
 	it("drops Local-tagged pool events (no shadow, no webview render posts)", async () => {
 		// A registry whose LOCAL agent is drivable, so we can emit a Local-tagged event.
 		const { context } = makeContext()

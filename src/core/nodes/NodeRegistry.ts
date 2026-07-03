@@ -265,6 +265,24 @@ export class NodeRegistry {
 		return this.focusedShadowId ? this.shadows.get(this.focusedShadowId) : undefined
 	}
 
+	/** Whether `taskId` is a remote-owned shadow task (vs. a local in-process task). */
+	isShadow(taskId: string): boolean {
+		return this.shadows.has(taskId)
+	}
+
+	/**
+	 * Answer a remote shadow task's outstanding `ask`, routed over the pool to the
+	 * owning executor (the reverse of the demuxed `ask` render). This is the
+	 * controller side of interactive remote approvals: a webview approve/deny for a
+	 * shadow task lands here instead of the in-process `handleWebviewAskResponse`.
+	 */
+	async respondToAsk(
+		taskId: string,
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
+	): Promise<void> {
+		await this.pool.respondToAsk(taskId, response)
+	}
+
 	/** Make a remote shadow the focused task and switch the webview to it. */
 	focusShadow(taskId: string): void {
 		if (!this.shadows.has(taskId)) return
