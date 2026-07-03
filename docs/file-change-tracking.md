@@ -88,6 +88,19 @@ do not leak their changes into each other's panels, even though they share the
 underlying files on disk. The click-to-diff view likewise compares `base` ↔ `final`
 (not the live file) for the same reason.
 
+### Worktree cwd
+
+`FileContextTracker` resolves all file paths against the **task's cwd**
+(`task.cwd`), passed via the constructor — NOT against the VS Code workspace
+folder (`getWorkspacePath()`). For embedded-worktree tasks
+(`.shofer/worktrees/<name>/`), the workspace folder points at the **main
+checkout**, while the task's edits live in the **worktree subdirectory**.
+Resolving against the wrong directory caused `captureFinal` to read
+stale/absent files, making `getChangedFiles` skip them — the root cause of the
+worktree underreporting bug. `Task.reassignCwd()` forwards to
+`tracker.reassignCwd()` to keep them in sync when a WorkflowTask moves to a
+different worktree.
+
 ## Unified source of truth
 
 All consumers go through one async API exported from

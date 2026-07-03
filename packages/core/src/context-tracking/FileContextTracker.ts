@@ -3,7 +3,6 @@ import * as path from "path"
 import * as crypto from "crypto"
 import type { HostFileWatcher } from "@shofer/types"
 import { getHost } from "@shofer/types"
-import { getWorkspacePath } from "../path/path.js"
 import { getTaskDirectoryPath } from "../utils/storage.js"
 import { GlobalFileNames } from "../shared/globalFileNames.js"
 import { fileExistsAtPath } from "../fs/fs.js"
@@ -43,24 +42,49 @@ export class FileContextTracker {
 	readonly taskId: string
 	private providerRef: WeakRef<TaskProviderLike>
 
+	/**
+	 * The working directory this task operates in. For ordinary tasks this is the
+	 * workspace root; for embedded-worktree tasks (`.shofer/worktrees/<name>/`)
+	 * it is the worktree subdirectory. All file reads/writes in this tracker
+	 * resolve relative to this path — NOT to the VS Code workspace folder, which
+	 * for a worktree task points at the main checkout and would read the wrong
+	 * files (the root cause of the `get_changed_files` worktree underreporting
+	 * bug).
+	 */
+	private cwd: string
+
 	// File tracking and watching
 	private fileWatchers = new Map<string, HostFileWatcher>()
 	private recentlyModifiedFiles = new Set<string>()
 	private recentlyEditedByRoo = new Set<string>()
 	private checkpointPossibleFiles = new Set<string>()
 
-	constructor(provider: TaskProviderLike, taskId: string) {
+	/**
+	 * @param provider  The task provider (host-side services + storage).
+	 * @param taskId    The task this tracker is scoped to.
+	 * @param cwd       The task's working directory. Must match `task.cwd` so
+	 *                  that file reads/writes resolve against the correct tree
+	 *                  (the worktree subdirectory for embedded-worktree tasks).
+	 */
+	constructor(provider: TaskProviderLike, taskId: string, cwd: string) {
 		this.providerRef = new WeakRef(provider)
 		this.taskId = taskId
+		this.cwd = cwd
 	}
 
-	// Gets the current working directory or returns undefined if it cannot be determined
-	private getCwd(): string | undefined {
-		const cwd = getWorkspacePath() || undefined
-		if (!cwd) {
-			taskLog.info("No workspace folder available - cannot determine current working directory")
-		}
-		return cwd
+	// Returns this task's working directory (the worktree subdirectory for
+	// embedded-worktree tasks, the workspace root otherwise).
+	private getCwd(): string {
+		return this.cwd
+	}
+
+	/**
+	 * Re-points the tracker's working directory. Called by {@link Task.reassignCwd}
+	 * when a running WorkflowTask is moved to a different worktree so that
+	 * subsequent file-change tracking resolves against the new tree.
+	 */
+	reassignCwd(newCwd: string): void {
+		this.cwd = newCwd
 	}
 
 	// File watchers are set up for each file that is tracked in the task metadata.
@@ -70,13 +94,8 @@ export class FileContextTracker {
 			return
 		}
 
-		const cwd = this.getCwd()
-		if (!cwd) {
-			return
-		}
-
 		// Create a file system watcher for this specific file
-		const absPath = path.resolve(cwd, filePath)
+		const absPath = path.resolve(this.getCwd(), filePath)
 		const watcher = getHost().watcher.watch(path.dirname(absPath), path.basename(absPath))
 
 		// Track file changes
@@ -97,11 +116,6 @@ export class FileContextTracker {
 	// This is the main entry point for FileContextTracker and is called when a file is passed to Shofer via a tool, mention, or edit.
 	async trackFileContext(filePath: string, operation: RecordSource) {
 		try {
-			const cwd = this.getCwd()
-			if (!cwd) {
-				return
-			}
-
 			await this.addFileToFileContextTracker(this.taskId, filePath, operation)
 
 			// Set up file watcher for this file
@@ -484,18 +498,11 @@ export class FileContextTracker {
 				)
 				return
 			}
-			const cwd = this.getCwd()
-			if (!cwd) {
-				taskLog.warn(
-					`[FileContextTracker] captureFinal skipped for ${relPath}: no workspace folder (cwd undefined)`,
-				)
-				return
-			}
-			const abs = path.resolve(cwd, relPath)
+			const abs = path.resolve(this.getCwd(), relPath)
 			let content: string | undefined
 			try {
 				content = await fs.readFile(abs, "utf8")
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			} catch (err: any) {
 				if (err?.code !== "ENOENT") {
 					taskLog.warn(

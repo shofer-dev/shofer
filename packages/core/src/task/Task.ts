@@ -1018,6 +1018,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.fileContextTracker = new FileContextTracker(
 			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
 			this.taskId,
+			this.cwd,
 		)
 
 		this.shoferIgnoreController.initialize().catch((error) => {
@@ -7564,9 +7565,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * agents read `this.cwd` at spawn time — so agents spawned after the change
 	 * run in the new worktree. Not for ordinary LLM tasks, whose cwd is bound to
 	 * their tools/checkpoints once running.
+	 *
+	 * The FileContextTracker's cwd is kept in sync so that any file-change
+	 * tracking performed by the WorkflowTask root itself resolves against the
+	 * new worktree.
 	 */
 	public reassignCwd(newCwd: string): void {
 		this._cwd = newCwd
+		this.fileContextTracker.reassignCwd(newCwd)
 	}
 
 	/**
