@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type * as vscode from "vscode"
 
-import type { AgentApi, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
-import { LOCAL_NODE_ID } from "@shofer/types"
+import type { AgentApi, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
+import { LOCAL_NODE_ID, ShoferEventName } from "@shofer/types"
 
 import { NodeRegistry, type INodeConnection, type NodeConnectionFactory } from "../NodeRegistry.js"
 
@@ -110,10 +110,35 @@ function makeProviderHost() {
 			return currentTaskId
 		}),
 		getCurrentTask: () => (currentTaskId ? { taskId: currentTaskId } : undefined),
-		postMessageToWebview: vi.fn(async () => {}),
+		postMessageToWebview: vi.fn(async (_msg: unknown) => {}),
+		postInitState: vi.fn(async () => {}),
 	}
 	return host
 }
+
+/** An {@link AgentApi} whose event stream is drivable (for the pool-feed demux). */
+function makeDrivableAgent(taskId: string) {
+	let emit: (e: ServerEvent) => void = () => {}
+	const api: AgentApi = {
+		createTask: vi.fn(async () => ({ taskId })),
+		sendMessage: vi.fn(async () => {}),
+		cancelTask: vi.fn(async () => {}),
+		subscribe: (listener) => {
+			emit = listener
+			return () => {
+				emit = () => {}
+			}
+		},
+	}
+	return { api, emit: (e: ServerEvent) => emit(e) }
+}
+
+const msg = (ts: number, over: Partial<import("@shofer/types").ShoferMessage> = {}) => ({
+	ts,
+	type: "say" as const,
+	text: `m${ts}`,
+	...over,
+})
 
 const remoteDef = { id: "r1", kind: "remote" as const, label: "box", host: "host:1", tls: false }
 
@@ -277,6 +302,76 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(host.createManagedTask).not.toHaveBeenCalled()
 		expect(taskId).toBe("r1-task-1")
 		expect(h.registry.executorPool.ownerOf("r1-task-1")).toBe("r1")
+	})
+
+	// ── L2: pool-feed demux → webview render ─────────────────────────────────────
+
+	it("demuxes a remote Message created/updated sequence into append/update webview posts", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+
+		// routeNewTask(remote) creates + FOCUSES the shadow so deltas mirror to the webview.
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+		expect(taskId).toBe("r1-task-1")
+		host.postMessageToWebview.mockClear()
+
+		// created → shoferMessageAppended
+		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "created", message: msg(1) }] })
+		// updated → messageUpdated
+		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "updated", message: msg(1, { text: "m1!" }) }] })
+
+		const posts = host.postMessageToWebview.mock.calls.map((c) => c[0] as { type: string; shoferMessage: { ts: number; text?: string } })
+		const renderPosts = posts.filter((p) => p.type === "shoferMessageAppended" || p.type === "messageUpdated")
+		expect(renderPosts).toEqual([
+			{ type: "shoferMessageAppended", shoferMessage: msg(1) },
+			{ type: "messageUpdated", shoferMessage: msg(1, { text: "m1!" }) },
+		])
+
+		// The shadow buffer reflects the in-place update by ts (no duplicate).
+		const shadow = h.registry.getFocusedShadow()!
+		expect(shadow.messages).toEqual([msg(1, { text: "m1!" })])
+	})
+
+	it("drops Local-tagged pool events (no shadow, no webview render posts)", async () => {
+		// A registry whose LOCAL agent is drivable, so we can emit a Local-tagged event.
+		const { context } = makeContext()
+		const localDrivable = makeDrivableAgent("local-1")
+		const registry = new NodeRegistry(
+			{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0" },
+			{ localAgent: localDrivable.api },
+		)
+		const host = makeProviderHost()
+		registry.attachProvider(host)
+
+		// Even a Message tagged with the Local executor must be ignored by the demux.
+		localDrivable.emit({ type: ShoferEventName.Message, args: [{ taskId: "local-1", action: "created", message: msg(1) }] })
+		localDrivable.emit({ type: ShoferEventName.TaskCompleted, args: ["local-1"] })
+
+		expect(host.postMessageToWebview).not.toHaveBeenCalled()
+		expect(registry.getFocusedShadow()).toBeUndefined()
+	})
+
+	it("surfaces a non-auto-approved remote ask as blockedOnAsk (never hangs)", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+
+		remote.emit({
+			type: ShoferEventName.Message,
+			args: [{ taskId, action: "created", message: msg(2, { type: "ask", ask: "command", autoApproved: false }) }],
+		})
+
+		const shadow = h.registry.getFocusedShadow()!
+		expect(shadow.blockedOnAsk).toBe(true)
 	})
 
 	it("init() auto-connects persisted autoConnect remotes and hydrates hasToken", async () => {

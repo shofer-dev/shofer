@@ -3762,6 +3762,15 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
+		// Shofer Nodes L2 — full-state clobber fix: when a REMOTE shadow task is the
+		// focused task, the webview must render the shadow's reduced-but-real
+		// conversation + synthetic header, NOT the local current task's. Without
+		// this override, any global full-state push (settings, MCP lifecycle, focus
+		// swaps) would wipe the remote conversation with whatever the local stack
+		// currently holds. The three render fields (currentTaskId, currentTaskItem,
+		// shoferMessages) short-circuit to the shadow below.
+		const focusedShadow = this.nodeRegistry?.getFocusedShadow()
+
 		// Re-seed the workflow visualization from the *focused* task. The viz
 		// fields below are normally pushed as deltas by WorkflowTask via
 		// postConfigUpdate, but those are global keys any live workflow writes to.
@@ -3819,8 +3828,10 @@ export class ShoferProvider
 			autoCondenseContext: autoCondenseContext ?? true,
 			autoCondenseContextPercent: autoCondenseContextPercent ?? 90,
 			uriScheme: vscode.env.uriScheme,
-			currentTaskId: currentTask?.taskId,
+			currentTaskId: focusedShadow?.taskId ?? currentTask?.taskId,
 			currentTaskItem: (() => {
+				// L2: a focused remote shadow renders its synthetic header summary.
+				if (focusedShadow) return focusedShadow.toTaskItem()
 				if (!currentTask?.taskId) return undefined
 				const stored = this.taskHistoryStore.get(currentTask.taskId)
 				// Resolve the live cost limit by walking up to the root task,
@@ -3839,6 +3850,8 @@ export class ShoferProvider
 				return stored ? { ...stored, costLimit: liveCostLimit } : undefined
 			})(),
 			shoferMessages: (() => {
+				// L2: a focused remote shadow renders its buffered conversation.
+				if (focusedShadow) return focusedShadow.messages
 				const msgs = currentTask?.shoferMessages || []
 				// LLM hint: diagnostic for the task-switch home-screen flash.
 				// Fires when we are about to broadcast an empty messages array
@@ -3867,7 +3880,7 @@ export class ShoferProvider
 			})(),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
-			hasMoreShoferMessages: currentTask?.hasMoreShoferMessages ?? false,
+			hasMoreShoferMessages: focusedShadow ? false : (currentTask?.hasMoreShoferMessages ?? false),
 			currentTaskTodos: currentTask?.todoList || [],
 			messageQueue: currentTask?.messageQueueService?.messages ?? [],
 			taskHistory: this.taskHistoryStore.getAll().filter((item: HistoryItem) => item.ts && item.task),

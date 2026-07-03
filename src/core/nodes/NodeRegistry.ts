@@ -2,7 +2,9 @@ import * as vscode from "vscode"
 
 import {
 	type AgentApi,
+	type ServerEvent,
 	type ShoferAPI,
+	type ShoferMessage,
 	type ShoferNodeConnState,
 	type ShoferNodeDef,
 	type ShoferNodeRequest,
@@ -10,8 +12,11 @@ import {
 	type ShoferNodesState,
 	ExecutorPool,
 	LOCAL_NODE_ID,
+	ShoferEventName,
 } from "@shofer/types"
 import { NodeConnection, ShoferApiAgent } from "@shofer/core"
+
+import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
 /**
  * Controller-side orchestrator for Shofer Nodes (v3-native, L1).
@@ -66,6 +71,8 @@ export interface NodeProviderHost {
 	): Promise<string | undefined>
 	getCurrentTask(): { taskId?: string } | undefined
 	postMessageToWebview(message: unknown): Promise<void> | void
+	/** Push a full ExtensionState snapshot (used to switch the webview to a focused shadow). */
+	postInitState(): Promise<void>
 }
 
 /** Options for {@link NodeRegistry.routeNewTask} (the pooled new-task entry point). */
@@ -106,6 +113,10 @@ export class NodeRegistry {
 	private readonly listeners = new Set<() => void>()
 	private defs: ShoferNodeDef[] = []
 	private provider?: NodeProviderHost
+	/** Per-remote-task render buffers (L2). Local tasks are NEVER shadowed. */
+	private readonly shadows = new Map<string, RemoteTaskShadow>()
+	/** The remote shadow the webview is currently showing (drives the render override). */
+	private focusedShadowId?: string
 
 	constructor(opts: NodeRegistryOptions, deps: NodeRegistryDeps = {}) {
 		this.context = opts.context
@@ -122,6 +133,9 @@ export class NodeRegistry {
 		// Register Local at construction; reflect its persisted disabled flag.
 		this.pool.add({ id: LOCAL_NODE_ID, api: this.localAgent })
 		if (this.getDef(LOCAL_NODE_ID)?.disabled) this.pool.setDisabled(LOCAL_NODE_ID, true)
+
+		// L2: demux the merged pool feed into per-remote-task shadows + webview render.
+		this.pool.subscribe((event) => this.onPoolEvent(event))
 	}
 
 	/**
@@ -192,7 +206,108 @@ export class NodeRegistry {
 
 		// Remote owner: the node runs the task; we only buffer/render it (Stage B).
 		const { taskId } = await this.pool.createTaskOn(owner, { prompt: input.prompt })
+		this.ensureShadow(taskId, owner, input.prompt)
+		this.focusShadow(taskId)
 		return taskId
+	}
+
+	// ── remote-task shadows (L2 render demux) ────────────────────────────────────
+
+	/** The remote shadow the webview is currently rendering, if any. */
+	getFocusedShadow(): RemoteTaskShadow | undefined {
+		return this.focusedShadowId ? this.shadows.get(this.focusedShadowId) : undefined
+	}
+
+	/** Make a remote shadow the focused task and switch the webview to it. */
+	focusShadow(taskId: string): void {
+		if (!this.shadows.has(taskId)) return
+		this.focusedShadowId = taskId
+		void this.provider?.postInitState()
+		this.fireChange()
+	}
+
+	/** Clear remote-shadow focus (e.g. the user switched back to a local task). */
+	clearShadowFocus(): void {
+		if (this.focusedShadowId === undefined) return
+		this.focusedShadowId = undefined
+		this.fireChange()
+	}
+
+	private ensureShadow(taskId: string, executorId: string, prompt?: string): RemoteTaskShadow {
+		let shadow = this.shadows.get(taskId)
+		if (!shadow) {
+			shadow = new RemoteTaskShadow({
+				taskId,
+				executorId,
+				nodeLabel: this.getDef(executorId)?.label ?? executorId,
+				prompt,
+			})
+			this.shadows.set(taskId, shadow)
+		}
+		return shadow
+	}
+
+	/**
+	 * Demux a single (executor-tagged) event off the merged pool feed.
+	 *
+	 * FIRST LINE INVARIANT: Local-tagged events return immediately — a Local task
+	 * renders through its own in-process {@link import("../task/Task.js").Task}
+	 * path, so re-rendering it here would double-emit. Only remote executors reach
+	 * the shadow machinery.
+	 */
+	private onPoolEvent(event: ServerEvent): void {
+		const executorId = event.executorId as string | undefined
+		if (!executorId || executorId === LOCAL_NODE_ID) return
+
+		const args = (event.args as unknown[]) ?? []
+		switch (event.type) {
+			case ShoferEventName.TaskCreated: {
+				const taskId = args[0] as string
+				if (taskId) this.ensureShadow(taskId, executorId)
+				this.fireChange()
+				return
+			}
+			case ShoferEventName.TaskStarted: {
+				this.shadows.get(args[0] as string)?.markStarted()
+				return
+			}
+			case ShoferEventName.Message: {
+				const payload = args[0] as
+					| { taskId: string; action: "created" | "updated"; message: ShoferMessage }
+					| undefined
+				if (!payload?.taskId || !payload.message) return
+				const shadow = this.ensureShadow(payload.taskId, executorId)
+				const wasBlocked = shadow.blockedOnAsk
+				shadow.applyMessageDelta(payload.action, payload.message)
+				// Mirror the local gate: only push deltas for the focused shadow.
+				if (this.focusedShadowId === shadow.taskId) {
+					void this.provider?.postMessageToWebview(
+						payload.action === "created"
+							? { type: "shoferMessageAppended", shoferMessage: payload.message }
+							: { type: "messageUpdated", shoferMessage: payload.message },
+					)
+				}
+				// A newly-detected non-auto-approvable ask changes the node view
+				// (surface the "cannot respond to remote ask" state) — re-push nodes.
+				if (!wasBlocked && shadow.blockedOnAsk) this.fireChange()
+				return
+			}
+			case ShoferEventName.TaskCompleted: {
+				this.shadows.get(args[0] as string)?.markCompleted()
+				this.fireChange()
+				return
+			}
+			case ShoferEventName.TaskAborted: {
+				this.shadows.get(args[0] as string)?.markAborted()
+				this.fireChange()
+				return
+			}
+			case ShoferEventName.TaskError: {
+				this.shadows.get(args[0] as string)?.markError(args[1] as string | undefined)
+				this.fireChange()
+				return
+			}
+		}
 	}
 
 	/** Dispatch a webview {@link ShoferNodeRequest}. */
