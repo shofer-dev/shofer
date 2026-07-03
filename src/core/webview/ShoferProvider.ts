@@ -5439,6 +5439,11 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
+			// Shofer Nodes L2: a new LOCAL task takes focus — drop any remote shadow
+			// focus so the render override + activeNodeId revert to Local before the
+			// full state push below.
+			this.nodeRegistry?.clearShadowFocus()
+
 			// Notify the webview of the new current task and switch to the chat tab.
 			await this.postInitState()
 			await this.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
@@ -5466,6 +5471,12 @@ export class ShoferProvider
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
+			// Shofer Nodes L2: focusing a task from the task list is always a LOCAL,
+			// in-process task (remote shadows aren't in taskHistory). Drop any remote
+			// shadow focus so the render override + activeNodeId revert to Local before
+			// the postInitState below recomputes the state.
+			this.nodeRegistry?.clearShadowFocus()
+
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
 			if (currentTask?.taskId === taskId) {

@@ -435,9 +435,14 @@ export class NodeRegistry {
 	// ── internals ──────────────────────────────────────────────────────────────
 
 	private activeNodeId(): string {
-		// L1: no pooled task routing yet → Local owns the active task. Phase 2 wires
-		// `pool.ownerOf(activeTaskId)`.
-		return LOCAL_NODE_ID
+		// L2: the active node OWNS the focused task. The focused task is the focused
+		// remote shadow (if any), else the provider's current in-process task. A task
+		// the pool never assigned (the pure local-only path, which bypasses the pool)
+		// has no owner → Local. This is what lights `isActive` in buildNodeViews and
+		// the "Executing on remote node" badge in TaskHeader.
+		const focusedTaskId = this.focusedShadowId ?? this.provider?.getCurrentTask()?.taskId
+		if (!focusedTaskId) return LOCAL_NODE_ID
+		return this.pool.ownerOf(focusedTaskId) ?? LOCAL_NODE_ID
 	}
 
 	private async startConnection(def: ShoferNodeDef): Promise<void> {

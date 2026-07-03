@@ -374,6 +374,33 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(shadow.blockedOnAsk).toBe(true)
 	})
 
+	// ── L2: dynamic activeNodeId + focus swaps ───────────────────────────────────
+
+	it("activeNodeId + isActive follow the focused task owner across a focus swap", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+
+		// Before any remote task: Local is active.
+		expect(h.registry.getState().activeNodeId).toBe(LOCAL_NODE_ID)
+
+		// Focus a remote shadow → the remote node becomes active + isActive.
+		await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+		let state = h.registry.getState()
+		expect(state.activeNodeId).toBe("r1")
+		expect(state.nodes.find((n) => n.id === "r1")!.isActive).toBe(true)
+		expect(state.nodes.find((n) => n.id === LOCAL_NODE_ID)!.isActive).toBe(false)
+
+		// Swap focus back to a local task → Local active again.
+		h.registry.clearShadowFocus()
+		state = h.registry.getState()
+		expect(state.activeNodeId).toBe(LOCAL_NODE_ID)
+		expect(state.nodes.find((n) => n.id === "r1")!.isActive).toBe(false)
+	})
+
 	it("init() auto-connects persisted autoConnect remotes and hydrates hasToken", async () => {
 		const seeded = makeRegistry([{ id: "r1", kind: "remote", label: "box", host: "host:1", autoConnect: true }])
 		seeded.secrets.set("shoferNode.token.r1", "tok")
