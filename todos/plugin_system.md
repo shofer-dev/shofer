@@ -97,10 +97,16 @@ Wiring points (live today):
 | ---------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `pluginRegistry.collectTools()`                | [`build-tools.ts:361`](../packages/core/src/task/build-tools.ts) | Plugin-contributed tools are registered into `customToolRegistry` and assembled into the LLM tool set. |
 | `pluginRegistry.applySystemPromptTransforms()` | [`system.ts:207`](../packages/core/src/prompts/system.ts)        | System prompt is threaded through all plugin transforms in registration order.                         |
-| `pluginRegistry.dispatchEvent()`               | [`extension.ts:214`](../src/extension.ts)                        | Every `TelemetryService.onEvent` is forwarded to plugin `onEvent` observers.                           |
+| `pluginRegistry.dispatchEvent()`               | [`extension.ts:215`](../src/extension.ts)                        | Every `TelemetryService.onEvent` is forwarded to plugin `onEvent` observers.                           |
 
 This is the **seed** — 3 hooks, no manifest, no discovery, no distribution. The
 design below grows this into a full plugin system.
+
+> **⚠️ Wired to fire, but dormant.** The three hook paths above are live, but
+> nothing ever calls `pluginRegistry.register()` — there is no discovery or
+> registration path, so the registry is always empty and no hook can currently
+> fire. Building that registration path (via `PluginManager`, step 1.2) is the
+> real starting point of Phase 1, not an enhancement to an already-running system.
 
 ### Other extension surfaces (to be unified)
 
@@ -294,6 +300,14 @@ mode resolution chain alongside `.shofer/shofermodes` and built-in modes.
 
 Plugin modes are tagged `source: "plugin:<name>"` so the user can see which
 plugin contributed which mode.
+
+> **Schema change required.** `ModeConfig.source` in
+> [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) is currently a
+> closed enum (`z.enum(["global", "project"])`), so a `"plugin:*"` source
+> fails validation today. This applies wherever the design proposes a
+> `source: "plugin:<name>"` tag (§6.1 tools, §6.3 modes, §11). The enum must be
+> widened (e.g. add a `"plugin"` variant plus a separate `pluginName` field, or
+> switch to a discriminated union) as a prerequisite for attribution.
 
 ### 6.4 Skills (`contributes.skills`)
 
@@ -877,11 +891,19 @@ expanded `TaskHeader`:
 | 1.2  | `PluginManager` — discovery, validation, lifecycle   | `packages/core/src/plugins/plugin-manager.ts` (new)            |
 | 1.3  | Extend `SkillsManager` to discover plugin skills     | `src/services/skills/SkillsManager.ts`                         |
 | 1.4  | Extend `CustomModesManager` to discover plugin modes | `src/core/config/CustomModesManager.ts`                        |
-| 1.5  | Extend `McpHub` to read plugin MCP configs           | `src/services/mcp/McpHub.ts`                                   |
-| 1.6  | Extend command discovery to read plugin commands     | `src/services/command/commands.ts`                             |
+| 1.5  | Extend `McpHub` to read plugin MCP configs           | `packages/core/src/services/mcp/McpHub.ts`                     |
+| 1.6  | Extend command discovery to read plugin commands     | `packages/core/src/services/command/commands.ts`              |
 | 1.7  | Settings → Plugins tab (list, enable/disable)        | `webview-ui/src/components/settings/PluginsSettings.tsx` (new) |
 
 **Declarative plugins work end-to-end after Phase 1.** No code execution.
+
+> **Reconcile with the v3 host-agnostic carve-out.** The target subsystems are
+> at different migration stages. `McpHub` and the command service already live in
+> `packages/core` (host-agnostic). `SkillsManager` (`src/services/skills/`) and
+> `CustomModesManager` (`src/core/config/`) are **still host-coupled in `src/`** —
+> extending them (steps 1.3, 1.4) either lands in host code or waits on their
+> carve-out. Sequence Phase 1 against the carve-out so plugin discovery doesn't
+> re-couple these subsystems to the VS Code host.
 
 ### Phase 2: Code plugins (existing hooks: tools, prompt, events)
 
