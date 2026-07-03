@@ -1,29 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from "vitest"
-import { Task } from "@shofer/core"
-import { ShoferProvider } from "../../webview/ShoferProvider.js"
-import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "@shofer/core"
-import { MessageManager } from "@shofer/core"
-import * as vscode from "vscode"
-import { getHost, setHost } from "@shofer/types"
-import { installVsCodeForwardingHost } from "../../../host/__tests__/forwarding-host.js"
 
-// Mock vscode
-vi.mock("vscode", () => ({
-	window: {
-		showErrorMessage: vi.fn(),
-		createTextEditorDecorationType: vi.fn(() => ({})),
-		showInformationMessage: vi.fn(),
-	},
-	Uri: {
-		file: vi.fn((path: string) => ({ fsPath: path })),
-		parse: vi.fn((uri: string) => ({ with: vi.fn(() => ({})) })),
-	},
-	commands: {
-		executeCommand: vi.fn(),
-	},
-}))
+import { setHost, createInMemoryHost } from "@shofer/types"
 
-// Mock other dependencies
+import type { Task } from "../../task/Task.js"
+import { checkpointSave, checkpointRestore, checkpointDiff, getCheckpointService } from "../orchestrator.js"
+import { RepoPerTaskCheckpointService } from "../RepoPerTaskCheckpointService.js"
+import { MessageManager } from "../../message-manager/index.js"
+import { getWorkspacePath } from "../../path/path.js"
+import { t } from "../../i18n/index.js"
+
+// Mock the TelemetryService the orchestrator captures events through.
 vi.mock("@shofer/telemetry", () => ({
 	TelemetryService: {
 		instance: {
@@ -34,23 +20,37 @@ vi.mock("@shofer/telemetry", () => ({
 	},
 }))
 
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...(await importOriginal<typeof import("@shofer/core")>()),
-	getWorkspacePath: vi.fn(() => "/test/workspace"),
-	// RepoPerTaskCheckpointService moved into @shofer/core; mock its factory here.
+// The subject collaborates with these siblings via intra-core RELATIVE imports;
+// only a relative mock (not the `@shofer/core` barrel) can intercept those calls.
+vi.mock("../RepoPerTaskCheckpointService.js", () => ({
 	RepoPerTaskCheckpointService: { create: vi.fn() },
-	// checkGitInstalled moved into @shofer/core; mock it here.
-	checkGitInstalled: vi.fn().mockResolvedValue(true),
-	t: vi.fn((key: string, options?: Record<string, any>) => {
-		if (key === "common:errors.wait_checkpoint_long_time") {
-			return `Checkpoint initialization is taking longer than ${options?.timeout} seconds...`
-		}
-		if (key === "common:errors.init_checkpoint_fail_long_time") {
-			return `Checkpoint initialization failed after ${options?.timeout} seconds`
-		}
-		return key
-	}),
 }))
+
+vi.mock("../../path/path.js", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("../../path/path.js")>()
+	return { ...orig, getWorkspacePath: vi.fn(() => "/test/workspace") }
+})
+
+vi.mock("../../utils/git.js", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("../../utils/git.js")>()
+	return { ...orig, checkGitInstalled: vi.fn().mockResolvedValue(true) }
+})
+
+vi.mock("../../i18n/index.js", async (importOriginal) => {
+	const orig = await importOriginal<typeof import("../../i18n/index.js")>()
+	return {
+		...orig,
+		t: vi.fn((key: string, options?: Record<string, any>) => {
+			if (key === "common:errors.wait_checkpoint_long_time") {
+				return `Checkpoint initialization is taking longer than ${options?.timeout} seconds...`
+			}
+			if (key === "common:errors.init_checkpoint_fail_long_time") {
+				return `Checkpoint initialization failed after ${options?.timeout} seconds`
+			}
+			return key
+		}),
+	}
+})
 
 // Mock p-wait-for to control timeout behavior
 vi.mock("p-wait-for", () => ({
@@ -62,15 +62,21 @@ describe("Checkpoint functionality", () => {
 	let mockTask: any
 	let mockCheckpointService: any
 	let mockShowMultiFileDiff: Mock
+	let mockNotifierInfo: Mock
 
 	beforeEach(async () => {
-		installVsCodeForwardingHost()
 		// The multi-file diff now goes through `getHost().editor.showMultiFileDiff`
-		// (the vscode.changes command lives in the VS Code host adapter). Override
-		// the (no-op) editor with a spy so the diff call can be asserted.
+		// and "no changes"/informational messages through `getHost().notifier.info`
+		// (the VS Code UI lives in the host adapter). Override those on an
+		// in-memory host with spies so the calls can be asserted.
 		mockShowMultiFileDiff = vi.fn().mockResolvedValue(undefined)
-		const baseHost = getHost()
-		setHost({ ...baseHost, editor: { ...baseHost.editor, showMultiFileDiff: mockShowMultiFileDiff } })
+		mockNotifierInfo = vi.fn()
+		const baseHost = createInMemoryHost()
+		setHost({
+			...baseHost,
+			editor: { ...baseHost.editor, showMultiFileDiff: mockShowMultiFileDiff },
+			notifier: { info: mockNotifierInfo, warn: vi.fn(), error: vi.fn(), showChoice: vi.fn() } as any,
+		})
 		// Create mock checkpoint service
 		mockCheckpointService = {
 			isInitialized: true,
@@ -114,8 +120,7 @@ describe("Checkpoint functionality", () => {
 		mockTask.messageManager = new MessageManager(mockTask)
 
 		// Update the mock to return our mockCheckpointService
-		const checkpointsModule = await import("@shofer/core")
-		vi.mocked(checkpointsModule.RepoPerTaskCheckpointService.create).mockReturnValue(mockCheckpointService)
+		vi.mocked(RepoPerTaskCheckpointService.create).mockReturnValue(mockCheckpointService)
 	})
 
 	afterEach(() => {
@@ -386,7 +391,7 @@ describe("Checkpoint functionality", () => {
 				mode: "to-current",
 			})
 
-			expect(vscode.window.showInformationMessage).toHaveBeenCalledWith("common:errors.checkpoint_no_changes")
+			expect(mockNotifierInfo).toHaveBeenCalledWith("common:errors.checkpoint_no_changes")
 			expect(mockShowMultiFileDiff).not.toHaveBeenCalled()
 		})
 
@@ -426,20 +431,19 @@ describe("Checkpoint functionality", () => {
 			mockTask.checkpointService = undefined
 			mockTask.checkpointServiceInitializing = false
 
-			const service = getCheckpointService(mockTask)
+			getCheckpointService(mockTask)
 
-			const checkpointsModule = await import("@shofer/core")
-			expect(vi.mocked(checkpointsModule.RepoPerTaskCheckpointService.create)).toHaveBeenCalledWith({
+			expect(vi.mocked(RepoPerTaskCheckpointService.create)).toHaveBeenCalledWith({
 				taskId: "test-task-id",
 				workspaceDir: "/test/workspace",
 				shadowDir: "/test/storage",
+				scopedWorktreeDir: undefined,
 				log: expect.any(Function),
 			})
 		})
 
 		it("should disable checkpoints if workspace path is not found", async () => {
-			const pathModule = await import("@shofer/core")
-			vi.mocked(pathModule.getWorkspacePath).mockReturnValue(null as any)
+			vi.mocked(getWorkspacePath).mockReturnValue(null as any)
 
 			mockTask.checkpointService = undefined
 			mockTask.checkpointServiceInitializing = false
@@ -454,7 +458,6 @@ describe("Checkpoint functionality", () => {
 	describe("getCheckpointService - initialization timeout behavior", () => {
 		it("should send warning message when initialization is slow", async () => {
 			// This test verifies the warning logic by directly testing the condition function behavior
-			const i18nModule = await import("@shofer/core")
 
 			// Setup: Create a scenario where initialization is in progress
 			mockTask.checkpointService = undefined
@@ -473,7 +476,7 @@ describe("Checkpoint functionality", () => {
 					const provider = mockTask.providerRef.deref()
 					provider?.postMessageToWebview({
 						type: "checkpointInitWarning",
-						checkpointWarning: i18nModule.t("common:errors.wait_checkpoint_long_time", { timeout: 5 }),
+						checkpointWarning: t("common:errors.wait_checkpoint_long_time", { timeout: 5 }),
 					})
 				}
 
@@ -498,8 +501,6 @@ describe("Checkpoint functionality", () => {
 		})
 
 		it("should send timeout error message when initialization fails", async () => {
-			const i18nModule = await import("@shofer/core")
-
 			// Setup
 			mockTask.checkpointService = undefined
 			mockTask.checkpointTimeout = 10
@@ -516,7 +517,7 @@ describe("Checkpoint functionality", () => {
 				const provider = mockTask.providerRef.deref()
 				provider?.postMessageToWebview({
 					type: "checkpointInitWarning",
-					checkpointWarning: i18nModule.t("common:errors.init_checkpoint_fail_long_time", {
+					checkpointWarning: t("common:errors.init_checkpoint_fail_long_time", {
 						timeout: mockTask.checkpointTimeout,
 					}),
 				})
@@ -576,15 +577,14 @@ describe("Checkpoint functionality", () => {
 		})
 
 		it("should use correct i18n keys for warning messages", async () => {
-			const i18nModule = await import("@shofer/core")
 			vi.clearAllMocks()
 
 			// Test warning message i18n key
-			const warningMessage = i18nModule.t("common:errors.wait_checkpoint_long_time", { timeout: 5 })
+			const warningMessage = t("common:errors.wait_checkpoint_long_time", { timeout: 5 })
 			expect(warningMessage).toBe("Checkpoint initialization is taking longer than 5 seconds...")
 
 			// Test timeout error message i18n key
-			const errorMessage = i18nModule.t("common:errors.init_checkpoint_fail_long_time", { timeout: 30 })
+			const errorMessage = t("common:errors.init_checkpoint_fail_long_time", { timeout: 30 })
 			expect(errorMessage).toBe("Checkpoint initialization failed after 30 seconds")
 		})
 	})
