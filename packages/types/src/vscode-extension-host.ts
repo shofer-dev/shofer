@@ -19,6 +19,7 @@ import type { ToolGroup } from "./tool.js"
 import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
+import type { ShoferNodesState, ShoferNodeRequest } from "./shofer-node.js"
 
 // Types previously from cloud.ts, now defined inline
 type CloudUserInfo = {
@@ -215,9 +216,13 @@ export interface ExtensionMessage {
 		| "fileContent"
 		| "addContextFiles"
 		| "changedFiles/update"
+		// Shofer Nodes (remote agents) — full nodes snapshot push
+		| "shoferNodes"
 		// Webview health messages
 		| "ping"
 	text?: string
+	/** For `shoferNodes`: registry + live status of every node (no secrets). */
+	shoferNodes?: ShoferNodesState
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
@@ -885,8 +890,12 @@ export interface WebviewMessage {
 		| "requestWorkflowStats"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
+		// Shofer Nodes (remote agents) — registry CRUD + connect/disconnect/test
+		| "shoferNode"
 	text?: string
 	taskId?: string
+	/** For `shoferNode`: the node registry/connection request. */
+	shoferNode?: ShoferNodeRequest
 	/** requestWorkflowStats: the subtree task ids to aggregate stats over. */
 	workflowStatsTaskIds?: string[]
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */

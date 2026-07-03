@@ -29,6 +29,7 @@
 		"providers": "Providers",
 		"modes": "Modes",
 		"mcp": "MCP Servers",
+		"shoferNodes": "Shofer Nodes",
 		"worktrees": "Worktrees",
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",

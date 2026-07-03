@@ -8,6 +8,7 @@ import {
 	FoldVertical,
 	ArrowLeft,
 	Rocket,
+	Server,
 } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
@@ -81,7 +82,9 @@ const TaskHeader = ({
 	isRunning = false,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, parallelTasks } = useExtensionState()
+	const { apiConfiguration, currentTaskItem, parallelTasks, shoferNodes } = useExtensionState()
+	const activeNode = shoferNodes?.nodes.find((n) => n.isActive)
+	const activeRemoteNode = activeNode && activeNode.kind === "remote" ? activeNode : undefined
 	const wfMeta = workflowVizMeta
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
@@ -223,7 +226,18 @@ const TaskHeader = ({
 								</div>
 							)}
 						</div>
-						<div className="flex items-center shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+						<div className="flex items-center shrink-0 ml-2 gap-1.5" onClick={(e) => e.stopPropagation()}>
+							{activeRemoteNode && (
+								<StandardTooltip
+									content={`Executing on remote node: ${activeRemoteNode.label}${
+										activeRemoteNode.agentVersion ? ` (v${activeRemoteNode.agentVersion})` : ""
+									}`}>
+									<span className="flex items-center gap-1 text-xs text-vscode-descriptionForeground">
+										<Server className="size-3" />
+										<span className="truncate max-w-[7rem]">{activeRemoteNode.label}</span>
+									</span>
+								</StandardTooltip>
+							)}
 							<StandardTooltip content={isTaskExpanded ? t("chat:task.collapse") : t("chat:task.expand")}>
 								<button
 									onClick={() => setIsTaskExpanded(!isTaskExpanded)}

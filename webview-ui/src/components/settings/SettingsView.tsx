@@ -25,6 +25,7 @@ import {
 	Glasses,
 	Plug,
 	Server,
+	Network,
 	Users2,
 	ArrowLeft,
 	GitCommitVertical,
@@ -84,6 +85,7 @@ import { ToolsSettings, type ToolsSettingsRef } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
+import { ShoferNodesSettings } from "./ShoferNodesSettings"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
@@ -113,6 +115,7 @@ export const sectionNames = [
 	"codebaseIndex",
 	"modes",
 	"mcp",
+	"shoferNodes",
 	"worktrees",
 	"prompts",
 	"ui",
@@ -663,6 +666,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "autoApprove", icon: CheckCheck },
 			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
+			{ id: "shoferNodes", icon: Network },
 			{ id: "checkpoints", icon: GitCommitVertical },
 			{ id: "liveMemory", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
@@ -1074,6 +1078,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* MCP Section */}
 						{renderTab === "mcp" && <McpView />}
+
+						{/* Shofer Nodes (remote agents) Section */}
+						{renderTab === "shoferNodes" && <ShoferNodesSettings />}
 
 						{/* Worktrees Section */}
 						{renderTab === "worktrees" && <WorktreesView />}

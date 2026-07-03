@@ -17,6 +17,7 @@ import {
 	type McpServer,
 	type VsCodeLmChatInfo,
 	type TaskState,
+	type ShoferNodesState,
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
@@ -69,6 +70,9 @@ export interface ExtensionStateContextType extends ExtensionState {
 	publicSharingEnabled: boolean
 	mdmCompliant?: boolean
 	hasOpenedModeSelector: boolean // New property to track if user has opened mode selector
+	// Shofer Nodes (remote agents) — registry + live status pushed by the extension.
+	// Undefined until the (v3-native) backend populates it; UI renders empty state.
+	shoferNodes?: ShoferNodesState
 	// Parallel task management
 	parallelTasks: ManagedTask[]
 	focusedTaskId: string | null
@@ -357,6 +361,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [worktreeExplicitOptOut, setWorktreeExplicitOptOut] = useState(false)
 	const [pendingWorkflowName, setPendingWorkflowName] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
+	// Shofer Nodes snapshot pushed by the extension (undefined until a backend sends it).
+	const [shoferNodes, setShoferNodes] = useState<ShoferNodesState | undefined>(undefined)
 
 	const setListApiConfigMeta = useCallback(
 		(value: ProviderSettingsEntry[]) => setState((prevState) => ({ ...prevState, listApiConfigMeta: value })),
@@ -677,6 +683,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					}))
 					break
 				}
+				case "shoferNodes": {
+					setShoferNodes(message.shoferNodes)
+					break
+				}
 			}
 		},
 		[setListApiConfigMeta, state.apiConfiguration?.apiProvider],
@@ -867,10 +877,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			parallelTasks: state.parallelTasks ?? [],
 			focusedTaskId: state.focusedTaskId ?? null,
 			taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
+			// Shofer Nodes (remote agents)
+			shoferNodes,
 		}),
 		[
 			state,
 			didHydrateState,
+			shoferNodes,
 			showWelcome,
 			theme,
 			mcpServers,
