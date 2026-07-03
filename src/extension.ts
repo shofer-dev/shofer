@@ -549,7 +549,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	}
 
-	return new API(outputChannel, provider, socketPath, enableLogging)
+	const api = new API(outputChannel, provider, socketPath, enableLogging)
+
+	// Shofer Nodes: attach the controller-side registry now that the live ShoferAPI
+	// exists. It owns the executor pool (Local + remote nodes) and pushes node
+	// status to the webview; the Local node is driven through this API.
+	provider.initNodeRegistry(api, Package.version)
+
+	return api
 }
 
 // This method is called when your extension is deactivated.

@@ -600,6 +600,8 @@ export type ExtensionState = Pick<
 	taskSyncEnabled: boolean
 	openAiCodexIsAuthenticated?: boolean
 	debug?: boolean
+	/** Shofer Nodes registry + live status (Local + remotes) for cold-load render. */
+	shoferNodes?: ShoferNodesState
 }
 
 export interface Command {

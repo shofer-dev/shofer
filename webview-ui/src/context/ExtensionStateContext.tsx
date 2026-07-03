@@ -439,6 +439,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						return merged
 					})
 					setShowWelcome(!checkExistKey(newState.apiConfiguration))
+					// Shofer Nodes live in their own state slice; hydrate them from the
+					// cold-load snapshot so the Nodes UI renders before the first
+					// dedicated `shoferNodes` push.
+					if (newState.shoferNodes) setShoferNodes(newState.shoferNodes)
 					setDidHydrateState(true)
 					break
 				}

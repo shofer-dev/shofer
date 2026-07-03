@@ -37,6 +37,8 @@ import {
 	type ToolUsage,
 	type ExtensionMessage,
 	type ExtensionState,
+	type ShoferAPI,
+	type ShoferNodesState,
 	type MarketplaceInstalledMetadata,
 	ShoferEventName,
 	requestyDefaultModelId,
@@ -49,6 +51,7 @@ import {
 	isRetiredProvider,
 } from "@shofer/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "@shofer/core"
+import { NodeRegistry } from "../nodes/NodeRegistry"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "@shofer/core"
@@ -193,6 +196,8 @@ export class ShoferProvider
 	private recentTasksCache?: string[]
 	public readonly taskHistoryStore: TaskHistoryStore
 	public readonly taskManager: TaskManager
+	/** Shofer Nodes registry (Local + remote executors). Set post-construction via {@link initNodeRegistry}. */
+	public nodeRegistry?: NodeRegistry
 	private taskHistoryStoreInitialized = false
 	private globalStateWriteThroughTimer: ReturnType<typeof setTimeout> | null = null
 	private static readonly GLOBAL_STATE_WRITE_THROUGH_DEBOUNCE_MS = 5000 // 5 seconds
@@ -1992,6 +1997,32 @@ export class ShoferProvider
 	}
 
 	// ------------------------------------------------------------------
+	// Shofer Nodes registry (Local + remote executors).
+	// ------------------------------------------------------------------
+
+	/**
+	 * Attach the Shofer Nodes registry. Called by the extension once the live
+	 * {@link ShoferAPI} exists (the registry drives the Local node through it).
+	 * Idempotent: a second call is ignored so re-activation can't double-register.
+	 */
+	public initNodeRegistry(localApi: ShoferAPI, controllerVersion: string): void {
+		if (this.nodeRegistry) return
+		const registry = new NodeRegistry({ context: this.context, localApi, controllerVersion })
+		this.nodeRegistry = registry
+		registry.onChange(() => {
+			void this.pushShoferNodesState()
+		})
+		void registry.init()
+	}
+
+	/** Push the current Shofer Nodes state (registry + live status, no secrets) to the webview. */
+	public async pushShoferNodesState(): Promise<void> {
+		const shoferNodes = this.nodeRegistry?.getState()
+		if (!shoferNodes) return
+		await this.postMessageToWebview({ type: "shoferNodes", shoferNodes })
+	}
+
+	// ------------------------------------------------------------------
 	// FileChangesPanel push notifications.
 	//
 	// Every Shofer edit triggers a debounced refresh of the
@@ -3762,6 +3793,7 @@ export class ShoferProvider
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
+			shoferNodes: this.nodeRegistry?.getState(),
 			apiConfiguration,
 			// editingApiConfiguration is intentionally NOT seeded here: it's a
 			// webview-only edit buffer set via a targeted configUpdate when the

@@ -1054,6 +1054,13 @@ export const webviewMessageHandler = async (
 				await provider.postInitState()
 			}
 			break
+		case "shoferNode":
+			// Shofer Nodes registry request (list/upsert/remove/connect/disconnect/setDisabled).
+			if (message.shoferNode) {
+				await provider.nodeRegistry?.handleRequest(message.shoferNode)
+				await provider.pushShoferNodesState()
+			}
+			break
 		case "clearTask":
 			// Clear task resets the current task.
 			await provider.clearTask()
