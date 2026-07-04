@@ -6,6 +6,7 @@ import matter from "gray-matter"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "@shofer/core"
 import { directoryExists, fileExists } from "@shofer/core"
+import { getSharedPluginManager } from "@shofer/core"
 import { SkillMetadata, SkillContent } from "@shofer/types"
 import { modes, getAllModes } from "@shofer/core"
 import {
@@ -45,8 +46,8 @@ export class SkillsManager {
 		this.skills.clear()
 		const skillsDirs = await this.getSkillsDirectories()
 
-		for (const { dir, source, mode } of skillsDirs) {
-			await this.scanSkillsDirectory(dir, source, mode)
+		for (const { dir, source, mode, pluginName } of skillsDirs) {
+			await this.scanSkillsDirectory(dir, source, mode, pluginName)
 		}
 	}
 
@@ -56,7 +57,12 @@ export class SkillsManager {
 	 * 1. The skills directory itself is a symlink (resolved by directoryExists using realpath)
 	 * 2. Individual skill subdirectories are symlinks
 	 */
-	private async scanSkillsDirectory(dirPath: string, source: "global" | "project", mode?: string): Promise<void> {
+	private async scanSkillsDirectory(
+		dirPath: string,
+		source: "global" | "project" | "plugin",
+		mode?: string,
+		pluginName?: string,
+	): Promise<void> {
 		if (!(await directoryExists(dirPath))) {
 			return
 		}
@@ -76,7 +82,7 @@ export class SkillsManager {
 				if (!stats?.isDirectory()) continue
 
 				// Load skill metadata - the skill name comes from the entry name (symlink name if symlinked)
-				await this.loadSkillMetadata(entryPath, source, mode, entryName)
+				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName)
 			}
 		} catch {
 			// Directory doesn't exist or can't be read - this is fine
@@ -92,9 +98,10 @@ export class SkillsManager {
 	 */
 	private async loadSkillMetadata(
 		skillDir: string,
-		source: "global" | "project",
+		source: "global" | "project" | "plugin",
 		mode?: string,
 		skillName?: string,
+		pluginName?: string,
 	): Promise<void> {
 		const skillMdPath = path.join(skillDir, "SKILL.md")
 		if (!(await fileExists(skillMdPath))) return
@@ -161,13 +168,14 @@ export class SkillsManager {
 			// Create unique key combining name, source, and modeSlugs for override resolution
 			// For backward compatibility, use first mode slug or undefined for the key
 			const primaryMode = modeSlugs?.[0]
-			const skillKey = this.getSkillKey(effectiveSkillName, source, primaryMode)
+			const skillKey = this.getSkillKey(effectiveSkillName, source, primaryMode, pluginName)
 
 			this.skills.set(skillKey, {
 				name: effectiveSkillName,
 				description,
 				path: skillMdPath,
 				source,
+				pluginName, // Set only for plugin-contributed skills (attribution)
 				mode: primaryMode, // Deprecated: kept for backward compatibility
 				modeSlugs, // New: array of mode slugs, undefined = any mode
 			})
@@ -228,8 +236,9 @@ export class SkillsManager {
 	 * Priority: project > global, mode-specific > generic
 	 */
 	private shouldOverrideSkill(existing: SkillMetadata, newSkill: SkillMetadata): boolean {
-		// Define source priority: project > global
+		// Define source priority: plugin > project > global (design §6.4).
 		const sourcePriority: Record<string, number> = {
+			plugin: 3,
 			project: 2,
 			global: 1,
 		}
@@ -576,11 +585,17 @@ Add your skill instructions here.
 	private async getSkillsDirectories(): Promise<
 		Array<{
 			dir: string
-			source: "global" | "project"
+			source: "global" | "project" | "plugin"
 			mode?: string
+			pluginName?: string
 		}>
 	> {
-		const dirs: Array<{ dir: string; source: "global" | "project"; mode?: string }> = []
+		const dirs: Array<{
+			dir: string
+			source: "global" | "project" | "plugin"
+			mode?: string
+			pluginName?: string
+		}> = []
 		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
 		const provider = this.providerRef.deref()
@@ -619,11 +634,22 @@ Add your skill instructions here.
 			dirs.push({ dir: path.join(globalShoferDir, `skills-${mode}`), source: "global", mode })
 		}
 
-		// Project .shofer directories (highest priority)
+		// Project .shofer directories (highest priority among file sources)
 		if (projectRooDir) {
 			dirs.push({ dir: path.join(projectRooDir, "skills"), source: "project" })
 			for (const mode of modesList) {
 				dirs.push({ dir: path.join(projectRooDir, `skills-${mode}`), source: "project", mode })
+			}
+		}
+
+		// Plugin-contributed skills (design §6.4 — highest precedence). Each enabled
+		// plugin ships a `<root>/skills/` directory scanned like any other; mode
+		// scoping comes from each SKILL.md's frontmatter. Empty when no plugin
+		// manager is wired or no plugins are enabled ⇒ behavior unchanged.
+		const pluginManager = getSharedPluginManager()
+		if (pluginManager) {
+			for (const { pluginName, dir } of pluginManager.getContributedSkillDirs()) {
+				dirs.push({ dir, source: "plugin", pluginName })
 			}
 		}
 
@@ -650,8 +676,11 @@ Add your skill instructions here.
 		}
 	}
 
-	private getSkillKey(name: string, source: string, mode?: string): string {
-		return `${source}:${mode || "generic"}:${name}`
+	private getSkillKey(name: string, source: string, mode?: string, pluginName?: string): string {
+		// Plugin skills include the plugin name so two plugins can each ship a
+		// same-named skill without their discovery keys colliding.
+		const scope = source === "plugin" && pluginName ? `plugin:${pluginName}` : source
+		return `${scope}:${mode || "generic"}:${name}`
 	}
 
 	private async setupFileWatchers(): Promise<void> {

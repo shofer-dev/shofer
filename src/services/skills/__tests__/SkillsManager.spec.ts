@@ -108,6 +108,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 
 import { SkillsManager } from "../SkillsManager"
 import { ShoferProvider } from "../../../core/webview/ShoferProvider"
+import { setSharedPluginManager } from "@shofer/core"
 
 describe("SkillsManager", () => {
 	let skillsManager: SkillsManager
@@ -1751,6 +1752,60 @@ Instructions`)
 
 			// Verify directory was NOT cleaned up (still has other skills)
 			expect(mockRmdir).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("plugin-contributed skills (Phase 1)", () => {
+		const pluginSkillsDir = p(PROJECT_DIR, ".shofer", "plugins", "my-plugin", "skills")
+		const deploySkillDir = p(pluginSkillsDir, "deploy-skill")
+		const deploySkillMd = p(deploySkillDir, "SKILL.md")
+
+		afterEach(() => {
+			setSharedPluginManager(undefined)
+		})
+
+		it("discovers a skill from an enabled plugin, tagged source=plugin", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [{ pluginName: "my-plugin", dir: pluginSkillsDir }],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) =>
+				dir === pluginSkillsDir ? ["deploy-skill"] : [],
+			)
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) {
+					return `---
+name: deploy-skill
+description: Deploy the current branch to staging
+---
+Deploy instructions`
+				}
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			const skills = skillsManager.getAllSkills()
+			expect(skills).toHaveLength(1)
+			expect(skills[0]).toMatchObject({
+				name: "deploy-skill",
+				source: "plugin",
+				pluginName: "my-plugin",
+			})
+		})
+
+		it("contributes nothing when no plugin manager is wired", async () => {
+			mockDirectoryExists.mockResolvedValue(false)
+			mockReaddir.mockResolvedValue([])
+			await skillsManager.discoverSkills()
+			expect(skillsManager.getAllSkills()).toHaveLength(0)
 		})
 	})
 })
