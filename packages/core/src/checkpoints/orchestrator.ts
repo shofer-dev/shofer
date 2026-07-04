@@ -1,7 +1,7 @@
 import pWaitFor from "p-wait-for"
 import { getHost } from "@shofer/types"
 
-import type { CheckpointDiffOptions, CheckpointRestoreOptions, ShoferApiReqInfo } from "@shofer/types"
+import type { CheckpointDiff, CheckpointDiffOptions, CheckpointRestoreOptions, ShoferApiReqInfo } from "@shofer/types"
 
 // Re-export the plain option types (relocated to `@shofer/types`) so existing
 // `../checkpoints/index.js` importers (e.g. Task.ts) keep resolving them here.
@@ -301,12 +301,31 @@ export async function checkpointRestore(
 	}
 }
 
+/**
+ * The outcome of resolving + computing a checkpoint diff, WITHOUT touching the
+ * host UI: either the resolved `{ title, changes }` or a `notice` i18n key naming
+ * why there's nothing to show. Split out of {@link checkpointDiff} so a remote
+ * executor can compute the per-file changes (shipping them over the control plane
+ * for the controller to render) instead of calling `showMultiFileDiff` locally.
+ * `undefined` means checkpoints are unavailable (service disabled).
+ */
+export type CheckpointDiffComputed =
+	| { title: string; changes: CheckpointDiff[]; notice?: undefined }
+	| {
+			title?: undefined
+			changes?: undefined
+			notice: "checkpoint_no_first" | "checkpoint_no_previous" | "checkpoint_no_changes"
+	  }
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function checkpointDiff(task: Task, { ts, previousCommitHash, commitHash, mode }: CheckpointDiffOptions) {
+export async function computeCheckpointDiff(
+	task: Task,
+	{ ts, previousCommitHash, commitHash, mode }: CheckpointDiffOptions,
+): Promise<CheckpointDiffComputed | undefined> {
 	const service = await getCheckpointService(task)
 
 	if (!service) {
-		return
+		return undefined
 	}
 
 	TelemetryService.instance.captureCheckpointDiffed(task.taskId)
@@ -318,8 +337,7 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	const checkpoints = task.shoferMessages.filter(({ say }) => say === "checkpoint_saved").map(({ text }) => text!)
 
 	if (["from-init", "full"].includes(mode) && checkpoints.length < 1) {
-		getHost().notifier.info(t("common:errors.checkpoint_no_first"))
-		return
+		return { notice: "checkpoint_no_first" }
 	}
 
 	const idx = checkpoints.indexOf(commitHash)
@@ -347,19 +365,29 @@ export async function checkpointDiff(task: Task, { ts, previousCommitHash, commi
 	}
 
 	if (!fromHash) {
-		getHost().notifier.info(t("common:errors.checkpoint_no_previous"))
-		return
+		return { notice: "checkpoint_no_previous" }
 	}
 
-	try {
-		const changes = await service.getDiff({ from: fromHash, to: toHash })
+	const changes = await service.getDiff({ from: fromHash, to: toHash })
 
-		if (!changes?.length) {
-			getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
+	if (!changes?.length) {
+		return { notice: "checkpoint_no_changes" }
+	}
+
+	return { title, changes }
+}
+
+export async function checkpointDiff(task: Task, options: CheckpointDiffOptions) {
+	try {
+		const computed = await computeCheckpointDiff(task, options)
+		if (computed === undefined) {
+			return // checkpoints unavailable
+		}
+		if (computed.notice) {
+			getHost().notifier.info(t(`common:errors.${computed.notice}`))
 			return
 		}
-
-		await getHost().editor.showMultiFileDiff(title, changes)
+		await getHost().editor.showMultiFileDiff(computed.title, computed.changes)
 	} catch (err) {
 		checkpointLog.warn("[checkpointDiff] disabling checkpoints for this task", err)
 		task.enableCheckpoints = false

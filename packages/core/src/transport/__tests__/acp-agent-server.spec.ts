@@ -12,6 +12,14 @@ function makeApi() {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		getCheckpointDiff: vi.fn(async () => []),
+		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
+		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
+		restoreCheckpoint: vi.fn(async () => {}),
+		revertChangedFile: vi.fn(async () => {}),
+		revertAllChangedFiles: vi.fn(async () => {}),
+		acceptChangedFile: vi.fn(async () => {}),
+		acceptAllChangedFiles: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {}

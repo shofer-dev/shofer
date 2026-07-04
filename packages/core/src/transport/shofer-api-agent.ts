@@ -1,6 +1,14 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type { AgentApi, AskResponse, ServerEvent } from "@shofer/types"
+import type {
+	AgentApi,
+	AskResponse,
+	ChangedFilesPayload,
+	CheckpointDiffEntry,
+	CheckpointDiffOptions,
+	CheckpointRestoreOptions,
+	ServerEvent,
+} from "@shofer/types"
 
 /**
  * Live {@link AgentApi} backed by the in-process {@link ShoferAPI} (§11).
@@ -49,6 +57,40 @@ export class ShoferApiAgent implements AgentApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.api.respondToAsk(taskId, response)
+	}
+
+	// ── Reverse data channel (Shofer Nodes L3) — delegate to the in-process API ──
+
+	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
+		return this.api.getCheckpointDiff(taskId, opts)
+	}
+
+	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
+		return this.api.getTaskChangedFiles(taskId)
+	}
+
+	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
+		return this.api.getChangedFileDiff(taskId, relPath)
+	}
+
+	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
+		await this.api.restoreCheckpoint(taskId, opts)
+	}
+
+	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.api.revertChangedFile(taskId, relPath)
+	}
+
+	async revertAllChangedFiles(taskId: string): Promise<void> {
+		await this.api.revertAllChangedFiles(taskId)
+	}
+
+	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.api.acceptChangedFile(taskId, relPath)
+	}
+
+	async acceptAllChangedFiles(taskId: string): Promise<void> {
+		await this.api.acceptAllChangedFiles(taskId)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

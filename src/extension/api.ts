@@ -15,6 +15,10 @@ import {
 	type TaskEvent,
 	type CreateTaskOptions,
 	type HistoryItem,
+	type CheckpointDiffEntry,
+	type CheckpointDiffOptions,
+	type CheckpointRestoreOptions,
+	type ChangedFilesPayload,
 	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
@@ -24,6 +28,16 @@ import {
 import { IpcServer } from "@shofer/ipc"
 
 import { Package } from "@shofer/core"
+import {
+	computeCheckpointDiff,
+	getChangedFiles,
+	getOriginalContent,
+	getFinalContent,
+	restoreFile,
+	restoreAll,
+	acceptFile,
+	acceptAll,
+} from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "@shofer/core"
@@ -33,6 +47,28 @@ import { getRecentLogs, getLogLevel, getLogKnownCategories } from "@shofer/core"
 import { buildJsonTrace } from "../integrations/misc/export-json"
 import { formatContentBlockToMarkdown, getTaskFileName } from "../integrations/misc/export-markdown"
 import { createWorkflowTask, discoverWorkflows } from "../core/workflow/index"
+
+/** Max per-file content bytes to ship in a remote checkpoint diff (larger → skipped). */
+const L3_MAX_DIFF_FILE_BYTES = 512 * 1024
+
+/**
+ * Bound a checkpoint diff for the control plane: drop binary files (NUL byte in
+ * before/after) and oversized files so the wire frame stays small. The controller
+ * renders whatever survives — the same shape {@link import("@shofer/types").HostEditor.showMultiFileDiff}
+ * consumes.
+ */
+function boundCheckpointDiff(changes: CheckpointDiffEntry[]): CheckpointDiffEntry[] {
+	return changes.filter((c) => {
+		const before = c.content.before ?? ""
+		const after = c.content.after ?? ""
+		const NUL = String.fromCharCode(0) // a NUL byte marks binary content
+		if (before.includes(NUL) || after.includes(NUL)) return false
+		return (
+			Buffer.byteLength(before, "utf8") <= L3_MAX_DIFF_FILE_BYTES &&
+			Buffer.byteLength(after, "utf8") <= L3_MAX_DIFF_FILE_BYTES
+		)
+	})
+}
 
 export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	private readonly outputChannel: vscode.OutputChannel
@@ -414,6 +450,75 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			response.images,
 			response.askId,
 		)
+	}
+
+	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────
+	// Executor side: resolve the managed task by id and drive the SAME in-process
+	// checkpoint/changed-files service a local task uses, so a controller can
+	// render/operate a remote task's diffs over the control plane.
+
+	/** Resolve a managed Task instance by id (else the current task) for L3 ops. */
+	private resolveTaskForL3(taskId: string, op: string) {
+		const task = this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
+		if (!task) this.log(`[API#${op}] no task for ${taskId}`)
+		return task
+	}
+
+	public async getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
+		const task = this.resolveTaskForL3(taskId, "getCheckpointDiff")
+		if (!task) return []
+		const computed = await computeCheckpointDiff(task, opts)
+		// Only the resolved `{ changes }` shape carries entries; a notice / no-service
+		// result yields an empty diff (the controller surfaces the "no changes" notice).
+		if (!computed || computed.notice) return []
+		// Bound the payload: skip binary + oversized files (their content would bloat
+		// or corrupt the wire frame). The controller renders the remainder.
+		return boundCheckpointDiff(computed.changes)
+	}
+
+	public async getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
+		const task = this.resolveTaskForL3(taskId, "getTaskChangedFiles")
+		if (!task) return { taskId, entries: [], backend: "none" }
+		return getChangedFiles(task)
+	}
+
+	public async getChangedFileDiff(
+		taskId: string,
+		relPath: string,
+	): Promise<{ original: string | null; final: string | null }> {
+		const task = this.resolveTaskForL3(taskId, "getChangedFileDiff")
+		if (!task) return { original: null, final: null }
+		return { original: await getOriginalContent(task, relPath), final: await getFinalContent(task, relPath) }
+	}
+
+	public async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
+		const task = this.resolveTaskForL3(taskId, "restoreCheckpoint")
+		if (!task) return
+		await task.checkpointRestore(opts)
+	}
+
+	public async revertChangedFile(taskId: string, relPath: string): Promise<void> {
+		const task = this.resolveTaskForL3(taskId, "revertChangedFile")
+		if (!task) return
+		await restoreFile(task, relPath)
+	}
+
+	public async revertAllChangedFiles(taskId: string): Promise<void> {
+		const task = this.resolveTaskForL3(taskId, "revertAllChangedFiles")
+		if (!task) return
+		await restoreAll(task)
+	}
+
+	public async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
+		const task = this.resolveTaskForL3(taskId, "acceptChangedFile")
+		if (!task) return
+		await acceptFile(task, relPath)
+	}
+
+	public async acceptAllChangedFiles(taskId: string): Promise<void> {
+		const task = this.resolveTaskForL3(taskId, "acceptAllChangedFiles")
+		if (!task) return
+		await acceptAll(task)
 	}
 
 	public deleteQueuedMessage(messageId: string) {

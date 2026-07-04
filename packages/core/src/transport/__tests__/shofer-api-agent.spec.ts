@@ -17,6 +17,14 @@ describe("ShoferApiAgent (§11)", () => {
 			sendMessage: vi.fn(async () => {}),
 			cancelCurrentTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
+			getCheckpointDiff: vi.fn(async () => [{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } }]),
+			getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" })),
+			getChangedFileDiff: vi.fn(async () => ({ original: "o", final: "f" })),
+			restoreCheckpoint: vi.fn(async () => {}),
+			revertChangedFile: vi.fn(async () => {}),
+			revertAllChangedFiles: vi.fn(async () => {}),
+			acceptChangedFile: vi.fn(async () => {}),
+			acceptAllChangedFiles: vi.fn(async () => {}),
 		}) as unknown as ShoferAPI & EventEmitter
 		return api
 	}
@@ -53,6 +61,35 @@ describe("ShoferApiAgent (§11)", () => {
 			askResponse: "yesButtonClicked",
 			askId: "a1",
 		})
+	})
+
+	it("L3 reverse-data-channel methods delegate 1:1 to the in-process ShoferAPI", async () => {
+		const api = makeApi()
+		const agent = new ShoferApiAgent(api)
+		const rec = api as unknown as Record<string, ReturnType<typeof vi.fn>>
+
+		expect(await agent.getCheckpointDiff("t1", { commitHash: "c1", mode: "checkpoint" })).toEqual([
+			{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } },
+		])
+		expect(rec.getCheckpointDiff).toHaveBeenCalledWith("t1", { commitHash: "c1", mode: "checkpoint" })
+
+		expect(await agent.getChangedFileDiff("t1", "a.ts")).toEqual({ original: "o", final: "f" })
+		expect(rec.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")
+
+		await agent.getTaskChangedFiles("t1")
+		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("t1")
+
+		await agent.restoreCheckpoint("t1", { ts: 1, commitHash: "c1", mode: "restore" })
+		expect(rec.restoreCheckpoint).toHaveBeenCalledWith("t1", { ts: 1, commitHash: "c1", mode: "restore" })
+
+		await agent.revertChangedFile("t1", "a.ts")
+		expect(rec.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
+		await agent.revertAllChangedFiles("t1")
+		expect(rec.revertAllChangedFiles).toHaveBeenCalledWith("t1")
+		await agent.acceptChangedFile("t1", "a.ts")
+		expect(rec.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
+		await agent.acceptAllChangedFiles("t1")
+		expect(rec.acceptAllChangedFiles).toHaveBeenCalledWith("t1")
 	})
 
 	it("subscribe forwards ShoferAPI events and unsubscribes", () => {
