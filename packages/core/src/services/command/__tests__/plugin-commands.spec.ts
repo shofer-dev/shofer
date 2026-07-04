@@ -28,13 +28,15 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockFs.stat = vi.fn().mockResolvedValue({ isDirectory: () => true })
-		mockFs.readdir = vi.fn(async (dir: any) => (dir === PLUGIN_DIR ? [dirent("deploy.md", PLUGIN_DIR)] : []))
+		mockFs.readdir = vi.fn(async (dir: any) =>
+			dir === PLUGIN_DIR ? [dirent("deploy.md", PLUGIN_DIR)] : [],
+		) as any
 		mockFs.readFile = vi.fn(async (file: any) => {
 			if (file === DEPLOY_MD) {
 				return `---\ndescription: Deploy the current project\nargument-hint: <environment>\n---\nDeploy body`
 			}
 			throw new Error("File not found")
-		})
+		}) as any
 		setSharedPluginManager({
 			getContributedCommandDirs: () => [{ pluginName: "my-plugin", dir: PLUGIN_DIR }],
 		} as any)
