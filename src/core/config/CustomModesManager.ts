@@ -1034,6 +1034,15 @@ export class CustomModesManager {
 		this.cachedAt = 0
 	}
 
+	/**
+	 * Invalidate the merged-modes cache so the next {@link getCustomModes} re-reads
+	 * files and re-merges plugin-contributed modes. Used after a plugin is
+	 * enabled/disabled so mode changes surface immediately rather than after the TTL.
+	 */
+	public invalidateCache(): void {
+		this.clearCache()
+	}
+
 	dispose(): void {
 		for (const disposable of this.disposables) {
 			disposable.dispose()

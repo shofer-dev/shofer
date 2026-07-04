@@ -7,7 +7,9 @@ import { openFile } from "../../integrations/misc/open-file"
 import { t } from "@shofer/core"
 import { webviewLog } from "@shofer/core"
 
-type SkillSource = SkillMetadata["source"]
+// These handlers only create/delete/move/edit *user* skills; plugin-contributed
+// skills are read-only, so the writable source set excludes "plugin".
+type SkillSource = Exclude<SkillMetadata["source"], "plugin">
 
 /**
  * Handles the requestSkills message - returns all skills metadata

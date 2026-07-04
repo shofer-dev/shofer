@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check } from "lucide-react"
+import { GraduationCap, ChevronDown, Globe, FolderGit2, ExternalLink, Check, Blocks } from "lucide-react"
 
 import type { SkillMetadata } from "@shofer/types"
 
@@ -16,6 +16,7 @@ import { vscode } from "@/utils/vscode"
 const SOURCE_ICONS: Record<SkillMetadata["source"], React.ElementType> = {
 	project: FolderGit2,
 	global: Globe,
+	plugin: Blocks,
 }
 
 /**

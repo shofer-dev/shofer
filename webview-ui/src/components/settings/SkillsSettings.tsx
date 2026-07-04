@@ -71,16 +71,18 @@ export const SkillsSettings: React.FC = () => {
 	}, [])
 
 	const handleDeleteConfirm = useCallback(() => {
-		if (skillToDelete) {
+		// Plugin-contributed skills are read-only (owned by the plugin); only
+		// user global/project skills can be deleted here.
+		if (skillToDelete && skillToDelete.source !== "plugin") {
 			vscode.postMessage({
 				type: "deleteSkill",
 				skillName: skillToDelete.name,
 				source: skillToDelete.source,
 				skillModeSlugs: skillToDelete.modeSlugs,
 			})
-			setDeleteDialogOpen(false)
-			setSkillToDelete(null)
 		}
+		setDeleteDialogOpen(false)
+		setSkillToDelete(null)
 	}, [skillToDelete])
 
 	const handleDeleteCancel = useCallback(() => {
@@ -89,6 +91,7 @@ export const SkillsSettings: React.FC = () => {
 	}, [])
 
 	const handleEditClick = useCallback((skill: SkillMetadata) => {
+		if (skill.source === "plugin") return // Plugin skills are read-only.
 		vscode.postMessage({
 			type: "openSkillFile",
 			skillName: skill.name,
@@ -136,7 +139,7 @@ export const SkillsSettings: React.FC = () => {
 
 	// Save mode changes
 	const handleSaveModes = useCallback(() => {
-		if (skillToEditModes) {
+		if (skillToEditModes && skillToEditModes.source !== "plugin") {
 			const newModeSlugs = isAnyMode ? undefined : selectedModes.length > 0 ? selectedModes : undefined
 			vscode.postMessage({
 				type: "updateSkillModes",

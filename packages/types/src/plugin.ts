@@ -229,3 +229,38 @@ export const pluginManifestSchema = z
 	.strict()
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
+
+// ---------------------------------------------------------------------------
+// UI-facing plugin types (Settings → Plugins tab, design §12)
+// ---------------------------------------------------------------------------
+
+/** Per-kind counts of a plugin's declarative contributions (for the UI summary). */
+export interface PluginContributionSummary {
+	modes: number
+	skills: number
+	commands: number
+	mcpServers: number
+	rules: number
+}
+
+/** A discovered plugin as shown in the Plugins settings tab (no secrets). */
+export interface PluginView {
+	name: string
+	version: string
+	description?: string
+	scope: "global" | "project"
+	enabled: boolean
+	/** Whether the plugin ships a code entry point (`main`). Not loaded in Phase 1. */
+	hasCode: boolean
+	contributionCounts: PluginContributionSummary
+}
+
+/** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */
+export interface PluginsState {
+	plugins: PluginView[]
+}
+
+/** Webview → extension request (carried in `WebviewMessage.plugin`). */
+export type PluginRequest =
+	| { action: "list" }
+	| { action: "setEnabled"; name: string; enabled: boolean }

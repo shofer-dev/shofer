@@ -20,6 +20,7 @@ import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
 import type { ShoferNodesState, ShoferNodeRequest } from "./shofer-node.js"
+import type { PluginsState, PluginRequest } from "./plugin.js"
 
 // Types previously from cloud.ts, now defined inline
 type CloudUserInfo = {
@@ -218,11 +219,15 @@ export interface ExtensionMessage {
 		| "changedFiles/update"
 		// Shofer Nodes (remote agents) — full nodes snapshot push
 		| "shoferNodes"
+		// Plugins (Settings → Plugins tab) — discovered plugins snapshot push
+		| "plugins"
 		// Webview health messages
 		| "ping"
 	text?: string
 	/** For `shoferNodes`: registry + live status of every node (no secrets). */
 	shoferNodes?: ShoferNodesState
+	/** For `plugins`: discovered plugins + enabled state (design §12). */
+	plugins?: PluginsState
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
@@ -303,7 +308,12 @@ export interface ExtensionMessage {
 	promptText?: string
 	results?:
 		| { path: string; type: "file" | "folder"; label?: string }[]
-		| { name: string; description?: string; argumentHint?: string; source: "global" | "project" | "built-in" }[]
+		| {
+				name: string
+				description?: string
+				argumentHint?: string
+				source: "global" | "project" | "built-in" | "plugin"
+		  }[]
 	error?: string
 	setting?: string
 	value?: any // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -606,10 +616,12 @@ export type ExtensionState = Pick<
 
 export interface Command {
 	name: string
-	source: "global" | "project" | "built-in"
+	source: "global" | "project" | "built-in" | "plugin"
 	filePath?: string
 	description?: string
 	argumentHint?: string
+	/** When source === "plugin", the contributing plugin's name (attribution). */
+	pluginName?: string
 }
 
 /**
@@ -894,10 +906,14 @@ export interface WebviewMessage {
 		| "pushMetrics"
 		// Shofer Nodes (remote agents) — registry CRUD + connect/disconnect/test
 		| "shoferNode"
+		// Plugins (Settings → Plugins tab) — list + enable/disable
+		| "plugin"
 	text?: string
 	taskId?: string
 	/** For `shoferNode`: the node registry/connection request. */
 	shoferNode?: ShoferNodeRequest
+	/** For `plugin`: list / enable-disable request (design §12). */
+	plugin?: PluginRequest
 	/** requestWorkflowStats: the subtree task ids to aggregate stats over. */
 	workflowStatsTaskIds?: string[]
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */

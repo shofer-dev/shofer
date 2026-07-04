@@ -79,6 +79,8 @@ import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
 
 import { McpHub } from "@shofer/core"
+import { PluginManager, createNodePluginFs, setSharedPluginManager, getGlobalShoferDirectory } from "@shofer/core"
+import type { PluginRequest, PluginView, PluginsState } from "@shofer/types"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
@@ -167,6 +169,8 @@ export class ShoferProvider
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
+	/** Declarative plugin manager (design §7). Lazily built via {@link getPluginManager}. */
+	private pluginManager?: PluginManager
 	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
 	/**
@@ -1184,6 +1188,10 @@ export class ShoferProvider
 		this.mcpHub = undefined
 		await this.skillsManager?.dispose()
 		this.skillsManager = undefined
+		if (this.pluginManager) {
+			setSharedPluginManager(undefined)
+			this.pluginManager = undefined
+		}
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 
@@ -2050,6 +2058,67 @@ export class ShoferProvider
 		const shoferNodes = this.nodeRegistry?.getState()
 		if (!shoferNodes) return
 		await this.postMessageToWebview({ type: "shoferNodes", shoferNodes })
+	}
+
+	/**
+	 * Lazily construct the declarative {@link PluginManager} (design §7) and install
+	 * it as the process-wide shared instance so core subsystems (McpHub, command
+	 * service) and src subsystems (SkillsManager, CustomModesManager) pick up plugin
+	 * contributions. Scans `~/.shofer/plugins` (global) and `<cwd>/.shofer/plugins`
+	 * (project); enabled state is persisted in globalState.
+	 */
+	public async getPluginManager(): Promise<PluginManager> {
+		if (this.pluginManager) return this.pluginManager
+		const stateKey = "shofer.plugins.enabledPlugins"
+		const cwd = this.cwd
+		const pluginDirs = [
+			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
+			...(cwd ? [{ dir: path.join(cwd, ".shofer", "plugins"), scope: "project" as const }] : []),
+		]
+		const manager = new PluginManager({
+			fs: createNodePluginFs(),
+			pluginDirs,
+			stateStore: {
+				getEnabledPlugins: () => this.context.globalState.get<string[]>(stateKey) ?? [],
+				setEnabledPlugins: async (names) => {
+					await this.context.globalState.update(stateKey, names)
+				},
+			},
+		})
+		await manager.discover()
+		this.pluginManager = manager
+		setSharedPluginManager(manager)
+		return manager
+	}
+
+	/** Push the discovered-plugins snapshot to the webview (design §12). */
+	public async pushPluginsState(): Promise<void> {
+		const manager = await this.getPluginManager()
+		const plugins: PluginView[] = manager.listPlugins().map((p) => ({
+			name: p.name,
+			version: p.version,
+			description: p.description,
+			scope: p.scope,
+			enabled: p.enabled,
+			hasCode: p.hasCode,
+			contributionCounts: p.contributionCounts,
+		}))
+		const state: PluginsState = { plugins }
+		await this.postMessageToWebview({ type: "plugins", plugins: state })
+	}
+
+	/** Handle a Plugins-tab request (list / enable-disable), then re-push state. */
+	public async handlePluginRequest(request: PluginRequest): Promise<void> {
+		const manager = await this.getPluginManager()
+		if (request.action === "setEnabled") {
+			await manager.setEnabled(request.name, request.enabled)
+			// Re-sync discovery-dependent subsystems so the toggle takes effect now.
+			await this.skillsManager?.discoverSkills().catch(() => {})
+			await this.mcpHub?.refreshProjectMcpServers().catch(() => {})
+			this.customModesManager.invalidateCache()
+			await this.postInitState().catch(() => {})
+		}
+		await this.pushPluginsState()
 	}
 
 	// ------------------------------------------------------------------

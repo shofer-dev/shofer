@@ -29,6 +29,24 @@
 			"leastLoad15m": "Least load (15m)"
 		}
 	},
+	"plugins": {
+		"description": "Plugins bundle modes, skills, slash commands, MCP servers, and rules into a single package. Discovered from ~/.shofer/plugins (global) and .shofer/plugins (this workspace). Enable a plugin to activate its contributions.",
+		"empty": "No plugins found. Drop a plugin folder with a plugin.json into ~/.shofer/plugins or .shofer/plugins.",
+		"enabled": "Enabled",
+		"disabled": "Disabled",
+		"toggleAria": "Toggle plugin {{name}}",
+		"scope": {
+			"global": "Global",
+			"project": "Workspace"
+		},
+		"counts": {
+			"modes": "{{count}} modes",
+			"skills": "{{count}} skills",
+			"commands": "{{count}} commands",
+			"mcpServers": "{{count}} MCP servers",
+			"rules": "{{count}} rules"
+		}
+	},
 	"unsavedChangesDialog": {
 		"title": "Unsaved Changes",
 		"description": "Do you want to discard changes and continue?",
@@ -40,6 +58,7 @@
 		"modes": "Modes",
 		"mcp": "MCP Servers",
 		"shoferNodes": "Shofer Nodes",
+		"plugins": "Plugins",
 		"worktrees": "Worktrees",
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",

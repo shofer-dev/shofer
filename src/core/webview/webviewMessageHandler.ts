@@ -1098,6 +1098,12 @@ export const webviewMessageHandler = async (
 				await provider.pushShoferNodesState()
 			}
 			break
+		case "plugin":
+			// Plugins tab request (list / enable-disable).
+			if (message.plugin) {
+				await provider.handlePluginRequest(message.plugin)
+			}
+			break
 		case "clearTask":
 			// Clear task resets the current task.
 			await provider.clearTask()
