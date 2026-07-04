@@ -18,6 +18,7 @@ import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
 import { createPluginStorage } from "./plugin-storage.js"
+import { PluginServiceSupervisor } from "./plugin-services.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
 import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
@@ -248,6 +249,8 @@ export class PluginManager {
 	private readonly loadedCodePlugins = new Set<string>()
 	/** Per-plugin `ctx.host.watch` disposables, torn down when the plugin unloads (P6.G3). */
 	private readonly pluginWatchers = new Map<string, HostDisposable[]>()
+	/** Supervises plugin-registered background services (P6.G7). */
+	private readonly serviceSupervisor = new PluginServiceSupervisor()
 	private plugins: DiscoveredPlugin[] = []
 	/**
 	 * The persisted enabled/install order (the `enabledPlugins` array, in the order
@@ -505,6 +508,9 @@ export class PluginManager {
 			pluginRegistry.unregister(name)
 			this.loadedCodePlugins.delete(name)
 			this.disposePluginWatchers(name)
+			// Stop the plugin's services before it re-registers, so the reload doesn't
+			// leave the old service running alongside a freshly started one (P6.G7).
+			await this.serviceSupervisor.stopForPlugin(name)
 		}
 		await this.activateCodePlugins()
 	}
@@ -571,6 +577,8 @@ export class PluginManager {
 				pluginRegistry.unregister(name)
 				this.loadedCodePlugins.delete(name)
 				this.disposePluginWatchers(name)
+				// P6.G7 — stop the plugin's supervised services on deactivation.
+				await this.serviceSupervisor.stopForPlugin(name)
 			}
 		}
 
@@ -584,12 +592,17 @@ export class PluginManager {
 					apiVersion: plugin.manifest.shoferPluginApiVersion,
 				})
 				const wrapped = this.wrapCodePlugin(plugin, raw)
+				// `register` runs the plugin's `initialize`, where it may call
+				// `ctx.registerService`; the services are then started below (P6.G7).
 				await pluginRegistry.register(wrapped, this.buildPluginContext(plugin), {
 					// Gate lifecycle hooks on the manifest grant (design §6.9, §8): only a
 					// plugin that requested `permissions.lifecycle` participates.
 					lifecycle: plugin.manifest.permissions?.lifecycle === true,
 				})
 				this.loadedCodePlugins.add(plugin.name)
+				// Start any services the plugin registered during initialize (supervised,
+				// isolated — a throwing/hanging service can never crash activation).
+				await this.serviceSupervisor.startForPlugin(plugin.name)
 			} catch (error) {
 				warnPlugin(`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`)
 			}
@@ -628,6 +641,8 @@ export class PluginManager {
 				this.storageBaseDir && this.host
 					? createPluginStorage(plugin.name, path.join(this.storageBaseDir, plugin.name), this.host.fs)
 					: undefined,
+			// P6.G7 — register a supervised background service tied to this plugin's lifecycle.
+			registerService: (service) => this.serviceSupervisor.register(plugin.name, service),
 		}
 	}
 
