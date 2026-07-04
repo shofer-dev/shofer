@@ -212,6 +212,7 @@ design below grows this into a full plugin system.
 		"events": true, // Can observe telemetry/lifecycle events
 		"network": ["https://jenkins.my-org.com", "https://gitlab.com/api/v4"],
 		"filesystem": ["./ci-config/", "./.pipeline/"],
+		"ai": true, // Phase 6 — request host LLM/embeddings access (billed, consented separately)
 	},
 
 	// Declarative contributions (no code needed for these)
@@ -259,6 +260,19 @@ The manifest is validated against a Zod schema (`pluginManifestSchema`) in
 `@shofer/types`. Unknown fields are rejected (fail-closed). The `permissions`
 block is the security contract — Shofer checks every plugin API call against
 the declared permissions.
+
+### `permissions.ai` (Phase 6 — Host Capabilities)
+
+`permissions.ai: true` requests **host LLM/embeddings access** — the `ctx.ai`
+surface (§6.11 G1). It is unlike the other permission flags in one crucial way:
+it costs the **user money** (billed model calls on their configured provider
+account). So the manifest grant is necessary but **not sufficient**: `ctx.ai`
+goes live only after a **separate, explicit consent** (§8 "Billed AI calls
+consent"), distinct from the plain enable toggle. A plugin that declares
+`permissions.ai` but has not been AI-consented gets a **denying** `ctx.ai`
+(every call throws + warns); a plugin that never declared it gets **no**
+`ctx.ai` at all (the field is absent). The plugin **never** receives raw API
+keys — only an opaque `ApiHandler` (§6.11).
 
 ---
 
@@ -564,6 +578,67 @@ export interface PluginEvent {
 }
 ```
 
+### 6.11 Host Capabilities (`ctx.*`) — Phase 6
+
+P1–P5 gave a plugin a restricted `ctx.host` (fs/fetch/notifier/env). The
+live-memory/RAG dogfood found that this is **not enough to build any nontrivial
+plugin**: rebuilding the Live Memory as a plugin needs (a) LLM access, (b) its
+own persistent storage, and (c) a background service. Phase 6 adds four host
+capabilities to `PluginContext` (all optional, all off by default, so a plugin
+that uses none is byte-for-byte identical to today; with no plugins the host is
+unchanged):
+
+```typescript
+export interface PluginContext {
+	// … P1–P5 fields (workspacePath, mode, taskId, cwd, config, host) …
+	ai?: PluginAi // G1 — host LLM/embeddings (only when permissions.ai + consent)
+	storage?: PluginStorage // G2 — per-plugin persistent data dir
+	registerService?(service: PluginService): HostDisposable // G7 — supervised background service
+}
+export interface PluginHost {
+	// … P1–P5 (fs, fetch, notifier, env) …
+	watch?(pattern: string, onChange: () => void): HostDisposable // G3 — scoped file watch
+}
+```
+
+- **G1 `ctx.ai` — provider access.** `ctx.ai.buildHandler(profileRef?)` resolves
+  a host-configured provider profile (via the existing provider-settings layer,
+  the default profile when `profileRef` is omitted) and returns the **same**
+  `ApiHandler` abstraction `buildApiHandler` returns — the identical seam
+  live-memory's `LiveMemoryLlmClient` consumes. `ctx.ai.embed(texts, profileRef?)`
+  returns `number[][]` from a host embedder. **The plugin never sees raw API
+  keys** — only the handler (which the host constructs). Access is gated on
+  `permissions.ai` **and** the billed-calls consent (§8); ungranted ⇒ `ctx.ai`
+  absent, granted-but-unconsented ⇒ denying stub (throw + warn). The construction
+  is **host-side** (it needs the extension's `ProviderSettingsManager`); it is
+  injected into `PluginManager` via a `PluginAiProvider` seam so `@shofer/core`
+  stays host-agnostic, mirroring how live-memory reaches `buildApiHandler`.
+  _Embedding surface (pragmatic choice):_ `embed()` reuses the **configured
+  Code Index embedder** (`CodeIndexServiceFactory.createEmbedder`) rather than
+  re-exposing the full 8-embedder matrix — the thinnest seam that gives a plugin
+  real vectors. `profileRef` is accepted for API symmetry but embeddings follow
+  the Code Index config (documented).
+- **G2 `ctx.storage` — per-plugin persistent dir.** `ctx.storage.dir` is
+  `<globalStorage>/plugins/<name>/`; the scoped fs (`readFile`/`writeFile`/
+  `list`/`exists`/`delete`) is confined to that dir (traversal-blocked). Created
+  lazily (mkdir on first write), survives restart, removed on uninstall. Works
+  regardless of `permissions.filesystem` — it is the plugin's **own** sandbox,
+  not host paths. The base path is host-provided via a seam
+  (`PluginManagerOptions.storageBaseDir`).
+- **G3 `ctx.host.watch(glob, cb)` — scoped file watch.** File-watching gated by
+  the plugin's `permissions.filesystem` scope: `watch` only ever watches inside
+  the granted paths (it wires one host `FileSystemWatcher` per granted root). A
+  plugin without a `permissions.filesystem` grant gets a deny + warn (no watcher,
+  no-op disposable). Host-backed via the existing `HostWatcher` seam so core
+  stays host-agnostic; disposed on plugin disable.
+- **G7 `ctx.registerService({ name, start, stop })` — supervised service.** A
+  long-lived background service tied to plugin lifecycle: `start()` runs when the
+  plugin is enabled+active, `stop()` on disable/uninstall/deactivate. The
+  `PluginManager` owns the service registry (via a `PluginServiceSupervisor`),
+  starts services after load and stops them on unregister, and **isolates** a
+  throwing/hanging service (per-service start/stop timeout + shown/logged
+  warning, never crash). This is the one capability no prior phase covered.
+
 ---
 
 ## 7. Plugin Lifecycle
@@ -634,15 +709,16 @@ State is persisted in `globalState` under `shofer.plugins.enabledPlugins: string
 
 ### Permission boundaries
 
-| Permission     | What it allows                       | Risk                                                                                                  |
-| -------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `tools`        | Register LLM-callable tools          | Tool code runs in the extension host with full `getHost()` access. Tools are gated by auto-approval.  |
-| `systemPrompt` | Modify the system prompt             | Can inject instructions that change agent behavior. User sees the diff in Settings.                   |
-| `modes`        | Contribute mode definitions          | Can restrict or expand tool access per mode. Subject to user mode-override.                           |
-| `ui`           | Render React components in Shofer    | Components run in a sandboxed context with `PluginUIApi` (no direct `vscode` access).                 |
-| `lifecycle`    | Hook into task lifecycle             | `beforeToolCall` can block/modify tool calls. `beforeAsk` can auto-approve/deny. High trust required. |
-| `network`      | Make HTTP requests to listed domains | Plugin code can call `fetch()` to listed domains only. Other domains are blocked.                     |
-| `filesystem`   | Read/write listed paths              | Plugin code can access `getHost().fs` for listed paths only.                                          |
+| Permission     | What it allows                       | Risk                                                                                                                                                   |
+| -------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tools`        | Register LLM-callable tools          | Tool code runs in the extension host with full `getHost()` access. Tools are gated by auto-approval.                                                   |
+| `systemPrompt` | Modify the system prompt             | Can inject instructions that change agent behavior. User sees the diff in Settings.                                                                    |
+| `modes`        | Contribute mode definitions          | Can restrict or expand tool access per mode. Subject to user mode-override.                                                                            |
+| `ui`           | Render React components in Shofer    | Components run in a sandboxed context with `PluginUIApi` (no direct `vscode` access).                                                                  |
+| `lifecycle`    | Hook into task lifecycle             | `beforeToolCall` can block/modify tool calls. `beforeAsk` can auto-approve/deny. High trust required.                                                  |
+| `network`      | Make HTTP requests to listed domains | Plugin code can call `fetch()` to listed domains only. Other domains are blocked.                                                                      |
+| `filesystem`   | Read/write listed paths              | Plugin code can access `getHost().fs` for listed paths only.                                                                                           |
+| `ai` (P6)      | Host LLM/embeddings via `ctx.ai`     | **Billed model calls on the user's account.** Requires a **separate consent** beyond enable (below). Plugin gets only an `ApiHandler`, never raw keys. |
 
 ### Sandboxing
 
@@ -657,6 +733,33 @@ State is persisted in `globalState` under `shofer.plugins.enabledPlugins: string
 | **Trusted**          | All requested permissions granted. Code runs with full `PluginContext`.                |
 | **Workspace**        | Permissions granted only in this workspace. Other workspaces must re-consent.          |
 | **Declarative-only** | No code execution. Only static contributions (modes, skills, etc.). No consent needed. |
+
+### Billed AI calls consent (Phase 6 — `permissions.ai`)
+
+`ctx.ai` (§6.11 G1) is the one capability that spends the user's **money** — it
+makes billed LLM/embedding calls on their configured provider account. Enabling
+a plugin (the normal toggle) is therefore **not** consent to bill them. A plugin
+that declares `permissions.ai` requires a **second, explicit, prominent
+confirmation** before `ctx.ai` is live:
+
+- **Two independent gates.** `ctx.ai` is constructed only when **both**
+  (a) the manifest granted `permissions.ai`, **and** (b) the user has AI-consented
+  this specific plugin. The consent is persisted separately from the enabled set
+  (`shofer.plugins.aiConsentedPlugins`, alongside `enabledPlugins`).
+- **Fail-closed states.** `permissions.ai` absent ⇒ `ctx.ai` is **absent** (the
+  field is not present at all). `permissions.ai` present but **not** consented ⇒
+  `ctx.ai` is a **denying stub**: every `buildHandler`/`embed` call throws a
+  descriptive error and emits a shown + logged warning (so a plugin that tries to
+  use AI without consent fails loudly, never silently bills the user).
+- **Surfaced in the UI.** The Plugins panel shows an **"uses AI (billed)"** badge
+  on any plugin whose manifest declares `permissions.ai`, and a distinct
+  **consent toggle/confirm** ("This plugin makes billed LLM calls on your
+  account") separate from enable. `PluginView` carries `usesAi` (declares
+  `permissions.ai`) and `aiConsented` (the persisted consent) so the panel can
+  render the badge + confirm without leaking any secret.
+- **No key exposure.** Even fully consented, the plugin receives only the
+  `ApiHandler` the host built — never the provider settings or API keys. Key
+  material stays entirely host-side.
 
 ### Audit log
 
@@ -892,7 +995,7 @@ expanded `TaskHeader`:
 | 1.3  | Extend `SkillsManager` to discover plugin skills     | `src/services/skills/SkillsManager.ts`                         |
 | 1.4  | Extend `CustomModesManager` to discover plugin modes | `src/core/config/CustomModesManager.ts`                        |
 | 1.5  | Extend `McpHub` to read plugin MCP configs           | `packages/core/src/services/mcp/McpHub.ts`                     |
-| 1.6  | Extend command discovery to read plugin commands     | `packages/core/src/services/command/commands.ts`              |
+| 1.6  | Extend command discovery to read plugin commands     | `packages/core/src/services/command/commands.ts`               |
 | 1.7  | Settings → Plugins tab (list, enable/disable)        | `webview-ui/src/components/settings/PluginsSettings.tsx` (new) |
 
 **Declarative plugins work end-to-end after Phase 1.** No code execution.
@@ -968,13 +1071,45 @@ expanded `TaskHeader`:
 > the Marketplace file picker. A future registry would layer search/`install name@ver`/
 > `update --all` on top of this same pack/unpack + `PluginManager` substrate.
 
-> **✅ §13 implementation plan complete (Phases 1–5).** Declarative plugins (P1), code
-> plugins + sandbox (P2), lifecycle hooks (P3), UI contributions (P4), and distribution
-> (P5) all land. **Known remaining follow-ups (out of the P1–P5 plan):**
+### Phase 6: Host Capabilities (`ctx.ai` / `ctx.storage` / `ctx.host.watch` / `ctx.registerService`)
+
+**Goal:** Give plugins the host capabilities that P1–P5 left missing and that block
+any nontrivial plugin (the live-memory/RAG dogfood gap): LLM/embeddings access,
+private storage, scoped file-watching, and a supervised background service. Adds
+**new phase** beyond the documented P1–P5. Non-breaking: a plugin using none of
+these is identical to today; no plugins ⇒ host unchanged.
+
+| Step | What                                                                                     | Files                                                                                                                                                                      |
+| ---- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6.G1 | `permissions.ai` + `ctx.ai` (`buildHandler`/`embed`); billed-calls consent + panel badge | `packages/types/src/plugin.ts`, `packages/core/src/plugins/plugin-ai.ts` (new), `plugin-manager.ts`, `src/core/webview/ShoferProvider.ts`, `webview-ui/.../PluginsTab.tsx` |
+| 6.G2 | `ctx.storage` — per-plugin persistent dir (scoped, traversal-blocked, lazy)              | `packages/types/src/plugin.ts`, `packages/core/src/plugins/plugin-storage.ts` (new), `plugin-manager.ts`, `ShoferProvider.ts`                                              |
+| 6.G3 | `ctx.host.watch(glob, cb)` — file-watch gated by `permissions.filesystem`                | `packages/types/src/plugin.ts`, `packages/core/src/plugins/plugin-sandbox.ts`                                                                                              |
+| 6.G7 | `ctx.registerService({ name, start, stop })` — supervised background service             | `packages/types/src/plugin.ts`, `packages/core/src/plugins/plugin-services.ts` (new), `plugin-manager.ts`                                                                  |
+
+**Host seams (keep `@shofer/core` host-agnostic).** G1's provider access needs the
+extension's `ProviderSettingsManager`, so a `PluginAiProvider` seam
+(`buildHandler`/`embed`) is injected into `PluginManager` where the sandbox host is
+built (`ShoferProvider.getPluginManager`) — mirroring how live-memory reaches
+`buildApiHandler`. G2's storage base path is a `storageBaseDir` option
+(`<globalStorage>/plugins`). G3 reuses the existing `HostWatcher` seam. G7's supervisor
+lives in core (`PluginServiceSupervisor`) and is driven by the manager's load/unload
+reconciliation. The AI **consent** is a second persisted set
+(`shofer.plugins.aiConsentedPlugins`) toggled from the Plugins panel, gating `ctx.ai`
+independently of enable.
+
+> **✅ Phase 6 implemented.** All four capabilities land with per-capability tests
+> (ctx.ai grant/deny/no-key-leak, ctx.storage read-write/traversal-block/isolation,
+> ctx.host.watch in-scope-fires/out-of-scope-denied, ctx.registerService
+> start-on-enable/stop-on-disable/throwing-isolation). Non-breaking and fail-closed:
+> a plugin without `permissions.ai` (or unconsented) never touches `ctx.ai`.
+
+> **✅ §13 implementation plan complete (Phases 1–6).** Declarative plugins (P1), code
+> plugins + sandbox (P2), lifecycle hooks (P3), UI contributions (P4), distribution
+> (P5), and host capabilities (P6) all land. **Known remaining follow-ups (out of the P1–P6 plan):**
 >
 > - **Remote plugin registry (5.4)** — deferred by owner decision (above).
 > - **Phase-4 external plugin UI bundle + CSP** — Phase 4 wires `PluginSlot` +
->   dynamic-import of plugin UI with a restricted API, but shipping a *third-party* plugin's
+>   dynamic-import of plugin UI with a restricted API, but shipping a _third-party_ plugin's
 >   own UI bundle still needs (a) the webview CSP / `localResourceRoots` to serve the plugin
 >   dir's assets, and (b) a shared-React boundary so the plugin component renders in the host
 >   React tree without bundling its own React. Built-in / first-party UI contributions work;
@@ -992,7 +1127,7 @@ expanded `TaskHeader`:
 
 2. **Plugin versioning.** **DECIDED: yes** — semver the plugin API surface via a `shoferPluginApiVersion` field in the manifest; major bumps require migration. ✅ Implemented in Phase 1 (`pluginManifestSchema`, step 1.1). Not enforced yet (declarative-only).
 
-3. **Plugin dependencies.** **DECIDED: fail-closed** (owner's final decision) — an enabled plugin whose declared `dependencies` (plugin names) are not all enabled+present is itself treated as **disabled**: none of its contributions register. `PluginManager.resolveDependencies()` (run after discovery and on every enable/disable) computes each enabled plugin's full dependency **closure**; a plugin is `effectiveEnabled` only when that closure is entirely enabled+present. Transitive failures cascade (a dependency that is itself failed-closed does not count as satisfied), and dependency **cycles** fail every plugin in the cycle closed (no infinite loop). Each blocked plugin surfaces a warning that is **both shown and logged** (`getHost().notifier.warn` + `configLog.warn`) naming the unmet dependency, and its `disabledReason` is pushed to the Plugins settings panel so the user sees *why* the toggle is on yet nothing registered. ✅ Implemented in Phase 1.
+3. **Plugin dependencies.** **DECIDED: fail-closed** (owner's final decision) — an enabled plugin whose declared `dependencies` (plugin names) are not all enabled+present is itself treated as **disabled**: none of its contributions register. `PluginManager.resolveDependencies()` (run after discovery and on every enable/disable) computes each enabled plugin's full dependency **closure**; a plugin is `effectiveEnabled` only when that closure is entirely enabled+present. Transitive failures cascade (a dependency that is itself failed-closed does not count as satisfied), and dependency **cycles** fail every plugin in the cycle closed (no infinite loop). Each blocked plugin surfaces a warning that is **both shown and logged** (`getHost().notifier.warn` + `configLog.warn`) naming the unmet dependency, and its `disabledReason` is pushed to the Plugins settings panel so the user sees _why_ the toggle is on yet nothing registered. ✅ Implemented in Phase 1.
 
 4. **Hot reload.** **DECIDED: yes** — watch the plugin dir and re-register on change (same as the `.shofer/shofermodes` watcher). Phase 1 structures discovery so a watcher can re-run it: `PluginManager.discover()` fully rebuilds state and is idempotent. Watcher wiring itself is deferred (Phase 2).
 
@@ -1042,25 +1177,25 @@ in `hooks/hooks.json`, MCP in `.mcp.json`, LSP in `.lsp.json`).
 
 **Key design patterns from Claude Code:**
 
-| Pattern                        | How Claude Code does it                                                                                                                                                                                                                                                                                                                                        | Relevance to Shofer                                                                                                                                                                                                                  |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Declarative-first**          | A plugin with no code — just directories of skills, agents, hooks JSON, MCP configs, LSP configs — works out of the box. The manifest is optional (auto-discovery by convention).                                                                                                                                                                              | ✅ Strongly adopt: Shofer's Phase 1 already targets this. Claude Code proves a manifest can be optional for simple plugins.                                                                                                          |
-| **Hooks as external commands** | Hooks are shell commands (`"type": "command"`) or HTTP endpoints (`"type": "http"`) or MCP tool calls (`"type": "mcp_tool"`) or LLM prompts (`"type": "prompt"`). No in-process code.                                                                                                                                                                          | ⚠️ Different philosophy. Shofer's in-process hooks (via `ShoferPlugin`) are more powerful but require code loading. **Adopt the command/http hook types** as alternatives to in-process hooks — they're safer and language-agnostic. |
-| **Extensive hook catalog**     | 30+ lifecycle events: `SessionStart`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `PermissionDenied`, `UserPromptSubmit`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`, `Stop`, `Notification`, `FileChanged`, `CwdChanged`, `WorktreeCreate`, `InstructionsLoaded`, `ConfigChange`, `Elicitation`, etc. | ✅ Adopt broadly. Shofer's lifecycle hooks (§6.9) should expand to cover most of these. The `FileChanged`, `CwdChanged`, `InstructionsLoaded` hooks are particularly useful.                                                         |
-| **User configuration**         | `userConfig` in the manifest declares fields the user is prompted for at enable time. Values are substituted as `${user_config.KEY}` in commands/configs. Sensitive values go to keychain.                                                                                                                                                                     | ✅ Adopt: Shofer's `config` schema in the manifest is the equivalent. Claude Code's `${user_config.*}` substitution pattern is elegant — adopt it.                                                                                   |
-| **Environment variables**      | `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}` — substituted in all paths. `CLAUDE_PLUGIN_DATA` is a persistent directory that survives updates.                                                                                                                                                                                    | ✅ Adopt: `${SHOFER_PLUGIN_ROOT}`, `${SHOFER_PLUGIN_DATA}`, `${SHOFER_PROJECT_DIR}`. The persistent data directory is essential for plugins that install dependencies.                                                               |
+| Pattern                        | How Claude Code does it                                                                                                                                                                                                                                                                                                                                        | Relevance to Shofer                                                                                                                                                                                                                                 |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Declarative-first**          | A plugin with no code — just directories of skills, agents, hooks JSON, MCP configs, LSP configs — works out of the box. The manifest is optional (auto-discovery by convention).                                                                                                                                                                              | ✅ Strongly adopt: Shofer's Phase 1 already targets this. Claude Code proves a manifest can be optional for simple plugins.                                                                                                                         |
+| **Hooks as external commands** | Hooks are shell commands (`"type": "command"`) or HTTP endpoints (`"type": "http"`) or MCP tool calls (`"type": "mcp_tool"`) or LLM prompts (`"type": "prompt"`). No in-process code.                                                                                                                                                                          | ⚠️ Different philosophy. Shofer's in-process hooks (via `ShoferPlugin`) are more powerful but require code loading. **Adopt the command/http hook types** as alternatives to in-process hooks — they're safer and language-agnostic.                |
+| **Extensive hook catalog**     | 30+ lifecycle events: `SessionStart`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `PermissionDenied`, `UserPromptSubmit`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`, `Stop`, `Notification`, `FileChanged`, `CwdChanged`, `WorktreeCreate`, `InstructionsLoaded`, `ConfigChange`, `Elicitation`, etc. | ✅ Adopt broadly. Shofer's lifecycle hooks (§6.9) should expand to cover most of these. The `FileChanged`, `CwdChanged`, `InstructionsLoaded` hooks are particularly useful.                                                                        |
+| **User configuration**         | `userConfig` in the manifest declares fields the user is prompted for at enable time. Values are substituted as `${user_config.KEY}` in commands/configs. Sensitive values go to keychain.                                                                                                                                                                     | ✅ Adopt: Shofer's `config` schema in the manifest is the equivalent. Claude Code's `${user_config.*}` substitution pattern is elegant — adopt it.                                                                                                  |
+| **Environment variables**      | `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}` — substituted in all paths. `CLAUDE_PLUGIN_DATA` is a persistent directory that survives updates.                                                                                                                                                                                    | ✅ Adopt: `${SHOFER_PLUGIN_ROOT}`, `${SHOFER_PLUGIN_DATA}`, `${SHOFER_PROJECT_DIR}`. The persistent data directory is essential for plugins that install dependencies.                                                                              |
 | **Namespacing**                | Plugin skills are namespaced: `/plugin-name:skill-name`. Prevents conflicts.                                                                                                                                                                                                                                                                                   | ⛔ **Not adopted** (owner decision, §14 Q7). Shofer uses **last-installed-wins + a shown/logged warning** instead: plugin skills/modes/commands keep their natural name, and a collision resolves to the last-installed contributor with a warning. |
-| **Marketplace**                | Git-hosted marketplace repos (`marketplace.json`). Community + official marketplaces. `claude plugin install name@marketplace`.                                                                                                                                                                                                                                | ✅ Adopt: Shofer's marketplace already has the infrastructure. Extend it to install plugin archives.                                                                                                                                 |
-| **Plugin scopes**              | `user` (global), `project` (checked into VCS), `local` (gitignored), `managed` (admin-enforced).                                                                                                                                                                                                                                                               | ✅ Adopt: Shofer already has project/global scope for modes/MCP. Extend to plugins.                                                                                                                                                  |
-| **Skills-directory plugins**   | A folder in `~/.claude/skills/` with a `.claude-plugin/plugin.json` auto-loads as `name@skills-dir`. No install step.                                                                                                                                                                                                                                          | ✅ Adopt: Shofer should support `.shofer/plugins/` auto-discovery (already in the design).                                                                                                                                           |
-| **Background monitors**        | `monitors/monitors.json` — shell commands that run for the session lifetime, delivering stdout lines to Claude as notifications.                                                                                                                                                                                                                               | ✅ **Strongly adopt.** This is a unique and powerful feature. A plugin that watches a log file or deployment status and proactively notifies the agent.                                                                              |
-| **LSP servers**                | `.lsp.json` — configure language servers for code intelligence. Diagnostics pushed into Claude's context after edits.                                                                                                                                                                                                                                          | ✅ **Adopt.** Shofer already has LSP tools (`get_errors`, `list_code_usages`, `rename_symbol`). Plugin-contributed LSP configs would let plugins add language support.                                                               |
-| **Themes**                     | `themes/` — JSON color theme files.                                                                                                                                                                                                                                                                                                                            | ⚠️ Low priority. Shofer uses VS Code themes. Could adopt for webview-only themes.                                                                                                                                                    |
-| **Output styles**              | `output-styles/` — markdown files that define how Claude formats responses.                                                                                                                                                                                                                                                                                    | ⚠️ Consider. Shofer's modes already control persona/instructions. Output styles are a lighter-weight version.                                                                                                                        |
-| **Plugin validation**          | `claude plugin validate` — checks manifest, frontmatter, hooks JSON. `--strict` treats warnings as errors.                                                                                                                                                                                                                                                     | ✅ Adopt: `shofer plugin validate` CLI command.                                                                                                                                                                                      |
-| **Token cost estimation**      | `claude plugin details <name>` — shows projected token cost per component (always-on vs on-invoke).                                                                                                                                                                                                                                                            | ✅ **Adopt.** This is excellent UX — users need to know the token cost of enabling a plugin.                                                                                                                                         |
-| **Channels**                   | MCP-based message injection (Telegram, Slack, Discord). Plugin declares a `channels` array binding to an MCP server.                                                                                                                                                                                                                                           | ⚠️ Defer. Interesting but niche. Could be a Phase 6 addition.                                                                                                                                                                        |
-| **Agent definitions**          | `agents/` — markdown files with frontmatter (`name`, `description`, `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`). Claude invokes them as subagents.                                                                                                                                                                                              | ✅ Adopt: Shofer's modes are the equivalent, but Claude Code's lightweight agent markdown format is simpler. Consider a `contributes.agents` section.                                                                                |
+| **Marketplace**                | Git-hosted marketplace repos (`marketplace.json`). Community + official marketplaces. `claude plugin install name@marketplace`.                                                                                                                                                                                                                                | ✅ Adopt: Shofer's marketplace already has the infrastructure. Extend it to install plugin archives.                                                                                                                                                |
+| **Plugin scopes**              | `user` (global), `project` (checked into VCS), `local` (gitignored), `managed` (admin-enforced).                                                                                                                                                                                                                                                               | ✅ Adopt: Shofer already has project/global scope for modes/MCP. Extend to plugins.                                                                                                                                                                 |
+| **Skills-directory plugins**   | A folder in `~/.claude/skills/` with a `.claude-plugin/plugin.json` auto-loads as `name@skills-dir`. No install step.                                                                                                                                                                                                                                          | ✅ Adopt: Shofer should support `.shofer/plugins/` auto-discovery (already in the design).                                                                                                                                                          |
+| **Background monitors**        | `monitors/monitors.json` — shell commands that run for the session lifetime, delivering stdout lines to Claude as notifications.                                                                                                                                                                                                                               | ✅ **Strongly adopt.** This is a unique and powerful feature. A plugin that watches a log file or deployment status and proactively notifies the agent.                                                                                             |
+| **LSP servers**                | `.lsp.json` — configure language servers for code intelligence. Diagnostics pushed into Claude's context after edits.                                                                                                                                                                                                                                          | ✅ **Adopt.** Shofer already has LSP tools (`get_errors`, `list_code_usages`, `rename_symbol`). Plugin-contributed LSP configs would let plugins add language support.                                                                              |
+| **Themes**                     | `themes/` — JSON color theme files.                                                                                                                                                                                                                                                                                                                            | ⚠️ Low priority. Shofer uses VS Code themes. Could adopt for webview-only themes.                                                                                                                                                                   |
+| **Output styles**              | `output-styles/` — markdown files that define how Claude formats responses.                                                                                                                                                                                                                                                                                    | ⚠️ Consider. Shofer's modes already control persona/instructions. Output styles are a lighter-weight version.                                                                                                                                       |
+| **Plugin validation**          | `claude plugin validate` — checks manifest, frontmatter, hooks JSON. `--strict` treats warnings as errors.                                                                                                                                                                                                                                                     | ✅ Adopt: `shofer plugin validate` CLI command.                                                                                                                                                                                                     |
+| **Token cost estimation**      | `claude plugin details <name>` — shows projected token cost per component (always-on vs on-invoke).                                                                                                                                                                                                                                                            | ✅ **Adopt.** This is excellent UX — users need to know the token cost of enabling a plugin.                                                                                                                                                        |
+| **Channels**                   | MCP-based message injection (Telegram, Slack, Discord). Plugin declares a `channels` array binding to an MCP server.                                                                                                                                                                                                                                           | ⚠️ Defer. Interesting but niche. Could be a Phase 6 addition.                                                                                                                                                                                       |
+| **Agent definitions**          | `agents/` — markdown files with frontmatter (`name`, `description`, `model`, `effort`, `maxTurns`, `tools`, `disallowedTools`). Claude invokes them as subagents.                                                                                                                                                                                              | ✅ Adopt: Shofer's modes are the equivalent, but Claude Code's lightweight agent markdown format is simpler. Consider a `contributes.agents` section.                                                                                               |
 
 ### Design refinements based on research
 
