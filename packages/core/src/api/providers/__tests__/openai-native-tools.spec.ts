@@ -3,6 +3,7 @@ import OpenAI from "openai"
 import { OpenAiHandler } from "../openai.js"
 import { OpenAiNativeHandler } from "../openai-native.js"
 import type { ApiHandlerOptions } from "../_deps.js"
+import { read_file } from "../../../prompts/tools/native-tools/read_file.js"
 
 describe("OpenAiHandler native tools", () => {
 	it("includes tools in request when tools are provided via metadata (regression test)", async () => {
@@ -358,6 +359,202 @@ describe("OpenAiNativeHandler MCP tool schema handling", () => {
 			name: "read_file",
 			arguments: '"/tmp/test.txt"}',
 		})
+	})
+})
+
+describe("OpenAiNativeHandler strict-mode schema recursion", () => {
+	// Drive a tool set through the real handler and return the transformed
+	// `parameters` schema the OpenAI Responses API would receive.
+	const transformThroughHandler = async (
+		tools: OpenAI.Chat.ChatCompletionTool[],
+	): Promise<Record<string, any>> => {
+		let capturedRequestBody: any
+
+		const handler = new OpenAiNativeHandler({
+			openAiNativeApiKey: "test-key",
+			apiModelId: "gpt-4o",
+		} as ApiHandlerOptions)
+
+		const mockClient = {
+			responses: {
+				create: vi.fn().mockImplementation((body: any) => {
+					capturedRequestBody = body
+					return {
+						[Symbol.asyncIterator]: async function* () {
+							yield {
+								type: "response.done",
+								response: {
+									output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }],
+									usage: { input_tokens: 1, output_tokens: 1 },
+								},
+							}
+						},
+					}
+				}),
+			},
+		}
+		;(handler as any).client = mockClient
+
+		const stream = handler.createMessage("system prompt", [], {
+			taskId: "test-task-id",
+			tools,
+		})
+		for await (const _ of stream) {
+			// consume
+		}
+
+		return capturedRequestBody.tools[0].parameters
+	}
+
+	// Recursively collect every object subschema in a JSON Schema tree, descending
+	// through the same containers the transform is expected to visit.
+	const collectObjectSchemas = (node: any, out: any[] = []): any[] => {
+		if (!node || typeof node !== "object") return out
+		if (Array.isArray(node)) {
+			for (const entry of node) collectObjectSchemas(entry, out)
+			return out
+		}
+		const type = node.type
+		const isObject =
+			type === "object" ||
+			(Array.isArray(type) && type.includes("object")) ||
+			(node.properties !== undefined && typeof node.properties === "object")
+		if (isObject) out.push(node)
+
+		if (node.properties && typeof node.properties === "object") {
+			for (const value of Object.values(node.properties)) collectObjectSchemas(value, out)
+		}
+		if (node.items !== undefined) collectObjectSchemas(node.items, out)
+		if (node.additionalItems !== undefined) collectObjectSchemas(node.additionalItems, out)
+		for (const key of ["anyOf", "oneOf", "allOf"] as const) {
+			if (Array.isArray(node[key])) for (const entry of node[key]) collectObjectSchemas(entry, out)
+		}
+		for (const key of ["then", "else"] as const) {
+			if (node[key]) collectObjectSchemas(node[key], out)
+		}
+		for (const key of ["$defs", "definitions"] as const) {
+			if (node[key] && typeof node[key] === "object") {
+				for (const value of Object.values(node[key])) collectObjectSchemas(value, out)
+			}
+		}
+		return out
+	}
+
+	it("adds additionalProperties:false + required to the real read_file tool's nested indentation object", async () => {
+		// Regression for the exact OpenAI Responses API rejection:
+		//   Invalid schema for function 'read_file': In context=('properties',
+		//   'indentation','type','0'), 'additionalProperties' is required to be
+		//   supplied and to be false.
+		const parameters = await transformThroughHandler([read_file])
+
+		// Every object subschema anywhere in the tree must be strict-compliant.
+		const objectSchemas = collectObjectSchemas(parameters)
+		expect(objectSchemas.length).toBeGreaterThanOrEqual(2) // root + indentation (at least)
+		for (const obj of objectSchemas) {
+			expect(obj.additionalProperties).toBe(false)
+			// required must list exactly the property keys (strict mode).
+			expect(new Set(obj.required)).toEqual(new Set(Object.keys(obj.properties)))
+		}
+
+		// The specific object OpenAI complained about: the optional `indentation`
+		// object, emitted with the nullable/union type ["object","null"].
+		const indentation = parameters.properties.indentation
+		expect(indentation.type).toEqual(["object", "null"])
+		expect(indentation.additionalProperties).toBe(false)
+		expect(new Set(indentation.required)).toEqual(
+			new Set(["anchor_line", "max_levels", "include_siblings", "include_header", "max_lines"]),
+		)
+		// Its members' containers are covered by the loop above too.
+		expect(indentation.properties.anchor_line.type).toBe("integer")
+	})
+
+	it("recurses into object-inside-anyOf, object-inside-optional, and deeply nested objects (strict tool)", async () => {
+		const tool: OpenAI.Chat.ChatCompletionTool = {
+			type: "function",
+			function: {
+				name: "deep_tool",
+				description: "hand-built nested/union schema",
+				parameters: {
+					type: "object",
+					properties: {
+						// object nested inside a union branch (anyOf)
+						choice: {
+							anyOf: [
+								{ type: "string" },
+								{
+									type: "object",
+									properties: { inner: { type: "string" } },
+								},
+							],
+						},
+						// object hidden behind the nullable/optional union type form
+						opt: {
+							type: ["object", "null"],
+							properties: { a: { type: "string" } },
+						},
+						// deeply nested: array -> items(object) -> object property
+						list: {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									deep: {
+										type: "object",
+										properties: { leaf: { type: "number" } },
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		const parameters = await transformThroughHandler([tool])
+
+		// Every object subschema at every depth gets additionalProperties:false and required.
+		const objectSchemas = collectObjectSchemas(parameters)
+		for (const obj of objectSchemas) {
+			expect(obj.additionalProperties).toBe(false)
+			expect(new Set(obj.required)).toEqual(new Set(Object.keys(obj.properties)))
+		}
+
+		// Spot-check each targeted location.
+		expect(parameters.properties.choice.anyOf[1].additionalProperties).toBe(false)
+		expect(parameters.properties.opt.additionalProperties).toBe(false)
+		expect(parameters.properties.list.items.additionalProperties).toBe(false)
+		expect(parameters.properties.list.items.properties.deep.additionalProperties).toBe(false)
+	})
+
+	it("recurses into nested objects for MCP tools (strict:false) without adding required", async () => {
+		const mcpTool: OpenAI.Chat.ChatCompletionTool = {
+			type: "function",
+			function: {
+				name: "mcp--svc--action",
+				description: "MCP tool with nested union object",
+				parameters: {
+					type: "object",
+					properties: {
+						token: { type: "string" },
+						// optional nested object in the nullable/union form
+						opts: {
+							type: ["object", "null"],
+							properties: { flag: { type: "boolean" } },
+						},
+					},
+					required: ["token"],
+				},
+			},
+		}
+
+		const parameters = await transformThroughHandler([mcpTool])
+
+		// additionalProperties:false is added everywhere, including the union-typed nested object.
+		expect(parameters.additionalProperties).toBe(false)
+		expect(parameters.properties.opts.additionalProperties).toBe(false)
+		// strict:false path must NOT rewrite the required arrays.
+		expect(parameters.required).toEqual(["token"])
+		expect(parameters.properties.opts.required).toBeUndefined()
 	})
 })
 

@@ -234,81 +234,109 @@ export class OpenAiNativeHandler extends BaseProvider implements SingleCompletio
 		metadata?: ApiHandlerCreateMessageMetadata,
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	): any {
-		// Ensure all properties are in the required array for OpenAI's strict mode
-		// This recursively processes nested objects and array items
+		// OpenAI's Responses API strict function-calling requires `additionalProperties:
+		// false` on EVERY object subschema anywhere in the tree — not just the root.
+		// A nested object can hide in many places the naive `prop.type === "object"`
+		// check misses: inside an optional (Zod `.optional()` emits `type: ["object",
+		// "null"]`, an ARRAY type where the string check fails), inside array `items`
+		// (single or tuple) or `additionalItems`, inside `anyOf`/`oneOf`/`allOf`
+		// union branches, inside `then`/`else`, or inside `$defs`/`definitions`. If we
+		// skip any of them, OpenAI rejects the whole tool (e.g. `read_file`'s optional
+		// `indentation` object shipped without `additionalProperties: false`).
+		//
+		// This single generic walk descends through ALL of those containers and, for
+		// every object subschema, forces `additionalProperties: false`. When
+		// `setRequired` is true (native strict tools) it also sets `required` to every
+		// property key — OpenAI strict mode requires all properties be required;
+		// optional properties are widened to nullable upstream (`defineNativeTool`).
+		// When false (MCP tools with `strict: false`) the `required` array is left
+		// untouched so the model may still omit advisory MCP parameters.
+		//
+		// The transform is pure: it shallow-copies each node and never mutates input.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ensureAllRequired = (schema: any): any => {
-			if (!schema || typeof schema !== "object" || schema.type !== "object") {
+		const applyStrictSchema = (schema: any, setRequired: boolean): any => {
+			if (!schema || typeof schema !== "object") {
 				return schema
+			}
+			if (Array.isArray(schema)) {
+				return schema.map((entry) => applyStrictSchema(entry, setRequired))
 			}
 
 			const result = { ...schema }
 
-			// OpenAI Responses API requires additionalProperties: false on all object schemas
-			// Only add if not already set to false (to avoid unnecessary mutations)
-			if (result.additionalProperties !== false) {
-				result.additionalProperties = false
+			// An object subschema is one whose `type` is "object", or an array of types
+			// that includes "object" (the nullable/union form), or — defensively — any
+			// node that carries `properties` even without an explicit object marker.
+			const type = result.type
+			const isObjectSchema =
+				type === "object" ||
+				(Array.isArray(type) && type.includes("object")) ||
+				(result.properties !== undefined && typeof result.properties === "object")
+
+			if (isObjectSchema) {
+				// OpenAI Responses API requires additionalProperties: false on all object schemas
+				// Only add if not already set to false (to avoid unnecessary mutations)
+				if (result.additionalProperties !== false) {
+					result.additionalProperties = false
+				}
+
+				if (result.properties && typeof result.properties === "object") {
+					const allKeys = Object.keys(result.properties)
+					if (setRequired) {
+						result.required = allKeys
+					}
+					const newProps: Record<string, unknown> = {}
+					for (const key of allKeys) {
+						newProps[key] = applyStrictSchema(result.properties[key], setRequired)
+					}
+					result.properties = newProps
+				}
 			}
 
-			if (result.properties) {
-				const allKeys = Object.keys(result.properties)
-				result.required = allKeys
-
-				// Recursively process nested objects
-				const newProps = { ...result.properties }
-				for (const key of allKeys) {
-					const prop = newProps[key]
-					if (prop.type === "object") {
-						newProps[key] = ensureAllRequired(prop)
-					} else if (prop.type === "array" && prop.items?.type === "object") {
-						newProps[key] = {
-							...prop,
-							items: ensureAllRequired(prop.items),
-						}
-					}
+			// Recurse through every schema-bearing container, regardless of the parent's
+			// `type`. `items`/`additionalItems` may be a single schema or a tuple array
+			// (both handled by the array branch at the top of this function).
+			if (result.items !== undefined) {
+				result.items = applyStrictSchema(result.items, setRequired)
+			}
+			if (result.additionalItems !== undefined && typeof result.additionalItems === "object") {
+				result.additionalItems = applyStrictSchema(result.additionalItems, setRequired)
+			}
+			for (const combinator of ["anyOf", "oneOf", "allOf"] as const) {
+				if (Array.isArray(result[combinator])) {
+					result[combinator] = result[combinator].map((entry: unknown) =>
+						applyStrictSchema(entry, setRequired),
+					)
 				}
-				result.properties = newProps
+			}
+			for (const branch of ["then", "else"] as const) {
+				if (result[branch] !== undefined && typeof result[branch] === "object") {
+					result[branch] = applyStrictSchema(result[branch], setRequired)
+				}
+			}
+			for (const defsKey of ["$defs", "definitions"] as const) {
+				if (result[defsKey] && typeof result[defsKey] === "object") {
+					const newDefs: Record<string, unknown> = {}
+					for (const [name, def] of Object.entries(result[defsKey])) {
+						newDefs[name] = applyStrictSchema(def, setRequired)
+					}
+					result[defsKey] = newDefs
+				}
 			}
 
 			return result
 		}
 
-		// Adds additionalProperties: false to all object schemas recursively
-		// without modifying required array. Used for MCP tools with strict: false
-		// to comply with OpenAI Responses API requirements.
+		// Ensure all properties are in the required array for OpenAI's strict mode,
+		// recursing into every nested/union object subschema (native strict tools).
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const ensureAdditionalPropertiesFalse = (schema: any): any => {
-			if (!schema || typeof schema !== "object" || schema.type !== "object") {
-				return schema
-			}
+		const ensureAllRequired = (schema: any): any => applyStrictSchema(schema, true)
 
-			const result = { ...schema }
-
-			// OpenAI Responses API requires additionalProperties: false on all object schemas
-			// Only add if not already set to false (to avoid unnecessary mutations)
-			if (result.additionalProperties !== false) {
-				result.additionalProperties = false
-			}
-
-			if (result.properties) {
-				// Recursively process nested objects
-				const newProps = { ...result.properties }
-				for (const key of Object.keys(result.properties)) {
-					const prop = newProps[key]
-					if (prop && prop.type === "object") {
-						newProps[key] = ensureAdditionalPropertiesFalse(prop)
-					} else if (prop && prop.type === "array" && prop.items?.type === "object") {
-						newProps[key] = {
-							...prop,
-							items: ensureAdditionalPropertiesFalse(prop.items),
-						}
-					}
-				}
-				result.properties = newProps
-			}
-
-			return result
-		}
+		// Adds additionalProperties: false to all object schemas recursively without
+		// modifying required arrays. Used for MCP tools with strict: false to comply
+		// with OpenAI Responses API requirements while preserving optional parameters.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const ensureAdditionalPropertiesFalse = (schema: any): any => applyStrictSchema(schema, false)
 
 		// Build a request body for the OpenAI Responses API.
 		// Ensure we explicitly pass max_output_tokens based on Shofer's reserved model response calculation
