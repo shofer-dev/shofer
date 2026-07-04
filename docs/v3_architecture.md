@@ -220,15 +220,21 @@ built-in `node:sqlite` — no flat files, no native dependency.
 
 ## Distributed execution (horizontal scaling)
 
-> **🧱 Substrate shipped.** The distribution seams below are built and exported. The
-> split-host RPC (`host-rpc.ts`), the session transport (`serveSession`/`connectSession`),
-> and the controller-side `ExecutorPool` live in `@shofer/types`; `@shofer/core` exports
-> the headless entry points `runAcpAgentOverShoferApi` and `serveHttpOverShoferApi`
-> (`packages/core/src/transport/`). With `Task` + the full tool loop now in `@shofer/core`,
-> the package is a **detachable, headless/ACP-runnable Executor**. What remains is standing
-> up a real remote-executor _process_ and wiring the node registry into the extension UI
-> (below); with **zero remote nodes registered, everything runs on the Local executor
-> exactly as today**.
+> **✅ Implemented — Shofer Nodes.** Horizontal scaling ships end-to-end. Remote
+> executors run as `shofer serve` (HTTP/SSE over `ShoferApiAgent`); the controller drives
+> them with `ShoferHttpClient` (which implements `AgentApi`) through the **`NodeRegistry`**,
+> which owns the `ExecutorPool`, persists node definitions (+ tokens in SecretStorage), and
+> handles the connect/auth/version handshake, live status, and load-balancing. Tasks run on
+> remote nodes and render in the webview with interactive approvals, token/context metering,
+> and checkpoint diff/restore + the changed-files panel (over the reverse data channel,
+> below); focus is per-view so the sidebar and an editor tab can watch two different tasks at
+> once. The Shofer Nodes UI is wired in (Settings panel, header status, a composer
+> node-picker, and the load-balancer selector). The split-host RPC (`host-rpc.ts`) + session
+> transport (`serveSession`/`connectSession`) remain available substrate for the future
+> "executor uses the _controller's_ host over RPC" model; the **shipped** node model instead
+> assumes a **shared workspace filesystem** (each remote `shofer serve` has the same mounted
+> workspace) and serves fs/config executor-locally. With **zero remote nodes registered,
+> everything runs on the Local executor exactly as today**.
 
 The Category I/II split is also what makes Shofer **horizontally scalable**: the
 portable core can run not just in a different front-end, but on a different _machine_
@@ -359,7 +365,7 @@ numbers are local to this document):
 | 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)                                                                                           |
 | 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                |
 | 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                     |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ substrate enabled — split-host RPC + session transport + `ExecutorPool` + headless/ACP entry points in core; remote-executor process + UI wiring remaining |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + checkpoint/changed-files reverse data channel, per-view shadow focus. Split-host RPC/session-transport substrate remains for the controller-host model; shared-index single-writer reconciliation is the remaining hardening |
 
 ### What "done" means, per initiative
 
@@ -522,14 +528,18 @@ prerequisites:
     (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
     the round-robin cursor. The policy is selected by the `shofer.nodes.loadBalancer`
     setting (read on init + on configuration change).
-- **Remaining**: stand up a real remote executor process (link `@shofer/core` + a
-  server adapter + the split host over a socket), wire the `ExecutorPool` into the
-  extension's UI (node registry, connect flow), and the shared-resource reconciliation
-  (single-writer index, serialized shadow-git/worktree creation).
+- **Shipped**: the remote executor process (`shofer serve`, HTTP/SSE over
+  `ShoferApiAgent`), the `NodeRegistry` that wires the `ExecutorPool` into the extension
+  (node registry + SecretStorage tokens, connect/auth/version handshake, live status,
+  load-balancing), the full Shofer Nodes UI (Settings panel, header status, composer
+  node-picker, load-balancer selector), interactive approvals (`respondToAsk`),
+  full-fidelity remote render, per-view shadow focus, and the reverse data channel
+  (checkpoint diff/restore + changed-files).
 
-With the agent-core carve-out finished, the built substrate is ready to become a live
-remote executor; the controller orchestration and host-callback plumbing already exist,
-and the only remaining work is the process/UI wiring above.
+**Remaining hardening**: shared-resource reconciliation (enforce single-writer index,
+serialize shadow-git/worktree creation on the shared repo), the split-host
+session-transport model (an executor using the _controller's_ host over RPC, vs today's
+shared-workspace executor-local host), and reconnect resilience / stream resync.
 
 ### Deliberately deferred (gated, not oversights)
 
