@@ -5,6 +5,7 @@ import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
 import { configLog } from "../../logging/subsystems.js"
+import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
@@ -14,11 +15,13 @@ const MAX_DEPTH = 5
 export interface Command {
 	name: string
 	content: string
-	source: "global" | "project" | "built-in"
+	source: "global" | "project" | "built-in" | "plugin"
 	filePath: string
 	description?: string
 	argumentHint?: string
 	mode?: string
+	/** When source === "plugin", the contributing plugin's name (attribution). */
+	pluginName?: string
 }
 
 /**
@@ -142,6 +145,16 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	await scanCommandDirectory(projectDir, "project", commands)
 
+	// Scan plugin-contributed commands (design §6.5). Names are namespaced
+	// `<pluginName>:<command>` (collision-free, §14.7), so they never shadow a
+	// built-in/global/project command. Empty when no plugin manager is wired.
+	const pluginManager = getSharedPluginManager()
+	if (pluginManager) {
+		for (const { pluginName, dir } of pluginManager.getContributedCommandDirs()) {
+			await scanCommandDirectory(dir, "plugin", commands, pluginName)
+		}
+	}
+
 	return Array.from(commands.values())
 }
 
@@ -166,6 +179,21 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 		return globalCommand
 	}
 
+	// Check plugin-contributed commands. Plugin commands are namespaced
+	// `<pluginName>:<command>`, so only attempt the plugin whose prefix matches.
+	const pluginManager = getSharedPluginManager()
+	if (pluginManager) {
+		for (const { pluginName, dir } of pluginManager.getContributedCommandDirs()) {
+			const prefix = `${pluginName}:`
+			if (!name.startsWith(prefix)) continue
+			const bare = name.slice(prefix.length)
+			const pluginCommand = await tryLoadCommand(dir, bare, "plugin")
+			if (pluginCommand) {
+				return { ...pluginCommand, name: `${prefix}${bare}`, source: "plugin", pluginName }
+			}
+		}
+	}
+
 	// Check built-in commands if not found in project or global (lowest priority)
 	return await getBuiltInCommand(name)
 }
@@ -176,7 +204,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 async function tryLoadCommand(
 	dirPath: string,
 	name: string,
-	source: "global" | "project",
+	source: "global" | "project" | "plugin",
 ): Promise<Command | undefined> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -269,8 +297,9 @@ export async function getCommandNames(cwd: string): Promise<string[]> {
  */
 async function scanCommandDirectory(
 	dirPath: string,
-	source: "global" | "project",
+	source: "global" | "project" | "plugin",
 	commands: Map<string, Command>,
+	pluginName?: string,
 ): Promise<void> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -293,8 +322,10 @@ async function scanCommandDirectory(
 
 		// Process each collected file
 		for (const { originalPath, resolvedPath } of fileInfo) {
-			// Command name comes from the original path (symlink name if symlinked)
-			const commandName = getCommandNameFromFile(path.basename(originalPath))
+			// Command name comes from the original path (symlink name if symlinked).
+			// Plugin commands are namespaced `<pluginName>:<command>` (design §14.7).
+			const baseName = getCommandNameFromFile(path.basename(originalPath))
+			const commandName = source === "plugin" && pluginName ? `${pluginName}:${baseName}` : baseName
 
 			try {
 				const content = await fs.readFile(resolvedPath, "utf-8")
@@ -329,8 +360,9 @@ async function scanCommandDirectory(
 					commandContent = content.trim()
 				}
 
-				// Project commands override global ones
-				if (source === "project" || !commands.has(commandName)) {
+				// Project commands override global ones; plugin commands are namespaced
+				// so they never collide.
+				if (source === "project" || source === "plugin" || !commands.has(commandName)) {
 					commands.set(commandName, {
 						name: commandName,
 						content: commandContent,
@@ -339,6 +371,7 @@ async function scanCommandDirectory(
 						description,
 						argumentHint,
 						mode,
+						pluginName: source === "plugin" ? pluginName : undefined,
 					})
 				}
 			} catch (error) {
