@@ -19,6 +19,16 @@
 		"placeholder": "Search settings...",
 		"noResults": "No settings found"
 	},
+	"shoferNodes": {
+		"loadBalancer": {
+			"label": "Load balancing",
+			"description": "How new tasks are distributed across the enabled nodes.",
+			"roundRobin": "Round-robin",
+			"leastLoad1m": "Least load (1m)",
+			"leastLoad5m": "Least load (5m)",
+			"leastLoad15m": "Least load (15m)"
+		}
+	},
 	"unsavedChangesDialog": {
 		"title": "Unsaved Changes",
 		"description": "Do you want to discard changes and continue?",

@@ -2,12 +2,28 @@ import { HTMLAttributes, useEffect, useMemo, useState } from "react"
 import { Plus, Pencil, Trash2, Plug, Unplug, Power, PowerOff } from "lucide-react"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
-import type { ShoferNodeConnState, ShoferNodeDef, ShoferNodeRequest, ShoferNodeView } from "@shofer/types"
+import type {
+	LoadBalancerPolicy,
+	ShoferNodeConnState,
+	ShoferNodeDef,
+	ShoferNodeRequest,
+	ShoferNodeView,
+} from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
-import { Button, Input, ToggleSwitch } from "@src/components/ui"
+import {
+	Button,
+	Input,
+	ToggleSwitch,
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@src/components/ui"
 import { cn } from "@src/lib/utils"
 
 import { SectionHeader } from "./SectionHeader"
@@ -41,6 +57,14 @@ function emptyForm(): NodeForm {
 function post(shoferNode: ShoferNodeRequest) {
 	vscode.postMessage({ type: "shoferNode", shoferNode })
 }
+
+/** The load-balancer policies in menu order, paired with their i18n label key. */
+const LOAD_BALANCER_POLICIES: { value: LoadBalancerPolicy; labelKey: string }[] = [
+	{ value: "round-robin", labelKey: "settings:shoferNodes.loadBalancer.roundRobin" },
+	{ value: "least-load-1m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad1m" },
+	{ value: "least-load-5m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad5m" },
+	{ value: "least-load-15m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad15m" },
+]
 
 export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 	const { t } = useAppTranslation()
@@ -90,6 +114,32 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 					token is stored in VS Code SecretStorage and never synced or exported. Connecting a node also makes
 					it reconnect automatically on the next start; disabling a node takes it out of the pool entirely.
 				</div>
+
+				{/* Load balancing: how new tasks are spread across enabled nodes. */}
+				<label className="flex flex-col gap-1 text-sm mb-3">
+					<span className="font-medium">{t("settings:shoferNodes.loadBalancer.label")}</span>
+					<Select
+						value={shoferNodes?.loadBalancer ?? "round-robin"}
+						onValueChange={(value) =>
+							post({ action: "setLoadBalancer", policy: value as LoadBalancerPolicy })
+						}>
+						<SelectTrigger className="w-full">
+							<SelectValue placeholder={t("settings:common.select")} />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								{LOAD_BALANCER_POLICIES.map(({ value, labelKey }) => (
+									<SelectItem key={value} value={value}>
+										{t(labelKey)}
+									</SelectItem>
+								))}
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+					<span className="text-xs text-vscode-descriptionForeground">
+						{t("settings:shoferNodes.loadBalancer.description")}
+					</span>
+				</label>
 
 				<div className="flex flex-col gap-2">
 					{nodes.map((n) => {
