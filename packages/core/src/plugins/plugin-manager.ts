@@ -15,6 +15,7 @@ import { configLog } from "../logging/subsystems.js"
 import { pluginRegistry } from "./plugin-registry.js"
 import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
+import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
 import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
@@ -97,6 +98,18 @@ export interface PluginStateStore {
 	getEnabledPlugins(): string[] | Promise<string[]>
 	/** Persist the new enabled set. */
 	setEnabledPlugins(names: string[]): void | Promise<void>
+}
+
+/**
+ * Persistence seam for the set of plugins the user has consented to make **billed** AI
+ * calls (design §6.11 G1, §8; Phase 6). Separate from {@link PluginStateStore} (enable)
+ * so consent is an independent, explicit gate on `ctx.ai`.
+ */
+export interface PluginAiConsentStore {
+	/** Names of plugins the user has AI-consented (billed calls allowed). */
+	getAiConsentedPlugins(): string[] | Promise<string[]>
+	/** Persist the new AI-consented set. */
+	setAiConsentedPlugins(names: string[]): void | Promise<void>
 }
 
 /** A directory the manager was told to scan, with its scope tag. */
@@ -194,6 +207,18 @@ export interface PluginManagerOptions {
 	getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
 	/** Absolute workspace path threaded into code-plugin contexts (`workspacePath`/`cwd`). */
 	workspacePath?: string
+	/**
+	 * Host seam constructing a plugin's `ctx.ai` (design §6.11 G1). When omitted, no
+	 * plugin gets AI access (even a granted+consented one) — headless/pure-core stays
+	 * host-agnostic. Supplied by the extension where `ProviderSettingsManager` lives.
+	 */
+	aiProvider?: PluginAiProvider
+	/**
+	 * Persistence seam for the billed-AI consent set (design §8). When omitted, no
+	 * plugin is ever AI-consented, so any `permissions.ai` plugin gets a denying
+	 * `ctx.ai` (fail-closed).
+	 */
+	aiConsentStore?: PluginAiConsentStore
 }
 
 const MANIFEST_FILENAME = "plugin.json"
@@ -206,6 +231,10 @@ export class PluginManager {
 	private readonly host?: HostBridge
 	private readonly getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
 	private readonly workspacePath?: string
+	private readonly aiProvider?: PluginAiProvider
+	private readonly aiConsentStore?: PluginAiConsentStore
+	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
+	private aiConsented = new Set<string>()
 	/** Names of code plugins currently loaded + registered into `pluginRegistry`. */
 	private readonly loadedCodePlugins = new Set<string>()
 	private plugins: DiscoveredPlugin[] = []
@@ -226,6 +255,8 @@ export class PluginManager {
 		this.host = options.host
 		this.getPluginConfigs = options.getPluginConfigs
 		this.workspacePath = options.workspacePath
+		this.aiProvider = options.aiProvider
+		this.aiConsentStore = options.aiConsentStore
 	}
 
 	/**
@@ -238,6 +269,8 @@ export class PluginManager {
 		const enabledList = await this.stateStore.getEnabledPlugins()
 		this.enabledOrder = [...enabledList]
 		const enabled = new Set(enabledList)
+		// Load the billed-AI consent set (design §8) — an independent gate on `ctx.ai`.
+		this.aiConsented = new Set((await this.aiConsentStore?.getAiConsentedPlugins()) ?? [])
 		const byName = new Map<string, DiscoveredPlugin>()
 
 		for (const { dir, scope } of this.pluginDirs) {
@@ -436,6 +469,33 @@ export class PluginManager {
 		await this.activateCodePlugins()
 	}
 
+	/** Whether the user has AI-consented (billed calls) for `name` (design §8). */
+	isAiConsented(name: string): boolean {
+		return this.aiConsented.has(name)
+	}
+
+	/**
+	 * Grant or revoke a plugin's billed-AI consent (design §6.11 G1, §8) and persist it.
+	 * Consent is an independent gate on `ctx.ai`: this reloads the affected code plugin so
+	 * its context is rebuilt with the new consent (a live `ctx.ai` becomes a denying stub
+	 * on revoke, and vice versa) rather than serving a stale surface captured at load.
+	 */
+	async setAiConsent(name: string, consented: boolean): Promise<void> {
+		const current = new Set(this.aiConsented)
+		if (consented) current.add(name)
+		else current.delete(name)
+		const next = [...current]
+		await this.aiConsentStore?.setAiConsentedPlugins(next)
+		this.aiConsented = current
+		// Force the affected code plugin to rebuild its context (and thus `ctx.ai`) on the
+		// next activation pass. No-op for a declarative/unloaded plugin.
+		if (this.loadedCodePlugins.has(name)) {
+			pluginRegistry.unregister(name)
+			this.loadedCodePlugins.delete(name)
+		}
+		await this.activateCodePlugins()
+	}
+
 	/**
 	 * Uninstall a plugin: delete its directory and drop it from the enabled set and
 	 * the in-memory list. All its contributions disappear on the next read.
@@ -469,7 +529,11 @@ export class PluginManager {
 	async activateCodePlugins(): Promise<void> {
 		if (!this.codeLoader) return
 
-		const active = new Set(this.enabledPlugins().filter((p) => p.hasCode).map((p) => p.name))
+		const active = new Set(
+			this.enabledPlugins()
+				.filter((p) => p.hasCode)
+				.map((p) => p.name),
+		)
 
 		// Unregister code plugins that are loaded but no longer active (disabled, or
 		// failed closed by a dependency toggle).
@@ -497,9 +561,7 @@ export class PluginManager {
 				})
 				this.loadedCodePlugins.add(plugin.name)
 			} catch (error) {
-				warnPlugin(
-					`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`,
-				)
+				warnPlugin(`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`)
 			}
 		}
 	}
@@ -525,7 +587,22 @@ export class PluginManager {
 			cwd: this.workspacePath,
 			config,
 			host,
+			ai: this.buildPluginAi(plugin),
 		}
+	}
+
+	/**
+	 * Construct a plugin's `ctx.ai` surface (design §6.11 G1, §8). Two fail-closed gates:
+	 * `permissions.ai` **ungranted** ⇒ `undefined` (`ctx.ai` absent entirely); granted but
+	 * no host {@link PluginAiProvider} wired (headless) ⇒ also `undefined`; granted + wired
+	 * but **not** billed-AI-consented ⇒ a denying stub (calls throw + warn). Only a granted,
+	 * wired, **consented** plugin gets the live provider-backed surface.
+	 */
+	private buildPluginAi(plugin: DiscoveredPlugin): PluginContext["ai"] {
+		if (plugin.manifest.permissions?.ai !== true) return undefined
+		if (!this.aiProvider) return undefined
+		if (!this.aiConsented.has(plugin.name)) return createDeniedPluginAi(plugin.name)
+		return createPluginAi(plugin.name, this.aiProvider)
 	}
 
 	/**

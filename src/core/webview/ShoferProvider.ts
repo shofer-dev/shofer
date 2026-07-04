@@ -90,10 +90,14 @@ import {
 	PluginPackError,
 } from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
+import type { ApiHandler, PluginAiProvider } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodeIndexConfigManager } from "../../services/code-index/config-manager"
+import { CacheManager } from "../../services/code-index/cache-manager"
+import { CodeIndexServiceFactory } from "../../services/code-index/service-factory"
 import type { IndexProgressUpdate } from "@shofer/core"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { LiveMemoryManager } from "../../services/live-memory/manager"
@@ -2079,6 +2083,7 @@ export class ShoferProvider
 	public async getPluginManager(): Promise<PluginManager> {
 		if (this.pluginManager) return this.pluginManager
 		const stateKey = "shofer.plugins.enabledPlugins"
+		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
 		const cwd = this.cwd
 		const pluginDirs = [
 			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
@@ -2102,6 +2107,17 @@ export class ShoferProvider
 			getPluginConfigs: () =>
 				this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined,
 			workspacePath: cwd,
+			// P6.G1 — host LLM/embeddings seam for `ctx.ai` (never leaks keys). Wired here
+			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
+			// + code-index embedder, mirroring how live-memory reaches buildApiHandler.
+			aiProvider: this.buildPluginAiProvider(),
+			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
+			aiConsentStore: {
+				getAiConsentedPlugins: () => this.context.globalState.get<string[]>(aiConsentKey) ?? [],
+				setAiConsentedPlugins: async (names) => {
+					await this.context.globalState.update(aiConsentKey, names)
+				},
+			},
 		})
 		await manager.discover()
 		this.pluginManager = manager
@@ -2111,6 +2127,53 @@ export class ShoferProvider
 		// each finishes loading. Failures are warned + isolated inside activateCodePlugins.
 		void manager.activateCodePlugins()
 		return manager
+	}
+
+	/**
+	 * Build the host {@link PluginAiProvider} seam that backs a consented plugin's `ctx.ai`
+	 * (P6.G1). `buildHandler` resolves a provider profile — a named/id `profileRef`, or the
+	 * active `apiConfiguration` when omitted — and returns the same `ApiHandler`
+	 * `buildApiHandler` gives the main agent (the plugin never sees the settings or keys).
+	 * `embed` reuses the **configured Code Index embedder** (the thinnest useful embedding
+	 * seam; `profileRef` is accepted for symmetry but embeddings follow the Code Index
+	 * config). Any resolution/embedding failure surfaces as a rejected promise to the plugin.
+	 */
+	private buildPluginAiProvider(): PluginAiProvider {
+		const PLUGIN_TASK_ID = "shofer-plugin"
+		return {
+			buildHandler: async (profileRef?: string): Promise<ApiHandler> => {
+				if (profileRef) {
+					// Try by name, then by id (a profileRef may be either).
+					let profile
+					try {
+						profile = await this.providerSettingsManager.getProfile({ name: profileRef })
+					} catch {
+						profile = await this.providerSettingsManager.getProfile({ id: profileRef })
+					}
+					return buildApiHandler(profile, { taskId: PLUGIN_TASK_ID })
+				}
+				const { apiConfiguration } = await this.getState()
+				return buildApiHandler(apiConfiguration, { taskId: PLUGIN_TASK_ID })
+			},
+			embed: async (texts: string[]): Promise<number[][]> => {
+				const configManager = new CodeIndexConfigManager(this.contextProxy)
+				await configManager.loadConfiguration()
+				if (!configManager.isFeatureConfigured) {
+					throw new Error(
+						"ctx.ai.embed: Code Index embeddings are not configured — enable and configure Code Index in Settings.",
+					)
+				}
+				const workspacePath = this.cwd ?? getGlobalShoferDirectory()
+				const factory = new CodeIndexServiceFactory({
+					configManager,
+					workspacePath,
+					cacheManager: new CacheManager(this.context, workspacePath),
+				})
+				const embedder = factory.createEmbedder()
+				const { embeddings } = await embedder.createEmbeddings(texts)
+				return embeddings
+			},
+		}
 	}
 
 	/** Push the discovered-plugins snapshot to the webview (design §12). */
@@ -2127,6 +2190,10 @@ export class ShoferProvider
 			disabledReason: p.disabledReason,
 			hasCode: p.hasCode,
 			contributionCounts: p.contributionCounts,
+			// P6.G1 — surface the billed-AI grant + consent so the panel can render the
+			// "uses AI (billed)" badge and the separate consent affordance (design §8).
+			usesAi: p.manifest.permissions?.ai === true,
+			aiConsented: manager.isAiConsented(p.name),
 		}))
 		const state: PluginsState = { plugins }
 		await this.postMessageToWebview({ type: "plugins", plugins: state })
@@ -2144,6 +2211,11 @@ export class ShoferProvider
 			case "setEnabled":
 				await manager.setEnabled(request.name, request.enabled)
 				await this.resyncAfterPluginChange()
+				break
+			case "setAiConsent":
+				// P6.G1 — separate consent gate for billed AI calls (design §8). Reloads the
+				// affected code plugin so its `ctx.ai` flips live/denied immediately.
+				await manager.setAiConsent(request.name, request.consented)
 				break
 			case "uninstall":
 				await manager.uninstall(request.name)

@@ -160,6 +160,11 @@
 		"installFromFile": "Install from file…",
 		"uninstall": "Uninstall",
 		"uninstallConfirm": "Uninstall the plugin \"{{name}}\"? This deletes its directory.",
-		"cancel": "Cancel"
+		"cancel": "Cancel",
+		"aiBadge": "uses AI (billed)",
+		"aiConsentPrompt": "This plugin makes billed LLM calls on your account. Allow it?",
+		"aiConsentAllow": "Allow billed AI",
+		"aiConsented": "AI allowed",
+		"aiConsentRevoke": "Revoke"
 	}
 }

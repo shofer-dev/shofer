@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Blocks, Trash2, Upload } from "lucide-react"
+import { Blocks, Sparkles, Trash2, Upload } from "lucide-react"
 
 import type { PluginRequest, PluginView } from "@shofer/types"
 
@@ -82,6 +82,14 @@ export function PluginsTab() {
 										<span className="text-xs rounded bg-vscode-badge-background text-vscode-badge-foreground px-1.5 py-0.5">
 											{t(`settings:plugins.scope.${plugin.scope}`)}
 										</span>
+										{plugin.usesAi && (
+											<span
+												className="text-xs rounded px-1.5 py-0.5 inline-flex items-center gap-1 bg-vscode-inputValidation-warningBackground text-vscode-inputValidation-warningForeground border border-vscode-inputValidation-warningBorder"
+												title={t("marketplace:plugins.aiConsentPrompt")}>
+												<Sparkles className="size-3" />
+												{t("marketplace:plugins.aiBadge")}
+											</span>
+										)}
 									</div>
 									{plugin.description && (
 										<div className="text-sm text-vscode-descriptionForeground mt-0.5">
@@ -94,6 +102,49 @@ export function PluginsTab() {
 									{plugin.enabled && plugin.disabledReason && (
 										<div className="text-xs text-vscode-errorForeground mt-1">
 											{t("settings:plugins.disabledReason", { reason: plugin.disabledReason })}
+										</div>
+									)}
+									{plugin.usesAi && (
+										<div className="mt-2 flex items-center gap-2 flex-wrap">
+											{plugin.aiConsented ? (
+												<>
+													<span className="text-xs text-vscode-descriptionForeground inline-flex items-center gap-1">
+														<Sparkles className="size-3" />
+														{t("marketplace:plugins.aiConsented")}
+													</span>
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() =>
+															post({
+																action: "setAiConsent",
+																name: plugin.name,
+																consented: false,
+															})
+														}>
+														{t("marketplace:plugins.aiConsentRevoke")}
+													</Button>
+												</>
+											) : (
+												<>
+													<span className="text-xs text-vscode-descriptionForeground">
+														{t("marketplace:plugins.aiConsentPrompt")}
+													</span>
+													<Button
+														variant="secondary"
+														size="sm"
+														onClick={() =>
+															post({
+																action: "setAiConsent",
+																name: plugin.name,
+																consented: true,
+															})
+														}>
+														<Sparkles className="size-3" />
+														{t("marketplace:plugins.aiConsentAllow")}
+													</Button>
+												</>
+											)}
 										</div>
 									)}
 								</div>

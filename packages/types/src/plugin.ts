@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
-import type { HostEnv, HostFileSystem, Notifier } from "./host.js"
+import type { HostDisposable, HostEnv, HostFileSystem, Notifier } from "./host.js"
 import { modeConfigObjectSchema } from "./mode.js"
 
 /**
@@ -185,6 +185,76 @@ export interface PluginHost {
 	readonly env: HostEnv
 	/** HTTP access, scoped to the plugin's `permissions.network` origin allowlist. */
 	fetch(input: string | URL, init?: RequestInit): Promise<Response>
+	/**
+	 * Watch files matching `pattern` (a glob) for create/change/delete, invoking
+	 * `onChange` on any event (design §6.11 G3; Phase 6). **Scoped to the plugin's
+	 * `permissions.filesystem` grant**: it watches `pattern` under each granted root
+	 * only. A plugin without a filesystem grant gets a deny + warn (no watcher; the
+	 * returned {@link HostDisposable} is a no-op). Dispose to stop watching (the manager
+	 * also disposes it on plugin disable). Present only when the host wired a watcher.
+	 */
+	watch?(pattern: string, onChange: () => void): HostDisposable
+}
+
+/**
+ * Host LLM/embeddings access handed to a plugin granted `permissions.ai` **and** the
+ * billed-calls consent (design §6.11 G1, §8; Phase 6). The plugin never sees raw API
+ * keys — only an opaque {@link Handler} (the host's `ApiHandler`, constructed in
+ * `@shofer/core` via `buildApiHandler`). `@shofer/types` stays browser-safe by leaving
+ * the handler type abstract (defaulting to `unknown`); core wires the concrete
+ * `ApiHandler` in (a `PluginAi<ApiHandler>` is assignable to `PluginAi`).
+ *
+ * Both calls are async because host provider-profile resolution
+ * (`ProviderSettingsManager.getProfile`) is async — `→ ApiHandler` in the design is
+ * shorthand for "the same handler abstraction `buildApiHandler` returns".
+ */
+export interface PluginAi<Handler = unknown> {
+	/**
+	 * Build an {@link Handler} for `profileRef` (a host provider-profile name/id), or the
+	 * host's default profile when omitted. Reuses the host's `buildApiHandler` seam, so
+	 * the plugin gets the identical `ApiHandler` the main agent uses — never keys.
+	 */
+	buildHandler(profileRef?: string): Promise<Handler>
+	/** Embed `texts` via a host embedder, returning one vector per input text. */
+	embed(texts: string[], profileRef?: string): Promise<number[][]>
+}
+
+/**
+ * A plugin's **private** persistent storage (design §6.11 G2; Phase 6). Rooted at
+ * {@link dir} (`<globalStorage>/plugins/<name>/`); every path is resolved relative to
+ * it and **traversal-blocked** (a `..` escape is denied). Created lazily, survives
+ * restart, removed on uninstall. Works regardless of `permissions.filesystem` — it is
+ * the plugin's own sandbox, not host paths.
+ */
+export interface PluginStorage {
+	/** Absolute path of this plugin's storage directory. */
+	readonly dir: string
+	/** Read a UTF-8 file under {@link dir}. Rejects on traversal or a missing file. */
+	readFile(relativePath: string): Promise<string>
+	/** Write a UTF-8 file under {@link dir} (parent dirs created). Rejects on traversal. */
+	writeFile(relativePath: string, content: string): Promise<void>
+	/** Whether a path under {@link dir} exists. Rejects on traversal. */
+	exists(relativePath: string): Promise<boolean>
+	/** Delete a file under {@link dir}. Rejects on traversal. */
+	delete(relativePath: string): Promise<void>
+	/** List entries (absolute paths) under {@link dir} or a subdirectory of it. */
+	list(relativeDir?: string): Promise<string[]>
+}
+
+/**
+ * A supervised, long-lived background service a plugin registers via
+ * {@link PluginContext.registerService} (design §6.11 G7; Phase 6). {@link start} runs
+ * when the plugin is enabled+active; {@link stop} on disable/uninstall/deactivate. The
+ * {@link PluginManager} isolates a throwing/hanging `start`/`stop` (timeout + warning)
+ * so a bad service can never crash the host.
+ */
+export interface PluginService {
+	/** Service name — used in supervision warnings for attribution. */
+	readonly name: string
+	/** Start the service. Awaited (with a timeout) when the plugin activates. */
+	start(): void | Promise<void>
+	/** Stop/dispose the service. Awaited (with a timeout) when the plugin deactivates. */
+	stop?(): void | Promise<void>
 }
 
 /**
@@ -192,7 +262,10 @@ export interface PluginHost {
  * fields are always populated by the hook call sites; {@link taskId}, {@link cwd},
  * {@link config}, and {@link host} are threaded in by the {@link PluginManager} when
  * a code plugin is registered (Phase 2) — they are absent for the seed/no-host case,
- * keeping behavior identical when no plugins are active.
+ * keeping behavior identical when no plugins are active. {@link ai}, {@link storage},
+ * and {@link registerService} are the Phase-6 host capabilities (design §6.11), each
+ * present only when the host wired its seam (and, for {@link ai}, only when
+ * `permissions.ai` was granted).
  */
 export interface PluginContext {
 	/** Absolute path of the active workspace, if any. */
@@ -207,6 +280,21 @@ export interface PluginContext {
 	readonly config?: Record<string, unknown>
 	/** Restricted, permission-checked host surface (design §6.2, §8; step 2.4). */
 	readonly host?: PluginHost
+	/**
+	 * Host LLM/embeddings access (design §6.11 G1; Phase 6). Present **only** when the
+	 * plugin was granted `permissions.ai` and the host wired its AI seam. When granted
+	 * but the user has not consented to billed calls (§8), this is a denying stub whose
+	 * calls throw + warn; when ungranted it is absent entirely.
+	 */
+	readonly ai?: PluginAi
+	/** This plugin's private persistent storage (design §6.11 G2; Phase 6). */
+	readonly storage?: PluginStorage
+	/**
+	 * Register a supervised background service tied to this plugin's lifecycle (design
+	 * §6.11 G7; Phase 6). Returns a {@link HostDisposable} that stops + removes the
+	 * service. Present only when the host wired the service supervisor.
+	 */
+	registerService?(service: PluginService): HostDisposable
 }
 
 /** A lightweight event surfaced to `onEvent` (decoupled from the telemetry catalog). */
@@ -267,6 +355,14 @@ export const pluginPermissionsSchema = z
 		network: z.array(z.string()).optional(),
 		/** Allowed filesystem paths (relative to the plugin/workspace). Enforced in Phase 2. */
 		filesystem: z.array(z.string()).optional(),
+		/**
+		 * Host LLM/embeddings access (`ctx.ai`, Phase 6 / P6.G1). Unlike the other
+		 * flags this costs the **user money** (billed model calls), so the grant is
+		 * necessary but not sufficient: `ctx.ai` is live only after a **separate**
+		 * billed-calls consent (design §8). Granted-but-unconsented ⇒ a denying stub;
+		 * ungranted ⇒ `ctx.ai` is absent entirely. The plugin never receives raw keys.
+		 */
+		ai: z.boolean().optional(),
 	})
 	.strict()
 
@@ -464,6 +560,17 @@ export interface PluginView {
 	/** Whether the plugin ships a code entry point (`main`). Not loaded in Phase 1. */
 	hasCode: boolean
 	contributionCounts: PluginContributionSummary
+	/**
+	 * Whether the plugin declares `permissions.ai` — i.e. it wants host LLM/embeddings
+	 * access, which makes **billed** calls (design §6.11 G1, §8; Phase 6). Drives the
+	 * "uses AI (billed)" badge + consent affordance in the Plugins panel.
+	 */
+	usesAi?: boolean
+	/**
+	 * Whether the user has consented to this plugin's billed AI calls (§8). Only
+	 * meaningful when {@link usesAi} is true; `ctx.ai` is live only when both hold.
+	 */
+	aiConsented?: boolean
 }
 
 /** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */
@@ -475,6 +582,12 @@ export interface PluginsState {
 export type PluginRequest =
 	| { action: "list" }
 	| { action: "setEnabled"; name: string; enabled: boolean }
+	/**
+	 * Grant or revoke consent for a plugin's **billed** AI calls (`permissions.ai`,
+	 * design §6.11 G1, §8; Phase 6). Separate from the enable toggle: `ctx.ai` is live
+	 * only when the plugin is enabled, declares `permissions.ai`, **and** is consented.
+	 */
+	| { action: "setAiConsent"; name: string; consented: boolean }
 	/** Uninstall a plugin: delete its directory and drop it from the enabled allow-list. */
 	| { action: "uninstall"; name: string }
 	/**
