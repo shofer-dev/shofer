@@ -1,4 +1,12 @@
-import type { AgentApi, AskResponse, ServerEvent } from "@shofer/types"
+import type {
+	AgentApi,
+	AskResponse,
+	ChangedFilesPayload,
+	CheckpointDiffEntry,
+	CheckpointDiffOptions,
+	CheckpointRestoreOptions,
+	ServerEvent,
+} from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -44,11 +52,61 @@ export class ShoferHttpClient implements AgentApi {
 		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
 	}
 
+	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
+
+	async getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
+		return (await this.post(`/task/${encodeURIComponent(taskId)}/checkpoint-diff`, opts)) as CheckpointDiffEntry[]
+	}
+
+	async getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
+		return (await this.get(`/task/${encodeURIComponent(taskId)}/changed-files`)) as ChangedFilesPayload
+	}
+
+	async getChangedFileDiff(
+		taskId: string,
+		relPath: string,
+	): Promise<{ original: string | null; final: string | null }> {
+		return (await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/diff`, { relPath })) as {
+			original: string | null
+			final: string | null
+		}
+	}
+
+	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/checkpoint-restore`, opts)
+	}
+
+	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/revert`, { relPath })
+	}
+
+	async revertAllChangedFiles(taskId: string): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/revert`, {})
+	}
+
+	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/accept`, { relPath })
+	}
+
+	async acceptAllChangedFiles(taskId: string): Promise<void> {
+		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/accept`, {})
+	}
+
 	/** Subscribe to the SSE event stream; returns an unsubscribe fn (aborts the request). */
 	subscribe(listener: (event: ServerEvent) => void): () => void {
 		const controller = new AbortController()
 		void this.streamEvents(listener, controller.signal)
 		return () => controller.abort()
+	}
+
+	private async get(path: string): Promise<unknown> {
+		const res = await this.doFetch(`${this.base}${path}`, {
+			method: "GET",
+			headers: { ...this.authHeaders },
+		})
+		if (!res.ok) throw new Error(`shofer server ${path} → ${res.status}`)
+		const text = await res.text()
+		return text ? JSON.parse(text) : undefined
 	}
 
 	private async post(path: string, body: unknown): Promise<unknown> {

@@ -1,6 +1,6 @@
 import http from "node:http"
 
-import type { AgentApi } from "@shofer/types"
+import type { AgentApi, CheckpointDiffOptions, CheckpointRestoreOptions } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -60,6 +60,12 @@ export interface HttpServerOptions {
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId? } (interactive approval)
+ *   POST /api/v1/task/:id/checkpoint-diff     → CheckpointDiffOptions → 200 CheckpointDiffEntry[]  (L3)
+ *   POST /api/v1/task/:id/checkpoint-restore  → CheckpointRestoreOptions → 202                     (L3)
+ *   GET  /api/v1/task/:id/changed-files       → 200 ChangedFilesPayload                            (L3)
+ *   POST /api/v1/task/:id/changed-files/diff  → { relPath } → 200 { original, final }              (L3)
+ *   POST /api/v1/task/:id/changed-files/revert→ { relPath? } → 202 (one file, or all when omitted) (L3)
+ *   POST /api/v1/task/:id/changed-files/accept→ { relPath? } → 202 (one file, or all when omitted) (L3)
  */
 export function createHttpServer(api: AgentApi, opts: HttpServerOptions = {}): http.Server {
 	return http.createServer(createRequestHandler(api, opts))
@@ -147,6 +153,53 @@ export function createRequestHandler(
 			}
 			await api.cancelTask(taskId)
 			return send(res, 202, { taskId, cancelled: true })
+		}
+
+		// ── Reverse data channel (Shofer Nodes L3) — remote checkpoint + changed-files ──
+
+		// GET the task's changed-files panel payload.
+		const changedFilesGet = path.match(new RegExp(`^${base}/task/([^/]+)/changed-files$`))
+		if (method === "GET" && changedFilesGet) {
+			const taskId = decodeURIComponent(changedFilesGet[1]!)
+			return send(res, 200, await api.getTaskChangedFiles(taskId))
+		}
+
+		// POST-with-body for the remaining L3 routes (data + execute).
+		const l3Match = path.match(
+			new RegExp(
+				`^${base}/task/([^/]+)/(checkpoint-diff|checkpoint-restore|changed-files/diff|changed-files/revert|changed-files/accept)$`,
+			),
+		)
+		if (method === "POST" && l3Match) {
+			const taskId = decodeURIComponent(l3Match[1]!)
+			const action = l3Match[2]!
+			const body = await readJson(req)
+
+			if (action === "checkpoint-diff") {
+				if (typeof body.commitHash !== "string") return send(res, 400, { error: "commitHash is required" })
+				const changes = await api.getCheckpointDiff(taskId, body as unknown as CheckpointDiffOptions)
+				return send(res, 200, changes)
+			}
+			if (action === "checkpoint-restore") {
+				if (typeof body.commitHash !== "string") return send(res, 400, { error: "commitHash is required" })
+				await api.restoreCheckpoint(taskId, body as unknown as CheckpointRestoreOptions)
+				return send(res, 202, { taskId, restored: true })
+			}
+			if (action === "changed-files/diff") {
+				if (typeof body.relPath !== "string") return send(res, 400, { error: "relPath is required" })
+				return send(res, 200, await api.getChangedFileDiff(taskId, body.relPath))
+			}
+			// revert / accept: a `relPath` scopes to one file; its absence targets all.
+			const relPath = typeof body.relPath === "string" ? body.relPath : undefined
+			if (action === "changed-files/revert") {
+				if (relPath !== undefined) await api.revertChangedFile(taskId, relPath)
+				else await api.revertAllChangedFiles(taskId)
+				return send(res, 202, { taskId, reverted: true })
+			}
+			// changed-files/accept
+			if (relPath !== undefined) await api.acceptChangedFile(taskId, relPath)
+			else await api.acceptAllChangedFiles(taskId)
+			return send(res, 202, { taskId, accepted: true })
 		}
 
 		send(res, 404, { error: `no route for ${method} ${path}` })
