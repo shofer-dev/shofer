@@ -113,10 +113,7 @@ export const groupEntryArraySchema = rawGroupEntryArraySchema
  * available on ZodEffects.
  */
 export const modeConfigObjectSchema = z.object({
-	// `:` is permitted only so plugin-contributed modes can be namespaced as
-	// `<pluginName>:<slug>` (collision-free per design §14.7); authored slugs use
-	// letters/numbers/dashes.
-	slug: z.string().regex(/^[a-zA-Z0-9:-]+$/, "Slug must contain only letters numbers and dashes"),
+	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
 	name: z.string().min(1, "Name is required"),
 	roleDefinition: z.string().min(1, "Role definition is required"),
 	whenToUse: z.string().optional(),

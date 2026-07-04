@@ -120,8 +120,8 @@ describe("PluginManager (design §7, Phase 1)", () => {
 
 		const modes = pm.getContributedModes()
 		expect(modes).toHaveLength(1)
-		// Slug is namespaced <pluginName>:<slug> (collision-free, design §14.7).
-		expect(modes[0]).toMatchObject({ slug: "p1:deploy", source: "plugin", pluginName: "p1" })
+		// Slug is the natural authored slug (no namespacing, design §14.7).
+		expect(modes[0]).toMatchObject({ slug: "deploy", source: "plugin", pluginName: "p1" })
 
 		expect(pm.getContributedSkillDirs()).toEqual([{ pluginName: "p1", dir: `${PROJECT}/p1/skills` }])
 		expect(pm.getContributedCommandDirs()).toEqual([{ pluginName: "p1", dir: `${PROJECT}/p1/commands` }])
@@ -312,5 +312,58 @@ describe("PluginManager — fail-closed dependencies (design §14.3, Q3)", () =>
 		await pm.setEnabled("base", true)
 		expect(pm.getPlugin("app")!.effectiveEnabled).toBe(true)
 		expect(pm.getPlugin("base")!.effectiveEnabled).toBe(true)
+	})
+})
+
+describe("PluginManager — last-installed-wins on mode conflict (design §14.7, Q7)", () => {
+	const PROJECT = "/ws/.shofer/plugins"
+	const dirs: PluginDir[] = [{ dir: PROJECT, scope: "project" }]
+
+	let fs: MemoryFs
+	let notifier: RecordingNotifier
+
+	beforeEach(() => {
+		fs = new MemoryFs()
+		const host = createInMemoryHost()
+		notifier = host.notifier as RecordingNotifier
+		setHost(host)
+	})
+
+	const modeWith = (pluginName: string, roleDefinition: string) => ({
+		name: pluginName,
+		version: "1.0.0",
+		permissions: { modes: true },
+		contributes: {
+			// Both plugins contribute the SAME natural slug "deploy".
+			modes: [{ slug: "deploy", name: "Deploy", roleDefinition, tools: ["read"] }],
+		},
+	})
+
+	it("uses the natural slug and lets the last-installed plugin win, with a warning", async () => {
+		fs.addManifest(`${PROJECT}/a`, modeWith("a", "role-A"))
+		fs.addManifest(`${PROJECT}/b`, modeWith("b", "role-B"))
+		// enabledPlugins order = install order: a first, then b ⇒ b is last-installed.
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["a", "b"]), pluginDirs: dirs })
+		await pm.discover()
+
+		const modes = pm.getContributedModes()
+		expect(modes).toHaveLength(1)
+		// Natural slug (no namespacing); last-installed (b) wins.
+		expect(modes[0]).toMatchObject({ slug: "deploy", pluginName: "b", roleDefinition: "role-B" })
+
+		// Warning is shown to the user naming the slug + winner/shadowed plugins.
+		const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
+		expect(warns.some((m) => m.includes("deploy") && m.includes('"b"') && m.includes('"a"'))).toBe(true)
+	})
+
+	it("flips the winner when the install order flips (deterministic)", async () => {
+		fs.addManifest(`${PROJECT}/a`, modeWith("a", "role-A"))
+		fs.addManifest(`${PROJECT}/b`, modeWith("b", "role-B"))
+		// b enabled first, then a ⇒ a is last-installed and wins.
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["b", "a"]), pluginDirs: dirs })
+		await pm.discover()
+		const modes = pm.getContributedModes()
+		expect(modes).toHaveLength(1)
+		expect(modes[0]).toMatchObject({ pluginName: "a", roleDefinition: "role-A" })
 	})
 })

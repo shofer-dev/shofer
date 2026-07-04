@@ -146,7 +146,8 @@ describe("CustomModesManager", () => {
 			setSharedPluginManager({
 				getContributedModes: () => [
 					{
-						slug: "my-plugin:deploy",
+						// Natural slug (no namespacing, design §14.7).
+						slug: "deploy",
 						name: "🚀 Deploy",
 						roleDefinition: "Deploy specialist",
 						tools: ["read"],
@@ -158,11 +159,44 @@ describe("CustomModesManager", () => {
 
 			try {
 				const modes = await manager.getCustomModes()
-				const deploy = modes.find((m) => m.slug === "my-plugin:deploy")
+				const deploy = modes.find((m) => m.slug === "deploy")
 				expect(deploy).toBeDefined()
 				expect(deploy).toMatchObject({ source: "plugin", pluginName: "my-plugin" })
 				// Existing user modes are untouched.
 				expect(modes.find((m) => m.slug === "mode1")).toBeDefined()
+			} finally {
+				setSharedPluginManager(undefined)
+			}
+		})
+
+		it("plugin mode overrides a same-slug user mode (last-installed-wins) with a warning", async () => {
+			const settingsModes = [{ slug: "deploy", name: "User Deploy", roleDefinition: "User role", tools: ["read"] }]
+			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
+				if (path === mockSettingsPath) {
+					return yaml.stringify({ customModes: settingsModes })
+				}
+				throw new Error("File not found")
+			})
+
+			setSharedPluginManager({
+				getContributedModes: () => [
+					{
+						slug: "deploy",
+						name: "Plugin Deploy",
+						roleDefinition: "Plugin role",
+						tools: ["read"],
+						source: "plugin" as const,
+						pluginName: "my-plugin",
+					},
+				],
+			} as any)
+
+			try {
+				const modes = await manager.getCustomModes()
+				const deploy = modes.filter((m) => m.slug === "deploy")
+				// Exactly one "deploy" survives, and it is the plugin's (last-installed on top).
+				expect(deploy).toHaveLength(1)
+				expect(deploy[0]).toMatchObject({ source: "plugin", pluginName: "my-plugin", name: "Plugin Deploy" })
 			} finally {
 				setSharedPluginManager(undefined)
 			}

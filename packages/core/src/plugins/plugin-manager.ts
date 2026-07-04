@@ -21,6 +21,20 @@ function warnPlugin(message: string): void {
 }
 
 /**
+ * Warn (shown + logged) about a slug/name conflict resolved by last-installed-wins
+ * (design §14.7). `kind` is the contribution kind ("mode"/"command"/"skill"),
+ * `slug` the colliding identity, and `winner`/`shadowed` short descriptions of the
+ * winning and shadowed contributors (e.g. `plugin "b"`, `project mode`, `built-in`).
+ * The winner is the *last-installed* contributor per the persisted install order.
+ */
+export function warnPluginConflict(kind: string, slug: string, winner: string, shadowed: string): void {
+	warnPlugin(
+		`[plugins] ${kind} "${slug}" from ${winner} shadows the one from ${shadowed} ` +
+			`(last-installed wins).`,
+	)
+}
+
+/**
  * PluginManager — discovery, validation, permission-gating, and enable/disable
  * for declarative plugins (design §4, §7; Phase 1).
  *
@@ -399,25 +413,30 @@ export class PluginManager {
 	}
 
 	/**
-	 * Modes contributed by enabled plugins. Each is tagged `source: "plugin"` +
-	 * `pluginName`, and its slug is **namespaced** as `<pluginName>:<slug>` so it
-	 * can never collide with a built-in/project/global mode (design §14.7 —
-	 * namespacing). The authored (bare) slug is preserved as `baseSlug`-free info
-	 * only via the manifest; consumers use the namespaced slug as the identity.
+	 * Modes contributed by enabled plugins. Each keeps its **natural** authored slug
+	 * (no `<pluginName>:` namespacing) and is tagged `source: "plugin"` + `pluginName`
+	 * (attribution). On a slug collision *between two plugins*, last-installed-wins
+	 * (design §14.7): plugins are iterated in install-rank order (via
+	 * {@link enabledWithPermission}) so the later-installed plugin's mode overwrites
+	 * the earlier one's, with a warning that is shown + logged. Plugin-vs-file
+	 * collisions are resolved by the consumer ({@link CustomModesManager}).
 	 */
 	getContributedModes(): ModeConfig[] {
-		const modes: ModeConfig[] = []
+		const bySlug = new Map<string, ModeConfig>()
 		for (const plugin of this.enabledWithPermission("modes")) {
 			for (const mode of plugin.manifest.contributes?.modes ?? []) {
-				modes.push({
+				const prior = bySlug.get(mode.slug)
+				if (prior) {
+					warnPluginConflict("mode", mode.slug, `plugin "${plugin.name}"`, `plugin "${prior.pluginName}"`)
+				}
+				bySlug.set(mode.slug, {
 					...mode,
-					slug: `${plugin.name}:${mode.slug}`,
 					source: "plugin",
 					pluginName: plugin.name,
 				})
 			}
 		}
-		return modes
+		return Array.from(bySlug.values())
 	}
 
 	/** `<root>/skills` directories for enabled plugins that declare skills. */

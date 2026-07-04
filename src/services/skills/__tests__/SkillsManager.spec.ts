@@ -109,6 +109,7 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 import { SkillsManager } from "../SkillsManager"
 import { ShoferProvider } from "../../../core/webview/ShoferProvider"
 import { setSharedPluginManager } from "@shofer/core"
+import { createInMemoryHost, setHost } from "@shofer/types"
 
 describe("SkillsManager", () => {
 	let skillsManager: SkillsManager
@@ -1806,6 +1807,55 @@ Deploy instructions`
 			mockReaddir.mockResolvedValue([])
 			await skillsManager.discoverSkills()
 			expect(skillsManager.getAllSkills()).toHaveLength(0)
+		})
+
+		it("last-installed plugin wins a same-named skill, with a warning (design §14.7)", async () => {
+			const dirA = p(PROJECT_DIR, ".shofer", "plugins", "a", "skills")
+			const dirB = p(PROJECT_DIR, ".shofer", "plugins", "b", "skills")
+			const skillDirA = p(dirA, "deploy-skill")
+			const skillDirB = p(dirB, "deploy-skill")
+			const skillMdA = p(skillDirA, "SKILL.md")
+			const skillMdB = p(skillDirB, "SKILL.md")
+
+			// Fresh host so we can read the shown warning.
+			const host = createInMemoryHost()
+			const notifier = host.notifier as unknown as { messages: Array<{ level: string; message: string }> }
+			setHost(host)
+
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [
+					{ pluginName: "a", dir: dirA },
+					{ pluginName: "b", dir: dirB },
+				],
+				// b is installed later ⇒ higher rank ⇒ wins.
+				installRank: (name: string) => (name === "a" ? 0 : 1),
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === dirA || dir === dirB)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) =>
+				dir === dirA || dir === dirB ? ["deploy-skill"] : [],
+			)
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === skillDirA || pathArg === skillDirB) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === skillMdA || file === skillMdB)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === skillMdA) return `---\nname: deploy-skill\ndescription: from plugin A\n---\nA body`
+				if (file === skillMdB) return `---\nname: deploy-skill\ndescription: from plugin B\n---\nB body`
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Both are discovered (distinct keys), but resolution picks the last-installed.
+			const resolved = skillsManager.getSkillsForMode("code").filter((s) => s.name === "deploy-skill")
+			expect(resolved).toHaveLength(1)
+			expect(resolved[0]).toMatchObject({ pluginName: "b", description: "from plugin B" })
+
+			const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
+			expect(warns.some((m) => m.includes("deploy-skill") && m.includes('"b"') && m.includes('"a"'))).toBe(true)
 		})
 	})
 })

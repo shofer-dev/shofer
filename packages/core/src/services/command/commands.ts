@@ -5,7 +5,7 @@ import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
 import { configLog } from "../../logging/subsystems.js"
-import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
+import { getSharedPluginManager, warnPluginConflict } from "../../plugins/plugin-manager.js"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
@@ -145,9 +145,12 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	await scanCommandDirectory(projectDir, "project", commands)
 
-	// Scan plugin-contributed commands (design §6.5). Names are namespaced
-	// `<pluginName>:<command>` (collision-free, §14.7), so they never shadow a
-	// built-in/global/project command. Empty when no plugin manager is wired.
+	// Scan plugin-contributed commands (design §6.5). Commands use their **natural**
+	// name (no namespacing). Plugin dirs come back in install-rank order, so
+	// scanning them last — and letting a plugin overwrite whatever is present —
+	// yields last-installed-wins over built-in/global/project *and* over earlier
+	// plugins (design §14.7), with a shown+logged warning on each collision. Empty
+	// when no plugin manager is wired.
 	const pluginManager = getSharedPluginManager()
 	if (pluginManager) {
 		for (const { pluginName, dir } of pluginManager.getContributedCommandDirs()) {
@@ -167,7 +170,21 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	const globalDir = path.join(getGlobalShoferDirectory(), "commands")
 
-	// Check project directory first (highest priority)
+	// Check plugin-contributed commands first — they sit on top (last-installed
+	// wins, design §14.7). Plugin dirs are install-rank ascending, so scan them in
+	// *descending* order and return the first match (the last-installed contributor).
+	const pluginManager = getSharedPluginManager()
+	if (pluginManager) {
+		const dirs = [...pluginManager.getContributedCommandDirs()].reverse()
+		for (const { pluginName, dir } of dirs) {
+			const pluginCommand = await tryLoadCommand(dir, name, "plugin")
+			if (pluginCommand) {
+				return { ...pluginCommand, name, source: "plugin", pluginName }
+			}
+		}
+	}
+
+	// Check project directory next (highest priority among file sources)
 	const projectCommand = await tryLoadCommand(projectDir, name, "project")
 	if (projectCommand) {
 		return projectCommand
@@ -179,22 +196,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 		return globalCommand
 	}
 
-	// Check plugin-contributed commands. Plugin commands are namespaced
-	// `<pluginName>:<command>`, so only attempt the plugin whose prefix matches.
-	const pluginManager = getSharedPluginManager()
-	if (pluginManager) {
-		for (const { pluginName, dir } of pluginManager.getContributedCommandDirs()) {
-			const prefix = `${pluginName}:`
-			if (!name.startsWith(prefix)) continue
-			const bare = name.slice(prefix.length)
-			const pluginCommand = await tryLoadCommand(dir, bare, "plugin")
-			if (pluginCommand) {
-				return { ...pluginCommand, name: `${prefix}${bare}`, source: "plugin", pluginName }
-			}
-		}
-	}
-
-	// Check built-in commands if not found in project or global (lowest priority)
+	// Check built-in commands if not found anywhere else (lowest priority)
 	return await getBuiltInCommand(name)
 }
 
@@ -323,9 +325,8 @@ async function scanCommandDirectory(
 		// Process each collected file
 		for (const { originalPath, resolvedPath } of fileInfo) {
 			// Command name comes from the original path (symlink name if symlinked).
-			// Plugin commands are namespaced `<pluginName>:<command>` (design §14.7).
-			const baseName = getCommandNameFromFile(path.basename(originalPath))
-			const commandName = source === "plugin" && pluginName ? `${pluginName}:${baseName}` : baseName
+			// Plugin commands use their natural name (no namespacing, design §14.7).
+			const commandName = getCommandNameFromFile(path.basename(originalPath))
 
 			try {
 				const content = await fs.readFile(resolvedPath, "utf-8")
@@ -360,9 +361,21 @@ async function scanCommandDirectory(
 					commandContent = content.trim()
 				}
 
-				// Project commands override global ones; plugin commands are namespaced
-				// so they never collide.
-				if (source === "project" || source === "plugin" || !commands.has(commandName)) {
+				// File precedence: project overrides global overrides built-in (unchanged).
+				// Plugin commands sit on top (last-installed wins, design §14.7): a
+				// plugin always overwrites whatever is present, and any real collision
+				// (plugin vs plugin, or plugin vs built-in/user command) emits a shown +
+				// logged warning naming the winning vs shadowed contributor.
+				if (source === "plugin") {
+					const existing = commands.get(commandName)
+					if (existing) {
+						warnPluginConflict(
+							"command",
+							commandName,
+							`plugin "${pluginName}"`,
+							existing.pluginName ? `plugin "${existing.pluginName}"` : `${existing.source} command`,
+						)
+					}
 					commands.set(commandName, {
 						name: commandName,
 						content: commandContent,
@@ -371,7 +384,18 @@ async function scanCommandDirectory(
 						description,
 						argumentHint,
 						mode,
-						pluginName: source === "plugin" ? pluginName : undefined,
+						pluginName,
+					})
+				} else if (source === "project" || !commands.has(commandName)) {
+					commands.set(commandName, {
+						name: commandName,
+						content: commandContent,
+						source,
+						filePath: resolvedPath,
+						description,
+						argumentHint,
+						mode,
+						pluginName: undefined,
 					})
 				}
 			} catch (error) {

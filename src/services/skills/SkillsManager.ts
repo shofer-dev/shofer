@@ -6,7 +6,7 @@ import matter from "gray-matter"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "@shofer/core"
 import { directoryExists, fileExists } from "@shofer/core"
-import { getSharedPluginManager } from "@shofer/core"
+import { getSharedPluginManager, warnPluginConflict } from "@shofer/core"
 import { SkillMetadata, SkillContent } from "@shofer/types"
 import { modes, getAllModes } from "@shofer/core"
 import {
@@ -49,6 +49,11 @@ export class SkillsManager {
 		for (const { dir, source, mode, pluginName } of skillsDirs) {
 			await this.scanSkillsDirectory(dir, source, mode, pluginName)
 		}
+
+		// Surface name collisions that involve a plugin skill (last-installed-wins,
+		// design §14.7). Done once here rather than per-`getSkillsForMode` so the
+		// warning is not re-emitted on every resolution.
+		this.warnSkillConflicts()
 	}
 
 	/**
@@ -186,7 +191,9 @@ export class SkillsManager {
 
 	/**
 	 * Get skills available for the current mode.
-	 * Resolves overrides: project > global, mode-specific > generic.
+	 * Resolves overrides by {@link skillPrecedence}: project > global for file skills,
+	 * plugin skills on top with last-installed-wins (§14.7), mode-specific > generic
+	 * on a tie.
 	 *
 	 * @param currentMode - The current mode slug (e.g., 'code', 'architect')
 	 */
@@ -232,33 +239,82 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Determine if newSkill should override existingSkill based on priority rules.
-	 * Priority: project > global, mode-specific > generic
+	 * Resolution precedence for a skill. Higher wins. File skills keep the
+	 * established chain (project > global). Plugin skills sit **above** all file
+	 * skills, and among themselves resolve by **last-installed-wins** (design §14.7):
+	 * a plugin's precedence is offset by its install rank, so the later-installed
+	 * plugin's skill wins. This replaces the old fixed plugin-source priority.
+	 */
+	private skillPrecedence(skill: SkillMetadata): number {
+		if (skill.source === "plugin") {
+			const rank = skill.pluginName ? (getSharedPluginManager()?.installRank(skill.pluginName) ?? 0) : 0
+			// 100 base keeps every plugin skill above file skills regardless of rank.
+			return 100 + Math.max(rank, 0)
+		}
+		if (skill.source === "project") return 2
+		return 1 // global
+	}
+
+	/**
+	 * Determine if newSkill should override existingSkill. Higher {@link skillPrecedence}
+	 * wins (project > global for files; plugin last-installed-wins on top). On a tie,
+	 * mode-specific overrides generic, else the first-seen wins.
 	 */
 	private shouldOverrideSkill(existing: SkillMetadata, newSkill: SkillMetadata): boolean {
-		// Define source priority: plugin > project > global (design §6.4).
-		const sourcePriority: Record<string, number> = {
-			plugin: 3,
-			project: 2,
-			global: 1,
-		}
+		const existingPriority = this.skillPrecedence(existing)
+		const newPriority = this.skillPrecedence(newSkill)
 
-		const existingPriority = sourcePriority[existing.source] ?? 0
-		const newPriority = sourcePriority[newSkill.source] ?? 0
-
-		// Higher priority source always wins
+		// Higher precedence always wins
 		if (newPriority > existingPriority) return true
 		if (newPriority < existingPriority) return false
 
-		// Same source: mode-specific overrides generic
+		// Tie: mode-specific overrides generic
 		// A skill with modeSlugs (restricted) is more specific than one without (any mode)
 		const existingHasModes = existing.modeSlugs && existing.modeSlugs.length > 0
 		const newHasModes = newSkill.modeSlugs && newSkill.modeSlugs.length > 0
 		if (newHasModes && !existingHasModes) return true
 		if (!newHasModes && existingHasModes) return false
 
-		// Same source and same mode-specificity: keep existing (first wins)
+		// Same precedence and same mode-specificity: keep existing (first wins)
 		return false
+	}
+
+	/** Short description of a skill's origin for conflict warnings. */
+	private describeSkillOrigin(skill: SkillMetadata): string {
+		return skill.source === "plugin" && skill.pluginName ? `plugin "${skill.pluginName}"` : `${skill.source} skill`
+	}
+
+	/** Whether two same-named skills can apply to the same mode (so they truly collide). */
+	private skillsModesOverlap(a: SkillMetadata, b: SkillMetadata): boolean {
+		const am = a.modeSlugs
+		const bm = b.modeSlugs
+		if (!am || am.length === 0) return true // a is "any mode"
+		if (!bm || bm.length === 0) return true // b is "any mode"
+		return am.some((m) => bm.includes(m))
+	}
+
+	/**
+	 * Emit a shown + logged warning for each name collision that involves a plugin
+	 * skill (design §14.7 — last-installed-wins). File-vs-file collisions are the
+	 * established project > global precedence and are not surfaced here.
+	 */
+	private warnSkillConflicts(): void {
+		const all = [...this.skills.values()]
+		const warned = new Set<string>()
+		for (let i = 0; i < all.length; i++) {
+			for (let j = i + 1; j < all.length; j++) {
+				const a = all[i]
+				const b = all[j]
+				if (a.name !== b.name) continue
+				if (a.source !== "plugin" && b.source !== "plugin") continue
+				if (!this.skillsModesOverlap(a, b)) continue
+				const [winner, loser] = this.shouldOverrideSkill(a, b) ? [b, a] : [a, b]
+				const key = `${a.name}|${this.describeSkillOrigin(loser)}|${this.describeSkillOrigin(winner)}`
+				if (warned.has(key)) continue
+				warned.add(key)
+				warnPluginConflict("skill", a.name, this.describeSkillOrigin(winner), this.describeSkillOrigin(loser))
+			}
+		}
 	}
 
 	/**
