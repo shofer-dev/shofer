@@ -359,7 +359,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		])
 
 		// The shadow buffer reflects the in-place update by ts (no duplicate).
-		const shadow = h.registry.getFocusedShadow()!
+		const shadow = h.registry.getFocusedShadow(host)!
 		expect(shadow.messages).toEqual([msg(1, { text: "m1!" })])
 	})
 
@@ -439,15 +439,15 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 			type: ShoferEventName.Message,
 			args: [{ taskId, action: "created", message: { ts: 10, say: "text", text: "hi" } }],
 		})
-		expect(h.registry.getFocusedShadow()!.messages).toHaveLength(1)
+		expect(h.registry.getFocusedShadow(host)!.messages).toHaveLength(1)
 		host.postInitState.mockClear()
 
 		await h.registry.rebuildShadow(taskId!)
 
-		expect(h.registry.getFocusedShadow()!.messages).toHaveLength(0) // cleared
+		expect(h.registry.getFocusedShadow(host)!.messages).toHaveLength(0) // cleared
 		expect(host.postInitState).toHaveBeenCalled()
 		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
-		expect(h.registry.getFocusedShadow()!.changedFiles?.entries).toHaveLength(1)
+		expect(h.registry.getFocusedShadow(host)!.changedFiles?.entries).toHaveLength(1)
 		expect(host.postMessageToWebview).toHaveBeenCalledWith(
 			expect.objectContaining({ type: "changedFiles/update" }),
 		)
@@ -491,7 +491,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
 
 		// Before any usage event, the summary is zeroed.
-		expect(h.registry.getFocusedShadow()!.toTaskItem()).toMatchObject({ tokensIn: 0, tokensOut: 0, totalCost: 0 })
+		expect(h.registry.getFocusedShadow(host)!.toTaskItem()).toMatchObject({ tokensIn: 0, tokensOut: 0, totalCost: 0 })
 
 		remote.emit({
 			type: ShoferEventName.TaskTokenUsageUpdated,
@@ -502,7 +502,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 			],
 		})
 
-		expect(h.registry.getFocusedShadow()!.toTaskItem()).toMatchObject({
+		expect(h.registry.getFocusedShadow(host)!.toTaskItem()).toMatchObject({
 			tokensIn: 1200,
 			tokensOut: 340,
 			totalCost: 0.05,
@@ -528,7 +528,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		localDrivable.emit({ type: ShoferEventName.TaskCompleted, args: ["local-1"] })
 
 		expect(host.postMessageToWebview).not.toHaveBeenCalled()
-		expect(registry.getFocusedShadow()).toBeUndefined()
+		expect(registry.getFocusedShadow(host)).toBeUndefined()
 	})
 
 	it("buffers a non-auto-approved remote ask + mirrors it to the webview (interactive approval)", async () => {
@@ -546,7 +546,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 
 		// The ask is buffered like any other message (no "blocked" dead-end) and
 		// mirrored to the webview so it can render normal approve/deny buttons.
-		const shadow = h.registry.getFocusedShadow()!
+		const shadow = h.registry.getFocusedShadow(host)!
 		expect(shadow.messages).toContainEqual(askMessage)
 		expect(host.postMessageToWebview).toHaveBeenCalledWith({
 			type: "shoferMessageAppended",
@@ -575,10 +575,46 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(state.nodes.find((n) => n.id === LOCAL_NODE_ID)!.isActive).toBe(false)
 
 		// Swap focus back to a local task → Local active again.
-		h.registry.clearShadowFocus()
+		h.registry.clearShadowFocus(host)
 		state = h.registry.getState()
 		expect(state.activeNodeId).toBe(LOCAL_NODE_ID)
 		expect(state.nodes.find((n) => n.id === "r1")!.isActive).toBe(false)
+	})
+
+	// ── per-view shadow focus (the shadow-first non-clobber increment) ───────────
+
+	it("focuses a shadow PER VIEW: focusing in one view leaves the other unaffected; deltas fan out only to focused views; detach clears focus", async () => {
+		const a = makeProviderHost() // e.g. the sidebar
+		const b = makeProviderHost() // e.g. a separate editor tab
+		h.registry.attachProvider(a)
+		h.registry.attachProvider(b)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+
+		// View B starts the remote task → only B focuses the new shadow; A is untouched.
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" }, b)
+		expect(taskId).toBe("r1-task-1")
+		expect(h.registry.getFocusedShadow(b)?.taskId).toBe("r1-task-1")
+		expect(h.registry.getFocusedShadow(a)).toBeUndefined()
+
+		a.postMessageToWebview.mockClear()
+		b.postMessageToWebview.mockClear()
+
+		// A remote Message delta posts ONLY to the focused view (B), never the
+		// unfocused one (A) — the core non-clobber guarantee at the delta layer.
+		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "created", message: msg(1) }] })
+		expect(b.postMessageToWebview).toHaveBeenCalledWith({ type: "shoferMessageAppended", shoferMessage: msg(1) })
+		expect(a.postMessageToWebview).not.toHaveBeenCalled()
+
+		// Detaching B releases its focus; the shadow keeps buffering (for any future view).
+		h.registry.detachProvider(b)
+		expect(h.registry.getFocusedShadow(b)).toBeUndefined()
+		b.postMessageToWebview.mockClear()
+		remote.emit({ type: ShoferEventName.Message, args: [{ taskId, action: "created", message: msg(2) }] })
+		expect(b.postMessageToWebview).not.toHaveBeenCalled()
+		expect(h.registry.isShadow(taskId!)).toBe(true)
 	})
 
 	// ── L2/D: shared singleton + multi-provider ──────────────────────────────────

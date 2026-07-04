@@ -119,17 +119,17 @@ export class NodeRegistry {
 	private defs: ShoferNodeDef[] = []
 	/** Every attached provider (sidebar + editor-tab). All get `shoferNodes` via `onChange`. */
 	private readonly providers = new Set<NodeProviderHost>()
-	/**
-	 * The provider that RENDERS the current task (Local new-task path + remote
-	 * shadow deltas + focus). Defaults to the first attached provider; a `newTask`
-	 * routed from a specific provider retargets it, so a task started in the editor
-	 * tab renders there (Stage D).
-	 */
-	private renderTarget?: NodeProviderHost
 	/** Per-remote-task render buffers (L2). Local tasks are NEVER shadowed. */
 	private readonly shadows = new Map<string, RemoteTaskShadow>()
-	/** The remote shadow the webview is currently showing (drives the render override). */
-	private focusedShadowId?: string
+	/**
+	 * Per-view shadow focus: the remote-task shadow each view (provider) is currently
+	 * rendering. A view ABSENT from this map renders the GLOBAL local current task —
+	 * byte-for-byte the pre-per-view behavior. This split is what lets the sidebar
+	 * show a local task while a separate editor tab streams a remote-node shadow
+	 * without the two clobbering each other. The map key IS the provider object
+	 * reference, so no separate view id is needed.
+	 */
+	private readonly focusedShadows = new Map<NodeProviderHost, string>()
 	// Debounced changed-files refresh for the focused shadow (mirrors the local
 	// ShoferProvider.scheduleChangedFilesUpdate): coalesce a burst of remote Message
 	// deltas into one control-plane fetch + webview push.
@@ -202,21 +202,21 @@ export class NodeRegistry {
 
 	/**
 	 * Attach a controller-side provider host (Level 2). Every attached provider
-	 * receives `shoferNodes` state (via its own `onChange` registration). The FIRST
-	 * attached provider also becomes the default render target for the Local
-	 * new-task path + remote shadow deltas; `routeNewTask` retargets it per task.
+	 * receives `shoferNodes` state (via its own `onChange` registration). A view
+	 * that starts a remote task focuses its own shadow (see {@link routeNewTask});
+	 * an attached view with no focused shadow renders the global local current task.
 	 */
 	attachProvider(provider: NodeProviderHost): void {
 		this.providers.add(provider)
-		if (!this.renderTarget) this.renderTarget = provider
 	}
 
-	/** Detach a provider (its webview closed). Re-points the render target if needed. */
+	/**
+	 * Detach a provider (its webview closed). The closed view releases its shadow
+	 * focus; the shadow itself keeps buffering in {@link shadows} for any other view.
+	 */
 	detachProvider(provider: NodeProviderHost): void {
 		this.providers.delete(provider)
-		if (this.renderTarget === provider) {
-			this.renderTarget = this.providers.values().next().value
-		}
+		this.focusedShadows.delete(provider)
 	}
 
 	/** True when at least one *remote* executor is currently assignable (enabled + connected). */
@@ -238,12 +238,11 @@ export class NodeRegistry {
 	 * Returns the new task id (or `undefined` if the Local path failed to create).
 	 */
 	async routeNewTask(input: RouteNewTaskInput, initiator?: NodeProviderHost): Promise<string | undefined> {
-		// The provider that issued this newTask becomes the render target, so the
-		// task renders in the webview the user started it from (sidebar or tab).
-		if (initiator) {
-			this.providers.add(initiator)
-			this.renderTarget = initiator
-		}
+		// The view that issued this newTask is where the task renders. Ensure it's
+		// tracked so its shadow focus (remote owner) / local render (Local owner)
+		// lands there. Falls back to the first attached view when unspecified.
+		if (initiator) this.providers.add(initiator)
+		const view = initiator ?? this.providers.values().next().value
 		const assignable = this.pool.assignableIds()
 		const preferred =
 			input.preferredNodeId && assignable.includes(input.preferredNodeId) ? input.preferredNodeId : undefined
@@ -251,17 +250,11 @@ export class NodeRegistry {
 		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_NODE_ID
 
 		if (owner === LOCAL_NODE_ID) {
-			if (!this.renderTarget) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
-			const taskId = await this.renderTarget.createManagedTask(
-				undefined,
-				input.prompt,
-				input.images,
-				input.worktreeDir,
-				{
-					mode: input.mode,
-					apiConfigName: input.apiConfigName,
-				},
-			)
+			if (!view) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
+			const taskId = await view.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
+				mode: input.mode,
+				apiConfigName: input.apiConfigName,
+			})
 			// Record Local ownership so ownerOf()/activeNodeId() report Local. The
 			// task ran fully in-process — never through the pool's createTask.
 			if (taskId) this.pool.assignOwner(taskId, LOCAL_NODE_ID)
@@ -269,17 +262,27 @@ export class NodeRegistry {
 		}
 
 		// Remote owner: the node runs the task; we only buffer/render it (Stage B).
+		// The INITIATING view focuses the new shadow (per-view focus) — other views
+		// are untouched and keep showing whatever they were on.
 		const { taskId } = await this.pool.createTaskOn(owner, { prompt: input.prompt })
 		this.ensureShadow(taskId, owner, input.prompt)
-		this.focusShadow(taskId)
+		if (view) this.focusShadow(view, taskId)
 		return taskId
 	}
 
 	// ── remote-task shadows (L2 render demux) ────────────────────────────────────
 
-	/** The remote shadow the webview is currently rendering, if any. */
-	getFocusedShadow(): RemoteTaskShadow | undefined {
-		return this.focusedShadowId ? this.shadows.get(this.focusedShadowId) : undefined
+	/** The remote shadow the given view is currently rendering, if any (per-view). */
+	getFocusedShadow(provider: NodeProviderHost): RemoteTaskShadow | undefined {
+		const id = this.focusedShadows.get(provider)
+		return id ? this.shadows.get(id) : undefined
+	}
+
+	/** Every view currently focused on `taskId` — the fan-out set for a shadow's deltas. */
+	private viewsFocusedOn(taskId: string): NodeProviderHost[] {
+		const views: NodeProviderHost[] = []
+		for (const [p, id] of this.focusedShadows) if (id === taskId) views.push(p)
+		return views
 	}
 
 	/** Whether `taskId` is a remote-owned shadow task (vs. a local in-process task). */
@@ -348,7 +351,7 @@ export class NodeRegistry {
 		const shadow = this.shadows.get(taskId)
 		if (!shadow) return
 		shadow.clearMessages()
-		if (this.focusedShadowId === taskId) await this.renderTarget?.postInitState()
+		for (const view of this.viewsFocusedOn(taskId)) await view.postInitState()
 		await this.fetchShadowChangedFiles(taskId)
 	}
 
@@ -364,8 +367,8 @@ export class NodeRegistry {
 		try {
 			const payload = await this.pool.getTaskChangedFiles(taskId)
 			shadow.setChangedFiles(payload)
-			if (this.focusedShadowId === taskId) {
-				void this.renderTarget?.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+			for (const view of this.viewsFocusedOn(taskId)) {
+				void view.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
 			}
 		} catch {
 			// Executor unreachable or task ended — keep the last-known panel.
@@ -387,18 +390,22 @@ export class NodeRegistry {
 		}, NodeRegistry.SHADOW_CHANGED_FILES_DEBOUNCE_MS)
 	}
 
-	/** Make a remote shadow the focused task and switch the webview to it. */
-	focusShadow(taskId: string): void {
+	/** Focus a remote shadow IN A SINGLE VIEW and switch that view's webview to it. */
+	focusShadow(provider: NodeProviderHost, taskId: string): void {
 		if (!this.shadows.has(taskId)) return
-		this.focusedShadowId = taskId
-		void this.renderTarget?.postInitState()
+		this.focusedShadows.set(provider, taskId)
+		void provider.postInitState()
 		this.fireChange()
 	}
 
-	/** Clear remote-shadow focus (e.g. the user switched back to a local task). */
-	clearShadowFocus(): void {
-		if (this.focusedShadowId === undefined) return
-		this.focusedShadowId = undefined
+	/**
+	 * Clear a view's remote-shadow focus (e.g. it switched back to a local task).
+	 * Reverts THAT view to the global local current task via a fresh full-state push.
+	 */
+	clearShadowFocus(provider: NodeProviderHost): void {
+		if (!this.focusedShadows.has(provider)) return
+		this.focusedShadows.delete(provider)
+		void provider.postInitState()
 		this.fireChange()
 	}
 
@@ -447,13 +454,14 @@ export class NodeRegistry {
 				if (!payload?.taskId || !payload.message) return
 				const shadow = this.ensureShadow(payload.taskId, executorId)
 				shadow.applyMessageDelta(payload.action, payload.message)
-				// Mirror the local gate: only push deltas for the focused shadow.
-				if (this.focusedShadowId === shadow.taskId) {
-					void this.renderTarget?.postMessageToWebview(
+				// Fan the delta out to EVERY view focused on this shadow (per-view focus).
+				const focusedViews = this.viewsFocusedOn(shadow.taskId)
+				if (focusedViews.length > 0) {
+					const post =
 						payload.action === "created"
 							? { type: "shoferMessageAppended", shoferMessage: payload.message }
-							: { type: "messageUpdated", shoferMessage: payload.message },
-					)
+							: { type: "messageUpdated", shoferMessage: payload.message }
+					for (const view of focusedViews) void view.postMessageToWebview(post)
 					// A remote edit may have changed files — refresh the panel (debounced,
 					// mirroring the local FileContextTracker → scheduleChangedFilesUpdate).
 					this.scheduleShadowChangedFiles(shadow.taskId)
@@ -465,8 +473,8 @@ export class NodeRegistry {
 				const usage = args[1] as TokenUsage | undefined
 				if (shadow && usage) {
 					shadow.setTokenUsage(usage)
-					// Refresh the header/token summary for the focused shadow.
-					if (this.focusedShadowId === shadow.taskId) void this.renderTarget?.postInitState()
+					// Refresh the header/token summary for every view focused on this shadow.
+					for (const view of this.viewsFocusedOn(shadow.taskId)) void view.postInitState()
 				}
 				return
 			}
@@ -612,17 +620,21 @@ export class NodeRegistry {
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()
+		this.focusedShadows.clear()
 	}
 
 	// ── internals ──────────────────────────────────────────────────────────────
 
 	private activeNodeId(): string {
-		// L2: the active node OWNS the focused task. The focused task is the focused
-		// remote shadow (if any), else the provider's current in-process task. A task
-		// the pool never assigned (the pure local-only path, which bypasses the pool)
-		// has no owner → Local. This is what lights `isActive` in buildNodeViews and
-		// the "Executing on remote node" badge in TaskHeader.
-		const focusedTaskId = this.focusedShadowId ?? this.renderTarget?.getCurrentTask()?.taskId
+		// L2: the single global `shoferNodes` badge shows ONE active node. With per-view
+		// shadow focus this is inherently ambiguous, so we resolve it deterministically:
+		// if ANY view focuses a remote shadow, the active node owns that shadow (first
+		// map entry); otherwise it owns the global local current task (first attached
+		// view). A task the pool never assigned (the pure local-only path) has no owner
+		// → Local. This lights `isActive` in buildNodeViews + the TaskHeader badge.
+		const firstFocusedShadowId = this.focusedShadows.values().next().value as string | undefined
+		const localTaskId = this.providers.values().next().value?.getCurrentTask()?.taskId
+		const focusedTaskId = firstFocusedShadowId ?? localTaskId
 		if (!focusedTaskId) return LOCAL_NODE_ID
 		return this.pool.ownerOf(focusedTaskId) ?? LOCAL_NODE_ID
 	}
