@@ -331,6 +331,41 @@ export class NodeRegistry {
 		await this.pool.acceptAllChangedFiles(taskId)
 	}
 
+	/**
+	 * Rebuild a shadow after the executor restored a checkpoint (Shofer Nodes L3).
+	 * The executor rewound + reinitialized its task, so its stale post-rewind
+	 * `Message` stream will repopulate the shadow: clear the buffered conversation,
+	 * re-post init state for the focused shadow, then re-fetch the changed-files
+	 * panel (a restore mutates the shared worktree).
+	 */
+	async rebuildShadow(taskId: string): Promise<void> {
+		const shadow = this.shadows.get(taskId)
+		if (!shadow) return
+		shadow.clearMessages()
+		if (this.focusedShadowId === taskId) await this.renderTarget?.postInitState()
+		await this.fetchShadowChangedFiles(taskId)
+	}
+
+	/**
+	 * Fetch the changed-files panel for a shadow over the control plane, store it on
+	 * the shadow, and — when it's the focused shadow — push a `changedFiles/update`
+	 * to the webview (mirrors the local `pushChangedFilesUpdate`). Best-effort: a
+	 * dead executor / ended task leaves the last-known panel in place.
+	 */
+	async fetchShadowChangedFiles(taskId: string): Promise<void> {
+		const shadow = this.shadows.get(taskId)
+		if (!shadow) return
+		try {
+			const payload = await this.pool.getTaskChangedFiles(taskId)
+			shadow.setChangedFiles(payload)
+			if (this.focusedShadowId === taskId) {
+				void this.renderTarget?.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
+			}
+		} catch {
+			// Executor unreachable or task ended — keep the last-known panel.
+		}
+	}
+
 	/** Make a remote shadow the focused task and switch the webview to it. */
 	focusShadow(taskId: string): void {
 		if (!this.shadows.has(taskId)) return

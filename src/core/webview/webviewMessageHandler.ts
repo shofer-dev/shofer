@@ -1570,15 +1570,30 @@ export const webviewMessageHandler = async (
 				vscode.env.openExternal(vscode.Uri.parse(message.url))
 			}
 			break
-		case "checkpointDiff":
-			// Shofer Nodes L2: a shadow (remote) task's checkpoint repo lives in the
-			// EXECUTOR's globalStorage, which the shared-workspace-fs assumption does
-			// NOT cover — so an interactive diff can't resolve on the controller, and
-			// running it against getCurrentTask() would hit the WRONG local task.
-			// Checkpoint markers still DISPLAY; interactive diff is deferred (needs an
-			// executor-side reverse data channel).
-			if (provider.nodeRegistry?.getFocusedShadow()) {
-				getHost().notifier.warn(t("common:errors.checkpoint_remote_unsupported"))
+		case "checkpointDiff": {
+			// Shofer Nodes L3: a shadow (remote) task's checkpoint repo lives on the
+			// OWNING EXECUTOR. Fetch the computed per-file changes over the control
+			// plane and render them locally (title resolved from the mode); the
+			// executor never opens a diff viewer. Route by the FOCUSED shadow id and
+			// re-assert focus after the await so a focus switch mid-fetch can't render
+			// the wrong task's diff.
+			const diffShadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (diffShadowId) {
+				const parsed = checkoutDiffPayloadSchema.safeParse(message.payload)
+				if (!parsed.success) break
+				const changes = await provider.nodeRegistry!.getCheckpointDiff(diffShadowId, parsed.data)
+				if (provider.nodeRegistry?.getFocusedShadow()?.taskId !== diffShadowId) break
+				if (!changes.length) {
+					getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
+					break
+				}
+				const titleKey =
+					parsed.data.mode === "checkpoint"
+						? "checkpoint_diff_with_next"
+						: parsed.data.mode === "to-current"
+							? "checkpoint_diff_to_current"
+							: "checkpoint_diff_since_first" // from-init | full
+				await getHost().editor.showMultiFileDiff(t(`common:errors.${titleKey}`), changes)
 				break
 			}
 			const result = checkoutDiffPayloadSchema.safeParse(message.payload)
@@ -1588,12 +1603,27 @@ export const webviewMessageHandler = async (
 			}
 
 			break
+		}
 		case "checkpointRestore": {
-			// See checkpointDiff: interactive restore is deferred for shadow tasks
-			// (the executor owns the checkpoint repo); guard before cancel/restore so
-			// we never restore the wrong local task.
-			if (provider.nodeRegistry?.getFocusedShadow()) {
-				getHost().notifier.warn(t("common:errors.checkpoint_remote_unsupported"))
+			// Shofer Nodes L3: restore a shadow (remote) task's checkpoint on the
+			// owning executor, then rebuild the shadow so its conversation matches the
+			// executor's post-rewind state. Gate on shared-workspace safety first: a
+			// concurrently-running local task in this worktree would collide with the
+			// executor's `git clean -fd` + `reset --hard`.
+			const restoreShadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (restoreShadowId) {
+				if (provider.taskManager.getActiveManagedTasks().length > 0) {
+					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
+					break
+				}
+				const parsed = checkoutRestorePayloadSchema.safeParse(message.payload)
+				if (!parsed.success) break
+				try {
+					await provider.nodeRegistry!.restoreCheckpoint(restoreShadowId, parsed.data)
+					await provider.nodeRegistry!.rebuildShadow(restoreShadowId)
+				} catch (error) {
+					getHost().notifier.error(t("common:errors.checkpoint_failed"))
+				}
 				break
 			}
 			const result = checkoutRestorePayloadSchema.safeParse(message.payload)

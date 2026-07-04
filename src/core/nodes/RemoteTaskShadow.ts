@@ -1,4 +1,4 @@
-import type { HistoryItem, ShoferMessage, TokenUsage } from "@shofer/types"
+import type { ChangedFilesPayload, HistoryItem, ShoferMessage, TokenUsage } from "@shofer/types"
 
 /**
  * Lifecycle state of a remote-owned task, as observed from the controller side.
@@ -40,6 +40,12 @@ export class RemoteTaskShadow {
 	 * meter / cost display reflect the remote task (full-fidelity rendering, L2).
 	 */
 	tokenUsage?: TokenUsage
+	/**
+	 * Latest changed-files panel payload for this remote task, fetched over the
+	 * control plane (Shofer Nodes L3). Substituted into the focused-shadow webview
+	 * state so the FileChangesPanel reflects the executor's edits, not a local task.
+	 */
+	changedFiles?: ChangedFilesPayload
 
 	constructor(opts: { taskId: string; executorId: string; nodeLabel: string; prompt?: string }) {
 		this.taskId = opts.taskId
@@ -85,6 +91,22 @@ export class RemoteTaskShadow {
 	/** Record the latest token usage from the remote's `TaskTokenUsageUpdated` feed. */
 	setTokenUsage(usage: TokenUsage): void {
 		this.tokenUsage = usage
+	}
+
+	/** Record the latest changed-files payload fetched from the executor (L3). */
+	setChangedFiles(payload: ChangedFilesPayload): void {
+		this.changedFiles = payload
+	}
+
+	/**
+	 * Drop the buffered conversation (Shofer Nodes L3 rebuild). After the executor
+	 * restores a checkpoint it rewinds + reinitializes its task and re-emits the
+	 * post-rewind `Message` stream; clearing here lets those deltas repopulate the
+	 * shadow so its conversation matches the executor, with no stale tail.
+	 */
+	clearMessages(): void {
+		this.messages = []
+		this.status = "running"
 	}
 
 	/** First non-empty user/prompt text, for the header summary. */
