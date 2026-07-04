@@ -30,18 +30,26 @@ piggybacks on it:
 The local current-task focus is likewise a single global (the task
 stack / `getCurrentTask()`), so this is not a nodes-only concern.
 
+## Terminology
+
+"**Provider**" here means a **`ShoferProvider`** — the extension-side
+class (`src/core/webview/ShoferProvider.ts`) that backs one webview view.
+There is one instance per webview surface: the sidebar, plus each editor
+tab opened via `openShoferInNewTab`. So "per-provider" == "**per-view /
+per-webview**". It is NOT an LLM provider and NOT a Shofer *node*.
+
 ## Design
 
-Make focus **per-provider** rather than global:
+Make focus **per-view** (per `ShoferProvider` webview) rather than global:
 
 - **`NodeRegistry`** — replace the single `focusedShadowId` /
-  `renderTarget` with a per-provider map keyed by the `ShoferProvider`
+  `renderTarget` with a per-view map keyed by the `ShoferProvider`
   instance (or a stable provider id): `Map<providerId, focusedShadowId>`.
   The `pool.subscribe` demux (Stage B) already knows the initiating
-  provider — target shadow render deltas to that provider only, and
-  resolve "focused shadow" per provider.
+  view — target shadow render deltas to that view only, and resolve
+  "focused shadow" per view.
 - **`ShoferProvider.getStateToPostToWebview`** — resolve the shadow
-  override from *this* provider's focus, not a global getter. Thread the
+  override from *this* view's focus, not a global getter. Thread the
   provider identity into `nodeRegistry.getFocusedShadow(provider)`.
 - **Local task focus** — the harder half: a per-view local focus needs
   the current-task/focus notion to stop being a single global. Decide
@@ -67,6 +75,30 @@ Make focus **per-provider** rather than global:
 - Sidebar shows task A, editor tab shows remote-node task B,
   simultaneously; a state push from either view does not swap the other's
   conversation.
+
+## Performance / scale
+
+This feature is bounded by the number of open **views**, not the number
+of tasks:
+
+- Today the webview (FE) holds only the **focused** task's
+  `shoferMessages` array; background tasks' messages live extension-side
+  in their `Task` objects (local) or in `RemoteTaskShadow` buffers inside
+  `NodeRegistry` (remote). Streaming deltas reach the FE only for the
+  focused task.
+- With per-view focus, each view holds *its own* focused task's array,
+  and each view is a separate webview with its own memory. So **N open
+  views ⇒ N arrays** (N realistically 1–3), independent of how many tasks
+  run. Hundreds of concurrent tasks are never each held in any FE — only
+  the ≤N focused ones are, and only those stream deltas. Per-view focus
+  adds negligibly (one focused task *per view* vs one global).
+- The real "hundreds of tasks" cost is **extension-side and already
+  exists** independent of this feature: each running task is a `Task`
+  object (local) or a shadow buffer + a slot in the merged `ExecutorPool`
+  event feed (remote). If that ever bites, the mitigations are
+  extension-side and orthogonal — evict/cap idle shadow buffers, the
+  existing `hasMoreShoferMessages` pagination for long conversations —
+  not affected by per-view focus.
 
 ## Notes
 
