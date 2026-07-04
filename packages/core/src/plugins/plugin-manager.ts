@@ -488,7 +488,11 @@ export class PluginManager {
 					apiVersion: plugin.manifest.shoferPluginApiVersion,
 				})
 				const wrapped = this.wrapCodePlugin(plugin, raw)
-				await pluginRegistry.register(wrapped, this.buildPluginContext(plugin))
+				await pluginRegistry.register(wrapped, this.buildPluginContext(plugin), {
+					// Gate lifecycle hooks on the manifest grant (design §6.9, §8): only a
+					// plugin that requested `permissions.lifecycle` participates.
+					lifecycle: plugin.manifest.permissions?.lifecycle === true,
+				})
 				this.loadedCodePlugins.add(plugin.name)
 			} catch (error) {
 				warnPlugin(
@@ -531,7 +535,10 @@ export class PluginManager {
 	 */
 	private wrapCodePlugin(plugin: DiscoveredPlugin, raw: ShoferPlugin): ShoferPlugin {
 		const bits = this.buildPluginContext(plugin)
-		const merge = (ctx: PluginContext): PluginContext => ({ ...ctx, ...bits })
+		// Generic so task-lifecycle contexts (`TaskLifecycleContext`, with `prompt`/`reason`)
+		// keep their extra fields through the merge, not just the base `PluginContext`.
+		const merge = <T extends PluginContext>(ctx: T): T => ({ ...ctx, ...bits })
+		const rawLifecycle = raw.lifecycle
 		return {
 			name: raw.name,
 			initialize: raw.initialize ? (ctx) => raw.initialize!(merge(ctx)) : undefined,
@@ -540,6 +547,29 @@ export class PluginManager {
 				? (prompt, ctx) => raw.transformSystemPrompt!(prompt, merge(ctx))
 				: undefined,
 			onEvent: raw.onEvent ? (event, ctx) => raw.onEvent!(event, merge(ctx)) : undefined,
+			// Forward lifecycle hooks (design §6.9), each with the per-plugin context
+			// (config/host/workspace) layered on. The registry additionally gates these on
+			// the manifest `permissions.lifecycle` grant passed to `register`.
+			lifecycle: rawLifecycle
+				? {
+						beforeTaskStart: rawLifecycle.beforeTaskStart
+							? (ctx) => rawLifecycle.beforeTaskStart!(merge(ctx))
+							: undefined,
+						afterTaskComplete: rawLifecycle.afterTaskComplete
+							? (ctx) => rawLifecycle.afterTaskComplete!(merge(ctx))
+							: undefined,
+						beforeToolCall: rawLifecycle.beforeToolCall
+							? (toolName, args, ctx) => rawLifecycle.beforeToolCall!(toolName, args, merge(ctx))
+							: undefined,
+						afterToolCall: rawLifecycle.afterToolCall
+							? (toolName, args, result, ctx) =>
+									rawLifecycle.afterToolCall!(toolName, args, result, merge(ctx))
+							: undefined,
+						beforeAsk: rawLifecycle.beforeAsk
+							? (askType, payload, ctx) => rawLifecycle.beforeAsk!(askType, payload, merge(ctx))
+							: undefined,
+					}
+				: undefined,
 		}
 	}
 
