@@ -1,4 +1,6 @@
 import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
+import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
+import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /**
  * Executor pool — the controller side of distributed execution (v3 architecture §13).
@@ -110,6 +112,40 @@ export class ExecutorPool implements AgentApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.owner(taskId).api.respondToAsk(taskId, response)
+	}
+
+	// ── Reverse data channel (Shofer Nodes L3) — route to the owning executor ────
+
+	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
+		return this.owner(taskId).api.getCheckpointDiff(taskId, opts)
+	}
+
+	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
+		return this.owner(taskId).api.getTaskChangedFiles(taskId)
+	}
+
+	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
+		return this.owner(taskId).api.getChangedFileDiff(taskId, relPath)
+	}
+
+	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
+		await this.owner(taskId).api.restoreCheckpoint(taskId, opts)
+	}
+
+	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.owner(taskId).api.revertChangedFile(taskId, relPath)
+	}
+
+	async revertAllChangedFiles(taskId: string): Promise<void> {
+		await this.owner(taskId).api.revertAllChangedFiles(taskId)
+	}
+
+	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.owner(taskId).api.acceptChangedFile(taskId, relPath)
+	}
+
+	async acceptAllChangedFiles(taskId: string): Promise<void> {
+		await this.owner(taskId).api.acceptAllChangedFiles(taskId)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

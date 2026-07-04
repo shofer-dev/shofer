@@ -12,6 +12,14 @@ function makeExecutor(id: string) {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		getCheckpointDiff: vi.fn(async () => []),
+		getTaskChangedFiles: vi.fn(async () => ({ taskId: `${id}-task-1`, entries: [], backend: "none" as const })),
+		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
+		restoreCheckpoint: vi.fn(async () => {}),
+		revertChangedFile: vi.fn(async () => {}),
+		revertAllChangedFiles: vi.fn(async () => {}),
+		acceptChangedFile: vi.fn(async () => {}),
+		acceptAllChangedFiles: vi.fn(async () => {}),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {
@@ -48,6 +56,45 @@ describe("ExecutorPool (§13 controller side)", () => {
 			askId: "a1",
 		})
 		expect(b.api.respondToAsk).not.toHaveBeenCalled()
+	})
+
+	it("routes the L3 reverse-data-channel methods to the owning executor", async () => {
+		const a = makeExecutor("A")
+		const b = makeExecutor("B")
+		const pool = new ExecutorPool()
+		pool.add({ id: a.id, api: a.api })
+		pool.add({ id: b.id, api: b.api })
+
+		const t1 = await pool.createTask({ prompt: "1" }) // → A
+		await pool.createTask({ prompt: "2" }) // → B (advances round-robin)
+
+		await pool.getCheckpointDiff(t1.taskId, { commitHash: "c1", mode: "checkpoint" })
+		expect(a.api.getCheckpointDiff).toHaveBeenCalledWith("A-task-1", { commitHash: "c1", mode: "checkpoint" })
+
+		await pool.getTaskChangedFiles(t1.taskId)
+		expect(a.api.getTaskChangedFiles).toHaveBeenCalledWith("A-task-1")
+
+		await pool.getChangedFileDiff(t1.taskId, "src/x.ts")
+		expect(a.api.getChangedFileDiff).toHaveBeenCalledWith("A-task-1", "src/x.ts")
+
+		await pool.restoreCheckpoint(t1.taskId, { ts: 1, commitHash: "c1", mode: "restore" })
+		expect(a.api.restoreCheckpoint).toHaveBeenCalledWith("A-task-1", { ts: 1, commitHash: "c1", mode: "restore" })
+
+		await pool.revertChangedFile(t1.taskId, "src/x.ts")
+		expect(a.api.revertChangedFile).toHaveBeenCalledWith("A-task-1", "src/x.ts")
+
+		await pool.revertAllChangedFiles(t1.taskId)
+		expect(a.api.revertAllChangedFiles).toHaveBeenCalledWith("A-task-1")
+
+		await pool.acceptChangedFile(t1.taskId, "src/x.ts")
+		expect(a.api.acceptChangedFile).toHaveBeenCalledWith("A-task-1", "src/x.ts")
+
+		await pool.acceptAllChangedFiles(t1.taskId)
+		expect(a.api.acceptAllChangedFiles).toHaveBeenCalledWith("A-task-1")
+
+		// None of these leaked to the other executor.
+		expect(b.api.getCheckpointDiff).not.toHaveBeenCalled()
+		expect(b.api.restoreCheckpoint).not.toHaveBeenCalled()
 	})
 
 	it("merges executor event streams, tagging each with executorId", async () => {

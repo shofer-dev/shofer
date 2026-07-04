@@ -1,17 +1,11 @@
 import { CommitResult } from "simple-git"
 
-export type CheckpointResult = Partial<CommitResult> & Pick<CommitResult, "commit">
+// The plain diff/restore types now live in `@shofer/types` (host-agnostic, so the
+// control plane can name them). Re-exported here so every `checkpoints/*` importer
+// keeps one source of truth.
+export type { CheckpointDiff, CheckpointDiffOptions, CheckpointRestoreOptions } from "@shofer/types"
 
-export type CheckpointDiff = {
-	paths: {
-		relative: string
-		absolute: string
-	}
-	content: {
-		before: string
-		after: string
-	}
-}
+export type CheckpointResult = Partial<CommitResult> & Pick<CommitResult, "commit">
 
 /**
  * Per-file line-level change summary between two checkpoints (or between a

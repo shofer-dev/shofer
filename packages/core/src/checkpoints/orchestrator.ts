@@ -1,7 +1,11 @@
 import pWaitFor from "p-wait-for"
 import { getHost } from "@shofer/types"
 
-import type { ShoferApiReqInfo } from "@shofer/types"
+import type { CheckpointDiffOptions, CheckpointRestoreOptions, ShoferApiReqInfo } from "@shofer/types"
+
+// Re-export the plain option types (relocated to `@shofer/types`) so existing
+// `../checkpoints/index.js` importers (e.g. Task.ts) keep resolving them here.
+export type { CheckpointDiffOptions, CheckpointRestoreOptions } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Task } from "../task/Task.js"
@@ -229,13 +233,6 @@ export async function checkpointSave(task: Task, force = false, suppressMessage 
 		})
 }
 
-export type CheckpointRestoreOptions = {
-	ts: number
-	commitHash: string
-	mode: "preview" | "restore"
-	operation?: "delete" | "edit" // Optional to maintain backward compatibility
-}
-
 export async function checkpointRestore(
 	task: Task,
 	{ ts, commitHash, mode, operation = "delete" }: CheckpointRestoreOptions,
@@ -302,19 +299,6 @@ export async function checkpointRestore(
 		checkpointLog.warn("[checkpointRestore] disabling checkpoints for this task")
 		task.enableCheckpoints = false
 	}
-}
-
-export type CheckpointDiffOptions = {
-	ts?: number
-	previousCommitHash?: string
-	commitHash: string
-	/**
-	 * from-init: Compare from the first checkpoint to the selected checkpoint.
-	 * checkpoint: Compare the selected checkpoint to the next checkpoint.
-	 * to-current: Compare the selected checkpoint to the current workspace.
-	 * full: Compare from the first checkpoint to the current workspace.
-	 */
-	mode: "from-init" | "checkpoint" | "to-current" | "full"
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

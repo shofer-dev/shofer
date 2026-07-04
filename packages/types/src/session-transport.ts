@@ -1,5 +1,7 @@
 import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
+import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { HostBridge } from "./host.js"
+import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 import { type HostRpcChannel, type RemoteHostCapability, dispatchHostCall } from "./host-rpc.js"
 
 /**
@@ -24,6 +26,15 @@ export type SessionClientFrame =
 	| { t: "cmd"; id: number; method: "sendMessage"; taskId: string; message: string }
 	| { t: "cmd"; id: number; method: "cancelTask"; taskId: string }
 	| { t: "cmd"; id: number; method: "respondToAsk"; taskId: string; response: AskResponse }
+	// Reverse data channel (Shofer Nodes L3): checkpoint diff/restore + changed-files.
+	| { t: "cmd"; id: number; method: "getCheckpointDiff"; taskId: string; opts: CheckpointDiffOptions }
+	| { t: "cmd"; id: number; method: "getTaskChangedFiles"; taskId: string }
+	| { t: "cmd"; id: number; method: "getChangedFileDiff"; taskId: string; relPath: string }
+	| { t: "cmd"; id: number; method: "restoreCheckpoint"; taskId: string; opts: CheckpointRestoreOptions }
+	| { t: "cmd"; id: number; method: "revertChangedFile"; taskId: string; relPath: string }
+	| { t: "cmd"; id: number; method: "revertAllChangedFiles"; taskId: string }
+	| { t: "cmd"; id: number; method: "acceptChangedFile"; taskId: string; relPath: string }
+	| { t: "cmd"; id: number; method: "acceptAllChangedFiles"; taskId: string }
 	/** Reply to a host-callback request. */
 	| { t: "hostResult"; id: number; result?: unknown; error?: string }
 
@@ -90,6 +101,15 @@ export function serveSession({
 			else if (frame.method === "sendMessage") await api.sendMessage(frame.taskId, frame.message)
 			else if (frame.method === "cancelTask") await api.cancelTask(frame.taskId)
 			else if (frame.method === "respondToAsk") await api.respondToAsk(frame.taskId, frame.response)
+			else if (frame.method === "getCheckpointDiff") result = await api.getCheckpointDiff(frame.taskId, frame.opts)
+			else if (frame.method === "getTaskChangedFiles") result = await api.getTaskChangedFiles(frame.taskId)
+			else if (frame.method === "getChangedFileDiff")
+				result = await api.getChangedFileDiff(frame.taskId, frame.relPath)
+			else if (frame.method === "restoreCheckpoint") await api.restoreCheckpoint(frame.taskId, frame.opts)
+			else if (frame.method === "revertChangedFile") await api.revertChangedFile(frame.taskId, frame.relPath)
+			else if (frame.method === "revertAllChangedFiles") await api.revertAllChangedFiles(frame.taskId)
+			else if (frame.method === "acceptChangedFile") await api.acceptChangedFile(frame.taskId, frame.relPath)
+			else if (frame.method === "acceptAllChangedFiles") await api.acceptAllChangedFiles(frame.taskId)
 			send({ t: "result", id: frame.id, result })
 		} catch (e) {
 			send({ t: "result", id: frame.id, error: errMsg(e) })
@@ -144,6 +164,32 @@ export function connectSession({
 		},
 		respondToAsk: async (taskId, response) => {
 			await command((id) => ({ t: "cmd", id, method: "respondToAsk", taskId, response }))
+		},
+		getCheckpointDiff: (taskId, opts) =>
+			command((id) => ({ t: "cmd", id, method: "getCheckpointDiff", taskId, opts })) as Promise<
+				CheckpointDiffEntry[]
+			>,
+		getTaskChangedFiles: (taskId) =>
+			command((id) => ({ t: "cmd", id, method: "getTaskChangedFiles", taskId })) as Promise<ChangedFilesPayload>,
+		getChangedFileDiff: (taskId, relPath) =>
+			command((id) => ({ t: "cmd", id, method: "getChangedFileDiff", taskId, relPath })) as Promise<{
+				original: string | null
+				final: string | null
+			}>,
+		restoreCheckpoint: async (taskId, opts) => {
+			await command((id) => ({ t: "cmd", id, method: "restoreCheckpoint", taskId, opts }))
+		},
+		revertChangedFile: async (taskId, relPath) => {
+			await command((id) => ({ t: "cmd", id, method: "revertChangedFile", taskId, relPath }))
+		},
+		revertAllChangedFiles: async (taskId) => {
+			await command((id) => ({ t: "cmd", id, method: "revertAllChangedFiles", taskId }))
+		},
+		acceptChangedFile: async (taskId, relPath) => {
+			await command((id) => ({ t: "cmd", id, method: "acceptChangedFile", taskId, relPath }))
+		},
+		acceptAllChangedFiles: async (taskId) => {
+			await command((id) => ({ t: "cmd", id, method: "acceptAllChangedFiles", taskId }))
 		},
 		subscribe: (listener) => {
 			listeners.add(listener)
