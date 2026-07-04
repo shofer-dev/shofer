@@ -121,3 +121,92 @@ describe("createPluginSandbox (§8 permission enforcement, step 2.4)", () => {
 		expect(() => sandbox.notifier.info("hi")).not.toThrow()
 	})
 })
+
+/** A controllable fake watcher recording watch() calls and letting a test fire events. */
+function makeWatchableHost(): {
+	host: HostBridge
+	watchCalls: { baseDir: string; pattern: string }[]
+	fireChange: () => void
+	fireCreate: () => void
+	disposed: () => number
+} {
+	const host = createInMemoryHost() as unknown as HostBridge
+	const watchCalls: { baseDir: string; pattern: string }[] = []
+	const changeHandlers: (() => void)[] = []
+	const createHandlers: (() => void)[] = []
+	let disposeCount = 0
+	;(host as { watcher: unknown }).watcher = {
+		watch: (baseDir: string, pattern: string) => {
+			watchCalls.push({ baseDir, pattern })
+			return {
+				onCreate: (h: () => void) => {
+					createHandlers.push(h)
+					return { dispose: () => {} }
+				},
+				onChange: (h: () => void) => {
+					changeHandlers.push(h)
+					return { dispose: () => {} }
+				},
+				onDelete: () => ({ dispose: () => {} }),
+				dispose: () => {
+					disposeCount++
+				},
+			}
+		},
+	}
+	return {
+		host,
+		watchCalls,
+		fireChange: () => changeHandlers.forEach((h) => h()),
+		fireCreate: () => createHandlers.forEach((h) => h()),
+		disposed: () => disposeCount,
+	}
+}
+
+describe("createPluginSandbox — ctx.host.watch (P6.G3)", () => {
+	const pluginRoot = "/plugins/ci"
+
+	it("watches within a granted filesystem root and fires the callback", () => {
+		const { host, watchCalls, fireChange, fireCreate } = makeWatchableHost()
+		const sandbox = createPluginSandbox({
+			pluginName: "ci",
+			pluginRoot,
+			permissions: { filesystem: ["./data/"] },
+			host,
+			warn: vi.fn(),
+		})
+		const cb = vi.fn()
+		const disposable = sandbox.watch!("**/*.json", cb)
+		// It watched under the granted root (not an arbitrary path).
+		expect(watchCalls).toEqual([{ baseDir: "/plugins/ci/data", pattern: "**/*.json" }])
+		fireChange()
+		fireCreate()
+		expect(cb).toHaveBeenCalledTimes(2)
+		disposable.dispose()
+	})
+
+	it("denies watch (warn + no-op) when no permissions.filesystem is granted", () => {
+		const { host, watchCalls } = makeWatchableHost()
+		const warn = vi.fn()
+		const sandbox = createPluginSandbox({ pluginName: "ci", pluginRoot, host, warn })
+		const cb = vi.fn()
+		const disposable = sandbox.watch!("**/*", cb)
+		expect(warn).toHaveBeenCalledOnce()
+		expect(watchCalls).toEqual([]) // never created a host watcher
+		expect(() => disposable.dispose()).not.toThrow() // no-op disposable
+	})
+
+	it("disposes the underlying host watcher(s) on dispose", () => {
+		const { host, disposed } = makeWatchableHost()
+		const sandbox = createPluginSandbox({
+			pluginName: "ci",
+			pluginRoot,
+			permissions: { filesystem: ["./a/", "./b/"] },
+			host,
+			warn: vi.fn(),
+		})
+		const disposable = sandbox.watch!("*", vi.fn())
+		disposable.dispose()
+		expect(disposed()).toBe(2) // one per granted root
+	})
+})

@@ -3,6 +3,7 @@ import * as path from "path"
 
 import {
 	type HostBridge,
+	type HostDisposable,
 	type ModeConfig,
 	type PluginContext,
 	type PluginManifest,
@@ -245,6 +246,8 @@ export class PluginManager {
 	private aiConsented = new Set<string>()
 	/** Names of code plugins currently loaded + registered into `pluginRegistry`. */
 	private readonly loadedCodePlugins = new Set<string>()
+	/** Per-plugin `ctx.host.watch` disposables, torn down when the plugin unloads (P6.G3). */
+	private readonly pluginWatchers = new Map<string, HostDisposable[]>()
 	private plugins: DiscoveredPlugin[] = []
 	/**
 	 * The persisted enabled/install order (the `enabledPlugins` array, in the order
@@ -501,8 +504,21 @@ export class PluginManager {
 		if (this.loadedCodePlugins.has(name)) {
 			pluginRegistry.unregister(name)
 			this.loadedCodePlugins.delete(name)
+			this.disposePluginWatchers(name)
 		}
 		await this.activateCodePlugins()
+	}
+
+	/** Dispose and forget a plugin's tracked `ctx.host.watch` disposables (P6.G3). */
+	private disposePluginWatchers(name: string): void {
+		for (const d of this.pluginWatchers.get(name) ?? []) {
+			try {
+				d.dispose()
+			} catch {
+				// One watcher's dispose must not block the rest.
+			}
+		}
+		this.pluginWatchers.delete(name)
 	}
 
 	/**
@@ -554,6 +570,7 @@ export class PluginManager {
 			if (!active.has(name)) {
 				pluginRegistry.unregister(name)
 				this.loadedCodePlugins.delete(name)
+				this.disposePluginWatchers(name)
 			}
 		}
 
@@ -593,6 +610,12 @@ export class PluginManager {
 					pluginRoot: plugin.root,
 					workspacePath: this.workspacePath,
 					host: this.host,
+					// Track `ctx.host.watch` disposables so they are torn down on disable (P6.G3).
+					trackWatch: (disposable) => {
+						const list = this.pluginWatchers.get(plugin.name) ?? []
+						list.push(disposable)
+						this.pluginWatchers.set(plugin.name, list)
+					},
 				})
 			: undefined
 		return {

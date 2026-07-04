@@ -21,7 +21,15 @@
 
 import path from "path"
 
-import type { FindFilesOptions, HostBridge, HostEnv, HostFileSystem, PluginHost, PluginPermissions } from "@shofer/types"
+import type {
+	FindFilesOptions,
+	HostBridge,
+	HostDisposable,
+	HostEnv,
+	HostFileSystem,
+	PluginHost,
+	PluginPermissions,
+} from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
 
@@ -40,6 +48,13 @@ export interface PluginSandboxOptions {
 	fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>
 	/** Warning sink (shown + logged); defaults to {@link warnPlugin}. Injectable for tests. */
 	warn?: (message: string) => void
+	/**
+	 * Sink for the disposables returned by {@link PluginHost.watch} (P6.G3). The manager
+	 * records them per plugin so it can dispose the plugin's watchers when it is disabled/
+	 * uninstalled (design §6.11 G3 — "disposed on plugin disable"). Optional; when absent
+	 * the plugin is solely responsible for disposing via the returned handle.
+	 */
+	trackWatch?: (disposable: HostDisposable) => void
 }
 
 /** Whether `target` is inside (or equal to) `root`, after normalization. */
@@ -143,6 +158,45 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 
 	const env: HostEnv = host.env
 
+	/**
+	 * Scoped file-watch (design §6.11 G3, P6.G3). Watches `pattern` under **each** granted
+	 * `permissions.filesystem` root (so it can never observe paths the plugin wasn't
+	 * granted), wiring create/change/delete → `onChange`. A plugin without a filesystem
+	 * grant is denied (warn + no-op disposable). Returns a composite {@link HostDisposable}
+	 * that disposes every underlying watcher (and their event subscriptions).
+	 */
+	const watch = (pattern: string, onChange: () => void): HostDisposable => {
+		if (fsRoots.length === 0) {
+			warn(
+				`[plugin:${pluginName}] file watch of "${pattern}" denied — ` +
+					"the plugin did not request any permissions.filesystem paths to watch.",
+			)
+			return { dispose: () => {} }
+		}
+		const disposables: HostDisposable[] = []
+		for (const root of fsRoots) {
+			const watcher = host.watcher.watch(root, pattern)
+			disposables.push(watcher.onCreate(onChange))
+			disposables.push(watcher.onChange(onChange))
+			disposables.push(watcher.onDelete(onChange))
+			disposables.push(watcher)
+		}
+		const composite: HostDisposable = {
+			dispose: () => {
+				for (const d of disposables) {
+					try {
+						d.dispose()
+					} catch {
+						// Disposing one watcher must not block the rest.
+					}
+				}
+			},
+		}
+		// Let the manager track it so the plugin's watchers are torn down on disable.
+		options.trackWatch?.(composite)
+		return composite
+	}
+
 	const restrictedFetch = (input: string | URL, init?: RequestInit): Promise<Response> => {
 		const url = input.toString()
 		if (!isNetworkAllowed(url, networkAllowlist)) {
@@ -166,5 +220,6 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 			error: (m: string) => host.notifier.error(m),
 		},
 		fetch: restrictedFetch,
+		watch,
 	}
 }
