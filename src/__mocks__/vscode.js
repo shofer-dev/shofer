@@ -128,6 +128,12 @@ export const FileType = {
 	SymbolicLink: 64,
 }
 
+export const ConfigurationTarget = {
+	Global: 1,
+	Workspace: 2,
+	WorkspaceFolder: 3,
+}
+
 export const DiagnosticSeverity = {
 	Error: 0,
 	Warning: 1,

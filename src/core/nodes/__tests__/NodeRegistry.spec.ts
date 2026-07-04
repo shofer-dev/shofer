@@ -427,7 +427,18 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
 		rec.getTaskChangedFiles.mockResolvedValue({
 			taskId: "r1-task-1",
-			entries: [{ path: "a.ts", insertions: 1, deletions: 0, binary: false, state: "modified", source: "working", hasOriginalContent: true, hasFinalContent: true }],
+			entries: [
+				{
+					path: "a.ts",
+					insertions: 1,
+					deletions: 0,
+					binary: false,
+					state: "modified",
+					source: "working",
+					hasOriginalContent: true,
+					hasFinalContent: true,
+				},
+			],
 			backend: "working",
 		})
 		await h.registry.upsert(remoteDef, "tok")
@@ -449,9 +460,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(host.postInitState).toHaveBeenCalled()
 		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
 		expect(h.registry.getFocusedShadow(host)!.changedFiles?.entries).toHaveLength(1)
-		expect(host.postMessageToWebview).toHaveBeenCalledWith(
-			expect.objectContaining({ type: "changedFiles/update" }),
-		)
+		expect(host.postMessageToWebview).toHaveBeenCalledWith(expect.objectContaining({ type: "changedFiles/update" }))
 	})
 
 	it("debounces a changed-files fetch for the focused shadow as Message deltas arrive", async () => {
@@ -492,15 +501,15 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
 
 		// Before any usage event, the summary is zeroed.
-		expect(h.registry.getFocusedShadow(host)!.toTaskItem()).toMatchObject({ tokensIn: 0, tokensOut: 0, totalCost: 0 })
+		expect(h.registry.getFocusedShadow(host)!.toTaskItem()).toMatchObject({
+			tokensIn: 0,
+			tokensOut: 0,
+			totalCost: 0,
+		})
 
 		remote.emit({
 			type: ShoferEventName.TaskTokenUsageUpdated,
-			args: [
-				taskId,
-				{ totalTokensIn: 1200, totalTokensOut: 340, totalCost: 0.05, contextTokens: 1540 },
-				{},
-			],
+			args: [taskId, { totalTokensIn: 1200, totalTokensOut: 340, totalCost: 0.05, contextTokens: 1540 }, {}],
 		})
 
 		expect(h.registry.getFocusedShadow(host)!.toTaskItem()).toMatchObject({
@@ -719,6 +728,29 @@ describe("NodeRegistry — load-average LB policy (Shofer Nodes)", () => {
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
 	})
 
+	it("setLoadBalancer persists the setting and applies it live to the pool + pushed state", async () => {
+		const update = vi.fn(async () => {})
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: (_key: string, def: unknown) => def,
+			update,
+		} as unknown as vscode.WorkspaceConfiguration)
+
+		const { registry } = makeRegistry()
+		expect(registry.getState().loadBalancer).toBe("round-robin")
+
+		let changed = 0
+		registry.onChange(() => changed++)
+		await registry.handleRequest({ action: "setLoadBalancer", policy: "least-load-5m" })
+
+		// Persisted to the Global config target…
+		expect(update).toHaveBeenCalledWith("loadBalancer", "least-load-5m", vscode.ConfigurationTarget.Global)
+		// …and applied immediately to the pool + surfaced in the pushed state (no wait
+		// for the onDidChangeConfiguration round-trip), with a change fired for the UI.
+		expect(registry.executorPool.getPolicy()).toBe("least-load-5m")
+		expect(registry.getState().loadBalancer).toBe("least-load-5m")
+		expect(changed).toBe(1)
+	})
+
 	it("re-reads the policy on a relevant configuration change", () => {
 		let changeCb: ((e: vscode.ConfigurationChangeEvent) => void) | undefined
 		vi.spyOn(vscode.workspace, "onDidChangeConfiguration").mockImplementation((cb) => {
@@ -739,7 +771,9 @@ describe("NodeRegistry — load-average LB policy (Shofer Nodes)", () => {
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
 
 		// A change touching our setting re-reads it.
-		changeCb?.({ affectsConfiguration: (s: string) => s === "shofer.nodes.loadBalancer" } as vscode.ConfigurationChangeEvent)
+		changeCb?.({
+			affectsConfiguration: (s: string) => s === "shofer.nodes.loadBalancer",
+		} as vscode.ConfigurationChangeEvent)
 		expect(registry.executorPool.getPolicy()).toBe("least-load-1m")
 	})
 })

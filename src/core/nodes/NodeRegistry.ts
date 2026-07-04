@@ -548,7 +548,25 @@ export class NodeRegistry {
 				return this.disconnect(req.id)
 			case "setDisabled":
 				return this.setDisabled(req.id, req.disabled)
+			case "setLoadBalancer":
+				return this.setLoadBalancer(req.policy)
 		}
+	}
+
+	/**
+	 * Persist + apply the pool's new-task load-balancing policy. Writes the
+	 * `shofer.nodes.loadBalancer` setting (Global) AND applies it to the pool
+	 * immediately + fires a change, so the panel updates without waiting for the
+	 * `onDidChangeConfiguration` listener to round-trip. That listener re-reads
+	 * and re-applies the same policy (idempotent — {@link ExecutorPool.setPolicy}
+	 * is a plain assignment), so the double-apply is harmless.
+	 */
+	async setLoadBalancer(policy: LoadBalancerPolicy): Promise<void> {
+		await vscode.workspace
+			.getConfiguration("shofer.nodes")
+			.update("loadBalancer", policy, vscode.ConfigurationTarget.Global)
+		this.pool.setPolicy(policy)
+		this.fireChange()
 	}
 
 	// ── request handlers ───────────────────────────────────────────────────────
@@ -643,6 +661,7 @@ export class NodeRegistry {
 		return {
 			nodes: this.buildNodeViews(),
 			activeNodeId: this.activeNodeId(),
+			loadBalancer: this.pool.getPolicy(),
 		}
 	}
 
