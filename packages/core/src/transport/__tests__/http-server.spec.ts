@@ -93,7 +93,7 @@ describe("createRequestHandler (§11)", () => {
 		const res = mockRes()
 		await run(mockReq("GET", "/health"), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(200)
-		expect(JSON.parse(res.body)).toEqual({ ok: true })
+		expect(JSON.parse(res.body)).toMatchObject({ ok: true })
 	})
 
 	it("GET /health reports the injected version", async () => {
@@ -101,7 +101,18 @@ describe("createRequestHandler (§11)", () => {
 		const res = mockRes()
 		versioned(mockReq("GET", "/health"), res as unknown as ServerResponse)
 		await flush()
-		expect(JSON.parse(res.body)).toEqual({ ok: true, version: "9.9.9" })
+		expect(JSON.parse(res.body)).toMatchObject({ ok: true, version: "9.9.9" })
+	})
+
+	it("GET /health exposes load metrics (loadavg triple + cpu count) for the LB channel", async () => {
+		const res = mockRes()
+		await run(mockReq("GET", "/health"), res as unknown as ServerResponse)
+		const body = JSON.parse(res.body) as { loadavg: unknown; cpus: unknown }
+		expect(Array.isArray(body.loadavg)).toBe(true)
+		expect(body.loadavg).toHaveLength(3)
+		expect((body.loadavg as number[]).every((n) => typeof n === "number")).toBe(true)
+		expect(typeof body.cpus).toBe("number")
+		expect(body.cpus as number).toBeGreaterThanOrEqual(1)
 	})
 
 	it("POST /api/v1/task creates a task", async () => {
@@ -287,7 +298,7 @@ describe("createRequestHandler (§11)", () => {
 		it("leaves /health open even when a token is set", async () => {
 			const res = await call(authed(), mockReq("GET", "/health"))
 			expect(res.statusCode).toBe(200)
-			expect(JSON.parse(res.body)).toEqual({ ok: true, version: "1.2.3" })
+			expect(JSON.parse(res.body)).toMatchObject({ ok: true, version: "1.2.3" })
 		})
 	})
 })

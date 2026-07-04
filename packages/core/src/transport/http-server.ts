@@ -1,4 +1,5 @@
 import http from "node:http"
+import os from "node:os"
 
 import type { AgentApi, CheckpointDiffOptions, CheckpointRestoreOptions } from "@shofer/types"
 
@@ -53,7 +54,7 @@ export interface HttpServerOptions {
 /**
  * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
  * `/health`):
- *   GET  /health                     → liveness + version (open)
+ *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) (open)
  *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream
  *   POST /api/v1/task                → { prompt, taskId? } → { taskId }
@@ -92,9 +93,11 @@ export function createRequestHandler(
 		const path = url.pathname
 		const method = req.method ?? "GET"
 
-		// Open liveness probe — never gated by the bearer token.
+		// Open liveness probe — never gated by the bearer token. Also the
+		// load-metric channel: `loadavg`/`cpus` let a controller's ExecutorPool
+		// run a load-average LB policy (Shofer Nodes).
 		if (method === "GET" && path === "/health") {
-			return send(res, 200, { ok: true, version })
+			return send(res, 200, { ok: true, version, loadavg: os.loadavg(), cpus: os.cpus().length })
 		}
 
 		// Bearer-token gate for the entire versioned API surface.

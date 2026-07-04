@@ -134,6 +134,41 @@ describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
 		expect(states).toEqual(["connected"]) // re-fired to surface latency
 	})
 
+	it("parses + exposes the load sample from the health ping", async () => {
+		await conn.connect()
+		expect(conn.load).toBeUndefined() // empty-body health so far
+		env.routes.health.mockResolvedValueOnce(json(200, { ok: true, loadavg: [1.5, 2.5, 3.5], cpus: 8 }))
+		await env.runInterval()
+		expect(conn.load).toEqual({ loadavg: [1.5, 2.5, 3.5], cpus: 8 })
+	})
+
+	it("keeps the previous load sample when a later health body omits/malforms metrics", async () => {
+		await conn.connect()
+		env.routes.health.mockResolvedValueOnce(json(200, { ok: true, loadavg: [1, 1, 1], cpus: 4 }))
+		await env.runInterval()
+		expect(conn.load).toEqual({ loadavg: [1, 1, 1], cpus: 4 })
+		// Next ping has no metrics → previous sample is retained.
+		env.routes.health.mockResolvedValueOnce(json(200, { ok: true }))
+		await env.runInterval()
+		expect(conn.load).toEqual({ loadavg: [1, 1, 1], cpus: 4 })
+	})
+
+	it("accepts load metrics volunteered on the whoami handshake", async () => {
+		env.routes.whoami.mockResolvedValueOnce(json(200, { version: "1.0.0", loadavg: [0.1, 0.2, 0.3], cpus: 2 }))
+		await conn.connect()
+		expect(conn.status).toBe("connected")
+		expect(conn.load).toEqual({ loadavg: [0.1, 0.2, 0.3], cpus: 2 })
+	})
+
+	it("clears the load sample on disconnect", async () => {
+		await conn.connect()
+		env.routes.health.mockResolvedValueOnce(json(200, { ok: true, loadavg: [1, 1, 1], cpus: 4 }))
+		await env.runInterval()
+		expect(conn.load).toBeDefined()
+		conn.disconnect()
+		expect(conn.load).toBeUndefined()
+	})
+
 	it("reconnects after a ping failure and recovers", async () => {
 		await conn.connect()
 		states.length = 0

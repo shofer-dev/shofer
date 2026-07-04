@@ -1,4 +1,4 @@
-import type { AgentApi, ShoferNodeConnState } from "@shofer/types"
+import type { AgentApi, LoadSample, ShoferNodeConnState } from "@shofer/types"
 import { TypedEmitter } from "@shofer/types"
 
 import { MAX_EXPONENTIAL_BACKOFF_SECONDS } from "../constants.js"
@@ -67,11 +67,26 @@ function errMsg(e: unknown): string {
 	return e instanceof Error ? e.message : String(e)
 }
 
+/**
+ * Best-effort {@link LoadSample} extraction from a `/health` (or `/whoami`) JSON
+ * body. Returns `undefined` unless a well-formed `loadavg` triple + numeric
+ * `cpus` are present, so a node that doesn't report metrics simply has no sample.
+ */
+function parseLoadSample(body: unknown): LoadSample | undefined {
+	if (typeof body !== "object" || body === null) return undefined
+	const { loadavg, cpus } = body as { loadavg?: unknown; cpus?: unknown }
+	if (!Array.isArray(loadavg) || loadavg.length < 3) return undefined
+	if (!loadavg.slice(0, 3).every((n) => typeof n === "number" && Number.isFinite(n))) return undefined
+	if (typeof cpus !== "number" || !Number.isFinite(cpus)) return undefined
+	return { loadavg: [loadavg[0], loadavg[1], loadavg[2]] as [number, number, number], cpus }
+}
+
 export class NodeConnection {
 	private _status: ShoferNodeConnState = "disconnected"
 	private _latencyMs?: number
 	private _agentVersion?: string
 	private _error?: string
+	private _load?: LoadSample
 	private _client?: ShoferHttpClient
 
 	private readonly emitter = new TypedEmitter<ShoferNodeConnState>()
@@ -93,6 +108,14 @@ export class NodeConnection {
 	}
 	get error(): string | undefined {
 		return this._error
+	}
+	/**
+	 * The remote node's latest {@link LoadSample} (from the `GET /health` ping /
+	 * initial handshake), or `undefined` if the node hasn't reported one yet. Fed
+	 * into the controller's ExecutorPool for its load-average LB policy.
+	 */
+	get load(): LoadSample | undefined {
+		return this._load
 	}
 	/** The live agent surface — only exposed while `connected`. */
 	get api(): AgentApi | undefined {
@@ -125,6 +148,7 @@ export class NodeConnection {
 		this.teardownClient()
 		this.reconnectAttempt = 0
 		this._latencyMs = undefined
+		this._load = undefined
 		this.setStatus("disconnected")
 	}
 
@@ -161,7 +185,11 @@ export class NodeConnection {
 
 		let version: string | undefined
 		try {
-			version = ((await res.json()) as { version?: string }).version
+			const body = (await res.json()) as { version?: string }
+			version = body.version
+			// Accept load metrics from the handshake too, if the node volunteers them.
+			const sample = parseLoadSample(body)
+			if (sample) this._load = sample
 		} catch {
 			version = undefined
 		}
@@ -234,6 +262,12 @@ export class NodeConnection {
 		}
 		if (!res.ok) return this.onPingFailure(`health → ${res.status}`)
 		this._latencyMs = Math.max(0, Math.round(now() - start))
+		try {
+			const sample = parseLoadSample(await res.json())
+			if (sample) this._load = sample
+		} catch {
+			// Non-JSON / malformed health body — keep the previous sample.
+		}
 		this.reconnectAttempt = 0
 		// Re-fire the (unchanged) status so subscribers pick up the new latency.
 		this.emitter.fire(this._status)
