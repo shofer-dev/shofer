@@ -113,7 +113,10 @@ export const groupEntryArraySchema = rawGroupEntryArraySchema
  * available on ZodEffects.
  */
 export const modeConfigObjectSchema = z.object({
-	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
+	// `:` is permitted only so plugin-contributed modes can be namespaced as
+	// `<pluginName>:<slug>` (collision-free per design §14.7); authored slugs use
+	// letters/numbers/dashes.
+	slug: z.string().regex(/^[a-zA-Z0-9:-]+$/, "Slug must contain only letters numbers and dashes"),
 	name: z.string().min(1, "Name is required"),
 	roleDefinition: z.string().min(1, "Role definition is required"),
 	whenToUse: z.string().optional(),
@@ -122,7 +125,13 @@ export const modeConfigObjectSchema = z.object({
 	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
-	source: z.enum(["global", "project"]).optional(),
+	source: z.enum(["global", "project", "plugin"]).optional(),
+	/**
+	 * When `source === "plugin"`, the name of the plugin that contributed this
+	 * mode (attribution shown in the UI as `plugin:<pluginName>`). Unset for
+	 * built-in / global / project modes.
+	 */
+	pluginName: z.string().optional(),
 	provider: z.string().optional(),
 })
 
