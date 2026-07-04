@@ -14,6 +14,7 @@ import type { ModeConfig } from "@shofer/types"
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getWorkspacePath, arePathsEqual } from "@shofer/core"
 import { GlobalFileNames } from "@shofer/core"
+import { setSharedPluginManager } from "@shofer/core"
 
 import { CustomModesManager } from "../CustomModesManager"
 
@@ -131,6 +132,40 @@ describe("CustomModesManager", () => {
 			const modes = await manager.getCustomModes()
 
 			expect(modes).toHaveLength(2)
+		})
+
+		it("should include plugin-contributed modes tagged source=plugin (Phase 1)", async () => {
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
+			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
+				if (path === mockSettingsPath) {
+					return yaml.stringify({ customModes: settingsModes })
+				}
+				throw new Error("File not found")
+			})
+
+			setSharedPluginManager({
+				getContributedModes: () => [
+					{
+						slug: "my-plugin:deploy",
+						name: "🚀 Deploy",
+						roleDefinition: "Deploy specialist",
+						tools: ["read"],
+						source: "plugin" as const,
+						pluginName: "my-plugin",
+					},
+				],
+			} as any)
+
+			try {
+				const modes = await manager.getCustomModes()
+				const deploy = modes.find((m) => m.slug === "my-plugin:deploy")
+				expect(deploy).toBeDefined()
+				expect(deploy).toMatchObject({ source: "plugin", pluginName: "my-plugin" })
+				// Existing user modes are untouched.
+				expect(modes.find((m) => m.slug === "mode1")).toBeDefined()
+			} finally {
+				setSharedPluginManager(undefined)
+			}
 		})
 
 		it("should merge modes with .shofer/shofermodes taking precedence", async () => {

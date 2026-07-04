@@ -17,6 +17,7 @@ import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
+import { getSharedPluginManager } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 
@@ -252,7 +253,30 @@ export class CustomModesManager {
 			}
 		}
 
+		this.appendPluginModes(merged, slugs)
+
 		return merged
+	}
+
+	/**
+	 * Modes contributed by enabled plugins (design §6.3). They arrive already
+	 * tagged `source: "plugin"` + `pluginName` and slug-namespaced as
+	 * `<pluginName>:<slug>` (collision-free, §14.7), so they sit at the top of the
+	 * precedence chain without shadowing project/global modes. Empty when no
+	 * plugin manager is wired or no plugins are enabled ⇒ behavior unchanged.
+	 */
+	private getPluginModes(): ModeConfig[] {
+		return getSharedPluginManager()?.getContributedModes() ?? []
+	}
+
+	/** Append plugin-contributed modes to `merged`, skipping any slug already present. */
+	private appendPluginModes(merged: ModeConfig[], slugs: Set<string>): void {
+		for (const mode of this.getPluginModes()) {
+			if (!slugs.has(mode.slug)) {
+				slugs.add(mode.slug)
+				merged.push(mode)
+			}
+		}
 	}
 
 	public async getCustomModesFilePath(): Promise<string> {
@@ -394,6 +418,9 @@ export class CustomModesManager {
 				.filter((mode) => !projectModes.has(mode.slug))
 				.map((mode) => ({ ...mode, source: "global" as const })),
 		]
+
+		// Append plugin-contributed modes (design §6.3) at the top of the chain.
+		this.appendPluginModes(mergedModes, new Set(mergedModes.map((m) => m.slug)))
 
 		await this.context.globalState.update("customModes", mergedModes)
 
