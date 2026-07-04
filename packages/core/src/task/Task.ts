@@ -3504,6 +3504,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async startTask(task?: string, images?: string[]): Promise<void> {
+		// Lifecycle `beforeTaskStart` observer (design §6.9). Owner decision: kept off
+		// the latency-critical path — fired non-blocking (not awaited) and timeout-guarded
+		// inside the registry, so a plugin can never delay or block task start. No-op when
+		// no permitted plugin declares it.
+		void pluginRegistry
+			.notifyBeforeTaskStart({ taskId: this.taskId, cwd: this.cwd, mode: this._taskMode, prompt: task })
+			.catch(() => {})
+
 		try {
 			// `conversationHistory` (for API) and `shoferMessages` (for webview)
 			// need to be in sync.
@@ -4093,6 +4101,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					? "abandoned"
 					: "user"
 		this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
+
+		// Lifecycle `afterTaskComplete` observer (design §6.9). This is the single task
+		// teardown site — it fires both for a normal completion (post-attempt_completion
+		// cleanup, `abortReasonValue === "completed"`) and for a genuine abort. Fired
+		// non-blocking + timeout-guarded so an observer can never delay teardown. No-op
+		// when no permitted plugin declares it.
+		void pluginRegistry
+			.notifyAfterTaskComplete({
+				taskId: this.taskId,
+				cwd: this.cwd,
+				mode: this._taskMode,
+				reason: abortReasonValue === "completed" ? "completed" : "aborted",
+			})
+			.catch(() => {})
 
 		try {
 			this.dispose() // Call the centralized dispose method
