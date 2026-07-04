@@ -20,7 +20,12 @@ import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
 import type { ShoferNodesState, ShoferNodeRequest } from "./shofer-node.js"
-import type { PluginsState, PluginRequest } from "./plugin.js"
+import type {
+	PluginsState,
+	PluginRequest,
+	PluginUiContributionsState,
+	PluginUiMessageEnvelope,
+} from "./plugin.js"
 
 // Types previously from cloud.ts, now defined inline
 type CloudUserInfo = {
@@ -221,6 +226,10 @@ export interface ExtensionMessage {
 		| "shoferNodes"
 		// Plugins (Settings → Plugins tab) — discovered plugins snapshot push
 		| "plugins"
+		// Plugin UI contributions (design §6.8) — per-region contributions snapshot push
+		| "pluginUiContributions"
+		// Plugin UI channel (design §6.8) — extension → a plugin's UI (scoped/namespaced)
+		| "pluginUiMessage"
 		// Webview health messages
 		| "ping"
 	text?: string
@@ -228,6 +237,10 @@ export interface ExtensionMessage {
 	shoferNodes?: ShoferNodesState
 	/** For `plugins`: discovered plugins + enabled state (design §12). */
 	plugins?: PluginsState
+	/** For `pluginUiContributions`: enabled plugins' UI contributions per region (design §6.8). */
+	pluginUiContributions?: PluginUiContributionsState
+	/** For `pluginUiMessage`: a scoped plugin-UI channel message (extension → the plugin's UI). */
+	pluginUiMessage?: PluginUiMessageEnvelope
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
@@ -908,12 +921,16 @@ export interface WebviewMessage {
 		| "shoferNode"
 		// Plugins (Settings → Plugins tab) — list + enable/disable
 		| "plugin"
+		// Plugin UI channel (design §6.8) — a plugin's UI → its extension-side plugin (scoped)
+		| "pluginUiMessage"
 	text?: string
 	taskId?: string
 	/** For `shoferNode`: the node registry/connection request. */
 	shoferNode?: ShoferNodeRequest
 	/** For `plugin`: list / enable-disable request (design §12). */
 	plugin?: PluginRequest
+	/** For `pluginUiMessage`: a scoped plugin-UI channel message (the plugin's UI → extension). */
+	pluginUiMessage?: PluginUiMessageEnvelope
 	/** requestWorkflowStats: the subtree task ids to aggregate stats over. */
 	workflowStatsTaskIds?: string[]
 	/** §4.3: sha256 of a blob to fetch on `getBlobContent`. */

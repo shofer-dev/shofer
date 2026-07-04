@@ -709,6 +709,11 @@ export const webviewMessageHandler = async (
 			provider.postInitState()
 			provider.workspaceTracker?.initializeFilePaths() // Don't await.
 
+			// Push plugin UI contributions so PluginSlot regions (chat toolbar, task
+			// header, settings) are populated on load. Empty with no UI plugins →
+			// every slot renders nothing (non-breaking). Don't await/block launch.
+			void provider.pushPluginUiContributions().catch(() => {})
+
 			// Always push the current parallel task state so the TaskSelector has
 			// up-to-date data when the webview loads.
 			{
@@ -1102,6 +1107,12 @@ export const webviewMessageHandler = async (
 			// Plugins tab request (list / enable-disable).
 			if (message.plugin) {
 				await provider.handlePluginRequest(message.plugin)
+			}
+			break
+		case "pluginUiMessage":
+			// Scoped plugin-UI channel message (a plugin's UI → its extension-side plugin).
+			if (message.pluginUiMessage) {
+				await provider.handlePluginUiMessage(message.pluginUiMessage)
 			}
 			break
 		case "clearTask":

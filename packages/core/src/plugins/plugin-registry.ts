@@ -317,6 +317,29 @@ export class PluginRegistry {
 			}
 		}
 	}
+
+	/**
+	 * Deliver a plugin-UI channel message to **only** the named plugin's `onUiMessage`
+	 * (design §6.8, Phase 4). Namespaced by construction: the message reaches the
+	 * `pluginName` plugin and no other, so one plugin can neither observe nor spoof
+	 * another's channel. Errors and timeouts are isolated and warned (like `onEvent`) so
+	 * a bad plugin can never break the host. No-op when the plugin is absent or declares
+	 * no `onUiMessage`. Fire-and-forget: the caller does not await delivery.
+	 */
+	async dispatchUiMessage(pluginName: string, message: unknown, context: PluginContext = {}): Promise<void> {
+		const plugin = this.plugins.find((p) => p.name === pluginName)
+		if (!plugin?.onUiMessage) return
+		try {
+			await withHookTimeout(
+				Promise.resolve(plugin.onUiMessage(message, context)),
+				() => {
+					warnPlugin(`[plugin:${pluginName}] onUiMessage exceeded ${PLUGIN_HOOK_TIMEOUT_MS}ms — skipped.`)
+				},
+			)
+		} catch (error) {
+			warnPlugin(`[plugin:${pluginName}] onUiMessage failed: ${String(error)} — skipped.`)
+		}
+	}
 }
 
 /** Shared registry instance. */

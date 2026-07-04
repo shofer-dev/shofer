@@ -549,6 +549,8 @@ export class PluginManager {
 				? (prompt, ctx) => raw.transformSystemPrompt!(prompt, merge(ctx))
 				: undefined,
 			onEvent: raw.onEvent ? (event, ctx) => raw.onEvent!(event, merge(ctx)) : undefined,
+			// Forward the plugin-UI channel receiver (design §6.8) with this plugin's context.
+			onUiMessage: raw.onUiMessage ? (message, ctx) => raw.onUiMessage!(message, merge(ctx)) : undefined,
 			// Forward lifecycle hooks (design §6.9), each with the per-plugin context
 			// (config/host/workspace) layered on. The registry additionally gates these on
 			// the manifest `permissions.lifecycle` grant passed to `register`.

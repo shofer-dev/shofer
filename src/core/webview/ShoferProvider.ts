@@ -85,8 +85,9 @@ import {
 	createNodePluginCodeLoader,
 	setSharedPluginManager,
 	getGlobalShoferDirectory,
+	pluginRegistry,
 } from "@shofer/core"
-import type { PluginRequest, PluginView, PluginsState } from "@shofer/types"
+import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
@@ -2141,8 +2142,45 @@ export class ShoferProvider
 			await this.mcpHub?.refreshProjectMcpServers().catch(() => {})
 			this.customModesManager.invalidateCache()
 			await this.postInitState().catch(() => {})
+			// A toggle can add/remove UI contributions — re-push so slots update live.
+			await this.pushPluginUiContributions().catch(() => {})
 		}
 		await this.pushPluginsState()
+	}
+
+	/**
+	 * Push the enabled plugins' UI contributions per region to the webview (design
+	 * §6.8, Phase 4). `PluginSlot` renders these; with zero UI-contributing plugins the
+	 * snapshot is empty and every slot renders nothing (non-breaking).
+	 */
+	public async pushPluginUiContributions(): Promise<void> {
+		const manager = await this.getPluginManager()
+		const contributions = manager.getContributedUiContributions()
+		await this.postMessageToWebview({
+			type: "pluginUiContributions",
+			pluginUiContributions: { contributions },
+		})
+	}
+
+	/**
+	 * Route a scoped plugin-UI channel message (webview → extension) to its plugin's
+	 * `onUiMessage` (design §6.8). Namespaced by `pluginName`: only that plugin's
+	 * receiver fires. Delivery is error-isolated inside the registry.
+	 */
+	public async handlePluginUiMessage(envelope: PluginUiMessageEnvelope): Promise<void> {
+		await pluginRegistry.dispatchUiMessage(envelope.pluginName, envelope.message)
+	}
+
+	/**
+	 * Send a scoped plugin-UI channel message (extension → the plugin's UI). Namespaced
+	 * by `pluginName` so only that plugin's mounted component(s) receive it. This is the
+	 * host-side sender a plugin's extension code uses to push to its UI.
+	 */
+	public async postPluginUiMessage(pluginName: string, message: unknown): Promise<void> {
+		await this.postMessageToWebview({
+			type: "pluginUiMessage",
+			pluginUiMessage: { pluginName, message },
+		})
 	}
 
 	// ------------------------------------------------------------------
