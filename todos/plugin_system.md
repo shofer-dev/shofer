@@ -947,10 +947,38 @@ expanded `TaskHeader`:
 
 | Step | What                                               | Files                                                        |
 | ---- | -------------------------------------------------- | ------------------------------------------------------------ |
-| 5.1  | Archive pack/unack utilities                       | `packages/core/src/plugins/plugin-pack.ts` (new)             |
+| 5.1  | Archive pack/unpack utilities                      | `packages/core/src/plugins/plugin-pack.ts` (new)             |
 | 5.2  | `shofer plugin install/list/remove` CLI commands   | `apps/cli/src/commands/plugin/` (new)                        |
 | 5.3  | Marketplace "Plugins" tab                          | `webview-ui/src/components/marketplace/PluginsTab.tsx` (new) |
 | 5.4  | Remote plugin registry (deferred — hosted service) | —                                                            |
+
+> **✅ Phase 5 implemented.** 5.1 `plugin-pack.ts` — the `.shofer-plugin` gzip-tarball
+> format (portable `tar`), `packPlugin`/`unpackPlugin`/`installPlugin`, validated against
+> `pluginManifestSchema`, zip-slip-/symlink-hardened, name-collision-gated (host-agnostic
+> in `@shofer/core`). 5.2 `shofer plugin install|list|remove` (thin over 5.1 + the Phase-1
+> `PluginManager`; the enabled allow-list is the same `shofer.plugins.enabledPlugins` the
+> running agent reads). 5.3 the Marketplace **Plugins** tab (list / enable-disable /
+> uninstall / **install-from-file**) with the extension-side `uninstall` + `installFromFile`
+> handlers (native file picker → 5.1 `unpackPlugin`). All three steps unit-tested.
+>
+> **5.4 Remote plugin registry — deferred (not built).** Per owner decision §14 Q5
+> ("Remote plugins — no, stay deferred; needs code signing + trust chain"), there is no
+> hosted registry, no `shofer plugin search`, and no remote/URL install. Distribution is
+> LOCAL only: a `.shofer-plugin` archive (or a plugin directory) installed via the CLI or
+> the Marketplace file picker. A future registry would layer search/`install name@ver`/
+> `update --all` on top of this same pack/unpack + `PluginManager` substrate.
+
+> **✅ §13 implementation plan complete (Phases 1–5).** Declarative plugins (P1), code
+> plugins + sandbox (P2), lifecycle hooks (P3), UI contributions (P4), and distribution
+> (P5) all land. **Known remaining follow-ups (out of the P1–P5 plan):**
+>
+> - **Remote plugin registry (5.4)** — deferred by owner decision (above).
+> - **Phase-4 external plugin UI bundle + CSP** — Phase 4 wires `PluginSlot` +
+>   dynamic-import of plugin UI with a restricted API, but shipping a *third-party* plugin's
+>   own UI bundle still needs (a) the webview CSP / `localResourceRoots` to serve the plugin
+>   dir's assets, and (b) a shared-React boundary so the plugin component renders in the host
+>   React tree without bundling its own React. Built-in / first-party UI contributions work;
+>   arbitrary external UI bundles await this CSP + shared-React work.
 
 ---
 
