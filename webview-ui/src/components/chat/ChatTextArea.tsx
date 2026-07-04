@@ -32,6 +32,7 @@ import { AutoApproveDropdown } from "./AutoApproveDropdown"
 import { WorktreeIndicator } from "./WorktreeIndicator"
 import { CommandsButton } from "./CommandsButton"
 import { SkillsButton } from "./SkillsButton"
+import { PluginSlot } from "../plugins/PluginSlot"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
@@ -1582,6 +1583,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						<WorktreeIndicator />
 						{!isWorkflow && <CommandsButton />}
 						{!isWorkflow && <SkillsButton />}
+						{/* Plugin contributions for the chat-input toolbar (design §6.8). Renders
+						    nothing when no plugin contributes here — layout unchanged. */}
+						<PluginSlot region="chat-input-toolbar" />
 					</div>
 					<div
 						className={cn(

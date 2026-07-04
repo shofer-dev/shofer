@@ -27,6 +27,7 @@ import Thumbnails from "../common/Thumbnails"
 
 import { TaskActions } from "./TaskActions"
 import { ContextWindowProgress } from "./ContextWindowProgress"
+import { PluginSlot } from "../plugins/PluginSlot"
 import { Mention } from "./Mention"
 import { TodoListDisplay } from "./TodoListDisplay"
 import { LucideIconButton } from "./LucideIconButton"
@@ -446,6 +447,10 @@ const TaskHeader = ({
 						<div onClick={(e) => e.stopPropagation()}>
 							<TaskActions item={currentTaskItem} buttonsDisabled={buttonsDisabled} />
 						</div>
+
+						{/* Plugin contributions for the expanded task header (design §6.8).
+						    Renders nothing when no plugin contributes here. */}
+						<PluginSlot region="task-header" />
 
 						<div className="pt-3 mt-2 -mx-2.5 px-2.5 border-t border-vscode-sideBar-background">
 							<table className="w-full text-sm">

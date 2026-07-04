@@ -8,6 +8,8 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 import { ToggleSwitch } from "@src/components/ui"
 
+import { PluginSlot } from "../plugins/PluginSlot"
+
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 
@@ -111,6 +113,10 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 						})}
 					</div>
 				)}
+
+				{/* Plugin contributions for the settings tab (design §6.8). Renders
+				    nothing when no plugin contributes a settings-tab component. */}
+				<PluginSlot region="settings-tab" />
 			</Section>
 		</div>
 	)
