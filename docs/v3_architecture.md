@@ -276,6 +276,28 @@ Distributing execution uses two boundaries that the v3 split already defines:
     divergences are not special cases — they are exactly the front-end-bound slice of
     Category I, and the boundary is already drawn.
 
+3. **Reverse data channel (controller → executor), typed methods on `AgentApi`.**
+   Checkpoint diff/restore and the changed-files panel operate on per-task state
+   that lives on the **owning executor** (its shadow-git checkpoint repo + its
+   `ChangedFilesService` snapshots). For a remote (shadow) task the controller
+   therefore does not touch a local `Task`; it calls typed `AgentApi` methods that
+   round-trip to the executor over the same session/HTTP transport as the rest of
+   the control plane:
+
+    - **Data fetch** — `getCheckpointDiff` (the executor resolves the from/to
+      hashes and runs `service.getDiff`, skipping binary/oversized files to bound
+      the payload; the controller renders the returned `CheckpointDiff[]` and
+      resolves the diff title locally), `getTaskChangedFiles`, `getChangedFileDiff`.
+    - **Execute-on-executor** — `restoreCheckpoint` (after which the controller
+      **rebuilds the shadow** so its buffered conversation matches the executor's
+      post-rewind state), `revert{,All}ChangedFile(s)`, `accept{,All}ChangedFile(s)`.
+
+    The controller-side `NodeRegistry` routes each through the `ExecutorPool` to the
+    task's owner, refreshes the focused shadow's changed-files panel on a debounce as
+    remote `Message` deltas arrive, and gates restore/revert on "no other active task
+    in this worktree" (shared-workspace safety — an executor `git clean -fd`/`reset
+    --hard` must not race a local task's writes).
+
 ### Routing and invariants
 
 - **Root-task-level routing.** Each new top-level task — and its entire tree (all

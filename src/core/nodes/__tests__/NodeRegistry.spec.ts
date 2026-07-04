@@ -419,6 +419,68 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(rec.acceptAllChangedFiles).toHaveBeenCalledWith("r1-task-1")
 	})
 
+	it("rebuildShadow clears the buffered conversation, re-posts init state, and re-fetches changed files", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
+		rec.getTaskChangedFiles.mockResolvedValue({
+			taskId: "r1-task-1",
+			entries: [{ path: "a.ts", insertions: 1, deletions: 0, binary: false, state: "modified", source: "working", hasOriginalContent: true, hasFinalContent: true }],
+			backend: "working",
+		})
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+
+		// Buffer a message, then rebuild.
+		remote.emit({
+			type: ShoferEventName.Message,
+			args: [{ taskId, action: "created", message: { ts: 10, say: "text", text: "hi" } }],
+		})
+		expect(h.registry.getFocusedShadow()!.messages).toHaveLength(1)
+		host.postInitState.mockClear()
+
+		await h.registry.rebuildShadow(taskId!)
+
+		expect(h.registry.getFocusedShadow()!.messages).toHaveLength(0) // cleared
+		expect(host.postInitState).toHaveBeenCalled()
+		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
+		expect(h.registry.getFocusedShadow()!.changedFiles?.entries).toHaveLength(1)
+		expect(host.postMessageToWebview).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "changedFiles/update" }),
+		)
+	})
+
+	it("debounces a changed-files fetch for the focused shadow as Message deltas arrive", async () => {
+		vi.useFakeTimers()
+		try {
+			const host = makeProviderHost()
+			h.registry.attachProvider(host)
+			const remote = makeDrivableAgent("r1-task-1")
+			const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
+			await h.registry.upsert(remoteDef, "tok")
+			await h.registry.connect("r1")
+			h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+			const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+			rec.getTaskChangedFiles.mockClear()
+
+			// A burst of deltas coalesces into a single fetch after the debounce.
+			for (let i = 0; i < 3; i++) {
+				remote.emit({
+					type: ShoferEventName.Message,
+					args: [{ taskId, action: "created", message: { ts: 100 + i, say: "text", text: `m${i}` } }],
+				})
+			}
+			expect(rec.getTaskChangedFiles).not.toHaveBeenCalled() // still within the debounce window
+			await vi.advanceTimersByTimeAsync(600)
+			expect(rec.getTaskChangedFiles).toHaveBeenCalledTimes(1)
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+
 	it("carries remote token usage onto the shadow's header summary (full-fidelity meter)", async () => {
 		const host = makeProviderHost()
 		h.registry.attachProvider(host)
