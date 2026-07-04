@@ -1577,12 +1577,12 @@ export const webviewMessageHandler = async (
 			// executor never opens a diff viewer. Route by the FOCUSED shadow id and
 			// re-assert focus after the await so a focus switch mid-fetch can't render
 			// the wrong task's diff.
-			const diffShadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const diffShadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (diffShadowId) {
 				const parsed = checkoutDiffPayloadSchema.safeParse(message.payload)
 				if (!parsed.success) break
 				const changes = await provider.nodeRegistry!.getCheckpointDiff(diffShadowId, parsed.data)
-				if (provider.nodeRegistry?.getFocusedShadow()?.taskId !== diffShadowId) break
+				if (provider.nodeRegistry?.getFocusedShadow(provider)?.taskId !== diffShadowId) break
 				if (!changes.length) {
 					getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
 					break
@@ -1610,7 +1610,7 @@ export const webviewMessageHandler = async (
 			// executor's post-rewind state. Gate on shared-workspace safety first: a
 			// concurrently-running local task in this worktree would collide with the
 			// executor's `git clean -fd` + `reset --hard`.
-			const restoreShadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const restoreShadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (restoreShadowId) {
 				if (provider.taskManager.getActiveManagedTasks().length > 0) {
 					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
@@ -1652,7 +1652,7 @@ export const webviewMessageHandler = async (
 		case "changedFiles/get": {
 			// Shofer Nodes L3: a focused remote shadow's panel is fetched from the
 			// owning executor over the control plane, not computed from a local task.
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
 				break
@@ -1665,7 +1665,7 @@ export const webviewMessageHandler = async (
 			if (!relPath) break
 			// Shofer Nodes L3: for a shadow, the base/final content lives on the
 			// executor — fetch both over the control plane and diff them directly.
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				try {
 					const { original, final } = await provider.nodeRegistry!.getChangedFileDiff(shadowId, relPath)
@@ -1721,7 +1721,7 @@ export const webviewMessageHandler = async (
 			// Shofer Nodes L3: revert on the executor. Gate on shared-workspace safety
 			// (any active local task in this worktree would collide with the executor
 			// mutating the shared files), then refresh the shadow panel.
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				if (provider.taskManager.getActiveManagedTasks().length > 0) {
 					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
@@ -1776,7 +1776,7 @@ export const webviewMessageHandler = async (
 		}
 		case "changedFiles/revertAll": {
 			// Shofer Nodes L3: revert-all on the executor (same shared-workspace gate).
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				if (provider.taskManager.getActiveManagedTasks().length > 0) {
 					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
@@ -1824,7 +1824,7 @@ export const webviewMessageHandler = async (
 			if (!relPath) break
 			// Shofer Nodes L3: accept on the executor. Accept only rewrites tracking
 			// metadata (no workspace mutation), so it needs no active-task gate.
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				try {
 					await provider.nodeRegistry!.acceptChangedFile(shadowId, relPath)
@@ -1852,7 +1852,7 @@ export const webviewMessageHandler = async (
 		}
 		case "changedFiles/acceptAll": {
 			// Shofer Nodes L3: accept-all on the executor (metadata only, no gate).
-			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			const shadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
 			if (shadowId) {
 				try {
 					await provider.nodeRegistry!.acceptAllChangedFiles(shadowId)

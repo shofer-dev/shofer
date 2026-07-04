@@ -3796,7 +3796,7 @@ export class ShoferProvider
 		// swaps) would wipe the remote conversation with whatever the local stack
 		// currently holds. The three render fields (currentTaskId, currentTaskItem,
 		// shoferMessages) short-circuit to the shadow below.
-		const focusedShadow = this.nodeRegistry?.getFocusedShadow()
+		const focusedShadow = this.nodeRegistry?.getFocusedShadow(this)
 
 		// Re-seed the workflow visualization from the *focused* task. The viz
 		// fields below are normally pushed as deltas by WorkflowTask via
@@ -5476,10 +5476,10 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
-			// Shofer Nodes L2: a new LOCAL task takes focus — drop any remote shadow
-			// focus so the render override + activeNodeId revert to Local before the
-			// full state push below.
-			this.nodeRegistry?.clearShadowFocus()
+			// Shofer Nodes L2: a new LOCAL task takes focus in THIS view — drop this
+			// view's remote shadow focus so its render override + activeNodeId revert
+			// to Local before the full state push below.
+			this.nodeRegistry?.clearShadowFocus(this)
 
 			// Notify the webview of the new current task and switch to the chat tab.
 			await this.postInitState()
@@ -5509,10 +5509,10 @@ export class ShoferProvider
 	public async focusTask(taskId: string): Promise<void> {
 		try {
 			// Shofer Nodes L2: focusing a task from the task list is always a LOCAL,
-			// in-process task (remote shadows aren't in taskHistory). Drop any remote
-			// shadow focus so the render override + activeNodeId revert to Local before
-			// the postInitState below recomputes the state.
-			this.nodeRegistry?.clearShadowFocus()
+			// in-process task (remote shadows aren't in taskHistory). Drop THIS view's
+			// remote shadow focus so its render override + activeNodeId revert to Local
+			// before the postInitState below recomputes the state.
+			this.nodeRegistry?.clearShadowFocus(this)
 
 			// Check if we already have this task focused
 			const currentTask = this.getCurrentTask()
