@@ -53,6 +53,7 @@ import { getWorkspacePath } from "../../path/path.js"
 import { injectVariables } from "../../utils/config.js"
 import { safeWriteJson } from "../../utils/safeWriteJson.js"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
+import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
 // Discriminated union for connection states
 export type ConnectedMcpConnection = {
@@ -430,49 +431,86 @@ export class McpHub {
 	}
 
 	private async updateProjectMcpServers(): Promise<void> {
-		try {
-			const projectMcpPath = await this.getProjectMcpPath()
-			if (!projectMcpPath) return
+		await this.syncProjectMcpServers()
+	}
 
+	/**
+	 * MCP server configs contributed by enabled plugins (design §6.6 Mode A). Keyed
+	 * by server name; each value is a loose config object re-validated per-server by
+	 * {@link updateServerConnections}. Empty when no plugin manager is wired ⇒ no
+	 * plugin servers ⇒ behavior identical to the pre-plugin hub.
+	 */
+	private getPluginMcpServers(): Record<string, unknown> {
+		const pluginManager = getSharedPluginManager()
+		if (!pluginManager) return {}
+		const servers: Record<string, unknown> = {}
+		for (const { name, config } of pluginManager.getContributedMcpServers()) {
+			servers[name] = config
+		}
+		return servers
+	}
+
+	/**
+	 * Recompute the "project"-source server set as `.shofer/mcp.json` servers merged
+	 * with plugin-contributed servers, and reconcile the connections. `.shofer/mcp.json`
+	 * takes precedence on a name collision. Plugin servers are preserved even when the
+	 * project config file is absent or invalid.
+	 */
+	private async syncProjectMcpServers(): Promise<void> {
+		const pluginServers = this.getPluginMcpServers()
+		const projectMcpPath = await this.getProjectMcpPath()
+
+		if (!projectMcpPath) {
+			await this.updateServerConnections(pluginServers, "project", false)
+			return
+		}
+
+		try {
 			const content = await fs.readFile(projectMcpPath, "utf-8")
 			let config: any
-
 			try {
 				config = JSON.parse(content)
 			} catch (parseError) {
 				const errorMessage = t("mcp:errors.invalid_settings_syntax")
 				mcpSysLog.error(errorMessage, parseError)
 				getHost().notifier.error(errorMessage)
+				await this.updateServerConnections(pluginServers, "project", false)
 				return
 			}
 
-			// Validate configuration structure
 			const result = McpSettingsSchema.safeParse(config)
 			if (result.success) {
-				await this.updateServerConnections(result.data.mcpServers || {}, "project")
+				await this.updateServerConnections(
+					{ ...pluginServers, ...(result.data.mcpServers || {}) },
+					"project",
+					false,
+				)
 			} else {
-				// Format validation errors for better user feedback
 				const errorMessages = result.error.errors
 					.map((err) => `${err.path.join(".")}: ${err.message}`)
 					.join("\n")
 				mcpSysLog.error("Invalid project MCP settings format:", errorMessages)
 				getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
+				await this.updateServerConnections(pluginServers, "project", false)
 			}
 		} catch (error) {
 			this.showErrorMessage(t("mcp:errors.failed_update_project"), error)
 		}
 	}
 
+	/**
+	 * Public re-sync hook: call after plugins are enabled/disabled so plugin-
+	 * contributed MCP servers (dis)connect and the webview is notified.
+	 */
+	async refreshProjectMcpServers(): Promise<void> {
+		await this.syncProjectMcpServers()
+		await this.notifyWebviewOfServerChanges()
+	}
+
 	private async cleanupProjectMcpServers(): Promise<void> {
-		// Disconnect and remove all project MCP servers
-		const projectConnections = this.connections.filter((conn) => conn.server.source === "project")
-
-		for (const conn of projectConnections) {
-			await this.deleteConnection(conn.server.name, "project")
-		}
-
-		// Clear project servers from the connections list
-		await this.updateServerConnections({}, "project", false)
+		// Disconnect and remove file-based project MCP servers, but keep plugin-
+		// contributed servers connected (they don't come from `.shofer/mcp.json`).
+		await this.updateServerConnections(this.getPluginMcpServers(), "project", false)
 	}
 
 	getServers(): McpServer[] {
@@ -656,9 +694,9 @@ export class McpHub {
 		}
 	}
 
-	// Initialize project-level MCP servers
+	// Initialize project-level MCP servers (file-based + plugin-contributed).
 	private async initializeProjectMcpServers(): Promise<void> {
-		await this.initializeMcpServers("project")
+		await this.syncProjectMcpServers()
 	}
 
 	/**
