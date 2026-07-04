@@ -2,7 +2,19 @@ import { Command } from "commander"
 
 import { DEFAULT_FLAGS } from "@/types/constants.js"
 import { VERSION } from "@/lib/utils/version.js"
-import { run, listCommands, listModes, listModels, listSessions, upgrade, acp, serve } from "@/commands/index.js"
+import {
+	run,
+	listCommands,
+	listModes,
+	listModels,
+	listSessions,
+	upgrade,
+	acp,
+	serve,
+	pluginInstall,
+	pluginList,
+	pluginRemove,
+} from "@/commands/index.js"
 
 const program = new Command()
 
@@ -186,5 +198,46 @@ program
 			await acp(options)
 		},
 	)
+
+const pluginCommand = program
+	.command("plugin")
+	.description("Install, list, or remove Shofer plugins (~/.shofer/plugins)")
+	.enablePositionalOptions()
+	.passThroughOptions()
+
+const runPluginAction = async (action: () => Promise<void>) => {
+	try {
+		await action()
+		process.exit(0)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		console.error(`[CLI] Error: ${message}`)
+		process.exit(1)
+	}
+}
+
+pluginCommand
+	.command("install <source>")
+	.description("Install a plugin from a .shofer-plugin archive or a plugin directory")
+	.option("--overwrite", "Replace an already-installed plugin of the same name", false)
+	.option("--enable", "Enable the plugin immediately after installing", false)
+	.action(async (source: string, options: { overwrite?: boolean; enable?: boolean }) => {
+		await runPluginAction(() => pluginInstall(source, { overwrite: options.overwrite, enable: options.enable }))
+	})
+
+pluginCommand
+	.command("list")
+	.description("List installed plugins and their enabled state")
+	.option("--json", "Output as JSON", false)
+	.action(async (options: { json?: boolean }) => {
+		await runPluginAction(() => pluginList({ json: options.json }))
+	})
+
+pluginCommand
+	.command("remove <name>")
+	.description("Remove an installed plugin (deletes its directory, drops it from the enabled list)")
+	.action(async (name: string) => {
+		await runPluginAction(() => pluginRemove(name))
+	})
 
 program.parse()

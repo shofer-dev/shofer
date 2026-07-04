@@ -26,4 +26,3 @@ export {
 	type PluginFsHost,
 	type PluginStateStore,
 } from "./plugins/plugin-manager.js"
-export { getGlobalShoferDirectory } from "./services/shofer-config/index.js"
