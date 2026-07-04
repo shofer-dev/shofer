@@ -2111,6 +2111,8 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
 			// + code-index embedder, mirroring how live-memory reaches buildApiHandler.
 			aiProvider: this.buildPluginAiProvider(),
+			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
+			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
 			aiConsentStore: {
 				getAiConsentedPlugins: () => this.context.globalState.get<string[]>(aiConsentKey) ?? [],

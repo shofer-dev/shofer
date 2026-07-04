@@ -16,6 +16,7 @@ import { pluginRegistry } from "./plugin-registry.js"
 import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
+import { createPluginStorage } from "./plugin-storage.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
 import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
@@ -219,6 +220,12 @@ export interface PluginManagerOptions {
 	 * `ctx.ai` (fail-closed).
 	 */
 	aiConsentStore?: PluginAiConsentStore
+	/**
+	 * Absolute base dir for per-plugin storage (design §6.11 G2). A plugin's
+	 * `ctx.storage.dir` is `<storageBaseDir>/<name>`. When omitted (or when no host fs
+	 * is available), `ctx.storage` is absent. Host-provided (e.g. `<globalStorage>/plugins`).
+	 */
+	storageBaseDir?: string
 }
 
 const MANIFEST_FILENAME = "plugin.json"
@@ -233,6 +240,7 @@ export class PluginManager {
 	private readonly workspacePath?: string
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
+	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
 	/** Names of code plugins currently loaded + registered into `pluginRegistry`. */
@@ -257,6 +265,7 @@ export class PluginManager {
 		this.workspacePath = options.workspacePath
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
+		this.storageBaseDir = options.storageBaseDir
 	}
 
 	/**
@@ -506,6 +515,10 @@ export class PluginManager {
 			return
 		}
 		await this.fs.removeDir(plugin.root)
+		// Remove the plugin's private storage dir too (design §6.11 G2 — removed on uninstall).
+		if (this.storageBaseDir) {
+			await this.fs.removeDir(path.join(this.storageBaseDir, name)).catch(() => {})
+		}
 		await this.setEnabled(name, false)
 		this.plugins = this.plugins.filter((p) => p.name !== name)
 	}
@@ -588,6 +601,10 @@ export class PluginManager {
 			config,
 			host,
 			ai: this.buildPluginAi(plugin),
+			storage:
+				this.storageBaseDir && this.host
+					? createPluginStorage(plugin.name, path.join(this.storageBaseDir, plugin.name), this.host.fs)
+					: undefined,
 		}
 	}
 
