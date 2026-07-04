@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 
 import type { AgentApi, ServerEvent } from "../agent-api.js"
+import type { LoadSample } from "../executor-pool.js"
 import { ExecutorPool } from "../executor-pool.js"
 
 /** A mock executor whose task ids are namespaced + whose event stream is drivable. */
@@ -191,6 +192,135 @@ describe("ExecutorPool (§13 controller side)", () => {
 		const pool = new ExecutorPool()
 		expect(pool.pickNext()).toBeUndefined()
 		expect(pool.assignableIds()).toEqual([])
+	})
+
+	describe("load-average load balancing (least-load-* policies)", () => {
+		/** An executor whose injected load sample is mutable per test. */
+		function loadExecutor(id: string, sample: LoadSample | undefined) {
+			const e = makeExecutor(id)
+			let current = sample
+			return {
+				...e,
+				load: () => current,
+				setLoad: (s: LoadSample | undefined) => {
+					current = s
+				},
+			}
+		}
+
+		it("picks the executor with the lowest normalized load for the selected window", async () => {
+			const a = loadExecutor("A", { loadavg: [4, 4, 4], cpus: 4 }) // 1.0 normalized
+			const b = loadExecutor("B", { loadavg: [1, 2, 3], cpus: 4 }) // 0.25 / 0.5 / 0.75
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+
+			pool.setPolicy("least-load-1m")
+			expect(pool.getPolicy()).toBe("least-load-1m")
+			expect(pool.pickNext()).toBe("B") // 0.25 < 1.0
+
+			// A clear winner does not rotate — repeated picks stay on the least-loaded.
+			const t1 = await pool.createTask({ prompt: "1" })
+			const t2 = await pool.createTask({ prompt: "2" })
+			expect(pool.ownerOf(t1.taskId)).toBe("B")
+			expect(pool.ownerOf(t2.taskId)).toBe("B")
+		})
+
+		it("selects the 1m/5m/15m window by policy", () => {
+			// A wins on 1m; B wins on 5m and 15m.
+			const a = loadExecutor("A", { loadavg: [1, 9, 9], cpus: 1 })
+			const b = loadExecutor("B", { loadavg: [9, 1, 1], cpus: 1 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+
+			pool.setPolicy("least-load-1m")
+			expect(pool.pickNext()).toBe("A")
+			pool.setPolicy("least-load-5m")
+			expect(pool.pickNext()).toBe("B")
+			pool.setPolicy("least-load-15m")
+			expect(pool.pickNext()).toBe("B")
+		})
+
+		it("normalizes by cpu count — a high-core node with higher raw load can still win", () => {
+			// A: raw 8 over 16 cores = 0.5. B: raw 3 over 4 cores = 0.75. A wins despite higher raw load.
+			const a = loadExecutor("A", { loadavg: [8, 8, 8], cpus: 16 })
+			const b = loadExecutor("B", { loadavg: [3, 3, 3], cpus: 4 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+
+			pool.setPolicy("least-load-1m")
+			expect(pool.pickNext()).toBe("A")
+		})
+
+		it("excludes executors with no sample; falls back to round-robin when NONE have a sample", async () => {
+			// One with a sample, one without → the sampled one is chosen.
+			const a = loadExecutor("A", { loadavg: [5, 5, 5], cpus: 1 })
+			const b = loadExecutor("B", undefined)
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+			pool.setPolicy("least-load-1m")
+			expect(pool.pickNext()).toBe("A")
+			expect(pool.pickNext()).toBe("A") // B still excluded
+
+			// Neither exposes a sample → degrade to round-robin over the pool.
+			const c = loadExecutor("C", undefined)
+			const d = loadExecutor("D", undefined)
+			const rr = new ExecutorPool()
+			rr.add({ id: c.id, api: c.api, load: c.load })
+			rr.add({ id: d.id, api: d.api, load: d.load })
+			rr.setPolicy("least-load-5m")
+			expect(rr.pickNext()).toBe("C")
+			expect(rr.pickNext()).toBe("D")
+			expect(rr.pickNext()).toBe("C")
+		})
+
+		it("spreads across tied executors (all-equal / all-zero Windows loadavg) via the round-robin cursor", () => {
+			const a = loadExecutor("A", { loadavg: [0, 0, 0], cpus: 8 })
+			const b = loadExecutor("B", { loadavg: [0, 0, 0], cpus: 4 })
+			const c = loadExecutor("C", { loadavg: [0, 0, 0], cpus: 2 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+			pool.add({ id: c.id, api: c.api, load: c.load })
+			pool.setPolicy("least-load-1m")
+			// All zero-normalized → tied → cursor spreads across the tied set in order.
+			expect([pool.pickNext(), pool.pickNext(), pool.pickNext(), pool.pickNext()]).toEqual(["A", "B", "C", "A"])
+		})
+
+		it("excludes disabled executors from the least-load comparison", () => {
+			const a = loadExecutor("A", { loadavg: [0.1, 0.1, 0.1], cpus: 1 }) // lowest, but disabled
+			const b = loadExecutor("B", { loadavg: [1, 1, 1], cpus: 1 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load, disabled: true })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+			pool.setPolicy("least-load-1m")
+			expect(pool.pickNext()).toBe("B") // A disabled → excluded despite lower load
+		})
+
+		it("loadOf exposes an executor's current sample and is undefined for unknown ids", () => {
+			const a = loadExecutor("A", { loadavg: [2, 2, 2], cpus: 2 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			expect(pool.loadOf("A")).toEqual({ loadavg: [2, 2, 2], cpus: 2 })
+			a.setLoad(undefined)
+			expect(pool.loadOf("A")).toBeUndefined()
+			expect(pool.loadOf("Z")).toBeUndefined()
+		})
+
+		it("default policy is round-robin (unchanged behavior)", async () => {
+			const a = loadExecutor("A", { loadavg: [9, 9, 9], cpus: 1 })
+			const b = loadExecutor("B", { loadavg: [0, 0, 0], cpus: 1 })
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, load: a.load })
+			pool.add({ id: b.id, api: b.api, load: b.load })
+			expect(pool.getPolicy()).toBe("round-robin")
+			// Ignores load entirely — strict rotation.
+			expect(pool.pickNext()).toBe("A")
+			expect(pool.pickNext()).toBe("B")
+		})
 	})
 
 	it("round-robins over enabled executors and skips a runtime-disabled one via setDisabled", async () => {

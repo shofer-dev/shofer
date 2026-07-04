@@ -17,11 +17,46 @@ import type { ChangedFilesPayload } from "./vscode-extension-host.js"
  *
  * With a single executor this is behaviourally identical to driving it directly.
  */
+/**
+ * A point-in-time load reading for one executor. Mirrors the shape of
+ * `os.loadavg()` + `os.cpus().length` on the executor host, but is produced by an
+ * **injected accessor** ({@link PooledExecutor.load}) so this module stays
+ * browser-safe (the webview imports `@shofer/types`; it must NOT pull in
+ * `node:os`). The Node-side caller (`NodeRegistry`) supplies the accessor.
+ */
+export interface LoadSample {
+	/** `os.loadavg()` output — 1-, 5- and 15-minute run-queue averages. */
+	loadavg: [number, number, number]
+	/** Logical core count on the host, used to normalize `loadavg` across nodes. */
+	cpus: number
+}
+
+/**
+ * New-task assignment strategy for {@link ExecutorPool.pickNext}.
+ *  - `round-robin` — rotate over the assignable executors (the historical default).
+ *  - `least-load-<W>` — pick the executor with the lowest **normalized** load
+ *    (`loadavg[W] / max(cpus, 1)`) for the 1-, 5- or 15-minute window.
+ */
+export type LoadBalancerPolicy = "round-robin" | "least-load-1m" | "least-load-5m" | "least-load-15m"
+
+/** `loadavg` array index for each least-load window. */
+const LOAD_WINDOW_INDEX: Record<Exclude<LoadBalancerPolicy, "round-robin">, 0 | 1 | 2> = {
+	"least-load-1m": 0,
+	"least-load-5m": 1,
+	"least-load-15m": 2,
+}
+
 export interface PooledExecutor {
 	readonly id: string
 	readonly api: AgentApi
 	/** When true, excluded from new-task assignment (admin-disabled). */
 	disabled?: boolean
+	/**
+	 * Optional load accessor returning this executor's latest {@link LoadSample}
+	 * (or `undefined` if none is available yet). Injected by the Node-side caller;
+	 * consumed by {@link ExecutorPool.pickNext} under a `least-load-*` policy.
+	 */
+	load?: () => LoadSample | undefined
 }
 
 export class ExecutorPool implements AgentApi {
@@ -30,6 +65,17 @@ export class ExecutorPool implements AgentApi {
 	private readonly taskOwner = new Map<string, string>()
 	private readonly listeners = new Set<(event: ServerEvent) => void>()
 	private roundRobin = 0
+	private policy: LoadBalancerPolicy = "round-robin"
+
+	/** Select the new-task assignment strategy used by {@link pickNext}. */
+	setPolicy(policy: LoadBalancerPolicy): void {
+		this.policy = policy
+	}
+
+	/** The current new-task assignment strategy. */
+	getPolicy(): LoadBalancerPolicy {
+		return this.policy
+	}
 
 	/** Register an executor; returns a fn that removes it (and stops forwarding its events). */
 	add(executor: PooledExecutor): () => void {
@@ -55,16 +101,46 @@ export class ExecutorPool implements AgentApi {
 	}
 
 	/**
-	 * Advance the round-robin over the currently-assignable executors and return
+	 * Advance the load balancer over the currently-assignable executors and return
 	 * the chosen executor id, WITHOUT dispatching anything. Split out from
 	 * {@link createTask} so a controller can decide the owner up front (e.g. to
 	 * route a Local pick through an in-process path that bypasses the pool) while
 	 * still advancing the load-balancer cursor. Returns `undefined` when no
 	 * executor is assignable.
+	 *
+	 * Under `round-robin` (the default) this rotates over the assignable pool. Under
+	 * a `least-load-*` policy it picks the assignable executor with the lowest
+	 * **normalized** load (`loadavg[window] / max(cpus, 1)`) among those that expose
+	 * a {@link LoadSample}. Fallbacks: executors with no sample are excluded from the
+	 * comparison; if NONE expose a sample it degrades to round-robin over the
+	 * assignable pool; ties (equal minimum — including the all-zeros
+	 * `os.loadavg()===[0,0,0]` case) are broken by advancing the round-robin cursor
+	 * across the tied set so load stays spread.
 	 */
 	pickNext(): string | undefined {
 		const pool = this.assignable()
 		if (pool.length === 0) return undefined
+		if (this.policy === "round-robin") return this.roundRobinPick(pool)
+
+		const idx = LOAD_WINDOW_INDEX[this.policy]
+		const scored: { executor: PooledExecutor; load: number }[] = []
+		for (const executor of pool) {
+			const sample = executor.load?.()
+			if (!sample) continue // no sample → excluded from the least-load comparison
+			scored.push({ executor, load: sample.loadavg[idx] / Math.max(sample.cpus, 1) })
+		}
+		// No executor exposes a sample → degrade to round-robin over the pool.
+		if (scored.length === 0) return this.roundRobinPick(pool)
+
+		const min = Math.min(...scored.map((s) => s.load))
+		const tied = scored.filter((s) => s.load === min)
+		if (tied.length === 1) return tied[0]!.executor.id
+		// Tie (incl. all-zeros): spread by advancing the cursor across the tied set.
+		return tied[this.roundRobin++ % tied.length]!.executor.id
+	}
+
+	/** Rotate the round-robin cursor over `pool` and return the chosen id. */
+	private roundRobinPick(pool: PooledExecutor[]): string {
 		return pool[this.roundRobin++ % pool.length]!.id
 	}
 
@@ -175,6 +251,14 @@ export class ExecutorPool implements AgentApi {
 	/** Whether an executor with `id` is currently registered. */
 	has(id: string): boolean {
 		return this.executors.some((e) => e.id === id)
+	}
+
+	/**
+	 * The latest {@link LoadSample} for a registered executor (via its injected
+	 * `load` accessor), or `undefined` if the executor is unknown or exposes none.
+	 */
+	loadOf(id: string): LoadSample | undefined {
+		return this.executors.find((e) => e.id === id)?.load?.()
 	}
 
 	/**
