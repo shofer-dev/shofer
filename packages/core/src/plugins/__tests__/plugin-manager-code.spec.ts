@@ -186,6 +186,46 @@ describe("PluginManager.activateCodePlugins (step 2.5)", () => {
 		expect(pluginRegistry.has("codeplug")).toBe(false)
 	})
 
+	it("forwards lifecycle hooks and gates them on the manifest permissions.lifecycle grant (P3)", async () => {
+		const fs = new MemoryFs()
+		// Two plugins that both declare a beforeToolCall lifecycle hook; only one is
+		// granted `permissions.lifecycle`.
+		fs.addManifest("/plugins/granted", {
+			name: "granted",
+			version: "1.0.0",
+			main: "index.js",
+			permissions: { lifecycle: true },
+		})
+		fs.addManifest("/plugins/ungranted", {
+			name: "ungranted",
+			version: "1.0.0",
+			main: "index.js",
+			permissions: { tools: true },
+		})
+		const loader: PluginCodeLoader = {
+			load: async (source: PluginCodeSource): Promise<ShoferPlugin> => ({
+				name: source.name,
+				lifecycle: { beforeToolCall: () => ({ allow: false, reason: `${source.name} blocked` }) },
+			}),
+		}
+		const manager = new PluginManager({
+			fs,
+			pluginDirs: [{ dir: "/plugins", scope: "global" }],
+			stateStore: new MemoryStore(["granted", "ungranted"]),
+			codeLoader: loader,
+			host: createInMemoryHost(),
+		})
+		await manager.discover()
+		await manager.activateCodePlugins()
+
+		expect(pluginRegistry.has("granted")).toBe(true)
+		expect(pluginRegistry.has("ungranted")).toBe(true)
+		// Only the granted plugin participates in lifecycle hooks.
+		expect(pluginRegistry.hasLifecycleHook("beforeToolCall")).toBe(true)
+		const gate = await pluginRegistry.applyBeforeToolCall("read_file", { path: "x" })
+		expect(gate).toEqual({ allow: false, reason: "granted blocked" })
+	})
+
 	it("skips a code plugin failed closed by an unmet dependency (no registration)", async () => {
 		const fs = new MemoryFs()
 		fs.addManifest("/plugins/codeplug", { ...codeManifest, dependencies: ["missing"] })

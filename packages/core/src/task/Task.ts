@@ -120,6 +120,9 @@ import { SYSTEM_PROMPT } from "../prompts/system.js"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools.js"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool.js"
 
+// plugin lifecycle hooks (design §6.9)
+import { pluginRegistry } from "../plugins/plugin-registry.js"
+
 // core modules
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector.js"
 import { restoreTodoListForTask } from "../tools/UpdateTodoListTool.js"
@@ -2453,6 +2456,49 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		let askTs: number
 		/** UUID v7 that uniquely identifies this ask invocation. */
 		const askId = uuidv7()
+
+		// Lifecycle `beforeAsk` (design §6.9): a permitted plugin may modify the ask
+		// text or auto-answer it before it is surfaced. Only for complete (non-partial)
+		// asks — partial streaming chunks are not user decisions. Fast-path: with no
+		// participating plugin this is fully skipped and the ask proceeds byte-for-byte
+		// as before, never touching the existing approval/auto-approval flow.
+		if (partial !== true && pluginRegistry.hasLifecycleHook("beforeAsk")) {
+			const hookResult = await pluginRegistry.applyBeforeAsk(type, text, {
+				taskId: this.taskId,
+				cwd: this.cwd,
+				mode: this._taskMode,
+			})
+			if (hookResult) {
+				if (typeof hookResult.text === "string") {
+					// Modify the ask surfaced to the user / passed to auto-approval.
+					text = hookResult.text
+				}
+				if (hookResult.decision === "approve" || hookResult.decision === "deny") {
+					// Auto-answer: record the ask (marked auto-approved, mirroring the
+					// existing auto-approval fast-path) and short-circuit the user prompt.
+					const decidedTs = Date.now()
+					this.lastMessageTs = decidedTs
+					this._currentAskId = askId
+					await this.addToShoferMessages({
+						ts: decidedTs,
+						type: "ask",
+						ask: type,
+						text,
+						isProtected,
+						askId,
+						autoApproved: true,
+						isAnswered: hookResult.decision === "approve" && type === "tool" ? true : undefined,
+					})
+					this._currentAskId = undefined
+					this.emit(ShoferEventName.TaskAskResponded)
+					return {
+						response: hookResult.decision === "approve" ? "yesButtonClicked" : "noButtonClicked",
+						text: hookResult.text,
+						images: undefined,
+					}
+				}
+			}
+		}
 
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
