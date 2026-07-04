@@ -91,6 +91,18 @@ export enum TelemetryEventName {
 	// `layerId` so zero-hit / low-correctness layers can be retired (removal loop).
 	TOOL_CALL_RESOLVED = "Tool Call Resolved",
 	TOOL_RECOVERY_FIRED = "Tool Recovery Fired",
+
+	// Captcha solver (browser_detect_captcha + captcha-solver sub-task).
+	// CAPTCHA_DETECTED fires when browser_detect_captcha finds ≥1 widget;
+	// carries the captcha type(s), tabId, and which leg (mcp/chrome).
+	// CAPTCHA_SOLVE_ATTEMPTED fires when the solver sub-task begins a solve
+	// attempt; carries the captcha type, attempt number, and leg.
+	// CAPTCHA_SOLVE_COMPLETED fires when the solver finishes (solved/failed/
+	// unsolvable); carries the type, status, total duration_ms, attempt count,
+	// and leg. See extensions/docs/captcha-solver.md.
+	CAPTCHA_DETECTED = "Captcha Detected",
+	CAPTCHA_SOLVE_ATTEMPTED = "Captcha Solve Attempted",
+	CAPTCHA_SOLVE_COMPLETED = "Captcha Solve Completed",
 }
 
 /**
@@ -226,6 +238,9 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.TASK_PEER_DISCOVERY,
 			TelemetryEventName.TOOL_CALL_RESOLVED,
 			TelemetryEventName.TOOL_RECOVERY_FIRED,
+			TelemetryEventName.CAPTCHA_DETECTED,
+			TelemetryEventName.CAPTCHA_SOLVE_ATTEMPTED,
+			TelemetryEventName.CAPTCHA_SOLVE_COMPLETED,
 		]),
 		properties: telemetryPropertiesSchema,
 	}),

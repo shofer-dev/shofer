@@ -312,6 +312,30 @@ export const globalSettingsSchema = z.object({
 	 * @default undefined (all categories)
 	 */
 	logCategories: z.array(z.string()).optional(),
+
+	// ─── Captcha Solver ───────────────────────────────────────────────────
+	// Tuning knobs for the captcha-solver sub-task's retry/round budget and
+	// overall wall-clock timeout. Consumed by the captcha-solver mode's
+	// customInstructions and any agent-level orchestration that enforces the
+	// budget. See extensions/docs/captcha-solver.md for the full design.
+	/**
+	 * Maximum solve attempts per round before the solver returns "failed".
+	 * A round is one challenge presentation (e.g. one hCaptcha image grid).
+	 * @default 3
+	 */
+	captchaSolverMaxAttempts: z.number().int().min(1).optional(),
+	/**
+	 * Maximum challenge rounds for multi-round captchas (hCaptcha, Arkose)
+	 * before the solver returns "failed".
+	 * @default 3
+	 */
+	captchaSolverMaxRounds: z.number().int().min(1).optional(),
+	/**
+	 * Overall timeout in seconds for a single solve operation (all rounds).
+	 * The solver sub-task must return (solved/failed/unsolvable) before this.
+	 * @default 120
+	 */
+	captchaSolverTimeoutSec: z.number().int().min(10).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

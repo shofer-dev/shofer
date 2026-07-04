@@ -449,6 +449,45 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP, properties)
 	}
 
+	// ─── Captcha Solver ───────────────────────────────────────────────────
+	// See extensions/docs/captcha-solver.md for the full design. These events
+	// track detection (browser_detect_captcha) and the solver sub-task's
+	// attempt/round lifecycle. `leg` is "mcp" (headless/Playwright) or "chrome"
+	// (Chrome-extension CDP).
+
+	/** browser_detect_captcha found ≥1 captcha widget on the page. */
+	public captureCaptchaDetected(properties: {
+		taskId: string
+		/** Detected captcha type(s), e.g. "recaptcha_v2", "hcaptcha". */
+		types: string[]
+		tabId?: number
+		leg: "mcp" | "chrome"
+	}): void {
+		this.captureEvent(TelemetryEventName.CAPTCHA_DETECTED, properties)
+	}
+
+	/** The solver sub-task began a solve attempt. */
+	public captureCaptchaSolveAttempted(properties: {
+		taskId: string
+		type: string
+		attempt: number
+		leg: "mcp" | "chrome"
+	}): void {
+		this.captureEvent(TelemetryEventName.CAPTCHA_SOLVE_ATTEMPTED, properties)
+	}
+
+	/** The solver finished — solved, failed, or unsolvable. */
+	public captureCaptchaSolveCompleted(properties: {
+		taskId: string
+		type: string
+		status: "solved" | "failed" | "unsolvable"
+		durationMs: number
+		attempts: number
+		leg: "mcp" | "chrome"
+	}): void {
+		this.captureEvent(TelemetryEventName.CAPTCHA_SOLVE_COMPLETED, properties)
+	}
+
 	public async shutdown(): Promise<void> {
 		if (!this.isReady) {
 			return
