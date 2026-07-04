@@ -3,10 +3,11 @@ import { Anthropic } from "@anthropic-ai/sdk"
 import * as fsp from "fs/promises"
 import * as nodePath from "path"
 
-import type { ToolName, ShoferAsk, ToolProgressStatus, TaskInteractionPayload } from "@shofer/types"
+import type { ToolName, ShoferAsk, ToolProgressStatus, TaskInteractionPayload, PluginContext } from "@shofer/types"
 import { ConsecutiveMistakeError, TelemetryEventName } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
+import { pluginRegistry } from "../plugins/plugin-registry.js"
 
 import { t } from "../i18n/index.js"
 
@@ -610,6 +611,12 @@ export async function presentAssistantMessage(shofer: Task) {
 			// Track if we've already pushed a tool result for this tool call (native tool calling only)
 			let hasToolResult = false
 
+			// Lifecycle `afterToolCall` (design §6.9): capture the stringified result the
+			// tool pushes so a permitted plugin can observe/transform it after execution.
+			// Only read when an afterToolCall plugin participates — otherwise it stays
+			// unused and the tool path is byte-for-byte unchanged.
+			let capturedToolResult: string | undefined
+
 			// If this is a native tool call but the parser couldn't construct nativeArgs
 			// (e.g., malformed/unfinished JSON in a streaming tool call), we must NOT attempt to
 			// execute the tool. Instead, emit exactly one structured tool_result so the provider
@@ -695,6 +702,9 @@ export async function presentAssistantMessage(shofer: Task) {
 						imageBlocks = [...feedbackImageBlocks, ...imageBlocks]
 					}
 				}
+
+				// Remember the final result string for the afterToolCall lifecycle hook.
+				capturedToolResult = resultContent
 
 				shofer.pushToolResultToUserContent({
 					type: "tool_result",
@@ -995,6 +1005,33 @@ export async function presentAssistantMessage(shofer: Task) {
 						),
 					)
 					break
+				}
+			}
+
+			// Lifecycle `beforeToolCall` (design §6.9): permitted plugins may block or
+			// modify the call before it runs. Fast-path: with no participating plugin the
+			// whole block is skipped and the tool path is byte-for-byte unchanged.
+			const pluginCtx: PluginContext = {
+				taskId: shofer.taskId,
+				cwd: shofer.cwd,
+				mode: mode ?? defaultModeSlug,
+			}
+			if (!block.partial && pluginRegistry.hasLifecycleHook("beforeToolCall")) {
+				const toolArgs = ((block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>) ?? {}
+				const gate = await pluginRegistry.applyBeforeToolCall(String(block.name), toolArgs, pluginCtx)
+				if (!gate.allow) {
+					// Surface the block like a denied tool so the model gets a matching result.
+					const reason = gate.reason
+						? `Tool "${block.name}" was blocked by a plugin: ${gate.reason}`
+						: `Tool "${block.name}" was blocked by a plugin policy.`
+					pushToolResult(formatResponse.toolDenied() + `\n${reason}`)
+					break
+				}
+				if (gate.modifiedArgs) {
+					// Thread the modified args into the block the tool reads. Native tool
+					// calls read `nativeArgs`; keep `params` in sync for any XML-era readers.
+					block.nativeArgs = gate.modifiedArgs
+					block.params = gate.modifiedArgs as typeof block.params
 				}
 			}
 
@@ -1599,6 +1636,30 @@ export async function presentAssistantMessage(shofer: Task) {
 						is_error: true,
 					})
 					break
+				}
+			}
+
+			// Lifecycle `afterToolCall` (design §6.9): permitted plugins may observe or
+			// transform the tool's result after it ran. Fast-path: only runs when a plugin
+			// participates and the tool actually produced a result (captured above). A
+			// transformed string replaces the already-pushed tool_result in place.
+			if (capturedToolResult !== undefined && pluginRegistry.hasLifecycleHook("afterToolCall")) {
+				const toolArgs = ((block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>) ?? {}
+				const transformed = await pluginRegistry.applyAfterToolCall(
+					String(block.name),
+					toolArgs,
+					capturedToolResult,
+					pluginCtx,
+				)
+				if (transformed !== capturedToolResult) {
+					const sanitizedId = sanitizeToolUseId(toolCallId)
+					for (let i = shofer.userMessageContent.length - 1; i >= 0; i--) {
+						const contentBlock = shofer.userMessageContent[i]
+						if (contentBlock?.type === "tool_result" && contentBlock.tool_use_id === sanitizedId) {
+							contentBlock.content = transformed
+							break
+						}
+					}
 				}
 			}
 
