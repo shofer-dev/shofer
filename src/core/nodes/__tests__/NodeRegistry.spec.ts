@@ -12,12 +12,27 @@ import { NodeRegistry, type INodeConnection, type NodeConnectionFactory } from "
  * persistence, pool population, and the pushed view model are all deterministic.
  */
 
+/** The L3 reverse-data-channel stubs shared by the agent mocks below. */
+function l3Stubs() {
+	return {
+		getCheckpointDiff: vi.fn(async () => []),
+		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t", entries: [], backend: "none" as const })),
+		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
+		restoreCheckpoint: vi.fn(async () => {}),
+		revertChangedFile: vi.fn(async () => {}),
+		revertAllChangedFiles: vi.fn(async () => {}),
+		acceptChangedFile: vi.fn(async () => {}),
+		acceptAllChangedFiles: vi.fn(async () => {}),
+	}
+}
+
 function makeAgent(): AgentApi {
 	return {
 		createTask: vi.fn(async () => ({ taskId: "t" })),
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		...l3Stubs(),
 		subscribe: vi.fn(() => () => {}),
 	}
 }
@@ -128,6 +143,7 @@ function makeDrivableAgent(taskId: string) {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		...l3Stubs(),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {
@@ -367,6 +383,40 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 
 		// A local task is never a shadow.
 		expect(h.registry.isShadow("local-task-99")).toBe(false)
+	})
+
+	it("routes the L3 reverse-data-channel methods for a shadow task to the owning executor", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remote = makeDrivableAgent("r1-task-1")
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
+
+		const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
+		expect(h.registry.isShadow(taskId!)).toBe(true)
+		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
+
+		await h.registry.getCheckpointDiff(taskId!, { commitHash: "c1", mode: "checkpoint" })
+		expect(rec.getCheckpointDiff).toHaveBeenCalledWith("r1-task-1", { commitHash: "c1", mode: "checkpoint" })
+
+		await h.registry.getTaskChangedFiles(taskId!)
+		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
+
+		await h.registry.getChangedFileDiff(taskId!, "src/a.ts")
+		expect(rec.getChangedFileDiff).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
+
+		await h.registry.restoreCheckpoint(taskId!, { ts: 1, commitHash: "c1", mode: "restore" })
+		expect(rec.restoreCheckpoint).toHaveBeenCalledWith("r1-task-1", { ts: 1, commitHash: "c1", mode: "restore" })
+
+		await h.registry.revertChangedFile(taskId!, "src/a.ts")
+		expect(rec.revertChangedFile).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
+		await h.registry.revertAllChangedFiles(taskId!)
+		expect(rec.revertAllChangedFiles).toHaveBeenCalledWith("r1-task-1")
+		await h.registry.acceptChangedFile(taskId!, "src/a.ts")
+		expect(rec.acceptChangedFile).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
+		await h.registry.acceptAllChangedFiles(taskId!)
+		expect(rec.acceptAllChangedFiles).toHaveBeenCalledWith("r1-task-1")
 	})
 
 	it("carries remote token usage onto the shadow's header summary (full-fidelity meter)", async () => {

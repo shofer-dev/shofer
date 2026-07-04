@@ -2,6 +2,10 @@ import * as vscode from "vscode"
 
 import {
 	type AgentApi,
+	type ChangedFilesPayload,
+	type CheckpointDiffEntry,
+	type CheckpointDiffOptions,
+	type CheckpointRestoreOptions,
 	type ServerEvent,
 	type ShoferAPI,
 	type ShoferMessage,
@@ -288,6 +292,43 @@ export class NodeRegistry {
 		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
 	): Promise<void> {
 		await this.pool.respondToAsk(taskId, response)
+	}
+
+	// ── remote reverse data channel (Shofer Nodes L3) ────────────────────────────
+	// Route checkpoint diff/restore + changed-files ops for a shadow (remote) task
+	// over the pool to the owning executor. The webview shadow branches call these
+	// (guarded by `isShadow`/`getFocusedShadow`) instead of driving a local Task.
+
+	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
+		return this.pool.getCheckpointDiff(taskId, opts)
+	}
+
+	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
+		return this.pool.getTaskChangedFiles(taskId)
+	}
+
+	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
+		return this.pool.getChangedFileDiff(taskId, relPath)
+	}
+
+	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
+		await this.pool.restoreCheckpoint(taskId, opts)
+	}
+
+	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.pool.revertChangedFile(taskId, relPath)
+	}
+
+	async revertAllChangedFiles(taskId: string): Promise<void> {
+		await this.pool.revertAllChangedFiles(taskId)
+	}
+
+	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
+		await this.pool.acceptChangedFile(taskId, relPath)
+	}
+
+	async acceptAllChangedFiles(taskId: string): Promise<void> {
+		await this.pool.acceptAllChangedFiles(taskId)
 	}
 
 	/** Make a remote shadow the focused task and switch the webview to it. */
