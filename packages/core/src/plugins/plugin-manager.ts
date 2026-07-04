@@ -7,6 +7,7 @@ import {
 	type PluginContext,
 	type PluginManifest,
 	pluginManifestSchema,
+	type PluginUiContribution,
 	type ShoferPlugin,
 } from "@shofer/types"
 
@@ -14,6 +15,7 @@ import { configLog } from "../logging/subsystems.js"
 import { pluginRegistry } from "./plugin-registry.js"
 import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
+import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
 import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
 // Re-export the shared warning helpers so existing importers of `@shofer/core`
@@ -673,6 +675,22 @@ export class PluginManager {
 			}
 		}
 		return out
+	}
+
+	/**
+	 * UI contributions (design §6.8, Phase 4) of enabled plugins, permission-gated
+	 * through {@link PluginUiRegistry}. A plugin contributes to exactly the regions its
+	 * manifest granted in `permissions.ui`; a plugin without that grant contributes
+	 * nothing. Plugins are ordered by install rank so the webview renders per-region
+	 * contributions deterministically (last-installed last). The extension pushes the
+	 * result to the webview, which resolves each `componentId` to a React component.
+	 */
+	getContributedUiContributions(): PluginUiContribution[] {
+		const plugins: UiContributingPlugin[] = this.enabledPlugins()
+			.filter((p) => (p.manifest.permissions?.ui?.length ?? 0) > 0)
+			.sort((a, b) => this.installRank(a.name) - this.installRank(b.name))
+			.map((p) => ({ name: p.name, grantedRegions: p.manifest.permissions?.ui ?? [] }))
+		return buildPluginUiRegistry(plugins).all()
 	}
 }
 
