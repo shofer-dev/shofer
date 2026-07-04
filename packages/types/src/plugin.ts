@@ -51,6 +51,16 @@ export interface ShoferPlugin {
 	 * crash or stall the agent loop.
 	 */
 	lifecycle?: LifecycleHooks
+
+	/**
+	 * Receive a message from this plugin's UI component(s) over the scoped plugin-UI
+	 * channel (design §6.8, Phase 4). The extension routes only messages addressed to
+	 * this plugin (namespaced by plugin name), so a plugin can neither observe nor
+	 * spoof another's channel. Observer-style: the return value is ignored and it must
+	 * not throw (the registry isolates and warns on a throw). A plugin pushes back *to*
+	 * its UI via the host-side sender (`ShoferProvider.postPluginUiMessage`).
+	 */
+	onUiMessage?(message: unknown, context: PluginContext): void | Promise<void>
 }
 
 /**
@@ -465,3 +475,99 @@ export interface PluginsState {
 export type PluginRequest =
 	| { action: "list" }
 	| { action: "setEnabled"; name: string; enabled: boolean }
+
+// ---------------------------------------------------------------------------
+// Plugin UI contributions (design §6.8, §12; Phase 4)
+//
+// A plugin may contribute React components into named webview regions
+// ({@link PluginUiRegion}). Per the owner decision (§14 Q1) the component is loaded
+// into the webview via dynamic import with a restricted API — NOT a sandboxed
+// iframe — so it shares the host's React/theme. It receives only a {@link PluginUIApi}:
+// a *scoped* message channel to its extension-side plugin plus a read-only context
+// blob. No direct `vscode` API and no DOM escape are exposed.
+//
+// These types are the shared contract between the webview (`PluginSlot`) and the
+// extension (`ui-registry` + provider routing). They are React-free so
+// `@shofer/types` stays browser-safe — the concrete `React.ComponentType` lives in
+// the webview, keyed by {@link PluginUiContribution.componentId}.
+// ---------------------------------------------------------------------------
+
+/** Read-only snapshot of the current task handed to a plugin UI component (design §6.8). */
+export interface PluginUiTaskSummary {
+	/** Id of the active task, if any. */
+	readonly taskId?: string
+	/** Current mode slug, if any. */
+	readonly mode?: string
+}
+
+/**
+ * The read-only context blob a plugin UI component receives (design §6.8). Carries
+ * the region it is mounted in, the contributing plugin's name, the current task
+ * summary, the plugin's user config, and theme variables — everything the component
+ * may *read*. The only way to affect host state is {@link PluginUIApi.postMessage}.
+ */
+export interface PluginUIContext {
+	/** The region this component is mounted in. */
+	readonly region: PluginUiRegion
+	/** The contributing plugin's name (also the channel namespace). */
+	readonly pluginName: string
+	/** Read-only summary of the active task. */
+	readonly task?: PluginUiTaskSummary
+	/** This plugin's validated, user-configured settings (design §6.2). */
+	readonly config?: Record<string, unknown>
+	/** VS Code theme CSS variables (name → value), for theme-aware rendering. */
+	readonly theme?: Record<string, string>
+}
+
+/**
+ * The **restricted** surface handed to a plugin UI component (design §6.8, §14 Q1).
+ * Scoped to a single plugin: {@link postMessage} tags every outgoing message with the
+ * plugin's name so the extension routes it only to that plugin's extension-side code,
+ * and {@link onMessage} only ever receives messages addressed to this plugin
+ * (namespacing — one plugin can neither spoof nor observe another). {@link context}
+ * is the read-only blob. No `vscode` API and no parent-DOM access are exposed.
+ */
+export interface PluginUIApi {
+	/** Send a message to this plugin's extension-side code (scoped to the plugin). */
+	postMessage(message: unknown): void
+	/** Subscribe to messages addressed to this plugin. Returns an unsubscribe fn. */
+	onMessage(listener: (message: unknown) => void): () => void
+	/** Read-only context (region, task, config, theme). */
+	readonly context: PluginUIContext
+}
+
+/**
+ * A single plugin UI contribution: plugin {@link pluginName} renders {@link componentId}
+ * into {@link region}. Produced by the permission-gated UI registry from enabled
+ * manifests and pushed to the webview, which resolves {@link componentId} to a React
+ * component. {@link componentId} is namespaced (`<pluginName>:<region>`) so it is
+ * globally unique across plugins and regions.
+ */
+export interface PluginUiContribution {
+	readonly pluginName: string
+	readonly region: PluginUiRegion
+	readonly componentId: string
+	/**
+	 * Optional URL to the plugin's UI bundle, resolved to a local `vscode-webview://`
+	 * resource (design §14 Q1 — CSP `strict-dynamic` permits importing scripts from
+	 * `cspSource`, not arbitrary hosts). Absent for co-bundled/fixture components, which
+	 * the webview resolves from its built-in component registry.
+	 */
+	readonly source?: string
+}
+
+/** Snapshot of plugin UI contributions pushed to the webview (`ExtensionMessage.pluginUiContributions`). */
+export interface PluginUiContributionsState {
+	contributions: PluginUiContribution[]
+}
+
+/**
+ * A message on the scoped plugin-UI ↔ plugin-extension channel (design §6.8). The
+ * {@link pluginName} namespaces the message so routing (both directions) is confined
+ * to one plugin. Carried by `WebviewMessage.pluginUiMessage` (UI → extension) and
+ * `ExtensionMessage.pluginUiMessage` (extension → UI).
+ */
+export interface PluginUiMessageEnvelope {
+	pluginName: string
+	message: unknown
+}
