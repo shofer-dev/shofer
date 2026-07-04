@@ -130,6 +130,12 @@ export class NodeRegistry {
 	private readonly shadows = new Map<string, RemoteTaskShadow>()
 	/** The remote shadow the webview is currently showing (drives the render override). */
 	private focusedShadowId?: string
+	// Debounced changed-files refresh for the focused shadow (mirrors the local
+	// ShoferProvider.scheduleChangedFilesUpdate): coalesce a burst of remote Message
+	// deltas into one control-plane fetch + webview push.
+	private shadowChangedFilesTimer?: NodeJS.Timeout
+	private shadowChangedFilesPendingTaskId?: string
+	private static readonly SHADOW_CHANGED_FILES_DEBOUNCE_MS = 500
 
 	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
 	private static _instance: NodeRegistry | undefined
@@ -366,6 +372,21 @@ export class NodeRegistry {
 		}
 	}
 
+	/**
+	 * Debounced changed-files refresh for a shadow (mirrors the local
+	 * `scheduleChangedFilesUpdate`). Coalesces a burst of remote `Message` deltas
+	 * into one control-plane fetch + webview push.
+	 */
+	private scheduleShadowChangedFiles(taskId: string): void {
+		this.shadowChangedFilesPendingTaskId = taskId
+		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
+		this.shadowChangedFilesTimer = setTimeout(() => {
+			this.shadowChangedFilesTimer = undefined
+			const id = this.shadowChangedFilesPendingTaskId
+			if (id) void this.fetchShadowChangedFiles(id)
+		}, NodeRegistry.SHADOW_CHANGED_FILES_DEBOUNCE_MS)
+	}
+
 	/** Make a remote shadow the focused task and switch the webview to it. */
 	focusShadow(taskId: string): void {
 		if (!this.shadows.has(taskId)) return
@@ -433,6 +454,9 @@ export class NodeRegistry {
 							? { type: "shoferMessageAppended", shoferMessage: payload.message }
 							: { type: "messageUpdated", shoferMessage: payload.message },
 					)
+					// A remote edit may have changed files — refresh the panel (debounced,
+					// mirroring the local FileContextTracker → scheduleChangedFilesUpdate).
+					this.scheduleShadowChangedFiles(shadow.taskId)
 				}
 				return
 			}
@@ -584,6 +608,7 @@ export class NodeRegistry {
 	}
 
 	dispose(): void {
+		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()

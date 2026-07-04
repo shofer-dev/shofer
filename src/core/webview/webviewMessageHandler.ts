@@ -1650,12 +1650,39 @@ export const webviewMessageHandler = async (
 			await provider.cancelTask()
 			break
 		case "changedFiles/get": {
+			// Shofer Nodes L3: a focused remote shadow's panel is fetched from the
+			// owning executor over the control plane, not computed from a local task.
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
+				break
+			}
 			await provider.pushChangedFilesUpdate()
 			break
 		}
 		case "changedFiles/showDiff": {
 			const relPath = message.text || ""
 			if (!relPath) break
+			// Shofer Nodes L3: for a shadow, the base/final content lives on the
+			// executor — fetch both over the control plane and diff them directly.
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				try {
+					const { original, final } = await provider.nodeRegistry!.getChangedFileDiff(shadowId, relPath)
+					const leftUri = vscode.Uri.parse(
+						`shofer-original:/${encodeURIComponent(relPath)}?${Buffer.from(original ?? "", "utf8").toString("base64")}`,
+					)
+					const rightUri = vscode.Uri.parse(
+						`shofer-original:/${encodeURIComponent(relPath)}?${Buffer.from(final ?? "", "utf8").toString("base64")}`,
+					)
+					const title = `${path.basename(relPath)} (Shofer changes)`
+					await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title)
+				} catch (err) {
+					const errorMsg = err instanceof Error ? err.message : String(err)
+					getHost().notifier.error(`Failed to open Shofer diff: ${errorMsg}`)
+				}
+				break
+			}
 			const task = provider.getCurrentTask()
 			if (!task) break
 			try {
@@ -1691,6 +1718,24 @@ export const webviewMessageHandler = async (
 		case "changedFiles/revert": {
 			const relPath = message.text || ""
 			if (!relPath) break
+			// Shofer Nodes L3: revert on the executor. Gate on shared-workspace safety
+			// (any active local task in this worktree would collide with the executor
+			// mutating the shared files), then refresh the shadow panel.
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				if (provider.taskManager.getActiveManagedTasks().length > 0) {
+					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
+					break
+				}
+				try {
+					await provider.nodeRegistry!.revertChangedFile(shadowId, relPath)
+					await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
+				} catch (err) {
+					const errorMsg = err instanceof Error ? err.message : String(err)
+					getHost().notifier.error(`Revert failed: ${errorMsg}`)
+				}
+				break
+			}
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
@@ -1730,6 +1775,28 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "changedFiles/revertAll": {
+			// Shofer Nodes L3: revert-all on the executor (same shared-workspace gate).
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				if (provider.taskManager.getActiveManagedTasks().length > 0) {
+					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
+					break
+				}
+				const choice = await getHost().notifier.showChoice(
+					t("common:fileChanges.revertAllConfirm"),
+					[t("common:fileChanges.revertConfirmYes")],
+					{ severity: "warn", modal: true },
+				)
+				if (choice !== t("common:fileChanges.revertConfirmYes")) break
+				try {
+					await provider.nodeRegistry!.revertAllChangedFiles(shadowId)
+					await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
+				} catch (err) {
+					const errorMsg = err instanceof Error ? err.message : String(err)
+					getHost().notifier.error(`Revert all failed: ${errorMsg}`)
+				}
+				break
+			}
 			const task = provider.getCurrentTask()
 			if (!task) break
 			if (task.isStreaming) {
@@ -1755,6 +1822,19 @@ export const webviewMessageHandler = async (
 		case "changedFiles/accept": {
 			const relPath = message.text || ""
 			if (!relPath) break
+			// Shofer Nodes L3: accept on the executor. Accept only rewrites tracking
+			// metadata (no workspace mutation), so it needs no active-task gate.
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				try {
+					await provider.nodeRegistry!.acceptChangedFile(shadowId, relPath)
+					await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
+				} catch (err) {
+					const errorMsg = err instanceof Error ? err.message : String(err)
+					getHost().notifier.error(`Accept failed: ${errorMsg}`)
+				}
+				break
+			}
 			const task = provider.getCurrentTask()
 			if (!task) break
 			// LLM hint: accept only updates internal tracking metadata
@@ -1771,6 +1851,18 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "changedFiles/acceptAll": {
+			// Shofer Nodes L3: accept-all on the executor (metadata only, no gate).
+			const shadowId = provider.nodeRegistry?.getFocusedShadow()?.taskId
+			if (shadowId) {
+				try {
+					await provider.nodeRegistry!.acceptAllChangedFiles(shadowId)
+					await provider.nodeRegistry!.fetchShadowChangedFiles(shadowId)
+				} catch (err) {
+					const errorMsg = err instanceof Error ? err.message : String(err)
+					getHost().notifier.error(`Accept all failed: ${errorMsg}`)
+				}
+				break
+			}
 			const task = provider.getCurrentTask()
 			if (!task) break
 			// LLM hint: acceptAll only updates internal tracking metadata;

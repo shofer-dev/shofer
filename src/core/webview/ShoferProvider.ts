@@ -3905,6 +3905,10 @@ export class ShoferProvider
 				}
 				return msgs
 			})(),
+			// Shofer Nodes L3: a focused remote shadow renders the executor's
+			// changed-files panel (fetched over the control plane), NOT the local
+			// task's — so the FileChangesPanel isn't stale on a full-state push.
+			...(focusedShadow ? { changedFiles: focusedShadow.changedFiles } : {}),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
 			hasMoreShoferMessages: focusedShadow ? false : (currentTask?.hasMoreShoferMessages ?? false),
