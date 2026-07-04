@@ -1,38 +1,24 @@
 import * as nodeFs from "fs/promises"
 import * as path from "path"
 
-import { getHost, type ModeConfig, type PluginManifest, pluginManifestSchema } from "@shofer/types"
+import {
+	type HostBridge,
+	type ModeConfig,
+	type PluginContext,
+	type PluginManifest,
+	pluginManifestSchema,
+	type ShoferPlugin,
+} from "@shofer/types"
 
 import { configLog } from "../logging/subsystems.js"
+import { pluginRegistry } from "./plugin-registry.js"
+import type { PluginCodeLoader } from "./plugin-loader.js"
+import { createPluginSandbox } from "./plugin-sandbox.js"
+import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
-/**
- * Surface a plugin warning **both** in the log and to the user (design §14.3/§14.7
- * — warnings must be shown *and* logged). Routed through `getHost().notifier` so it
- * works in any host; the in-memory host (tests, pre-front-end) records it instead
- * of popping a dialog, keeping core host-agnostic.
- */
-export function warnPlugin(message: string): void {
-	configLog.warn(message)
-	try {
-		getHost().notifier.warn(message)
-	} catch {
-		// A missing/partial host must never break discovery — logging already happened.
-	}
-}
-
-/**
- * Warn (shown + logged) about a slug/name conflict resolved by last-installed-wins
- * (design §14.7). `kind` is the contribution kind ("mode"/"command"/"skill"),
- * `slug` the colliding identity, and `winner`/`shadowed` short descriptions of the
- * winning and shadowed contributors (e.g. `plugin "b"`, `project mode`, `built-in`).
- * The winner is the *last-installed* contributor per the persisted install order.
- */
-export function warnPluginConflict(kind: string, slug: string, winner: string, shadowed: string): void {
-	warnPlugin(
-		`[plugins] ${kind} "${slug}" from ${winner} shadows the one from ${shadowed} ` +
-			`(last-installed wins).`,
-	)
-}
+// Re-export the shared warning helpers so existing importers of `@shofer/core`
+// (SkillsManager, CustomModesManager, plugin-sandbox) keep working unchanged.
+export { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 
 /**
  * Resolve a plugin's effective config: the user's stored values with the
@@ -187,6 +173,25 @@ export interface PluginManagerOptions {
 	stateStore: PluginStateStore
 	/** Directories to scan for `<subdir>/plugin.json` candidates, lowest precedence first. */
 	pluginDirs: PluginDir[]
+	/**
+	 * Code-plugin loader (Phase 2, step 2.1). When omitted, {@link PluginManager.activateCodePlugins}
+	 * is a no-op — no plugin code is transpiled/imported/registered, so behavior is
+	 * byte-for-byte identical to no code plugins (declarative discovery still runs).
+	 */
+	codeLoader?: PluginCodeLoader
+	/**
+	 * Full host used to build each code plugin's **restricted** sandbox host
+	 * ({@link PluginContext.host}, design §8). When omitted, code plugins are still
+	 * loaded/registered but receive no `host` (their permitted host access is unavailable).
+	 */
+	host?: HostBridge
+	/**
+	 * Read the persisted per-plugin config map (`pluginConfigs` from `ContextProxy`),
+	 * keyed by plugin name. Merged with manifest defaults into `PluginContext.config`.
+	 */
+	getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
+	/** Absolute workspace path threaded into code-plugin contexts (`workspacePath`/`cwd`). */
+	workspacePath?: string
 }
 
 const MANIFEST_FILENAME = "plugin.json"
@@ -195,6 +200,12 @@ export class PluginManager {
 	private readonly fs: PluginFsHost
 	private readonly stateStore: PluginStateStore
 	private readonly pluginDirs: PluginDir[]
+	private readonly codeLoader?: PluginCodeLoader
+	private readonly host?: HostBridge
+	private readonly getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
+	private readonly workspacePath?: string
+	/** Names of code plugins currently loaded + registered into `pluginRegistry`. */
+	private readonly loadedCodePlugins = new Set<string>()
 	private plugins: DiscoveredPlugin[] = []
 	/**
 	 * The persisted enabled/install order (the `enabledPlugins` array, in the order
@@ -209,6 +220,10 @@ export class PluginManager {
 		this.fs = options.fs
 		this.stateStore = options.stateStore
 		this.pluginDirs = options.pluginDirs
+		this.codeLoader = options.codeLoader
+		this.host = options.host
+		this.getPluginConfigs = options.getPluginConfigs
+		this.workspacePath = options.workspacePath
 	}
 
 	/**
@@ -414,6 +429,9 @@ export class PluginManager {
 		// Re-run fail-closed resolution: toggling one plugin can satisfy or break
 		// another's dependency closure (design §14.3).
 		this.resolveDependencies()
+		// Reconcile code plugins so a toggled code plugin is loaded/unloaded now (a
+		// disabled plugin's hooks must stop firing). No-op without a codeLoader.
+		await this.activateCodePlugins()
 	}
 
 	/**
@@ -428,6 +446,101 @@ export class PluginManager {
 		await this.fs.removeDir(plugin.root)
 		await this.setEnabled(name, false)
 		this.plugins = this.plugins.filter((p) => p.name !== name)
+	}
+
+	// --- Code plugins (Phase 2: load `main`, register into pluginRegistry) ------
+
+	/**
+	 * Load every enabled code plugin (`main` entry) and register it into the shared
+	 * `pluginRegistry` so its `registerTools`/`transformSystemPrompt`/`onEvent` hooks
+	 * fire at the wired sites. Idempotent and reconciling: already-loaded plugins are
+	 * skipped, and code plugins that are no longer effectively enabled are
+	 * unregistered (their hooks stop firing). A per-plugin load failure is caught,
+	 * warned (shown + logged), and skipped — it never crashes activation (design §2.7
+	 * safe failure). No-op when no {@link PluginCodeLoader} was supplied, so behavior
+	 * with no code plugins is byte-for-byte identical.
+	 *
+	 * Non-blocking by contract (owner decision #8): the caller kicks this off without
+	 * awaiting on the task-start path; hooks simply begin firing once a plugin finishes
+	 * loading.
+	 */
+	async activateCodePlugins(): Promise<void> {
+		if (!this.codeLoader) return
+
+		const active = new Set(this.enabledPlugins().filter((p) => p.hasCode).map((p) => p.name))
+
+		// Unregister code plugins that are loaded but no longer active (disabled, or
+		// failed closed by a dependency toggle).
+		for (const name of [...this.loadedCodePlugins]) {
+			if (!active.has(name)) {
+				pluginRegistry.unregister(name)
+				this.loadedCodePlugins.delete(name)
+			}
+		}
+
+		for (const plugin of this.enabledPlugins()) {
+			if (!plugin.hasCode || this.loadedCodePlugins.has(plugin.name)) continue
+			try {
+				const raw = await this.codeLoader.load({
+					name: plugin.name,
+					root: plugin.root,
+					main: plugin.manifest.main as string,
+					apiVersion: plugin.manifest.shoferPluginApiVersion,
+				})
+				const wrapped = this.wrapCodePlugin(plugin, raw)
+				await pluginRegistry.register(wrapped, this.buildPluginContext(plugin))
+				this.loadedCodePlugins.add(plugin.name)
+			} catch (error) {
+				warnPlugin(
+					`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`,
+				)
+			}
+		}
+	}
+
+	/**
+	 * Build the per-plugin `PluginContext` bits that are constant across hook calls:
+	 * the resolved config (manifest defaults merged over stored values) and the
+	 * restricted sandbox host (permission-checked; only when a base host was supplied).
+	 */
+	private buildPluginContext(plugin: DiscoveredPlugin): PluginContext {
+		const config = resolvePluginConfig(plugin.manifest.config, this.getPluginConfigs?.()?.[plugin.name])
+		const host = this.host
+			? createPluginSandbox({
+					pluginName: plugin.name,
+					permissions: plugin.manifest.permissions,
+					pluginRoot: plugin.root,
+					workspacePath: this.workspacePath,
+					host: this.host,
+				})
+			: undefined
+		return {
+			workspacePath: this.workspacePath,
+			cwd: this.workspacePath,
+			config,
+			host,
+		}
+	}
+
+	/**
+	 * Wrap a loaded plugin so each hook receives a context enriched with this
+	 * plugin's own `config`/`host` (design §6.2). The registry passes a single shared
+	 * context to all plugins at each call site, so per-plugin bits are injected here
+	 * via closure — call-site fields (`mode`, `taskId`) survive, this plugin's
+	 * `config`/`host`/`workspacePath`/`cwd` are layered on top.
+	 */
+	private wrapCodePlugin(plugin: DiscoveredPlugin, raw: ShoferPlugin): ShoferPlugin {
+		const bits = this.buildPluginContext(plugin)
+		const merge = (ctx: PluginContext): PluginContext => ({ ...ctx, ...bits })
+		return {
+			name: raw.name,
+			initialize: raw.initialize ? (ctx) => raw.initialize!(merge(ctx)) : undefined,
+			registerTools: raw.registerTools ? (ctx) => raw.registerTools!(merge(ctx)) : undefined,
+			transformSystemPrompt: raw.transformSystemPrompt
+				? (prompt, ctx) => raw.transformSystemPrompt!(prompt, merge(ctx))
+				: undefined,
+			onEvent: raw.onEvent ? (event, ctx) => raw.onEvent!(event, merge(ctx)) : undefined,
+		}
 	}
 
 	// --- Declarative contributions (enabled + permission-gated) ----------------

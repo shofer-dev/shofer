@@ -23,7 +23,7 @@ import path from "path"
 
 import type { FindFilesOptions, HostBridge, HostEnv, HostFileSystem, PluginHost, PluginPermissions } from "@shofer/types"
 
-import { warnPlugin } from "./plugin-manager.js"
+import { warnPlugin } from "./plugin-warnings.js"
 
 export interface PluginSandboxOptions {
 	/** Plugin name — used in denial warnings for attribution. */

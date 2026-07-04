@@ -79,7 +79,13 @@ import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
 
 import { McpHub } from "@shofer/core"
-import { PluginManager, createNodePluginFs, setSharedPluginManager, getGlobalShoferDirectory } from "@shofer/core"
+import {
+	PluginManager,
+	createNodePluginFs,
+	createNodePluginCodeLoader,
+	setSharedPluginManager,
+	getGlobalShoferDirectory,
+} from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState } from "@shofer/types"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
@@ -2084,10 +2090,25 @@ export class ShoferProvider
 					await this.context.globalState.update(stateKey, names)
 				},
 			},
+			// Phase 2: load enabled code plugins (`main`) and register their hooks.
+			// The esbuild binary lives in the extension's dist/bin in production.
+			codeLoader: createNodePluginCodeLoader({ extensionPath: this.context.extensionPath }),
+			// Base host for each code plugin's restricted, permission-checked sandbox (§8).
+			host: getHost(),
+			// Per-plugin config (merged with manifest defaults) from ContextProxy.
+			getPluginConfigs: () =>
+				this.contextProxy.getValue("pluginConfigs") as
+					| Record<string, Record<string, unknown>>
+					| undefined,
+			workspacePath: cwd,
 		})
 		await manager.discover()
 		this.pluginManager = manager
 		setSharedPluginManager(manager)
+		// Load code plugins asynchronously — must NOT block task start (owner decision
+		// #8). Discovery (declarative) is done; code-plugin hooks begin firing once
+		// each finishes loading. Failures are warned + isolated inside activateCodePlugins.
+		void manager.activateCodePlugins()
 		return manager
 	}
 
