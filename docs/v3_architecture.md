@@ -505,9 +505,23 @@ prerequisites:
   agent channel and the host-callback channel). Category I is DTO-based, so it
   serializes for free.
 - **Controller-side routing is built**: `ExecutorPool` implements `AgentApi` over one
-  or more executors — round-robin root-task assignment, per-task routing, and a merged
+  or more executors — pluggable root-task assignment, per-task routing, and a merged
   event feed tagged by `executorId` (the unified view). Single-executor behaviour is
   identical to driving one directly.
+  - **Load-balancing policy** (`LoadBalancerPolicy`, `setPolicy`/`getPolicy`): the
+    default `round-robin` rotates evenly; the `least-load-1m`/`5m`/`15m` policies pick the
+    assignable executor with the lowest **normalized** load average
+    (`loadavg[window] / max(cpus, 1)`) for the chosen window, so a bigger-core node can
+    absorb more work. The load metric is an **injected accessor**
+    (`PooledExecutor.load?: () => LoadSample`) — `@shofer/types` stays browser-safe and
+    never imports `node:os`. The Node-side `NodeRegistry` supplies it: the Local executor
+    reads this host's live `os.loadavg()`/`os.cpus().length`; each remote reads the sample
+    from its `NodeConnection` (carried on the periodic `GET /health` ping, which now
+    returns `loadavg` + `cpus`). Fallbacks keep it robust: executors with no sample are
+    excluded from the comparison, an all-no-sample pool degrades to round-robin, and ties
+    (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
+    the round-robin cursor. The policy is selected by the `shofer.nodes.loadBalancer`
+    setting (read on init + on configuration change).
 - **Remaining**: stand up a real remote executor process (link `@shofer/core` + a
   server adapter + the split host over a socket), wire the `ExecutorPool` into the
   extension's UI (node registry, connect flow), and the shared-resource reconciliation
