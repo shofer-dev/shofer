@@ -11,7 +11,7 @@ import { configLog } from "../logging/subsystems.js"
  * works in any host; the in-memory host (tests, pre-front-end) records it instead
  * of popping a dialog, keeping core host-agnostic.
  */
-function warnPlugin(message: string): void {
+export function warnPlugin(message: string): void {
 	configLog.warn(message)
 	try {
 		getHost().notifier.warn(message)
