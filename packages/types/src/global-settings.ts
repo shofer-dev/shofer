@@ -312,6 +312,17 @@ export const globalSettingsSchema = z.object({
 	 * @default undefined (all categories)
 	 */
 	logCategories: z.array(z.string()).optional(),
+
+	/**
+	 * Per-plugin user-configured settings, keyed by plugin name (plugin system
+	 * design §5 `config` schema / §6.2 `PluginContext.config`). Each entry is the
+	 * plugin's own config object; the plugin's manifest declares the shape and
+	 * defaults, and the PluginManager merges defaults over the stored values before
+	 * injecting the result into the plugin's `PluginContext.config`. Persisted/read
+	 * via `ContextProxy` in globalState (design §12 Settings → Plugins).
+	 * @default undefined (no plugin has configured settings)
+	 */
+	pluginConfigs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

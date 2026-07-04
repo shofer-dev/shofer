@@ -35,6 +35,36 @@ export function warnPluginConflict(kind: string, slug: string, winner: string, s
 }
 
 /**
+ * Resolve a plugin's effective config: the user's stored values with the
+ * manifest-declared **defaults** filled in for any key the user hasn't set
+ * (plugin system design §5 `config` schema / §6.2 `PluginContext.config`).
+ *
+ * The manifest `config` is a JSON-Schema-ish object (`{ type, properties: { key:
+ * { default, ... } } }`). We do a shallow default-merge: for each declared
+ * `properties.<key>.default`, seed it unless the stored config already has that
+ * key. Stored values always win. Full JSON-Schema *validation* of stored values
+ * (type/enum enforcement) is deferred — see step 2.3 notes; this keeps
+ * `@shofer/core` free of a JSON-Schema validator while still delivering defaults
+ * and a stable object into `PluginContext.config`.
+ */
+export function resolvePluginConfig(
+	manifestConfig: Record<string, unknown> | undefined,
+	stored: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+	const result: Record<string, unknown> = { ...(stored ?? {}) }
+	const properties = manifestConfig?.properties
+	if (properties && typeof properties === "object") {
+		for (const [key, schema] of Object.entries(properties as Record<string, unknown>)) {
+			if (key in result) continue
+			if (schema && typeof schema === "object" && "default" in schema) {
+				result[key] = (schema as { default: unknown }).default
+			}
+		}
+	}
+	return result
+}
+
+/**
  * PluginManager — discovery, validation, permission-gating, and enable/disable
  * for declarative plugins (design §4, §7; Phase 1).
  *
