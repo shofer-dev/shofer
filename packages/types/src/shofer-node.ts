@@ -12,6 +12,8 @@
  * SecretStorage and only its *presence* (`hasToken`) is surfaced to the webview.
  */
 
+import type { LoadBalancerPolicy } from "./executor-pool.js"
+
 export type ShoferNodeKind = "local" | "remote"
 
 /**
@@ -79,6 +81,8 @@ export interface ShoferNodeView extends ShoferNodeDef {
 export interface ShoferNodesState {
 	nodes: ShoferNodeView[]
 	activeNodeId: string
+	/** The pool's current new-task load-balancing policy (drives the panel dropdown). */
+	loadBalancer: LoadBalancerPolicy
 }
 
 /** Webview → extension request (carried in `WebviewMessage.shoferNode`). */
@@ -95,6 +99,8 @@ export type ShoferNodeRequest =
 	| { action: "disconnect"; id: string }
 	/** Administratively enable/disable a node (applies to Local too). */
 	| { action: "setDisabled"; id: string; disabled: boolean }
+	/** Select the pool's new-task load-balancing policy (persisted + applied live). */
+	| { action: "setLoadBalancer"; policy: LoadBalancerPolicy }
 
 /** The reserved id of the built-in Local node. */
 export const LOCAL_NODE_ID = "local"
