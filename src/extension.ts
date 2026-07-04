@@ -212,7 +212,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// §10: fan captured agent events out to plugins' `onEvent` hooks. No-op while no
 	// plugins are registered.
-	telemetryService.onEvent((name, properties) => pluginRegistry.dispatchEvent({ name, properties }))
+	telemetryService.onEvent((name, properties) =>
+		pluginRegistry.dispatchEvent({ name, properties, timestamp: Date.now() }),
+	)
 
 	// Initialize i18n for internationalization support.
 	initializeI18n(context.globalState.get("language") ?? formatLanguage(vscode.env.language))

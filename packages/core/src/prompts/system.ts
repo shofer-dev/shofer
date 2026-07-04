@@ -204,5 +204,5 @@ export const SYSTEM_PROMPT = async (
 
 	// §10: let registered plugins transform the assembled prompt (no-op when no
 	// plugins are registered — threaded in registration order).
-	return pluginRegistry.applySystemPromptTransforms(prompt, { workspacePath: cwd, mode: currentMode.slug })
+	return pluginRegistry.applySystemPromptTransforms(prompt, { workspacePath: cwd, cwd, mode: currentMode.slug })
 }

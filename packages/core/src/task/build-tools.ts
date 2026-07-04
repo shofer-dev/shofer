@@ -358,7 +358,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	let nativeCustomTools: OpenAI.Chat.ChatCompletionFunctionTool[] = []
 	// §10: register plugin-contributed tools so they are assembled AND executable
 	// through the unified custom-tool path (independent of the customTools experiment).
-	const pluginTools = await pluginRegistry.collectTools({ workspacePath: cwd, mode })
+	const pluginTools = await pluginRegistry.collectTools({ workspacePath: cwd, cwd, mode })
 	for (const def of pluginTools) {
 		customToolRegistry.register(def, "plugin")
 	}

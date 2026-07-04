@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
+import type { HostEnv, HostFileSystem, Notifier } from "./host.js"
 import { modeConfigObjectSchema } from "./mode.js"
 
 /**
@@ -42,18 +43,62 @@ export interface ShoferPlugin {
 	onEvent?(event: PluginEvent, context: PluginContext): void
 }
 
-/** Minimal, host-agnostic context handed to plugin hooks. */
+/**
+ * The **restricted** host surface handed to a plugin via {@link PluginContext.host}
+ * (design §6.2, §8). This is *not* the full `getHost()` `HostBridge`: it exposes
+ * only the capabilities the plugin's manifest `permissions` grant, and every call
+ * is checked against those permissions at runtime by the plugin sandbox (step 2.4).
+ *
+ * - {@link fs} — filesystem access, scoped to `permissions.filesystem` paths.
+ * - {@link fetch} — network access, scoped to `permissions.network` origins.
+ * - {@link notifier} — always available (surfacing messages is inherently safe).
+ * - {@link env} — read-only host/environment metadata (safe, no side effects).
+ *
+ * The type shape is the same regardless of which permissions were granted; an
+ * out-of-scope call is denied at runtime (deny + shown/logged warning), not hidden
+ * from the type — so a plugin author gets a clear runtime error, not a missing API.
+ */
+export interface PluginHost {
+	/** Filesystem access, scoped to the plugin's `permissions.filesystem` allowlist. */
+	readonly fs: HostFileSystem
+	/** Surface an info/warning/error message (always permitted). */
+	readonly notifier: Pick<Notifier, "info" | "warn" | "error">
+	/** Read-only host/environment metadata. */
+	readonly env: HostEnv
+	/** HTTP access, scoped to the plugin's `permissions.network` origin allowlist. */
+	fetch(input: string | URL, init?: RequestInit): Promise<Response>
+}
+
+/**
+ * Context handed to plugin hooks. Host-agnostic (no `vscode` types). The first two
+ * fields are always populated by the hook call sites; {@link taskId}, {@link cwd},
+ * {@link config}, and {@link host} are threaded in by the {@link PluginManager} when
+ * a code plugin is registered (Phase 2) — they are absent for the seed/no-host case,
+ * keeping behavior identical when no plugins are active.
+ */
 export interface PluginContext {
 	/** Absolute path of the active workspace, if any. */
 	readonly workspacePath?: string
 	/** Current mode slug. */
 	readonly mode?: string
+	/** Id of the task the hook is running for, if applicable (design §6.2). */
+	readonly taskId?: string
+	/** Current working directory (design §6.2). */
+	readonly cwd?: string
+	/** This plugin's validated, user-configured settings (design §6.2, step 2.3). */
+	readonly config?: Record<string, unknown>
+	/** Restricted, permission-checked host surface (design §6.2, §8; step 2.4). */
+	readonly host?: PluginHost
 }
 
 /** A lightweight event surfaced to `onEvent` (decoupled from the telemetry catalog). */
 export interface PluginEvent {
 	readonly name: string
 	readonly properties?: Record<string, unknown>
+	/** Task that emitted the event, if any (design §6.10). */
+	readonly taskId?: string
+	/** When the event occurred (epoch ms), if known (design §6.10). */
+	readonly timestamp?: number
 }
 
 // ---------------------------------------------------------------------------
