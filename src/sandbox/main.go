@@ -303,6 +303,8 @@ func fallbackBwrap(worktreeDir string, extraPaths []string, cmdArgs []string) er
 //
 // Without write access to these directories, every git command that writes
 // (add, commit, checkout, merge, …) fails inside a sandboxed worktree.
+// In particular, `git commit` appends to .git/logs/refs/heads/<branch> (the
+// reflog), so logs/ must be writable alongside objects/ and refs/.
 //
 // Security: the .git file is writable by the sandboxed process (it lives inside
 // the worktree).  Before whitelisting any gitdir, we validate that it lies under
@@ -330,15 +332,13 @@ func resolveWorktreeGitPaths(worktreeDir string) []string {
 	paths := []string{gitDir}
 
 	// Resolve the commondir pointer (usually "../.." → main .git) to
-	// also whitelist shared objects/ and refs/.  Use trailing-sep paths
-	// so we only allow writes below those subdirectories, not to config
-	// or hooks.
-	if commonObj, commonRefs := parseCommondirPaths(gitDir); commonObj != "" {
-		paths = append(paths, commonObj)
-		if commonRefs != "" {
-			paths = append(paths, commonRefs)
-		}
-	}
+	// also whitelist shared objects/, refs/, and logs/.  These are the
+	// three subdirectories git writes to during add/commit/checkout:
+	//   - objects/  — new commit/tree/blob objects
+	//   - refs/     — branch/tag ref updates
+	//   - logs/     — reflog appends (disabled reflog still needs the
+	//                 dir to exist; some git operations touch it)
+	paths = append(paths, parseCommondirPaths(gitDir)...)
 
 	return paths
 }
@@ -421,35 +421,44 @@ func parseWorktreeGitDir(worktreeDir string) (string, error) {
 }
 
 // parseCommondirPaths reads <gitDir>/commondir and returns the absolute paths
-// to the shared objects/ and refs/ directories.  The commondir file contains a
-// relative path from the per-worktree gitdir to the main .git directory
-// (typically "../..").
+// to the shared objects/, refs/, and logs/ directories.  The commondir file
+// contains a relative path from the per-worktree gitdir to the main .git
+// directory (typically "../..").
 //
-// Returns objectsPath (ends in /objects) and refsPath (ends in /refs).
-// If commondir cannot be read, both are empty strings.
-func parseCommondirPaths(gitDir string) (objectsPath string, refsPath string) {
+// The three directories are the write targets for git's mutating operations:
+//   - objects/ — new commit/tree/blob objects (git hash-object, git add)
+//   - refs/    — branch/tag ref updates (git commit, git update-ref)
+//   - logs/    — reflog appends (git commit appends to logs/refs/heads/<branch>)
+//
+// Returns a slice of existing absolute directory paths (each ending in its
+// subdirectory name).  Non-existent subdirectories are omitted to avoid
+// polluting the ruleset with phantom entries.  Returns nil if commondir
+// cannot be read.
+func parseCommondirPaths(gitDir string) []string {
 	commonFile := filepath.Join(gitDir, "commondir")
 	rel, err := readFirstLine(commonFile)
 	if err != nil || rel == "" {
-		return "", ""
+		return nil
 	}
 
 	commonAbs := filepath.Join(gitDir, rel)
 	commonAbs = filepath.Clean(commonAbs)
 
-	objectsPath = filepath.Join(commonAbs, "objects")
-	refsPath = filepath.Join(commonAbs, "refs")
+	// Candidate subdirectories under the common dir that git writes to.
+	// Order: objects, refs, logs — matches git's typical write sequence.
+	candidates := []string{"objects", "refs", "logs"}
 
-	// Only return paths that actually exist — avoids polluting the ruleset
-	// with phantom entries.
-	if _, err := os.Stat(objectsPath); os.IsNotExist(err) {
-		objectsPath = ""
-	}
-	if _, err := os.Stat(refsPath); os.IsNotExist(err) {
-		refsPath = ""
+	var paths []string
+	for _, sub := range candidates {
+		p := filepath.Join(commonAbs, sub)
+		// Only return paths that actually exist — avoids polluting the
+		// ruleset with phantom entries.
+		if _, err := os.Stat(p); err == nil {
+			paths = append(paths, p)
+		}
 	}
 
-	return objectsPath, refsPath
+	return paths
 }
 
 // readFirstLine reads the first line of a file and returns it with whitespace

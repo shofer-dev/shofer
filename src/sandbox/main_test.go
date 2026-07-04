@@ -198,6 +198,7 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	//     .git/             ← main .git directory
 	//       objects/        ← shared objects dir
 	//       refs/           ← shared refs dir
+	//       logs/           ← shared reflog dir
 	//       worktrees/
 	//         test-wt/
 	//           commondir   ← contains "../.."
@@ -210,11 +211,13 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	worktree := filepath.Join(repo, "sub", "worktree")
 
 	// Create main .git directory (so resolveRepoRoot finds it).
-	// Create shared .git objects/ and refs/
+	// Create shared .git objects/, refs/, and logs/ — the three
+	// subdirectories git writes to during add/commit/checkout.
 	for _, d := range []string{
 		mainGit,
 		filepath.Join(mainGit, "objects"),
 		filepath.Join(mainGit, "refs"),
+		filepath.Join(mainGit, "logs"),
 		wtGitDir,
 	} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -246,12 +249,15 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	paths := resolveWorktreeGitPaths(worktree)
 
 	// Expected: the worktree git dir + main .git/objects + main .git/refs
+	// + main .git/logs
 	expectedObjs := filepath.Join(mainGit, "objects")
 	expectedRefs := filepath.Join(mainGit, "refs")
+	expectedLogs := filepath.Join(mainGit, "logs")
 
 	foundGitDir := false
 	foundObjs := false
 	foundRefs := false
+	foundLogs := false
 	for _, p := range paths {
 		switch p {
 		case wtGitDir:
@@ -260,6 +266,8 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 			foundObjs = true
 		case expectedRefs:
 			foundRefs = true
+		case expectedLogs:
+			foundLogs = true
 		}
 	}
 
@@ -271,6 +279,112 @@ func TestResolveWorktreeGitPaths_Integration(t *testing.T) {
 	}
 	if !foundRefs {
 		t.Errorf("expected refs dir %s in paths, got %v", expectedRefs, paths)
+	}
+	if !foundLogs {
+		t.Errorf("expected logs dir %s in paths, got %v", expectedLogs, paths)
+	}
+}
+
+// TestParseCommondirPaths verifies that parseCommondirPaths returns the
+// objects/, refs/, and logs/ subdirectories of the common dir, omitting
+// any that don't exist on disk.
+func TestParseCommondirPaths(t *testing.T) {
+	// Layout:
+	//   <tmp>/
+	//     gitDir/
+	//       commondir    ← contains "../common"
+	//     common/
+	//       objects/
+	//       refs/
+	//       logs/
+	tmp := t.TempDir()
+
+	gitDir := filepath.Join(tmp, "gitDir")
+	commonDir := filepath.Join(tmp, "common")
+
+	// Create gitDir with commondir pointing to ../common
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(gitDir): %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(gitDir, "commondir"),
+		[]byte("../common\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile(commondir): %v", err)
+	}
+
+	// Create all three subdirectories under common/
+	for _, sub := range []string{"objects", "refs", "logs"} {
+		if err := os.MkdirAll(filepath.Join(commonDir, sub), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", sub, err)
+		}
+	}
+
+	paths := parseCommondirPaths(gitDir)
+
+	// All three should be present.
+	wantPaths := map[string]bool{
+		filepath.Join(commonDir, "objects"): false,
+		filepath.Join(commonDir, "refs"):    false,
+		filepath.Join(commonDir, "logs"):    false,
+	}
+	for _, p := range paths {
+		if _, ok := wantPaths[p]; ok {
+			wantPaths[p] = true
+		}
+	}
+	for p, found := range wantPaths {
+		if !found {
+			t.Errorf("expected %s in parseCommondirPaths output, got %v", p, paths)
+		}
+	}
+}
+
+// TestParseCommondirPaths_PartialDirs verifies that parseCommondirPaths
+// omits non-existent subdirectories (e.g. logs/ may not exist in repos
+// with reflog disabled).
+func TestParseCommondirPaths_PartialDirs(t *testing.T) {
+	tmp := t.TempDir()
+
+	gitDir := filepath.Join(tmp, "gitDir")
+	commonDir := filepath.Join(tmp, "common")
+
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(gitDir): %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(gitDir, "commondir"),
+		[]byte("../common\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile(commondir): %v", err)
+	}
+
+	// Only create objects/ — refs/ and logs/ are absent.
+	if err := os.MkdirAll(filepath.Join(commonDir, "objects"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(objects): %v", err)
+	}
+
+	paths := parseCommondirPaths(gitDir)
+
+	// Only objects/ should be present.
+	if len(paths) != 1 {
+		t.Fatalf("expected 1 path (objects only), got %d: %v", len(paths), paths)
+	}
+	expected := filepath.Join(commonDir, "objects")
+	if paths[0] != expected {
+		t.Errorf("expected %s, got %s", expected, paths[0])
+	}
+}
+
+// TestParseCommondirPaths_NoCommondir verifies that parseCommondirPaths
+// returns nil when the commondir file is missing.
+func TestParseCommondirPaths_NoCommondir(t *testing.T) {
+	dir := t.TempDir()
+	paths := parseCommondirPaths(dir)
+	if paths != nil {
+		t.Errorf("expected nil for missing commondir, got %v", paths)
 	}
 }
 
