@@ -1,3 +1,5 @@
+import os from "node:os"
+
 import * as vscode from "vscode"
 
 import {
@@ -6,6 +8,8 @@ import {
 	type CheckpointDiffEntry,
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
+	type LoadBalancerPolicy,
+	type LoadSample,
 	type ServerEvent,
 	type ShoferAPI,
 	type ShoferMessage,
@@ -45,6 +49,8 @@ export interface INodeConnection {
 	readonly latencyMs?: number
 	readonly agentVersion?: string
 	readonly error?: string
+	/** The node's latest load sample (from the health ping), for the LB policy. */
+	readonly load: LoadSample | undefined
 	readonly api: AgentApi | undefined
 	onStatusChange(cb: (state: ShoferNodeConnState) => void): () => void
 	connect(): Promise<void>
@@ -107,6 +113,16 @@ export interface NodeRegistryDeps {
 const DEFS_KEY = "shoferNodes.defs"
 const tokenKey = (id: string): string => `shoferNode.token.${id}`
 
+/** VS Code setting selecting the ExecutorPool's new-task load-balancing policy. */
+const LOAD_BALANCER_SETTING = "shofer.nodes.loadBalancer"
+/** Valid {@link LoadBalancerPolicy} values (guards the settings read). */
+const LOAD_BALANCER_POLICIES: readonly LoadBalancerPolicy[] = [
+	"round-robin",
+	"least-load-1m",
+	"least-load-5m",
+	"least-load-15m",
+]
+
 export class NodeRegistry {
 	private readonly context: vscode.ExtensionContext
 	private readonly controllerVersion: string
@@ -135,6 +151,8 @@ export class NodeRegistry {
 	// deltas into one control-plane fetch + webview push.
 	private shadowChangedFilesTimer?: NodeJS.Timeout
 	private shadowChangedFilesPendingTaskId?: string
+	/** Disposes the `onDidChangeConfiguration` subscription for the LB policy. */
+	private readonly configDisposable: vscode.Disposable
 	private static readonly SHADOW_CHANGED_FILES_DEBOUNCE_MS = 500
 
 	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
@@ -172,12 +190,30 @@ export class NodeRegistry {
 			this.defs.unshift({ id: LOCAL_NODE_ID, kind: "local", label: "Local" })
 		}
 
-		// Register Local at construction; reflect its persisted disabled flag.
-		this.pool.add({ id: LOCAL_NODE_ID, api: this.localAgent })
+		// Register Local at construction; reflect its persisted disabled flag. The
+		// Local load accessor reads this host's live loadavg/cpu count on demand
+		// (node:os is fine here — NodeRegistry is Node-side, unlike @shofer/types).
+		this.pool.add({
+			id: LOCAL_NODE_ID,
+			api: this.localAgent,
+			load: (): LoadSample => ({ loadavg: os.loadavg() as [number, number, number], cpus: os.cpus().length }),
+		})
 		if (this.getDef(LOCAL_NODE_ID)?.disabled) this.pool.setDisabled(LOCAL_NODE_ID, true)
+
+		// Apply the persisted load-balancer policy + track config changes.
+		this.pool.setPolicy(this.readLoadBalancerPolicy())
+		this.configDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration(LOAD_BALANCER_SETTING)) this.pool.setPolicy(this.readLoadBalancerPolicy())
+		})
 
 		// L2: demux the merged pool feed into per-remote-task shadows + webview render.
 		this.pool.subscribe((event) => this.onPoolEvent(event))
+	}
+
+	/** Read the `shofer.nodes.loadBalancer` setting (default `round-robin`). */
+	private readLoadBalancerPolicy(): LoadBalancerPolicy {
+		const raw = vscode.workspace.getConfiguration().get<string>(LOAD_BALANCER_SETTING, "round-robin")
+		return LOAD_BALANCER_POLICIES.includes(raw as LoadBalancerPolicy) ? (raw as LoadBalancerPolicy) : "round-robin"
 	}
 
 	/**
@@ -617,6 +653,7 @@ export class NodeRegistry {
 
 	dispose(): void {
 		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
+		this.configDisposable.dispose()
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()
@@ -657,7 +694,7 @@ export class NodeRegistry {
 		const eligible = conn.status === "connected" && !!conn.api && !def?.disabled
 		const inPool = this.pool.has(id)
 		if (eligible && !inPool) {
-			this.pool.add({ id, api: conn.api! })
+			this.pool.add({ id, api: conn.api!, load: () => conn.load })
 		} else if (!eligible && inPool) {
 			this.pool.remove(id)
 		}

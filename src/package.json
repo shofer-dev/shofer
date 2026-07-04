@@ -578,6 +578,24 @@
 					"default": false,
 					"description": "%settings.enableLlmProviderIntegration.description%",
 					"markdownDescription": "%settings.enableLlmProviderIntegration.description%"
+				},
+				"shofer.nodes.loadBalancer": {
+					"type": "string",
+					"enum": [
+						"round-robin",
+						"least-load-1m",
+						"least-load-5m",
+						"least-load-15m"
+					],
+					"enumDescriptions": [
+						"%settings.nodes.loadBalancer.roundRobin%",
+						"%settings.nodes.loadBalancer.leastLoad1m%",
+						"%settings.nodes.loadBalancer.leastLoad5m%",
+						"%settings.nodes.loadBalancer.leastLoad15m%"
+					],
+					"default": "round-robin",
+					"description": "%settings.nodes.loadBalancer.description%",
+					"markdownDescription": "%settings.nodes.loadBalancer.description%"
 				}
 			}
 		},

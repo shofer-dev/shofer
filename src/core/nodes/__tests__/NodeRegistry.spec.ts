@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
-import type * as vscode from "vscode"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import * as vscode from "vscode"
 
-import type { AgentApi, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
+import type { AgentApi, LoadSample, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
 import { LOCAL_NODE_ID, ShoferEventName } from "@shofer/types"
 
 import { NodeRegistry, type INodeConnection, type NodeConnectionFactory } from "../NodeRegistry.js"
@@ -67,6 +67,7 @@ class FakeConn implements INodeConnection {
 	latencyMs?: number
 	agentVersion?: string
 	error?: string
+	load: LoadSample | undefined
 	api: AgentApi | undefined
 	disposed = false
 	private cbs = new Set<(s: ShoferNodeConnState) => void>()
@@ -91,7 +92,7 @@ class FakeConn implements INodeConnection {
 	/** Test helper: transition and (optionally) set the live api. */
 	drive(
 		status: ShoferNodeConnState,
-		extra: Partial<Pick<FakeConn, "api" | "latencyMs" | "agentVersion" | "error">> = {},
+		extra: Partial<Pick<FakeConn, "api" | "latencyMs" | "agentVersion" | "error" | "load">> = {},
 	): void {
 		Object.assign(this, extra)
 		this.set(status)
@@ -680,5 +681,65 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(seeded.registry.executorPool.has("r1")).toBe(true)
 		const view = seeded.registry.getState().nodes.find((n) => n.id === "r1")!
 		expect(view).toMatchObject({ status: "connected", hasToken: true })
+	})
+})
+
+describe("NodeRegistry — load-average LB policy (Shofer Nodes)", () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
+	it("wires a live Local load sample (loadavg triple + cpu count)", () => {
+		const { registry } = makeRegistry()
+		const sample = registry.executorPool.loadOf(LOCAL_NODE_ID)
+		expect(sample).toBeDefined()
+		expect(sample!.loadavg).toHaveLength(3)
+		expect(sample!.loadavg.every((n) => typeof n === "number")).toBe(true)
+		expect(sample!.cpus).toBeGreaterThanOrEqual(1)
+	})
+
+	it("defaults the pool policy to round-robin", () => {
+		const { registry } = makeRegistry()
+		expect(registry.executorPool.getPolicy()).toBe("round-robin")
+	})
+
+	it("applies the shofer.nodes.loadBalancer setting on init", () => {
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: (key: string, def: unknown) => (key === "shofer.nodes.loadBalancer" ? "least-load-5m" : def),
+		} as unknown as vscode.WorkspaceConfiguration)
+		const { registry } = makeRegistry()
+		expect(registry.executorPool.getPolicy()).toBe("least-load-5m")
+	})
+
+	it("ignores an invalid setting value (falls back to round-robin)", () => {
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: () => "bogus-policy",
+		} as unknown as vscode.WorkspaceConfiguration)
+		const { registry } = makeRegistry()
+		expect(registry.executorPool.getPolicy()).toBe("round-robin")
+	})
+
+	it("re-reads the policy on a relevant configuration change", () => {
+		let changeCb: ((e: vscode.ConfigurationChangeEvent) => void) | undefined
+		vi.spyOn(vscode.workspace, "onDidChangeConfiguration").mockImplementation((cb) => {
+			changeCb = cb as (e: vscode.ConfigurationChangeEvent) => void
+			return { dispose: () => {} }
+		})
+		let policyValue = "round-robin"
+		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+			get: (key: string, def: unknown) => (key === "shofer.nodes.loadBalancer" ? policyValue : def),
+		} as unknown as vscode.WorkspaceConfiguration)
+
+		const { registry } = makeRegistry()
+		expect(registry.executorPool.getPolicy()).toBe("round-robin")
+
+		// A change touching an unrelated setting is ignored.
+		policyValue = "least-load-1m"
+		changeCb?.({ affectsConfiguration: () => false } as vscode.ConfigurationChangeEvent)
+		expect(registry.executorPool.getPolicy()).toBe("round-robin")
+
+		// A change touching our setting re-reads it.
+		changeCb?.({ affectsConfiguration: (s: string) => s === "shofer.nodes.loadBalancer" } as vscode.ConfigurationChangeEvent)
+		expect(registry.executorPool.getPolicy()).toBe("least-load-1m")
 	})
 })
