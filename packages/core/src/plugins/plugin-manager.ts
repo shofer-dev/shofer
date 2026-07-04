@@ -1,9 +1,24 @@
 import * as nodeFs from "fs/promises"
 import * as path from "path"
 
-import { type ModeConfig, type PluginManifest, pluginManifestSchema } from "@shofer/types"
+import { getHost, type ModeConfig, type PluginManifest, pluginManifestSchema } from "@shofer/types"
 
 import { configLog } from "../logging/subsystems.js"
+
+/**
+ * Surface a plugin warning **both** in the log and to the user (design §14.3/§14.7
+ * — warnings must be shown *and* logged). Routed through `getHost().notifier` so it
+ * works in any host; the in-memory host (tests, pre-front-end) records it instead
+ * of popping a dialog, keeping core host-agnostic.
+ */
+function warnPlugin(message: string): void {
+	configLog.warn(message)
+	try {
+		getHost().notifier.warn(message)
+	} catch {
+		// A missing/partial host must never break discovery — logging already happened.
+	}
+}
 
 /**
  * PluginManager — discovery, validation, permission-gating, and enable/disable
@@ -77,7 +92,23 @@ export interface DiscoveredPlugin {
 	/** Absolute path to the plugin's `plugin.json`. */
 	manifestPath: string
 	scope: "global" | "project"
+	/** The user's persisted intent — did they toggle this plugin on? (design §7). */
 	enabled: boolean
+	/**
+	 * Whether the plugin's contributions actually register. A plugin is effective
+	 * only when it is {@link enabled} **and** its full dependency closure is also
+	 * enabled+present (design §14.3 — fail-closed dependencies). A user-enabled
+	 * plugin with an unmet/missing/cyclic dependency is treated as disabled: none
+	 * of its contributions surface. Defaults to `enabled` until {@link resolveDependencies}
+	 * runs during {@link discover}.
+	 */
+	effectiveEnabled: boolean
+	/**
+	 * Why an enabled plugin is nonetheless inactive (unmet dependency / cycle),
+	 * shown in the Plugins settings panel so the user sees *why* it is off. Unset
+	 * when the plugin is effective or was never enabled.
+	 */
+	disabledReason?: string
 	/** Whether the plugin ships a code entry point (`main`). Not loaded in Phase 1. */
 	hasCode: boolean
 	manifest: PluginManifest
@@ -121,6 +152,14 @@ export class PluginManager {
 	private readonly stateStore: PluginStateStore
 	private readonly pluginDirs: PluginDir[]
 	private plugins: DiscoveredPlugin[] = []
+	/**
+	 * The persisted enabled/install order (the `enabledPlugins` array, in the order
+	 * plugins were enabled). Its index is a plugin's **install rank** — later index =
+	 * enabled/installed later. This is the deterministic, restart-stable ordering
+	 * that drives last-installed-wins conflict resolution (design §14.7). See
+	 * {@link installRank}.
+	 */
+	private enabledOrder: string[] = []
 
 	constructor(options: PluginManagerOptions) {
 		this.fs = options.fs
@@ -135,7 +174,9 @@ export class PluginManager {
 	 * `global` before `project` so a project plugin shadows a global one).
 	 */
 	async discover(): Promise<void> {
-		const enabled = new Set(await this.stateStore.getEnabledPlugins())
+		const enabledList = await this.stateStore.getEnabledPlugins()
+		this.enabledOrder = [...enabledList]
+		const enabled = new Set(enabledList)
 		const byName = new Map<string, DiscoveredPlugin>()
 
 		for (const { dir, scope } of this.pluginDirs) {
@@ -157,6 +198,74 @@ export class PluginManager {
 		}
 
 		this.plugins = Array.from(byName.values())
+		this.resolveDependencies()
+	}
+
+	/**
+	 * Fail-closed dependency resolution (design §14.3). After discovery, an enabled
+	 * plugin is {@link DiscoveredPlugin.effectiveEnabled} only when its **full
+	 * dependency closure** is enabled+present; otherwise it is treated as disabled —
+	 * none of its contributions register — and a warning (shown + logged) names the
+	 * unmet dependency. Handles transitive dependencies and does not infinite-loop
+	 * on cycles: any plugin in a dependency cycle is failed closed with a warning.
+	 *
+	 * `dependencies` are plugin *names* (manifest `dependencies: string[]`). A
+	 * dependency counts as satisfied only if it is itself effectively enabled, so a
+	 * dependency that is present but transitively broken cascades the failure.
+	 */
+	private resolveDependencies(): void {
+		const byName = new Map(this.plugins.map((p) => [p.name, p]))
+
+		// Depth-first evaluation with the current recursion path as a stack (fresh per
+		// plugin) so cycles are detected without memoizing partial results.
+		const evaluate = (name: string, stack: string[]): { ok: true } | { ok: false; reason: string } => {
+			const plugin = byName.get(name)
+			if (!plugin) {
+				return { ok: false, reason: `missing dependency "${name}"` }
+			}
+			if (!plugin.enabled) {
+				return { ok: false, reason: `dependency "${name}" is not enabled` }
+			}
+			if (stack.includes(name)) {
+				return { ok: false, reason: `dependency cycle ${[...stack, name].join(" → ")}` }
+			}
+			for (const dep of plugin.manifest.dependencies ?? []) {
+				const depResult = evaluate(dep, [...stack, name])
+				if (!depResult.ok) {
+					// Surface the *unmet* dependency at the top of the chain, keeping the
+					// transitive reason so the user can trace it.
+					return { ok: false, reason: `unmet dependency "${dep}" (${depResult.reason})` }
+				}
+			}
+			return { ok: true }
+		}
+
+		for (const plugin of this.plugins) {
+			if (!plugin.enabled) {
+				plugin.effectiveEnabled = false
+				plugin.disabledReason = undefined
+				continue
+			}
+			const result = evaluate(plugin.name, [])
+			plugin.effectiveEnabled = result.ok
+			plugin.disabledReason = result.ok ? undefined : result.reason
+			if (!result.ok) {
+				warnPlugin(
+					`[plugins] Plugin "${plugin.name}" is enabled but disabled by an ${result.reason}; ` +
+						`its contributions will not be registered.`,
+				)
+			}
+		}
+	}
+
+	/**
+	 * A plugin's install rank — its index in the persisted enabled/install order
+	 * ({@link enabledOrder}). Later-enabled plugins rank higher; this is the
+	 * deterministic, restart-stable ordering that decides last-installed-wins on a
+	 * slug/name conflict (design §14.7). Returns `-1` for plugins not in the set.
+	 */
+	installRank(name: string): number {
+		return this.enabledOrder.indexOf(name)
 	}
 
 	private async loadPlugin(
@@ -202,6 +311,9 @@ export class PluginManager {
 			manifestPath,
 			scope,
 			enabled: enabled.has(manifest.name),
+			// Recomputed by resolveDependencies() right after discovery; seed to the
+			// user intent so a manager inspected mid-discovery is never inconsistent.
+			effectiveEnabled: enabled.has(manifest.name),
 			hasCode: typeof manifest.main === "string" && manifest.main.length > 0,
 			manifest,
 			contributionCounts: {
@@ -219,9 +331,13 @@ export class PluginManager {
 		return [...this.plugins]
 	}
 
-	/** Enabled plugins only. */
+	/**
+	 * Plugins whose contributions are actually active — enabled **and** with a
+	 * satisfied dependency closure (design §14.3). A user-enabled plugin blocked by
+	 * an unmet/cyclic dependency is excluded here.
+	 */
 	enabledPlugins(): DiscoveredPlugin[] {
-		return this.plugins.filter((p) => p.enabled)
+		return this.plugins.filter((p) => p.effectiveEnabled)
 	}
 
 	getPlugin(name: string): DiscoveredPlugin | undefined {
@@ -237,18 +353,23 @@ export class PluginManager {
 	 * still recorded so state survives a plugin that is temporarily absent.
 	 */
 	async setEnabled(name: string, enabled: boolean): Promise<void> {
-		const current = new Set(await this.stateStore.getEnabledPlugins())
+		// Maintain the install/enable *order* (append on enable, drop on disable) so
+		// installRank() stays meaningful and last-installed-wins is stable across a
+		// toggle without a full re-discover (design §14.7).
+		const order = (await this.stateStore.getEnabledPlugins()).filter((n) => n !== name)
 		if (enabled) {
-			current.add(name)
-		} else {
-			current.delete(name)
+			order.push(name)
 		}
-		await this.stateStore.setEnabledPlugins(Array.from(current))
+		await this.stateStore.setEnabledPlugins(order)
+		this.enabledOrder = order
 
 		const plugin = this.getPlugin(name)
 		if (plugin) {
 			plugin.enabled = enabled
 		}
+		// Re-run fail-closed resolution: toggling one plugin can satisfy or break
+		// another's dependency closure (design §14.3).
+		this.resolveDependencies()
 	}
 
 	/**
@@ -268,7 +389,13 @@ export class PluginManager {
 	// --- Declarative contributions (enabled + permission-gated) ----------------
 
 	private enabledWithPermission(kind: keyof NonNullable<PluginManifest["permissions"]>): DiscoveredPlugin[] {
-		return this.plugins.filter((p) => p.enabled && p.manifest.permissions?.[kind] === true)
+		// `effectiveEnabled` (not raw `enabled`) so a plugin failed closed by an unmet
+		// dependency contributes nothing (design §14.3). Ordered by install rank
+		// ascending so callers that let later entries overwrite earlier ones get
+		// last-installed-wins on a conflict (design §14.7).
+		return this.plugins
+			.filter((p) => p.effectiveEnabled && p.manifest.permissions?.[kind] === true)
+			.sort((a, b) => this.installRank(a.name) - this.installRank(b.name))
 	}
 
 	/**

@@ -34,6 +34,8 @@
 		"empty": "No plugins found. Drop a plugin folder with a plugin.json into ~/.shofer/plugins or .shofer/plugins.",
 		"enabled": "Enabled",
 		"disabled": "Disabled",
+		"inactive": "Inactive",
+		"disabledReason": "Enabled, but inactive: {{reason}}",
 		"toggleAria": "Toggle plugin {{name}}",
 		"scope": {
 			"global": "Global",

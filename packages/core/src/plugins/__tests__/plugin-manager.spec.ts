@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
+import { createInMemoryHost, setHost, type Notifier } from "@shofer/types"
 
 import {
 	PluginManager,
@@ -6,6 +7,11 @@ import {
 	type PluginFsHost,
 	type PluginStateStore,
 } from "../plugin-manager.js"
+
+/** Notifier that records shown messages, for asserting warnings are surfaced. */
+interface RecordingNotifier extends Notifier {
+	messages: Array<{ level: string; message: string }>
+}
 
 /** In-memory {@link PluginFsHost}: a flat map of file paths + a set of dirs. */
 class MemoryFs implements PluginFsHost {
@@ -208,5 +214,103 @@ describe("PluginManager (design §7, Phase 1)", () => {
 		const p = pm.getPlugin("p1")!
 		expect(p.hasCode).toBe(true)
 		expect(p.contributionCounts).toEqual({ modes: 1, skills: 1, commands: 1, mcpServers: 1, rules: 1 })
+	})
+})
+
+describe("PluginManager — fail-closed dependencies (design §14.3, Q3)", () => {
+	const PROJECT = "/ws/.shofer/plugins"
+	const GLOBAL = "/home/.shofer/plugins"
+	const dirs: PluginDir[] = [
+		{ dir: GLOBAL, scope: "global" },
+		{ dir: PROJECT, scope: "project" },
+	]
+
+	let fs: MemoryFs
+	let notifier: RecordingNotifier
+
+	beforeEach(() => {
+		fs = new MemoryFs()
+		// Route getHost().notifier.warn to a recording notifier so we can assert the
+		// warning is *shown* (not just logged).
+		const host = createInMemoryHost()
+		notifier = host.notifier as RecordingNotifier
+		setHost(host)
+	})
+
+	const shownWarnings = () => notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
+
+	it("disables a plugin whose dependency is not enabled, and warns (shown + suppressed contributions)", async () => {
+		fs.addManifest(`${PROJECT}/base`, modeManifest("base"))
+		fs.addManifest(`${PROJECT}/app`, modeManifest("app", { dependencies: ["base"] }))
+		// app is enabled, base is NOT.
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["app"]), pluginDirs: dirs })
+		await pm.discover()
+
+		const app = pm.getPlugin("app")!
+		expect(app.enabled).toBe(true) // user intent preserved
+		expect(app.effectiveEnabled).toBe(false) // but inactive
+		expect(app.disabledReason).toMatch(/base/)
+		// None of app's contributions surface.
+		expect(pm.getContributedModes()).toEqual([])
+		expect(pm.getContributedSkillDirs()).toEqual([])
+		expect(pm.enabledPlugins()).toEqual([])
+		// Warning is shown to the user, naming the missing dependency.
+		expect(shownWarnings().some((m) => m.includes("app") && m.includes("base"))).toBe(true)
+	})
+
+	it("disables a plugin whose dependency is missing (not discovered)", async () => {
+		fs.addManifest(`${PROJECT}/app`, modeManifest("app", { dependencies: ["ghost"] }))
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["app"]), pluginDirs: dirs })
+		await pm.discover()
+		const app = pm.getPlugin("app")!
+		expect(app.effectiveEnabled).toBe(false)
+		expect(app.disabledReason).toMatch(/ghost/)
+		expect(shownWarnings().some((m) => m.includes("ghost"))).toBe(true)
+	})
+
+	it("registers a plugin whose whole dependency closure is enabled", async () => {
+		fs.addManifest(`${PROJECT}/base`, modeManifest("base"))
+		fs.addManifest(`${PROJECT}/app`, modeManifest("app", { dependencies: ["base"] }))
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["base", "app"]), pluginDirs: dirs })
+		await pm.discover()
+		expect(pm.getPlugin("app")!.effectiveEnabled).toBe(true)
+		expect(pm.getPlugin("base")!.effectiveEnabled).toBe(true)
+		expect(pm.enabledPlugins().map((p) => p.name).sort()).toEqual(["app", "base"])
+		expect(shownWarnings()).toEqual([])
+	})
+
+	it("cascades a transitive failure (A→B→C, C disabled ⇒ A and B fail closed)", async () => {
+		fs.addManifest(`${PROJECT}/c`, modeManifest("c"))
+		fs.addManifest(`${PROJECT}/b`, modeManifest("b", { dependencies: ["c"] }))
+		fs.addManifest(`${PROJECT}/a`, modeManifest("a", { dependencies: ["b"] }))
+		// a and b enabled; c NOT enabled.
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["a", "b"]), pluginDirs: dirs })
+		await pm.discover()
+		expect(pm.getPlugin("a")!.effectiveEnabled).toBe(false)
+		expect(pm.getPlugin("b")!.effectiveEnabled).toBe(false)
+		expect(pm.getPlugin("a")!.disabledReason).toMatch(/c/)
+	})
+
+	it("fails every plugin in a dependency cycle closed (no infinite loop)", async () => {
+		fs.addManifest(`${PROJECT}/x`, modeManifest("x", { dependencies: ["y"] }))
+		fs.addManifest(`${PROJECT}/y`, modeManifest("y", { dependencies: ["x"] }))
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["x", "y"]), pluginDirs: dirs })
+		await pm.discover()
+		expect(pm.getPlugin("x")!.effectiveEnabled).toBe(false)
+		expect(pm.getPlugin("y")!.effectiveEnabled).toBe(false)
+		expect(pm.getPlugin("x")!.disabledReason).toMatch(/cycle/)
+	})
+
+	it("re-resolves on enable: enabling the dependency activates the dependent", async () => {
+		fs.addManifest(`${PROJECT}/base`, modeManifest("base"))
+		fs.addManifest(`${PROJECT}/app`, modeManifest("app", { dependencies: ["base"] }))
+		const store = new MemoryStore(["app"])
+		const pm = new PluginManager({ fs, stateStore: store, pluginDirs: dirs })
+		await pm.discover()
+		expect(pm.getPlugin("app")!.effectiveEnabled).toBe(false)
+
+		await pm.setEnabled("base", true)
+		expect(pm.getPlugin("app")!.effectiveEnabled).toBe(true)
+		expect(pm.getPlugin("base")!.effectiveEnabled).toBe(true)
 	})
 })

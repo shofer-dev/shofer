@@ -249,7 +249,16 @@ export interface PluginView {
 	version: string
 	description?: string
 	scope: "global" | "project"
+	/** The user's persisted toggle intent (design §7). */
 	enabled: boolean
+	/**
+	 * Why an enabled plugin is nonetheless inactive — an unmet/missing/cyclic
+	 * dependency (design §14.3 — fail-closed). Present only when {@link enabled} is
+	 * `true` but the plugin's contributions are suppressed, so the panel can show
+	 * the user *why* the toggle is on yet nothing registered. Unset when the plugin
+	 * is active or disabled by the user.
+	 */
+	disabledReason?: string
 	/** Whether the plugin ships a code entry point (`main`). Not loaded in Phase 1. */
 	hasCode: boolean
 	contributionCounts: PluginContributionSummary

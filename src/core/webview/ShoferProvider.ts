@@ -2100,6 +2100,9 @@ export class ShoferProvider
 			description: p.description,
 			scope: p.scope,
 			enabled: p.enabled,
+			// Surface *why* an enabled plugin is inactive (unmet dependency / cycle,
+			// design §14.3) so the Plugins panel can show it (fail-closed).
+			disabledReason: p.disabledReason,
 			hasCode: p.hasCode,
 			contributionCounts: p.contributionCounts,
 		}))

@@ -77,11 +77,20 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 												{summary}
 											</div>
 										)}
+										{plugin.enabled && plugin.disabledReason && (
+											<div className="text-xs text-vscode-errorForeground mt-1">
+												{t("settings:plugins.disabledReason", {
+													reason: plugin.disabledReason,
+												})}
+											</div>
+										)}
 									</div>
 									<div className="flex items-center gap-2 shrink-0">
 										<span className="text-xs text-vscode-descriptionForeground">
 											{plugin.enabled
-												? t("settings:plugins.enabled")
+												? plugin.disabledReason
+													? t("settings:plugins.inactive")
+													: t("settings:plugins.enabled")
 												: t("settings:plugins.disabled")}
 										</span>
 										<ToggleSwitch
