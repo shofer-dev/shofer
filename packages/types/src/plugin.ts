@@ -475,6 +475,14 @@ export interface PluginsState {
 export type PluginRequest =
 	| { action: "list" }
 	| { action: "setEnabled"; name: string; enabled: boolean }
+	/** Uninstall a plugin: delete its directory and drop it from the enabled allow-list. */
+	| { action: "uninstall"; name: string }
+	/**
+	 * Install a plugin from a local `.shofer-plugin` archive. The extension opens a file
+	 * picker (the webview cannot read local files), unpacks it into the global plugins
+	 * dir, and re-discovers. Remote/registry install stays deferred (design §9, §14 Q5).
+	 */
+	| { action: "installFromFile" }
 
 // ---------------------------------------------------------------------------
 // Plugin UI contributions (design §6.8, §12; Phase 4)

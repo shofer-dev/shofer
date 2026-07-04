@@ -86,6 +86,8 @@ import {
 	setSharedPluginManager,
 	getGlobalShoferDirectory,
 	pluginRegistry,
+	unpackPlugin,
+	PluginPackError,
 } from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
@@ -2098,9 +2100,7 @@ export class ShoferProvider
 			host: getHost(),
 			// Per-plugin config (merged with manifest defaults) from ContextProxy.
 			getPluginConfigs: () =>
-				this.contextProxy.getValue("pluginConfigs") as
-					| Record<string, Record<string, unknown>>
-					| undefined,
+				this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined,
 			workspacePath: cwd,
 		})
 		await manager.discover()
@@ -2132,20 +2132,75 @@ export class ShoferProvider
 		await this.postMessageToWebview({ type: "plugins", plugins: state })
 	}
 
-	/** Handle a Plugins-tab request (list / enable-disable), then re-push state. */
+	/**
+	 * Handle a Plugins-tab request (list / enable-disable / uninstall / install-from-file),
+	 * then re-push state. Uninstall and install both re-run discovery so the change is
+	 * reflected immediately; install opens a native file picker for a local
+	 * `.shofer-plugin` archive (remote/registry install stays deferred, design §14 Q5).
+	 */
 	public async handlePluginRequest(request: PluginRequest): Promise<void> {
 		const manager = await this.getPluginManager()
-		if (request.action === "setEnabled") {
-			await manager.setEnabled(request.name, request.enabled)
-			// Re-sync discovery-dependent subsystems so the toggle takes effect now.
-			await this.skillsManager?.discoverSkills().catch(() => {})
-			await this.mcpHub?.refreshProjectMcpServers().catch(() => {})
-			this.customModesManager.invalidateCache()
-			await this.postInitState().catch(() => {})
-			// A toggle can add/remove UI contributions — re-push so slots update live.
-			await this.pushPluginUiContributions().catch(() => {})
+		switch (request.action) {
+			case "setEnabled":
+				await manager.setEnabled(request.name, request.enabled)
+				await this.resyncAfterPluginChange()
+				break
+			case "uninstall":
+				await manager.uninstall(request.name)
+				await this.resyncAfterPluginChange()
+				break
+			case "installFromFile":
+				await this.installPluginFromFile(manager)
+				break
+			case "list":
+				break
 		}
 		await this.pushPluginsState()
+	}
+
+	/**
+	 * Re-sync every discovery-dependent subsystem after a plugin's contributions change
+	 * (enable/disable/install/uninstall) so the change takes effect without a reload.
+	 */
+	private async resyncAfterPluginChange(): Promise<void> {
+		await this.skillsManager?.discoverSkills().catch(() => {})
+		await this.mcpHub?.refreshProjectMcpServers().catch(() => {})
+		this.customModesManager.invalidateCache()
+		await this.postInitState().catch(() => {})
+		// A change can add/remove UI contributions — re-push so slots update live.
+		await this.pushPluginUiContributions().catch(() => {})
+	}
+
+	/**
+	 * Open a native file picker for a local `.shofer-plugin` archive and install it into
+	 * the global plugins dir (design §9, Phase 5.3). Unpacking is validated + zip-slip-safe
+	 * (Phase 5.1); a bad archive surfaces as an error notification rather than a crash.
+	 * A cancelled picker is a no-op.
+	 */
+	private async installPluginFromFile(manager: PluginManager): Promise<void> {
+		const picked = await vscode.window.showOpenDialog({
+			canSelectFiles: true,
+			canSelectFolders: false,
+			canSelectMany: false,
+			filters: { "Shofer plugin": ["shofer-plugin"] },
+			title: "Select a .shofer-plugin archive to install",
+		})
+		if (!picked || !picked[0]) {
+			return
+		}
+		const globalPluginsDir = path.join(getGlobalShoferDirectory(), "plugins")
+		try {
+			const installed = await unpackPlugin(picked[0].fsPath, globalPluginsDir)
+			// Rebuild discovery so the freshly written plugin dir is picked up.
+			await manager.discover()
+			await this.resyncAfterPluginChange()
+			vscode.window.showInformationMessage(
+				`Installed plugin "${installed.name}" v${installed.version}. Enable it in the Plugins tab.`,
+			)
+		} catch (error) {
+			const message = error instanceof PluginPackError ? error.message : String(error)
+			vscode.window.showErrorMessage(`Failed to install plugin: ${message}`)
+		}
 	}
 
 	/**
