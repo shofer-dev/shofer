@@ -231,6 +231,45 @@ export const pluginManifestSchema = z
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
 
 // ---------------------------------------------------------------------------
+// Plugin API versioning (design §14.2 — owner decision: enforce at load).
+//
+// The `ShoferPlugin` hook surface is semver'd. A plugin declares the API it was
+// built against via the manifest `shoferPluginApiVersion`; Shofer refuses to load
+// a plugin whose declared version is incompatible with the host's current API
+// (major mismatch, or a host older than the minor/patch the plugin requires) with
+// a shown+logged warning. Kept in `@shofer/types` (browser-safe) so the manifest
+// schema and the (core-side) loader share one policy.
+// ---------------------------------------------------------------------------
+
+/** The plugin API surface version this Shofer build implements (design §14.2). */
+export const PLUGIN_API_VERSION = "1.0.0"
+
+/** Parse a bare `major.minor.patch` string; returns `null` when malformed. */
+function parsePluginSemver(version: string): { major: number; minor: number; patch: number } | null {
+	const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version.trim())
+	if (!match) return null
+	return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
+}
+
+/**
+ * Whether a plugin declaring `declared` as its target plugin-API version can run
+ * against a host implementing `host` (defaults to {@link PLUGIN_API_VERSION}).
+ * Compatible iff the majors match **and** the host is at least as new as the
+ * declared version within that major (a plugin that needs newer features than the
+ * host provides, or a different major, is refused). Malformed versions are
+ * incompatible (fail-closed).
+ */
+export function isPluginApiCompatible(declared: string, host: string = PLUGIN_API_VERSION): boolean {
+	const d = parsePluginSemver(declared)
+	const h = parsePluginSemver(host)
+	if (!d || !h) return false
+	if (d.major !== h.major) return false
+	if (h.minor < d.minor) return false
+	if (h.minor === d.minor && h.patch < d.patch) return false
+	return true
+}
+
+// ---------------------------------------------------------------------------
 // UI-facing plugin types (Settings → Plugins tab, design §12)
 // ---------------------------------------------------------------------------
 

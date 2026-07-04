@@ -1,0 +1,134 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest"
+import fs from "fs"
+import os from "os"
+import path from "path"
+
+import { PluginRegistry } from "../plugin-registry.js"
+import { loadPluginFromEntry, createNodePluginCodeLoader } from "../plugin-loader.js"
+
+/**
+ * Loader tests exercise the *real* esbuild transpile + dynamic-import path (same
+ * as the custom-tools loader), so they write TypeScript/JS fixtures to a temp dir
+ * and load them. A unique cacheDir per suite avoids cross-run bundle reuse.
+ */
+describe("plugin-loader (§7 code loading, step 2.1)", () => {
+	let dir: string
+	let cacheDir: string
+
+	beforeAll(() => {
+		dir = fs.mkdtempSync(path.join(os.tmpdir(), "shofer-plugin-loader-"))
+		cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "shofer-plugin-loader-cache-"))
+	})
+	afterAll(() => {
+		fs.rmSync(dir, { recursive: true, force: true })
+		fs.rmSync(cacheDir, { recursive: true, force: true })
+	})
+
+	/** Write a plugin root with a `main` entry file, returning the root. */
+	function writePlugin(name: string, entryFile: string, source: string): string {
+		const root = path.join(dir, name)
+		fs.mkdirSync(root, { recursive: true })
+		fs.writeFileSync(path.join(root, entryFile), source)
+		return root
+	}
+
+	it("transpiles a .ts entry and its hooks fire through pluginRegistry", async () => {
+		const root = writePlugin(
+			"ts-plugin",
+			"index.ts",
+			`
+			interface Ctx { mode?: string }
+			const plugin = {
+				name: "ts-plugin",
+				registerTools(_ctx: Ctx) {
+					return [{ name: "hello", description: "hi", execute: async () => "world" }]
+				},
+				transformSystemPrompt(prompt: string, _ctx: Ctx): string {
+					return prompt + " [ts-plugin]"
+				},
+				onEvent(event: { name: string }) {
+					seen.push(event.name)
+				},
+			}
+			const seen: string[] = []
+			;(globalThis as any).__tsPluginSeen = seen
+			export default plugin
+			`,
+		)
+
+		const plugin = await loadPluginFromEntry(
+			{ name: "ts-plugin", root, main: "index.ts" },
+			{ cacheDir },
+		)
+		expect(plugin.name).toBe("ts-plugin")
+
+		const reg = new PluginRegistry()
+		await reg.register(plugin)
+
+		const tools = await reg.collectTools()
+		expect(tools.map((t) => t.name)).toEqual(["hello"])
+
+		const prompt = await reg.applySystemPromptTransforms("base")
+		expect(prompt).toBe("base [ts-plugin]")
+
+		reg.dispatchEvent({ name: "task.created" })
+		expect((globalThis as unknown as { __tsPluginSeen: string[] }).__tsPluginSeen).toEqual(["task.created"])
+	})
+
+	it("loads a plain .js entry directly (no transpile)", async () => {
+		const root = writePlugin(
+			"js-plugin",
+			"index.mjs",
+			`export default { name: "js-plugin", transformSystemPrompt: (p) => p + "!" }`,
+		)
+		const plugin = await loadPluginFromEntry({ name: "js-plugin", root, main: "index.mjs" }, { cacheDir })
+		expect(plugin.transformSystemPrompt?.("x", {})).toBe("x!")
+	})
+
+	it("uses the createNodePluginCodeLoader seam", async () => {
+		const root = writePlugin("seam-plugin", "e.mjs", `export default { name: "seam-plugin" }`)
+		const loader = createNodePluginCodeLoader({ cacheDir })
+		const plugin = await loader.load({ name: "seam-plugin", root, main: "e.mjs" })
+		expect(plugin.name).toBe("seam-plugin")
+	})
+
+	it("rejects an API-version mismatch before running code (owner decision)", async () => {
+		const root = writePlugin("v-plugin", "e.mjs", `export default { name: "v-plugin" }`)
+		await expect(
+			loadPluginFromEntry(
+				{ name: "v-plugin", root, main: "e.mjs", apiVersion: "2.0.0" },
+				{ cacheDir, hostApiVersion: "1.0.0" },
+			),
+		).rejects.toThrow(/incompatible/)
+	})
+
+	it("accepts a compatible declared API version", async () => {
+		const root = writePlugin("v-ok", "e.mjs", `export default { name: "v-ok" }`)
+		const plugin = await loadPluginFromEntry(
+			{ name: "v-ok", root, main: "e.mjs", apiVersion: "1.0.0" },
+			{ cacheDir, hostApiVersion: "1.2.0" },
+		)
+		expect(plugin.name).toBe("v-ok")
+	})
+
+	it("rejects a manifest/module name mismatch", async () => {
+		const root = writePlugin("named-a", "e.mjs", `export default { name: "actually-b" }`)
+		await expect(
+			loadPluginFromEntry({ name: "named-a", root, main: "e.mjs" }, { cacheDir }),
+		).rejects.toThrow(/name mismatch/)
+	})
+
+	it("rejects a module that is not a ShoferPlugin", async () => {
+		const root = writePlugin("no-plugin", "e.mjs", `export const notAPlugin = 42`)
+		await expect(
+			loadPluginFromEntry({ name: "no-plugin", root, main: "e.mjs" }, { cacheDir }),
+		).rejects.toThrow(/does not export a ShoferPlugin/)
+	})
+
+	it("rejects an entry that escapes the plugin directory", async () => {
+		const root = writePlugin("escape", "e.mjs", `export default { name: "escape" }`)
+		await expect(
+			loadPluginFromEntry({ name: "escape", root, main: "../evil.mjs" }, { cacheDir }),
+		).rejects.toThrow(/escapes the plugin directory/)
+	})
+})
