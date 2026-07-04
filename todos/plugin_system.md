@@ -956,21 +956,25 @@ expanded `TaskHeader`:
 
 ## 14. Open Questions
 
-1. **UI component sandboxing.** Should plugin UI components run in an iframe (like Slang visualization) or via dynamic import with a restricted API? Iframe is safer but limits integration (no shared React context, no theme inheritance without injection). Dynamic import is more flexible but requires careful API surface design.
+> **✅ Resolved (owner decisions, 2026-07).** All eight questions below have been
+> answered. The decisions are recorded inline; Phase-1-affecting ones (2, 6, 7)
+> are already implemented.
 
-2. **Plugin versioning.** How to handle breaking changes in the `ShoferPlugin` API? Semver the API surface (`shoferPluginApiVersion` in manifest). Major version bumps require migration.
+1. **UI component sandboxing.** **DECIDED: no sandbox** — plugin UI components load via **dynamic import with a restricted API** (`PluginUIApi`), not an iframe. Simpler integration (shared React context/theme). (Phase 4.)
 
-3. **Plugin dependencies.** If plugin A depends on plugin B, what happens if B is disabled? Fail-closed (A is also disabled) or fail-soft (A runs without B's contributions)?
+2. **Plugin versioning.** **DECIDED: yes** — semver the plugin API surface via a `shoferPluginApiVersion` field in the manifest; major bumps require migration. ✅ Implemented in Phase 1 (`pluginManifestSchema`, step 1.1). Not enforced yet (declarative-only).
 
-4. **Hot reload.** Should plugins be hot-reloadable during development? Probably yes — watch the plugin directory and re-register on change (same as `.shofer/shofermodes` watcher).
+3. **Plugin dependencies.** **DECIDED: fail-soft** (assumed default — easy to flip) — if a dependency is disabled, the dependent plugin still runs, just without the dependency's contributions. Not enforced in Phase 1 (`dependencies` is parsed but inert).
 
-5. **Remote plugins.** Should Shofer support loading plugins from a remote URL (like a CDN)? This would require code signing and a trust chain. Deferred.
+4. **Hot reload.** **DECIDED: yes** — watch the plugin dir and re-register on change (same as the `.shofer/shofermodes` watcher). Phase 1 structures discovery so a watcher can re-run it: `PluginManager.discover()` fully rebuilds state and is idempotent. Watcher wiring itself is deferred (Phase 2).
 
-6. **Plugin permissions UI.** How granular should the consent dialog be? One dialog per plugin, or one dialog per permission? Probably per-plugin with expandable details.
+5. **Remote plugins.** **DECIDED: no** — stay deferred (needs code signing + trust chain).
 
-7. **Conflict resolution.** If two plugins contribute a mode with the same slug, which wins? Proposal: last-installed wins, with a warning. Or: namespace plugin modes (`plugin:slug`) to avoid collisions entirely.
+6. **Plugin permissions UI.** **DECIDED: one dialog per plugin** (per-plugin consent with expandable details), not per-permission. Phase 1's enable/disable model is per-plugin: a plugin is inert until the user enables it in the Plugins tab (default-disabled), which is the consent gate.
 
-8. **Performance.** How to measure and limit plugin impact on task startup latency? Plugin hooks (`collectTools`, `transformSystemPrompt`) are on the hot path. Proposal: timeout per hook (default 500ms), async loading (don't block task start on plugin initialization).
+7. **Conflict resolution.** **DECIDED: namespacing** (`<pluginName>:<slug>`, assumed default — easy to flip) — collision-free, so no "last wins" ambiguity. ✅ Implemented in Phase 1 for plugin-contributed **modes** (slug regex widened to allow `:`) and **commands** (name-prefixed). Note: plugin **skills** cannot be `:`-namespaced (the agentskills.io name regex forbids `:`), so they fall back to precedence (plugin source ranks highest, §6.4) rather than namespacing. Caveat: a `:` in a mode slug is unusual on Windows paths — revisit if mode-rules directories (`rules-<slug>/`) are ever derived from a plugin mode slug.
+
+8. **Performance.** **DECIDED: yes** — per-hook timeout (default 500ms) + async loading so plugin init never blocks task start (Phase 2/3, when hooks land). Phase 1 keeps discovery/registration async and off the task-start hot path.
 
 ---
 
