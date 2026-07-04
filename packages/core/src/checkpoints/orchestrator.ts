@@ -317,10 +317,9 @@ export type CheckpointDiffComputed =
 			notice: "checkpoint_no_first" | "checkpoint_no_previous" | "checkpoint_no_changes"
 	  }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function computeCheckpointDiff(
 	task: Task,
-	{ ts, previousCommitHash, commitHash, mode }: CheckpointDiffOptions,
+	{ commitHash, mode }: CheckpointDiffOptions,
 ): Promise<CheckpointDiffComputed | undefined> {
 	const service = await getCheckpointService(task)
 
