@@ -41,6 +41,114 @@ export interface ShoferPlugin {
 
 	/** Observe telemetry/lifecycle events (read-only; must not throw). */
 	onEvent?(event: PluginEvent, context: PluginContext): void
+
+	/**
+	 * Task/tool **lifecycle hooks** (design §6.9). Only honored for a plugin whose
+	 * manifest grants `permissions.lifecycle`; the registry filters on that grant so
+	 * an ungranted plugin's hooks never fire. Every hook is run behind the shared
+	 * per-hook 500ms timeout and per-plugin error isolation (owner decision #8): a
+	 * slow or throwing hook is skipped with a shown+logged warning and can never
+	 * crash or stall the agent loop.
+	 */
+	lifecycle?: LifecycleHooks
+}
+
+/**
+ * Lifecycle hooks a plugin can implement (design §6.9). All optional. The reducer
+ * semantics (how multiple plugins compose, and what each may change) live in the
+ * `@shofer/core` `PluginRegistry`:
+ *
+ * - `beforeToolCall` — **allow / modify params / block**. Plugins run in
+ *   registration order; a returned `modifiedArgs` threads into later hooks and the
+ *   tool; the first plugin returning `allow: false` short-circuits the tool with an
+ *   optional `reason` (surfaced like a denied tool).
+ * - `afterToolCall` — **observe / transform the result**. Each plugin sees the prior
+ *   plugin's (possibly transformed) result string; returning a string replaces it.
+ * - `beforeAsk` — **observe / modify / auto-answer** an ask. A returned `text`
+ *   modifies the surfaced ask; a `decision` of `"approve"`/`"deny"` auto-answers it
+ *   (short-circuiting the user prompt), `"ask"`/absent lets it proceed.
+ * - `beforeTaskStart` / `afterTaskComplete` — **observers** (owner decision for
+ *   Phase 3: kept off the latency-critical path, fired non-blocking). Their return
+ *   value is ignored in Phase 3.
+ */
+export interface LifecycleHooks {
+	/**
+	 * Observe a task starting (design §6.9). Phase 3 treats this as a fire-and-forget
+	 * observer (non-blocking, timeout-guarded); any returned value is ignored.
+	 */
+	beforeTaskStart?(context: TaskLifecycleContext): void | Promise<void>
+
+	/**
+	 * Observe a task completing or aborting (design §6.9). Fire-and-forget observer;
+	 * {@link TaskLifecycleContext.reason} distinguishes a normal completion from an abort.
+	 */
+	afterTaskComplete?(context: TaskLifecycleContext): void | Promise<void>
+
+	/**
+	 * Called before a tool executes. May allow it (return `{ allow: true }`), modify
+	 * its arguments (`{ allow: true, modifiedArgs }`), or block it
+	 * (`{ allow: false, reason }`). Blocking short-circuits the tool.
+	 */
+	beforeToolCall?(
+		toolName: string,
+		args: Record<string, unknown>,
+		context: PluginContext,
+	): BeforeToolCallResult | Promise<BeforeToolCallResult>
+
+	/**
+	 * Called after a tool executes with its stringified result. Returning a string
+	 * replaces the result the model sees; returning nothing observes without change.
+	 */
+	afterToolCall?(
+		toolName: string,
+		args: Record<string, unknown>,
+		result: string,
+		context: PluginContext,
+	): string | void | Promise<string | void>
+
+	/**
+	 * Called before an ask is surfaced to the user. May modify the ask (`text`) and/or
+	 * auto-answer it (`decision`). Returning nothing (or `{ decision: "ask" }`) lets the
+	 * ask proceed to the user unchanged.
+	 */
+	beforeAsk?(
+		askType: string,
+		payload: unknown,
+		context: PluginContext,
+	): BeforeAskResult | void | Promise<BeforeAskResult | void>
+}
+
+/**
+ * Context handed to the task-level lifecycle observers ({@link LifecycleHooks.beforeTaskStart},
+ * {@link LifecycleHooks.afterTaskComplete}). Extends {@link PluginContext} with the
+ * task's initial prompt and, for completion, the terminal reason.
+ */
+export interface TaskLifecycleContext extends PluginContext {
+	/** The task's initial prompt (present for `beforeTaskStart`). */
+	readonly prompt?: string
+	/** Why the task ended, for `afterTaskComplete` (`"completed"` vs `"aborted"`). */
+	readonly reason?: "completed" | "aborted"
+}
+
+/** Result of a {@link LifecycleHooks.beforeToolCall} hook (design §6.9). */
+export interface BeforeToolCallResult {
+	/** Whether the tool may run. `false` blocks it (short-circuit with {@link reason}). */
+	allow: boolean
+	/** Replacement args threaded into the tool and later hooks (honored only when allowed). */
+	modifiedArgs?: Record<string, unknown>
+	/** Human-readable reason surfaced to the model/user when the call is blocked. */
+	reason?: string
+}
+
+/** Result of a {@link LifecycleHooks.beforeAsk} hook (design §6.9). */
+export interface BeforeAskResult {
+	/**
+	 * Short-circuit the user prompt: `"approve"`/`"deny"` auto-answers the ask;
+	 * `"ask"` (or absent) lets it proceed to the user.
+	 */
+	decision?: "approve" | "deny" | "ask"
+	/** Modified ask text surfaced to the user, or the answer text when auto-answering. */
+	text?: string
 }
 
 /**
