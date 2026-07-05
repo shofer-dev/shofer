@@ -123,8 +123,12 @@ describe("PluginManager (design §7, Phase 1)", () => {
 		// Slug is namespaced under the plugin name (design §14.7 → namespacing).
 		expect(modes[0]).toMatchObject({ slug: "p1:deploy", source: "plugin", pluginName: "p1" })
 
-		expect(pm.getContributedSkillDirs()).toEqual([{ pluginName: "p1", dir: `${PROJECT}/p1/skills` }])
-		expect(pm.getContributedCommandDirs()).toEqual([{ pluginName: "p1", dir: `${PROJECT}/p1/commands` }])
+		expect(pm.getContributedSkillDirs()).toEqual([
+			{ pluginName: "p1", dir: `${PROJECT}/p1/skills`, privateNames: [] },
+		])
+		expect(pm.getContributedCommandDirs()).toEqual([
+			{ pluginName: "p1", dir: `${PROJECT}/p1/commands`, privateNames: [] },
+		])
 
 		const mcp = pm.getContributedMcpServers()
 		expect(mcp).toEqual([{ pluginName: "p1", name: "srv", config: { type: "stdio", command: "node" } }])
@@ -381,6 +385,68 @@ describe("PluginManager — namespaced modes, no cross-plugin conflict (design �
 		expect(modes[0]).toMatchObject({ slug: "a:deploy", roleDefinition: "role-2" })
 		const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
 		expect(warns.some((m) => m.includes("a:deploy"))).toBe(true)
+	})
+})
+
+describe("PluginManager — private contributions (owner directive #4)", () => {
+	const PROJECT = "/ws/.shofer/plugins"
+	const dirs: PluginDir[] = [{ dir: PROJECT, scope: "project" }]
+	let fs: MemoryFs
+
+	beforeEach(() => {
+		fs = new MemoryFs()
+		setHost(createInMemoryHost())
+	})
+
+	const mixedManifest = {
+		name: "p",
+		version: "1.0.0",
+		permissions: { modes: true, skills: true, commands: true },
+		contributes: {
+			modes: [
+				{ slug: "public-mode", name: "Public", roleDefinition: "r", tools: ["read"] },
+				{ slug: "verifier", name: "Verifier", roleDefinition: "r", tools: ["read"], private: true },
+			],
+			skills: [
+				{ name: "public-skill", description: "d" },
+				{ name: "secret-skill", description: "d", private: true },
+			],
+			commands: [
+				{ name: "public-cmd" },
+				{ name: "secret-cmd", private: true },
+			],
+		},
+	}
+
+	it("emits a private mode namespaced + tagged private:true (still registered)", async () => {
+		fs.addManifest(`${PROJECT}/p`, mixedManifest)
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["p"]), pluginDirs: dirs })
+		await pm.discover()
+
+		const modes = pm.getContributedModes()
+		const publicMode = modes.find((m) => m.slug === "p:public-mode")
+		const verifier = modes.find((m) => m.slug === "p:verifier")
+		expect(publicMode).toBeDefined()
+		expect(publicMode?.private).toBeFalsy()
+		expect(verifier).toMatchObject({ slug: "p:verifier", private: true })
+	})
+
+	it("reports the private authored names on the skill/command dir contributions", async () => {
+		fs.addManifest(`${PROJECT}/p`, mixedManifest)
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["p"]), pluginDirs: dirs })
+		await pm.discover()
+
+		expect(pm.getContributedSkillDirs()[0].privateNames).toEqual(["secret-skill"])
+		expect(pm.getContributedCommandDirs()[0].privateNames).toEqual(["secret-cmd"])
+	})
+
+	it("excludes private contributions from the user-facing contribution counts", async () => {
+		fs.addManifest(`${PROJECT}/p`, mixedManifest)
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["p"]), pluginDirs: dirs })
+		await pm.discover()
+
+		const counts = pm.getPlugin("p")!.contributionCounts
+		expect(counts).toMatchObject({ modes: 1, skills: 1, commands: 1 })
 	})
 })
 

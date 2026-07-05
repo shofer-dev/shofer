@@ -10,6 +10,13 @@ export interface SkillMetadata {
 	/** When source === "plugin", the contributing plugin's name (attribution). */
 	pluginName?: string
 	/**
+	 * A **private** (internal) contribution — resolvable/invocable by its qualified
+	 * name (`<pluginName>:<name>`) but hidden from every user-facing enumeration (the
+	 * skills UI list and the slash-command menu). Set from a plugin skill
+	 * contribution's `private` flag; absent for file skills and normal plugin skills.
+	 */
+	private?: boolean
+	/**
 	 * @deprecated Use modeSlugs instead. Kept for backward compatibility.
 	 * If set, skill is only available in this mode.
 	 */

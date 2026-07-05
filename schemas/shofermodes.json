@@ -50,6 +50,9 @@
 					"pluginName": {
 						"type": "string"
 					},
+					"private": {
+						"type": "boolean"
+					},
 					"provider": {
 						"type": "string"
 					},

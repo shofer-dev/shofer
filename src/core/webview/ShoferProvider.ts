@@ -4268,7 +4268,10 @@ export class ShoferProvider
 			customSupportPrompts: customSupportPrompts ?? {},
 			enhancementApiConfigId,
 			autoApprovalEnabled: autoApprovalEnabled ?? false,
-			customModes,
+			// User-facing state → hide **private** modes from the mode selector/picker
+			// (owner directive #4). Private plugin modes stay switch-able by their
+			// qualified slug (getCustomModes still returns them for resolution).
+			customModes: (customModes ?? []).filter((m) => !m.private),
 			experiments: experiments ?? experimentDefault,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
 			maxOpenTabsContext: maxOpenTabsContext ?? 20,

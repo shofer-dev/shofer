@@ -78,6 +78,23 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 		const commands = await getCommands("/test/cwd")
 		expect(commands).toHaveLength(0)
 	})
+
+	it("hides a private command from getCommands but keeps it resolvable via getCommand", async () => {
+		setSharedPluginManager({
+			getContributedCommandDirs: () => [
+				{ pluginName: "my-plugin", dir: PLUGIN_DIR, privateNames: ["deploy"] },
+			],
+		} as any)
+
+		// Enumeration excludes the private command entirely.
+		const commands = await getCommands("/test/cwd")
+		expect(commands.find((c) => c.name === "my-plugin:deploy")).toBeUndefined()
+
+		// But it is still invocable by its qualified name.
+		const cmd = await getCommand("/test/cwd", "my-plugin:deploy")
+		expect(cmd).toMatchObject({ name: "my-plugin:deploy", source: "plugin", pluginName: "my-plugin" })
+		expect(cmd?.content).toBe("Deploy body")
+	})
 })
 
 describe("Plugin command namespacing — no cross-plugin conflict (design §14.7)", () => {

@@ -390,6 +390,12 @@ export const pluginSkillContributionSchema = z
 	.object({
 		name: z.string().min(1),
 		description: z.string().min(1),
+		/**
+		 * A **private** (internal) skill: registered and invocable by its qualified
+		 * name (`<pluginName>:<name>`) but excluded from every user-facing enumeration
+		 * (the skills UI list, the slash-command menu). Absent/false ⇒ user-visible.
+		 */
+		private: z.boolean().optional(),
 	})
 	.strict()
 
@@ -404,6 +410,13 @@ export const pluginCommandContributionSchema = z
 		name: z.string().min(1),
 		description: z.string().optional(),
 		argumentHint: z.string().optional(),
+		/**
+		 * A **private** (internal) command: registered and invocable by its qualified
+		 * name (`<pluginName>:<command>`) but excluded from every user-facing
+		 * enumeration (the command palette / slash-command list). Absent/false ⇒
+		 * user-visible.
+		 */
+		private: z.boolean().optional(),
 	})
 	.strict()
 

@@ -204,6 +204,38 @@ describe("CustomModesManager", () => {
 			}
 		})
 
+		it("retains a private plugin mode in getCustomModes so it stays switch-able (picker filters at the state layer)", async () => {
+			const settingsModes = [{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] }]
+			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
+				if (path === mockSettingsPath) {
+					return yaml.stringify({ customModes: settingsModes })
+				}
+				throw new Error("File not found")
+			})
+
+			setSharedPluginManager({
+				getContributedModes: () => [
+					{
+						slug: "my-plugin:verifier",
+						name: "Verifier",
+						roleDefinition: "Verify things",
+						tools: ["read"],
+						source: "plugin" as const,
+						pluginName: "my-plugin",
+						private: true,
+					},
+				],
+			} as any)
+
+			try {
+				const modes = await manager.getCustomModes()
+				const verifier = modes.find((m) => m.slug === "my-plugin:verifier")
+				expect(verifier).toMatchObject({ private: true, source: "plugin" })
+			} finally {
+				setSharedPluginManager(undefined)
+			}
+		})
+
 		it("should merge modes with .shofer/shofermodes taking precedence", async () => {
 			const settingsModes = [
 				{ slug: "mode1", name: "Mode 1", roleDefinition: "Role 1", tools: ["read"] },

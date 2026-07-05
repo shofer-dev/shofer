@@ -46,8 +46,8 @@ export class SkillsManager {
 		this.skills.clear()
 		const skillsDirs = await this.getSkillsDirectories()
 
-		for (const { dir, source, mode, pluginName } of skillsDirs) {
-			await this.scanSkillsDirectory(dir, source, mode, pluginName)
+		for (const { dir, source, mode, pluginName, privateNames } of skillsDirs) {
+			await this.scanSkillsDirectory(dir, source, mode, pluginName, privateNames)
 		}
 	}
 
@@ -62,6 +62,7 @@ export class SkillsManager {
 		source: "global" | "project" | "plugin",
 		mode?: string,
 		pluginName?: string,
+		privateNames: string[] = [],
 	): Promise<void> {
 		if (!(await directoryExists(dirPath))) {
 			return
@@ -82,7 +83,7 @@ export class SkillsManager {
 				if (!stats?.isDirectory()) continue
 
 				// Load skill metadata - the skill name comes from the entry name (symlink name if symlinked)
-				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName)
+				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName, privateNames)
 			}
 		} catch {
 			// Directory doesn't exist or can't be read - this is fine
@@ -102,6 +103,7 @@ export class SkillsManager {
 		mode?: string,
 		skillName?: string,
 		pluginName?: string,
+		privateNames: string[] = [],
 	): Promise<void> {
 		const skillMdPath = path.join(skillDir, "SKILL.md")
 		if (!(await fileExists(skillMdPath))) return
@@ -176,6 +178,9 @@ export class SkillsManager {
 				path: skillMdPath,
 				source,
 				pluginName, // Set only for plugin-contributed skills (attribution)
+				// Private plugin skills: invocable by qualified name, hidden from
+				// user-facing enumerations (owner directive #4).
+				private: source === "plugin" && privateNames.includes(effectiveSkillName) ? true : undefined,
 				mode: primaryMode, // Deprecated: kept for backward compatibility
 				modeSlugs, // New: array of mode slugs, undefined = any mode
 			})
@@ -185,21 +190,33 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Get skills available for the current mode.
-	 * Resolution is keyed by the skill's **addressing identifier**
-	 * ({@link qualifiedSkillName}): file skills by their bare name, plugin skills by
-	 * `<pluginName>:<name>` (§14.7 → namespacing). This isolates plugin skills by
-	 * construction — a plugin skill can never shadow a built-in/user skill or another
-	 * plugin's skill. Within a single identifier, overrides resolve by
-	 * {@link skillPrecedence} (project > global for files) with mode-specific > generic
-	 * on a tie.
+	 * Get skills **advertised** for the current mode — the list shown to the model
+	 * (system-prompt skills section, skill tool) and to the user (slash-command
+	 * menu). Excludes {@link SkillMetadata.private} skills (owner directive #4); those
+	 * remain resolvable/invocable by qualified name via {@link getSkillContent}.
 	 *
 	 * @param currentMode - The current mode slug (e.g., 'code', 'architect')
 	 */
 	getSkillsForMode(currentMode: string): SkillMetadata[] {
+		return this.resolveSkillsForMode(currentMode, false)
+	}
+
+	/**
+	 * Resolve the skills applicable to `currentMode`, keyed by each skill's
+	 * **addressing identifier** ({@link qualifiedSkillName}): file skills by their bare
+	 * name, plugin skills by `<pluginName>:<name>` (§14.7 → namespacing). This isolates
+	 * plugin skills by construction — a plugin skill can never shadow a built-in/user
+	 * skill or another plugin's skill. Within a single identifier, overrides resolve by
+	 * {@link skillPrecedence} (project > global for files) with mode-specific > generic
+	 * on a tie. `includePrivate` gates whether private skills participate: `false` for
+	 * the advertised list, `true` for invocation-time resolution.
+	 */
+	private resolveSkillsForMode(currentMode: string, includePrivate: boolean): SkillMetadata[] {
 		const resolvedSkills = new Map<string, SkillMetadata>()
 
 		for (const skill of this.skills.values()) {
+			if (skill.private && !includePrivate) continue
+
 			// Check if skill is available in current mode:
 			// - modeSlugs undefined or empty = available in all modes ("Any mode")
 			// - modeSlugs array with values = available only if currentMode is in the array
@@ -288,8 +305,10 @@ export class SkillsManager {
 
 		// Skills are addressed by their qualified identifier: a bare name for file
 		// skills, `<pluginName>:<name>` for plugin skills (§14.7 → namespacing).
+		// Invocation resolution includes private skills (hidden from listings, but
+		// still callable by qualified name — owner directive #4).
 		if (currentMode) {
-			const modeSkills = this.getSkillsForMode(currentMode)
+			const modeSkills = this.resolveSkillsForMode(currentMode, true)
 			skill = modeSkills.find((s) => qualifiedSkillName(s) === name)
 		} else {
 			// Fall back to any skill with this addressing identifier
@@ -317,11 +336,13 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Get all skills metadata (for UI display)
-	 * Returns skills from all sources without content
+	 * Get all skills metadata (for UI display). Returns skills from all sources
+	 * without content, **excluding** private plugin skills — this is a user-facing
+	 * enumeration (the skills UI list), so private skills stay hidden here (they
+	 * remain invocable by qualified name via {@link getSkillContent}).
 	 */
 	getSkillsMetadata(): SkillMetadata[] {
-		return this.getAllSkills()
+		return this.getAllSkills().filter((s) => !s.private)
 	}
 
 	/**
@@ -604,6 +625,7 @@ Add your skill instructions here.
 			source: "global" | "project" | "plugin"
 			mode?: string
 			pluginName?: string
+			privateNames?: string[]
 		}>
 	> {
 		const dirs: Array<{
@@ -611,6 +633,7 @@ Add your skill instructions here.
 			source: "global" | "project" | "plugin"
 			mode?: string
 			pluginName?: string
+			privateNames?: string[]
 		}> = []
 		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
@@ -664,8 +687,8 @@ Add your skill instructions here.
 		// manager is wired or no plugins are enabled ⇒ behavior unchanged.
 		const pluginManager = getSharedPluginManager()
 		if (pluginManager) {
-			for (const { pluginName, dir } of pluginManager.getContributedSkillDirs()) {
-				dirs.push({ dir, source: "plugin", pluginName })
+			for (const { pluginName, dir, privateNames } of pluginManager.getContributedSkillDirs()) {
+				dirs.push({ dir, source: "plugin", pluginName, privateNames: privateNames ?? [] })
 			}
 		}
 

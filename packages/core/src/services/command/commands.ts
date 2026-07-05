@@ -22,6 +22,12 @@ export interface Command {
 	mode?: string
 	/** When source === "plugin", the contributing plugin's name (attribution). */
 	pluginName?: string
+	/**
+	 * A **private** (internal) plugin command — invocable by its qualified name but
+	 * hidden from user-facing enumerations. {@link getCommands} filters these out;
+	 * {@link getCommand} still resolves them. Absent for normal/file commands.
+	 */
+	private?: boolean
 }
 
 /**
@@ -145,20 +151,21 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	await scanCommandDirectory(projectDir, "project", commands)
 
-	// Scan plugin-contributed commands (design §6.5). Commands use their **natural**
-	// name (no namespacing). Plugin dirs come back in install-rank order, so
-	// scanning them last — and letting a plugin overwrite whatever is present —
-	// yields last-installed-wins over built-in/global/project *and* over earlier
-	// plugins (design §14.7), with a shown+logged warning on each collision. Empty
-	// when no plugin manager is wired.
+	// Scan plugin-contributed commands (design §6.5). Each is keyed under its
+	// **namespaced** name `<pluginName>:<command>` (design §14.7 → namespacing), so a
+	// plugin command can never collide with a built-in/user command or another
+	// plugin's — no override/warning is needed. Empty when no plugin manager is wired.
 	const pluginManager = getSharedPluginManager()
 	if (pluginManager) {
-		for (const { pluginName, dir } of pluginManager.getContributedCommandDirs()) {
-			await scanCommandDirectory(dir, "plugin", commands, pluginName)
+		for (const { pluginName, dir, privateNames } of pluginManager.getContributedCommandDirs()) {
+			await scanCommandDirectory(dir, "plugin", commands, pluginName, privateNames ?? [])
 		}
 	}
 
-	return Array.from(commands.values())
+	// `getCommands` is the **enumeration** surface (command palette / slash-command
+	// menu / autocomplete). Private plugin commands are registered + invocable by
+	// their qualified name (via `getCommand`) but hidden here (owner directive #4).
+	return Array.from(commands.values()).filter((c) => !c.private)
 }
 
 /**
@@ -311,6 +318,7 @@ async function scanCommandDirectory(
 	source: "global" | "project" | "plugin",
 	commands: Map<string, Command>,
 	pluginName?: string,
+	privateNames: string[] = [],
 ): Promise<void> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -388,6 +396,8 @@ async function scanCommandDirectory(
 						argumentHint,
 						mode,
 						pluginName,
+						// Hidden from enumerations, still invocable by qualified name.
+						private: privateNames.includes(bareName),
 					})
 				} else if (source === "project" || !commands.has(commandName)) {
 					commands.set(commandName, {

@@ -1857,6 +1857,37 @@ Deploy instructions`
 			expect(warns.some((m) => m.includes("shadows"))).toBe(false)
 		})
 
+		it("hides a private plugin skill from listings but keeps it invocable by qualified name", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [
+					{ pluginName: "my-plugin", dir: pluginSkillsDir, privateNames: ["deploy-skill"] },
+				],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === pluginSkillsDir ? ["deploy-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) return `---\nname: deploy-skill\ndescription: Deploy to staging\n---\nBody`
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Hidden from both user-facing enumerations…
+			expect(skillsManager.getSkillsMetadata().find((s) => s.name === "deploy-skill")).toBeUndefined()
+			expect(skillsManager.getSkillsForMode("code").find((s) => s.name === "deploy-skill")).toBeUndefined()
+
+			// …but still invocable by its qualified name.
+			const content = await skillsManager.getSkillContent("my-plugin:deploy-skill", "code")
+			expect(content).toMatchObject({ name: "deploy-skill", pluginName: "my-plugin", private: true })
+		})
+
 		it("resolves a plugin skill by its qualified name, never by the bare name", async () => {
 			setSharedPluginManager({
 				getContributedSkillDirs: () => [{ pluginName: "my-plugin", dir: pluginSkillsDir }],

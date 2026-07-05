@@ -139,6 +139,15 @@ export const modeConfigObjectSchema = z.object({
 	 * built-in / global / project modes.
 	 */
 	pluginName: z.string().optional(),
+	/**
+	 * A **private** (internal) contribution — registered and switch-able by its
+	 * qualified slug, but hidden from every user-facing surface (the mode
+	 * selector/picker and the Plugins settings panel). Primarily set by a plugin
+	 * (e.g. a browser plugin's `verifier` mode the agent runs but the user never
+	 * picks); a private mode still governs its subtask's tools once switched into.
+	 * Absent/false ⇒ a normal, user-visible mode.
+	 */
+	private: z.boolean().optional(),
 	provider: z.string().optional(),
 })
 

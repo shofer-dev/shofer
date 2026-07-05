@@ -169,6 +169,12 @@ export interface PluginDirContribution {
 	pluginName: string
 	/** Absolute directory holding the physical files (`<root>/skills` or `<root>/commands`). */
 	dir: string
+	/**
+	 * Authored names (skill dir names / command file basenames) the manifest marked
+	 * `private` — resolvable/invocable by qualified name but hidden from user-facing
+	 * enumerations. Empty when the plugin declares no private entries of this kind.
+	 */
+	privateNames: string[]
 }
 
 /** A plugin-contributed rules file. */
@@ -426,10 +432,13 @@ export class PluginManager {
 			effectiveEnabled: enabled.has(manifest.name),
 			hasCode: typeof manifest.main === "string" && manifest.main.length > 0,
 			manifest,
+			// Counts feed the user-facing Plugins settings panel, so **private**
+			// modes/skills/commands are excluded (they are hidden from users, though
+			// still registered + invocable by qualified name).
 			contributionCounts: {
-				modes: contributes.modes?.length ?? 0,
-				skills: contributes.skills?.length ?? 0,
-				commands: contributes.commands?.length ?? 0,
+				modes: (contributes.modes ?? []).filter((m) => !m.private).length,
+				skills: (contributes.skills ?? []).filter((s) => !s.private).length,
+				commands: (contributes.commands ?? []).filter((c) => !c.private).length,
 				mcpServers: contributes.mcpServers ? Object.keys(contributes.mcpServers).length : 0,
 				rules: contributes.rules?.length ?? 0,
 			},
@@ -758,8 +767,13 @@ export class PluginManager {
 	getContributedSkillDirs(): PluginDirContribution[] {
 		const out: PluginDirContribution[] = []
 		for (const plugin of this.enabledWithPermission("skills")) {
-			if ((plugin.manifest.contributes?.skills?.length ?? 0) > 0) {
-				out.push({ pluginName: plugin.name, dir: path.join(plugin.root, "skills") })
+			const skills = plugin.manifest.contributes?.skills ?? []
+			if (skills.length > 0) {
+				out.push({
+					pluginName: plugin.name,
+					dir: path.join(plugin.root, "skills"),
+					privateNames: skills.filter((s) => s.private).map((s) => s.name),
+				})
 			}
 		}
 		return out
@@ -769,8 +783,13 @@ export class PluginManager {
 	getContributedCommandDirs(): PluginDirContribution[] {
 		const out: PluginDirContribution[] = []
 		for (const plugin of this.enabledWithPermission("commands")) {
-			if ((plugin.manifest.contributes?.commands?.length ?? 0) > 0) {
-				out.push({ pluginName: plugin.name, dir: path.join(plugin.root, "commands") })
+			const commands = plugin.manifest.contributes?.commands ?? []
+			if (commands.length > 0) {
+				out.push({
+					pluginName: plugin.name,
+					dir: path.join(plugin.root, "commands"),
+					privateNames: commands.filter((c) => c.private).map((c) => c.name),
+				})
 			}
 		}
 		return out

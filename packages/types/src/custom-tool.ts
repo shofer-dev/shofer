@@ -53,6 +53,14 @@ export interface CustomToolDefinition {
 	 */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	execute: (args: any, context: CustomToolContext) => Promise<string>
+
+	/**
+	 * A **private** (internal) tool. Registered and callable in the contexts the
+	 * contributing plugin exposes it, but excluded from user-facing tool listings
+	 * (e.g. the Plugins settings panel's contribution list). Absent/false ⇒ a
+	 * normal, user-visible tool. Primarily set by plugin-contributed tools.
+	 */
+	private?: boolean
 }
 
 export interface SerializedCustomToolDefinition {
