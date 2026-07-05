@@ -85,7 +85,7 @@ import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
 import { ShoferNodesSettings } from "./ShoferNodesSettings"
-import { PluginsSettings } from "./PluginsSettings"
+import { PluginsSettings, type PluginsSettingsRef } from "./PluginsSettings"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
@@ -187,6 +187,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	// for why those buffers are not folded into SettingsView's cachedState).
 	const modesViewRef = useRef<ModesViewRef>(null)
 	const toolsSettingsRef = useRef<ToolsSettingsRef>(null)
+	const pluginsSettingsRef = useRef<PluginsSettingsRef>(null)
 	const ragIndexerRef = useRef<RagIndexerSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
@@ -542,6 +543,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// Apply staged MCP per-tool enable/disable changes (Tools tab).
 			toolsSettingsRef.current?.commitToolBuffers()
 
+			// Apply staged plugin config edits (Plugins tab) — persists + reloads each plugin.
+			pluginsSettingsRef.current?.commitConfigBuffers()
+
 			// Flush code-index secret fields (API keys) that are managed
 			// inside CodeIndexConfigForm via its own atomic-save path.
 			ragIndexerRef.current?.saveCodeIndexSecrets()
@@ -577,6 +581,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				// Also drop any per-mode text buffers held inside ModesView.
 				modesViewRef.current?.discardBuffers()
 				toolsSettingsRef.current?.discardToolBuffers()
+				pluginsSettingsRef.current?.discardConfigBuffers()
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)
 			}
 			// If confirm is false (Cancel), do nothing, dialog closes automatically
@@ -1061,7 +1066,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Shofer Nodes (remote agents) Section */}
 						{renderTab === "shoferNodes" && <ShoferNodesSettings />}
-					{renderTab === "plugins" && <PluginsSettings />}
+					{renderTab === "plugins" && (
+						<PluginsSettings ref={pluginsSettingsRef} onConfigDirty={() => setChangeDetected(true)} />
+					)}
 
 						{/* Worktrees Section */}
 						{renderTab === "worktrees" && <WorktreesView />}

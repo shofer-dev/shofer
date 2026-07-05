@@ -1,4 +1,4 @@
-import { HTMLAttributes, useEffect, useMemo, useState } from "react"
+import { HTMLAttributes, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react"
 import { Blocks, ChevronDown, ChevronRight } from "lucide-react"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
@@ -7,7 +7,7 @@ import type { PluginRequest, PluginView } from "@shofer/types"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
-import { ToggleSwitch, Button } from "@src/components/ui"
+import { ToggleSwitch } from "@src/components/ui"
 
 import { PluginSlot } from "../plugins/PluginSlot"
 
@@ -18,33 +18,54 @@ function post(plugin: PluginRequest) {
 	vscode.postMessage({ type: "plugin", plugin })
 }
 
+/** Imperative handle so `SettingsView` can commit/drop staged plugin config on Save/Discard. */
+export interface PluginsSettingsRef {
+	/** Persist staged config overrides (posts `setConfig` per edited plugin). Called on Save. */
+	commitConfigBuffers: () => void
+	/** Drop staged config edits. Called on Discard. */
+	discardConfigBuffers: () => void
+}
+
+type PluginsSettingsProps = HTMLAttributes<HTMLDivElement> & {
+	/**
+	 * Fired when a plugin config field is edited, so `SettingsView` can enable its Save
+	 * button. Config is staged and only persisted when the user clicks that (single) Save.
+	 */
+	onConfigDirty?: () => void
+}
+
 /**
  * Editable config form for one plugin, driven by its manifest `config` JSON-schema
- * (design §5). A field's current value is the user's stored override, or the schema
- * default when unset. Saving persists the overrides and reloads the plugin so the new
- * values take effect. Collapsed by default; renders nothing when the plugin has no config.
+ * (design §5). Controlled by {@link PluginsSettings}: `override` is the full staged/stored
+ * override object (a field falls back to its schema `default` when absent). Edits are
+ * **staged** — they persist only via the shared Settings Save button, not a local one.
+ * Collapsed by default; renders nothing when the plugin has no config.
  */
-function PluginConfigForm({ plugin }: { plugin: PluginView }) {
+function PluginConfigForm({
+	plugin,
+	override,
+	onChange,
+	onReset,
+}: {
+	plugin: PluginView
+	override: Record<string, unknown>
+	onChange: (key: string, value: unknown) => void
+	onReset: () => void
+}) {
 	const { t } = useAppTranslation()
 	const props = plugin.configSchema?.properties
 	const [open, setOpen] = useState(false)
-	const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...plugin.config }))
-
-	// Re-seed the draft when the persisted config changes (e.g. after a save round-trips).
-	useEffect(() => {
-		setDraft({ ...plugin.config })
-	}, [plugin.config])
 
 	if (!props || Object.keys(props).length === 0) return null
 
-	const valueOf = (key: string): unknown => (draft[key] !== undefined ? draft[key] : props[key]?.default)
-	const setField = (key: string, v: unknown) => setDraft((d) => ({ ...d, [key]: v }))
+	const valueOf = (key: string): unknown => (override[key] !== undefined ? override[key] : props[key]?.default)
 
 	return (
 		<div className="mt-2">
 			<button
 				type="button"
 				onClick={() => setOpen((o) => !o)}
+				aria-expanded={open}
 				className="flex items-center gap-1 text-xs text-vscode-descriptionForeground hover:text-vscode-foreground">
 				{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
 				{t("settings:plugins.configure")}
@@ -60,7 +81,7 @@ function PluginConfigForm({ plugin }: { plugin: PluginView }) {
 									{spec.type === "boolean" && (
 										<ToggleSwitch
 											checked={!!val}
-											onChange={() => setField(key, !val)}
+											onChange={() => onChange(key, !val)}
 											size="small"
 											aria-label={key}
 										/>
@@ -76,13 +97,9 @@ function PluginConfigForm({ plugin }: { plugin: PluginView }) {
 										value={val === undefined || val === null ? "" : String(val)}
 										onInput={(e) => {
 											const raw = (e.target as HTMLInputElement).value
-											setField(
+											onChange(
 												key,
-												spec.type === "number"
-													? raw === ""
-														? undefined
-														: Number(raw)
-													: raw,
+												spec.type === "number" ? (raw === "" ? undefined : Number(raw)) : raw,
 											)
 										}}
 									/>
@@ -90,20 +107,14 @@ function PluginConfigForm({ plugin }: { plugin: PluginView }) {
 							</div>
 						)
 					})}
-					<div className="flex gap-2 mt-1">
-						<Button
-							onClick={() => post({ action: "setConfig", name: plugin.name, config: draft })}>
-							{t("settings:plugins.save")}
-						</Button>
-						<Button
-							variant="secondary"
-							onClick={() => {
-								setDraft({})
-								post({ action: "setConfig", name: plugin.name, config: {} })
-							}}>
-							{t("settings:plugins.resetDefaults")}
-						</Button>
-					</div>
+					{/* Staging affordance (not a Save): clears all overrides back to schema
+					    defaults; applied when the shared Settings Save button is clicked. */}
+					<button
+						type="button"
+						onClick={onReset}
+						className="self-start text-xs text-vscode-descriptionForeground hover:text-vscode-foreground underline">
+						{t("settings:plugins.resetDefaults")}
+					</button>
 				</div>
 			)}
 		</div>
@@ -122,9 +133,16 @@ function contributionSummary(plugin: PluginView, t: (key: string, opts?: Record<
 	return parts.join(" · ")
 }
 
-export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
+export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsProps>(function PluginsSettings(
+	{ onConfigDirty, ...props },
+	ref,
+) {
 	const { t } = useAppTranslation()
 	const { plugins } = useExtensionState()
+
+	// Staged config overrides, keyed by plugin name. A plugin present here has pending
+	// edits (the full override object to persist); absent ⇒ show its persisted config.
+	const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({})
 
 	// Ask the extension for the current plugin list whenever this panel mounts.
 	useEffect(() => {
@@ -132,6 +150,33 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 	}, [])
 
 	const list = useMemo<PluginView[]>(() => plugins?.plugins ?? [], [plugins])
+
+	useImperativeHandle(
+		ref,
+		() => ({
+			commitConfigBuffers: () => {
+				for (const [name, config] of Object.entries(drafts)) {
+					post({ action: "setConfig", name, config })
+				}
+				setDrafts({})
+			},
+			discardConfigBuffers: () => setDrafts({}),
+		}),
+		[drafts],
+	)
+
+	// Seed a plugin's draft from its persisted config on first edit, then patch the field.
+	const editField = (plugin: PluginView, key: string, value: unknown) => {
+		setDrafts((d) => {
+			const base = d[plugin.name] ?? { ...plugin.config }
+			return { ...d, [plugin.name]: { ...base, [key]: value } }
+		})
+		onConfigDirty?.()
+	}
+	const resetPlugin = (plugin: PluginView) => {
+		setDrafts((d) => ({ ...d, [plugin.name]: {} }))
+		onConfigDirty?.()
+	}
 
 	return (
 		<div {...props}>
@@ -217,8 +262,14 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 											</div>
 										)}
 										{/* Editable config form from the plugin's manifest `config`
-										    schema — the plugin-era replacement for a bespoke tab. */}
-										<PluginConfigForm plugin={plugin} />
+										    schema. Edits stage into `drafts` and persist via the
+										    shared Settings Save button (no local Save button). */}
+										<PluginConfigForm
+											plugin={plugin}
+											override={drafts[plugin.name] ?? plugin.config ?? {}}
+											onChange={(key, value) => editField(plugin, key, value)}
+											onReset={() => resetPlugin(plugin)}
+										/>
 									</div>
 									<div className="flex items-center gap-2 shrink-0">
 										<span className="text-xs text-vscode-descriptionForeground">
@@ -253,4 +304,4 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 			</Section>
 		</div>
 	)
-}
+})
