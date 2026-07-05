@@ -18,6 +18,7 @@ import { pluginRegistry } from "./plugin-registry.js"
 import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
+import { type PluginAgentProvider, createPluginAgent, createDeniedPluginAgent } from "./plugin-agent.js"
 import { createPluginStorage } from "./plugin-storage.js"
 import { PluginServiceSupervisor } from "./plugin-services.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
@@ -230,6 +231,13 @@ export interface PluginManagerOptions {
 	 */
 	aiConsentStore?: PluginAiConsentStore
 	/**
+	 * Host seam constructing a plugin's `ctx.agent` (design §6.11 G8; Phase 7). When
+	 * omitted, no plugin gets agent-steering (even a granted one) — headless/pure-core
+	 * stays host-agnostic and `ctx.agent` is absent. Supplied by the extension where the
+	 * task manager / message queue live.
+	 */
+	agentProvider?: PluginAgentProvider
+	/**
 	 * Absolute base dir for per-plugin storage (design §6.11 G2). A plugin's
 	 * `ctx.storage.dir` is `<storageBaseDir>/<name>`. When omitted (or when no host fs
 	 * is available), `ctx.storage` is absent. Host-provided (e.g. `<globalStorage>/plugins`).
@@ -249,6 +257,7 @@ export class PluginManager {
 	private readonly workspacePath?: string
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
+	private readonly agentProvider?: PluginAgentProvider
 	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
@@ -278,6 +287,7 @@ export class PluginManager {
 		this.workspacePath = options.workspacePath
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
+		this.agentProvider = options.agentProvider
 		this.storageBaseDir = options.storageBaseDir
 	}
 
@@ -647,6 +657,7 @@ export class PluginManager {
 			config,
 			host,
 			ai: this.buildPluginAi(plugin),
+			agent: this.buildPluginAgent(plugin),
 			storage:
 				this.storageBaseDir && this.host
 					? createPluginStorage(plugin.name, path.join(this.storageBaseDir, plugin.name), this.host.fs)
@@ -668,6 +679,19 @@ export class PluginManager {
 		if (!this.aiProvider) return undefined
 		if (!this.aiConsented.has(plugin.name)) return createDeniedPluginAi(plugin.name)
 		return createPluginAi(plugin.name, this.aiProvider)
+	}
+
+	/**
+	 * Construct a plugin's `ctx.agent` surface (design §6.11 G8, §8; Phase 7). Fail-closed:
+	 * no host {@link PluginAgentProvider} wired (headless/pure-core) ⇒ `undefined` (`ctx.agent`
+	 * absent — there is nothing to steer); wired but `permissions.agent` **ungranted** ⇒ a
+	 * denying stub (calls throw + warn); wired **and** granted ⇒ the live provider-backed
+	 * surface. Steering the agent is billed/behavioral, so an ungranted plugin is denied loudly.
+	 */
+	private buildPluginAgent(plugin: DiscoveredPlugin): PluginContext["agent"] {
+		if (!this.agentProvider) return undefined
+		if (plugin.manifest.permissions?.agent !== true) return createDeniedPluginAgent(plugin.name)
+		return createPluginAgent(plugin.name, this.agentProvider)
 	}
 
 	/**

@@ -220,6 +220,44 @@ export interface PluginAi<Handler = unknown> {
 }
 
 /**
+ * Proactive **agent-steering** handed to a plugin granted `permissions.agent` (design
+ * §6.11 G8; Phase 7). Lets a plugin — from a background service ({@link
+ * PluginContext.registerService}), a file watcher ({@link PluginHost.watch}), or a
+ * lifecycle hook — PROACTIVELY inject a message into the running agent ("the deploy just
+ * failed, here's the log"), rather than only reacting when the agent calls it. This is
+ * powerful (a plugin steering the agent carries billed/behavioral impact), so it is gated
+ * on a dedicated `permissions.agent` grant.
+ *
+ * As with {@link PluginAi}, the plugin-facing surface stays in `@shofer/types`
+ * (browser-safe) while the concrete task-injection lives host-side behind a seam (core's
+ * `PluginAgentProvider`). Ungranted (but the host wired the seam) ⇒ a denying stub whose
+ * {@link notify} throws + warns; no seam (headless) ⇒ `ctx.agent` is absent entirely.
+ */
+export interface PluginAgent {
+	/**
+	 * Inject `message` into the agent. Resolves once the message has been delivered
+	 * (queued / the spawned task created). Rejects (+ warns) when the plugin lacks
+	 * `permissions.agent` or the host has no task to steer.
+	 */
+	notify(message: string, opts?: PluginAgentNotifyOptions): Promise<void>
+}
+
+/** Options for {@link PluginAgent.notify} (design §6.11 G8; Phase 7). */
+export interface PluginAgentNotifyOptions {
+	/**
+	 * How the message reaches the agent. Default **`"queue"`**: enqueue into the active
+	 * task's message queue so the agent picks it up on its next turn (non-disruptive).
+	 * `"spawn"`: start a **new** task seeded with the message. `"interrupt"`: **reduced**
+	 * to queued-ASAP — the message is enqueued and, if the task loop has already
+	 * terminated, the tested cancel-and-process path is kicked so it is drained
+	 * immediately; there is no fragile mid-turn injection (see PLUGINS.md).
+	 */
+	mode?: "queue" | "interrupt" | "spawn"
+	/** Target a specific task by id; defaults to the host's active/current task. */
+	taskId?: string
+}
+
+/**
  * A plugin's **private** persistent storage (design §6.11 G2; Phase 6). Rooted at
  * {@link dir} (`<globalStorage>/plugins/<name>/`); every path is resolved relative to
  * it and **traversal-blocked** (a `..` escape is denied). Created lazily, survives
@@ -287,6 +325,13 @@ export interface PluginContext {
 	 * calls throw + warn; when ungranted it is absent entirely.
 	 */
 	readonly ai?: PluginAi
+	/**
+	 * Proactive agent-steering (design §6.11 G8; Phase 7). Present only when the host
+	 * wired its agent seam. Granted `permissions.agent` ⇒ a live surface that injects
+	 * messages into the running agent; granted-not / seam wired ⇒ a denying stub whose
+	 * `notify` throws + warns; no seam (headless) ⇒ absent entirely. See {@link PluginAgent}.
+	 */
+	readonly agent?: PluginAgent
 	/** This plugin's private persistent storage (design §6.11 G2; Phase 6). */
 	readonly storage?: PluginStorage
 	/**
@@ -363,6 +408,14 @@ export const pluginPermissionsSchema = z
 		 * ungranted ⇒ `ctx.ai` is absent entirely. The plugin never receives raw keys.
 		 */
 		ai: z.boolean().optional(),
+		/**
+		 * Proactive **agent-steering** (`ctx.agent`, Phase 7 / P6.G8). Lets the plugin
+		 * inject messages into the running agent (queue / spawn / interrupt). This has
+		 * **billed/behavioral impact** (a plugin steering the agent is powerful), so it is
+		 * gated on this dedicated grant: ungranted ⇒ `ctx.agent` is a denying stub (calls
+		 * throw + warn), absent entirely on a host with no agent seam.
+		 */
+		agent: z.boolean().optional(),
 	})
 	.strict()
 

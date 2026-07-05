@@ -90,7 +90,7 @@ import {
 	PluginPackError,
 } from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
-import type { ApiHandler, PluginAiProvider } from "@shofer/core"
+import type { ApiHandler, PluginAiProvider, PluginAgentProvider } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
@@ -2121,6 +2121,10 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
 			// + code-index embedder, mirroring how live-memory reaches buildApiHandler.
 			aiProvider: this.buildPluginAiProvider(),
+			// P7 — host seam for `ctx.agent.notify` (proactive agent-steering). Wired here
+			// (not in @shofer/core) because it needs the provider's task stack + message
+			// queue; gated on `permissions.agent` inside the manager.
+			agentProvider: this.buildPluginAgentProvider(),
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
@@ -2184,6 +2188,50 @@ export class ShoferProvider
 				const embedder = factory.createEmbedder()
 				const { embeddings } = await embedder.createEmbeddings(texts)
 				return embeddings
+			},
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginAgentProvider} seam that backs a granted plugin's
+	 * `ctx.agent.notify` (P7). Lets a plugin proactively steer the running agent:
+	 *
+	 * - `mode: "spawn"` ⇒ start a **new** task seeded with the message ({@link createTask}).
+	 * - `mode: "queue"` (default) ⇒ enqueue into the target task's message queue (the same
+	 *   {@link MessageQueueService} the webview "Send" uses), so the agent picks it up on its
+	 *   next `ask()`. If the loop has already terminated (e.g. `attempt_completion` set
+	 *   `abort`), the tested {@link Task.cancelAndProcessQueuedMessages} path is kicked so the
+	 *   message isn't stranded.
+	 * - `mode: "interrupt"` ⇒ **reduced** to the same queued-ASAP behavior (no fragile
+	 *   mid-turn injection; see PLUGINS.md).
+	 *
+	 * The target is an explicit `opts.taskId` (resolved against the live task stack) or the
+	 * current task. With no task to steer, it falls back to spawning so a proactive notify is
+	 * never silently dropped.
+	 */
+	private buildPluginAgentProvider(): PluginAgentProvider {
+		return {
+			notify: async (message: string, opts): Promise<void> => {
+				const mode = opts?.mode ?? "queue"
+				if (mode === "spawn") {
+					await this.createTask(message)
+					return
+				}
+				// queue / interrupt (both reduced to queued-ASAP): resolve the target task.
+				const target =
+					(opts?.taskId ? this.shoferStack.find((t) => t.taskId === opts.taskId) : undefined) ??
+					this.getCurrentTask()
+				if (!target) {
+					// Nothing to steer — don't drop the message; start a task with it instead.
+					await this.createTask(message)
+					return
+				}
+				target.messageQueueService.addMessage(message)
+				// A terminated loop won't ask() again to drain the queue; kick the same
+				// cancel-and-process path "Send Now" uses so the message is picked up ASAP.
+				if (target.abort) {
+					await target.cancelAndProcessQueuedMessages()
+				}
 			},
 		}
 	}
