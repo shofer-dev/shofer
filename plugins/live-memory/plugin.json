@@ -1,0 +1,47 @@
+{
+	"name": "live-memory",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "Persistent, LLM-backed codebase memory. Observes Shofer's own file activity and external edits, accumulates a per-workspace knowledge log, and answers investigative questions from it via the `ask_live_memory` tool — a first-party dogfood of the plugin architecture.",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"main": "main.ts",
+	"permissions": {
+		"tools": true,
+		"systemPrompt": true,
+		"lifecycle": true,
+		"events": true,
+		"ai": true,
+		"filesystem": ["."]
+	},
+	"config": {
+		"type": "object",
+		"properties": {
+			"profileRef": {
+				"type": "string",
+				"default": "",
+				"description": "Provider-profile name/id the memory LLM uses (ctx.ai.buildHandler). Empty ⇒ the host default profile."
+			},
+			"maxObservations": {
+				"type": "number",
+				"default": 400,
+				"description": "How many recent activity observations to retain per workspace."
+			},
+			"maxQuestions": {
+				"type": "number",
+				"default": 50,
+				"description": "How many recent question/answer pairs to retain per workspace."
+			},
+			"watchGlob": {
+				"type": "string",
+				"default": "**/*",
+				"description": "Glob (under the granted filesystem roots) watched for external edits via ctx.host.watch."
+			},
+			"compactIntervalMs": {
+				"type": "number",
+				"default": 300000,
+				"description": "Background maintenance-service interval (ms) for compacting the observation log into a running summary. 0 disables it."
+			}
+		}
+	}
+}
