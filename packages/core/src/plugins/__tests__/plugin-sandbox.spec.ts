@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 import { createInMemoryHost, type HostBridge } from "@shofer/types"
 
 import { createPluginSandbox } from "../plugin-sandbox.js"
+import { pluginLogCtx } from "../plugin-log.js"
 
 /** A HostBridge whose fs/fetch record calls, so we can assert delegation happens. */
 function makeHost(): { host: HostBridge; reads: string[] } {
@@ -211,5 +212,20 @@ describe("createPluginSandbox — ctx.host.watch (P6.G3)", () => {
 		const disposable = sandbox.watch!("*", vi.fn())
 		disposable.dispose()
 		expect(disposed()).toBe(2) // one per granted root
+	})
+
+	it("always exposes a scoped `log` surface tagged with the plugin's Log category", () => {
+		const { host } = makeHost()
+		const sandbox = createPluginSandbox({ pluginName: "ci", pluginRoot, host, warn: vi.fn() })
+		// Logging is ungated (like notifier): present regardless of permissions.
+		expect(typeof sandbox.log.debug).toBe("function")
+		expect(typeof sandbox.log.info).toBe("function")
+		expect(typeof sandbox.log.warn).toBe("function")
+		expect(typeof sandbox.log.error).toBe("function")
+		// The category tag is `Plugin:<name>` — the single source of truth the Logging
+		// settings UI shows and filters on.
+		expect(pluginLogCtx("ci")).toBe("Plugin:ci")
+		// A call must not throw even with no wired transport.
+		expect(() => sandbox.log.info("hello")).not.toThrow()
 	})
 })

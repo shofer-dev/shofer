@@ -11,6 +11,7 @@
 import { getHost } from "@shofer/types"
 
 import { configLog } from "../logging/subsystems.js"
+import { getPluginLogger } from "./plugin-log.js"
 
 /**
  * Surface a plugin warning **both** in the log and to the user. Routed through
@@ -18,9 +19,12 @@ import { configLog } from "../logging/subsystems.js"
  * pre-front-end) records it instead of popping a dialog, keeping core
  * host-agnostic. A missing/partial host never breaks the caller — logging already
  * happened.
+ *
+ * When `pluginName` is given, the log line goes to that plugin's own `Plugin:<name>`
+ * Log category (filterable in Settings → Logging) instead of the shared `Config` one.
  */
-export function warnPlugin(message: string): void {
-	configLog.warn(message)
+export function warnPlugin(message: string, pluginName?: string): void {
+	;(pluginName ? getPluginLogger(pluginName) : configLog).warn(message)
 	try {
 		getHost().notifier.warn(message)
 	} catch {

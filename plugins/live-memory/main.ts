@@ -234,6 +234,7 @@ const plugin: ShoferPlugin = {
 		await store.load()
 
 		const c = cfg(ctx)
+		ctx.host?.log.info(`initialized (watchGlob="${c.watchGlob}", maxObservations=${c.maxObservations})`)
 
 		// ── External edits via ctx.host.watch (P6.G3) ──────────────────────────
 		// The watch callback now carries the changed path + change kind (P7 —
@@ -249,6 +250,7 @@ const plugin: ShoferPlugin = {
 					event.path,
 					setTimeout(() => {
 						pending.delete(event.path)
+						ctx.host?.log.debug(`observed external ${event.type}: ${event.path}`)
 						void store.recordObservation({
 							at: Date.now(),
 							kind: "external",

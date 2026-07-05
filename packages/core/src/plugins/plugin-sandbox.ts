@@ -34,6 +34,7 @@ import type {
 } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
+import { getPluginLogger } from "./plugin-log.js"
 
 export interface PluginSandboxOptions {
 	/** Plugin name — used in denial warnings for attribution. */
@@ -113,7 +114,10 @@ function isNetworkAllowed(url: string, allowlist: string[]): boolean {
  */
 export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 	const { pluginName, permissions, pluginRoot, workspacePath, host } = options
-	const warn = options.warn ?? warnPlugin
+	// Default deny-warnings to the plugin's own Log category so a plugin's permission
+	// denials are filterable alongside the rest of its output.
+	const warn = options.warn ?? ((m: string) => warnPlugin(m, pluginName))
+	const log = getPluginLogger(pluginName)
 	const doFetch = options.fetchImpl ?? ((input, init) => fetch(input, init))
 
 	const fsRoots = resolveFsRoots(permissions?.filesystem ?? [], pluginRoot, workspacePath)
@@ -229,6 +233,8 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 			warn: (m: string) => host.notifier.warn(m),
 			error: (m: string) => host.notifier.error(m),
 		},
+		// Plugin-scoped logger → its own `Plugin:<name>` Log category (Settings → Logging).
+		log,
 		fetch: restrictedFetch,
 		watch,
 		// Already gated by the manager (live / denying stub / absent); surfaced as-is.

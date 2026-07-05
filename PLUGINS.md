@@ -297,6 +297,16 @@ missing API.
   workspace.
 - **`host.fetch(input, init?)`** — HTTP, scoped to `permissions.network` origins/prefixes.
 - **`host.notifier`** — `info`/`warn`/`error`. **Always available** (surfacing messages is safe).
+  Pops a user-facing toast; use it sparingly for things the user must see.
+- **`host.log`** — `debug`/`info`/`warn`/`error`. **Always available** (logging is safe). Writes to
+  the plugin's **own Log category `Plugin:<name>`** (Settings → Logging), *not* a user toast. Each
+  loaded plugin automatically gets its category, so a user can view and filter one plugin's output
+  independently. Prefer this over `console.*` for anything diagnostic.
+
+  ```ts
+  ctx.host?.log.info("reindexed", { files: 12 })
+  // shows in Settings → Logging under the "Plugin:my-plugin" category
+  ```
 - **`host.env`** — read-only host/environment metadata. Always available.
 - **`host.watch(pattern, onChange)`** — watch a glob for create/change/delete, **scoped to
   `permissions.filesystem`** (watches `pattern` under each granted root). The callback receives the

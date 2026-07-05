@@ -170,17 +170,37 @@ export interface BeforeAskResult {
  * - {@link fs} — filesystem access, scoped to `permissions.filesystem` paths.
  * - {@link fetch} — network access, scoped to `permissions.network` origins.
  * - {@link notifier} — always available (surfacing messages is inherently safe).
+ * - {@link log} — always available; writes to the plugin's own Log category.
  * - {@link env} — read-only host/environment metadata (safe, no side effects).
  *
  * The type shape is the same regardless of which permissions were granted; an
  * out-of-scope call is denied at runtime (deny + shown/logged warning), not hidden
  * from the type — so a plugin author gets a clear runtime error, not a missing API.
  */
+/**
+ * A minimal structured logger handed to a plugin (see {@link PluginHost.log}). Mirrors
+ * the host's `ILogger` shape without depending on it, so `@shofer/types` stays free of
+ * `@shofer/core`. Extra args are stringified and appended to the line.
+ */
+export interface PluginLogger {
+	debug(message: string, ...extra: unknown[]): void
+	info(message: string, ...extra: unknown[]): void
+	warn(message: string, ...extra: unknown[]): void
+	error(message: string | Error, ...extra: unknown[]): void
+}
+
 export interface PluginHost {
 	/** Filesystem access, scoped to the plugin's `permissions.filesystem` allowlist. */
 	readonly fs: HostFileSystem
 	/** Surface an info/warning/error message (always permitted). */
 	readonly notifier: Pick<Notifier, "info" | "warn" | "error">
+	/**
+	 * Scoped logger — always available (logging is inherently safe). Writes to the
+	 * plugin's own `Plugin:<name>` Log category (Settings → Logging), so its output can
+	 * be filtered independently of the core subsystems and of other plugins. Unlike
+	 * {@link notifier} (user-facing toasts), this goes only to the log/output channel.
+	 */
+	readonly log: PluginLogger
 	/** Read-only host/environment metadata. */
 	readonly env: HostEnv
 	/** HTTP access, scoped to the plugin's `permissions.network` origin allowlist. */

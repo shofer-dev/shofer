@@ -26,6 +26,7 @@ import { createPluginStorage } from "./plugin-storage.js"
 import { PluginServiceSupervisor } from "./plugin-services.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
 import { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
+import { getPluginLogger } from "./plugin-log.js"
 
 // Re-export the shared warning helpers so existing importers of `@shofer/core`
 // (SkillsManager, CustomModesManager, plugin-sandbox) keep working unchanged.
@@ -686,8 +687,14 @@ export class PluginManager {
 				// Start any services the plugin registered during initialize (supervised,
 				// isolated — a throwing/hanging service can never crash activation).
 				await this.serviceSupervisor.startForPlugin(plugin.name)
+				// Emit under the plugin's own `Plugin:<name>` Log category so it registers
+				// as a filterable category in Settings → Logging as soon as it loads.
+				getPluginLogger(plugin.name).info("loaded")
 			} catch (error) {
-				warnPlugin(`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`)
+				warnPlugin(
+					`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`,
+					plugin.name,
+				)
 			}
 		}
 	}
