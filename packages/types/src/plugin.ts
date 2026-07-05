@@ -432,6 +432,29 @@ export const pluginMcpServersSchema = z.record(z.string(), z.record(z.string(), 
 
 export type PluginMcpServers = z.infer<typeof pluginMcpServersSchema>
 
+/**
+ * A UI bundle a plugin ships for a webview region (design §6.8, P4 external-UI).
+ * `region` must also be granted in `permissions.ui` (the grant); this entry points
+ * at the plugin's **built** UI module (an ESM file relative to the plugin root, e.g.
+ * `ui/toolbar.js`) that the extension serves as a local `vscode-webview://` resource
+ * and the webview dynamic-imports. A granted region *without* a matching entry falls
+ * back to the webview's co-bundled/first-party component registry (non-breaking).
+ *
+ * The built module must default-export a React component that takes a single
+ * `{ api: PluginUIApi }` prop and **externalize** `react`, `react-dom`, and
+ * `react/jsx-runtime` so its `import React` resolves to the host's shared instance
+ * (see PLUGINS.md §6 — the host injects an import map for those specifiers).
+ */
+export const pluginUiEntrySchema = z
+	.object({
+		region: pluginUiRegionSchema,
+		/** Built UI ESM module, relative to the plugin root (e.g. `ui/toolbar.js`). */
+		entry: z.string().min(1),
+	})
+	.strict()
+
+export type PluginUiEntry = z.infer<typeof pluginUiEntrySchema>
+
 /** The declarative `contributes` block (design §5, §6). All entries optional. */
 export const pluginContributesSchema = z
 	.object({
@@ -440,6 +463,12 @@ export const pluginContributesSchema = z
 		commands: z.array(pluginCommandContributionSchema).optional(),
 		mcpServers: pluginMcpServersSchema.optional(),
 		rules: z.array(pluginRuleContributionSchema).optional(),
+		/**
+		 * External UI bundles per region (design §6.8, P4). Each entry's `region` must
+		 * also be granted in `permissions.ui`; the `entry` names the built ESM module the
+		 * extension serves + the webview dynamic-imports. Omit to use a co-bundled component.
+		 */
+		ui: z.array(pluginUiEntrySchema).optional(),
 	})
 	.strict()
 
