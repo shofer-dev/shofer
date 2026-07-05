@@ -594,10 +594,12 @@ export interface PluginContext {
 	ai?: PluginAi // G1 — host LLM/embeddings (only when permissions.ai + consent)
 	storage?: PluginStorage // G2 — per-plugin persistent data dir
 	registerService?(service: PluginService): HostDisposable // G7 — supervised background service
+	agent?: PluginAgent // G8 (Phase 7) — proactive agent-steering (only when permissions.agent)
 }
 export interface PluginHost {
 	// … P1–P5 (fs, fetch, notifier, env) …
-	watch?(pattern: string, onChange: () => void): HostDisposable // G3 — scoped file watch
+	// G3 — scoped file watch; Phase 7 made the callback path-carrying (see §6.11 Phase-7 below):
+	watch?(pattern: string, onChange: (event: { path: string; type: "create" | "change" | "delete" }) => void): HostDisposable
 }
 ```
 
@@ -638,6 +640,34 @@ export interface PluginHost {
   starts services after load and stops them on unregister, and **isolates** a
   throwing/hanging service (per-service start/stop timeout + shown/logged
   warning, never crash). This is the one capability no prior phase covered.
+
+#### Phase 7 additions (`ctx.agent` + two dogfood fixes)
+
+The live-memory dogfood (`plugins/live-memory/DOGFOOD.md`) surfaced one genuine gap and
+one minor nicety, and Phase 7 adds the headline **proactive agent-notification**:
+
+- **G8 `ctx.agent.notify(message, opts?)` — proactive agent-steering.** A plugin (from a
+  `ctx.registerService` background service, a `ctx.host.watch` callback, or a lifecycle
+  hook) can PROACTIVELY inject a message into the running agent — e.g. "the deploy just
+  failed, here's the log." `opts.mode` defaults to **`"queue"`** (enqueue into the active
+  task's `MessageQueueService` so the agent sees it on its next turn — non-disruptive);
+  **`"spawn"`** starts a new task; **`"interrupt"`** is _reduced_ to queued-ASAP (enqueue,
+  and if the loop already ended, drain via the tested `cancelAndProcessQueuedMessages`
+  path — **no** fragile mid-turn injection). Gated on a dedicated **`permissions.agent`**
+  grant (a plugin steering the agent has billed/behavioral impact): ungranted ⇒ a denying
+  stub (throw + warn), no host seam ⇒ absent. The task-injection is **host-side** behind a
+  `PluginAgentProvider` seam (mirroring `PluginAiProvider`), wired in
+  `ShoferProvider.getPluginManager` against the provider's task stack / message queue, so
+  `@shofer/core` stays host-agnostic.
+- **Path-carrying `ctx.host.watch` (dogfood gap fix).** The G3 watch callback used to fire
+  with no argument, so a plugin could only record a coarse "something changed" marker. The
+  `HostFileWatcher` seam now delivers the changed file's absolute path
+  (`on{Create,Change,Delete}(handler: (path) => void)`, VS Code adapter threads
+  `uri.fsPath`), surfaced on `PluginHost.watch` as `cb(event: { path, type })`.
+- **`ctx.ai.hasConsent()` (minor dogfood item).** A read-only accessor so a plugin can tell
+  whether its billed AI calls will run (`ctx.ai` is *present* in both the live and
+  denying-stub cases). `true` on the live surface, `false` on the stub; the plugin still
+  cannot grant itself consent.
 
 ---
 

@@ -148,6 +148,7 @@ reachable, when its permission is present. All keys are optional:
 | `network`      | string[] | Allowed network origins/prefixes for `ctx.host.fetch`.                                                            |
 | `filesystem`   | string[] | Allowed paths for `ctx.host.fs` and `ctx.host.watch` (relative entries resolve to plugin root **and** workspace). |
 | `ai`           | boolean  | Host LLM/embeddings via `ctx.ai`. **Necessary but not sufficient** — also needs the AI-billing consent (§7).      |
+| `agent`        | boolean  | Proactive agent-steering via `ctx.agent.notify` (inject a message into the running agent). Billed/behavioral.     |
 
 ### `config`
 
@@ -255,6 +256,7 @@ plugin's grants:
 | `config`               | This plugin's validated, default-merged settings.                              |
 | `host`                 | The restricted host surface (below). Present when the host wired its bridge.   |
 | `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam. |
+| `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`. |
 | `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.     |
 | `registerService(svc)` | Register a background service. Present when the host wired the supervisor.     |
 
@@ -271,9 +273,18 @@ missing API.
 - **`host.notifier`** — `info`/`warn`/`error`. **Always available** (surfacing messages is safe).
 - **`host.env`** — read-only host/environment metadata. Always available.
 - **`host.watch(pattern, onChange)`** — watch a glob for create/change/delete, **scoped to
-  `permissions.filesystem`** (watches `pattern` under each granted root). Ungranted ⇒ deny + no-op
-  disposable. Dispose to stop (the manager also disposes it on plugin disable). Present only when the
-  host wired a watcher.
+  `permissions.filesystem`** (watches `pattern` under each granted root). The callback receives the
+  event **`{ path, type }`** — `path` is the absolute path of the changed file (always inside a
+  granted root) and `type` is `"create" | "change" | "delete"` — so you can act on *which* file
+  changed, not just that something did. Ungranted ⇒ deny + no-op disposable. Dispose to stop (the
+  manager also disposes it on plugin disable). Present only when the host wired a watcher.
+
+  ```ts
+  ctx.host.watch("**/*.json", (event) => {
+  	// event.path e.g. "/abs/ws/ci-config/status.json", event.type "change"
+  	reindex(event.path)
+  })
+  ```
 
 ### Phase-6 host capabilities
 
@@ -282,9 +293,34 @@ missing API.
 - `buildHandler(profileRef?)` → `Promise<Handler>` — build the **same** `ApiHandler` the main agent
   uses (the host's default profile when `profileRef` is omitted). The plugin never sees raw API keys.
 - `embed(texts, profileRef?)` → `Promise<number[][]>` — one embedding vector per input text.
+- `hasConsent()` → `boolean` — **read-only** consent check: `true` when calls will actually run,
+  `false` on the denying stub. Because `ctx.ai` is *present* in both the live and unconsented cases,
+  use this to word prompt/UI copy for the consent state **without** making a billed call to find out.
+  It cannot grant consent — only the user can.
 
-Granted but **not** consented ⇒ `ctx.ai` is present but a _denying stub_ (every call throws + warns,
-so the user is never silently billed). Ungranted ⇒ `ctx.ai` is **absent** entirely.
+Granted but **not** consented ⇒ `ctx.ai` is present but a _denying stub_ (`buildHandler`/`embed` throw +
+warn, `hasConsent()` returns `false`), so the user is never silently billed. Ungranted ⇒ `ctx.ai` is
+**absent** entirely.
+
+**`ctx.agent`** (`PluginAgent`) — proactive **agent-steering**, requires `permissions.agent`. Lets a
+plugin push a message **into** the running agent (rather than only reacting to it) — from a background
+service, a `ctx.host.watch` callback, or a lifecycle hook:
+
+- `notify(message, opts?)` → `Promise<void>`. `opts.mode` (default **`"queue"`**) enqueues the message
+  into the active task's queue so the agent picks it up on its next turn (non-disruptive); **`"spawn"`**
+  starts a new task seeded with the message; **`"interrupt"`** is _reduced_ to queued-ASAP (the message
+  is enqueued and, if the loop already ended, drained immediately via the tested cancel-and-process
+  path — there is no fragile mid-turn injection). `opts.taskId` targets a specific task; otherwise the
+  current/active task is used (with no task to steer, a `queue`/`interrupt` notify falls back to spawning
+  so the message is never dropped).
+
+```ts
+// e.g. inside a registered service watching a deploy log
+await ctx.agent?.notify("The deploy just failed — see /var/log/deploy.log for the trace.")
+```
+
+Ungranted (host wired the seam) ⇒ `ctx.agent` is a _denying stub_ (`notify` throws + warns). No agent
+seam (headless/pure-core) ⇒ `ctx.agent` is **absent** entirely.
 
 **`ctx.storage`** (`PluginStorage`) — the plugin's own persistent dir at
 `<globalStorage>/plugins/<name>/`, independent of `permissions.filesystem`. `readFile`/`writeFile`/
