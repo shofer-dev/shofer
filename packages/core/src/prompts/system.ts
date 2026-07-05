@@ -16,7 +16,6 @@ import { isEmpty } from "../utils/object.js"
 
 import { McpHub } from "../services/mcp/McpHub.js"
 import { getCodeIndexManagerFactory } from "../services/code-index/code-index-registry.js"
-import { getLiveMemoryManagerAccessor } from "../services/live-memory/live-memory-registry.js"
 import type { SkillsManagerLike } from "../services/skills/skills-registry.js"
 
 import { listSubmodules } from "../utils/git-submodules.js"
@@ -33,7 +32,6 @@ import {
 	addCustomInstructions,
 	markdownFormattingSection,
 	getSkillsSection,
-	getLiveMemorySection,
 } from "./sections/index.js"
 
 // Helper function to get prompt component, filtering out empty objects
@@ -109,16 +107,6 @@ async function generatePrompt(
 	])
 	const skillsSection = includeSkills ? rawSkillsSection : ""
 
-	// Resolve the LiveMemoryManager through its host registry (Chunk B). Headless
-	// hosts leave the accessor unset, so the section is simply omitted.
-	let liveMemorySection = ""
-	try {
-		const liveMemoryManager = getLiveMemoryManagerAccessor()?.getInstance(context, cwd)
-		liveMemorySection = getLiveMemorySection(cwd, liveMemoryManager)
-	} catch {
-		// Manager not yet wired or unavailable; omit the section silently.
-	}
-
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
 
@@ -144,7 +132,7 @@ ${skillsSection ? `\n${skillsSection}` : ""}
 ${getRulesSection(cwd, settings)}
 ${includeSystemInfo ? `\n${getSystemInfoSection(cwd, submoduleInfos)}` : ""}
 
-${getObjectiveSection()}${liveMemorySection ? `\n\n${liveMemorySection}` : ""}
+${getObjectiveSection()}
 
 ${await addCustomInstructions(baseInstructions, globalCustomInstructions || "", cwd, mode, {
 	language: language ?? formatLanguage(getHost().env.language),

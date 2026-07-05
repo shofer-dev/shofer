@@ -7,7 +7,6 @@ import { resolveToolAlias } from "../../tools/tool-aliases.js"
 import { buildMcpToolName } from "../../utils/mcp-name.js"
 import type { CodeIndexManagerLike } from "../../services/code-index/code-index-registry.js"
 import type { GitIndexManagerLike } from "../../services/git-index/git-index-registry.js"
-import type { LiveMemoryManagerLike } from "../../services/live-memory/live-memory-registry.js"
 import type { McpHub } from "../../services/mcp/McpHub.js"
 import { isToolAllowedForMode } from "../../tools/validateToolUse.js"
 
@@ -182,7 +181,6 @@ export function applyModelToolCustomization(
 export const FEATURE_GATED_TOOLS = {
 	rag_search: "ragSearch",
 	git_search: "gitSearch",
-	ask_live_memory: "askLiveMemory",
 	generate_image: "generateImage",
 	run_slash_command: "runSlashCommand",
 	access_mcp_resource: "accessMcpResource",
@@ -270,7 +268,6 @@ export function filterNativeToolsForMode(
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
-	liveMemoryManager?: LiveMemoryManagerLike,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
 	const modeSlug = mode ?? defaultModeSlug
@@ -300,7 +297,6 @@ export function filterNativeToolsForMode(
 	const gates: ToolAccessGates = {
 		ragSearch: isCodeIndexReady,
 		gitSearch: isGitIndexReady,
-		askLiveMemory: !!liveMemoryManager?.isLiveMemoryAvailable,
 		generateImage: !!experiments?.imageGeneration,
 		runSlashCommand: !!experiments?.runSlashCommand,
 		accessMcpResource: !!mcpHub && hasAnyMcpResources(mcpHub),

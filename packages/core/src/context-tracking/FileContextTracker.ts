@@ -9,7 +9,6 @@ import { fileExistsAtPath } from "../fs/fs.js"
 import fs from "fs/promises"
 import { type FileMetadataEntry, type RecordSource, type TaskMetadata } from "./FileContextTrackerTypes.js"
 import { type TaskProviderLike } from "../task-provider/index.js"
-import { getLiveMemoryManagerAccessor } from "../services/live-memory/live-memory-registry.js"
 import { taskLog } from "../logging/subsystems.js"
 
 /**
@@ -241,10 +240,6 @@ export class FileContextTracker {
 				)
 				const provider = this.providerRef.deref()
 				provider?.scheduleChangedFilesUpdate?.(this.taskId)
-
-				// Notify the live memory so it can attach a "recently modified"
-				// hint to the next question (KV-cache preserving).
-				this._notifyLiveMemory(filePath)
 			}
 		} catch (error) {
 			taskLog.error("Failed to add file to metadata:", error)
@@ -362,21 +357,6 @@ export class FileContextTracker {
 	// Marks a file as edited by Shofer to prevent false positives in file watchers
 	markFileAsEditedByRoo(filePath: string): void {
 		this.recentlyEditedByRoo.add(filePath)
-	}
-
-	/**
-	 * Notify the live memory that a file was modified by a Shofer tool.
-	 * Best-effort — failures are silently ignored.
-	 */
-	private _notifyLiveMemory(filePath: string): void {
-		try {
-			const managers = getLiveMemoryManagerAccessor()?.getAllInstances() ?? []
-			for (const mgr of managers) {
-				mgr.notifyFileModified(filePath)
-			}
-		} catch {
-			// Live Memory manager may not be loaded — best-effort only
-		}
 	}
 
 	// ------------------------------------------------------------------

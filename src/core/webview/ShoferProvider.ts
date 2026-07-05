@@ -102,7 +102,6 @@ import { CacheManager } from "../../services/code-index/cache-manager"
 import { CodeIndexServiceFactory } from "../../services/code-index/service-factory"
 import type { IndexProgressUpdate } from "@shofer/core"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
-import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -179,8 +178,6 @@ export class ShoferProvider
 	private codeIndexManager?: CodeIndexManager
 	private gitIndexStatusSubscription?: vscode.Disposable
 	private gitIndexManager?: GitIndexManager
-	private liveMemoryStatusSubscription?: vscode.Disposable
-	private liveMemoryManager?: LiveMemoryManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -1480,9 +1477,6 @@ export class ShoferProvider
 		// Initialize git index status subscription for the current workspace.
 		this.updateGitIndexStatusSubscription()
 
-		// Initialize live memory status subscription.
-		this.updateLiveMemoryStatusSubscription()
-
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
 		const activeEditorSubscription = vscode.window.onDidChangeActiveTextEditor(() => {
@@ -1549,7 +1543,6 @@ export class ShoferProvider
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
 					this.gitIndexManager = undefined
-					this.liveMemoryManager = undefined
 					if (this.webviewInstanceId === instanceId) {
 						this.view = undefined
 						this.webviewInstanceId = undefined
@@ -2128,7 +2121,7 @@ export class ShoferProvider
 			workspacePath: cwd,
 			// P6.G1 — host LLM/embeddings seam for `ctx.ai` (never leaks keys). Wired here
 			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
-			// + code-index embedder, mirroring how live-memory reaches buildApiHandler.
+			// + code-index embedder to reach buildApiHandler.
 			aiProvider: this.buildPluginAiProvider(),
 			// P7 — host seam for `ctx.agent.notify` (proactive agent-steering). Wired here
 			// (not in @shofer/core) because it needs the provider's task stack + message
@@ -4299,10 +4292,6 @@ export class ShoferProvider
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
 			lockApiConfigAcrossModes,
-			liveMemoryEnabled,
-			liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold,
 			logLevel,
 			logCategories,
 		} = await this.getState()
@@ -4560,10 +4549,6 @@ export class ShoferProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
-			liveMemoryEnabled: liveMemoryEnabled ?? true,
-			liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold,
 			logLevel: logLevel ?? "info",
 			logCategories: logCategories ?? undefined,
 			logCategoriesKnown: (() => {
@@ -4812,10 +4797,6 @@ export class ShoferProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
-			liveMemoryEnabled: stateValues.liveMemoryEnabled,
-			liveMemoryApiConfigId: stateValues.liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens: stateValues.liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold: stateValues.liveMemoryContextFillThreshold,
 			logLevel: stateValues.logLevel,
 			logCategories: stateValues.logCategories,
 		}
@@ -5135,91 +5116,6 @@ export class ShoferProvider
 				},
 			})
 		}
-	}
-
-	/**
-	 * Updates the live memory status subscription to push status to the webview.
-	 * Follows the same pattern as updateCodeIndexStatusSubscription.
-	 */
-	private updateLiveMemoryStatusSubscription(): void {
-		const currentManager = LiveMemoryManager.getInstance(this.context)
-
-		if (currentManager === this.liveMemoryManager) {
-			return
-		}
-
-		if (this.liveMemoryStatusSubscription) {
-			this.liveMemoryStatusSubscription.dispose()
-			this.liveMemoryStatusSubscription = undefined
-		}
-
-		this.liveMemoryManager = currentManager
-
-		if (currentManager) {
-			const sendStatus = () => {
-				if (currentManager !== this.liveMemoryManager) return
-				this.postMessageToWebview({
-					type: "liveMemoryStatusUpdate",
-					text: JSON.stringify({
-						state: currentManager.state,
-						stateMessage: currentManager.stateMessage,
-						isAvailable: currentManager.isLiveMemoryAvailable,
-						modelId: currentManager.modelId,
-						provider: currentManager.provider,
-						contextUsage: currentManager.getContextUsage(),
-						contextWindowSource: currentManager.contextWindowSource,
-						costSnapshot: currentManager.getCostSnapshot(),
-						conversationTurnCount: currentManager.conversationTurnCount,
-						pendingQuestionCount: currentManager.pendingQuestionCount,
-						contextFiles: currentManager.contextFiles,
-					}),
-				})
-			}
-
-			// Combine state-change and conversation-update subscriptions
-			// into a single disposable so both are cleaned up on re-subscribe.
-			const stateSubscription = currentManager.onStateChange(() => sendStatus())
-			const convSubscription = currentManager.onConversationUpdate(() => sendStatus())
-			this.liveMemoryStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
-
-			if (this.view) {
-				this.webviewDisposables.push(this.liveMemoryStatusSubscription)
-			}
-
-			sendStatus()
-		}
-	}
-
-	/**
-	 * Pushes a fresh Live Memory status snapshot to the webview. Used by the
-	 * webview status badge to populate itself on mount, since the periodic
-	 * subscription only fires on state/conversation changes.
-	 */
-	public sendLiveMemoryStatus(): void {
-		const manager = this.liveMemoryManager ?? LiveMemoryManager.getInstance(this.context)
-		if (!manager) {
-			this.postMessageToWebview({
-				type: "liveMemoryStatusUpdate",
-				text: JSON.stringify({ state: "Standby", isAvailable: false }),
-			})
-			return
-		}
-		this.postMessageToWebview({
-			type: "liveMemoryStatusUpdate",
-			text: JSON.stringify({
-				state: manager.state,
-				stateMessage: manager.stateMessage,
-				isAvailable: manager.isLiveMemoryAvailable,
-				modelId: manager.modelId,
-				provider: manager.provider,
-				contextUsage: manager.getContextUsage(),
-				contextWindowSource: manager.contextWindowSource,
-				costSnapshot: manager.getCostSnapshot(),
-				conversationTurnCount: manager.conversationTurnCount,
-				pendingQuestionCount: manager.pendingQuestionCount,
-				contextFiles: manager.contextFiles,
-			}),
-		})
 	}
 
 	/**
