@@ -436,8 +436,8 @@ describe("PluginManager — private contributions (owner directive #4)", () => {
 		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["p"]), pluginDirs: dirs })
 		await pm.discover()
 
-		expect(pm.getContributedSkillDirs()[0].privateNames).toEqual(["secret-skill"])
-		expect(pm.getContributedCommandDirs()[0].privateNames).toEqual(["secret-cmd"])
+		expect(pm.getContributedSkillDirs()[0]!.privateNames).toEqual(["secret-skill"])
+		expect(pm.getContributedCommandDirs()[0]!.privateNames).toEqual(["secret-cmd"])
 	})
 
 	it("excludes private contributions from the user-facing contribution counts", async () => {
