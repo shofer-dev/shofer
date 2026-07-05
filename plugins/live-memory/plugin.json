@@ -14,7 +14,8 @@
 		"ai": true,
 		"filesystem": ["."],
 		"search": true,
-		"skills": true
+		"skills": true,
+		"commands": true
 	},
 	"contributes": {
 		"skills": [
@@ -29,6 +30,20 @@
 			{
 				"name": "live-memory-empty",
 				"description": "Empty the Live Memory for this workspace — wipe its accumulated observation/Q&A log, persisted conversation window, and cost ledger so the next question starts from a blank slate."
+			}
+		],
+		"commands": [
+			{
+				"name": "show-chat",
+				"description": "Open / focus the Live Memory chat panel to watch the memory agent's live conversation and state."
+			},
+			{
+				"name": "clear-context",
+				"description": "Clear the Live Memory agent's in-flight context window (keeps the accumulated observation/Q&A log)."
+			},
+			{
+				"name": "empty",
+				"description": "Empty the Live Memory for this workspace — wipe the accumulated observation/Q&A log, the persisted conversation, and the cost ledger."
 			}
 		]
 	},
