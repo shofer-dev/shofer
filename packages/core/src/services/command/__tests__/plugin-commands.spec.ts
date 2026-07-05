@@ -47,12 +47,14 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 		setSharedPluginManager(undefined)
 	})
 
-	it("getCommands lists a plugin command with its natural (non-namespaced) name", async () => {
+	it("getCommands lists a plugin command under its namespaced name", async () => {
 		const commands = await getCommands("/test/cwd")
-		const deploy = commands.find((c) => c.name === "deploy")
+		const deploy = commands.find((c) => c.name === "my-plugin:deploy")
 		expect(deploy).toBeDefined()
+		// A bare name never resolves to a plugin command.
+		expect(commands.find((c) => c.name === "deploy")).toBeUndefined()
 		expect(deploy).toMatchObject({
-			name: "deploy",
+			name: "my-plugin:deploy",
 			source: "plugin",
 			pluginName: "my-plugin",
 			description: "Deploy the current project",
@@ -60,10 +62,15 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 		})
 	})
 
-	it("getCommand resolves a plugin command by its natural name", async () => {
-		const cmd = await getCommand("/test/cwd", "deploy")
-		expect(cmd).toMatchObject({ name: "deploy", source: "plugin", pluginName: "my-plugin" })
+	it("getCommand resolves a plugin command by its namespaced name", async () => {
+		const cmd = await getCommand("/test/cwd", "my-plugin:deploy")
+		expect(cmd).toMatchObject({ name: "my-plugin:deploy", source: "plugin", pluginName: "my-plugin" })
 		expect(cmd?.content).toBe("Deploy body")
+	})
+
+	it("getCommand does NOT resolve a plugin command by its bare name", async () => {
+		const cmd = await getCommand("/test/cwd", "deploy")
+		expect(cmd).toBeUndefined()
 	})
 
 	it("contributes nothing when no plugin manager is wired", async () => {
@@ -73,7 +80,7 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 	})
 })
 
-describe("Plugin command conflicts — last-installed-wins + warning (design §14.7)", () => {
+describe("Plugin command namespacing — no cross-plugin conflict (design §14.7)", () => {
 	const DIR_A = path.join("/plugins", "a", "commands")
 	const DIR_B = path.join("/plugins", "b", "commands")
 	const A_MD = path.join(DIR_A, "deploy.md")
@@ -113,18 +120,19 @@ describe("Plugin command conflicts — last-installed-wins + warning (design §1
 		setSharedPluginManager(undefined)
 	})
 
-	it("last-installed plugin wins the natural name, warns naming both plugins", async () => {
+	it("both plugins' same-authored command coexist under distinct namespaced names, no warning", async () => {
 		const commands = await getCommands("/test/cwd")
-		const deploy = commands.filter((c) => c.name === "deploy")
-		expect(deploy).toHaveLength(1)
-		expect(deploy[0]).toMatchObject({ name: "deploy", pluginName: "b", content: "from-B" })
+		const a = commands.find((c) => c.name === "a:deploy")
+		const b = commands.find((c) => c.name === "b:deploy")
+		expect(a).toMatchObject({ name: "a:deploy", pluginName: "a", content: "from-A" })
+		expect(b).toMatchObject({ name: "b:deploy", pluginName: "b", content: "from-B" })
 
 		const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
-		expect(warns.some((m) => m.includes("deploy") && m.includes('"b"') && m.includes('"a"'))).toBe(true)
+		expect(warns.some((m) => m.includes("shadows"))).toBe(false)
 	})
 
-	it("getCommand returns the last-installed plugin's command", async () => {
-		const cmd = await getCommand("/test/cwd", "deploy")
-		expect(cmd).toMatchObject({ name: "deploy", pluginName: "b", content: "from-B" })
+	it("getCommand resolves each plugin's command by its own namespaced name", async () => {
+		expect(await getCommand("/test/cwd", "a:deploy")).toMatchObject({ pluginName: "a", content: "from-A" })
+		expect(await getCommand("/test/cwd", "b:deploy")).toMatchObject({ pluginName: "b", content: "from-B" })
 	})
 })

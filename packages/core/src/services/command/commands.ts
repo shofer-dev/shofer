@@ -5,7 +5,7 @@ import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
 import { configLog } from "../../logging/subsystems.js"
-import { getSharedPluginManager, warnPluginConflict } from "../../plugins/plugin-manager.js"
+import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
@@ -170,16 +170,25 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	const globalDir = path.join(getGlobalShoferDirectory(), "commands")
 
-	// Check plugin-contributed commands first — they sit on top (last-installed
-	// wins, design §14.7). Plugin dirs are install-rank ascending, so scan them in
-	// *descending* order and return the first match (the last-installed contributor).
+	// Plugin-contributed commands are addressed by their **namespaced** name
+	// `<pluginName>:<command>` (design §14.7 → namespacing). A bare name can never
+	// resolve to a plugin command, so plugins can neither shadow nor be shadowed by
+	// built-in/user commands. Parse the qualified form, find that specific plugin's
+	// dir, and load the bare `<command>.md` from it.
 	const pluginManager = getSharedPluginManager()
 	if (pluginManager) {
-		const dirs = [...pluginManager.getContributedCommandDirs()].reverse()
-		for (const { pluginName, dir } of dirs) {
-			const pluginCommand = await tryLoadCommand(dir, name, "plugin")
-			if (pluginCommand) {
-				return { ...pluginCommand, name, source: "plugin", pluginName }
+		const sep = name.indexOf(":")
+		if (sep > 0) {
+			const pluginName = name.slice(0, sep)
+			const bareName = name.slice(sep + 1)
+			const contribution = pluginManager
+				.getContributedCommandDirs()
+				.find((c) => c.pluginName === pluginName)
+			if (contribution) {
+				const pluginCommand = await tryLoadCommand(contribution.dir, bareName, "plugin")
+				if (pluginCommand) {
+					return { ...pluginCommand, name, source: "plugin", pluginName }
+				}
 			}
 		}
 	}
@@ -325,8 +334,11 @@ async function scanCommandDirectory(
 		// Process each collected file
 		for (const { originalPath, resolvedPath } of fileInfo) {
 			// Command name comes from the original path (symlink name if symlinked).
-			// Plugin commands use their natural name (no namespacing, design §14.7).
-			const commandName = getCommandNameFromFile(path.basename(originalPath))
+			// Plugin commands are **namespaced** as `<pluginName>:<command>` (design
+			// §14.7 → namespacing) so they can never collide with built-in/user
+			// commands or with another plugin's commands.
+			const bareName = getCommandNameFromFile(path.basename(originalPath))
+			const commandName = source === "plugin" && pluginName ? `${pluginName}:${bareName}` : bareName
 
 			try {
 				const content = await fs.readFile(resolvedPath, "utf-8")
@@ -362,20 +374,11 @@ async function scanCommandDirectory(
 				}
 
 				// File precedence: project overrides global overrides built-in (unchanged).
-				// Plugin commands sit on top (last-installed wins, design §14.7): a
-				// plugin always overwrites whatever is present, and any real collision
-				// (plugin vs plugin, or plugin vs built-in/user command) emits a shown +
-				// logged warning naming the winning vs shadowed contributor.
+				// Plugin commands are namespaced (`<pluginName>:<command>`), so their key
+				// can never collide with a built-in/user command or another plugin's
+				// command — no last-installed-wins tie-break or warning is needed here
+				// (design §14.7 → namespacing).
 				if (source === "plugin") {
-					const existing = commands.get(commandName)
-					if (existing) {
-						warnPluginConflict(
-							"command",
-							commandName,
-							`plugin "${pluginName}"`,
-							existing.pluginName ? `plugin "${existing.pluginName}"` : `${existing.source} command`,
-						)
-					}
 					commands.set(commandName, {
 						name: commandName,
 						content: commandContent,
