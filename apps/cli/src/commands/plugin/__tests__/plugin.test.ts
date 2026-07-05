@@ -2,7 +2,7 @@ import * as nodeFs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 
-import { packPluginToFile } from "@shofer/core/cli"
+import { packPlugin, packPluginToFile } from "@shofer/core/cli"
 
 import { pluginInstall, pluginList, pluginRemove, type PluginCommandOptions } from "../index.js"
 
@@ -60,6 +60,43 @@ describe("shofer plugin CLI (Phase 5.2)", () => {
 
 		await pluginInstall(archive, ctx)
 		expect(await nodeFs.readFile(path.join(pluginsDir, "beta", "plugin.json"), "utf-8")).toContain("beta")
+	})
+
+	it("installs from an http(s) URL by downloading the archive (mocked fetch)", async () => {
+		const src = await writePluginDir(tmp, { name: "zeta", version: "1.0.0" })
+		const archivePath = path.join(tmp, "zeta.shofer-plugin")
+		await packPluginToFile(src, archivePath)
+		const bytes = await nodeFs.readFile(archivePath)
+		const fetchImpl = (async () =>
+			new Response(bytes, {
+				status: 200,
+				headers: { "content-length": String(bytes.byteLength) },
+			})) as unknown as typeof fetch
+
+		await pluginInstall("https://example.com/zeta.shofer-plugin", { ...ctx, fetchImpl })
+		expect(await nodeFs.readFile(path.join(pluginsDir, "zeta", "plugin.json"), "utf-8")).toContain("zeta")
+		expect(lines.join("\n")).toContain('Installed plugin "zeta" v1.0.0')
+	})
+
+	it("errors on a non-2xx URL response", async () => {
+		const fetchImpl = (async () =>
+			new Response("nope", { status: 500, statusText: "Server Error" })) as unknown as typeof fetch
+		await expect(pluginInstall("https://example.com/x.shofer-plugin", { ...ctx, fetchImpl })).rejects.toThrow(
+			/HTTP 500/,
+		)
+	})
+
+	it("rejects an oversize URL download", async () => {
+		const src = await writePluginDir(tmp, { name: "big", version: "1.0.0" })
+		const bytes = await packPlugin(src)
+		const fetchImpl = (async () =>
+			new Response(bytes, {
+				status: 200,
+				headers: { "content-length": String(bytes.byteLength) },
+			})) as unknown as typeof fetch
+		await expect(
+			pluginInstall("https://example.com/big.shofer-plugin", { ...ctx, fetchImpl, maxDownloadBytes: 1 }),
+		).rejects.toThrow(/too large|download limit/)
 	})
 
 	it("refuses to overwrite unless --overwrite is set", async () => {

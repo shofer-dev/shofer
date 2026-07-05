@@ -218,12 +218,21 @@ const runPluginAction = async (action: () => Promise<void>) => {
 
 pluginCommand
 	.command("install <source>")
-	.description("Install a plugin from a .shofer-plugin archive or a plugin directory")
+	.description("Install a plugin from a .shofer-plugin archive, a plugin directory, or an http(s) URL")
 	.option("--overwrite", "Replace an already-installed plugin of the same name", false)
 	.option("--enable", "Enable the plugin immediately after installing", false)
-	.action(async (source: string, options: { overwrite?: boolean; enable?: boolean }) => {
-		await runPluginAction(() => pluginInstall(source, { overwrite: options.overwrite, enable: options.enable }))
-	})
+	.option("--allow-insecure-http", "Allow a plain http:// URL from a non-localhost host (https is required by default)", false)
+	.action(
+		async (source: string, options: { overwrite?: boolean; enable?: boolean; allowInsecureHttp?: boolean }) => {
+			await runPluginAction(() =>
+				pluginInstall(source, {
+					overwrite: options.overwrite,
+					enable: options.enable,
+					allowInsecureHttp: options.allowInsecureHttp,
+				}),
+			)
+		},
+	)
 
 pluginCommand
 	.command("list")
