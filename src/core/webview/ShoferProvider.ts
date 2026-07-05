@@ -91,7 +91,8 @@ import {
 	PluginPackError,
 } from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
-import type { ApiHandler, PluginAiProvider, PluginAgentProvider } from "@shofer/core"
+import type { ApiHandler, PluginAiProvider, PluginAgentProvider, PluginSearchProvider } from "@shofer/core"
+import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
@@ -2126,6 +2127,11 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the provider's task stack + message
 			// queue; gated on `permissions.agent` inside the manager.
 			agentProvider: this.buildPluginAgentProvider(),
+			// §6.11 — host seam for `ctx.host.search` (read-only index/symbol/diagnostics
+			// queries). Wired here (not in @shofer/core) because it needs the extension's
+			// CodeIndexManager / GitIndexManager / vscode symbol+diagnostics providers; gated
+			// on `permissions.search` inside the manager.
+			searchProvider: this.buildPluginSearchProvider(),
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
@@ -2233,6 +2239,108 @@ export class ShoferProvider
 				if (target.abort) {
 					await target.cancelAndProcessQueuedMessages()
 				}
+			},
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginSearchProvider} seam that backs a granted plugin's
+	 * `ctx.host.search` (§6.11). Read-only index/symbol/diagnostics queries, the same
+	 * providers the built-in Live Memory reaches, mapped to plain DTOs (no `vscode` types
+	 * cross the boundary):
+	 *
+	 * - `ragSearch` ⇒ the code-index `searchIndex` (via {@link getCodeIndexManagerFactory}).
+	 * - `gitSearch` ⇒ the git-index `searchIndex` (via {@link getGitIndexManagerFactory}).
+	 * - `codeUsages` ⇒ `vscode.executeWorkspaceSymbolProvider`.
+	 * - `diagnostics` ⇒ `vscode.languages.getDiagnostics`.
+	 *
+	 * Fail-soft (never throws): when a backing service is absent/unconfigured (e.g. the code
+	 * index is off, or a headless workspace) the method returns an empty result, so a plugin
+	 * can probe capabilities without special-casing. `permissions.search` gating happens in
+	 * the manager; this seam is unconditionally read-only.
+	 */
+	private buildPluginSearchProvider(): PluginSearchProvider {
+		return {
+			ragSearch: async (query, opts) => {
+				const mgr = getCodeIndexManagerFactory()?.(this.context, this.cwd)
+				// Guard both the missing manager and the enabled-but-uninitialized case
+				// (searchIndex asserts initialization) so we degrade to empty, never throw.
+				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
+				const results = await mgr.searchIndex(query, opts?.directoryPrefix, opts?.maxResults)
+				return results.map((r) => ({
+					filePath: r.payload?.filePath ?? "",
+					startLine: r.payload?.startLine ?? 0,
+					endLine: r.payload?.endLine ?? 0,
+					score: r.score ?? 0,
+					snippet: (r.payload?.codeChunk ?? "").slice(0, 800),
+				}))
+			},
+			gitSearch: async (query, opts) => {
+				const mgr = getGitIndexManagerFactory()?.(this.context, this.cwd)
+				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
+				const results = await mgr.searchIndex(query, opts?.maxResults)
+				return results.map((r) => ({
+					commitHash: r.payload.commit_hash,
+					shortHash: r.payload.short_hash,
+					author: r.payload.author,
+					authorDate: r.payload.author_date,
+					subject: r.payload.subject,
+					body: r.payload.body ?? "",
+					score: r.score,
+				}))
+			},
+			codeUsages: async (symbol, opts) => {
+				const cwd = this.cwd
+				const symbols =
+					(await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+						"vscode.executeWorkspaceSymbolProvider",
+						symbol,
+					)) ?? []
+				const filtered = opts?.filePath
+					? symbols.filter((s) => {
+							const rel = cwd ? path.relative(cwd, s.location.uri.fsPath) : s.location.uri.fsPath
+							return rel === opts.filePath || rel.startsWith(opts.filePath!) || s.location.uri.fsPath === opts.filePath
+						})
+					: symbols
+				const limited = opts?.maxResults ? filtered.slice(0, opts.maxResults) : filtered
+				return limited.map((s) => ({
+					name: s.name,
+					kind: vscode.SymbolKind[s.kind],
+					filePath: cwd ? path.relative(cwd, s.location.uri.fsPath) : s.location.uri.fsPath,
+					line: s.location.range.start.line + 1,
+				}))
+			},
+			diagnostics: async (filterPath) => {
+				const cwd = this.cwd
+				const out: {
+					filePath: string
+					line: number
+					column: number
+					severity: "error" | "warning" | "info" | "hint"
+					message: string
+					source?: string
+				}[] = []
+				const sevMap = {
+					[vscode.DiagnosticSeverity.Error]: "error" as const,
+					[vscode.DiagnosticSeverity.Warning]: "warning" as const,
+					[vscode.DiagnosticSeverity.Information]: "info" as const,
+					[vscode.DiagnosticSeverity.Hint]: "hint" as const,
+				}
+				for (const [uri, diags] of vscode.languages.getDiagnostics()) {
+					const rel = cwd ? path.relative(cwd, uri.fsPath) : uri.fsPath
+					if (filterPath && rel !== filterPath && !rel.startsWith(filterPath)) continue
+					for (const d of diags) {
+						out.push({
+							filePath: rel,
+							line: d.range.start.line + 1,
+							column: d.range.start.character + 1,
+							severity: sevMap[d.severity],
+							message: d.message,
+							source: d.source,
+						})
+					}
+				}
+				return out
 			},
 		}
 	}

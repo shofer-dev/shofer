@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import type { CustomToolDefinition } from "./custom-tool.js"
-import type { HostDisposable, HostEnv, HostFileSystem, Notifier } from "./host.js"
+import type { HostDiagnostic, HostDisposable, HostEnv, HostFileSystem, HostSymbol, Notifier } from "./host.js"
 import { modeConfigObjectSchema } from "./mode.js"
 
 /**
@@ -196,6 +196,100 @@ export interface PluginHost {
 	 * Present only when the host wired a watcher.
 	 */
 	watch?(pattern: string, onChange: (event: PluginWatchEvent) => void): HostDisposable
+	/**
+	 * Read-only **index / symbol / diagnostics search** over the host's code index, git
+	 * history, language service, and diagnostics (design §6.11; the `ctx.host.search`
+	 * seam — see {@link PluginSearch}). Gated on `permissions.search`: present only when
+	 * the host wired a search provider **and** the plugin was granted `permissions.search`
+	 * (live surface); granted-not / provider wired ⇒ a denying stub whose calls throw +
+	 * warn; no provider (headless/pure-core) ⇒ absent entirely. This is the seam the
+	 * built-in Live Memory's `rag_search` / `git_search` / `list_code_usages` / `get_errors`
+	 * reach VS Code providers through — exposed to plugins without leaking `vscode` types
+	 * (all results are plain DTOs).
+	 */
+	readonly search?: PluginSearch
+}
+
+/** Options for {@link PluginSearch.ragSearch} (semantic code-index search). */
+export interface PluginRagSearchOptions {
+	/** Restrict results to files under this workspace-relative directory prefix. */
+	directoryPrefix?: string
+	/** Maximum number of results to return. */
+	maxResults?: number
+}
+
+/** One semantic code-index hit (maps to a `VectorStoreSearchResult`). Positions are 1-based. */
+export interface PluginRagSearchResult {
+	/** Workspace-relative (or absolute, host-dependent) path of the matched file. */
+	filePath: string
+	/** First line of the matched chunk. */
+	startLine: number
+	/** Last line of the matched chunk. */
+	endLine: number
+	/** Similarity score (higher = closer). */
+	score: number
+	/** The matched code chunk (may be truncated by the host). */
+	snippet: string
+}
+
+/** Options for {@link PluginSearch.gitSearch} (semantic git-history search). */
+export interface PluginGitSearchOptions {
+	/** Maximum number of commits to return. */
+	maxResults?: number
+}
+
+/** One git-history hit (maps to a `GitSearchResult`). */
+export interface PluginGitSearchResult {
+	/** Full commit hash. */
+	commitHash: string
+	/** Abbreviated commit hash. */
+	shortHash: string
+	/** Commit author. */
+	author: string
+	/** Author date (as recorded by the index). */
+	authorDate: string
+	/** Commit subject line. */
+	subject: string
+	/** Commit body (may be empty). */
+	body: string
+	/** Similarity score (higher = closer). */
+	score: number
+}
+
+/** Options for {@link PluginSearch.codeUsages} (workspace-symbol lookup). */
+export interface PluginCodeUsagesOptions {
+	/** Restrict results to a single file (workspace-relative or absolute). */
+	filePath?: string
+	/** Maximum number of symbols to return. */
+	maxResults?: number
+}
+
+/**
+ * Read-only **index / symbol / diagnostics** queries handed to a plugin granted
+ * `permissions.search` (design §6.11; the `ctx.host.search` seam). Every result is a
+ * plain DTO ({@link PluginRagSearchResult} / {@link PluginGitSearchResult} /
+ * {@link HostSymbol} / {@link HostDiagnostic}) so `@shofer/types` stays browser-safe —
+ * no `vscode` types cross the boundary. The concrete queries live host-side behind
+ * core's `PluginSearchProvider` seam (mirroring {@link PluginAi} / {@link PluginAgent}),
+ * so headless/pure-core hosts that wire no provider simply omit `ctx.host.search`.
+ *
+ * Each method is **fail-soft**: when the backing service is absent/unconfigured (e.g. the
+ * code index is off) the host returns an empty result rather than throwing, so a plugin
+ * can probe capabilities without special-casing. (A *denying stub* — granted-not — is the
+ * one case that throws, mirroring the other capability seams.)
+ */
+export interface PluginSearch {
+	/** Semantic code-index search (maps to the host `CodeIndexManager.searchIndex`). */
+	ragSearch(query: string, opts?: PluginRagSearchOptions): Promise<PluginRagSearchResult[]>
+	/** Semantic git-history search (maps to the host `GitIndexManager.searchIndex`). */
+	gitSearch(query: string, opts?: PluginGitSearchOptions): Promise<PluginGitSearchResult[]>
+	/** Workspace symbols matching `symbol` (maps to `vscode.executeWorkspaceSymbolProvider`). */
+	codeUsages(symbol: string, opts?: PluginCodeUsagesOptions): Promise<HostSymbol[]>
+	/**
+	 * Current workspace diagnostics (maps to `vscode.languages.getDiagnostics`), optionally
+	 * filtered to files under `path` (workspace-relative prefix). Empty on a headless host.
+	 */
+	diagnostics(path?: string): Promise<HostDiagnostic[]>
 }
 
 /**
@@ -441,6 +535,17 @@ export const pluginPermissionsSchema = z
 		 * throw + warn), absent entirely on a host with no agent seam.
 		 */
 		agent: z.boolean().optional(),
+		/**
+		 * Read-only **index / symbol / diagnostics search** (`ctx.host.search`, design
+		 * §6.11). Grants the plugin the host's code-index (`rag_search`), git-history
+		 * (`git_search`), workspace-symbol (`list_code_usages`), and diagnostics
+		 * (`get_errors`) queries as plain DTOs — the seam the built-in Live Memory's read
+		 * tools use, exposed without leaking `vscode` types. Read-only and side-effect-free,
+		 * so it is a plain grant (no billed-calls consent): ungranted ⇒ `ctx.host.search` is
+		 * a denying stub (calls throw + warn), absent entirely on a host with no search
+		 * provider.
+		 */
+		search: z.boolean().optional(),
 	})
 	.strict()
 

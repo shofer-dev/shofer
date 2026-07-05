@@ -29,6 +29,7 @@ import type {
 	HostFileSystem,
 	PluginHost,
 	PluginPermissions,
+	PluginSearch,
 	PluginWatchEvent,
 } from "@shofer/types"
 
@@ -56,6 +57,13 @@ export interface PluginSandboxOptions {
 	 * the plugin is solely responsible for disposing via the returned handle.
 	 */
 	trackWatch?: (disposable: HostDisposable) => void
+	/**
+	 * The permission-gated `ctx.host.search` surface (design §6.11). Built + gated by the
+	 * {@link PluginManager} (mirroring `ctx.ai`/`ctx.agent`), so the sandbox merely surfaces
+	 * it on the restricted host: a live surface for a granted plugin, a denying stub for an
+	 * ungranted one, or absent (`undefined`) when the host wired no search provider.
+	 */
+	search?: PluginSearch
 }
 
 /** Whether `target` is inside (or equal to) `root`, after normalization. */
@@ -223,5 +231,7 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 		},
 		fetch: restrictedFetch,
 		watch,
+		// Already gated by the manager (live / denying stub / absent); surfaced as-is.
+		search: options.search,
 	}
 }

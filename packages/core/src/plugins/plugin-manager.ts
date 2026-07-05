@@ -7,6 +7,7 @@ import {
 	type ModeConfig,
 	type PluginContext,
 	type PluginManifest,
+	type PluginSearch,
 	pluginManifestSchema,
 	type PluginUiContribution,
 	type PluginUiRegion,
@@ -19,6 +20,7 @@ import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
 import { type PluginAgentProvider, createPluginAgent, createDeniedPluginAgent } from "./plugin-agent.js"
+import { type PluginSearchProvider, createPluginSearch, createDeniedPluginSearch } from "./plugin-search.js"
 import { createPluginStorage } from "./plugin-storage.js"
 import { PluginServiceSupervisor } from "./plugin-services.js"
 import { buildPluginUiRegistry, type UiContributingPlugin } from "./ui-registry.js"
@@ -238,6 +240,14 @@ export interface PluginManagerOptions {
 	 */
 	agentProvider?: PluginAgentProvider
 	/**
+	 * Host seam running a plugin's `ctx.host.search` queries (design §6.11). When omitted,
+	 * no plugin gets search access (even a granted one) — headless/pure-core stays
+	 * host-agnostic and `ctx.host.search` is absent. Supplied by the extension where the
+	 * `CodeIndexManager` / `GitIndexManager` / symbol provider / diagnostics live; gated on
+	 * `permissions.search` inside the manager.
+	 */
+	searchProvider?: PluginSearchProvider
+	/**
 	 * Absolute base dir for per-plugin storage (design §6.11 G2). A plugin's
 	 * `ctx.storage.dir` is `<storageBaseDir>/<name>`. When omitted (or when no host fs
 	 * is available), `ctx.storage` is absent. Host-provided (e.g. `<globalStorage>/plugins`).
@@ -258,6 +268,7 @@ export class PluginManager {
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
 	private readonly agentProvider?: PluginAgentProvider
+	private readonly searchProvider?: PluginSearchProvider
 	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
@@ -288,6 +299,7 @@ export class PluginManager {
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
 		this.agentProvider = options.agentProvider
+		this.searchProvider = options.searchProvider
 		this.storageBaseDir = options.storageBaseDir
 	}
 
@@ -643,6 +655,10 @@ export class PluginManager {
 					pluginRoot: plugin.root,
 					workspacePath: this.workspacePath,
 					host: this.host,
+					// Permission-gated `ctx.host.search` (design §6.11). Built by the manager
+					// (mirroring `ctx.ai`/`ctx.agent`) so the gating stays in one place; the
+					// sandbox merely surfaces it on the restricted host.
+					search: this.buildPluginSearch(plugin),
 					// Track `ctx.host.watch` disposables so they are torn down on disable (P6.G3).
 					trackWatch: (disposable) => {
 						const list = this.pluginWatchers.get(plugin.name) ?? []
@@ -692,6 +708,20 @@ export class PluginManager {
 		if (!this.agentProvider) return undefined
 		if (plugin.manifest.permissions?.agent !== true) return createDeniedPluginAgent(plugin.name)
 		return createPluginAgent(plugin.name, this.agentProvider)
+	}
+
+	/**
+	 * Construct a plugin's `ctx.host.search` surface (design §6.11). Fail-closed, mirroring
+	 * {@link buildPluginAgent}: no host {@link PluginSearchProvider} wired (headless/pure-core)
+	 * ⇒ `undefined` (`ctx.host.search` absent — there is nothing to query); wired but
+	 * `permissions.search` **ungranted** ⇒ a denying stub (calls throw + warn); wired **and**
+	 * granted ⇒ the live provider-backed surface. Read-only + side-effect-free, so — unlike
+	 * `ctx.ai` — the grant alone gates it (no billed-calls consent).
+	 */
+	private buildPluginSearch(plugin: DiscoveredPlugin): PluginSearch | undefined {
+		if (!this.searchProvider) return undefined
+		if (plugin.manifest.permissions?.search !== true) return createDeniedPluginSearch(plugin.name)
+		return createPluginSearch(plugin.name, this.searchProvider)
 	}
 
 	/**
