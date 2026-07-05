@@ -146,8 +146,8 @@ describe("CustomModesManager", () => {
 			setSharedPluginManager({
 				getContributedModes: () => [
 					{
-						// Natural slug (no namespacing, design §14.7).
-						slug: "deploy",
+						// Namespaced slug (design §14.7 → namespacing): `<pluginName>:<slug>`.
+						slug: "my-plugin:deploy",
 						name: "🚀 Deploy",
 						roleDefinition: "Deploy specialist",
 						tools: ["read"],
@@ -159,7 +159,7 @@ describe("CustomModesManager", () => {
 
 			try {
 				const modes = await manager.getCustomModes()
-				const deploy = modes.find((m) => m.slug === "deploy")
+				const deploy = modes.find((m) => m.slug === "my-plugin:deploy")
 				expect(deploy).toBeDefined()
 				expect(deploy).toMatchObject({ source: "plugin", pluginName: "my-plugin" })
 				// Existing user modes are untouched.
@@ -169,7 +169,7 @@ describe("CustomModesManager", () => {
 			}
 		})
 
-		it("plugin mode overrides a same-slug user mode (last-installed-wins) with a warning", async () => {
+		it("a plugin mode never shadows a same-authored-slug user mode (namespacing isolates them)", async () => {
 			const settingsModes = [{ slug: "deploy", name: "User Deploy", roleDefinition: "User role", tools: ["read"] }]
 			;(fs.readFile as Mock).mockImplementation(async (path: string) => {
 				if (path === mockSettingsPath) {
@@ -181,7 +181,8 @@ describe("CustomModesManager", () => {
 			setSharedPluginManager({
 				getContributedModes: () => [
 					{
-						slug: "deploy",
+						// The plugin authored slug "deploy", surfaced namespaced as "my-plugin:deploy".
+						slug: "my-plugin:deploy",
 						name: "Plugin Deploy",
 						roleDefinition: "Plugin role",
 						tools: ["read"],
@@ -193,10 +194,11 @@ describe("CustomModesManager", () => {
 
 			try {
 				const modes = await manager.getCustomModes()
-				const deploy = modes.filter((m) => m.slug === "deploy")
-				// Exactly one "deploy" survives, and it is the plugin's (last-installed on top).
-				expect(deploy).toHaveLength(1)
-				expect(deploy[0]).toMatchObject({ source: "plugin", pluginName: "my-plugin", name: "Plugin Deploy" })
+				// Both survive under distinct slugs — no override, no shadowing.
+				const userDeploy = modes.find((m) => m.slug === "deploy")
+				const pluginDeploy = modes.find((m) => m.slug === "my-plugin:deploy")
+				expect(userDeploy).toMatchObject({ name: "User Deploy" })
+				expect(pluginDeploy).toMatchObject({ source: "plugin", pluginName: "my-plugin", name: "Plugin Deploy" })
 			} finally {
 				setSharedPluginManager(undefined)
 			}

@@ -723,24 +723,29 @@ export class PluginManager {
 	}
 
 	/**
-	 * Modes contributed by enabled plugins. Each keeps its **natural** authored slug
-	 * (no `<pluginName>:` namespacing) and is tagged `source: "plugin"` + `pluginName`
-	 * (attribution). On a slug collision *between two plugins*, last-installed-wins
-	 * (design §14.7): plugins are iterated in install-rank order (via
-	 * {@link enabledWithPermission}) so the later-installed plugin's mode overwrites
-	 * the earlier one's, with a warning that is shown + logged. Plugin-vs-file
-	 * collisions are resolved by the consumer ({@link CustomModesManager}).
+	 * Modes contributed by enabled plugins. Each is **namespaced** under its plugin
+	 * name — the emitted `slug` is `<pluginName>:<authoredSlug>` (design §14.7 →
+	 * namespacing) and is tagged `source: "plugin"` + `pluginName` (attribution). The
+	 * authored slug the plugin declares in its manifest stays natural; the qualified
+	 * form is how the mode is addressed/switched-to. Namespacing makes plugin↔plugin
+	 * and plugin↔built-in collisions impossible **by construction**, so there is no
+	 * last-installed-wins tie-break here. The only residual collision is a single
+	 * plugin declaring the same authored slug twice; that is a manifest bug and is
+	 * surfaced with a defensive warning (later entry wins, deterministically).
 	 */
 	getContributedModes(): ModeConfig[] {
 		const bySlug = new Map<string, ModeConfig>()
 		for (const plugin of this.enabledWithPermission("modes")) {
 			for (const mode of plugin.manifest.contributes?.modes ?? []) {
-				const prior = bySlug.get(mode.slug)
-				if (prior) {
-					warnPluginConflict("mode", mode.slug, `plugin "${plugin.name}"`, `plugin "${prior.pluginName}"`)
+				const qualifiedSlug = `${plugin.name}:${mode.slug}`
+				if (bySlug.has(qualifiedSlug)) {
+					// Same plugin declared this authored slug twice — a manifest bug, not a
+					// cross-plugin conflict (which namespacing prevents). Defensive only.
+					warnPluginConflict("mode", qualifiedSlug, `plugin "${plugin.name}"`, `plugin "${plugin.name}"`)
 				}
-				bySlug.set(mode.slug, {
+				bySlug.set(qualifiedSlug, {
 					...mode,
+					slug: qualifiedSlug,
 					source: "plugin",
 					pluginName: plugin.name,
 				})

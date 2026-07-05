@@ -112,8 +112,18 @@ export const groupEntryArraySchema = rawGroupEntryArraySchema
  * ZodObject methods like `.omit()`, `.extend()`, `.pick()`, etc. that are not
  * available on ZodEffects.
  */
+/**
+ * Mode-slug regex. Accepts either a **natural** slug (`deploy`) — used by built-in,
+ * global, and project modes — or a **qualified** plugin slug (`<pluginName>:<slug>`,
+ * e.g. `live-memory:verifier`) with a single `:` separator. Plugin-contributed modes
+ * are namespaced under their plugin name so a plugin can never silently shadow a
+ * built-in or another plugin's mode (design §14.7 → namespacing). Both segments allow
+ * only letters, numbers, and dashes.
+ */
+export const MODE_SLUG_REGEX = /^[a-zA-Z0-9-]+(:[a-zA-Z0-9-]+)?$/
+
 export const modeConfigObjectSchema = z.object({
-	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
+	slug: z.string().regex(MODE_SLUG_REGEX, "Slug must contain only letters numbers and dashes"),
 	name: z.string().min(1, "Name is required"),
 	roleDefinition: z.string().min(1, "Role definition is required"),
 	whenToUse: z.string().optional(),

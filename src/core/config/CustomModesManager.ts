@@ -17,7 +17,7 @@ import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
-import { getSharedPluginManager, warnPluginConflict } from "@shofer/core"
+import { getSharedPluginManager } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 
@@ -260,38 +260,27 @@ export class CustomModesManager {
 
 	/**
 	 * Modes contributed by enabled plugins (design §6.3). They arrive tagged
-	 * `source: "plugin"` + `pluginName` with their **natural** slug (no namespacing,
-	 * §14.7) and already de-duplicated plugin-vs-plugin by last-installed-wins.
-	 * Empty when no plugin manager is wired or no plugins are enabled ⇒ behavior
-	 * unchanged.
+	 * `source: "plugin"` + `pluginName` with a **namespaced** slug
+	 * (`<pluginName>:<authoredSlug>`, §14.7 → namespacing). Empty when no plugin
+	 * manager is wired or no plugins are enabled ⇒ behavior unchanged.
 	 */
 	private getPluginModes(): ModeConfig[] {
 		return getSharedPluginManager()?.getContributedModes() ?? []
 	}
 
 	/**
-	 * Merge plugin-contributed modes into `merged`. Plugin modes sit on top of the
-	 * precedence chain (last-installed-wins, §14.7): on a slug collision with an
-	 * existing project/global mode the plugin mode **overrides** it and a warning is
-	 * shown + logged naming the shadowed contributor; project-over-global among file
-	 * modes is unaffected (that ordering is settled before this runs).
+	 * Append plugin-contributed modes to `merged`. Because plugin slugs are
+	 * namespaced (`<pluginName>:<slug>`), they can never collide with a built-in,
+	 * global, or project mode's natural slug, nor with another plugin's mode — so
+	 * there is no override/last-installed-wins tie-break here; each qualified mode is
+	 * simply appended. A `slugs`-guard is kept only as a defensive de-dup (a repeated
+	 * qualified slug would already have been reported upstream by the manager).
 	 */
 	private appendPluginModes(merged: ModeConfig[], slugs: Set<string>): void {
 		for (const mode of this.getPluginModes()) {
-			const existingIdx = merged.findIndex((m) => m.slug === mode.slug)
-			if (existingIdx !== -1) {
-				const shadowed = merged[existingIdx]
-				warnPluginConflict(
-					"mode",
-					mode.slug,
-					`plugin "${mode.pluginName}"`,
-					shadowed.pluginName ? `plugin "${shadowed.pluginName}"` : `${shadowed.source ?? "user"} mode`,
-				)
-				merged[existingIdx] = mode
-			} else {
-				slugs.add(mode.slug)
-				merged.push(mode)
-			}
+			if (slugs.has(mode.slug)) continue
+			slugs.add(mode.slug)
+			merged.push(mode)
 		}
 	}
 
