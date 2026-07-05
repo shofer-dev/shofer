@@ -9,6 +9,7 @@ import {
 	type PluginManifest,
 	pluginManifestSchema,
 	type PluginUiContribution,
+	type PluginUiRegion,
 	type ShoferPlugin,
 } from "@shofer/types"
 
@@ -818,13 +819,57 @@ export class PluginManager {
 	 * nothing. Plugins are ordered by install rank so the webview renders per-region
 	 * contributions deterministically (last-installed last). The extension pushes the
 	 * result to the webview, which resolves each `componentId` to a React component.
+	 *
+	 * **External UI bundles (P4):** when a granted region also has a `contributes.ui`
+	 * entry, `resolveSource` (host-supplied) converts that entry's **absolute** module
+	 * path to a served URI (`webview.asWebviewUri`); the resulting `source` tells the
+	 * webview to dynamic-import the plugin's own bundle instead of the co-bundled
+	 * registry. Host-agnostic: this method only builds absolute paths and calls back —
+	 * VS Code URI conversion lives in the extension. Without `resolveSource` (CLI/tests)
+	 * every `source` is `undefined`, so resolution falls back to co-bundled (safe).
 	 */
-	getContributedUiContributions(): PluginUiContribution[] {
+	getContributedUiContributions(
+		resolveSource?: (entryAbsolutePath: string) => string,
+	): PluginUiContribution[] {
 		const plugins: UiContributingPlugin[] = this.enabledPlugins()
 			.filter((p) => (p.manifest.permissions?.ui?.length ?? 0) > 0)
 			.sort((a, b) => this.installRank(a.name) - this.installRank(b.name))
-			.map((p) => ({ name: p.name, grantedRegions: p.manifest.permissions?.ui ?? [] }))
+			.map((p) => ({
+				name: p.name,
+				grantedRegions: p.manifest.permissions?.ui ?? [],
+				sources: resolveSource ? this.resolveUiSources(p, resolveSource) : undefined,
+			}))
 		return buildPluginUiRegistry(plugins).all()
+	}
+
+	/**
+	 * Build the region→source map for one plugin from its `contributes.ui` entries,
+	 * resolving each entry's path (relative to the plugin root) to a served URI via
+	 * `resolveSource`. Only entries whose region is *also* granted in `permissions.ui`
+	 * survive the permission gate in {@link PluginUiRegistry.add}; entries for
+	 * ungranted regions are harmless here (never consumed).
+	 */
+	private resolveUiSources(
+		plugin: DiscoveredPlugin,
+		resolveSource: (entryAbsolutePath: string) => string,
+	): Partial<Record<PluginUiRegion, string>> {
+		const sources: Partial<Record<PluginUiRegion, string>> = {}
+		for (const entry of plugin.manifest.contributes?.ui ?? []) {
+			sources[entry.region] = resolveSource(path.join(plugin.root, entry.entry))
+		}
+		return sources
+	}
+
+	/**
+	 * Absolute directories the host must expose to the webview (`localResourceRoots`)
+	 * so enabled plugins' external UI bundles are servable as `vscode-webview://`
+	 * resources. Returns each enabled UI-bundle-shipping plugin's root; the extension
+	 * adds these (or their parents) to the webview's resource roots.
+	 */
+	getUiAssetRoots(): string[] {
+		return this.enabledPlugins()
+			.filter((p) => (p.manifest.contributes?.ui?.length ?? 0) > 0)
+			.map((p) => p.root)
 	}
 }
 
