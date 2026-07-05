@@ -13,7 +13,24 @@
 		"events": true,
 		"ai": true,
 		"filesystem": ["."],
-		"search": true
+		"search": true,
+		"skills": true
+	},
+	"contributes": {
+		"skills": [
+			{
+				"name": "live-memory-stats",
+				"description": "Show the Live Memory plugin's current status for this workspace — agent state, context-window fill, retained observations and Q&A pairs, session token cost, and the pending question queue."
+			},
+			{
+				"name": "live-memory-config",
+				"description": "View or change the Live Memory plugin's configuration — the provider profile the memory LLM uses, retention caps, the external-edit watch glob, the compaction interval, and the context-window budget/threshold."
+			},
+			{
+				"name": "live-memory-empty",
+				"description": "Empty the Live Memory for this workspace — wipe its accumulated observation/Q&A log, persisted conversation window, and cost ledger so the next question starts from a blank slate."
+			}
+		]
 	},
 	"config": {
 		"type": "object",
