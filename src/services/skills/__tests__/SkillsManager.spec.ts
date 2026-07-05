@@ -1809,7 +1809,7 @@ Deploy instructions`
 			expect(skillsManager.getAllSkills()).toHaveLength(0)
 		})
 
-		it("last-installed plugin wins a same-named skill, with a warning (design §14.7)", async () => {
+		it("two plugins' same-named skills coexist under namespaced identifiers, no warning (design §14.7)", async () => {
 			const dirA = p(PROJECT_DIR, ".shofer", "plugins", "a", "skills")
 			const dirB = p(PROJECT_DIR, ".shofer", "plugins", "b", "skills")
 			const skillDirA = p(dirA, "deploy-skill")
@@ -1817,7 +1817,7 @@ Deploy instructions`
 			const skillMdA = p(skillDirA, "SKILL.md")
 			const skillMdB = p(skillDirB, "SKILL.md")
 
-			// Fresh host so we can read the shown warning.
+			// Fresh host so we can assert NO warning is shown.
 			const host = createInMemoryHost()
 			const notifier = host.notifier as unknown as { messages: Array<{ level: string; message: string }> }
 			setHost(host)
@@ -1827,8 +1827,6 @@ Deploy instructions`
 					{ pluginName: "a", dir: dirA },
 					{ pluginName: "b", dir: dirB },
 				],
-				// b is installed later ⇒ higher rank ⇒ wins.
-				installRank: (name: string) => (name === "a" ? 0 : 1),
 			} as any)
 
 			mockDirectoryExists.mockImplementation(async (dir: string) => dir === dirA || dir === dirB)
@@ -1849,13 +1847,42 @@ Deploy instructions`
 
 			await skillsManager.discoverSkills()
 
-			// Both are discovered (distinct keys), but resolution picks the last-installed.
+			// Both resolve — namespacing keys them under a:deploy-skill / b:deploy-skill.
 			const resolved = skillsManager.getSkillsForMode("code").filter((s) => s.name === "deploy-skill")
-			expect(resolved).toHaveLength(1)
-			expect(resolved[0]).toMatchObject({ pluginName: "b", description: "from plugin B" })
+			expect(resolved).toHaveLength(2)
+			expect(resolved.map((s) => s.pluginName).sort()).toEqual(["a", "b"])
 
+			// No conflict warning — the identifiers are isolated by construction.
 			const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
-			expect(warns.some((m) => m.includes("deploy-skill") && m.includes('"b"') && m.includes('"a"'))).toBe(true)
+			expect(warns.some((m) => m.includes("shadows"))).toBe(false)
+		})
+
+		it("resolves a plugin skill by its qualified name, never by the bare name", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [{ pluginName: "my-plugin", dir: pluginSkillsDir }],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === pluginSkillsDir ? ["deploy-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) {
+					return `---\nname: deploy-skill\ndescription: Deploy to staging\n---\nDeploy instructions`
+				}
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Qualified name resolves; the bare on-disk name does not address a plugin skill.
+			const qualified = await skillsManager.getSkillContent("my-plugin:deploy-skill")
+			expect(qualified).toMatchObject({ name: "deploy-skill", pluginName: "my-plugin" })
+			expect(await skillsManager.getSkillContent("deploy-skill")).toBeNull()
 		})
 	})
 })

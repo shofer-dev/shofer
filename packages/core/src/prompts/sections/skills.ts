@@ -1,3 +1,5 @@
+import { qualifiedSkillName } from "@shofer/types"
+
 import type { SkillsManagerLike } from "../../services/skills/skills-registry.js"
 
 /** This section only needs mode-filtered skill discovery, not content lookup. */
@@ -32,7 +34,9 @@ export async function getSkillsSection(
 
 	const skillsXml = skills
 		.map((skill) => {
-			const name = escapeXml(skill.name)
+			// Plugin skills are listed under their namespaced identifier so the model
+			// invokes them by the same qualified name it must pass to the skill tool.
+			const name = escapeXml(qualifiedSkillName(skill))
 			const description = escapeXml(skill.description)
 			const locationLine = `\n    <location>${escapeXml(skill.path)}</location>`
 			return `  <skill>\n    <name>${name}</name>\n    <description>${description}</description>${locationLine}\n  </skill>`

@@ -30,6 +30,20 @@ export interface SkillContent extends SkillMetadata {
 }
 
 /**
+ * The **addressing identifier** a skill resolves and is invoked under. File
+ * skills (global/project) keep their bare on-disk `name`. Plugin-contributed
+ * skills are **namespaced** as `<pluginName>:<name>` (design §14.7 →
+ * namespacing) so a plugin skill can never shadow a built-in/user skill or
+ * another plugin's skill by construction. The on-disk directory name and the
+ * SKILL.md frontmatter `name` stay spec-compliant (no `:`); the qualification
+ * lives purely at this resolution/addressing layer — `pluginName` already
+ * carries attribution.
+ */
+export function qualifiedSkillName(skill: Pick<SkillMetadata, "name" | "source" | "pluginName">): string {
+	return skill.source === "plugin" && skill.pluginName ? `${skill.pluginName}:${skill.name}` : skill.name
+}
+
+/**
  * Skill name validation constants per agentskills.io specification:
  * https://agentskills.io/specification
  *

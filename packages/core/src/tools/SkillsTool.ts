@@ -3,7 +3,7 @@ import { type TaskProviderLike } from "../task-provider/index.js"
 import { type SkillsManagerLike } from "../services/skills/skills-registry.js"
 import { formatResponse } from "../prompts/responses.js"
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
-import { type ToolUse } from "@shofer/types"
+import { type ToolUse, qualifiedSkillName } from "@shofer/types"
 import { buildSkillApprovalMessage, buildSkillResult, resolveSkillContentForMode } from "../services/skills/skillInvocation.js"
 
 interface SkillParams {
@@ -56,7 +56,7 @@ export class SkillsTool extends BaseTool<"skills"> {
 			if (!skillContent) {
 				// Get available skills for error message
 				const availableSkills = skillsManager.getSkillsForMode(currentMode)
-				const skillNames = availableSkills.map((s) => s.name)
+				const skillNames = availableSkills.map((s) => qualifiedSkillName(s))
 
 				task.recordToolError("skills")
 				task.didToolFailInCurrentTurn = true
