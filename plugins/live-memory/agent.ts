@@ -44,11 +44,16 @@ import {
 	type FileContextEntry,
 	type QuestionResult,
 	type LiveMemoryCostTracking,
-} from "@shofer/types"
+} from "./types.js"
 
 import { ContextWindow, estimateTokens, type ContextUsage } from "./context-window.js"
 import { QuestionQueue, type QuestionSoftLimits } from "./question-queue.js"
-import { MemoryLlmClient, type ConversationMessage, type ConversationContentBlock, type ToolDefinition } from "./memory-llm.js"
+import {
+	MemoryLlmClient,
+	type ConversationMessage,
+	type ConversationContentBlock,
+	type ToolDefinition,
+} from "./memory-llm.js"
 import { LiveMemoryToolExecutor, LIVE_MEMORY_PLUGIN_READ_TOOLS } from "./tool-executor.js"
 import type { ConversationSnapshot } from "./memory-store.js"
 
@@ -514,7 +519,9 @@ export class LiveMemoryAgent {
 		}
 
 		for (const fc of this._window.fileContexts) {
-			parts.push(`[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`)
+			parts.push(
+				`[File context: ${fc.filePath}]\n(Content hash: ${fc.contentHash}, tokens: ~${fc.tokenEstimate})`,
+			)
 		}
 
 		for (const msg of this._window.messages) {

@@ -16,13 +16,9 @@
 import { createHash } from "node:crypto"
 import { resolve as resolvePath } from "node:path"
 
-import type {
-	PluginStorage,
-	HostFileSystem,
-	AgentMessage,
-	FileContextEntry,
-	LiveMemoryCostTracking,
-} from "@shofer/types"
+import type { PluginStorage, HostFileSystem } from "@shofer/types"
+
+import type { AgentMessage, FileContextEntry, LiveMemoryCostTracking } from "./types.js"
 
 /**
  * Schema version of the persisted document; bump on an incompatible shape change.

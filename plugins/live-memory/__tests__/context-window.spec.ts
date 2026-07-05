@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import { ContextWindow, estimateTokens } from "../context-window.js"
-import type { AgentMessage, FileContextEntry } from "@shofer/types"
+import type { AgentMessage, FileContextEntry } from "../types.js"
 
 const MS = 1
 const makeMessage = (role: AgentMessage["role"], content: string, ts = MS): AgentMessage => ({

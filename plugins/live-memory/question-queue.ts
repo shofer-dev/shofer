@@ -3,7 +3,7 @@
  *
  * Ported near-verbatim from the built-in `packages/core/src/services/live-memory/
  * question-queue.ts`. Pure domain logic: imports only value/type constants from the
- * browser-safe `@shofer/types` surface, so it bundles cleanly through the plugin's
+ * plugin's own `./types.js` module, so it bundles cleanly through the plugin's
  * runtime esbuild loader.
  *
  * Serializes question processing so that only one LLM call is in flight at a time.
@@ -20,7 +20,7 @@
  * through to its underlying LLM client.
  */
 
-import { MAX_QUESTION_QUEUE_SIZE, QUESTION_TIMEOUT_MS, type QuestionResult } from "@shofer/types"
+import { MAX_QUESTION_QUEUE_SIZE, QUESTION_TIMEOUT_MS, type QuestionResult } from "./types.js"
 
 /** Soft (advisory) limits attached to a queued question. Forwarded to the
  *  processor so it can embed them in the LLM prompt. NEVER enforced by the

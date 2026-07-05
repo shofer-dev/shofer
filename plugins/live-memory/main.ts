@@ -19,13 +19,10 @@
  * genuine gap (external-edit path granularity).
  */
 
-import {
-	DEFAULT_MAX_CONTEXT_TOKENS,
-	DEFAULT_CONTEXT_FILL_THRESHOLD,
-	defineCustomTool,
-	parametersSchema as z,
-} from "@shofer/types"
+import { defineCustomTool, parametersSchema as z } from "@shofer/types"
 import type { HostDisposable, PluginContext, PluginEvent, ShoferPlugin } from "@shofer/types"
+
+import { DEFAULT_MAX_CONTEXT_TOKENS, DEFAULT_CONTEXT_FILL_THRESHOLD } from "./types.js"
 
 import { MemoryStore, type Observation, type ObservationKind } from "./memory-store.js"
 import { renderMemoryContext, summarizeMemory, MemoryLlmClient } from "./memory-llm.js"

@@ -20,8 +20,9 @@
 
 import { relative as relativePath } from "node:path"
 
-import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "@shofer/types"
 import type { HostFileSystem } from "@shofer/types"
+
+import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "./types.js"
 
 /** Directories to skip during scanning (mirrors the built-in `SKIP_PARTS`). */
 export const SKIP_PARTS = new Set([

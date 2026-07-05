@@ -2,7 +2,8 @@ import { createHash } from "node:crypto"
 import { resolve as resolvePath } from "node:path"
 
 import { describe, it, expect } from "vitest"
-import type { PluginStorage, HostFileSystem, FileContextEntry, AgentMessage } from "@shofer/types"
+import type { PluginStorage, HostFileSystem } from "@shofer/types"
+import type { FileContextEntry, AgentMessage } from "../types.js"
 
 import { MemoryStore, MEMORY_STORE_VERSION, hashWorkspace, type MemoryData } from "../memory-store.js"
 

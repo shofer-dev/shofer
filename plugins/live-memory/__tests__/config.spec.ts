@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest"
 
-import { DEFAULT_MAX_CONTEXT_TOKENS, DEFAULT_CONTEXT_FILL_THRESHOLD } from "@shofer/types"
 import type { PluginAi, HostFileSystem, FindFilesOptions } from "@shofer/types"
+
+import { DEFAULT_MAX_CONTEXT_TOKENS, DEFAULT_CONTEXT_FILL_THRESHOLD } from "../types.js"
 
 import { LiveMemoryAgent } from "../agent.js"
 import { MemoryLlmClient } from "../memory-llm.js"

@@ -3,7 +3,7 @@
  *
  * Ported near-verbatim from the built-in `packages/core/src/services/live-memory/
  * context-window.ts`. Pure domain logic: no I/O, no host coupling — it imports only
- * value/type constants from the browser-safe `@shofer/types` surface, so it bundles
+ * value/type constants from the plugin's own `./types.js` module, so it bundles
  * cleanly through the plugin's runtime esbuild loader.
  *
  * Owns the in-memory list of conversation messages and file context entries and is the
@@ -27,7 +27,7 @@ import {
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
 	type AgentMessage,
 	type FileContextEntry,
-} from "@shofer/types"
+} from "./types.js"
 
 /** Snapshot of the current context window utilisation. */
 export interface ContextUsage {
