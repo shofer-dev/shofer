@@ -159,6 +159,9 @@ export const toolParamNames = [
 	"timeout_sec",
 	// new_task peer_task_ids parameter
 	"peer_task_ids",
+	// new_task advisory soft-limit parameters
+	"softTimeoutSec",
+	"softResultLength",
 	// list_background_tasks scope parameter
 	"scope",
 ] as const
