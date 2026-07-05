@@ -154,6 +154,35 @@ async function main() {
 						srcDir,
 						distDir,
 					)
+					// Ship the esbuild-wasm CLI so the runtime loader can transpile
+					// TypeScript at `<extensionPath>/dist/bin/esbuild` (the production
+					// path in custom-tools/esbuild-runner.ts getEsbuildScriptPath). This
+					// is what custom tools AND bundled code plugins (e.g. the live-memory
+					// plugin, transpiled at activation) rely on — without it the loader
+					// falls back to node_modules, which isn't resolvable from the bundled
+					// CJS extension host. The wasm shim resolves `../esbuild.wasm` and
+					// `../wasm_exec_node.js` relative to itself, and that in turn
+					// `require("./wasm_exec")`, so the wasm blob and both Go loader
+					// scripts must sit one level up, at the dist/ root.
+					const esbuildWasmDir = path.join(srcDir, "node_modules", "esbuild-wasm")
+					const esbuildBinDest = path.join(distDir, "bin")
+					fs.mkdirSync(esbuildBinDest, { recursive: true })
+					fs.copyFileSync(
+						path.join(esbuildWasmDir, "bin", "esbuild"),
+						path.join(esbuildBinDest, "esbuild"),
+					)
+					fs.copyFileSync(
+						path.join(esbuildWasmDir, "esbuild.wasm"),
+						path.join(distDir, "esbuild.wasm"),
+					)
+					fs.copyFileSync(
+						path.join(esbuildWasmDir, "wasm_exec_node.js"),
+						path.join(distDir, "wasm_exec_node.js"),
+					)
+					fs.copyFileSync(
+						path.join(esbuildWasmDir, "wasm_exec.js"),
+						path.join(distDir, "wasm_exec.js"),
+					)
 					// Ship the first-party (bundled) plugins tree into dist/plugins so the
 					// runtime resolves it at `<extensionPath>/dist/plugins` (design §7 —
 					// bundled scope). Mirrors the tree-sitter-wasm copy above. The P2 code

@@ -195,7 +195,13 @@ export async function runEsbuild(options: EsbuildOptions, extensionPath?: string
 	}
 
 	// Build environment with NODE_PATH for module resolution.
-	const env: NodeJS.ProcessEnv = { ...process.env }
+	//
+	// Force node semantics for the spawned CLI. Inside the VS Code extension host
+	// `process.execPath` is the Electron binary; without ELECTRON_RUN_AS_NODE it
+	// would launch a new Electron window instead of executing the esbuild-wasm
+	// shim as a Node script. The flag is Electron-only and ignored by a plain
+	// node binary (dev/test), so it is safe unconditionally.
+	const env: NodeJS.ProcessEnv = { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
 
 	if (options.nodePaths && options.nodePaths.length > 0) {
 		env.NODE_PATH = options.nodePaths.join(path.delimiter)
