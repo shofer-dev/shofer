@@ -16,10 +16,13 @@
 		"search": true,
 		"skills": true,
 		"commands": true,
-		"ui": ["sidebar-panel"]
+		"ui": ["sidebar-panel", "chat-input-toolbar"]
 	},
 	"contributes": {
-		"ui": [{ "region": "sidebar-panel", "entry": "ui/panel.js" }],
+		"ui": [
+			{ "region": "sidebar-panel", "entry": "ui/panel.js" },
+			{ "region": "chat-input-toolbar", "entry": "ui/badge.js" }
+		],
 		"skills": [
 			{
 				"name": "live-memory-stats",

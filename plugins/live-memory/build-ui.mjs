@@ -25,19 +25,20 @@ import * as esbuild from "esbuild"
 
 const here = dirname(fileURLToPath(import.meta.url))
 
-await esbuild.build({
-	entryPoints: [resolve(here, "ui/panel.tsx")],
-	outfile: resolve(here, "ui/panel.js"),
-	bundle: true,
-	format: "esm",
-	platform: "browser",
-	target: "es2020",
-	jsx: "automatic",
-	// Externalize React so the bundle uses the host's single shared instance (a second
-	// copy silently breaks hooks/context). react-dom/client + jsx-dev-runtime are covered
-	// too, matching the host's injected import map.
-	external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
-	legalComments: "none",
-})
-
-console.log("[live-memory] built ui/panel.js")
+// Both UI bundles: the `sidebar-panel` chat panel and the `chat-input-toolbar` status
+// badge. Same options; React is externalized so each uses the host's single shared
+// instance (a second copy silently breaks hooks/context).
+for (const name of ["panel", "badge"]) {
+	await esbuild.build({
+		entryPoints: [resolve(here, `ui/${name}.tsx`)],
+		outfile: resolve(here, `ui/${name}.js`),
+		bundle: true,
+		format: "esm",
+		platform: "browser",
+		target: "es2020",
+		jsx: "automatic",
+		external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+		legalComments: "none",
+	})
+	console.log(`[live-memory] built ui/${name}.js`)
+}
