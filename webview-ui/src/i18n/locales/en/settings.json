@@ -38,6 +38,7 @@
 		"disabledReason": "Enabled, but inactive: {{reason}}",
 		"toggleAria": "Toggle plugin {{name}}",
 		"scope": {
+			"bundled": "Built-in",
 			"global": "Global",
 			"project": "Workspace"
 		},

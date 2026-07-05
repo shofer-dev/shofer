@@ -212,7 +212,10 @@ export function PluginsTab() {
 										size="medium"
 										aria-label={t("settings:plugins.toggleAria", { name: plugin.name })}
 									/>
-									{isConfirming ? (
+									{/* First-party (bundled) plugins ship with the extension and are
+									    non-uninstallable — hide the uninstall affordance. Disabling
+									    is the way to turn them off. */}
+									{plugin.firstParty ? null : isConfirming ? (
 										<div className="flex items-center gap-1">
 											<Button
 												variant="destructive"

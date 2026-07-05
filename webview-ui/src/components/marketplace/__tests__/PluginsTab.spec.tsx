@@ -135,4 +135,27 @@ describe("PluginsTab (Phase 5.3)", () => {
 			plugin: { action: "uninstall", name: "alpha" },
 		})
 	})
+
+	it("hides the uninstall affordance for a first-party (bundled) plugin", () => {
+		renderTab({
+			plugins: [
+				{
+					name: "live-memory",
+					version: "0.1.0",
+					description: "Bundled first-party plugin",
+					scope: "bundled",
+					firstParty: true,
+					enabled: false,
+					hasCode: true,
+					contributionCounts: { modes: 0, skills: 3, commands: 3, mcpServers: 0, rules: 0 },
+				},
+			],
+		})
+		// Row renders and the "Built-in" scope badge shows...
+		expect(screen.getByText("live-memory")).toBeInTheDocument()
+		// ...but there is no uninstall (Trash) control for a bundled plugin.
+		expect(screen.queryByTitle("marketplace:plugins.uninstall")).not.toBeInTheDocument()
+		// The enable toggle is still present (disabling is how you turn it off).
+		expect(screen.getByLabelText("settings:plugins.toggleAria:live-memory")).toBeInTheDocument()
+	})
 })
