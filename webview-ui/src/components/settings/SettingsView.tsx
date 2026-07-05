@@ -12,7 +12,6 @@ import React, {
 import {
 	CheckCheck,
 	GitBranch,
-	MessageCircle,
 	Archive,
 	Database,
 	SquareTerminal,
@@ -71,7 +70,6 @@ import ApiConfigManager from "./ApiConfigManager"
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
-import { LiveMemorySettings } from "./LiveMemorySettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -111,7 +109,6 @@ export const sectionNames = [
 	"slashCommands",
 	"skills",
 	"checkpoints",
-	"liveMemory",
 	"contextManagement",
 	"terminal",
 	"codebaseIndex",
@@ -260,10 +257,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		defaultCostLimit,
 		archivedTaskRetentionDays,
 		maxParallelTasks,
-		liveMemoryEnabled,
-		liveMemoryApiConfigId,
-		liveMemoryMaxContextTokens,
-		liveMemoryContextFillThreshold,
 		codebaseIndexConfig,
 		logLevel,
 		logCategories,
@@ -509,10 +502,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
-					liveMemoryEnabled: liveMemoryEnabled ?? true,
-					liveMemoryApiConfigId: liveMemoryApiConfigId ?? "",
-					liveMemoryMaxContextTokens: liveMemoryMaxContextTokens,
-					liveMemoryContextFillThreshold: liveMemoryContextFillThreshold,
 					codebaseIndexConfig,
 					logLevel,
 					logCategories,
@@ -672,7 +661,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "shoferNodes", icon: Network },
 			{ id: "plugins", icon: Blocks },
 			{ id: "checkpoints", icon: GitCommitVertical },
-			{ id: "liveMemory", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "codebaseIndex", icon: Archive },
@@ -1007,18 +995,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							<CheckpointSettings
 								enableCheckpoints={enableCheckpoints}
 								checkpointTimeout={checkpointTimeout}
-								setCachedStateField={setCachedStateField}
-							/>
-						)}
-
-						{/* Live Memory Section */}
-						{renderTab === "liveMemory" && (
-							<LiveMemorySettings
-								liveMemoryEnabled={liveMemoryEnabled}
-								liveMemoryApiConfigId={liveMemoryApiConfigId}
-								liveMemoryMaxContextTokens={liveMemoryMaxContextTokens}
-								liveMemoryContextFillThreshold={liveMemoryContextFillThreshold}
-								listApiConfigMeta={listApiConfigMeta ?? []}
 								setCachedStateField={setCachedStateField}
 							/>
 						)}

@@ -36,7 +36,6 @@ import { PluginSlot } from "../plugins/PluginSlot"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
-import { LiveMemoryStatusBadge } from "./LiveMemoryStatusBadge"
 import { NodeStatus } from "./NodeStatus"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 // CloudAccountSwitcher removed
@@ -1613,7 +1612,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</StandardTooltip>
 						)}
 						{!isEditMode ? <NodeStatus /> : null}
-						{!isEditMode ? <LiveMemoryStatusBadge /> : null}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{/* CloudAccountSwitcher removed */}
 					</div>
