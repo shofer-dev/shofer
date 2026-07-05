@@ -212,6 +212,32 @@ plugin directory; the manifest entry is the declaration.
 - **`rules`** — `{ path, modes? }`, where `path` is a rules-markdown file relative to the plugin
   root, optionally scoped to specific modes.
 
+### Namespacing
+
+Plugin-contributed **modes**, **commands**, and **skills** are addressed under a
+`<plugin-name>:<name>` identifier, so a plugin item can never shadow a built-in/user item or
+another plugin's item — collisions are impossible **by construction** (there is no
+"last-installed-wins" tie-break between plugins). How the qualification surfaces differs slightly:
+
+| Contribution | Addressed as              | On-disk / authored name                                                                                                                                                                                              |
+| ------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **modes**    | `<plugin-name>:<slug>`    | The emitted mode `slug` **is** the qualified form; the authored slug in your manifest stays natural (no `:`). Attribution is carried on `source: "plugin"` + `pluginName`.                                            |
+| **commands** | `<plugin-name>:<command>` | The command is registered and invoked under the namespaced name; the bare name is never resolvable on its own.                                                                                                       |
+| **skills**   | `<plugin-name>:<name>`    | Namespaced purely at the **resolution/addressing** layer — the on-disk directory name and the `SKILL.md` frontmatter `name` stay spec-compliant (no `:`). The model lists and invokes the skill by its qualified name. |
+
+The only residual collision is a single plugin declaring the same slug/name twice — a manifest bug,
+surfaced with a defensive warning (later entry wins, deterministically).
+
+### Private contributions
+
+A mode, command, or skill can be marked **`private: true`**. A private contribution is fully
+registered and **agent-invocable by its qualified name** (`<plugin-name>:<name>`), but is **hidden
+from every user-facing surface** — the mode selector/picker, the slash-command menu, the skills
+list, and the Plugins panel. Use it for an item the agent drives but the user never picks directly —
+e.g. a plugin's `verifier` mode that a task switches into programmatically. Absent/`false` ⇒ a
+normal, user-visible contribution. (`private` is a field on the mode, command, and skill
+contribution schemas; a private mode still governs its subtask's tools once switched into.)
+
 ### Code (requires `main`)
 
 Implement any subset of the `ShoferPlugin` hooks. All are optional.
@@ -453,8 +479,8 @@ zip-slip (absolute paths, `..` segments, symlink/hardlink entries are all reject
 ### CLI
 
 ```bash
-# Install from a .shofer-plugin archive OR an unpacked plugin directory
-shofer plugin install <source> [--enable] [--overwrite]
+# Install from a .shofer-plugin archive, an unpacked plugin directory, OR a direct http(s) URL
+shofer plugin install <source> [--enable] [--overwrite] [--allow-insecure-http]
 
 # List installed plugins and their state (enabled / disabled / inactive)
 shofer plugin list [--json]
@@ -462,6 +488,11 @@ shofer plugin list [--json]
 # Remove a plugin (deletes its dir, drops it from the enabled list)
 shofer plugin remove <name>
 ```
+
+`<source>` may be a local `.shofer-plugin` archive, an unpacked plugin directory, **or a direct
+`http(s)` URL to a `.shofer-plugin` archive**. A URL source is downloaded and unpacked through the
+same manifest-validation / zip-slip-hardened path as a local archive; **`https` is required** unless
+the host is loopback or you pass `--allow-insecure-http` (see the https/size policy below).
 
 The CLI installs into the **global** dir (`~/.shofer/plugins/<name>`) and shares the enabled
 allow-list with the running app, so a plugin installed/enabled here is picked up by the extension and
@@ -472,14 +503,41 @@ the Plugins settings tab unchanged. Without `--enable`, a freshly installed plug
 ### Marketplace Plugins tab
 
 The Marketplace's **Plugins** tab lists discovered plugins with enable/disable toggles, an uninstall
-action, the "uses AI (billed)" badge + consent affordance, and an **Install from file** button that
-opens a native picker for a local `.shofer-plugin` archive.
+action, and the "uses AI (billed)" badge + consent affordance, plus **two install affordances**:
 
-> **Remote registry install is not available yet** — install is local-only (archive or directory).
+- **Install from file** — opens a native picker for a local `.shofer-plugin` archive (the webview
+  can't read local files, so the extension does the pick + unpack).
+- **Install from URL** — paste a direct `http(s)` link to a `.shofer-plugin` archive; the extension
+  downloads it via the core helper (https-only + size-capped + zip-slip / manifest validated),
+  unpacks it into the global plugins dir, and re-discovers. Freshly installed plugins stay disabled
+  (matching install-from-file), so you enable them afterward.
+
+> The Settings → **Plugins** tab shows the same discovered-plugin list with enable/disable toggles
+> (plus the `settings-tab` UI region), but the install affordances + AI-consent controls live in the
+> Marketplace Plugins tab.
+
+> **Direct-URL install is supported; a remote *registry* is not.** There is no
+> `shofer plugin search` / `install name@version` / hosted directory — install is a local archive,
+> a local directory, or a **direct** archive URL. Registry lookup + a trust/signing chain stay
+> deferred.
+
+### The https / size policy (URL install)
+
+Both the CLI (`shofer plugin install <URL>`) and the Marketplace "Install from URL" go through the
+same host-agnostic core helper:
+
+- **`https` only** by default. A plain `http://` URL is refused unless the host is loopback
+  (`localhost`/`127.0.0.1`) or, on the CLI, `--allow-insecure-http` is passed.
+- **Size-capped** — the download is bounded (default 64 MiB) to prevent an oversized-response DoS.
+- **Validated + hardened** — the fetched bytes are unpacked through the same `.shofer-plugin`
+  pipeline: a valid `plugin.json` at the archive root is required, and unpacking rejects absolute
+  paths, `..` segments, and symlink/hardlink entries (zip-slip hardened).
 
 ---
 
-## 9. A worked example
+## 9. Worked examples
+
+### A guardrail plugin
 
 A guardrail plugin: a status tool, a `beforeToolCall` hook that blocks force-pushes, and a config
 flag. It uses `permissions.tools` + `permissions.lifecycle` + `permissions.network`.
@@ -561,6 +619,32 @@ Now the model sees a `ci_status` tool (network-scoped), and any attempt to run `
 `execute_command` is short-circuited with the guard's reason — unless the user sets
 `blockForcePush: false` in the plugin's config.
 
+### A capability-rich plugin: Live Memory (first-party dogfood)
+
+The repo ships **`plugins/live-memory/`** — a real, first-party plugin that re-implements the core of
+Shofer's built-in Live Memory using **only** the public plugin surface (no reach into
+`@shofer/core` internals). It is the reference for the Phase-6/7 capabilities, exercising most of
+them in one plugin. Read its source; it is the canonical worked example.
+
+Its `plugin.json` grants `tools`, `systemPrompt`, `lifecycle`, `events`, `ai`, and
+`filesystem: ["."]`, and each capability maps to a public extension point:
+
+| What it does                                       | Extension point                                                       |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| The `ask_live_memory` tool                         | `registerTools`                                                       |
+| A memory section appended to the prompt            | `transformSystemPrompt` (gated on `ctx.ai?.hasConsent()`, not a bare `!!ctx.ai`) |
+| Answering / summarizing from memory                | **`ctx.ai.buildHandler`** (never sees keys) + the billed-calls consent |
+| Persisting observations + Q&A across restarts      | **`ctx.storage`** (its own traversal-blocked dir)                     |
+| Observing external edits                           | **`ctx.host.watch(glob, cb)`** — uses the path-carrying `cb(event: { path, type })` to record *which* file changed |
+| Observing Shofer's own file activity               | `lifecycle.afterToolCall` (+ `beforeTaskStart` / `afterTaskComplete`, `onEvent`) |
+| Periodic background compaction of the memory log   | **`ctx.registerService`** (a supervised `{ name, start, stop }` service) |
+
+Key files: `plugins/live-memory/main.ts` (the `ShoferPlugin`), `memory-store.ts` (the `ctx.storage`
+wrapper), `memory-llm.ts` (the `ctx.ai` calls), `system-section.ts` (the prompt section), and
+`plugin.json` (the manifest + `config` schema). **`plugins/live-memory/DOGFOOD.md`** documents the
+full built-in → plugin-API mapping, the reduced-fidelity notes, and the one genuine gap (the
+external-edit watch granularity) that Phase 7's path-carrying watch closed.
+
 ---
 
 ## Reference
@@ -570,4 +654,6 @@ Now the model sees a `ci_status` tool (network-scoped), and any attempt to run `
 - Runtime (manager/loader/registry/sandbox/ai/storage/services/pack): `packages/core/src/plugins/`
 - CLI: `apps/cli/src/commands/plugin/`
 - UI: `webview-ui/src/components/settings/PluginsSettings.tsx`,
-  `webview-ui/src/components/marketplace/PluginsTab.tsx`
+  `webview-ui/src/components/marketplace/PluginsTab.tsx`,
+  `webview-ui/src/components/plugins/` (`PluginSlot`, component resolver)
+- Worked example: `plugins/live-memory/` (+ `plugins/live-memory/DOGFOOD.md`)

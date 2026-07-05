@@ -213,6 +213,7 @@ design below grows this into a full plugin system.
 		"network": ["https://jenkins.my-org.com", "https://gitlab.com/api/v4"],
 		"filesystem": ["./ci-config/", "./.pipeline/"],
 		"ai": true, // Phase 6 — request host LLM/embeddings access (billed, consented separately)
+		"agent": true, // Phase 7 — proactive agent-steering via ctx.agent.notify (billed/behavioral)
 	},
 
 	// Declarative contributions (no code needed for these)
@@ -283,8 +284,8 @@ keys — only an opaque `ApiHandler` (§6.11).
 Already wired via `PluginRegistry.collectTools()`. A plugin returns
 `CustomToolDefinition[]` and they are merged into the tool set.
 
-**New:** Plugin tools carry a `source: "plugin:<name>"` tag for attribution
-in the UI and auto-approval.
+Plugin tools carry plugin attribution (`source: "plugin"` + `pluginName`) for the
+UI and auto-approval.
 
 ### 6.2 System Prompt Transform (`transformSystemPrompt`)
 
@@ -292,50 +293,77 @@ Already wired via `PluginRegistry.applySystemPromptTransforms()`. Plugins
 chain in priority order (manifest `priority` field, default = registration
 order). A throwing plugin is skipped.
 
-**New:** The `PluginContext` is enriched with:
+The `PluginContext` carries:
 
 ```typescript
 export interface PluginContext {
 	workspacePath?: string
 	mode?: string
-	taskId?: string // NEW: current task ID
-	cwd?: string // NEW: current working directory
-	config?: Record<string, unknown> // NEW: plugin's user-configured settings
-	host?: HostBridge // NEW: host-agnostic API access (getHost())
+	taskId?: string // current task ID
+	cwd?: string // current working directory
+	config?: Record<string, unknown> // plugin's validated, default-merged settings
+	host?: PluginHost // RESTRICTED, permission-checked host surface (NOT the full getHost() bridge)
+	// Phase 6/7 host capabilities (present only when the host wired each seam, and — for `ai` —
+	// only with permissions.ai): ai, storage, registerService, agent. See §6.11.
 }
 ```
+
+`host` is the **restricted** `PluginHost` (fs/fetch/notifier/env/watch), scoped to the plugin's
+`permissions` and checked at runtime by the sandbox — not the full `getHost()` `HostBridge`.
 
 ### 6.3 Modes (`contributes.modes`)
 
 A plugin ships mode definitions in its manifest. These are merged into the
 mode resolution chain alongside `.shofer/shofermodes` and built-in modes.
 
-**Precedence:** Built-in < global `custom_modes.yaml` < project `.shofer/shofermodes` < **plugin modes** < user overrides.
+**Namespacing (§14 Q7 → namespacing).** Each plugin mode is emitted with a
+**qualified `slug` of `<pluginName>:<authoredSlug>`** and tagged `source: "plugin"`
++ `pluginName` (attribution). The authored slug the plugin declares in its manifest
+stays natural (no `:`); the qualified form is how the mode is addressed/switched-to.
+Namespacing makes plugin↔plugin and plugin↔built-in slug collisions impossible by
+construction — there is no precedence/tie-break between a plugin mode and a built-in
+or user mode. `ModeConfig.source` is `z.enum(["global", "project", "plugin"])` with a
+sibling `pluginName?: string`.
 
-Plugin modes are tagged `source: "plugin:<name>"` so the user can see which
-plugin contributed which mode.
+**`private` modes.** A plugin mode may set **`private: true`**: it is registered and
+switch-able by its qualified slug (the agent can enter it), but hidden from every
+user-facing surface (the mode selector/picker, the Plugins settings panel) — e.g. a
+browser plugin's `verifier` mode the agent runs but the user never picks. A private
+mode still governs its subtask's tools once switched into.
 
-> **Schema change required.** `ModeConfig.source` in
-> [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) is currently a
-> closed enum (`z.enum(["global", "project"])`), so a `"plugin:*"` source
-> fails validation today. This applies wherever the design proposes a
-> `source: "plugin:<name>"` tag (§6.1 tools, §6.3 modes, §11). The enum must be
-> widened (e.g. add a `"plugin"` variant plus a separate `pluginName` field, or
-> switch to a discriminated union) as a prerequisite for attribution.
+**Status: implemented** (`plugin-manager.ts` `getContributedModes`;
+`packages/types/src/mode.ts` `source`/`pluginName`/`private`).
 
 ### 6.4 Skills (`contributes.skills`)
 
-A plugin ships `SKILL.md` files. These are discovered by `SkillsManager`
-alongside `.shofer/skills/` and `~/.shofer/skills/`.
+A plugin ships `SKILL.md` files under its `skills/` dir; each is declared in the
+manifest (`{ name, description, private? }`). They are discovered alongside
+`.shofer/skills/` and `~/.shofer/skills/`.
 
-**Precedence:** `~/.agents/skills/` < `{project}/.agents/skills/` < `~/.shofer/skills/` < `{project}/.shofer/skills/` < **plugin skills**.
+**Namespacing (§14 Q7 → namespacing).** A plugin skill is qualified as
+`<pluginName>:<name>` **purely at the resolution/addressing layer** (via
+`qualifiedSkillName()` in `@shofer/types`): the on-disk directory name and the
+`SKILL.md` frontmatter `name` stay spec-compliant (no `:`), while the model lists and
+invokes the skill by its qualified name. This is why there is no precedence chain
+between plugin skills and file skills — a plugin skill can never shadow another by
+construction.
+
+**`private` skills.** A skill with **`private: true`** is registered and invocable by
+its qualified name but excluded from every user-facing enumeration (the skills UI
+list, the slash-command menu). The plugin manager reports its private names to the
+skill scanner (`getContributedSkillDirs().privateNames`). **Status: implemented.**
 
 ### 6.5 Slash Commands (`contributes.commands`)
 
-A plugin ships `.md` command files. These are discovered by the command
-service alongside `.shofer/commands/`.
+A plugin ships `.md` command files under its `commands/` dir; each is declared in the
+manifest (`{ name, description?, argumentHint?, private? }`). They are discovered
+alongside `.shofer/commands/`.
 
-**Precedence:** Built-in < global `~/.shofer/commands/` < project `.shofer/commands/` < **plugin commands**.
+**Namespacing (§14 Q7 → namespacing).** A plugin command is registered and invoked as
+`<pluginName>:<command>` — the bare name never resolves on its own, so a plugin command
+cannot collide with a built-in/user command or another plugin's. A **`private: true`**
+command is invocable by its qualified name but filtered out of the command palette /
+slash-command list. **Status: implemented** (`services/command/commands.ts`).
 
 ### 6.6 MCP Integration (three modes)
 
@@ -503,23 +531,48 @@ that render in designated Shofer UI regions:
 | `chat-message-addon` | Below specific ChatRow messages                           | Inline annotations, action buttons per message |
 | `sidebar-panel`      | New panel in the Shofer sidebar                           | Custom dashboard/view                          |
 
-**Implementation:** Plugins declare UI contributions as **webview-safe
-JavaScript modules** that export React components. Shofer loads them in a
-sandboxed iframe (like the Slang visualization) or via dynamic import with
-a restricted API surface (`PluginUIApi`).
+**Implementation (§14 Q1 → dynamic import, NOT iframe).** A plugin UI component is loaded into the
+webview by **dynamic `import()`** with a restricted API surface (`PluginUIApi`) — **not** a sandboxed
+iframe. This is deliberate: sharing the host's React instance + theme is what keeps hooks/context
+working. A component throwing while rendering is caught by an error boundary and unmounted; the host
+UI keeps working. The `PluginUIApi` a component receives is **scoped to its own plugin**:
 
-```typescript
-// Plugin webview contribution (my-plugin/webview/deploy-button.tsx)
-export function DeployButton({ context }: { context: PluginUIContext }) {
-  return <button onClick={() => context.postMessage({ type: "deploy" })}>🚀 Deploy</button>
+- `postMessage(msg)` — send to this plugin's extension-side code (tagged with the plugin name, so it
+  routes only there). Received on the extension side via the `onUiMessage(message, ctx)` hook.
+- `onMessage(listener)` — subscribe to messages addressed **only** to this plugin (namespaced — a
+  plugin can neither observe nor spoof another's channel). Returns an unsubscribe fn.
+- `context` — read-only `{ region, pluginName, task?, config?, theme? }` (theme = VS Code CSS vars).
+
+**External UI bundles (P4 external-UI — implemented).** A third-party plugin ships its **own compiled
+UI module** by pointing a granted region at a built entry with `contributes.ui: [{ region, entry }]`
+(the `region` must also be in `permissions.ui` — that is the grant; fail-closed). `entry` is an ESM
+file relative to the plugin root (e.g. `ui/toolbar.js`). The extension adds the plugin dir to the
+webview's **`localResourceRoots`** and resolves the entry with **`asWebviewUri`** to a local
+`vscode-webview://` URL (surfaced as `PluginUiContribution.source`); the webview then
+dynamic-imports it (`pluginComponentResolver.ts`). Arbitrary external hosts stay blocked — only files
+under the plugin dirs are served, and the webview CSP uses **`strict-dynamic` + a nonce**, so the
+nonced host script may import the same-origin plugin module without weakening the policy. A granted
+region *without* a `contributes.ui` entry falls back to a co-bundled/first-party component.
+
+**The build contract — externalize React.** The bundle must **not** bundle its own React: the host
+injects an **import map** so `react`, `react-dom`, `react/jsx-runtime` (+ `react/jsx-dev-runtime`,
+`react-dom/client`) resolve to the host's running instance (a second copy silently breaks hooks). So
+build the entry as an ES module marking those packages external
+(`esbuild --format=esm --external:react …`), default-exporting a React component that takes a single
+`{ api: PluginUIApi }` prop. See PLUGINS.md §6 for the exact build invocation.
+
+```tsx
+// A plugin's external UI bundle (my-plugin/ui/toolbar.jsx → built to ui/toolbar.js)
+import { useEffect, useState } from "react" // resolves to the host's React via the import map
+export default function Toolbar({ api }: { api: PluginUIApi }) {
+  const [reply, setReply] = useState("")
+  useEffect(() => api.onMessage((m) => setReply(String(m))), [api])
+  return <button onClick={() => api.postMessage({ deploy: api.context.task?.taskId })}>Deploy {reply}</button>
 }
 ```
 
-The `PluginUIApi` provides:
-
-- `postMessage(msg)` — send a message to the plugin's background code
-- `context` — current workspace, mode, task info (read-only)
-- `theme` — VS Code theme variables (for CSS variable resolution)
+**Status: implemented** (`ui-registry.ts`, `pluginComponentResolver.ts`, `PluginSlot`,
+`ShoferProvider` `localResourceRoots`/`asWebviewUri` + the shared-React import map).
 
 ### 6.9 Lifecycle Hooks (`permissions.lifecycle`)
 
@@ -528,11 +581,12 @@ execute code:
 
 ```typescript
 export interface LifecycleHooks {
-	/** Called before a task starts. Can modify the initial prompt. */
-	beforeTaskStart?(context: TaskLifecycleContext): Promise<string | void>
+	/** Observe a task starting (`ctx.prompt` = the initial prompt). Fire-and-forget observer —
+	 * off the latency-critical path; its return value is ignored. */
+	beforeTaskStart?(context: TaskLifecycleContext): void | Promise<void>
 
-	/** Called after a task completes. */
-	afterTaskComplete?(context: TaskLifecycleContext): Promise<void>
+	/** Observe a task completing/aborting (`ctx.reason` = "completed" | "aborted"). Observer. */
+	afterTaskComplete?(context: TaskLifecycleContext): void | Promise<void>
 
 	/** Called before a tool is executed. Can block or modify the call. */
 	beforeToolCall?(
@@ -562,7 +616,19 @@ This enables:
 
 - **Policy plugins** — enforce org rules (block `rm -rf`, require code review before `attempt_completion`).
 - **Integration plugins** — auto-approve known-safe commands, log all tool calls to an external SIEM.
-- **Workflow plugins** — inject context before task start, post results to external systems.
+- **Workflow plugins** — observe task start, post results to external systems.
+
+**Reducer semantics + isolation (implemented).** Plugins run in registration order, threading state
+between them: `beforeToolCall` returns `{ allow, modifiedArgs?, reason? }` (a `modifiedArgs` threads
+into later hooks and the tool; the first `allow: false` short-circuits the tool, surfaced like a
+denied tool with `reason`); `afterToolCall` returns `string | void` (a returned string replaces the
+result for later hooks + the model); `beforeAsk` returns `{ decision?, text? } | void` (`text` edits
+the surfaced ask, `decision` of `"approve"`/`"deny"` auto-answers, `"ask"`/absent proceeds);
+`beforeTaskStart`/`afterTaskComplete` are fire-and-forget observers. Every hook only fires for a
+plugin granted `permissions.lifecycle`, and is bounded by a **500 ms per-hook timeout** with
+per-plugin error isolation — a hook that throws or exceeds the budget is skipped with a shown+logged
+warning and its would-be mutation is dropped, so it can never stall or crash the agent loop.
+**Status: implemented** (Phase 3).
 
 ### 6.10 Events (`onEvent`)
 
@@ -603,11 +669,13 @@ export interface PluginHost {
 }
 ```
 
-- **G1 `ctx.ai` — provider access.** `ctx.ai.buildHandler(profileRef?)` resolves
-  a host-configured provider profile (via the existing provider-settings layer,
-  the default profile when `profileRef` is omitted) and returns the **same**
-  `ApiHandler` abstraction `buildApiHandler` returns — the identical seam
-  live-memory's `LiveMemoryLlmClient` consumes. `ctx.ai.embed(texts, profileRef?)`
+- **G1 `ctx.ai` — provider access.** `ctx.ai.buildHandler(profileRef?)` (**async** —
+  provider-profile resolution via `ProviderSettingsManager.getProfile` is async) resolves
+  a host-configured provider profile (the default profile when `profileRef` is omitted)
+  and returns the **same** `ApiHandler` abstraction `buildApiHandler` returns — the identical
+  seam live-memory's `LiveMemoryLlmClient` consumes. `ctx.ai.hasConsent()` (P7) is a read-only
+  accessor for whether calls will actually run (`ctx.ai` is present in both the live and
+  denying-stub cases). `ctx.ai.embed(texts, profileRef?)`
   returns `number[][]` from a host embedder. **The plugin never sees raw API
   keys** — only the handler (which the host constructs). Access is gated on
   `permissions.ai` **and** the billed-calls consent (§8); ungranted ⇒ `ctx.ai`
@@ -695,22 +763,14 @@ with a warning logged to the output channel.
 
 ### Permission check
 
-The user sees a consent dialog when a plugin is first discovered:
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  Plugin "my-org-ci" requests:                            │
-│                                                          │
-│  🔧 Register tools                                       │
-│  📝 Modify system prompt                                 │
-│  🎨 Contribute UI components (chat-input-toolbar)        │
-│  🌐 Network access (jenkins.my-org.com, gitlab.com)     │
-│  📁 Filesystem access (./ci-config/)                     │
-│  ⚡ Hook into task lifecycle                             │
-│                                                          │
-│  [Enable]  [Enable for this workspace]  [Skip]          │
-└──────────────────────────────────────────────────────────┘
-```
+**Consent is per-plugin, via the enable toggle (§14 Q6), not a per-permission dialog.** A discovered
+plugin is **disabled by default**; enabling it in the Plugins tab (or `--enable` on CLI install) is
+the user's consent to run it at all. The manifest `permissions` then gate each capability at runtime
+(a contribution is only surfaced, and a code capability only reachable, when its permission is
+granted; `fs`/`network`/`filesystem` calls are checked against their allowlists). Enabling
+unregisters/re-registers the whole plugin. `permissions.ai` carries a **second, independent**
+consent (billed AI calls, below). **Status: implemented** — the earlier per-permission modal mockup
+was **not** built; the enable toggle is the consent surface.
 
 ### Code loading
 
@@ -749,11 +809,12 @@ State is persisted in `globalState` under `shofer.plugins.enabledPlugins: string
 | `network`      | Make HTTP requests to listed domains | Plugin code can call `fetch()` to listed domains only. Other domains are blocked.                                                                      |
 | `filesystem`   | Read/write listed paths              | Plugin code can access `getHost().fs` for listed paths only.                                                                                           |
 | `ai` (P6)      | Host LLM/embeddings via `ctx.ai`     | **Billed model calls on the user's account.** Requires a **separate consent** beyond enable (below). Plugin gets only an `ApiHandler`, never raw keys. |
+| `agent` (P7)   | Proactive agent-steering via `ctx.agent.notify` | Injects messages **into** the running agent (queue / spawn / interrupt) — billed/behavioral impact. Gated on this dedicated grant; ungranted ⇒ denying stub. |
 
 ### Sandboxing
 
-- **Code plugins** (with `main`) run in the extension host process but with a **restricted `PluginContext`** that wraps `getHost()` with permission checks.
-- **UI plugins** run in a sandboxed iframe or a restricted module scope — no direct `vscode` API, no DOM access to the parent webview.
+- **Code plugins** (with `main`) run in the extension host process but with a **restricted `PluginContext`** that wraps the host surface with permission checks (`plugin-sandbox.ts`).
+- **UI plugins** load via **dynamic `import()` with a restricted `PluginUIApi`** (§14 Q1 → not an iframe) — no direct `vscode` API, no parent-DOM access, only a plugin-scoped message channel. External bundles are served **local-only** (`vscode-webview://` under the plugin dir) under a `strict-dynamic` + nonce CSP; an error boundary unmounts a throwing component (§6.8).
 - **Declarative-only plugins** (no `main`) are inherently safe — they only contribute static files (modes, skills, commands, MCP configs).
 
 ### Trust levels
@@ -823,13 +884,19 @@ my-org-ci-1.0.0.shofer-plugin
 ### Installation
 
 ```bash
-# CLI
+# CLI — a local archive, an unpacked directory, or a direct http(s) archive URL (all implemented)
 shofer plugin install /path/to/my-org-ci-1.0.0.shofer-plugin
-shofer plugin install https://github.com/my-org/shofer-ci-plugin/releases/download/1.0.0/my-org-ci.shofer-plugin
+shofer plugin install ./my-org-ci                       # unpacked plugin directory
+shofer plugin install https://example.com/my-org-ci.shofer-plugin   # direct-URL install
+shofer plugin install <source> [--enable] [--overwrite] [--allow-insecure-http]
 
 # Or extract manually
 tar xzf my-org-ci-1.0.0.shofer-plugin -C .shofer/plugins/
 ```
+
+A URL source (`isPluginUrl` → `installPluginFromUrl`) is downloaded and unpacked through the same
+manifest-validation / zip-slip pipeline as a local archive: **`https` required** (unless loopback or
+`--allow-insecure-http`), **size-capped** (default 64 MiB), fail-closed on a bad manifest.
 
 ### Marketplace integration
 
@@ -844,7 +911,7 @@ The marketplace UI gains a "Plugins" tab alongside "Modes" and "MCP Servers".
 
 ### Plugin registry (remote)
 
-A future hosted plugin registry (like npm or VS Code Marketplace) would allow:
+A future hosted plugin **registry** (like npm or VS Code Marketplace) would allow:
 
 ```
 shofer plugin search "jenkins"
@@ -852,8 +919,10 @@ shofer plugin install my-org-ci@latest
 shofer plugin update --all
 ```
 
-This is deferred — the initial implementation uses local directories and
-direct archive installation.
+The **registry** (search / `install name@version` / a trust + signing chain) stays deferred (§14
+Q5). What ships today is install from a local archive, an unpacked directory, **or a direct http(s)
+archive URL** — the URL path is a direct download, not a registry lookup. **Status: implemented (CLI
+`installPluginFromUrl` + the Marketplace "Install from URL"); registry deferred.**
 
 ---
 
@@ -923,20 +992,25 @@ extensions around it.
 ### `CustomToolRegistry` → absorbed
 
 The existing `CustomToolRegistry` ([`packages/core/src/custom-tools/`](../packages/core/src/custom-tools/))
-becomes the implementation behind `registerTools`. Plugin tools are
-registered into it with `source: "plugin:<name>"`. The `.shofer/tools/`
+becomes the implementation behind `registerTools`. Plugin tools carry plugin
+attribution (`source: "plugin"` + `pluginName`). The `.shofer/tools/`
 directory loading continues to work (it's just another source).
 
 ### `SkillsManager` → extended
 
-`SkillsManager.discoverSkills()` gains a new source: plugin-contributed
-skills from `contributes.skills`. The discovery order is extended (plugin
-skills have higher priority than `.shofer/skills/`).
+`SkillsManager` gains a new source: plugin-contributed skills from
+`contributes.skills` (their `skills/` dirs supplied by the `PluginManager`).
+Plugin skills are **namespaced** (`<pluginName>:<name>` at the resolution layer
+via `qualifiedSkillName`), not merged by precedence, so they can't shadow file
+skills; a skill marked `private` is registered but excluded from user-facing
+enumeration.
 
 ### `CustomModesManager` → extended
 
 `getAllModes()` includes plugin-contributed modes from `contributes.modes`.
-Plugin modes are tagged with `source: "plugin:<name>"`.
+Plugin modes carry `source: "plugin"` + `pluginName` and are emitted under a
+**namespaced slug** `<pluginName>:<authoredSlug>`; a mode marked `private` is
+switch-able by the agent but hidden from the mode picker.
 
 ### `McpHub` → extended
 
@@ -981,10 +1055,20 @@ A new "Plugins" tab in SettingsView:
 
 Each plugin row shows:
 
-- Name, version, icon
-- Summary of contributions (N tools, N modes, N UI components)
-- Settings button (opens plugin config panel)
+- Name, version, scope badge
+- Summary of contributions (N modes · N skills · N commands · N mcpServers · N rules)
 - Enable/disable toggle
+
+**As shipped, two panels split the surface:**
+
+- **Settings → Plugins** (`PluginsSettings.tsx`) — the discovered-plugin list with enable/disable
+  toggles, plus the `settings-tab` UI region slot. Read/toggle only.
+- **Marketplace → Plugins** (`PluginsTab.tsx`) — the same list **plus** the install affordances
+  (**Install from file** = native picker for a local `.shofer-plugin`; **Install from URL** = a
+  direct http(s) archive link), the **uninstall** action, and — for a plugin declaring
+  `permissions.ai` — the **"uses AI (billed)" badge** + the separate AI-consent allow/revoke control
+  (`PluginView.usesAi`/`aiConsented`, `PluginRequest` `setAiConsent`). Registry/marketplace *lookup*
+  stays deferred (§14 Q5). **Status: implemented.**
 
 ### Chat input toolbar contributions
 
@@ -1085,21 +1169,25 @@ expanded `TaskHeader`:
 | 5.3  | Marketplace "Plugins" tab                          | `webview-ui/src/components/marketplace/PluginsTab.tsx` (new) |
 | 5.4  | Remote plugin registry (deferred — hosted service) | —                                                            |
 
-> **✅ Phase 5 implemented.** 5.1 `plugin-pack.ts` — the `.shofer-plugin` gzip-tarball
+> **Status: Phase 5 implemented.** 5.1 `plugin-pack.ts` — the `.shofer-plugin` gzip-tarball
 > format (portable `tar`), `packPlugin`/`unpackPlugin`/`installPlugin`, validated against
 > `pluginManifestSchema`, zip-slip-/symlink-hardened, name-collision-gated (host-agnostic
 > in `@shofer/core`). 5.2 `shofer plugin install|list|remove` (thin over 5.1 + the Phase-1
 > `PluginManager`; the enabled allow-list is the same `shofer.plugins.enabledPlugins` the
 > running agent reads). 5.3 the Marketplace **Plugins** tab (list / enable-disable /
-> uninstall / **install-from-file**) with the extension-side `uninstall` + `installFromFile`
-> handlers (native file picker → 5.1 `unpackPlugin`). All three steps unit-tested.
+> uninstall / **install-from-file** / **install-from-URL**) with the extension-side
+> `uninstall` + `installFromFile` + `installFromUrl` handlers. All steps unit-tested.
 >
-> **5.4 Remote plugin registry — deferred (not built).** Per owner decision §14 Q5
-> ("Remote plugins — no, stay deferred; needs code signing + trust chain"), there is no
-> hosted registry, no `shofer plugin search`, and no remote/URL install. Distribution is
-> LOCAL only: a `.shofer-plugin` archive (or a plugin directory) installed via the CLI or
-> the Marketplace file picker. A future registry would layer search/`install name@ver`/
-> `update --all` on top of this same pack/unpack + `PluginManager` substrate.
+> **Install-from-URL is shipped (direct download, not a registry).** Both the CLI
+> (`isPluginUrl` → `installPluginFromUrl`) and the Marketplace "Install from URL" download a direct
+> `http(s)` `.shofer-plugin` and unpack it through the same 5.1 validation/zip-slip path: **https
+> required** (unless loopback / `--allow-insecure-http`), **size-capped** (default 64 MiB),
+> fail-closed on a bad manifest.
+>
+> **5.4 Remote plugin *registry* — deferred (not built).** Per owner decision §14 Q5 (needs code
+> signing + a trust chain), there is no hosted registry, no `shofer plugin search`, and no
+> `install name@version`. A future registry would layer search / versioned install / `update --all`
+> on top of this same pack/unpack + `PluginManager` + direct-URL substrate.
 
 ### Phase 6: Host Capabilities (`ctx.ai` / `ctx.storage` / `ctx.host.watch` / `ctx.registerService`)
 
@@ -1133,17 +1221,34 @@ independently of enable.
 > start-on-enable/stop-on-disable/throwing-isolation). Non-breaking and fail-closed:
 > a plugin without `permissions.ai` (or unconsented) never touches `ctx.ai`.
 
-> **✅ §13 implementation plan complete (Phases 1–6).** Declarative plugins (P1), code
-> plugins + sandbox (P2), lifecycle hooks (P3), UI contributions (P4), distribution
-> (P5), and host capabilities (P6) all land. **Known remaining follow-ups (out of the P1–P6 plan):**
+### Phase 7: Proactive agent-steering + two dogfood fixes
+
+**Goal:** the live-memory dogfood's remaining gaps (see §6.11 Phase-7). Adds `ctx.agent` (proactive
+agent-notification), makes `ctx.host.watch` path-carrying, and adds `ctx.ai.hasConsent()`.
+
+| Step | What                                                                                  | Files                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 7.G8 | `permissions.agent` + `ctx.agent.notify(message, opts?)` (queue / spawn / interrupt)  | `packages/types/src/plugin.ts`, `packages/core/src/plugins/plugin-agent.ts` (new), `plugin-manager.ts`, `ShoferProvider` (`PluginAgentProvider` seam) |
+| 7.a  | Path-carrying `ctx.host.watch` — `cb(event: { path, type })`                           | `packages/types/src/plugin.ts`, `plugin-sandbox.ts`, the `HostFileWatcher` seam + VS Code adapter     |
+| 7.b  | `ctx.ai.hasConsent()` read-only accessor                                              | `packages/types/src/plugin.ts`, `plugin-ai.ts`                                                         |
+
+> **Status: Phase 7 implemented.** `ctx.agent` injects into the running agent host-side behind a
+> `PluginAgentProvider` seam (mirroring `PluginAiProvider`): `mode: "queue"` (default) enqueues into
+> the active task's `MessageQueueService`; `"spawn"` starts a new task; `"interrupt"` is **reduced to
+> queued-ASAP** (enqueue, and if the loop already ended, drain via the tested
+> `cancelAndProcessQueuedMessages` path — no fragile mid-turn injection). With **no task to steer**, a
+> `queue`/`interrupt` notify **falls back to spawning** so the message is never dropped. Gated on
+> `permissions.agent` (ungranted-but-seam-wired ⇒ denying stub; no seam ⇒ `ctx.agent` absent). The
+> watch callback now delivers the changed file's absolute path + kind, and `ctx.ai.hasConsent()`
+> lets a plugin word prompt/UI copy for the consent state without a billed call.
+
+> **Status: §13 implementation plan complete (Phases 1–7).** Declarative plugins (P1), code
+> plugins + sandbox (P2), lifecycle hooks (P3), UI contributions incl. **external plugin UI bundles**
+> — `localResourceRoots`/`asWebviewUri` serving + the shared-React import map under a
+> `strict-dynamic` CSP (P4, §6.8), distribution incl. **install-from-URL** (P5), host capabilities
+> (P6), and proactive agent-steering + path-carrying watch + `hasConsent` (P7) all land.
 >
-> - **Remote plugin registry (5.4)** — deferred by owner decision (above).
-> - **Phase-4 external plugin UI bundle + CSP** — Phase 4 wires `PluginSlot` +
->   dynamic-import of plugin UI with a restricted API, but shipping a _third-party_ plugin's
->   own UI bundle still needs (a) the webview CSP / `localResourceRoots` to serve the plugin
->   dir's assets, and (b) a shared-React boundary so the plugin component renders in the host
->   React tree without bundling its own React. Built-in / first-party UI contributions work;
->   arbitrary external UI bundles await this CSP + shared-React work.
+> **Remaining follow-up:** the remote plugin **registry** (5.4) — deferred by owner decision (§14 Q5).
 
 ---
 
@@ -1165,7 +1270,7 @@ independently of enable.
 
 6. **Plugin permissions UI.** **DECIDED: one dialog per plugin** (per-plugin consent with expandable details), not per-permission. Phase 1's enable/disable model is per-plugin: a plugin is inert until the user enables it in the Plugins tab (default-disabled), which is the consent gate.
 
-7. **Conflict resolution.** **DECIDED: last-installed-wins + warning** (owner's final decision — replaces the earlier namespacing default). Plugin-contributed **modes**, **commands**, and **skills** use their **natural** slug/name (no `<pluginName>:` namespacing; the mode-slug regex no longer allows `:`, and command names are not prefixed). On a slug/name **collision** — plugin vs plugin, or plugin vs built-in/user contribution — the **last-installed** contributor wins and a warning is emitted that is **both shown and logged** (`getHost().notifier.warn` + `configLog.warn`, via the shared `warnPluginConflict` helper) naming the colliding slug and the winning vs shadowed contributor. **"Last-installed" ordering:** the persisted `enabledPlugins` array (the `PluginStateStore`), which `setEnabled` appends to on enable — a plugin's **install rank** is its index in that array (restart-stable). Higher index = installed/enabled later = wins (`PluginManager.installRank`). **Composition with existing precedence:** project-over-global still governs file-vs-file collisions (settled before plugins merge); plugin contributions sit on **top** of that chain (a plugin is treated as installed after built-in/user contributions), so a plugin wins a plugin-vs-file collision (with a warning), and among plugins the higher install rank wins. Plugin **skills** now follow this same unified rule (the old fixed plugin-source-priority path was dropped in favor of `skillPrecedence` = files by source, plugins on top offset by install rank). ✅ Implemented in Phase 1.
+7. **Conflict resolution.** **DECIDED: namespacing.** Plugin-contributed **modes**, **commands**, and **skills** are addressed under a `<pluginName>:<name>` identifier, so a plugin item can never shadow a built-in/user item or another plugin's item — cross-contributor collisions are **impossible by construction**, and there is no last-installed-wins tie-break between plugins. Attribution rides on `source: "plugin"` + `pluginName`. **How the qualification surfaces** (§14.7 / §6.3–6.5): a plugin **mode**'s emitted `slug` **is** the qualified form `<pluginName>:<authoredSlug>` (the authored slug in the manifest stays natural — no `:`); a plugin **command** is registered/invoked as `<pluginName>:<command>` (the bare name never resolves); a plugin **skill** is namespaced purely at the **resolution/addressing** layer via `qualifiedSkillName()` (`<pluginName>:<name>`), keeping the on-disk dir name and the `SKILL.md` frontmatter `name` spec-compliant. The one residual collision — a single plugin declaring the same slug/name twice — is a manifest bug, surfaced with a defensive `warnPluginConflict` warning (both shown and logged; later entry wins deterministically). Project-over-global still governs file-vs-file precedence for user/built-in items; plugin items are simply orthogonal (namespaced). **Status: implemented** (`plugin-manager.ts` `getContributedModes`, `commands.ts`, `qualifiedSkillName` in `@shofer/types`).
 
 8. **Performance.** **DECIDED: yes** — per-hook timeout (default 500ms) + async loading so plugin init never blocks task start (Phase 2/3, when hooks land). Phase 1 keeps discovery/registration async and off the task-start hot path.
 
@@ -1214,7 +1319,7 @@ in `hooks/hooks.json`, MCP in `.mcp.json`, LSP in `.lsp.json`).
 | **Extensive hook catalog**     | 30+ lifecycle events: `SessionStart`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `PermissionDenied`, `UserPromptSubmit`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, `TaskCreated`, `TaskCompleted`, `Stop`, `Notification`, `FileChanged`, `CwdChanged`, `WorktreeCreate`, `InstructionsLoaded`, `ConfigChange`, `Elicitation`, etc. | ✅ Adopt broadly. Shofer's lifecycle hooks (§6.9) should expand to cover most of these. The `FileChanged`, `CwdChanged`, `InstructionsLoaded` hooks are particularly useful.                                                                        |
 | **User configuration**         | `userConfig` in the manifest declares fields the user is prompted for at enable time. Values are substituted as `${user_config.KEY}` in commands/configs. Sensitive values go to keychain.                                                                                                                                                                     | ✅ Adopt: Shofer's `config` schema in the manifest is the equivalent. Claude Code's `${user_config.*}` substitution pattern is elegant — adopt it.                                                                                                  |
 | **Environment variables**      | `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}` — substituted in all paths. `CLAUDE_PLUGIN_DATA` is a persistent directory that survives updates.                                                                                                                                                                                    | ✅ Adopt: `${SHOFER_PLUGIN_ROOT}`, `${SHOFER_PLUGIN_DATA}`, `${SHOFER_PROJECT_DIR}`. The persistent data directory is essential for plugins that install dependencies.                                                                              |
-| **Namespacing**                | Plugin skills are namespaced: `/plugin-name:skill-name`. Prevents conflicts.                                                                                                                                                                                                                                                                                   | ⛔ **Not adopted** (owner decision, §14 Q7). Shofer uses **last-installed-wins + a shown/logged warning** instead: plugin skills/modes/commands keep their natural name, and a collision resolves to the last-installed contributor with a warning. |
+| **Namespacing**                | Plugin skills are namespaced: `/plugin-name:skill-name`. Prevents conflicts.                                                                                                                                                                                                                                                                                   | ✅ **Adopted** (owner decision, §14 Q7). Shofer namespaces plugin **modes/commands/skills** as `<pluginName>:<name>`, so cross-contributor collisions are impossible by construction (§14.7 / §6.3–6.5). Skills qualify at the resolution layer (on-disk name unchanged); modes emit the qualified slug; commands register under the qualified name. |
 | **Marketplace**                | Git-hosted marketplace repos (`marketplace.json`). Community + official marketplaces. `claude plugin install name@marketplace`.                                                                                                                                                                                                                                | ✅ Adopt: Shofer's marketplace already has the infrastructure. Extend it to install plugin archives.                                                                                                                                                |
 | **Plugin scopes**              | `user` (global), `project` (checked into VCS), `local` (gitignored), `managed` (admin-enforced).                                                                                                                                                                                                                                                               | ✅ Adopt: Shofer already has project/global scope for modes/MCP. Extend to plugins.                                                                                                                                                                 |
 | **Skills-directory plugins**   | A folder in `~/.claude/skills/` with a `.claude-plugin/plugin.json` auto-loads as `name@skills-dir`. No install step.                                                                                                                                                                                                                                          | ✅ Adopt: Shofer should support `.shofer/plugins/` auto-discovery (already in the design).                                                                                                                                                          |
@@ -1359,16 +1464,18 @@ Support `${SHOFER_PLUGIN_ROOT}`, `${SHOFER_PLUGIN_DATA}`,
 
 This helps users decide whether to enable a plugin.
 
-#### R8: Last-installed-wins + warning (owner decision, supersedes namespacing)
+#### R8: Namespacing (owner decision, §14 Q7)
 
-Claude Code namespaces plugin items (`plugin-name:skill-name`). Shofer **does
-not** (§14 Q7). Plugin-contributed skills, commands, and modes keep their
-**natural** slug/name. On a collision — plugin vs plugin, or plugin vs
-built-in/user contribution — the **last-installed** contributor wins and a
-warning is **shown and logged** naming the colliding slug and the winning vs
-shadowed contributor. "Last-installed" = the plugin's index in the persisted
-`enabledPlugins` install order (higher index = later = wins). Project-over-global
-still governs file-vs-file collisions; plugins sit on top of that chain.
+Like Claude Code (`plugin-name:skill-name`), Shofer **namespaces** plugin items.
+Plugin-contributed **modes**, **commands**, and **skills** are addressed under a
+`<pluginName>:<name>` identifier, so a plugin item can never shadow a built-in/user
+item or another plugin's item — cross-contributor collisions are impossible by
+construction (no last-installed-wins tie-break). A plugin mode's emitted `slug` is
+the qualified `<pluginName>:<authoredSlug>`; a plugin command is registered/invoked
+as `<pluginName>:<command>`; a plugin skill is qualified at the resolution layer
+(`qualifiedSkillName`, on-disk name unchanged). The only residual collision — one
+plugin declaring a slug/name twice — is a manifest bug surfaced with a defensive
+`warnPluginConflict` warning (shown + logged). **Status: implemented.**
 
 ---
 
