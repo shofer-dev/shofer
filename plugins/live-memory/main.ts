@@ -201,7 +201,10 @@ const plugin: ShoferPlugin = {
 		const store = getStore(ctx)
 		if (!store) return prompt
 		const data = await store.snapshot()
-		const section = buildLiveMemorySection(data, { aiReady: !!ctx.ai })
+		// `ctx.ai.hasConsent()` (P7) tells us whether calls will actually run — `ctx.ai`
+		// is *present* in both the live and denying-stub cases, so a bare `!!ctx.ai` would
+		// mislabel a granted-but-unconsented plugin as ready. Read-only: no billed call.
+		const section = buildLiveMemorySection(data, { aiReady: ctx.ai?.hasConsent() ?? false })
 		return `${prompt}\n\n${section}`
 	},
 

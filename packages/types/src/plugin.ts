@@ -232,6 +232,16 @@ export interface PluginAi<Handler = unknown> {
 	buildHandler(profileRef?: string): Promise<Handler>
 	/** Embed `texts` via a host embedder, returning one vector per input text. */
 	embed(texts: string[], profileRef?: string): Promise<number[][]>
+	/**
+	 * Whether the user has consented to this plugin's **billed** AI calls (§8) — i.e.
+	 * whether {@link buildHandler}/{@link embed} will actually run rather than throw. A
+	 * plugin sees `ctx.ai` as *present* in both the live and the denying-stub case (they
+	 * differ only when called), so this read-only flag lets it word its prompt/UI copy
+	 * for the consent state **without** making a billed call to find out. Read-only: the
+	 * plugin still cannot grant itself consent. `true` on the live surface, `false` on the
+	 * denying stub.
+	 */
+	hasConsent(): boolean
 }
 
 /**

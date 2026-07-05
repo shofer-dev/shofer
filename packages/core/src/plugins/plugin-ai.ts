@@ -64,6 +64,8 @@ export function createPluginAi(pluginName: string, provider: PluginAiProvider): 
 				throw error
 			}
 		},
+		// Live surface ⇒ the user consented; calls will run (design §8).
+		hasConsent: () => true,
 	}
 }
 
@@ -94,5 +96,8 @@ export function createDeniedPluginAi(
 		async embed(): Promise<number[][]> {
 			return deny("embed")
 		},
+		// Denying stub ⇒ granted-but-not-consented; calls would throw (design §8). Lets a
+		// plugin read the consent state without triggering the deny path.
+		hasConsent: () => false,
 	}
 }

@@ -116,13 +116,17 @@ describe("plugin-ai — createPluginAi / createDeniedPluginAi (P6.G1 unit)", () 
 			[0, 1],
 			[1, 2],
 		])
-		// Surface exposes ONLY buildHandler + embed — no settings/keys leak through.
-		expect(Object.keys(ai).sort()).toEqual(["buildHandler", "embed"])
+		// A live surface reports consent without a billed call (P7 introspection).
+		expect(ai.hasConsent()).toBe(true)
+		// Surface exposes ONLY buildHandler + embed + hasConsent — no settings/keys leak through.
+		expect(Object.keys(ai).sort()).toEqual(["buildHandler", "embed", "hasConsent"])
 	})
 
-	it("denied surface throws + warns on every call", async () => {
+	it("denied surface throws + warns on every call, and reports no consent", async () => {
 		const warn = vi.fn()
 		const ai = createDeniedPluginAi("p", warn)
+		// hasConsent is read-only + side-effect-free: reflects "not consented" without throwing/warning.
+		expect(ai.hasConsent()).toBe(false)
 		await expect(ai.buildHandler()).rejects.toThrow(/not consented/)
 		await expect(ai.embed(["x"])).rejects.toThrow(/not consented/)
 		expect(warn).toHaveBeenCalledTimes(2)
@@ -165,6 +169,7 @@ describe("PluginManager — ctx.ai gating (P6.G1)", () => {
 		})
 		const ai = captured()?.ai
 		expect(ai).toBeDefined()
+		expect(ai!.hasConsent()).toBe(true) // consent introspection reflects granted+consented
 		expect(await ai!.buildHandler()).toBe(FAKE_HANDLER)
 		expect(provider.buildCalls).toEqual([undefined]) // default profile
 	})
@@ -177,6 +182,7 @@ describe("PluginManager — ctx.ai gating (P6.G1)", () => {
 		})
 		const ai = captured()?.ai
 		expect(ai).toBeDefined() // present-but-denying, distinct from absent
+		expect(ai!.hasConsent()).toBe(false) // introspection reflects granted-but-unconsented
 		await expect(ai!.buildHandler()).rejects.toThrow(/not consented/)
 		// The provider was NEVER reached — no billed call attempted.
 		expect(provider.buildCalls).toEqual([])
