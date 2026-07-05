@@ -17,6 +17,44 @@ const PLUGIN_COPY_EXCLUDE_FILES = new Set(["tsconfig.json", "vitest.config.ts", 
 const PLUGIN_COPY_EXCLUDE_EXT = new Set([".tsx"]) // built .js ships; .tsx source doesn't.
 
 /**
+ * Pre-bundle `@shofer/types` into a self-contained ESM module the runtime plugin
+ * loader can resolve. Code plugins import their SDK surface from `@shofer/types`
+ * (`defineCustomTool`, `parametersSchema`/zod, `PLUGIN_API_VERSION`, types …) and the
+ * loader **bundles** that in via esbuild. In dev the workspace `node_modules` resolves
+ * it; the installed VSIX ships no resolvable `@shofer/types`, so we emit one here.
+ *
+ * `@shofer/types`'s own `dist/index.js` externalizes zod/@anthropic-ai/sdk/etc., so we
+ * can't drop it as-is — we re-bundle with dependencies inlined (exactly what the main
+ * extension bundle already does for the same package) into a single dependency-free
+ * file. The loader's `nodePaths` (wired in ShoferProvider) points at the parent
+ * `node_modules` so a bare `@shofer/types` import resolves here.
+ */
+async function buildPluginSdk(srcDir, distDir) {
+	const typesEntry = path.join(srcDir, "..", "packages", "types", "dist", "index.js")
+	const sdkPkgDir = path.join(distDir, "plugin-sdk", "node_modules", "@shofer", "types")
+	fs.mkdirSync(sdkPkgDir, { recursive: true })
+	await esbuild.build({
+		entryPoints: [typesEntry],
+		outfile: path.join(sdkPkgDir, "index.js"),
+		format: "esm",
+		platform: "node",
+		target: "node18",
+		bundle: true,
+		// Inline every dependency (zod, @anthropic-ai/sdk, …) so the shipped module is
+		// self-contained; node built-ins stay external automatically for platform:node.
+		logLevel: "silent",
+	})
+	fs.writeFileSync(
+		path.join(sdkPkgDir, "package.json"),
+		JSON.stringify(
+			{ name: "@shofer/types", version: "0.0.0", type: "module", main: "index.js", module: "index.js", exports: { ".": "./index.js" } },
+			null,
+			2,
+		),
+	)
+}
+
+/**
  * Recursively copy the first-party plugins tree into the packaged output, skipping
  * dev-only cruft. Runtime needs each plugin's `plugin.json`, its `main` .ts sources
  * (the code loader transpiles them at load), built UI bundles (`ui/panel.js`), and
@@ -256,8 +294,12 @@ async function main() {
 
 	if (watch) {
 		await Promise.all([extensionCtx.watch(), workerCtx.watch()])
+		await buildPluginSdk(srcDir, distDir)
 	} else {
 		await Promise.all([extensionCtx.rebuild(), workerCtx.rebuild()])
+		// After the extension bundle exists, emit the self-contained @shofer/types SDK
+		// so bundled/installed code plugins can resolve it at load time.
+		await buildPluginSdk(srcDir, distDir)
 		await Promise.all([extensionCtx.dispose(), workerCtx.dispose()])
 	}
 }

@@ -2112,7 +2112,16 @@ export class ShoferProvider
 			},
 			// Phase 2: load enabled code plugins (`main`) and register their hooks.
 			// The esbuild binary lives in the extension's dist/bin in production.
-			codeLoader: createNodePluginCodeLoader({ extensionPath: this.context.extensionPath }),
+			// nodePaths points at the shipped self-contained plugin SDK so a plugin's
+			// bare `@shofer/types` import resolves in the installed extension (where no
+			// workspace node_modules exists); process.cwd() covers dev/test.
+			codeLoader: createNodePluginCodeLoader({
+				extensionPath: this.context.extensionPath,
+				nodePaths: [
+					path.join(this.context.extensionPath, "dist", "plugin-sdk", "node_modules"),
+					path.join(process.cwd(), "node_modules"),
+				],
+			}),
 			// Base host for each code plugin's restricted, permission-checked sandbox (§8).
 			host: getHost(),
 			// Per-plugin config (merged with manifest defaults) from ContextProxy.
