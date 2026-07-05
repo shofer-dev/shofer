@@ -74,27 +74,22 @@ lifecycle hook.
    correctly when unconsented. A read-only `ctx.ai.isConsented`/`ctx.ai.status` flag
    would close this — a small **additive** future nicety, not required for function.
 
-### Genuine gap (needs a capability the plugin surface does not expose)
+### Genuine gap — CLOSED in Phase 7 (path-carrying file-watch)
 
-**External-edit granularity — `ctx.host.watch` drops the changed path.** The built-in
-file-watcher (`src/services/live-memory/file-watcher.ts`) knows *which* file changed
-externally. The plugin surface's `ctx.host.watch(pattern, onChange: () => void)` fires
-with **no argument**, so the plugin can only record a coarse "something changed under
-`<glob>`" marker. This is **not** a plugin-API-only gap I should paper over: the path is
-discarded one layer deeper, at the **core host seam** —
-`HostFileWatcher.on{Create,Change,Delete}(handler: () => void)` in
-`packages/types/src/host.ts` maps to `vscode.FileSystemWatcher`, whose events *do*
-carry a `vscode.Uri`, but the seam throws it away. Threading the path to plugins
-therefore requires a **core host-seam change** (`HostFileWatcher` callbacks →
-`(path: string) => void`, its VS Code + in-memory adapters, its existing core callers,
-then `PluginHost.watch`'s callback), not the "small additive plugin capability" the
-brief scopes. I deliberately did **not** make that broader change; I recorded it here as
-the one item for the owner / Phase 7:
+**External-edit granularity — `ctx.host.watch` used to drop the changed path.** The
+built-in file-watcher (`src/services/live-memory/file-watcher.ts`) knows *which* file
+changed externally. In P1–P6 the plugin surface's `ctx.host.watch(pattern, onChange: () =>
+void)` fired with **no argument**, so the plugin could only record a coarse "something
+changed under `<glob>`" marker. The path was discarded one layer deeper, at the **core
+host seam** — `HostFileWatcher.on{Create,Change,Delete}(handler: () => void)` in
+`packages/types/src/host.ts` maps to `vscode.FileSystemWatcher`, whose events *do* carry a
+`vscode.Uri`, but the seam threw it away.
 
-> **Missing extension point (for Phase 7):** a path-carrying file-watch. Widen
-> `HostFileWatcher` to deliver the changed path, then surface it on
-> `PluginHost.watch(pattern, onChange: (path: string) => void)`. Until then,
-> plugin-observed external edits are coarse-grained.
+**Phase 7 threaded the path end-to-end** (the core host-seam change flagged as an owner
+decision): `HostFileWatcher` callbacks are now `(path: string) => void` (VS Code adapter
+passes `uri.fsPath`), and `PluginHost.watch(pattern, onChange: (event: { path; type }) =>
+void)` delivers the concrete changed path + change kind. This plugin now records the exact
+file (create/change/delete), debounced per path — no longer coarse-grained.
 
 ## New plugin-API capability added
 

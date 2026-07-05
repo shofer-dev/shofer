@@ -126,24 +126,24 @@ describe("createPluginSandbox (§8 permission enforcement, step 2.4)", () => {
 function makeWatchableHost(): {
 	host: HostBridge
 	watchCalls: { baseDir: string; pattern: string }[]
-	fireChange: () => void
-	fireCreate: () => void
+	fireChange: (path: string) => void
+	fireCreate: (path: string) => void
 	disposed: () => number
 } {
 	const host = createInMemoryHost() as unknown as HostBridge
 	const watchCalls: { baseDir: string; pattern: string }[] = []
-	const changeHandlers: (() => void)[] = []
-	const createHandlers: (() => void)[] = []
+	const changeHandlers: ((path: string) => void)[] = []
+	const createHandlers: ((path: string) => void)[] = []
 	let disposeCount = 0
 	;(host as { watcher: unknown }).watcher = {
 		watch: (baseDir: string, pattern: string) => {
 			watchCalls.push({ baseDir, pattern })
 			return {
-				onCreate: (h: () => void) => {
+				onCreate: (h: (path: string) => void) => {
 					createHandlers.push(h)
 					return { dispose: () => {} }
 				},
-				onChange: (h: () => void) => {
+				onChange: (h: (path: string) => void) => {
 					changeHandlers.push(h)
 					return { dispose: () => {} }
 				},
@@ -157,8 +157,8 @@ function makeWatchableHost(): {
 	return {
 		host,
 		watchCalls,
-		fireChange: () => changeHandlers.forEach((h) => h()),
-		fireCreate: () => createHandlers.forEach((h) => h()),
+		fireChange: (path: string) => changeHandlers.forEach((h) => h(path)),
+		fireCreate: (path: string) => createHandlers.forEach((h) => h(path)),
 		disposed: () => disposeCount,
 	}
 }
@@ -166,7 +166,7 @@ function makeWatchableHost(): {
 describe("createPluginSandbox — ctx.host.watch (P6.G3)", () => {
 	const pluginRoot = "/plugins/ci"
 
-	it("watches within a granted filesystem root and fires the callback", () => {
+	it("watches within a granted filesystem root and fires the callback with path + kind", () => {
 		const { host, watchCalls, fireChange, fireCreate } = makeWatchableHost()
 		const sandbox = createPluginSandbox({
 			pluginName: "ci",
@@ -179,9 +179,12 @@ describe("createPluginSandbox — ctx.host.watch (P6.G3)", () => {
 		const disposable = sandbox.watch!("**/*.json", cb)
 		// It watched under the granted root (not an arbitrary path).
 		expect(watchCalls).toEqual([{ baseDir: "/plugins/ci/data", pattern: "**/*.json" }])
-		fireChange()
-		fireCreate()
+		// The concrete changed path + change kind are threaded through (P7).
+		fireChange("/plugins/ci/data/config.json")
+		fireCreate("/plugins/ci/data/new.json")
 		expect(cb).toHaveBeenCalledTimes(2)
+		expect(cb).toHaveBeenNthCalledWith(1, { path: "/plugins/ci/data/config.json", type: "change" })
+		expect(cb).toHaveBeenNthCalledWith(2, { path: "/plugins/ci/data/new.json", type: "create" })
 		disposable.dispose()
 	})
 

@@ -187,13 +187,28 @@ export interface PluginHost {
 	fetch(input: string | URL, init?: RequestInit): Promise<Response>
 	/**
 	 * Watch files matching `pattern` (a glob) for create/change/delete, invoking
-	 * `onChange` on any event (design §6.11 G3; Phase 6). **Scoped to the plugin's
-	 * `permissions.filesystem` grant**: it watches `pattern` under each granted root
-	 * only. A plugin without a filesystem grant gets a deny + warn (no watcher; the
-	 * returned {@link HostDisposable} is a no-op). Dispose to stop watching (the manager
-	 * also disposes it on plugin disable). Present only when the host wired a watcher.
+	 * `onChange` with the **changed path + change kind** on any event (design §6.11 G3;
+	 * Phase 6, path-carrying since Phase 7 — see {@link PluginWatchEvent}). **Scoped to
+	 * the plugin's `permissions.filesystem` grant**: it watches `pattern` under each
+	 * granted root only, so a fired path is always inside a granted root. A plugin without
+	 * a filesystem grant gets a deny + warn (no watcher; the returned {@link HostDisposable}
+	 * is a no-op). Dispose to stop watching (the manager also disposes it on plugin disable).
+	 * Present only when the host wired a watcher.
 	 */
-	watch?(pattern: string, onChange: () => void): HostDisposable
+	watch?(pattern: string, onChange: (event: PluginWatchEvent) => void): HostDisposable
+}
+
+/**
+ * A single file-watch event delivered to {@link PluginHost.watch}'s callback (P7). Carries
+ * the **absolute path** of the changed file and the change {@link type}, so a plugin can
+ * act on *which* file changed (e.g. re-index just that file) rather than a coarse
+ * "something under the glob changed" signal.
+ */
+export interface PluginWatchEvent {
+	/** Absolute path of the file that changed (always inside a granted filesystem root). */
+	readonly path: string
+	/** Which kind of change fired the event. */
+	readonly type: "create" | "change" | "delete"
 }
 
 /**

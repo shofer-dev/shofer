@@ -29,6 +29,7 @@ import type {
 	HostFileSystem,
 	PluginHost,
 	PluginPermissions,
+	PluginWatchEvent,
 } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
@@ -159,13 +160,14 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 	const env: HostEnv = host.env
 
 	/**
-	 * Scoped file-watch (design §6.11 G3, P6.G3). Watches `pattern` under **each** granted
-	 * `permissions.filesystem` root (so it can never observe paths the plugin wasn't
-	 * granted), wiring create/change/delete → `onChange`. A plugin without a filesystem
-	 * grant is denied (warn + no-op disposable). Returns a composite {@link HostDisposable}
-	 * that disposes every underlying watcher (and their event subscriptions).
+	 * Scoped file-watch (design §6.11 G3, P6.G3; path-carrying since P7). Watches `pattern`
+	 * under **each** granted `permissions.filesystem` root (so it can never observe paths the
+	 * plugin wasn't granted), wiring create/change/delete → `onChange` with the changed path
+	 * and change kind ({@link PluginWatchEvent}). A plugin without a filesystem grant is denied
+	 * (warn + no-op disposable). Returns a composite {@link HostDisposable} that disposes every
+	 * underlying watcher (and their event subscriptions).
 	 */
-	const watch = (pattern: string, onChange: () => void): HostDisposable => {
+	const watch = (pattern: string, onChange: (event: PluginWatchEvent) => void): HostDisposable => {
 		if (fsRoots.length === 0) {
 			warn(
 				`[plugin:${pluginName}] file watch of "${pattern}" denied — ` +
@@ -176,9 +178,9 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 		const disposables: HostDisposable[] = []
 		for (const root of fsRoots) {
 			const watcher = host.watcher.watch(root, pattern)
-			disposables.push(watcher.onCreate(onChange))
-			disposables.push(watcher.onChange(onChange))
-			disposables.push(watcher.onDelete(onChange))
+			disposables.push(watcher.onCreate((path) => onChange({ path, type: "create" })))
+			disposables.push(watcher.onChange((path) => onChange({ path, type: "change" })))
+			disposables.push(watcher.onDelete((path) => onChange({ path, type: "delete" })))
 			disposables.push(watcher)
 		}
 		const composite: HostDisposable = {

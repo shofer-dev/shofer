@@ -106,21 +106,28 @@ const plugin: ShoferPlugin = {
 		const c = cfg(ctx)
 
 		// ── External edits via ctx.host.watch (P6.G3) ──────────────────────────
-		// The watch callback carries no path (the HostFileWatcher seam drops the URI —
-		// see DOGFOOD.md "reduced fidelity"), so we record a coarse "external change"
-		// marker. Debounced so a burst of saves is one observation.
+		// The watch callback now carries the changed path + change kind (P7 —
+		// path-carrying watch), so we record the concrete file and whether it was
+		// created/changed/deleted. Debounced per path so a burst of saves to one file
+		// is a single observation.
 		if (ctx.host?.watch) {
-			let pending: ReturnType<typeof setTimeout> | undefined
-			state.watchDisposable = ctx.host.watch(c.watchGlob, () => {
-				if (pending) clearTimeout(pending)
-				pending = setTimeout(() => {
-					void store.recordObservation({
-						at: Date.now(),
-						kind: "external",
-						subject: `(external change under ${c.watchGlob})`,
-						via: "ctx.host.watch",
-					})
-				}, 250)
+			const pending = new Map<string, ReturnType<typeof setTimeout>>()
+			state.watchDisposable = ctx.host.watch(c.watchGlob, (event) => {
+				const prior = pending.get(event.path)
+				if (prior) clearTimeout(prior)
+				pending.set(
+					event.path,
+					setTimeout(() => {
+						pending.delete(event.path)
+						void store.recordObservation({
+							at: Date.now(),
+							kind: "external",
+							subject: event.path,
+							via: "ctx.host.watch",
+							note: `external ${event.type}`,
+						})
+					}, 250),
+				)
 			})
 		}
 
