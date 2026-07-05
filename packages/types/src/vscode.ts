@@ -50,13 +50,6 @@ export const commandIds = [
 	"focusPanel",
 	"toggleAutoApprove",
 
-	// Live Memory
-	"liveMemory.start",
-	"liveMemory.stop",
-	"liveMemory.clearContext",
-	"liveMemory.showChat",
-	"liveMemory.openSettings",
-
 	// Git Index
 	"startGitIndexing",
 	"stopGitIndexing",
