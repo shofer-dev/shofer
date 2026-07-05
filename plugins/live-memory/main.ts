@@ -19,11 +19,14 @@
  * genuine gap (external-edit path granularity).
  */
 
-import { defineCustomTool, parametersSchema as z } from "@shofer/types"
+import { DEFAULT_MAX_CONTEXT_TOKENS, defineCustomTool, parametersSchema as z } from "@shofer/types"
 import type { HostDisposable, PluginContext, PluginEvent, ShoferPlugin } from "@shofer/types"
 
 import { MemoryStore, type Observation, type ObservationKind } from "./memory-store.js"
-import { answerFromMemory, summarizeMemory } from "./memory-llm.js"
+import { renderMemoryContext, summarizeMemory, MemoryLlmClient } from "./memory-llm.js"
+import { LiveMemoryToolExecutor } from "./tool-executor.js"
+import { LiveMemoryDirectoryTree } from "./directory-tree.js"
+import { LiveMemoryAgent } from "./agent.js"
 import { buildLiveMemorySection } from "./system-section.js"
 
 const PLUGIN_NAME = "live-memory"
@@ -41,10 +44,17 @@ const READ_TOOLS = new Set(["read_file"])
 interface PluginState {
 	/** One store per workspace (mirrors the built-in's per-workspace manager instances). */
 	stores: Map<string, MemoryStore>
+	/** One agent orchestrator per workspace (the Stage-C loop; created lazily on first question). */
+	agents: Map<string, LiveMemoryAgent>
 	watchDisposable?: HostDisposable
 	serviceDisposable?: HostDisposable
 }
-const state: PluginState = { stores: new Map() }
+const state: PluginState = { stores: new Map(), agents: new Map() }
+
+/** The workspace key used for both the store + agent maps. */
+function workspaceKey(ctx: PluginContext): string {
+	return ctx.workspacePath ?? ctx.cwd ?? "default-workspace"
+}
 
 /** Config accessors with defaults matching the manifest. */
 function cfg(ctx: PluginContext) {
@@ -62,7 +72,7 @@ function cfg(ctx: PluginContext) {
 function getStore(ctx: PluginContext): MemoryStore | undefined {
 	if (!ctx.storage) return undefined
 	const c = cfg(ctx)
-	const workspace = ctx.workspacePath ?? ctx.cwd ?? "default-workspace"
+	const workspace = workspaceKey(ctx)
 	const existing = state.stores.get(workspace)
 	if (existing) return existing
 	const store = new MemoryStore(ctx.storage, workspace, {
@@ -74,6 +84,61 @@ function getStore(ctx: PluginContext): MemoryStore | undefined {
 	})
 	state.stores.set(workspace, store)
 	return store
+}
+
+/** An already-created agent for this workspace, if any (non-creating — for cheap hooks). */
+function peekAgent(ctx: PluginContext): LiveMemoryAgent | undefined {
+	return state.agents.get(workspaceKey(ctx))
+}
+
+/**
+ * Lazily create (once per workspace) + initialize the Stage-C {@link LiveMemoryAgent}.
+ * Requires `ctx.ai` (host LLM access) + `ctx.host.fs` (the tool executor's filesystem);
+ * returns `undefined` when either is absent. The agent restores its persisted
+ * conversation window from the store, wires the workspace directory tree + the live
+ * accumulated-memory context into its system prompt, and persists back through the store.
+ */
+async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined> {
+	if (!ctx.ai || !ctx.host?.fs) return undefined
+	const store = getStore(ctx)
+	if (!store) return undefined
+
+	const workspace = workspaceKey(ctx)
+	const existing = state.agents.get(workspace)
+	if (existing) return existing
+
+	const c = cfg(ctx)
+	const fs = ctx.host.fs
+	const maxContextTokens = DEFAULT_MAX_CONTEXT_TOKENS
+	const buildTree = async (): Promise<string> => {
+		try {
+			return await new LiveMemoryDirectoryTree(workspace, maxContextTokens, fs).generate()
+		} catch {
+			return "[Workspace directory tree unavailable]"
+		}
+	}
+
+	const agent = new LiveMemoryAgent({
+		llm: new MemoryLlmClient(ctx.ai, c.profileRef),
+		executor: LiveMemoryToolExecutor.fromContext(ctx),
+		workspacePath: workspace,
+		maxContextTokens,
+		directoryTree: await buildTree(),
+		rebuildDirectoryTree: buildTree,
+		// Fold the live observation/Q&A log into the system prompt each question (the
+		// plugin's "memory" is the passive activity log; the built-in's is its window).
+		memoryContextProvider: async () => renderMemoryContext(await store.snapshot()),
+		// Sandboxed reads for contextFiles, scoped by `permissions.filesystem`.
+		readFile: (abs) => fs.readFile(abs),
+		persist: (snapshot) => store.saveConversation(snapshot),
+	})
+
+	// Restore any persisted conversation window + cost ledger, then promote to Ready.
+	const data = await store.snapshot()
+	agent.initialize({ messages: data.messages, fileContexts: data.fileContexts, costTracking: data.costTracking })
+
+	state.agents.set(workspace, agent)
+	return agent
 }
 
 /** Best-effort extraction of a file path from a tool call's arguments. */
@@ -166,33 +231,64 @@ const plugin: ShoferPlugin = {
 		// Capture this call's `ctx` (with ai/storage) in the tool closure — the tool's
 		// own `execute` receives a CustomToolContext, not the PluginContext.
 		const store = getStore(ctx)
-		const c = cfg(ctx)
 		return [
 			defineCustomTool({
 				name: "ask_live_memory",
 				description:
-					"Ask the persistent Live Memory a question about this codebase. It answers from the knowledge it has accumulated by observing the files Shofer edits and reads (and external changes) over time. Read-only; best for bigger, cross-file investigative questions.",
+					"Ask the persistent Live Memory a question about this codebase. It answers from the knowledge it has accumulated by observing the files Shofer edits and reads (and external changes) over time, running a read-only tool-using agent loop over the workspace. Read-only; best for bigger, cross-file investigative questions.",
 				parameters: z.object({
 					question: z.string().describe("The investigative question to answer from accumulated memory."),
+					contextFiles: z
+						.array(z.string())
+						.describe("Optional workspace-relative file paths to load into the memory's context window.")
+						.optional(),
+					timeoutMs: z
+						.number()
+						.describe("HARD limit (ms) for the whole call, covering queue-wait + processing. Default 300000.")
+						.optional(),
+					softTimeoutSec: z
+						.number()
+						.describe("Soft (advisory) wall-time recommendation in seconds, embedded in the prompt. Default 60.")
+						.optional(),
+					softResultLength: z
+						.number()
+						.describe("Soft (advisory) answer-length recommendation in characters, embedded in the prompt. Default 2000.")
+						.optional(),
 				}),
-				async execute({ question }): Promise<string> {
+				async execute({ question, contextFiles, timeoutMs, softTimeoutSec, softResultLength }): Promise<string> {
 					if (!store) return "Live Memory error: no persistent storage is available (ctx.storage unwired)."
 					if (!ctx.ai) {
 						return "Live Memory error: this plugin is not granted host AI access (ctx.ai absent). Grant permissions.ai."
 					}
 					if (!question || question.trim() === "") return "Live Memory error: a non-empty `question` is required."
 					try {
-						const data = await store.snapshot()
-						const result = await answerFromMemory(ctx.ai, c.profileRef, question, data, {
-							maxAnswerChars: 4000,
+						const agent = await getAgent(ctx)
+						if (!agent) {
+							return "Live Memory error: the agent could not start (ctx.host.fs is unavailable — grant permissions.filesystem)."
+						}
+						const result = await agent.askQuestion(question, contextFiles ?? undefined, {
+							timeoutMs: timeoutMs ?? undefined,
+							softTimeoutSec: softTimeoutSec ?? undefined,
+							softResultLength: softResultLength ?? undefined,
 						})
-						// Persist the Q&A so memory behaves as a companion across tasks.
+						// Persist the Q&A so the observation/Q&A stats (surfaced in the prompt
+						// section) reflect the exchange; the conversation window is persisted
+						// separately by the agent itself.
 						await store.recordQa(question, result.answer)
-						const model = result.modelId ? ` [model: ${result.modelId}]` : ""
-						return `Live Memory Answer${model}:\n${result.answer}\n\n---\nGrounded in ${data.observations.length} observation(s) across this workspace; tokens: ${result.promptTokens} prompt + ${result.completionTokens} completion.`
+
+						// Output block matching the built-in AskLiveMemoryTool.
+						return `Live Memory Answer:
+${result.answer}
+
+---
+Context: ${result.contextUsage.currentTokens} / ${result.contextUsage.maxTokens} tokens (${(result.contextUsage.fillFraction * 100).toFixed(1)}% full)
+Duration: ${(result.durationMs / 1000).toFixed(1)}s
+Tokens: ${result.tokensUsed.prompt} prompt + ${result.tokensUsed.completion} completion = ${result.tokensUsed.total} total
+Cost: $${result.costSnapshot.sessionEstimatedCostUSD.toFixed(6)} (session total)
+Files in context: ${result.contextFiles.length}`
 					} catch (error) {
 						// A granted-but-not-consented plugin gets a denying ctx.ai stub whose
-						// buildHandler throws here — surfaced as a clear, non-billing error.
+						// buildHandler throws inside the loop — surfaced as a clear, non-billing error.
 						return `Live Memory error: ${error instanceof Error ? error.message : String(error)}`
 					}
 				},
@@ -266,6 +362,13 @@ const plugin: ShoferPlugin = {
 				note: kind === "edit" ? truncate(String(result ?? ""), 160) : undefined,
 			}
 			await store.recordObservation(observation)
+
+			// Feed edit observations into the running agent's recentlyModifiedFiles hint —
+			// the plugin-native replacement for FileContextTracker → notifyFileModified. Only
+			// an already-created agent is notified (no eager LLM-handler build for a hook).
+			if (kind === "edit" && subject !== "(unknown file)") {
+				peekAgent(ctx)?.notifyFileModified(subject)
+			}
 		},
 	},
 }

@@ -12,7 +12,8 @@
 		"lifecycle": true,
 		"events": true,
 		"ai": true,
-		"filesystem": ["."]
+		"filesystem": ["."],
+		"search": true
 	},
 	"config": {
 		"type": "object",

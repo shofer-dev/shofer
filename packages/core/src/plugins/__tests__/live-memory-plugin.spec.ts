@@ -195,6 +195,34 @@ describe("Live Memory plugin (P1–P6 dogfood)", () => {
 		expect(answer).toContain("What changed recently?")
 	})
 
+	it("accepts the full ask_live_memory param set and returns the agent-loop output block", async () => {
+		const h = await buildHarness({ consented: true })
+		await pluginRegistry.applyAfterToolCall("write_to_file", { path: "src/foo.ts" }, "ok")
+		// Seed a context file so `contextFiles` loading is exercised (Files in context: 1).
+		h.recordingFs.files.set(path.resolve(h.workspace, "src/foo.ts"), "export const foo = 1\n")
+
+		const tools = await pluginRegistry.collectTools()
+		const ask = tools.find((t) => t.name === "ask_live_memory")!
+		const answer = await ask.execute(
+			{
+				question: "How does foo work?",
+				contextFiles: ["src/foo.ts"],
+				timeoutMs: 120000,
+				softTimeoutSec: 20,
+				softResultLength: 500,
+			},
+			{ mode: "code", task: {} as never },
+		)
+		// The Stage-C output block mirrors the built-in AskLiveMemoryTool exactly.
+		expect(answer).toContain("Live Memory Answer")
+		expect(answer).toContain("Context:")
+		expect(answer).toContain("% full)")
+		expect(answer).toMatch(/Duration: [\d.]+s/)
+		expect(answer).toMatch(/Tokens: \d+ prompt \+ \d+ completion = \d+ total/)
+		expect(answer).toMatch(/Cost: \$[\d.]+ \(session total\)/)
+		expect(answer).toContain("Files in context: 1")
+	})
+
 	it("gates ctx.ai on the billed-AI consent (denying stub when not consented)", async () => {
 		await buildHarness({ consented: false })
 		await pluginRegistry.applyAfterToolCall("write_to_file", { path: "src/foo.ts" }, "ok")
