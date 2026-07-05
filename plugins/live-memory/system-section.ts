@@ -8,12 +8,19 @@
  */
 
 import type { MemoryData } from "./memory-store.js"
+import type { ContextUsage } from "./context-window.js"
 
 export interface SectionOptions {
-	/** Model label (`id via provider`) when known, for parity with the built-in copy. */
+	/** Model label (the memory LLM's model id) when known, for parity with the built-in copy. */
 	modelLabel?: string
 	/** Whether `ctx.ai` is live (granted + consented). When false, the tool will error. */
 	aiReady: boolean
+	/**
+	 * Live context-window utilisation from the running agent (Stage C). When present the
+	 * section reports the token-fill % and a nearly-full ⚠️, matching the built-in
+	 * `getLiveMemorySection`. Absent before the agent has run any question (window empty).
+	 */
+	contextUsage?: ContextUsage
 }
 
 /** Count distinct file subjects across edit/read/external observations. */
@@ -44,6 +51,18 @@ export function buildLiveMemorySection(data: MemoryData, opts: SectionOptions): 
 		? `\n- **Running summary:** ${truncate(data.stats.summary, 300)}`
 		: ""
 
+	// Context-window fill line + nearly-full ⚠️ (matches the built-in getLiveMemorySection),
+	// surfaced once the agent has run and has a live ContextWindow snapshot.
+	let contextLine = ""
+	if (opts.contextUsage) {
+		const { currentTokens, maxTokens, isNearlyFull } = opts.contextUsage
+		const fillPercent = maxTokens > 0 ? Math.round((currentTokens / maxTokens) * 100) : 0
+		const fillWarning = isNearlyFull
+			? ` ⚠️ nearly full — answers may become less relevant; consider clearing its context.`
+			: ""
+		contextLine = `\n- **Context window:** ~${fillPercent}% of ${maxTokens.toLocaleString()} tokens.${fillWarning}`
+	}
+
 	return `====
 
 LIVE MEMORY
@@ -52,7 +71,7 @@ A persistent, workspace-scoped memory companion is available via the \`ask_live_
 
 Current memory state:
 - **Observations retained:** ${data.observations.length} (of ${data.stats.totalObservations} seen) across ${files} file(s).
-- **Questions answered so far:** ${data.stats.totalQuestions}.${summaryLine}${consentNote}
+- **Questions answered so far:** ${data.stats.totalQuestions}.${contextLine}${summaryLine}${consentNote}
 
 Best practices:
 - Reserve it for **bigger investigative questions** that benefit from accumulated, cross-file context — how a subsystem fits together, what has recently been changing and where.

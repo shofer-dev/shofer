@@ -303,7 +303,24 @@ Files in context: ${result.contextFiles.length}`
 		// `ctx.ai.hasConsent()` (P7) tells us whether calls will actually run — `ctx.ai`
 		// is *present* in both the live and denying-stub cases, so a bare `!!ctx.ai` would
 		// mislabel a granted-but-unconsented plugin as ready. Read-only: no billed call.
-		const section = buildLiveMemorySection(data, { aiReady: ctx.ai?.hasConsent() ?? false })
+		const aiReady = ctx.ai?.hasConsent() ?? false
+
+		// Read live model label + context-window fill from an ALREADY-running agent (do not
+		// force-create one here — building the directory tree/handler on every prompt would
+		// be wasteful). Before the first question the section shows stats only; once the
+		// agent exists it gains the model label + fill %/⚠️, matching getLiveMemorySection.
+		const agent = peekAgent(ctx)
+		let modelLabel: string | undefined
+		if (agent && aiReady) {
+			// getModel() on the (already-built) handler — best-effort, no billed call.
+			modelLabel = await agent.getModelLabel().catch(() => undefined)
+		}
+
+		const section = buildLiveMemorySection(data, {
+			aiReady,
+			modelLabel,
+			contextUsage: agent?.getContextUsage(),
+		})
 		return `${prompt}\n\n${section}`
 	},
 
