@@ -1,5 +1,10 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
+import * as HostReact from "react"
+import * as HostReactDom from "react-dom"
+import * as HostReactDomClient from "react-dom/client"
+import * as HostJsxRuntime from "react/jsx-runtime"
+import * as HostJsxDevRuntime from "react/jsx-dev-runtime"
 
 import "./index.css"
 import App from "./App"
@@ -8,6 +13,23 @@ import "../node_modules/@vscode/codicons/dist/codicon.css"
 
 import { getHighlighter } from "./utils/highlighter"
 import { vscode } from "./utils/vscode"
+
+// ---------------------------------------------------------------------------
+// Shared-React boundary for external plugin UI bundles (design §6.8, P4).
+//
+// A third-party plugin's UI bundle is built with `react`/`react-dom`/
+// `react/jsx-runtime` **externalized**, so its imports stay bare specifiers. The
+// webview HTML injects an import map that resolves those specifiers to small shim
+// modules under `plugin-host/` which re-export the globals published here — so a
+// dynamically-imported plugin bundle reuses THIS running React instance instead of
+// bundling its own (a second copy would break hooks/context). Published
+// synchronously at module-eval time, well before any plugin bundle is imported.
+// ---------------------------------------------------------------------------
+;(globalThis as unknown as Record<string, unknown>).__shoferHostReact = HostReact
+;(globalThis as unknown as Record<string, unknown>).__shoferHostReactDom = HostReactDom
+;(globalThis as unknown as Record<string, unknown>).__shoferHostReactDomClient = HostReactDomClient
+;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxRuntime = HostJsxRuntime
+;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxDevRuntime = HostJsxDevRuntime
 
 // ---------------------------------------------------------------------------
 // Global error listeners — marshal uncaught exceptions back to the extension
