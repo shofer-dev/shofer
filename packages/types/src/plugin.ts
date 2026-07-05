@@ -792,7 +792,17 @@ export interface PluginView {
 	name: string
 	version: string
 	description?: string
-	scope: "global" | "project"
+	/**
+	 * Provenance: `"bundled"` = first-party, shipped inside the extension; `"global"`
+	 * = `~/.shofer/plugins`; `"project"` = `<cwd>/.shofer/plugins`.
+	 */
+	scope: "bundled" | "global" | "project"
+	/**
+	 * Whether this is a first-party (bundled) plugin. First-party plugins are
+	 * non-uninstallable (they ship with the extension), so the Plugins panel hides
+	 * their uninstall affordance. They still follow the normal enable toggle.
+	 */
+	firstParty: boolean
 	/** The user's persisted toggle intent (design §7). */
 	enabled: boolean
 	/**

@@ -2089,8 +2089,9 @@ export class ShoferProvider
 	 * Lazily construct the declarative {@link PluginManager} (design §7) and install
 	 * it as the process-wide shared instance so core subsystems (McpHub, command
 	 * service) and src subsystems (SkillsManager, CustomModesManager) pick up plugin
-	 * contributions. Scans `~/.shofer/plugins` (global) and `<cwd>/.shofer/plugins`
-	 * (project); enabled state is persisted in globalState.
+	 * contributions. Scans `<extensionPath>/dist/plugins` (bundled first-party),
+	 * `~/.shofer/plugins` (global) and `<cwd>/.shofer/plugins` (project); enabled
+	 * state is persisted in globalState.
 	 */
 	public async getPluginManager(): Promise<PluginManager> {
 		if (this.pluginManager) return this.pluginManager
@@ -2098,6 +2099,12 @@ export class ShoferProvider
 		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
 		const cwd = this.cwd
 		const pluginDirs = [
+			// First-party bundled plugins shipped inside the extension (design §7 —
+			// bundled scope). Copied by esbuild into `<extensionPath>/dist/plugins`
+			// (mirroring the tree-sitter-wasm copy). Scanned first ⇒ lowest precedence,
+			// so a same-named global/project plugin can shadow a bundled one. Missing dir
+			// (e.g. an unbundled dev run) discovers nothing — the manager tolerates it.
+			{ dir: path.join(this.context.extensionPath, "dist", "plugins"), scope: "bundled" as const },
 			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
 			...(cwd ? [{ dir: path.join(cwd, ".shofer", "plugins"), scope: "project" as const }] : []),
 		]
@@ -2362,6 +2369,9 @@ export class ShoferProvider
 			version: p.version,
 			description: p.description,
 			scope: p.scope,
+			// First-party (bundled) plugins are non-uninstallable — the panel hides the
+			// uninstall affordance for them (they ship with the extension).
+			firstParty: p.firstParty,
 			enabled: p.enabled,
 			// Surface *why* an enabled plugin is inactive (unmet dependency / cycle,
 			// design §14.3) so the Plugins panel can show it (fail-closed).
