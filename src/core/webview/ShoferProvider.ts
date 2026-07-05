@@ -87,6 +87,7 @@ import {
 	getGlobalShoferDirectory,
 	pluginRegistry,
 	unpackPlugin,
+	installPluginFromUrl as installPluginArchiveFromUrl,
 	PluginPackError,
 } from "@shofer/core"
 import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
@@ -2260,10 +2261,11 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Handle a Plugins-tab request (list / enable-disable / uninstall / install-from-file),
-	 * then re-push state. Uninstall and install both re-run discovery so the change is
-	 * reflected immediately; install opens a native file picker for a local
-	 * `.shofer-plugin` archive (remote/registry install stays deferred, design §14 Q5).
+	 * Handle a Plugins-tab request (list / enable-disable / uninstall / install-from-file /
+	 * install-from-url), then re-push state. Uninstall and both installs re-run discovery so
+	 * the change is reflected immediately; install-from-file opens a native file picker for a
+	 * local `.shofer-plugin` archive, install-from-url downloads a `.shofer-plugin` from a
+	 * direct http(s) URL (registry lookup stays deferred, design §14 Q5).
 	 */
 	public async handlePluginRequest(request: PluginRequest): Promise<void> {
 		const manager = await this.getPluginManager()
@@ -2283,6 +2285,9 @@ export class ShoferProvider
 				break
 			case "installFromFile":
 				await this.installPluginFromFile(manager)
+				break
+			case "installFromUrl":
+				await this.installPluginFromUrl(manager, request.url, request.enable)
 				break
 			case "list":
 				break
@@ -2328,6 +2333,41 @@ export class ShoferProvider
 			await this.resyncAfterPluginChange()
 			vscode.window.showInformationMessage(
 				`Installed plugin "${installed.name}" v${installed.version}. Enable it in the Plugins tab.`,
+			)
+		} catch (error) {
+			const message = error instanceof PluginPackError ? error.message : String(error)
+			vscode.window.showErrorMessage(`Failed to install plugin: ${message}`)
+		}
+	}
+
+	/**
+	 * Install a plugin from a direct http(s) URL to a `.shofer-plugin` archive (design §9,
+	 * Phase 5.3). Delegates the download + unpack to the core `installPluginFromUrl` helper
+	 * (https-only + size-capped + zip-slip / manifest validated) — no download logic is
+	 * duplicated here — then re-discovers so the freshly written plugin appears immediately.
+	 * With `enable`, the plugin is turned on after install; otherwise it lands disabled like
+	 * install-from-file. A bad URL / archive surfaces the helper's `PluginPackError` message
+	 * as an error notification rather than a crash.
+	 */
+	private async installPluginFromUrl(manager: PluginManager, url: string, enable?: boolean): Promise<void> {
+		const trimmed = url.trim()
+		if (!trimmed) {
+			vscode.window.showErrorMessage("Enter a plugin URL to install.")
+			return
+		}
+		const globalPluginsDir = path.join(getGlobalShoferDirectory(), "plugins")
+		try {
+			const installed = await installPluginArchiveFromUrl(trimmed, globalPluginsDir, { overwrite: false })
+			// Rebuild discovery so the freshly downloaded plugin dir is picked up.
+			await manager.discover()
+			if (enable) {
+				await manager.setEnabled(installed.name, true)
+			}
+			await this.resyncAfterPluginChange()
+			vscode.window.showInformationMessage(
+				enable
+					? `Installed and enabled plugin "${installed.name}" v${installed.version}.`
+					: `Installed plugin "${installed.name}" v${installed.version}. Enable it in the Plugins tab.`,
 			)
 		} catch (error) {
 			const message = error instanceof PluginPackError ? error.message : String(error)
