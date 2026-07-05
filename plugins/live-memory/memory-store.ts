@@ -13,10 +13,21 @@
  * workspace an isolated, bounded-length file.
  */
 
-import type { PluginStorage } from "@shofer/types"
+import { createHash } from "node:crypto"
+import { resolve as resolvePath } from "node:path"
 
-/** Schema version of the persisted document; bump on an incompatible shape change. */
-export const MEMORY_STORE_VERSION = 1
+import type { PluginStorage, HostFileSystem, AgentMessage, FileContextEntry, LiveMemoryCostTracking } from "@shofer/types"
+
+/**
+ * Schema version of the persisted document; bump on an incompatible shape change.
+ *
+ * v2 grew the document (alongside the existing observations/qa/stats) to also persist
+ * the memory agent's conversation `messages`, loaded `fileContexts`, and running
+ * `costTracking` — mirroring the built-in `ConversationStore` schema so a later stage
+ * can run the full agent-loop Q&A on the plugin surface. Loads stay backward-tolerant:
+ * a v1 document (without those fields) is upgraded in place with empty defaults.
+ */
+export const MEMORY_STORE_VERSION = 2
 
 /** How the plugin came to know about a file touch. */
 export type ObservationKind =
@@ -66,6 +77,25 @@ export interface MemoryData {
 	observations: Observation[]
 	qa: QaEntry[]
 	stats: MemoryStats
+	/**
+	 * The memory agent's conversation transcript (added in v2). Mirrors
+	 * `ConversationStore.messages`; used by the agent-loop Q&A in a later stage.
+	 */
+	messages: AgentMessage[]
+	/**
+	 * File context entries the memory agent has loaded (added in v2). Mirrors
+	 * `ConversationStore.fileContexts`; validated on load against the workspace.
+	 */
+	fileContexts: FileContextEntry[]
+	/** Running cost ledger (added in v2). Mirrors `ConversationStore.costTracking`. */
+	costTracking: LiveMemoryCostTracking
+}
+
+/** The conversation slice persisted alongside the observation/Q&A log (v2). */
+export interface ConversationSnapshot {
+	messages: AgentMessage[]
+	fileContexts: FileContextEntry[]
+	costTracking: LiveMemoryCostTracking
 }
 
 export interface MemoryStoreOptions {
@@ -73,6 +103,12 @@ export interface MemoryStoreOptions {
 	maxObservations?: number
 	/** Cap on retained Q&A pairs (older ones evicted FIFO). */
 	maxQuestions?: number
+	/**
+	 * Host filesystem (`ctx.host.fs`) used for on-load file-context validation — the
+	 * plugin's `permissions.filesystem: ["."]` grant scopes it. When absent, validation
+	 * is skipped and persisted file contexts load unchanged.
+	 */
+	hostFs?: HostFileSystem
 }
 
 /** A stable, dependency-free 32-bit FNV-1a hash rendered as 8 hex chars. */
@@ -86,6 +122,16 @@ export function hashWorkspace(workspacePath: string): string {
 	return (h >>> 0).toString(16).padStart(8, "0")
 }
 
+function emptyCostTracking(): LiveMemoryCostTracking {
+	return {
+		totalInputTokens: 0,
+		totalOutputTokens: 0,
+		totalTokensTruncated: 0,
+		estimatedCostUSD: 0,
+		lastUpdated: Date.now(),
+	}
+}
+
 function emptyData(workspacePath: string): MemoryData {
 	return {
 		version: MEMORY_STORE_VERSION,
@@ -94,6 +140,9 @@ function emptyData(workspacePath: string): MemoryData {
 		observations: [],
 		qa: [],
 		stats: { totalObservations: 0, totalQuestions: 0 },
+		messages: [],
+		fileContexts: [],
+		costTracking: emptyCostTracking(),
 	}
 }
 
@@ -107,6 +156,7 @@ export class MemoryStore {
 	private readonly fileName: string
 	private readonly maxObservations: number
 	private readonly maxQuestions: number
+	private readonly hostFs: HostFileSystem | undefined
 	private cache: MemoryData | undefined
 
 	constructor(
@@ -117,6 +167,7 @@ export class MemoryStore {
 		this.fileName = `memory-${hashWorkspace(workspacePath)}.json`
 		this.maxObservations = Math.max(1, opts.maxObservations ?? 400)
 		this.maxQuestions = Math.max(1, opts.maxQuestions ?? 50)
+		this.hostFs = opts.hostFs
 	}
 
 	/** The relative file name under the plugin's storage dir (for diagnostics/tests). */
@@ -124,15 +175,24 @@ export class MemoryStore {
 		return this.fileName
 	}
 
-	/** Load (once) from storage, tolerating a missing/corrupt/old-version file. */
+	/**
+	 * Load (once) from storage, tolerating a missing/corrupt file. Backward-tolerant
+	 * across store versions: any document from v1 up to the current
+	 * {@link MEMORY_STORE_VERSION} is normalized (missing v2 fields default empty);
+	 * an unknown/future version starts fresh. On load, persisted file contexts are
+	 * validated against the workspace (stale/missing entries evicted) when a host
+	 * filesystem was provided.
+	 */
 	async load(): Promise<MemoryData> {
 		if (this.cache) return this.cache
 		try {
 			if (await this.storage.exists(this.fileName)) {
 				const raw = await this.storage.readFile(this.fileName)
 				const parsed = JSON.parse(raw) as MemoryData
-				if (parsed && parsed.version === MEMORY_STORE_VERSION) {
-					this.cache = normalize(parsed, this.workspacePath)
+				if (parsed && typeof parsed.version === "number" && parsed.version >= 1 && parsed.version <= MEMORY_STORE_VERSION) {
+					const data = normalize(parsed, this.workspacePath)
+					data.fileContexts = await this.validateFileContexts(data.fileContexts)
+					this.cache = data
 					return this.cache
 				}
 			}
@@ -178,13 +238,48 @@ export class MemoryStore {
 		await this.persist(data)
 	}
 
+	/**
+	 * Replace the persisted conversation slice (messages / file contexts / cost ledger)
+	 * and persist. The agent-loop analogue of `ConversationStore.save`, kept alongside
+	 * the observation/Q&A log so a later stage can restore a full memory-agent session.
+	 */
+	async saveConversation(snapshot: ConversationSnapshot): Promise<void> {
+		const data = await this.load()
+		data.messages = snapshot.messages
+		data.fileContexts = snapshot.fileContexts
+		data.costTracking = snapshot.costTracking
+		await this.persist(data)
+	}
+
+	/**
+	 * Re-read each file context's source file and keep only the entries whose SHA-256
+	 * content hash still matches — the plugin-native port of
+	 * `ConversationStore._validateFileContexts`. Missing/unreadable files are evicted.
+	 * A no-op (entries returned unchanged) when no host filesystem was provided.
+	 */
+	private async validateFileContexts(entries: FileContextEntry[]): Promise<FileContextEntry[]> {
+		if (!this.hostFs || entries.length === 0) return entries
+		const validated: FileContextEntry[] = []
+		for (const fc of entries) {
+			try {
+				const fullPath = resolvePath(this.workspacePath, fc.filePath)
+				const content = await this.hostFs.readFile(fullPath)
+				const currentHash = createHash("sha256").update(content).digest("hex")
+				if (currentHash === fc.contentHash) validated.push(fc)
+			} catch {
+				// File deleted / unreadable → evict.
+			}
+		}
+		return validated
+	}
+
 	private async persist(data: MemoryData): Promise<void> {
 		data.updatedAt = Date.now()
 		await this.storage.writeFile(this.fileName, JSON.stringify(data, null, "\t"))
 	}
 }
 
-/** Coerce a loaded document into a well-formed {@link MemoryData} (defensive). */
+/** Coerce a loaded document (any supported version) into a well-formed {@link MemoryData}. */
 function normalize(parsed: MemoryData, workspacePath: string): MemoryData {
 	const base = emptyData(workspacePath)
 	return {
@@ -199,5 +294,11 @@ function normalize(parsed: MemoryData, workspacePath: string): MemoryData {
 			summary: parsed.stats?.summary,
 			summaryUpdatedAt: parsed.stats?.summaryUpdatedAt,
 		},
+		// v2 fields — default empty when loading a v1 document.
+		messages: Array.isArray(parsed.messages) ? parsed.messages : base.messages,
+		fileContexts: Array.isArray(parsed.fileContexts) ? parsed.fileContexts : base.fileContexts,
+		costTracking: parsed.costTracking
+			? { ...base.costTracking, ...parsed.costTracking }
+			: base.costTracking,
 	}
 }

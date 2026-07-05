@@ -68,6 +68,9 @@ function getStore(ctx: PluginContext): MemoryStore | undefined {
 	const store = new MemoryStore(ctx.storage, workspace, {
 		maxObservations: c.maxObservations,
 		maxQuestions: c.maxQuestions,
+		// Enables on-load file-context validation (a no-op until file contexts are
+		// persisted). Scoped by the plugin's `permissions.filesystem: ["."]` grant.
+		hostFs: ctx.host?.fs,
 	})
 	state.stores.set(workspace, store)
 	return store
