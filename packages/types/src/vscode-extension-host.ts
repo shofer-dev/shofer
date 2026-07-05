@@ -1255,7 +1255,6 @@ export interface ShoferSayTool {
 		| "insertEdit"
 		| "removeFile"
 		| "moveFile"
-		| "askLiveMemory"
 		| "gitSearch"
 		| "callMcpToolAsync"
 		| "checkMcpCallStatus"
@@ -1358,16 +1357,7 @@ export interface ShoferSayTool {
 	is_background?: boolean
 	softResultLength?: number
 	softTimeoutSec?: number
-	// Properties for ask_live_memory. The `question` field above carries the
-	// prompt sent to the live memory agent; these carry the answer + metadata that
-	// only become known after the live memory agent responds (emitted via a follow-up
-	// `task.say("tool", ...)` once the call returns).
-	answer?: string
 	contextFiles?: string[]
-	timeoutMs?: number
-	durationMs?: number
-	tokensTotal?: number
-	costUSD?: number
 }
 
 /**
