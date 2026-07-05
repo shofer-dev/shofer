@@ -716,6 +716,15 @@ export type PluginRequest =
 	 * dir, and re-discovers. Remote/registry install stays deferred (design §9, §14 Q5).
 	 */
 	| { action: "installFromFile" }
+	/**
+	 * Install a plugin from a direct http(s) `url` pointing at a `.shofer-plugin` archive.
+	 * The extension downloads it via the core helper (https-only + size-capped + zip-slip
+	 * / manifest validated), unpacks it into the global plugins dir, and re-discovers.
+	 * Optional {@link enable} enables the freshly installed plugin on success (default:
+	 * installed disabled, matching install-from-file). This is a **direct-URL** install,
+	 * not a registry lookup (design §9, §14 Q5).
+	 */
+	| { action: "installFromUrl"; url: string; enable?: boolean }
 
 // ---------------------------------------------------------------------------
 // Plugin UI contributions (design §6.8, §12; Phase 4)
