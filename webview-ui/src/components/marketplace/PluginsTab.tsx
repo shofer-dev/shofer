@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Blocks, Sparkles, Trash2, Upload } from "lucide-react"
+import { Blocks, Link2, Sparkles, Trash2, Upload } from "lucide-react"
 
 import type { PluginRequest, PluginView } from "@shofer/types"
 
@@ -7,7 +7,7 @@ import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { vscode } from "@/utils/vscode"
 import { Button } from "@/components/ui/button"
-import { ToggleSwitch } from "@/components/ui"
+import { Input, ToggleSwitch } from "@/components/ui"
 
 function post(plugin: PluginRequest) {
 	vscode.postMessage({ type: "plugin", plugin })
@@ -27,23 +27,41 @@ function contributionSummary(plugin: PluginView, t: (key: string, opts?: Record<
 
 /**
  * Marketplace "Plugins" tab (design §9, §12; Phase 5.3). Lists installed/discovered
- * plugins with enable/disable + uninstall, and an "Install from file" affordance for a
- * local `.shofer-plugin` archive. Remote/registry install is deferred (design §14 Q5) —
- * install here is LOCAL only; the extension opens a native file picker.
+ * plugins with enable/disable + uninstall, plus two install affordances: "Install from
+ * file" (a local `.shofer-plugin` archive via a native picker) and "Install from URL" (a
+ * direct http(s) link to a `.shofer-plugin`). Registry/marketplace lookup stays deferred
+ * (design §14 Q5) — install here is a local file or a direct URL only.
  *
  * Reuses the Phase-1 plugins snapshot pushed to `useExtensionState().plugins` and the
- * `plugin` webview→extension channel (enable/disable/uninstall/install-from-file).
+ * `plugin` webview→extension channel (enable/disable/uninstall/install-from-file/url).
  */
 export function PluginsTab() {
 	const { t } = useAppTranslation()
 	const { plugins } = useExtensionState()
 	// Per-plugin two-step uninstall confirmation (avoids a modal dependency).
 	const [confirming, setConfirming] = useState<string | null>(null)
+	// Install-from-URL: the typed URL + an in-flight flag (the extension surfaces the
+	// success/error itself via a native notification, like install-from-file).
+	const [url, setUrl] = useState("")
+	const [installing, setInstalling] = useState(false)
 
 	// Ask the extension for the current plugin list whenever this tab mounts.
 	useEffect(() => {
 		post({ action: "list" })
 	}, [])
+
+	// Clear the pending flag once a fresh plugins snapshot arrives — the extension
+	// re-pushes state after handling the request whether the install succeeded or failed.
+	useEffect(() => {
+		setInstalling(false)
+	}, [plugins])
+
+	const submitUrlInstall = () => {
+		const trimmed = url.trim()
+		if (!trimmed || installing) return
+		setInstalling(true)
+		post({ action: "installFromUrl", url: trimmed })
+	}
 
 	const list = useMemo<PluginView[]>(() => plugins?.plugins ?? [], [plugins])
 
@@ -56,6 +74,32 @@ export function PluginsTab() {
 				<Button variant="secondary" className="shrink-0" onClick={() => post({ action: "installFromFile" })}>
 					<Upload className="size-4" />
 					{t("marketplace:plugins.installFromFile")}
+				</Button>
+			</div>
+
+			<div className="flex items-center gap-2">
+				<Input
+					type="url"
+					value={url}
+					disabled={installing}
+					placeholder={t("marketplace:plugins.installFromUrlPlaceholder")}
+					aria-label={t("marketplace:plugins.installFromUrl")}
+					onChange={(e) => setUrl(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							e.preventDefault()
+							submitUrlInstall()
+						}
+					}}
+					className="flex-1"
+				/>
+				<Button
+					variant="secondary"
+					className="shrink-0"
+					disabled={installing || url.trim() === ""}
+					onClick={submitUrlInstall}>
+					<Link2 className="size-4" />
+					{installing ? t("marketplace:plugins.installing") : t("marketplace:plugins.installFromUrl")}
 				</Button>
 			</div>
 

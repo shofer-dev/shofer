@@ -86,6 +86,37 @@ describe("PluginsTab (Phase 5.3)", () => {
 		})
 	})
 
+	it("install-from-url posts installFromUrl with the trimmed URL", () => {
+		renderTab(samplePlugins)
+		const input = screen.getByLabelText("marketplace:plugins.installFromUrl")
+		fireEvent.change(input, { target: { value: "  https://example.com/p.shofer-plugin  " } })
+		fireEvent.click(screen.getByText("marketplace:plugins.installFromUrl"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "installFromUrl", url: "https://example.com/p.shofer-plugin" },
+		})
+	})
+
+	it("install-from-url does not post while the URL is blank", () => {
+		renderTab(samplePlugins)
+		// The button is disabled with an empty URL, so a click posts nothing.
+		fireEvent.click(screen.getByText("marketplace:plugins.installFromUrl"))
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(
+			expect.objectContaining({ plugin: expect.objectContaining({ action: "installFromUrl" }) }),
+		)
+	})
+
+	it("install-from-url submits on Enter", () => {
+		renderTab(samplePlugins)
+		const input = screen.getByLabelText("marketplace:plugins.installFromUrl")
+		fireEvent.change(input, { target: { value: "https://example.com/p.shofer-plugin" } })
+		fireEvent.keyDown(input, { key: "Enter" })
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "installFromUrl", url: "https://example.com/p.shofer-plugin" },
+		})
+	})
+
 	it("uninstall requires a confirmation step before posting", () => {
 		renderTab(samplePlugins)
 		// First click reveals the confirm button; nothing is posted yet.
