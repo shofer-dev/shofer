@@ -1416,6 +1416,16 @@ export class ShoferProvider
 			resourceRoots.push(...vscode.workspace.workspaceFolders.map((folder) => folder.uri))
 		}
 
+		// Serve plugin UI bundles (design §6.8, P4): register the global + project
+		// plugin base dirs so any enabled plugin's built UI module under them is
+		// reachable as a `vscode-webview://` resource (converted via `asWebviewUri`).
+		// Registering the parents (not per-plugin dirs) keeps enable/disable/install
+		// working without recreating the webview. Non-existent dirs are simply inert.
+		resourceRoots.push(vscode.Uri.file(path.join(getGlobalShoferDirectory(), "plugins")))
+		if (this.cwd) {
+			resourceRoots.push(vscode.Uri.file(path.join(this.cwd, ".shofer", "plugins")))
+		}
+
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: resourceRoots,
@@ -2284,7 +2294,16 @@ export class ShoferProvider
 	 */
 	public async pushPluginUiContributions(): Promise<void> {
 		const manager = await this.getPluginManager()
-		const contributions = manager.getContributedUiContributions()
+		// Resolve each external UI bundle's absolute module path to a served
+		// `vscode-webview://` URI so the webview can dynamic-import it under the CSP
+		// (`strict-dynamic` permits importing same-origin `cspSource` resources). When
+		// no webview is attached yet, omit the resolver ⇒ contributions carry no
+		// `source` and fall back to the co-bundled registry (non-breaking).
+		const webview = this.view?.webview
+		const resolveSource = webview
+			? (absolutePath: string) => webview.asWebviewUri(vscode.Uri.file(absolutePath)).toString()
+			: undefined
+		const contributions = manager.getContributedUiContributions(resolveSource)
 		await this.postMessageToWebview({
 			type: "pluginUiContributions",
 			pluginUiContributions: { contributions },
