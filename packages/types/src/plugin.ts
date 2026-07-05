@@ -847,6 +847,27 @@ export interface PluginView {
 	 * meaningful when {@link usesAi} is true; `ctx.ai` is live only when both hold.
 	 */
 	aiConsented?: boolean
+	/**
+	 * The plugin's declared config JSON-schema (manifest `config`), if any — an object
+	 * with `properties`, each carrying `type`/`default`/`description`. Drives the
+	 * editable config form in the Plugins panel. Absent ⇒ the plugin has no config.
+	 */
+	configSchema?: PluginConfigSchema
+	/**
+	 * The user's stored config overrides for this plugin (a subset of the schema's
+	 * properties). A field absent here falls back to its schema `default`. The effective
+	 * value the plugin sees is `default` merged under these overrides.
+	 */
+	config?: Record<string, unknown>
+}
+
+/** A plugin's config JSON-schema (manifest `config`) as surfaced to the Plugins panel. */
+export interface PluginConfigSchema {
+	type?: string
+	properties?: Record<
+		string,
+		{ type?: string; default?: unknown; description?: string; enum?: unknown[] }
+	>
 }
 
 /** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */
@@ -864,6 +885,12 @@ export type PluginRequest =
 	 * only when the plugin is enabled, declares `permissions.ai`, **and** is consented.
 	 */
 	| { action: "setAiConsent"; name: string; consented: boolean }
+	/**
+	 * Persist the user's config overrides for a plugin and reload it so the new values
+	 * take effect immediately (design §5 `config` / §6.2 `PluginContext.config`). `config`
+	 * is the full override object for the plugin (fields omitted fall back to schema defaults).
+	 */
+	| { action: "setConfig"; name: string; config: Record<string, unknown> }
 	/** Uninstall a plugin: delete its directory and drop it from the enabled allow-list. */
 	| { action: "uninstall"; name: string }
 	/**

@@ -2382,6 +2382,8 @@ export class ShoferProvider
 	/** Push the discovered-plugins snapshot to the webview (design §12). */
 	public async pushPluginsState(): Promise<void> {
 		const manager = await this.getPluginManager()
+		const storedConfigs =
+			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
 		const plugins: PluginView[] = manager.listPlugins().map((p) => ({
 			name: p.name,
 			version: p.version,
@@ -2400,6 +2402,10 @@ export class ShoferProvider
 			// "uses AI (billed)" badge and the separate consent affordance (design §8).
 			usesAi: p.manifest.permissions?.ai === true,
 			aiConsented: manager.isAiConsented(p.name),
+			// Config schema (manifest `config`) + the user's stored overrides so the panel
+			// can render an editable form. Absent schema ⇒ the panel shows no config section.
+			configSchema: p.manifest.config as PluginView["configSchema"],
+			config: storedConfigs[p.name] ?? {},
 		}))
 		const state: PluginsState = { plugins }
 		await this.postMessageToWebview({ type: "plugins", plugins: state })
@@ -2424,6 +2430,20 @@ export class ShoferProvider
 				// affected code plugin so its `ctx.ai` flips live/denied immediately.
 				await manager.setAiConsent(request.name, request.consented)
 				break
+			case "setConfig": {
+				// Persist the plugin's config overrides, then reload it so `ctx.config`
+				// reflects the new values immediately (design §5/§6.2).
+				const all = {
+					...((this.contextProxy.getValue("pluginConfigs") as
+						| Record<string, Record<string, unknown>>
+						| undefined) ?? {}),
+				}
+				all[request.name] = request.config
+				await this.contextProxy.setValue("pluginConfigs", all)
+				await manager.reloadPlugin(request.name)
+				await this.resyncAfterPluginChange()
+				break
+			}
 			case "uninstall":
 				await manager.uninstall(request.name)
 				await this.resyncAfterPluginChange()

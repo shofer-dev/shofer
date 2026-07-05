@@ -17,7 +17,8 @@
 - **Lifecycle hooks.** `beforeToolCall` (block/modify), `afterToolCall` (transform), `beforeAsk` (auto-answer), and `beforeTaskStart` / `afterTaskComplete` observers — each timeout-guarded and error-isolated.
 - **Host capabilities.** Permission-gated `ctx.ai` (billed model calls + embeddings; requires explicit consent), `ctx.storage` (scoped per-plugin storage), `ctx.host.watch` (path-carrying file watch), `ctx.host.search` (rag / git / symbol / diagnostics), `ctx.agent.notify` (proactively queue a message into the running task), `ctx.registerService` (start-on-enable/stop-on-disable background services), and `ctx.ui` (extension↔UI channel).
 - **Per-plugin logging.** Every loaded plugin automatically gets its own `Plugin:<name>` Log category (Settings → Logging), so a user can view and filter one plugin's output independently. Plugins write to it via `ctx.host.log` (`debug`/`info`/`warn`/`error`).
-- **Settings → Plugins tab** to view, enable/disable, install (file or URL), and grant/revoke AI consent per plugin.
+- **Settings → Plugins tab** to view, enable/disable, install (file or URL), **grant/revoke billed-AI consent**, and **edit each plugin's configuration** (an inline form generated from the plugin's `config` schema — the plugin-era replacement for a bespoke settings tab).
+- **`sidebar-panel` UI region** is mounted as a collapsible drawer in the chat view, so a plugin (e.g. Live Memory) can show a live panel there. Renders nothing when no plugin contributes one.
 - **`shofer plugin` CLI** — `install` (folder / archive / URL), `list`, and `remove`. Archive install is zip-slip/symlink-safe; URL install defaults to https with a 64 MiB cap.
 - **Author guide** in `PLUGINS.md` documenting the manifest, permissions, contribution points, and every host capability.
 

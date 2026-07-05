@@ -1,12 +1,13 @@
-import { HTMLAttributes, useEffect, useMemo } from "react"
-import { Blocks } from "lucide-react"
+import { HTMLAttributes, useEffect, useMemo, useState } from "react"
+import { Blocks, ChevronDown, ChevronRight } from "lucide-react"
+import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type { PluginRequest, PluginView } from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
-import { ToggleSwitch } from "@src/components/ui"
+import { ToggleSwitch, Button } from "@src/components/ui"
 
 import { PluginSlot } from "../plugins/PluginSlot"
 
@@ -15,6 +16,98 @@ import { Section } from "./Section"
 
 function post(plugin: PluginRequest) {
 	vscode.postMessage({ type: "plugin", plugin })
+}
+
+/**
+ * Editable config form for one plugin, driven by its manifest `config` JSON-schema
+ * (design §5). A field's current value is the user's stored override, or the schema
+ * default when unset. Saving persists the overrides and reloads the plugin so the new
+ * values take effect. Collapsed by default; renders nothing when the plugin has no config.
+ */
+function PluginConfigForm({ plugin }: { plugin: PluginView }) {
+	const { t } = useAppTranslation()
+	const props = plugin.configSchema?.properties
+	const [open, setOpen] = useState(false)
+	const [draft, setDraft] = useState<Record<string, unknown>>(() => ({ ...plugin.config }))
+
+	// Re-seed the draft when the persisted config changes (e.g. after a save round-trips).
+	useEffect(() => {
+		setDraft({ ...plugin.config })
+	}, [plugin.config])
+
+	if (!props || Object.keys(props).length === 0) return null
+
+	const valueOf = (key: string): unknown => (draft[key] !== undefined ? draft[key] : props[key]?.default)
+	const setField = (key: string, v: unknown) => setDraft((d) => ({ ...d, [key]: v }))
+
+	return (
+		<div className="mt-2">
+			<button
+				type="button"
+				onClick={() => setOpen((o) => !o)}
+				className="flex items-center gap-1 text-xs text-vscode-descriptionForeground hover:text-vscode-foreground">
+				{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+				{t("settings:plugins.configure")}
+			</button>
+			{open && (
+				<div className="mt-2 flex flex-col gap-3 pl-3 border-l border-vscode-panel-border">
+					{Object.entries(props).map(([key, spec]) => {
+						const val = valueOf(key)
+						return (
+							<div key={key} className="flex flex-col gap-1">
+								<div className="flex items-center gap-2">
+									<span className="text-xs font-medium">{key}</span>
+									{spec.type === "boolean" && (
+										<ToggleSwitch
+											checked={!!val}
+											onChange={() => setField(key, !val)}
+											size="small"
+											aria-label={key}
+										/>
+									)}
+								</div>
+								{spec.description && (
+									<span className="text-xs text-vscode-descriptionForeground">
+										{spec.description}
+									</span>
+								)}
+								{spec.type !== "boolean" && (
+									<VSCodeTextField
+										value={val === undefined || val === null ? "" : String(val)}
+										onInput={(e) => {
+											const raw = (e.target as HTMLInputElement).value
+											setField(
+												key,
+												spec.type === "number"
+													? raw === ""
+														? undefined
+														: Number(raw)
+													: raw,
+											)
+										}}
+									/>
+								)}
+							</div>
+						)
+					})}
+					<div className="flex gap-2 mt-1">
+						<Button
+							onClick={() => post({ action: "setConfig", name: plugin.name, config: draft })}>
+							{t("settings:plugins.save")}
+						</Button>
+						<Button
+							variant="secondary"
+							onClick={() => {
+								setDraft({})
+								post({ action: "setConfig", name: plugin.name, config: {} })
+							}}>
+							{t("settings:plugins.resetDefaults")}
+						</Button>
+					</div>
+				</div>
+			)}
+		</div>
+	)
 }
 
 /** Human-readable one-line summary of a plugin's declarative contributions. */
@@ -123,6 +216,9 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 												)}
 											</div>
 										)}
+										{/* Editable config form from the plugin's manifest `config`
+										    schema — the plugin-era replacement for a bespoke tab. */}
+										<PluginConfigForm plugin={plugin} />
 									</div>
 									<div className="flex items-center gap-2 shrink-0">
 										<span className="text-xs text-vscode-descriptionForeground">

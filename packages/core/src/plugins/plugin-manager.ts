@@ -700,6 +700,21 @@ export class PluginManager {
 	}
 
 	/**
+	 * Force a single code plugin to rebuild its `PluginContext` (and thus re-read its
+	 * config, `ctx.ai`, etc.). Used after the user edits a plugin's config so the change
+	 * takes effect without a full reload. No-op for a declarative/unloaded plugin.
+	 */
+	async reloadPlugin(name: string): Promise<void> {
+		if (this.loadedCodePlugins.has(name)) {
+			pluginRegistry.unregister(name)
+			this.loadedCodePlugins.delete(name)
+			this.disposePluginWatchers(name)
+			await this.serviceSupervisor.stopForPlugin(name)
+		}
+		await this.activateCodePlugins()
+	}
+
+	/**
 	 * Tear down every code plugin this manager loaded: unregister it from the shared
 	 * global registry, stop its supervised services, and dispose its watchers. Called
 	 * when the owning webview provider is disposed so a freshly built manager (e.g.

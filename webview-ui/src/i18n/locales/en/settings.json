@@ -43,6 +43,10 @@
 		"aiNotConsented": "AI blocked",
 		"aiConsentHint": "This plugin makes billed model calls (e.g. the Live Memory tool). Turn on to allow them.",
 		"aiConsentAria": "Toggle billed-AI consent for plugin {{name}}",
+		"configure": "Configure",
+		"save": "Save",
+		"saved": "Saved",
+		"resetDefaults": "Reset to defaults",
 		"scope": {
 			"bundled": "Built-in",
 			"global": "Global",

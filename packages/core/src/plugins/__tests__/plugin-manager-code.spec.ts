@@ -147,6 +147,32 @@ describe("PluginManager.activateCodePlugins (step 2.5)", () => {
 		expect(pluginRegistry.has("codeplug")).toBe(false)
 	})
 
+	it("reloadPlugin rebuilds a code plugin's context with updated config", async () => {
+		const fs = new MemoryFs()
+		fs.addManifest("/plugins/codeplug", codeManifest)
+		const { loader, captured } = makeCapturingLoader()
+		let cfg: Record<string, unknown> = { greeting: "one" }
+		const manager = new PluginManager({
+			fs,
+			pluginDirs: [{ dir: "/plugins", scope: "global" }],
+			stateStore: new MemoryStore(["codeplug"]),
+			codeLoader: loader,
+			host: createInMemoryHost(),
+			getPluginConfigs: () => ({ codeplug: cfg }),
+			workspacePath: "/work",
+		})
+		await manager.discover()
+		await manager.activateCodePlugins()
+		expect(captured()?.config).toEqual({ greeting: "one" })
+
+		// Simulate the user editing config (Plugins panel → setConfig) then a reload.
+		cfg = { greeting: "two" }
+		await manager.reloadPlugin("codeplug")
+		expect(captured()?.config).toEqual({ greeting: "two" })
+		// Reload must not leave a duplicate registration behind.
+		expect(pluginRegistry.list().filter((n) => n === "codeplug")).toHaveLength(1)
+	})
+
 	it("falls back to the manifest default config when nothing is stored", async () => {
 		const fs = new MemoryFs()
 		fs.addManifest("/plugins/codeplug", codeManifest)
