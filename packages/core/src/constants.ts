@@ -10,7 +10,6 @@
  * module holds only the values those fall back to, plus internal caps that are
  * not user-configurable but are freely tunable.
  *
- * Modelled on `claude-code/live-memory/server/live_memory/constants.py`.
  *
  * ── Deliberately NOT here (not "tunable magic numbers") ──────────────────────
  * These are protocol constraints, wire-format sizes, algorithmic invariants, or
@@ -37,8 +36,7 @@
  *     integrator-owned and lives with each provider adapter.
  *   - Subsystem constant modules that are already consolidated per-subsystem:
  *     `services/code-index/constants/index.ts`, `services/glob/constants.ts`,
- *     `task/subtask-limits.ts`, and the `services/live-memory/*` mirrors of the
- *     Python `constants.py`. Those are left in place; this file does not
+ *     and `task/subtask-limits.ts`. Those are left in place; this file does not
  *     re-home them.
  *   - Token/heuristic factors tightly coupled to an estimator
  *     (`TOKEN_FUDGE_FACTOR` in utils/tiktoken.ts, `CHARS_PER_TOKEN` in the

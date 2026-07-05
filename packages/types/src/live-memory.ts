@@ -1,7 +1,5 @@
 import { z } from "zod"
 
-import type { ProviderSettings } from "./provider-settings.js"
-
 // ─── Agent State ────────────────────────────────────────────────────────────
 
 /**
@@ -73,37 +71,6 @@ export const fileContextEntrySchema = z.object({
 })
 export type FileContextEntry = z.infer<typeof fileContextEntrySchema>
 
-// ─── Configuration ──────────────────────────────────────────────────────────
-
-/**
- * LiveMemoryConfig — runtime configuration resolved from settings.
- *
- *   `apiConfigId`/`apiConfigName` identify the API Configuration profile
- *   (managed under Settings → Providers) that supplied the credentials.
- *   `providerSettings` is the resolved profile, fed verbatim into
- *   `buildApiHandler` — the live memory agent does NOT carry its own
- *   per-provider keys or model ids.
- *   `maxContextTokens` may be overridden in Settings → Live Memory;
- *   otherwise it is taken from the model info reported by the handler.
- */
-export interface LiveMemoryConfig {
-	enabled: boolean
-	apiConfigId: string
-	apiConfigName: string
-	providerSettings: ProviderSettings
-	maxContextTokens: number
-	/**
-	 * How `maxContextTokens` was resolved. Surfaced in the popover so a user
-	 * can tell at a glance whether the displayed value comes from the linked
-	 * model's reported `info.contextWindow` or from an explicit override under
-	 * Settings → Live Memory. `"unresolved"` is reserved for partial
-	 * configs (e.g. no API Configuration linked yet) where the agent will be
-	 * in Error/Standby state and the value is just a placeholder.
-	 */
-	contextWindowSource: "override" | "model-info" | "unresolved"
-	contextFillThreshold: number
-}
-
 // ─── Cost Tracking ──────────────────────────────────────────────────────────
 
 export const liveMemoryCostTrackingSchema = z.object({
@@ -114,19 +81,6 @@ export const liveMemoryCostTrackingSchema = z.object({
 	lastUpdated: z.number(), // Unix ms
 })
 export type LiveMemoryCostTracking = z.infer<typeof liveMemoryCostTrackingSchema>
-
-// ─── Conversation Store ─────────────────────────────────────────────────────
-
-export const liveMemoryConversationDataSchema = z.object({
-	version: z.literal(2),
-	workspacePath: z.string(),
-	createdAt: z.number(),
-	updatedAt: z.number(),
-	messages: z.array(agentMessageSchema),
-	fileContexts: z.array(fileContextEntrySchema),
-	costTracking: liveMemoryCostTrackingSchema,
-})
-export type LiveMemoryConversationData = z.infer<typeof liveMemoryConversationDataSchema>
 
 // ─── Question Result ────────────────────────────────────────────────────────
 

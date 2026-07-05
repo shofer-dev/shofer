@@ -144,7 +144,7 @@ export interface ILogger {
 	/**
 	 * Creates a child logger with inherited metadata.
 	 * Use this to tag all entries from a subsystem:
-	 *   const log = logger.child({ ctx: "LiveMemory" })
+	 *   const log = logger.child({ ctx: "CodeIndex" })
 	 * @param meta - Metadata to merge with parent's metadata
 	 * @returns A new logger instance with combined metadata
 	 */

@@ -7,8 +7,8 @@
  * `ApiHandler` the main agent uses (never raw API keys) and embed text via a host
  * embedder. The *construction* is host-side (it needs the extension's
  * `ProviderSettingsManager` + embedder), so `@shofer/core` stays host-agnostic by
- * consuming a {@link PluginAiProvider} seam the extension/CLI supplies — mirroring how
- * live-memory's `LiveMemoryLlmClient` reaches `buildApiHandler`.
+ * consuming a {@link PluginAiProvider} seam the extension/CLI supplies — the same way a
+ * plugin's own LLM client reaches `buildApiHandler` through this seam.
  *
  * Two fail-closed states (design §8):
  * - `permissions.ai` granted but **not** consented ⇒ {@link createDeniedPluginAi}: every

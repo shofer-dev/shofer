@@ -213,7 +213,7 @@ describe("Live Memory plugin (P1–P6 dogfood)", () => {
 			},
 			{ mode: "code", task: {} as never },
 		)
-		// The Stage-C output block mirrors the built-in AskLiveMemoryTool exactly.
+		// The Stage-C output block emits the canonical Live Memory answer format.
 		expect(answer).toContain("Live Memory Answer")
 		expect(answer).toContain("Context:")
 		expect(answer).toContain("% full)")

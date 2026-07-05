@@ -27,9 +27,6 @@ export const gitLog = getLogger().child({ ctx: "Git" })
 /** Code index (RAG) and tree-sitter */
 export const codeIndexLog = getLogger().child({ ctx: "CodeIndex" })
 
-/** Live memory subsystem */
-export const liveMemoryLog = getLogger().child({ ctx: "LiveMemory" })
-
 /** MCP servers and transport */
 export const mcpLog = getLogger().child({ ctx: "MCP" })
 
