@@ -37,6 +37,12 @@
 		"inactive": "Inactive",
 		"disabledReason": "Enabled, but inactive: {{reason}}",
 		"toggleAria": "Toggle plugin {{name}}",
+		"usesAi": "Uses AI (billed)",
+		"aiConsentLabel": "Allow billed AI calls",
+		"aiConsented": "AI allowed",
+		"aiNotConsented": "AI blocked",
+		"aiConsentHint": "This plugin makes billed model calls (e.g. the Live Memory tool). Turn on to allow them.",
+		"aiConsentAria": "Toggle billed-AI consent for plugin {{name}}",
 		"scope": {
 			"bundled": "Built-in",
 			"global": "Global",

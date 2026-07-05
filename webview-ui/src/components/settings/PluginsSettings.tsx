@@ -86,6 +86,43 @@ export const PluginsSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 												})}
 											</div>
 										)}
+										{/* Billed-AI consent (design §8). A plugin declaring
+										    `permissions.ai` needs explicit consent before `ctx.ai`
+										    (and any tool that depends on it, e.g. Live Memory's
+										    `ask_live_memory`) becomes live. Only actionable while
+										    the plugin is enabled. */}
+										{plugin.usesAi && (
+											<div className="flex items-center gap-2 mt-2 flex-wrap">
+												<span className="text-xs rounded bg-vscode-badge-background text-vscode-badge-foreground px-1.5 py-0.5">
+													{t("settings:plugins.usesAi")}
+												</span>
+												<ToggleSwitch
+													checked={!!plugin.aiConsented}
+													disabled={!plugin.enabled}
+													onChange={() =>
+														post({
+															action: "setAiConsent",
+															name: plugin.name,
+															consented: !plugin.aiConsented,
+														})
+													}
+													size="small"
+													aria-label={t("settings:plugins.aiConsentAria", {
+														name: plugin.name,
+													})}
+												/>
+												<span className="text-xs text-vscode-descriptionForeground">
+													{plugin.aiConsented
+														? t("settings:plugins.aiConsented")
+														: t("settings:plugins.aiNotConsented")}
+												</span>
+												{!plugin.aiConsented && (
+													<div className="w-full text-xs text-vscode-descriptionForeground">
+														{t("settings:plugins.aiConsentHint")}
+													</div>
+												)}
+											</div>
+										)}
 									</div>
 									<div className="flex items-center gap-2 shrink-0">
 										<span className="text-xs text-vscode-descriptionForeground">
