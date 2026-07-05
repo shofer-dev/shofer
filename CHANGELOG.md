@@ -1,6 +1,26 @@
 # Shofer Changelog
 
-## 2.0.0 — 2026-06-19 (Current)
+## 2.2.0 — 2026-07-06 (Current)
+
+> A **plugin system** release. Shofer is now extensible: third-party and first-party plugins can contribute tools, modes, commands, skills, MCP servers, UI regions, lifecycle hooks, and background services, with a restricted host capability surface. **Live Memory has been reimplemented as a bundled first-party plugin** at full parity with the former built-in — and, as a plugin, it is now **disabled by default** and requires **explicit AI consent** before it makes any (billed) model calls. Only notable changes since 2.0.0 are listed.
+
+### Behavior Changes
+
+- **Live Memory is now an opt-in plugin.** The built-in Live Memory has been removed and replaced by a bundled `live-memory` plugin with full parity (active Q&A sub-agent, streaming chat panel, skills/commands, context-window + cost tracking, configuration). Unlike the old built-in — which was on by default — the plugin ships **disabled**, and enabling it requires granting **explicit AI consent** (it makes billed LLM calls). Enable it under **Settings → Plugins** and grant the AI-consent when prompted. No settings are migrated; there is no auto-enable or auto-consent.
+
+### Features
+
+#### Plugin system
+
+- **Plugins.** Install and manage plugins from a local folder, a `.shofer-plugin` archive, or a URL. Plugins are discovered from `~/.shofer/plugins` (global), `<workspace>/.shofer/plugins` (project), and bundled first-party plugins. All plugins are **disabled by default** (an allow-list; enabling doubles as per-plugin consent).
+- **Contributions.** A plugin may contribute tools, modes, commands, skills, MCP servers, and webview UI regions, all namespaced as `<plugin>:<name>`; a `private` flag hides a contribution from user-facing pickers while keeping it invocable by the plugin/agent.
+- **Lifecycle hooks.** `beforeToolCall` (block/modify), `afterToolCall` (transform), `beforeAsk` (auto-answer), and `beforeTaskStart` / `afterTaskComplete` observers — each timeout-guarded and error-isolated.
+- **Host capabilities.** Permission-gated `ctx.ai` (billed model calls + embeddings; requires explicit consent), `ctx.storage` (scoped per-plugin storage), `ctx.host.watch` (path-carrying file watch), `ctx.host.search` (rag / git / symbol / diagnostics), `ctx.agent.notify` (proactively queue a message into the running task), `ctx.registerService` (start-on-enable/stop-on-disable background services), and `ctx.ui` (extension↔UI channel).
+- **Settings → Plugins tab** to view, enable/disable, install (file or URL), and grant/revoke AI consent per plugin.
+- **`shofer plugin` CLI** — `install` (folder / archive / URL), `list`, and `remove`. Archive install is zip-slip/symlink-safe; URL install defaults to https with a 64 MiB cap.
+- **Author guide** in `PLUGINS.md` documenting the manifest, permissions, contribution points, and every host capability.
+
+## 2.0.0 — 2026-06-19
 
 > A maturation-and-cleanup release on top of the 1.8.24 Workflow line. Two renames drive the major bump — **`groups` → `tools`** in mode configuration (breaking) and **Assistant Agent → Live Memory** — alongside structured (no-magic-string) Slang workflows with full per-agent configuration, per-tool MCP auto-approval, a global parallel-task limit, and a deep fix pass on windowed-cold-load scroll/header behavior in long chats. Only changes since 1.8.24 are listed.
 
