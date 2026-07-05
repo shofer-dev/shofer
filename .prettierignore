@@ -1,0 +1,6 @@
+# Generated plugin webview UI bundles — esbuild output, rebuilt from the sibling
+# `.tsx` by each plugin's `build-ui.mjs` (run automatically during `pnpm bundle`).
+# They are committed as distributable artifacts so a plugin folder is one self-contained
+# unit; they must NOT be hand-formatted, or the pre-commit Prettier pass would fight the
+# build and leave the tree perpetually dirty.
+plugins/*/ui/*.js

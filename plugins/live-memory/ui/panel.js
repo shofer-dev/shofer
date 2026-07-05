@@ -1,339 +1,236 @@
-// plugins/live-memory/ui/panel.tsx
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Fragment, jsx, jsxs } from "react/jsx-runtime"
+// ui/panel.tsx
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function escapeHtml(s) {
-	return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function renderInline(text) {
-	let s = escapeHtml(text)
-	s = s.replace(/`([^`]+)`/g, (_m, c) => "<code>" + c + "</code>")
-	s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-	s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-	s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
-	return s
+  let s = escapeHtml(text);
+  s = s.replace(/`([^`]+)`/g, (_m, c) => "<code>" + c + "</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
+  return s;
 }
 function renderMarkdown(src) {
-	if (!src) return ""
-	const lines = src.split(/\r?\n/)
-	const out = []
-	let i = 0
-	while (i < lines.length) {
-		const line = lines[i]
-		const fence = line.match(/^```(\w*)\s*$/)
-		if (fence) {
-			const lang = fence[1] || ""
-			const buf2 = []
-			i++
-			while (i < lines.length && !/^```\s*$/.test(lines[i])) {
-				buf2.push(lines[i])
-				i++
-			}
-			if (i < lines.length) i++
-			out.push(
-				'<pre><code class="lang-' + escapeHtml(lang) + '">' + escapeHtml(buf2.join("\n")) + "</code></pre>",
-			)
-			continue
-		}
-		const h = line.match(/^(#{1,4})\s+(.*)$/)
-		if (h) {
-			out.push("<h" + h[1].length + ">" + renderInline(h[2]) + "</h" + h[1].length + ">")
-			i++
-			continue
-		}
-		if (/^\s*[-*+]\s+/.test(line)) {
-			const items = []
-			while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
-				items.push("<li>" + renderInline(lines[i].replace(/^\s*[-*+]\s+/, "")) + "</li>")
-				i++
-			}
-			out.push("<ul>" + items.join("") + "</ul>")
-			continue
-		}
-		if (/^\s*\d+\.\s+/.test(line)) {
-			const items = []
-			while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
-				items.push("<li>" + renderInline(lines[i].replace(/^\s*\d+\.\s+/, "")) + "</li>")
-				i++
-			}
-			out.push("<ol>" + items.join("") + "</ol>")
-			continue
-		}
-		if (/^>\s?/.test(line)) {
-			const buf2 = []
-			while (i < lines.length && /^>\s?/.test(lines[i])) {
-				buf2.push(lines[i].replace(/^>\s?/, ""))
-				i++
-			}
-			out.push("<blockquote>" + renderMarkdown(buf2.join("\n")) + "</blockquote>")
-			continue
-		}
-		if (
-			/^\s*\|.*\|\s*$/.test(line) &&
-			i + 1 < lines.length &&
-			/^\s*\|?\s*:?-{2,}:?(\s*\|\s*:?-{2,}:?)*\s*\|?\s*$/.test(lines[i + 1])
-		) {
-			const splitRow = (row) => {
-				const trimmed = row.replace(/^\s*\|/, "").replace(/\|\s*$/, "")
-				return trimmed.split(/\|/).map((c) => c.trim())
-			}
-			const headers = splitRow(line)
-			const sepCells = splitRow(lines[i + 1])
-			const aligns = sepCells.map((c) => {
-				const left = c.startsWith(":")
-				const right = c.endsWith(":")
-				return right && left ? "center" : right ? "right" : left ? "left" : ""
-			})
-			const alignAttr = (idx) => (aligns[idx] ? ' class="align-' + aligns[idx] + '"' : "")
-			i += 2
-			const bodyRows = []
-			while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-				bodyRows.push(splitRow(lines[i]))
-				i++
-			}
-			let html = "<table><thead><tr>"
-			for (let c = 0; c < headers.length; c++)
-				html += "<th" + alignAttr(c) + ">" + renderInline(headers[c]) + "</th>"
-			html += "</tr></thead><tbody>"
-			for (const row of bodyRows) {
-				html += "<tr>"
-				for (let c = 0; c < headers.length; c++)
-					html += "<td" + alignAttr(c) + ">" + renderInline(row[c] || "") + "</td>"
-				html += "</tr>"
-			}
-			html += "</tbody></table>"
-			out.push(html)
-			continue
-		}
-		if (/^\s*$/.test(line)) {
-			i++
-			continue
-		}
-		const buf = [line]
-		i++
-		while (
-			i < lines.length &&
-			!/^\s*$/.test(lines[i]) &&
-			!/^```/.test(lines[i]) &&
-			!/^#{1,4}\s/.test(lines[i]) &&
-			!/^\s*[-*+]\s+/.test(lines[i]) &&
-			!/^\s*\d+\.\s+/.test(lines[i]) &&
-			!/^>\s?/.test(lines[i]) &&
-			!/^\s*\|.*\|\s*$/.test(lines[i])
-		) {
-			buf.push(lines[i])
-			i++
-		}
-		out.push("<p>" + renderInline(buf.join(" ")) + "</p>")
-	}
-	return out.join("\n")
+  if (!src) return "";
+  const lines = src.split(/\r?\n/);
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const fence = line.match(/^```(\w*)\s*$/);
+    if (fence) {
+      const lang = fence[1] || "";
+      const buf2 = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        buf2.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      out.push('<pre><code class="lang-' + escapeHtml(lang) + '">' + escapeHtml(buf2.join("\n")) + "</code></pre>");
+      continue;
+    }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {
+      out.push("<h" + h[1].length + ">" + renderInline(h[2]) + "</h" + h[1].length + ">");
+      i++;
+      continue;
+    }
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push("<li>" + renderInline(lines[i].replace(/^\s*[-*+]\s+/, "")) + "</li>");
+        i++;
+      }
+      out.push("<ul>" + items.join("") + "</ul>");
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+        items.push("<li>" + renderInline(lines[i].replace(/^\s*\d+\.\s+/, "")) + "</li>");
+        i++;
+      }
+      out.push("<ol>" + items.join("") + "</ol>");
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const buf2 = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        buf2.push(lines[i].replace(/^>\s?/, ""));
+        i++;
+      }
+      out.push("<blockquote>" + renderMarkdown(buf2.join("\n")) + "</blockquote>");
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?(\s*\|\s*:?-{2,}:?)*\s*\|?\s*$/.test(lines[i + 1])) {
+      const splitRow = (row) => {
+        const trimmed = row.replace(/^\s*\|/, "").replace(/\|\s*$/, "");
+        return trimmed.split(/\|/).map((c) => c.trim());
+      };
+      const headers = splitRow(line);
+      const sepCells = splitRow(lines[i + 1]);
+      const aligns = sepCells.map((c) => {
+        const left = c.startsWith(":");
+        const right = c.endsWith(":");
+        return right && left ? "center" : right ? "right" : left ? "left" : "";
+      });
+      const alignAttr = (idx) => aligns[idx] ? ' class="align-' + aligns[idx] + '"' : "";
+      i += 2;
+      const bodyRows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        bodyRows.push(splitRow(lines[i]));
+        i++;
+      }
+      let html = "<table><thead><tr>";
+      for (let c = 0; c < headers.length; c++)
+        html += "<th" + alignAttr(c) + ">" + renderInline(headers[c]) + "</th>";
+      html += "</tr></thead><tbody>";
+      for (const row of bodyRows) {
+        html += "<tr>";
+        for (let c = 0; c < headers.length; c++)
+          html += "<td" + alignAttr(c) + ">" + renderInline(row[c] || "") + "</td>";
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+      out.push(html);
+      continue;
+    }
+    if (/^\s*$/.test(line)) {
+      i++;
+      continue;
+    }
+    const buf = [line];
+    i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^```/.test(lines[i]) && !/^#{1,4}\s/.test(lines[i]) && !/^\s*[-*+]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i]) && !/^>\s?/.test(lines[i]) && !/^\s*\|.*\|\s*$/.test(lines[i])) {
+      buf.push(lines[i]);
+      i++;
+    }
+    out.push("<p>" + renderInline(buf.join(" ")) + "</p>");
+  }
+  return out.join("\n");
 }
 function prettyArgs(raw) {
-	if (!raw) return ""
-	try {
-		return JSON.stringify(JSON.parse(raw), null, 2)
-	} catch {
-		return raw
-	}
+  if (!raw) return "";
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return raw;
+  }
 }
 function TextPart({ text }) {
-	return /* @__PURE__ */ jsx("div", {
-		className: "part part-text md",
-		dangerouslySetInnerHTML: { __html: renderMarkdown(text) },
-	})
+  return /* @__PURE__ */ jsx("div", { className: "part part-text md", dangerouslySetInnerHTML: { __html: renderMarkdown(text) } });
 }
 function ReasoningPart({ text }) {
-	return /* @__PURE__ */ jsxs("details", {
-		className: "part part-reasoning",
-		children: [
-			/* @__PURE__ */ jsx("summary", { children: "Thinking" }),
-			/* @__PURE__ */ jsx("div", { className: "body", children: text }),
-		],
-	})
+  return /* @__PURE__ */ jsxs("details", { className: "part part-reasoning", children: [
+    /* @__PURE__ */ jsx("summary", { children: "Thinking" }),
+    /* @__PURE__ */ jsx("div", { className: "body", children: text })
+  ] });
 }
 function ToolPart({ part }) {
-	const inProgress = !!part.inProgress
-	const isError = !!part.isError
-	const statusCls = inProgress ? "in-progress" : isError ? "error" : "done"
-	const statusText = inProgress ? "running" : isError ? "error" : "done"
-	return /* @__PURE__ */ jsxs("details", {
-		className: "part part-tool",
-		open: inProgress,
-		"data-testid": "tool-part",
-		children: [
-			/* @__PURE__ */ jsxs("summary", {
-				children: [
-					inProgress
-						? /* @__PURE__ */ jsx("span", {
-								className: "spinner",
-								"data-testid": "tool-spinner",
-								"aria-hidden": "true",
-							})
-						: null,
-					/* @__PURE__ */ jsx("span", { className: "tool-name", children: part.name || "tool" }),
-					/* @__PURE__ */ jsx("span", {
-						className: "tool-status " + statusCls,
-						"data-testid": "tool-status",
-						children: statusText,
-					}),
-				],
-			}),
-			/* @__PURE__ */ jsx("div", { className: "tool-block-label", children: "Arguments" }),
-			/* @__PURE__ */ jsx("pre", { children: prettyArgs(part.args) }),
-			part.result !== void 0
-				? /* @__PURE__ */ jsxs(Fragment, {
-						children: [
-							/* @__PURE__ */ jsx("div", {
-								className: "tool-block-label",
-								children: isError ? "Error" : "Result",
-							}),
-							/* @__PURE__ */ jsx("pre", { children: part.result }),
-						],
-					})
-				: null,
-		],
-	})
+  const inProgress = !!part.inProgress;
+  const isError = !!part.isError;
+  const statusCls = inProgress ? "in-progress" : isError ? "error" : "done";
+  const statusText = inProgress ? "running" : isError ? "error" : "done";
+  return /* @__PURE__ */ jsxs("details", { className: "part part-tool", open: inProgress, "data-testid": "tool-part", children: [
+    /* @__PURE__ */ jsxs("summary", { children: [
+      inProgress ? /* @__PURE__ */ jsx("span", { className: "spinner", "data-testid": "tool-spinner", "aria-hidden": "true" }) : null,
+      /* @__PURE__ */ jsx("span", { className: "tool-name", children: part.name || "tool" }),
+      /* @__PURE__ */ jsx("span", { className: "tool-status " + statusCls, "data-testid": "tool-status", children: statusText })
+    ] }),
+    /* @__PURE__ */ jsx("div", { className: "tool-block-label", children: "Arguments" }),
+    /* @__PURE__ */ jsx("pre", { children: prettyArgs(part.args) }),
+    part.result !== void 0 ? /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("div", { className: "tool-block-label", children: isError ? "Error" : "Result" }),
+      /* @__PURE__ */ jsx("pre", { children: part.result })
+    ] }) : null
+  ] });
 }
 function MessageView({ msg }) {
-	const time = useMemo(() => new Date(msg.timestamp).toLocaleTimeString(), [msg.timestamp])
-	const src = msg.metadata?.sourceTaskId ? " \xB7 Task: " + msg.metadata.sourceTaskId : ""
-	const parts = Array.isArray(msg.parts) && msg.parts.length > 0 ? msg.parts : null
-	return /* @__PURE__ */ jsxs("div", {
-		className: "msg msg-" + msg.role,
-		"data-testid": "msg-" + msg.role,
-		children: [
-			/* @__PURE__ */ jsxs("div", { className: "msg-meta", children: [msg.role, " \xB7 ", time, src] }),
-			parts
-				? parts.map((p, idx) => {
-						if (p.kind === "text") return /* @__PURE__ */ jsx(TextPart, { text: p.text }, idx)
-						if (p.kind === "reasoning") return /* @__PURE__ */ jsx(ReasoningPart, { text: p.text }, idx)
-						return /* @__PURE__ */ jsx(ToolPart, { part: p }, p.toolCallId || idx)
-					})
-				: /* @__PURE__ */ jsx(TextPart, { text: msg.content || "" }),
-		],
-	})
+  const time = useMemo(() => new Date(msg.timestamp).toLocaleTimeString(), [msg.timestamp]);
+  const src = msg.metadata?.sourceTaskId ? " \xB7 Task: " + msg.metadata.sourceTaskId : "";
+  const parts = Array.isArray(msg.parts) && msg.parts.length > 0 ? msg.parts : null;
+  return /* @__PURE__ */ jsxs("div", { className: "msg msg-" + msg.role, "data-testid": "msg-" + msg.role, children: [
+    /* @__PURE__ */ jsxs("div", { className: "msg-meta", children: [
+      msg.role,
+      " \xB7 ",
+      time,
+      src
+    ] }),
+    parts ? parts.map((p, idx) => {
+      if (p.kind === "text") return /* @__PURE__ */ jsx(TextPart, { text: p.text }, idx);
+      if (p.kind === "reasoning") return /* @__PURE__ */ jsx(ReasoningPart, { text: p.text }, idx);
+      return /* @__PURE__ */ jsx(ToolPart, { part: p }, p.toolCallId || idx);
+    }) : /* @__PURE__ */ jsx(TextPart, { text: msg.content || "" })
+  ] });
 }
-var EMPTY_USAGE = { currentTokens: 0, maxTokens: 0, fillFraction: 0, isNearlyFull: false }
+var EMPTY_USAGE = { currentTokens: 0, maxTokens: 0, fillFraction: 0, isNearlyFull: false };
 function LiveMemoryPanel({ api }) {
-	const [state, setState] = useState({
-		type: "state",
-		state: "Standby",
-		stateMessage: "Connecting to Live Memory\u2026",
-		contextUsage: EMPTY_USAGE,
-		messages: [],
-	})
-	useEffect(() => {
-		const unsubscribe = api.onMessage((raw) => {
-			if (raw && typeof raw === "object" && raw.type === "state") {
-				setState(raw)
-			}
-		})
-		api.postMessage({ type: "ready" })
-		return unsubscribe
-	}, [api])
-	const send = useCallback((type) => api.postMessage({ type }), [api])
-	const usage = state.contextUsage || EMPTY_USAGE
-	const pct = Math.round((usage.fillFraction || 0) * 100)
-	const messages = state.messages || []
-	return /* @__PURE__ */ jsxs("div", {
-		className: "lm-panel",
-		"data-testid": "lm-panel",
-		children: [
-			/* @__PURE__ */ jsx("style", { children: PANEL_CSS }),
-			/* @__PURE__ */ jsxs("div", {
-				className: "header",
-				children: [
-					/* @__PURE__ */ jsxs("div", {
-						className: "header-row",
-						children: [
-							/* @__PURE__ */ jsxs("div", {
-								className: "state state-" + state.state,
-								"data-testid": "lm-state",
-								children: ["State: ", state.state],
-							}),
-							/* @__PURE__ */ jsxs("div", {
-								className: "meta-line",
-								"data-testid": "lm-ctx",
-								children: [
-									"Context: ",
-									usage.currentTokens.toLocaleString(),
-									" / ",
-									usage.maxTokens.toLocaleString(),
-									" (",
-									pct,
-									"%)",
-									usage.isNearlyFull
-										? /* @__PURE__ */ jsx("span", {
-												className: "warn",
-												children: " \u26A0\uFE0E nearly full",
-											})
-										: null,
-								],
-							}),
-							/* @__PURE__ */ jsxs("div", {
-								className: "meta-line",
-								children: ["Messages: ", messages.length],
-							}),
-							state.stats
-								? /* @__PURE__ */ jsxs("div", {
-										className: "meta-line",
-										"data-testid": "lm-stats",
-										children: [
-											"Obs: ",
-											state.stats.observations,
-											" \xB7 Q&A: ",
-											state.stats.questions,
-											state.stats.pendingQuestions
-												? " \xB7 Queue: " + state.stats.pendingQuestions
-												: "",
-										],
-									})
-								: null,
-						],
-					}),
-					/* @__PURE__ */ jsx("div", { className: "state-msg", children: state.stateMessage }),
-					/* @__PURE__ */ jsxs("div", {
-						className: "actions",
-						children: [
-							/* @__PURE__ */ jsx("button", {
-								type: "button",
-								"data-testid": "lm-refresh",
-								onClick: () => send("getState"),
-								children: "Refresh",
-							}),
-							/* @__PURE__ */ jsx("button", {
-								type: "button",
-								"data-testid": "lm-clear",
-								onClick: () => send("clear"),
-								children: "Clear context",
-							}),
-							/* @__PURE__ */ jsx("button", {
-								type: "button",
-								className: "danger",
-								"data-testid": "lm-empty",
-								onClick: () => send("empty"),
-								children: "Empty memory",
-							}),
-						],
-					}),
-				],
-			}),
-			messages.length > 0
-				? /* @__PURE__ */ jsx("div", {
-						className: "messages",
-						"data-testid": "lm-messages",
-						children: messages.map((m) => /* @__PURE__ */ jsx(MessageView, { msg: m }, m.id)),
-					})
-				: /* @__PURE__ */ jsxs("div", {
-						className: "empty",
-						"data-testid": "lm-empty-state",
-						children: [
-							"No conversation history yet.",
-							/* @__PURE__ */ jsx("br", {}),
-							"Tasks will ask questions via the ask_live_memory tool.",
-						],
-					}),
-		],
-	})
+  const [state, setState] = useState({
+    type: "state",
+    state: "Standby",
+    stateMessage: "Connecting to Live Memory\u2026",
+    contextUsage: EMPTY_USAGE,
+    messages: []
+  });
+  useEffect(() => {
+    const unsubscribe = api.onMessage((raw) => {
+      if (raw && typeof raw === "object" && raw.type === "state") {
+        setState(raw);
+      }
+    });
+    api.postMessage({ type: "ready" });
+    return unsubscribe;
+  }, [api]);
+  const send = useCallback((type) => api.postMessage({ type }), [api]);
+  const usage = state.contextUsage || EMPTY_USAGE;
+  const pct = Math.round((usage.fillFraction || 0) * 100);
+  const messages = state.messages || [];
+  return /* @__PURE__ */ jsxs("div", { className: "lm-panel", "data-testid": "lm-panel", children: [
+    /* @__PURE__ */ jsx("style", { children: PANEL_CSS }),
+    /* @__PURE__ */ jsxs("div", { className: "header", children: [
+      /* @__PURE__ */ jsxs("div", { className: "header-row", children: [
+        /* @__PURE__ */ jsxs("div", { className: "state state-" + state.state, "data-testid": "lm-state", children: [
+          "State: ",
+          state.state
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "meta-line", "data-testid": "lm-ctx", children: [
+          "Context: ",
+          usage.currentTokens.toLocaleString(),
+          " / ",
+          usage.maxTokens.toLocaleString(),
+          " (",
+          pct,
+          "%)",
+          usage.isNearlyFull ? /* @__PURE__ */ jsx("span", { className: "warn", children: " \u26A0\uFE0E nearly full" }) : null
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "meta-line", children: [
+          "Messages: ",
+          messages.length
+        ] }),
+        state.stats ? /* @__PURE__ */ jsxs("div", { className: "meta-line", "data-testid": "lm-stats", children: [
+          "Obs: ",
+          state.stats.observations,
+          " \xB7 Q&A: ",
+          state.stats.questions,
+          state.stats.pendingQuestions ? " \xB7 Queue: " + state.stats.pendingQuestions : ""
+        ] }) : null
+      ] }),
+      /* @__PURE__ */ jsx("div", { className: "state-msg", children: state.stateMessage }),
+      /* @__PURE__ */ jsxs("div", { className: "actions", children: [
+        /* @__PURE__ */ jsx("button", { type: "button", "data-testid": "lm-refresh", onClick: () => send("getState"), children: "Refresh" }),
+        /* @__PURE__ */ jsx("button", { type: "button", "data-testid": "lm-clear", onClick: () => send("clear"), children: "Clear context" }),
+        /* @__PURE__ */ jsx("button", { type: "button", className: "danger", "data-testid": "lm-empty", onClick: () => send("empty"), children: "Empty memory" })
+      ] })
+    ] }),
+    messages.length > 0 ? /* @__PURE__ */ jsx("div", { className: "messages", "data-testid": "lm-messages", children: messages.map((m) => /* @__PURE__ */ jsx(MessageView, { msg: m }, m.id)) }) : /* @__PURE__ */ jsxs("div", { className: "empty", "data-testid": "lm-empty-state", children: [
+      "No conversation history yet.",
+      /* @__PURE__ */ jsx("br", {}),
+      "Tasks will ask questions via the ask_live_memory tool."
+    ] })
+  ] });
 }
 var PANEL_CSS = `
 .lm-panel { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); line-height: 1.45; }
@@ -379,5 +276,7 @@ var PANEL_CSS = `
 .lm-panel .md table { border-collapse: collapse; margin: 0.4em 0; display: block; overflow-x: auto; max-width: 100%; }
 .lm-panel .md th, .lm-panel .md td { border: 1px solid var(--vscode-widget-border); padding: 4px 8px; text-align: left; vertical-align: top; }
 .lm-panel .empty { text-align: center; opacity: 0.5; margin-top: 40px; }
-`
-export { LiveMemoryPanel as default }
+`;
+export {
+  LiveMemoryPanel as default
+};

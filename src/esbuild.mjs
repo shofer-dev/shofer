@@ -85,6 +85,30 @@ function copyBundledPlugins(srcRoot, dstRoot) {
 	console.log(`[esbuild] Copied ${count} bundled-plugin files to ${dstRoot}`)
 }
 
+/**
+ * Build each bundled plugin's webview UI bundle(s) from source before packaging, so a
+ * plugin is one self-contained, always-current unit — its logic (`.ts`, transpiled at
+ * runtime) and its UI (`.tsx` → `.js`, browser ESM with React externalized) are built
+ * together on every `pnpm bundle`, never a stale hand-run artifact. A plugin opts in by
+ * shipping a `build-ui.mjs` (run from its own dir); a UI build failure fails the whole
+ * build (fail-closed) rather than silently shipping stale UI.
+ */
+function buildBundledPluginUis(pluginsRoot) {
+	if (!fs.existsSync(pluginsRoot)) return
+	for (const entry of fs.readdirSync(pluginsRoot, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue
+		const pluginDir = path.join(pluginsRoot, entry.name)
+		if (!fs.existsSync(path.join(pluginDir, "build-ui.mjs"))) continue
+		try {
+			execSync("node build-ui.mjs", { cwd: pluginDir, stdio: "pipe" })
+			console.log(`[esbuild] Built UI bundle(s) for plugin "${entry.name}"`)
+		} catch (err) {
+			console.error(`[esbuild] ERROR: failed to build UI for plugin "${entry.name}": ${err.message}`)
+			process.exit(1)
+		}
+	}
+}
+
 async function main() {
 	const name = "extension"
 	const production = process.argv.includes("--production")
@@ -228,6 +252,10 @@ async function main() {
 					// .ts SOURCES must ship — we copy everything except dev-only cruft
 					// (node_modules, __tests__, tsconfig/vitest/build scripts, .tsx sources
 					// whose built .js is already present).
+					//
+					// Build each plugin's UI bundle(s) from source FIRST so logic + UI ship
+					// together as one current unit (no stale hand-built .js).
+					buildBundledPluginUis(path.join(srcDir, "..", "plugins"))
 					copyBundledPlugins(path.join(srcDir, "..", "plugins"), path.join(distDir, "plugins"))
 				})
 			},
