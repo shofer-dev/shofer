@@ -667,6 +667,14 @@ export class PluginManager {
 					apiVersion: plugin.manifest.shoferPluginApiVersion,
 				})
 				const wrapped = this.wrapCodePlugin(plugin, raw)
+				// The registry is a process-wide singleton but managers are built
+				// per-webview-provider. A previous provider that wasn't fully disposed, or
+				// a concurrent build, may still hold this plugin. Replace it so THIS
+				// manager's context/seams own it, rather than throwing "already registered"
+				// (which would disable an otherwise-healthy plugin).
+				if (pluginRegistry.has(plugin.name)) {
+					pluginRegistry.unregister(plugin.name)
+				}
 				// `register` runs the plugin's `initialize`, where it may call
 				// `ctx.registerService`; the services are then started below (P6.G7).
 				await pluginRegistry.register(wrapped, this.buildPluginContext(plugin), {
@@ -681,6 +689,21 @@ export class PluginManager {
 			} catch (error) {
 				warnPlugin(`[plugins] Failed to load code plugin "${plugin.name}": ${String(error)} — plugin disabled.`)
 			}
+		}
+	}
+
+	/**
+	 * Tear down every code plugin this manager loaded: unregister it from the shared
+	 * global registry, stop its supervised services, and dispose its watchers. Called
+	 * when the owning webview provider is disposed so a freshly built manager (e.g.
+	 * after a reload) re-registers cleanly instead of colliding with a stale entry.
+	 */
+	async dispose(): Promise<void> {
+		for (const name of [...this.loadedCodePlugins]) {
+			pluginRegistry.unregister(name)
+			this.loadedCodePlugins.delete(name)
+			this.disposePluginWatchers(name)
+			await this.serviceSupervisor.stopForPlugin(name)
 		}
 	}
 

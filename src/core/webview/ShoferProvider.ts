@@ -183,6 +183,8 @@ export class ShoferProvider
 	protected skillsManager?: SkillsManager
 	/** Declarative plugin manager (design §7). Lazily built via {@link getPluginManager}. */
 	private pluginManager?: PluginManager
+	/** In-flight {@link getPluginManager} build, memoized so concurrent callers share one manager. */
+	private pluginManagerBuild?: Promise<PluginManager>
 	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
 	/**
@@ -1202,8 +1204,12 @@ export class ShoferProvider
 		this.skillsManager = undefined
 		if (this.pluginManager) {
 			setSharedPluginManager(undefined)
+			// Unregister this provider's code plugins from the process-wide registry so a
+			// freshly built manager (e.g. after a reload) re-registers without colliding.
+			await this.pluginManager.dispose()
 			this.pluginManager = undefined
 		}
+		this.pluginManagerBuild = undefined
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 
@@ -2086,8 +2092,18 @@ export class ShoferProvider
 	 * `~/.shofer/plugins` (global) and `<cwd>/.shofer/plugins` (project); enabled
 	 * state is persisted in globalState.
 	 */
-	public async getPluginManager(): Promise<PluginManager> {
-		if (this.pluginManager) return this.pluginManager
+	public getPluginManager(): Promise<PluginManager> {
+		if (this.pluginManager) return Promise.resolve(this.pluginManager)
+		// Memoize the in-flight build so concurrent callers share ONE manager. Building
+		// is async (discovery), and `this.pluginManager` is only assigned at the end;
+		// without this, two concurrent callers each build a manager and both register the
+		// same code plugins into the process-wide registry → "already registered". Cleared
+		// on dispose so a reloaded provider rebuilds.
+		if (!this.pluginManagerBuild) this.pluginManagerBuild = this.buildPluginManager()
+		return this.pluginManagerBuild
+	}
+
+	private async buildPluginManager(): Promise<PluginManager> {
 		const stateKey = "shofer.plugins.enabledPlugins"
 		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
 		const cwd = this.cwd

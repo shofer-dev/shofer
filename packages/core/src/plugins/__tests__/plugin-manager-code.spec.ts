@@ -117,6 +117,36 @@ describe("PluginManager.activateCodePlugins (step 2.5)", () => {
 		expect(await pluginRegistry.applySystemPromptTransforms("base")).toBe("base [yo]")
 	})
 
+	it("replaces a stale cross-manager registration instead of throwing 'already registered'", async () => {
+		const fs = new MemoryFs()
+		fs.addManifest("/plugins/codeplug", codeManifest)
+		const mk = () =>
+			new PluginManager({
+				fs,
+				pluginDirs: [{ dir: "/plugins", scope: "global" }],
+				stateStore: new MemoryStore(["codeplug"]),
+				codeLoader: makeCapturingLoader().loader,
+				host: createInMemoryHost(),
+				workspacePath: "/work",
+			})
+
+		const a = mk()
+		await a.discover()
+		await a.activateCodePlugins()
+		expect(pluginRegistry.has("codeplug")).toBe(true)
+
+		// A second manager (e.g. a second webview provider, or a concurrent build)
+		// activating the same plugin must NOT throw — it replaces the shared entry.
+		const b = mk()
+		await b.discover()
+		await expect(b.activateCodePlugins()).resolves.toBeUndefined()
+		expect(pluginRegistry.list().filter((n) => n === "codeplug")).toHaveLength(1)
+
+		// dispose() unregisters this manager's code plugins from the shared registry.
+		await b.dispose()
+		expect(pluginRegistry.has("codeplug")).toBe(false)
+	})
+
 	it("falls back to the manifest default config when nothing is stored", async () => {
 		const fs = new MemoryFs()
 		fs.addManifest("/plugins/codeplug", codeManifest)
