@@ -19,7 +19,12 @@
  * genuine gap (external-edit path granularity).
  */
 
-import { DEFAULT_MAX_CONTEXT_TOKENS, defineCustomTool, parametersSchema as z } from "@shofer/types"
+import {
+	DEFAULT_MAX_CONTEXT_TOKENS,
+	DEFAULT_CONTEXT_FILL_THRESHOLD,
+	defineCustomTool,
+	parametersSchema as z,
+} from "@shofer/types"
 import type { HostDisposable, PluginContext, PluginEvent, ShoferPlugin } from "@shofer/types"
 
 import { MemoryStore, type Observation, type ObservationKind } from "./memory-store.js"
@@ -65,6 +70,12 @@ function cfg(ctx: PluginContext) {
 		maxQuestions: typeof c.maxQuestions === "number" ? c.maxQuestions : 50,
 		watchGlob: typeof c.watchGlob === "string" ? c.watchGlob : "**/*",
 		compactIntervalMs: typeof c.compactIntervalMs === "number" ? c.compactIntervalMs : 300000,
+		maxContextTokens:
+			typeof c.maxContextTokens === "number" && c.maxContextTokens > 0 ? c.maxContextTokens : DEFAULT_MAX_CONTEXT_TOKENS,
+		contextFillThreshold:
+			typeof c.contextFillThreshold === "number" && c.contextFillThreshold > 0 && c.contextFillThreshold <= 1
+				? c.contextFillThreshold
+				: DEFAULT_CONTEXT_FILL_THRESHOLD,
 	}
 }
 
@@ -109,7 +120,7 @@ async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined
 
 	const c = cfg(ctx)
 	const fs = ctx.host.fs
-	const maxContextTokens = DEFAULT_MAX_CONTEXT_TOKENS
+	const maxContextTokens = c.maxContextTokens
 	const buildTree = async (): Promise<string> => {
 		try {
 			return await new LiveMemoryDirectoryTree(workspace, maxContextTokens, fs).generate()
@@ -123,6 +134,7 @@ async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined
 		executor: LiveMemoryToolExecutor.fromContext(ctx),
 		workspacePath: workspace,
 		maxContextTokens,
+		contextFillThreshold: c.contextFillThreshold,
 		directoryTree: await buildTree(),
 		rebuildDirectoryTree: buildTree,
 		// Fold the live observation/Q&A log into the system prompt each question (the

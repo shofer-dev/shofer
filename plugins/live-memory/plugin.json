@@ -74,6 +74,16 @@
 				"type": "number",
 				"default": 300000,
 				"description": "Background maintenance-service interval (ms) for compacting the observation log into a running summary. 0 disables it."
+			},
+			"maxContextTokens": {
+				"type": "number",
+				"default": 128000,
+				"description": "The memory agent's context-window budget in tokens (ContextWindow.maxContextTokens). Governs LRU eviction of file contexts + old message pairs."
+			},
+			"contextFillThreshold": {
+				"type": "number",
+				"default": 0.8,
+				"description": "Fraction of maxContextTokens past which the context window is flagged 'nearly full' (ContextWindow.contextFillThreshold), 0..1."
 			}
 		}
 	}
