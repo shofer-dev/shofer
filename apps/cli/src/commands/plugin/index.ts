@@ -13,7 +13,14 @@
 import * as os from "os"
 import * as path from "path"
 
-import { PluginManager, createNodePluginFs, installPlugin, type DiscoveredPlugin } from "@shofer/core/cli"
+import {
+	PluginManager,
+	createNodePluginFs,
+	installPlugin,
+	installPluginFromUrl,
+	isPluginUrl,
+	type DiscoveredPlugin,
+} from "@shofer/core/cli"
 import { VSCodeMockPaths } from "@shofer/vscode-shim"
 
 import { createFileStateStore } from "./state-store.js"
@@ -48,6 +55,12 @@ export interface PluginCommandOptions {
 	overwrite?: boolean
 	/** Enable the plugin immediately after install (install only). */
 	enable?: boolean
+	/** Permit a plain `http://` URL install from a non-loopback host (install only, URL source). */
+	allowInsecureHttp?: boolean
+	/** `fetch` override for URL installs (default: global `fetch`). Injected in tests. */
+	fetchImpl?: typeof fetch
+	/** Max download size (bytes) for URL installs. Default: core's 64 MiB cap. Injected in tests. */
+	maxDownloadBytes?: number
 }
 
 function resolvePluginsDir(options: PluginCommandOptions): string {
@@ -74,16 +87,26 @@ async function buildManager(options: PluginCommandOptions): Promise<PluginManage
 }
 
 /**
- * `shofer plugin install <source>` — install from a `.shofer-plugin` archive or an
- * unpacked plugin directory. Validates the manifest, copies/unpacks into the global
- * plugins dir, and reports the installed name/version. With `--enable`, enables it in
- * the allow-list too (otherwise it stays disabled until enabled in the Plugins tab —
- * the per-plugin consent gate, design §14 Q6).
+ * `shofer plugin install <source>` — install from a `.shofer-plugin` archive, an
+ * unpacked plugin directory, or a direct http(s) URL to a `.shofer-plugin` archive.
+ * Validates the manifest, copies/unpacks into the global plugins dir, and reports the
+ * installed name/version. A URL source is downloaded (via the host-agnostic core
+ * {@link installPluginFromUrl}) and unpacked through the same validation/zip-slip path;
+ * https is required unless the host is loopback or `--allow-insecure-http` is passed.
+ * With `--enable`, enables it in the allow-list too (otherwise it stays disabled until
+ * enabled in the Plugins tab — the per-plugin consent gate, design §14 Q6).
  */
 export async function pluginInstall(source: string, options: PluginCommandOptions = {}): Promise<void> {
 	const log = out(options)
 	const pluginsDir = resolvePluginsDir(options)
-	const installed = await installPlugin(source, pluginsDir, { overwrite: options.overwrite })
+	const installed = isPluginUrl(source)
+		? await installPluginFromUrl(source, pluginsDir, {
+				overwrite: options.overwrite,
+				allowInsecureHttp: options.allowInsecureHttp,
+				fetchImpl: options.fetchImpl,
+				maxBytes: options.maxDownloadBytes,
+			})
+		: await installPlugin(source, pluginsDir, { overwrite: options.overwrite })
 	log(`Installed plugin "${installed.name}" v${installed.version} → ${installed.dir}`)
 
 	if (options.enable) {

@@ -290,6 +290,136 @@ export async function installPlugin(
 	return unpackPlugin(source, destPluginsDir, options)
 }
 
+/**
+ * Default cap on a downloaded plugin archive (64 MiB). Plugins are small (manifest +
+ * skills/commands/code); this rejects absurdly large or runaway responses while leaving
+ * ample headroom for a legitimately bundled plugin.
+ */
+export const DEFAULT_MAX_PLUGIN_DOWNLOAD_BYTES = 64 * 1024 * 1024
+
+/** Knobs for {@link installPluginFromUrl} — the archive {@link UnpackOptions} plus download policy. */
+export interface InstallFromUrlOptions extends UnpackOptions {
+	/** `fetch` implementation (default: the global `fetch`). Injected in tests. */
+	fetchImpl?: typeof fetch
+	/** Max bytes to accept before rejecting as oversize (default {@link DEFAULT_MAX_PLUGIN_DOWNLOAD_BYTES}). */
+	maxBytes?: number
+	/** Permit plain `http://` from a non-loopback host (default: refuse; loopback is always allowed). */
+	allowInsecureHttp?: boolean
+}
+
+/** True if `source` is an http(s) URL (vs a local filesystem path). */
+export function isPluginUrl(source: string): boolean {
+	let parsed: URL
+	try {
+		parsed = new URL(source)
+	} catch {
+		return false
+	}
+	return parsed.protocol === "http:" || parsed.protocol === "https:"
+}
+
+/** Loopback hosts for which plain http is allowed without an explicit opt-in. */
+function isLoopbackHost(hostname: string): boolean {
+	return (
+		hostname === "localhost" ||
+		hostname === "127.0.0.1" ||
+		hostname === "::1" ||
+		hostname === "[::1]" ||
+		hostname.endsWith(".localhost")
+	)
+}
+
+/**
+ * Fetch a `.shofer-plugin` archive from an http(s) URL into memory, enforcing the
+ * download policy: **https only** by default (plain http is refused unless the host is
+ * loopback or `allowInsecureHttp` is set — a plugin archive is executable code), and a
+ * hard **size cap** checked against both a declared `Content-Length` and the streamed
+ * body (so a missing/lying header cannot make us buffer without bound). Failures throw
+ * {@link PluginPackError} so callers surface them as user errors.
+ */
+async function downloadArchiveBytes(url: string, options: InstallFromUrlOptions): Promise<Buffer> {
+	const fetchImpl = options.fetchImpl ?? globalThis.fetch
+	const maxBytes = options.maxBytes ?? DEFAULT_MAX_PLUGIN_DOWNLOAD_BYTES
+
+	const parsed = new URL(url)
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+		throw new PluginPackError(`Unsupported URL scheme "${parsed.protocol}" — plugin URLs must be http(s).`)
+	}
+	if (parsed.protocol === "http:" && !options.allowInsecureHttp && !isLoopbackHost(parsed.hostname)) {
+		throw new PluginPackError(
+			`Refusing to download a plugin over insecure http:// from "${parsed.host}". ` +
+				`Use https://, or opt in with allowInsecureHttp (http is always allowed for localhost).`,
+		)
+	}
+
+	let response: Response
+	try {
+		response = await fetchImpl(url)
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		throw new PluginPackError(`Failed to download plugin from ${url}: ${message}`)
+	}
+	if (!response.ok) {
+		throw new PluginPackError(
+			`Failed to download plugin from ${url}: HTTP ${response.status} ${response.statusText}`.trimEnd(),
+		)
+	}
+
+	// Reject an oversize response up front when the server declares its length.
+	const declared = Number(response.headers.get("content-length"))
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		throw new PluginPackError(
+			`Plugin archive at ${url} is too large (${declared} bytes > ${maxBytes} byte limit). Refusing to download.`,
+		)
+	}
+
+	const oversize = () =>
+		new PluginPackError(`Plugin archive at ${url} exceeds the ${maxBytes} byte download limit. Refusing to download.`)
+
+	const body = response.body
+	if (!body) {
+		const buf = Buffer.from(await response.arrayBuffer())
+		if (buf.byteLength > maxBytes) throw oversize()
+		return buf
+	}
+
+	const chunks: Buffer[] = []
+	let total = 0
+	const reader = body.getReader()
+	for (;;) {
+		const { done, value } = await reader.read()
+		if (done) break
+		if (!value) continue
+		total += value.byteLength
+		if (total > maxBytes) {
+			await reader.cancel().catch(() => {})
+			throw oversize()
+		}
+		chunks.push(Buffer.from(value))
+	}
+	return Buffer.concat(chunks)
+}
+
+/**
+ * Install a plugin from a direct http(s) URL to a `.shofer-plugin` archive. Downloads
+ * the archive (enforcing the https/size policy in {@link downloadArchiveBytes}) and
+ * feeds the bytes straight into {@link unpackPlugin} — so manifest validation, zip-slip
+ * protection, and the `overwrite` name-collision policy all apply unchanged. This is a
+ * **direct-URL** install, not a registry lookup.
+ *
+ * Host-agnostic: uses only `fetch` + the in-memory `unpackPlugin` path (no temp file),
+ * so both the `shofer plugin install <URL>` CLI and the extension's Plugins tab can call
+ * it. The size cap bounds peak memory, so buffering the archive is safe.
+ */
+export async function installPluginFromUrl(
+	url: string,
+	destPluginsDir: string,
+	options: InstallFromUrlOptions = {},
+): Promise<InstalledPlugin> {
+	const bytes = await downloadArchiveBytes(url, options)
+	return unpackPlugin(bytes, destPluginsDir, { overwrite: options.overwrite })
+}
+
 /** Throw if `dest` already exists and `overwrite` is not set; otherwise clear it. */
 async function ensureFreeOrOverwrite(dest: string, name: string, overwrite: boolean | undefined): Promise<void> {
 	const exists = await nodeFs

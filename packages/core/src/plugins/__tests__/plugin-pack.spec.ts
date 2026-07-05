@@ -9,6 +9,8 @@ import {
 	PluginPackError,
 	installPlugin,
 	installPluginFromDirectory,
+	installPluginFromUrl,
+	isPluginUrl,
 	packPlugin,
 	packPluginToFile,
 	unpackPlugin,
@@ -180,5 +182,129 @@ describe("plugin-pack (Phase 5.1)", () => {
 		expect(fromArchive.name).toBe("demo-plugin")
 
 		await expect(installPlugin(path.join(tmp, "missing"), destA)).rejects.toBeInstanceOf(PluginPackError)
+	})
+
+	describe("installPluginFromUrl (direct-URL install)", () => {
+		/** A `fetch` stub that returns `bytes` as a 200 archive response. */
+		function okFetch(bytes: Buffer): typeof fetch {
+			return (async () =>
+				new Response(bytes, {
+					status: 200,
+					headers: { "content-length": String(bytes.byteLength) },
+				})) as unknown as typeof fetch
+		}
+
+		it("isPluginUrl distinguishes http(s) URLs from local paths", () => {
+			expect(isPluginUrl("https://example.com/p.shofer-plugin")).toBe(true)
+			expect(isPluginUrl("http://localhost:8080/p.shofer-plugin")).toBe(true)
+			expect(isPluginUrl("./p.shofer-plugin")).toBe(false)
+			expect(isPluginUrl("/abs/p.shofer-plugin")).toBe(false)
+			expect(isPluginUrl("C:\\plugins\\p.shofer-plugin")).toBe(false)
+		})
+
+		it("downloads an https archive and installs it (happy path)", async () => {
+			const src = await writePlugin(tmp, validManifest)
+			const archive = await packPlugin(src)
+			const destPlugins = path.join(tmp, "plugins")
+
+			const installed = await installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, {
+				fetchImpl: okFetch(archive),
+			})
+
+			expect(installed.name).toBe("demo-plugin")
+			expect(installed.version).toBe("1.2.3")
+			expect(JSON.parse(await nodeFs.readFile(path.join(installed.dir, "plugin.json"), "utf-8")).name).toBe(
+				"demo-plugin",
+			)
+		})
+
+		it("honors overwrite on a URL install", async () => {
+			const destPlugins = path.join(tmp, "plugins")
+			const v1 = await packPlugin(await writePlugin(tmp, validManifest))
+			await installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, { fetchImpl: okFetch(v1) })
+
+			const v2 = await packPlugin(await writePlugin(path.join(tmp, "v2"), { ...validManifest, version: "2.0.0" }))
+			await expect(
+				installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, { fetchImpl: okFetch(v2) }),
+			).rejects.toBeInstanceOf(PluginPackError)
+
+			const upgraded = await installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, {
+				fetchImpl: okFetch(v2),
+				overwrite: true,
+			})
+			expect(upgraded.version).toBe("2.0.0")
+		})
+
+		it("rejects a non-2xx response with a clear error", async () => {
+			const fetchImpl = (async () =>
+				new Response("not found", { status: 404, statusText: "Not Found" })) as unknown as typeof fetch
+			await expect(
+				installPluginFromUrl("https://example.com/missing.shofer-plugin", path.join(tmp, "plugins"), {
+					fetchImpl,
+				}),
+			).rejects.toThrow(/HTTP 404/)
+		})
+
+		it("surfaces a network failure as a PluginPackError", async () => {
+			const fetchImpl = (async () => {
+				throw new Error("ECONNREFUSED")
+			}) as unknown as typeof fetch
+			await expect(
+				installPluginFromUrl("https://example.com/p.shofer-plugin", path.join(tmp, "plugins"), { fetchImpl }),
+			).rejects.toThrow(/Failed to download plugin.*ECONNREFUSED/)
+		})
+
+		it("rejects an oversize archive (declared Content-Length over the cap)", async () => {
+			const src = await writePlugin(tmp, validManifest)
+			const archive = await packPlugin(src)
+			await expect(
+				installPluginFromUrl("https://example.com/demo.shofer-plugin", path.join(tmp, "plugins"), {
+					fetchImpl: okFetch(archive),
+					maxBytes: 1,
+				}),
+			).rejects.toThrow(/too large|download limit/)
+		})
+
+		it("rejects an oversize streamed body when Content-Length is absent", async () => {
+			const src = await writePlugin(tmp, validManifest)
+			const archive = await packPlugin(src)
+			// No content-length header → the cap must be enforced while streaming the body.
+			const fetchImpl = (async () => new Response(archive, { status: 200 })) as unknown as typeof fetch
+			await expect(
+				installPluginFromUrl("https://example.com/demo.shofer-plugin", path.join(tmp, "plugins"), {
+					fetchImpl,
+					maxBytes: 1,
+				}),
+			).rejects.toThrow(/download limit/)
+		})
+
+		it("refuses a plain http:// URL from a non-loopback host by default", async () => {
+			const src = await writePlugin(tmp, validManifest)
+			const archive = await packPlugin(src)
+			await expect(
+				installPluginFromUrl("http://example.com/demo.shofer-plugin", path.join(tmp, "plugins"), {
+					fetchImpl: okFetch(archive),
+				}),
+			).rejects.toThrow(/insecure http/)
+		})
+
+		it("allows http:// for localhost, and for any host with allowInsecureHttp", async () => {
+			const src = await writePlugin(tmp, validManifest)
+			const archive = await packPlugin(src)
+
+			const local = await installPluginFromUrl(
+				"http://localhost:8080/demo.shofer-plugin",
+				path.join(tmp, "plugins-local"),
+				{ fetchImpl: okFetch(archive) },
+			)
+			expect(local.name).toBe("demo-plugin")
+
+			const opted = await installPluginFromUrl(
+				"http://example.com/demo.shofer-plugin",
+				path.join(tmp, "plugins-opt"),
+				{ fetchImpl: okFetch(archive), allowInsecureHttp: true },
+			)
+			expect(opted.name).toBe("demo-plugin")
+		})
 	})
 })
