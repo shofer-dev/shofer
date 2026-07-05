@@ -1,0 +1,7 @@
+{
+	"name": "fixture-ui",
+	"version": "1.0.0",
+	"description": "Test fixture: a plugin shipping its own built UI bundle (P4 external UI).",
+	"permissions": { "ui": ["task-header"] },
+	"contributes": { "ui": [{ "region": "task-header", "entry": "ui/toolbar.js" }] }
+}

@@ -124,7 +124,7 @@ error and the plugin is skipped with a warning. Fields:
 | `shoferVersion`          | string              | Minimum Shofer version (semver range). Not yet enforced.                                      |
 | `main`                   | string \| null      | Code entry, relative to the plugin dir. Absent/`null` ⇒ purely declarative.                   |
 | `permissions`            | object              | The security contract. See below.                                                             |
-| `contributes`            | object              | Declarative modes/skills/commands/mcpServers/rules. See [§4](#4-extension-points).            |
+| `contributes`            | object              | Declarative modes/skills/commands/mcpServers/rules, plus `ui` bundles. See [§4](#4-extension-points), [§6](#6-ui-contributions). |
 | `dependencies`           | string[]            | Other plugins that must be installed. (Discovery records unmet deps; not fully enforced yet.) |
 | `config`                 | object              | JSON-Schema-ish description of user settings. See below.                                      |
 
@@ -302,8 +302,9 @@ the service.
 ## 6. UI contributions
 
 A plugin can render React components into named webview **regions**. Declare the regions in
-`permissions.ui` — this is both the grant _and_ the declaration (each granted region yields exactly
-one contribution). Regions:
+`permissions.ui` — this is the grant. A granted region renders either a first-party/co-bundled
+component (default) or your **own compiled UI bundle** when you point `contributes.ui` at a built
+module (see [Shipping your own UI bundle](#shipping-your-own-ui-bundle)). Regions:
 
 - `chat-input-toolbar`
 - `task-header`
@@ -323,10 +324,60 @@ the host's React and theme. It receives only a **`PluginUIApi`**:
 The extension side receives your UI's messages via the `onUiMessage(message, ctx)` hook and pushes
 back with the host-side sender. No `vscode` API and no parent-DOM access are exposed.
 
-> **Current limitation.** First-party / co-bundled UI components (resolved from the webview's
-> built-in component registry) work today. Loading a **third-party** plugin's own compiled UI bundle
-> is not yet wired — the `source` bundle URL and the CSP/`localResourceRoots` plumbing are a
-> follow-up. Until then, UI contributions are practical for first-party/co-bundled components.
+### Shipping your own UI bundle
+
+A third-party plugin ships its **own compiled UI bundle**. Point a granted region at a built module
+with `contributes.ui`:
+
+```json
+{
+	"permissions": { "ui": ["chat-input-toolbar"] },
+	"contributes": { "ui": [{ "region": "chat-input-toolbar", "entry": "ui/toolbar.js" }] }
+}
+```
+
+- `permissions.ui` is still the **grant** — a region must be listed there or the contribution is
+  refused (fail-closed). `contributes.ui[].region` must be one of those granted regions.
+- `entry` is the built ESM module, **relative to your plugin root** (e.g. `ui/toolbar.js`). The
+  extension serves it as a local `vscode-webview://` resource (its dir is added to the webview's
+  `localResourceRoots`) and the webview **dynamic-imports** it. A granted region *without* a
+  `contributes.ui` entry falls back to a first-party/co-bundled component (unchanged behavior).
+
+**The build contract — externalize React.** Your bundle must **not** bundle its own React: the host
+injects an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+so that `react`, `react-dom`, `react/jsx-runtime` (and `react/jsx-dev-runtime`, `react-dom/client`)
+resolve to the **host's running React instance**. Sharing one instance is what keeps hooks and
+context working — a second copy silently breaks them. So build the entry as an **ES module** and mark
+those packages **external**. With esbuild:
+
+```sh
+esbuild ui/toolbar.jsx --bundle --format=esm --jsx=automatic \
+  --external:react --external:react-dom --external:react/jsx-runtime \
+  --outfile=ui/toolbar.js
+```
+
+(or, with Vite/Rollup, `build.lib` + `rollupOptions.external: ["react", "react-dom", "react/jsx-runtime"]`).
+
+The module must **default-export** a React component taking a single `{ api: PluginUIApi }` prop:
+
+```jsx
+import { useEffect, useState } from "react"
+export default function Toolbar({ api }) {
+	const [reply, setReply] = useState("")
+	useEffect(() => api.onMessage((m) => setReply(String(m))), [api])
+	return (
+		<button onClick={() => api.postMessage({ deploy: api.context.task?.taskId })}>
+			Deploy {reply}
+		</button>
+	)
+}
+```
+
+The bundle loads under the webview CSP without weakening it: `script-src` uses `strict-dynamic` +
+a nonce, so the nonced host script may dynamic-import your same-origin (`vscode-webview://`) module.
+Arbitrary external hosts remain blocked — only files under the plugin dirs are served. If your
+component throws while rendering, it is caught by an error boundary and unmounted; the host UI keeps
+working.
 
 ---
 

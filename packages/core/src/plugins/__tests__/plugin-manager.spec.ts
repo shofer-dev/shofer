@@ -367,3 +367,63 @@ describe("PluginManager — last-installed-wins on mode conflict (design §14.7,
 		expect(modes[0]).toMatchObject({ pluginName: "a", roleDefinition: "role-A" })
 	})
 })
+
+describe("PluginManager — external UI bundles (design §6.8, P4)", () => {
+	const PROJECT = "/ws/.shofer/plugins"
+	const dirs: PluginDir[] = [{ dir: PROJECT, scope: "project" }]
+	let fs: MemoryFs
+
+	beforeEach(() => {
+		fs = new MemoryFs()
+		setHost(createInMemoryHost())
+	})
+
+	// A plugin that grants two UI regions and ships an external bundle for one.
+	const uiManifest = {
+		name: "ext",
+		version: "1.0.0",
+		permissions: { ui: ["chat-input-toolbar", "task-header"] },
+		contributes: { ui: [{ region: "chat-input-toolbar", entry: "ui/toolbar.js" }] },
+	}
+
+	it("resolves the external entry's absolute path through resolveSource into `source`", async () => {
+		fs.addManifest(`${PROJECT}/ext`, uiManifest)
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["ext"]), pluginDirs: dirs })
+		await pm.discover()
+
+		const seen: string[] = []
+		const contributions = pm.getContributedUiContributions((abs) => {
+			seen.push(abs)
+			return `served://${abs}`
+		})
+
+		// resolveSource is called with the entry path joined onto the plugin root.
+		expect(seen).toEqual([`${PROJECT}/ext/ui/toolbar.js`])
+		const toolbar = contributions.find((c) => c.region === "chat-input-toolbar")
+		expect(toolbar?.source).toBe(`served://${PROJECT}/ext/ui/toolbar.js`)
+		// The granted-but-not-shipped region stays co-bundled (no source).
+		const header = contributions.find((c) => c.region === "task-header")
+		expect(header?.source).toBeUndefined()
+	})
+
+	it("omits every source when no resolver is supplied (CLI/co-bundled fallback)", async () => {
+		fs.addManifest(`${PROJECT}/ext`, uiManifest)
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["ext"]), pluginDirs: dirs })
+		await pm.discover()
+		const contributions = pm.getContributedUiContributions()
+		expect(contributions.map((c) => c.source)).toEqual([undefined, undefined])
+	})
+
+	it("getUiAssetRoots lists only enabled plugins that ship a UI bundle", async () => {
+		fs.addManifest(`${PROJECT}/ext`, uiManifest)
+		// A UI plugin with no external bundle (co-bundled only) must NOT be a root.
+		fs.addManifest(`${PROJECT}/cob`, {
+			name: "cob",
+			version: "1.0.0",
+			permissions: { ui: ["sidebar-panel"] },
+		})
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["ext", "cob"]), pluginDirs: dirs })
+		await pm.discover()
+		expect(pm.getUiAssetRoots()).toEqual([`${PROJECT}/ext`])
+	})
+})

@@ -69,5 +69,36 @@ describe("PluginUiRegistry (§6.8, Phase 4)", () => {
 			const reg = buildPluginUiRegistry([{ name: "declarative", grantedRegions: [] }])
 			expect(reg.all()).toEqual([])
 		})
+
+		it("attaches a per-region external-bundle source when provided", () => {
+			const plugins: UiContributingPlugin[] = [
+				{
+					name: "ext",
+					grantedRegions: ["chat-input-toolbar", "task-header"],
+					// Only the toolbar ships an external bundle; task-header stays co-bundled.
+					sources: { "chat-input-toolbar": "vscode-webview://host/plugins/ext/ui/toolbar.js" },
+				},
+			]
+			const reg = buildPluginUiRegistry(plugins)
+			expect(reg.getForRegion("chat-input-toolbar")[0]?.source).toBe(
+				"vscode-webview://host/plugins/ext/ui/toolbar.js",
+			)
+			// A granted region with no source is co-bundled (source undefined).
+			expect(reg.getForRegion("task-header")[0]?.source).toBeUndefined()
+		})
+
+		it("does not leak a source for a region the plugin was not granted (fail-closed)", () => {
+			const plugins: UiContributingPlugin[] = [
+				{
+					name: "rogue",
+					grantedRegions: ["task-header"],
+					// Points a source at an ungranted region — must never surface.
+					sources: { "sidebar-panel": "vscode-webview://host/x.js" },
+				},
+			]
+			const reg = buildPluginUiRegistry(plugins)
+			expect(reg.getForRegion("sidebar-panel")).toEqual([])
+			expect(reg.getForRegion("task-header")[0]?.source).toBeUndefined()
+		})
 	})
 })

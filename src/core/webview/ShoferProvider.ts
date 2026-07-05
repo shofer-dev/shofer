@@ -1416,6 +1416,16 @@ export class ShoferProvider
 			resourceRoots.push(...vscode.workspace.workspaceFolders.map((folder) => folder.uri))
 		}
 
+		// Serve plugin UI bundles (design §6.8, P4): register the global + project
+		// plugin base dirs so any enabled plugin's built UI module under them is
+		// reachable as a `vscode-webview://` resource (converted via `asWebviewUri`).
+		// Registering the parents (not per-plugin dirs) keeps enable/disable/install
+		// working without recreating the webview. Non-existent dirs are simply inert.
+		resourceRoots.push(vscode.Uri.file(path.join(getGlobalShoferDirectory(), "plugins")))
+		if (this.cwd) {
+			resourceRoots.push(vscode.Uri.file(path.join(this.cwd, ".shofer", "plugins")))
+		}
+
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: resourceRoots,
@@ -2284,7 +2294,16 @@ export class ShoferProvider
 	 */
 	public async pushPluginUiContributions(): Promise<void> {
 		const manager = await this.getPluginManager()
-		const contributions = manager.getContributedUiContributions()
+		// Resolve each external UI bundle's absolute module path to a served
+		// `vscode-webview://` URI so the webview can dynamic-import it under the CSP
+		// (`strict-dynamic` permits importing same-origin `cspSource` resources). When
+		// no webview is attached yet, omit the resolver ⇒ contributions carry no
+		// `source` and fall back to the co-bundled registry (non-breaking).
+		const webview = this.view?.webview
+		const resolveSource = webview
+			? (absolutePath: string) => String(webview.asWebviewUri(vscode.Uri.file(absolutePath)))
+			: undefined
+		const contributions = manager.getContributedUiContributions(resolveSource)
 		await this.postMessageToWebview({
 			type: "pluginUiContributions",
 			pluginUiContributions: { contributions },
@@ -2494,6 +2513,19 @@ export class ShoferProvider
 		const file = "src/index.tsx"
 		const scriptUri = `http://${localServerUrl}/${file}`
 
+		// Shared-React import map for external plugin UI bundles (design §6.8, P4). In
+		// HMR the shim modules are served from the Vite dev server's public dir. Mirrors
+		// the prod map in getHtmlContent; unused when no plugin contributes UI.
+		const pluginImportMap = JSON.stringify({
+			imports: {
+				react: `http://${localServerUrl}/plugin-host/react.js`,
+				"react-dom": `http://${localServerUrl}/plugin-host/react-dom.js`,
+				"react-dom/client": `http://${localServerUrl}/plugin-host/react-dom-client.js`,
+				"react/jsx-runtime": `http://${localServerUrl}/plugin-host/jsx-runtime.js`,
+				"react/jsx-dev-runtime": `http://${localServerUrl}/plugin-host/jsx-dev-runtime.js`,
+			},
+		})
+
 		const reactRefresh = /*html*/ `
 			<script nonce="${nonce}" type="module">
 				import RefreshRuntime from "http://localhost:${localPort}/@react-refresh"
@@ -2528,6 +2560,8 @@ export class ShoferProvider
 					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
 					<link rel="stylesheet" type="text/css" href="${stylesUri}">
 					<link href="${codiconsUri}" rel="stylesheet" />
+					<!-- Shared-React import map (design §6.8, P4) — must precede the module scripts below. -->
+					<script type="importmap" nonce="${nonce}">${pluginImportMap}</script>
 					<script nonce="${nonce}">
 						window.IMAGES_BASE_URI = "${imagesUri}"
 						window.AUDIO_BASE_URI = "${audioUri}"
@@ -2573,6 +2607,24 @@ export class ShoferProvider
 
 		const scriptUri = getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "assets", "index.js"])
 		const codiconsUri = getUri(webview, this.contextProxy.extensionUri, ["assets", "codicons", "codicon.css"])
+
+		// Shared-React import map for external plugin UI bundles (design §6.8, P4). A
+		// plugin bundle externalizes react/react-dom/react/jsx-runtime; these bare
+		// specifiers resolve to host-shim modules (served from webview-ui/build) that
+		// re-export the host's running React instance (published on the global by
+		// index.tsx). Importing same-origin `cspSource` modules is allowed under the
+		// CSP's `strict-dynamic`. Absent any UI plugin the map is simply unused.
+		const pluginHostUri = (file: string) =>
+			String(getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "plugin-host", file]))
+		const pluginImportMap = JSON.stringify({
+			imports: {
+				react: pluginHostUri("react.js"),
+				"react-dom": pluginHostUri("react-dom.js"),
+				"react-dom/client": pluginHostUri("react-dom-client.js"),
+				"react/jsx-runtime": pluginHostUri("jsx-runtime.js"),
+				"react/jsx-dev-runtime": pluginHostUri("jsx-dev-runtime.js"),
+			},
+		})
 		const materialIconsUri = getUri(webview, this.contextProxy.extensionUri, [
 			"assets",
 			"vscode-material-icons",
@@ -2611,6 +2663,10 @@ export class ShoferProvider
             <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https://storage.googleapis.com https://img.clerk.com data:; media-src ${webview.cspSource}; script-src ${webview.cspSource} 'wasm-unsafe-eval' 'nonce-${nonce}' https://ph.shofer.dev 'strict-dynamic'; connect-src ${webview.cspSource} ${openRouterDomain} https://api.requesty.ai https://ph.shofer.dev; frame-src 'self'; clipboard-read 'self'; clipboard-write 'self';">
             <link rel="stylesheet" type="text/css" href="${stylesUri}">
 			<link href="${codiconsUri}" rel="stylesheet" />
+			<!-- Shared-React import map for external plugin UI bundles (design §6.8, P4).
+			     MUST precede the app module script so bare react specifiers in a
+			     dynamically-imported plugin bundle resolve to the host-shim modules. -->
+			<script type="importmap" nonce="${nonce}">${pluginImportMap}</script>
 			<script nonce="${nonce}">
 				window.IMAGES_BASE_URI = "${imagesUri}"
 				window.AUDIO_BASE_URI = "${audioUri}"

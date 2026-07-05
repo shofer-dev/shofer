@@ -91,6 +91,13 @@ export interface UiContributingPlugin {
 	name: string
 	/** Regions granted by the plugin's manifest `permissions.ui` (already the grant). */
 	grantedRegions: readonly PluginUiRegion[]
+	/**
+	 * Per-region **resolved** UI-bundle source URI (a served `vscode-webview://`
+	 * resource), for granted regions the plugin ships an external bundle for
+	 * (`contributes.ui`). A granted region absent here has no external bundle and is
+	 * resolved from the webview's co-bundled registry (`source` stays `undefined`).
+	 */
+	sources?: Partial<Record<PluginUiRegion, string>>
 }
 
 /**
@@ -104,7 +111,7 @@ export function buildPluginUiRegistry(plugins: readonly UiContributingPlugin[]):
 	const registry = new PluginUiRegistry()
 	for (const plugin of plugins) {
 		for (const region of plugin.grantedRegions) {
-			registry.add(plugin.name, region, plugin.grantedRegions)
+			registry.add(plugin.name, region, plugin.grantedRegions, plugin.sources?.[region])
 		}
 	}
 	return registry
