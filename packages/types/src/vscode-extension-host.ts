@@ -1351,6 +1351,8 @@ export interface ShoferSayTool {
 	softResultLength?: number
 	softTimeoutSec?: number
 	contextFiles?: string[]
+	// answer_subtask_question: the answer text rendered back into the chat row.
+	answer?: string
 }
 
 /**
