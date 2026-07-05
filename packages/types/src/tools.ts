@@ -141,11 +141,6 @@ export const toolParamNames = [
 	"source",
 	// check_task_status parameter
 	"include_activity",
-	// ask_live_memory parameters
-	"contextFiles",
-	"timeoutMs",
-	"softTimeoutSec",
-	"softResultLength",
 	// create_new_workspace parameters
 	"name",
 	"folders",
@@ -164,6 +159,9 @@ export const toolParamNames = [
 	"timeout_sec",
 	// new_task peer_task_ids parameter
 	"peer_task_ids",
+	// new_task advisory soft-limit parameters
+	"softTimeoutSec",
+	"softResultLength",
 	// list_background_tasks scope parameter
 	"scope",
 ] as const
@@ -175,13 +173,6 @@ export type ToolParamName = (typeof toolParamNames)[number]
  * Tools not listed here will fall back to `any` for backward compatibility.
  */
 export type NativeToolArgs = {
-	ask_live_memory: {
-		question: string
-		contextFiles?: string[] | null
-		timeoutMs?: number | null
-		softTimeoutSec?: number | null
-		softResultLength?: number | null
-	}
 	access_mcp_resource: { server_name: string; uri: string }
 	read_file: import("./tool-params.js").ReadFileToolParams
 	read_command_output: { artifact_id: string; search?: string; offset?: number; limit?: number }

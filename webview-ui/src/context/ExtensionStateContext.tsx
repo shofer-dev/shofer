@@ -18,6 +18,8 @@ import {
 	type VsCodeLmChatInfo,
 	type TaskState,
 	type ShoferNodesState,
+	type PluginsState,
+	type PluginUiContributionsState,
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
@@ -73,6 +75,10 @@ export interface ExtensionStateContextType extends ExtensionState {
 	// Shofer Nodes (remote agents) — registry + live status pushed by the extension.
 	// Undefined until the (v3-native) backend populates it; UI renders empty state.
 	shoferNodes?: ShoferNodesState
+	// Plugins (Settings → Plugins tab) — discovered plugins pushed by the extension.
+	plugins?: PluginsState
+	// Plugin UI contributions per region (design §6.8), pushed by the extension.
+	pluginUiContributions?: PluginUiContributionsState
 	// Parallel task management
 	parallelTasks: ManagedTask[]
 	focusedTaskId: string | null
@@ -330,10 +336,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		maxDiagnosticMessages: 50,
 		openRouterImageApiKey: "",
 		openRouterImageGenerationSelectedModel: "",
-		liveMemoryEnabled: true,
-		liveMemoryApiConfigId: "",
-		liveMemoryMaxContextTokens: undefined,
-		liveMemoryContextFillThreshold: undefined,
 		includeCurrentTime: true,
 		includeCurrentCost: true,
 		lockApiConfigAcrossModes: false,
@@ -374,6 +376,10 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 	// Shofer Nodes snapshot pushed by the extension (undefined until a backend sends it).
 	const [shoferNodes, setShoferNodes] = useState<ShoferNodesState | undefined>(undefined)
+	// Plugins snapshot pushed by the extension (undefined until the Plugins tab asks).
+	const [plugins, setPlugins] = useState<PluginsState | undefined>(undefined)
+	// Plugin UI contributions per region (design §6.8), pushed on launch + on toggle.
+	const [pluginUiContributions, setPluginUiContributions] = useState<PluginUiContributionsState | undefined>(undefined)
 
 	const setListApiConfigMeta = useCallback(
 		(value: ProviderSettingsEntry[]) => setState((prevState) => ({ ...prevState, listApiConfigMeta: value })),
@@ -702,6 +708,14 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					setShoferNodes(message.shoferNodes)
 					break
 				}
+				case "plugins": {
+					setPlugins(message.plugins)
+					break
+				}
+				case "pluginUiContributions": {
+					setPluginUiContributions(message.pluginUiContributions)
+					break
+				}
 			}
 		},
 		[setListApiConfigMeta, state.apiConfiguration?.apiProvider],
@@ -896,11 +910,17 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			taskNotifications: (state.taskNotifications ?? []) as TaskNotification[],
 			// Shofer Nodes (remote agents)
 			shoferNodes,
+			// Plugins (Settings → Plugins tab)
+			plugins,
+			// Plugin UI contributions per region (design §6.8)
+			pluginUiContributions,
 		}),
 		[
 			state,
 			didHydrateState,
 			shoferNodes,
+			plugins,
+			pluginUiContributions,
 			showWelcome,
 			theme,
 			mcpServers,

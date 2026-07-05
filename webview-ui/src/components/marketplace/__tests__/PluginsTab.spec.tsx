@@ -1,0 +1,161 @@
+import { fireEvent, render, screen } from "@testing-library/react"
+
+import type { PluginsState } from "@shofer/types"
+
+import { ExtensionStateContext } from "@/context/ExtensionStateContext"
+import { vscode } from "@/utils/vscode"
+
+import { PluginsTab } from "../PluginsTab"
+
+vi.mock("@/utils/vscode", () => ({
+	vscode: { postMessage: vi.fn() },
+}))
+
+vi.mock("@/i18n/TranslationContext", () => ({
+	useAppTranslation: () => ({
+		t: (key: string, opts?: Record<string, unknown>) => (opts?.name ? `${key}:${opts.name}` : key),
+	}),
+}))
+
+function renderTab(plugins?: PluginsState) {
+	return render(
+		<ExtensionStateContext.Provider value={{ plugins } as never}>
+			<PluginsTab />
+		</ExtensionStateContext.Provider>,
+	)
+}
+
+const samplePlugins: PluginsState = {
+	plugins: [
+		{
+			name: "alpha",
+			version: "1.0.0",
+			description: "Alpha plugin",
+			scope: "global",
+			firstParty: false,
+			enabled: false,
+			hasCode: false,
+			contributionCounts: { modes: 1, skills: 0, commands: 0, mcpServers: 0, rules: 0 },
+		},
+		{
+			name: "beta",
+			version: "2.0.0",
+			scope: "project",
+			firstParty: false,
+			enabled: true,
+			hasCode: true,
+			contributionCounts: { modes: 0, skills: 2, commands: 0, mcpServers: 0, rules: 0 },
+		},
+	],
+}
+
+describe("PluginsTab (Phase 5.3)", () => {
+	beforeEach(() => vi.clearAllMocks())
+
+	it("requests the plugin list on mount", () => {
+		renderTab(samplePlugins)
+		expect(vscode.postMessage).toHaveBeenCalledWith({ type: "plugin", plugin: { action: "list" } })
+	})
+
+	it("shows an empty state with no plugins", () => {
+		renderTab({ plugins: [] })
+		expect(screen.getByText("marketplace:plugins.empty")).toBeInTheDocument()
+	})
+
+	it("renders a row per discovered plugin", () => {
+		renderTab(samplePlugins)
+		expect(screen.getByText("alpha")).toBeInTheDocument()
+		expect(screen.getByText("beta")).toBeInTheDocument()
+		expect(screen.getByText("Alpha plugin")).toBeInTheDocument()
+	})
+
+	it("toggling a plugin posts setEnabled", () => {
+		renderTab(samplePlugins)
+		const toggle = screen.getByLabelText("settings:plugins.toggleAria:alpha")
+		fireEvent.click(toggle)
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "setEnabled", name: "alpha", enabled: true },
+		})
+	})
+
+	it("install-from-file posts installFromFile", () => {
+		renderTab(samplePlugins)
+		fireEvent.click(screen.getByText("marketplace:plugins.installFromFile"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "installFromFile" },
+		})
+	})
+
+	it("install-from-url posts installFromUrl with the trimmed URL", () => {
+		renderTab(samplePlugins)
+		const input = screen.getByLabelText("marketplace:plugins.installFromUrl")
+		fireEvent.change(input, { target: { value: "  https://example.com/p.shofer-plugin  " } })
+		fireEvent.click(screen.getByText("marketplace:plugins.installFromUrl"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "installFromUrl", url: "https://example.com/p.shofer-plugin" },
+		})
+	})
+
+	it("install-from-url does not post while the URL is blank", () => {
+		renderTab(samplePlugins)
+		// The button is disabled with an empty URL, so a click posts nothing.
+		fireEvent.click(screen.getByText("marketplace:plugins.installFromUrl"))
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(
+			expect.objectContaining({ plugin: expect.objectContaining({ action: "installFromUrl" }) }),
+		)
+	})
+
+	it("install-from-url submits on Enter", () => {
+		renderTab(samplePlugins)
+		const input = screen.getByLabelText("marketplace:plugins.installFromUrl")
+		fireEvent.change(input, { target: { value: "https://example.com/p.shofer-plugin" } })
+		fireEvent.keyDown(input, { key: "Enter" })
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "installFromUrl", url: "https://example.com/p.shofer-plugin" },
+		})
+	})
+
+	it("uninstall requires a confirmation step before posting", () => {
+		renderTab(samplePlugins)
+		// First click reveals the confirm button; nothing is posted yet.
+		const trashButtons = screen.getAllByTitle("marketplace:plugins.uninstall")
+		fireEvent.click(trashButtons[0])
+		expect(vscode.postMessage).not.toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "uninstall", name: "alpha" },
+		})
+		// The confirm button now posts the uninstall.
+		fireEvent.click(screen.getByText("marketplace:plugins.uninstall"))
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: { action: "uninstall", name: "alpha" },
+		})
+	})
+
+	it("hides the uninstall affordance for a first-party (bundled) plugin", () => {
+		renderTab({
+			plugins: [
+				{
+					name: "live-memory",
+					version: "0.1.0",
+					description: "Bundled first-party plugin",
+					scope: "bundled",
+					firstParty: true,
+					enabled: false,
+					hasCode: true,
+					contributionCounts: { modes: 0, skills: 3, commands: 3, mcpServers: 0, rules: 0 },
+				},
+			],
+		})
+		// Row renders and the "Built-in" scope badge shows...
+		expect(screen.getByText("live-memory")).toBeInTheDocument()
+		// ...but there is no uninstall (Trash) control for a bundled plugin.
+		expect(screen.queryByTitle("marketplace:plugins.uninstall")).not.toBeInTheDocument()
+		// The enable toggle is still present (disabling is how you turn it off).
+		expect(screen.getByLabelText("settings:plugins.toggleAria:live-memory")).toBeInTheDocument()
+	})
+})

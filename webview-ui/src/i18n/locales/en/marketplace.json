@@ -152,5 +152,22 @@
 	},
 	"footer": {
 		"issueText": "Found a problem with a marketplace item or have suggestions for new ones? <0>Open a GitHub issue</0> to let us know!"
+	},
+	"plugins": {
+		"tab": "Plugins",
+		"description": "Behavioral extensions installed under ~/.shofer/plugins and this project's .shofer/plugins. Plugins are disabled by default — enable one to activate its contributions.",
+		"empty": "No plugins installed yet. Install one from a .shofer-plugin file.",
+		"installFromFile": "Install from file…",
+		"installFromUrl": "Install from URL",
+		"installFromUrlPlaceholder": "https://example.com/my-plugin.shofer-plugin",
+		"installing": "Installing…",
+		"uninstall": "Uninstall",
+		"uninstallConfirm": "Uninstall the plugin \"{{name}}\"? This deletes its directory.",
+		"cancel": "Cancel",
+		"aiBadge": "uses AI (billed)",
+		"aiConsentPrompt": "This plugin makes billed LLM calls on your account. Allow it?",
+		"aiConsentAllow": "Allow billed AI",
+		"aiConsented": "AI allowed",
+		"aiConsentRevoke": "Revoke"
 	}
 }

@@ -991,62 +991,6 @@ export const ChatRowContent = ({
 						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
 					</>
 				)
-			case "askLiveMemory": {
-				// Two-phase render:
-				//   - `ask` (approval): show the question we're about to send.
-				//   - `say` (after answer arrives): show the question + the
-				//     answer (markdown, expandable) + cost/duration footer.
-				const headerKey =
-					message.type === "ask" ? "chat:askLiveMemory.wantsToAsk" : "chat:askLiveMemory.didAsk"
-				const hasAnswer = typeof tool.answer === "string" && tool.answer.length > 0
-				const footerBits: string[] = []
-				if (typeof tool.durationMs === "number") footerBits.push(`${(tool.durationMs / 1000).toFixed(1)}s`)
-				if (typeof tool.tokensTotal === "number") footerBits.push(`${tool.tokensTotal} tokens`)
-				if (typeof tool.costUSD === "number") footerBits.push(`$${tool.costUSD.toFixed(4)}`)
-				if (tool.contextFiles && tool.contextFiles.length > 0)
-					footerBits.push(`${tool.contextFiles.length} file(s)`)
-				return (
-					<>
-						<div style={headerStyle}>
-							{toolIcon("comment-discussion")}
-							<span style={{ fontWeight: "bold" }}>{t(headerKey)}</span>
-						</div>
-						{tool.question && (
-							<div className="pl-6 mb-2 text-vscode-descriptionForeground italic break-words whitespace-pre-wrap">
-								{tool.question}
-							</div>
-						)}
-						{hasAnswer && (
-							<div className="pl-6">
-								<div
-									className="border border-vscode-editorGroup-border rounded overflow-hidden cursor-pointer"
-									onClick={handleToggleExpand}>
-									<div
-										className="flex items-center justify-between px-3 py-2 group"
-										style={{ background: "var(--vscode-textCodeBlock-background)" }}>
-										<span style={{ fontWeight: 500 }}>{t("chat:askLiveMemory.answer")}</span>
-										<span
-											className={`codicon codicon-chevron-${isExpanded ? "up" : "down"}`}></span>
-									</div>
-									{isExpanded && (
-										<div
-											className="px-3 py-2"
-											onClick={(e) => e.stopPropagation()}
-											style={{ borderTop: "1px solid var(--vscode-editorGroup-border)" }}>
-											<MarkdownBlock markdown={tool.answer!} />
-										</div>
-									)}
-								</div>
-								{footerBits.length > 0 && (
-									<div className="mt-1 text-xs text-vscode-descriptionForeground">
-										{footerBits.join(" · ")}
-									</div>
-								)}
-							</div>
-						)}
-					</>
-				)
-			}
 			case "switchMode":
 				return (
 					<>

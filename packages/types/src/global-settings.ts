@@ -263,22 +263,6 @@ export const globalSettingsSchema = z.object({
 	 */
 	enableLlmProviderIntegration: z.boolean().optional(),
 
-	// ─── Live Memory ──────────────────────────────────────────────────────
-	// Persistent codebase Q&A companion. Configuration is stored in
-	// GlobalState (typed via ContextProxy) instead of vscode workspace
-	// configuration so it shares the same lifecycle and migration hooks
-	// as the rest of the extension.
-	liveMemoryEnabled: z.boolean().optional(),
-	// ID of the API Configuration profile (managed by ProviderSettingsManager
-	// under Settings → Providers) used for live-memory LLM calls. The
-	// profile is the single source of truth for provider/model/credentials.
-	liveMemoryApiConfigId: z.string().optional(),
-	// Optional override for the live-memory context window. When unset,
-	// the manager falls back to the model info reported by the resolved
-	// API Configuration's ApiHandler (or DEFAULT_MAX_CONTEXT_TOKENS).
-	liveMemoryMaxContextTokens: z.number().int().positive().optional(),
-	liveMemoryContextFillThreshold: z.number().min(0).max(1).optional(),
-
 	/**
 	 * Maximum inline byte length of a tool result / message text stored in
 	 * `shoferMessages` and `apiConversationHistory`. Larger payloads are
@@ -336,6 +320,17 @@ export const globalSettingsSchema = z.object({
 	 * @default 120
 	 */
 	captchaSolverTimeoutSec: z.number().int().min(10).optional(),
+
+	/**
+	 * Per-plugin user-configured settings, keyed by plugin name (plugin system
+	 * design §5 `config` schema / §6.2 `PluginContext.config`). Each entry is the
+	 * plugin's own config object; the plugin's manifest declares the shape and
+	 * defaults, and the PluginManager merges defaults over the stored values before
+	 * injecting the result into the plugin's `PluginContext.config`. Persisted/read
+	 * via `ContextProxy` in globalState (design §12 Settings → Plugins).
+	 * @default undefined (no plugin has configured settings)
+	 */
+	pluginConfigs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>

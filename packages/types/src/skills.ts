@@ -6,7 +6,16 @@ export interface SkillMetadata {
 	name: string // Required: skill identifier
 	description: string // Required: when to use this skill
 	path: string // Absolute path to SKILL.md
-	source: "global" | "project" // Where the skill was discovered
+	source: "global" | "project" | "plugin" // Where the skill was discovered
+	/** When source === "plugin", the contributing plugin's name (attribution). */
+	pluginName?: string
+	/**
+	 * A **private** (internal) contribution — resolvable/invocable by its qualified
+	 * name (`<pluginName>:<name>`) but hidden from every user-facing enumeration (the
+	 * skills UI list and the slash-command menu). Set from a plugin skill
+	 * contribution's `private` flag; absent for file skills and normal plugin skills.
+	 */
+	private?: boolean
 	/**
 	 * @deprecated Use modeSlugs instead. Kept for backward compatibility.
 	 * If set, skill is only available in this mode.
@@ -25,6 +34,20 @@ export interface SkillMetadata {
  */
 export interface SkillContent extends SkillMetadata {
 	instructions: string // Full markdown body
+}
+
+/**
+ * The **addressing identifier** a skill resolves and is invoked under. File
+ * skills (global/project) keep their bare on-disk `name`. Plugin-contributed
+ * skills are **namespaced** as `<pluginName>:<name>` (design §14.7 →
+ * namespacing) so a plugin skill can never shadow a built-in/user skill or
+ * another plugin's skill by construction. The on-disk directory name and the
+ * SKILL.md frontmatter `name` stay spec-compliant (no `:`); the qualification
+ * lives purely at this resolution/addressing layer — `pluginName` already
+ * carries attribution.
+ */
+export function qualifiedSkillName(skill: Pick<SkillMetadata, "name" | "source" | "pluginName">): string {
+	return skill.source === "plugin" && skill.pluginName ? `${skill.pluginName}:${skill.name}` : skill.name
 }
 
 /**

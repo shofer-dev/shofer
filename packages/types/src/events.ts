@@ -131,7 +131,7 @@ export const shoferEventsSchema = z.object({
 		z.array(
 			z.object({
 				name: z.string(),
-				source: z.enum(["global", "project", "built-in"]),
+				source: z.enum(["global", "project", "built-in", "plugin"]),
 				filePath: z.string().optional(),
 				description: z.string().optional(),
 				argumentHint: z.string().optional(),

@@ -73,7 +73,6 @@ import insertEdit from "./insert_edit.js"
 import listCodeUsages from "./list_code_usages.js"
 import listFiles from "./list_files.js"
 import newTask from "./new_task.js"
-import askLiveMemory from "./ask_live_memory.js"
 import readCommandOutput from "./read_command_output.js"
 import readOutputChannel from "./read_output_channel.js"
 import { createReadFileTool, type ReadFileToolOptions } from "./read_file.js"
@@ -143,7 +142,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 	}
 
 	const tools: OpenAI.Chat.ChatCompletionTool[] = [
-		askLiveMemory,
 		accessMcpResource,
 		apply_diff,
 		applyPatch,

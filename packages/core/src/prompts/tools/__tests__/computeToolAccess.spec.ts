@@ -15,7 +15,6 @@ const codeMode = getModeBySlug("code", [])!
 const allGatesOn: ToolAccessGates = {
 	ragSearch: true,
 	gitSearch: true,
-	askLiveMemory: true,
 	generateImage: true,
 	runSlashCommand: true,
 	accessMcpResource: true,

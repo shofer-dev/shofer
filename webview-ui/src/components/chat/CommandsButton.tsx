@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
-import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink } from "lucide-react"
+import { Zap, ChevronDown, FolderGit2, Globe, Wrench, ExternalLink, Blocks } from "lucide-react"
 
 import type { Command } from "@shofer/types"
 
@@ -17,6 +17,7 @@ const SOURCE_ICONS: Record<Command["source"], React.ElementType> = {
 	project: FolderGit2,
 	global: Globe,
 	"built-in": Wrench,
+	plugin: Blocks,
 }
 
 /**

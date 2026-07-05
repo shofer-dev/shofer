@@ -44,7 +44,7 @@ import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
 import { registerNativeApiHandler } from "@shofer/core"
 import { setMcpHubFactory } from "@shofer/core"
-import { setCodeIndexManagerFactory, setGitIndexManagerFactory, setLiveMemoryManagerAccessor } from "@shofer/core"
+import { setCodeIndexManagerFactory, setGitIndexManagerFactory } from "@shofer/core"
 import { VsCodeLmHandler } from "./api/providers/vscode-lm"
 import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
@@ -67,7 +67,6 @@ import { setMcpOutputChannel } from "@shofer/core"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { NodeRegistry } from "./core/nodes/NodeRegistry"
 import { GitIndexManager } from "./services/git-index/git-index-manager"
-import { LiveMemoryManager } from "./services/live-memory/manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -161,7 +160,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	// Register the host accessors the portable Task core / FileContextTracker use to
-	// reach the Category II code-index, git-index and live-memory managers (Chunk B).
+	// reach the Category II code-index and git-index managers (Chunk B).
 	// The concrete singletons need a vscode.ExtensionContext (cast back here at the
 	// boundary); headless hosts leave these unset and the features degrade to off.
 	setCodeIndexManagerFactory((context, workspacePath) =>
@@ -170,11 +169,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	setGitIndexManagerFactory((context, workspacePath) =>
 		GitIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
 	)
-	setLiveMemoryManagerAccessor({
-		getInstance: (context, workspacePath) =>
-			LiveMemoryManager.getInstance(context as vscode.ExtensionContext, workspacePath),
-		getAllInstances: () => LiveMemoryManager.getAllInstances(),
-	})
 
 	// Set VS Code context key for marketplace visibility
 	vscode.commands.executeCommand("setContext", "shofer:marketplaceEnabled", MARKETPLACE_ENABLED)
@@ -212,7 +206,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// §10: fan captured agent events out to plugins' `onEvent` hooks. No-op while no
 	// plugins are registered.
-	telemetryService.onEvent((name, properties) => pluginRegistry.dispatchEvent({ name, properties }))
+	telemetryService.onEvent((name, properties) =>
+		pluginRegistry.dispatchEvent({ name, properties, timestamp: Date.now() }),
+	)
 
 	// Initialize i18n for internationalization support.
 	initializeI18n(context.globalState.get("language") ?? formatLanguage(vscode.env.language))
@@ -330,29 +326,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 				context.subscriptions.push(gitIndexManager)
 			}
-
-			// Initialize live memory manager for this workspace folder.
-			const liveMemoryManager = LiveMemoryManager.getInstance(context, folder.uri.fsPath)
-
-			if (liveMemoryManager) {
-				// Initialize in background; do not block extension activation
-				void liveMemoryManager.initialize().catch((error) => {
-					const message = error instanceof Error ? error.message : String(error)
-					outputChannel.appendLine(
-						`[LiveMemoryManager] Error during initialization for ${folder.uri.fsPath}: ${message}`,
-					)
-				})
-
-				context.subscriptions.push(liveMemoryManager)
-			}
 		}
 	}
-
-	// ─── Live Memory ──────────────────────────────────────────────────
-	// The Live Memory's status indicator and action menu live in the
-	// Shofer chat-input toolbar (LiveMemoryStatusBadge → LiveMemoryPopover),
-	// not in the VS Code status bar. Commands are registered through
-	// registerCommands() (typed CommandId system) below.
 
 	// Initialize the provider.
 	const provider = new ShoferProvider(context, outputChannel, "sidebar", contextProxy, undefined)
@@ -565,7 +540,6 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
-	LiveMemoryManager.disposeAll()
 	CodeIndexManager.disposeAll()
 	NodeRegistry.resetInstance()
 	TelemetryService.instance.shutdown()

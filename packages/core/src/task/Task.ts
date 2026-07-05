@@ -120,6 +120,9 @@ import { SYSTEM_PROMPT } from "../prompts/system.js"
 import { buildNativeToolsArrayWithRestrictions } from "./build-tools.js"
 import { MAX_SUBTASK_RESULT_LENGTH } from "../tools/NewTaskTool.js"
 
+// plugin lifecycle hooks (design §6.9)
+import { pluginRegistry } from "../plugins/plugin-registry.js"
+
 // core modules
 import { ToolRepetitionDetector } from "../tools/ToolRepetitionDetector.js"
 import { restoreTodoListForTask } from "../tools/UpdateTodoListTool.js"
@@ -2454,6 +2457,49 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		/** UUID v7 that uniquely identifies this ask invocation. */
 		const askId = uuidv7()
 
+		// Lifecycle `beforeAsk` (design §6.9): a permitted plugin may modify the ask
+		// text or auto-answer it before it is surfaced. Only for complete (non-partial)
+		// asks — partial streaming chunks are not user decisions. Fast-path: with no
+		// participating plugin this is fully skipped and the ask proceeds byte-for-byte
+		// as before, never touching the existing approval/auto-approval flow.
+		if (partial !== true && pluginRegistry.hasLifecycleHook("beforeAsk")) {
+			const hookResult = await pluginRegistry.applyBeforeAsk(type, text, {
+				taskId: this.taskId,
+				cwd: this.cwd,
+				mode: this._taskMode,
+			})
+			if (hookResult) {
+				if (typeof hookResult.text === "string") {
+					// Modify the ask surfaced to the user / passed to auto-approval.
+					text = hookResult.text
+				}
+				if (hookResult.decision === "approve" || hookResult.decision === "deny") {
+					// Auto-answer: record the ask (marked auto-approved, mirroring the
+					// existing auto-approval fast-path) and short-circuit the user prompt.
+					const decidedTs = Date.now()
+					this.lastMessageTs = decidedTs
+					this._currentAskId = askId
+					await this.addToShoferMessages({
+						ts: decidedTs,
+						type: "ask",
+						ask: type,
+						text,
+						isProtected,
+						askId,
+						autoApproved: true,
+						isAnswered: hookResult.decision === "approve" && type === "tool" ? true : undefined,
+					})
+					this._currentAskId = undefined
+					this.emit(ShoferEventName.TaskAskResponded)
+					return {
+						response: hookResult.decision === "approve" ? "yesButtonClicked" : "noButtonClicked",
+						text: hookResult.text,
+						images: undefined,
+					}
+				}
+			}
+		}
+
 		if (partial !== undefined) {
 			const lastMessage = this.shoferMessages.at(-1)
 
@@ -3458,6 +3504,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	private async startTask(task?: string, images?: string[]): Promise<void> {
+		// Lifecycle `beforeTaskStart` observer (design §6.9). Owner decision: kept off
+		// the latency-critical path — fired non-blocking (not awaited) and timeout-guarded
+		// inside the registry, so a plugin can never delay or block task start. No-op when
+		// no permitted plugin declares it.
+		void pluginRegistry
+			.notifyBeforeTaskStart({ taskId: this.taskId, cwd: this.cwd, mode: this._taskMode, prompt: task })
+			.catch(() => {})
+
 		try {
 			// `conversationHistory` (for API) and `shoferMessages` (for webview)
 			// need to be in sync.
@@ -4047,6 +4101,20 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					? "abandoned"
 					: "user"
 		this.emit(ShoferEventName.TaskAborted, { reason: abortReasonValue })
+
+		// Lifecycle `afterTaskComplete` observer (design §6.9). This is the single task
+		// teardown site — it fires both for a normal completion (post-attempt_completion
+		// cleanup, `abortReasonValue === "completed"`) and for a genuine abort. Fired
+		// non-blocking + timeout-guarded so an observer can never delay teardown. No-op
+		// when no permitted plugin declares it.
+		void pluginRegistry
+			.notifyAfterTaskComplete({
+				taskId: this.taskId,
+				cwd: this.cwd,
+				mode: this._taskMode,
+				reason: abortReasonValue === "completed" ? "completed" : "aborted",
+			})
+			.catch(() => {})
 
 		try {
 			this.dispose() // Call the centralized dispose method

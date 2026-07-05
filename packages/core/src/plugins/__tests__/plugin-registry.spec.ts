@@ -58,4 +58,36 @@ describe("PluginRegistry (§10)", () => {
 			expect(seen).toEqual(["task.created"])
 		})
 	})
+
+	it("dispatchUiMessage delivers only to the named plugin (namespaced)", async () => {
+		const reg = new PluginRegistry()
+		const aSeen: unknown[] = []
+		const bSeen: unknown[] = []
+		await reg.register({ name: "a", onUiMessage: (m) => void aSeen.push(m) })
+		await reg.register({ name: "b", onUiMessage: (m) => void bSeen.push(m) })
+
+		await reg.dispatchUiMessage("a", { hello: 1 })
+		expect(aSeen).toEqual([{ hello: 1 }])
+		expect(bSeen).toEqual([]) // b must not observe a's channel
+
+		await reg.dispatchUiMessage("b", { world: 2 })
+		expect(bSeen).toEqual([{ world: 2 }])
+		expect(aSeen).toEqual([{ hello: 1 }])
+	})
+
+	it("dispatchUiMessage isolates a throwing onUiMessage and no-ops unknown/absent", async () => {
+		const reg = new PluginRegistry()
+		await reg.register({
+			name: "throws",
+			onUiMessage: () => {
+				throw new Error("boom")
+			},
+		})
+		await reg.register({ name: "noHook" })
+		// Throwing receiver never rejects to the caller.
+		await expect(reg.dispatchUiMessage("throws", {})).resolves.toBeUndefined()
+		// Plugin with no onUiMessage, and an unknown plugin, are no-ops.
+		await expect(reg.dispatchUiMessage("noHook", {})).resolves.toBeUndefined()
+		await expect(reg.dispatchUiMessage("ghost", {})).resolves.toBeUndefined()
+	})
 })

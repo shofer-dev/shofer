@@ -17,6 +17,7 @@ import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
+import { getSharedPluginManager } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 
@@ -252,7 +253,35 @@ export class CustomModesManager {
 			}
 		}
 
+		this.appendPluginModes(merged, slugs)
+
 		return merged
+	}
+
+	/**
+	 * Modes contributed by enabled plugins (design §6.3). They arrive tagged
+	 * `source: "plugin"` + `pluginName` with a **namespaced** slug
+	 * (`<pluginName>:<authoredSlug>`, §14.7 → namespacing). Empty when no plugin
+	 * manager is wired or no plugins are enabled ⇒ behavior unchanged.
+	 */
+	private getPluginModes(): ModeConfig[] {
+		return getSharedPluginManager()?.getContributedModes() ?? []
+	}
+
+	/**
+	 * Append plugin-contributed modes to `merged`. Because plugin slugs are
+	 * namespaced (`<pluginName>:<slug>`), they can never collide with a built-in,
+	 * global, or project mode's natural slug, nor with another plugin's mode — so
+	 * there is no override/last-installed-wins tie-break here; each qualified mode is
+	 * simply appended. A `slugs`-guard is kept only as a defensive de-dup (a repeated
+	 * qualified slug would already have been reported upstream by the manager).
+	 */
+	private appendPluginModes(merged: ModeConfig[], slugs: Set<string>): void {
+		for (const mode of this.getPluginModes()) {
+			if (slugs.has(mode.slug)) continue
+			slugs.add(mode.slug)
+			merged.push(mode)
+		}
 	}
 
 	public async getCustomModesFilePath(): Promise<string> {
@@ -394,6 +423,9 @@ export class CustomModesManager {
 				.filter((mode) => !projectModes.has(mode.slug))
 				.map((mode) => ({ ...mode, source: "global" as const })),
 		]
+
+		// Append plugin-contributed modes (design §6.3) at the top of the chain.
+		this.appendPluginModes(mergedModes, new Set(mergedModes.map((m) => m.slug)))
 
 		await this.context.globalState.update("customModes", mergedModes)
 
@@ -1005,6 +1037,15 @@ export class CustomModesManager {
 	private clearCache(): void {
 		this.cachedModes = null
 		this.cachedAt = 0
+	}
+
+	/**
+	 * Invalidate the merged-modes cache so the next {@link getCustomModes} re-reads
+	 * files and re-merges plugin-contributed modes. Used after a plugin is
+	 * enabled/disabled so mode changes surface immediately rather than after the TTL.
+	 */
+	public invalidateCache(): void {
+		this.clearCache()
 	}
 
 	dispose(): void {

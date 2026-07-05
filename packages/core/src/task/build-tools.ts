@@ -13,7 +13,6 @@ import { type TaskProviderLike } from "../task-provider/index.js"
 import { getRooDirectoriesForCwd } from "../services/shofer-config/index.js"
 import { getCodeIndexManagerFactory } from "../services/code-index/code-index-registry.js"
 import { getGitIndexManagerFactory } from "../services/git-index/git-index-registry.js"
-import { getLiveMemoryManagerAccessor } from "../services/live-memory/live-memory-registry.js"
 
 import { getNativeTools } from "../prompts/tools/native-tools/index.js"
 import { getMcpServerTools } from "../prompts/tools/native-tools/mcp_server.js"
@@ -323,7 +322,6 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	// unset and the features are simply off.
 	const codeIndexManager = getCodeIndexManagerFactory()?.(provider.context, cwd)
 	const gitIndexManager = getGitIndexManagerFactory()?.(provider.context, cwd)
-	const liveMemoryManager = getLiveMemoryManagerAccessor()?.getInstance(provider.context, cwd)
 
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
@@ -348,7 +346,6 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		gitIndexManager,
 		filterSettings,
 		mcpHub,
-		liveMemoryManager,
 	)
 
 	const mcpTools = getMcpServerTools(mcpHub)
@@ -358,7 +355,7 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	let nativeCustomTools: OpenAI.Chat.ChatCompletionFunctionTool[] = []
 	// §10: register plugin-contributed tools so they are assembled AND executable
 	// through the unified custom-tool path (independent of the customTools experiment).
-	const pluginTools = await pluginRegistry.collectTools({ workspacePath: cwd, mode })
+	const pluginTools = await pluginRegistry.collectTools({ workspacePath: cwd, cwd, mode })
 	for (const def of pluginTools) {
 		customToolRegistry.register(def, "plugin")
 	}

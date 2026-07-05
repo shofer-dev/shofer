@@ -108,6 +108,8 @@ vi.mock("@shofer/core", async (importOriginal) => ({
 
 import { SkillsManager } from "../SkillsManager"
 import { ShoferProvider } from "../../../core/webview/ShoferProvider"
+import { setSharedPluginManager } from "@shofer/core"
+import { createInMemoryHost, setHost } from "@shofer/types"
 
 describe("SkillsManager", () => {
 	let skillsManager: SkillsManager
@@ -1751,6 +1753,167 @@ Instructions`)
 
 			// Verify directory was NOT cleaned up (still has other skills)
 			expect(mockRmdir).not.toHaveBeenCalled()
+		})
+	})
+
+	describe("plugin-contributed skills (Phase 1)", () => {
+		const pluginSkillsDir = p(PROJECT_DIR, ".shofer", "plugins", "my-plugin", "skills")
+		const deploySkillDir = p(pluginSkillsDir, "deploy-skill")
+		const deploySkillMd = p(deploySkillDir, "SKILL.md")
+
+		afterEach(() => {
+			setSharedPluginManager(undefined)
+		})
+
+		it("discovers a skill from an enabled plugin, tagged source=plugin", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [{ pluginName: "my-plugin", dir: pluginSkillsDir }],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) =>
+				dir === pluginSkillsDir ? ["deploy-skill"] : [],
+			)
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) {
+					return `---
+name: deploy-skill
+description: Deploy the current branch to staging
+---
+Deploy instructions`
+				}
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			const skills = skillsManager.getAllSkills()
+			expect(skills).toHaveLength(1)
+			expect(skills[0]).toMatchObject({
+				name: "deploy-skill",
+				source: "plugin",
+				pluginName: "my-plugin",
+			})
+		})
+
+		it("contributes nothing when no plugin manager is wired", async () => {
+			mockDirectoryExists.mockResolvedValue(false)
+			mockReaddir.mockResolvedValue([])
+			await skillsManager.discoverSkills()
+			expect(skillsManager.getAllSkills()).toHaveLength(0)
+		})
+
+		it("two plugins' same-named skills coexist under namespaced identifiers, no warning (design §14.7)", async () => {
+			const dirA = p(PROJECT_DIR, ".shofer", "plugins", "a", "skills")
+			const dirB = p(PROJECT_DIR, ".shofer", "plugins", "b", "skills")
+			const skillDirA = p(dirA, "deploy-skill")
+			const skillDirB = p(dirB, "deploy-skill")
+			const skillMdA = p(skillDirA, "SKILL.md")
+			const skillMdB = p(skillDirB, "SKILL.md")
+
+			// Fresh host so we can assert NO warning is shown.
+			const host = createInMemoryHost()
+			const notifier = host.notifier as unknown as { messages: Array<{ level: string; message: string }> }
+			setHost(host)
+
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [
+					{ pluginName: "a", dir: dirA },
+					{ pluginName: "b", dir: dirB },
+				],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === dirA || dir === dirB)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) =>
+				dir === dirA || dir === dirB ? ["deploy-skill"] : [],
+			)
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === skillDirA || pathArg === skillDirB) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === skillMdA || file === skillMdB)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === skillMdA) return `---\nname: deploy-skill\ndescription: from plugin A\n---\nA body`
+				if (file === skillMdB) return `---\nname: deploy-skill\ndescription: from plugin B\n---\nB body`
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Both resolve — namespacing keys them under a:deploy-skill / b:deploy-skill.
+			const resolved = skillsManager.getSkillsForMode("code").filter((s) => s.name === "deploy-skill")
+			expect(resolved).toHaveLength(2)
+			expect(resolved.map((s) => s.pluginName).sort()).toEqual(["a", "b"])
+
+			// No conflict warning — the identifiers are isolated by construction.
+			const warns = notifier.messages.filter((m) => m.level === "warn").map((m) => m.message)
+			expect(warns.some((m) => m.includes("shadows"))).toBe(false)
+		})
+
+		it("hides a private plugin skill from listings but keeps it invocable by qualified name", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [
+					{ pluginName: "my-plugin", dir: pluginSkillsDir, privateNames: ["deploy-skill"] },
+				],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === pluginSkillsDir ? ["deploy-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) return `---\nname: deploy-skill\ndescription: Deploy to staging\n---\nBody`
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Hidden from both user-facing enumerations…
+			expect(skillsManager.getSkillsMetadata().find((s) => s.name === "deploy-skill")).toBeUndefined()
+			expect(skillsManager.getSkillsForMode("code").find((s) => s.name === "deploy-skill")).toBeUndefined()
+
+			// …but still invocable by its qualified name.
+			const content = await skillsManager.getSkillContent("my-plugin:deploy-skill", "code")
+			expect(content).toMatchObject({ name: "deploy-skill", pluginName: "my-plugin", private: true })
+		})
+
+		it("resolves a plugin skill by its qualified name, never by the bare name", async () => {
+			setSharedPluginManager({
+				getContributedSkillDirs: () => [{ pluginName: "my-plugin", dir: pluginSkillsDir }],
+			} as any)
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === pluginSkillsDir ? ["deploy-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === deploySkillDir) return { isDirectory: () => true }
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === deploySkillMd)
+			mockReadFile.mockImplementation(async (file: string) => {
+				if (file === deploySkillMd) {
+					return `---\nname: deploy-skill\ndescription: Deploy to staging\n---\nDeploy instructions`
+				}
+				throw new Error("File not found")
+			})
+
+			await skillsManager.discoverSkills()
+
+			// Qualified name resolves; the bare on-disk name does not address a plugin skill.
+			const qualified = await skillsManager.getSkillContent("my-plugin:deploy-skill")
+			expect(qualified).toMatchObject({ name: "deploy-skill", pluginName: "my-plugin" })
+			expect(await skillsManager.getSkillContent("deploy-skill")).toBeNull()
 		})
 	})
 })

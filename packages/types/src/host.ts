@@ -146,12 +146,15 @@ export interface HostDisposable {
 /**
  * A file-system watcher over a glob (maps to `vscode.FileSystemWatcher`). Each
  * `on*` registers a handler and returns its own disposable; `dispose()` tears the
- * whole watcher down.
+ * whole watcher down. Each handler receives the **absolute path** of the file that
+ * fired the event (maps to the `vscode.Uri.fsPath` the underlying event carries) so
+ * callers that care *which* file changed (e.g. plugin `ctx.host.watch`, P7) get it;
+ * handlers that don't need the path can simply ignore the argument.
  */
 export interface HostFileWatcher extends HostDisposable {
-	onCreate(handler: () => void): HostDisposable
-	onChange(handler: () => void): HostDisposable
-	onDelete(handler: () => void): HostDisposable
+	onCreate(handler: (path: string) => void): HostDisposable
+	onChange(handler: (path: string) => void): HostDisposable
+	onDelete(handler: (path: string) => void): HostDisposable
 }
 
 /** File-watching the core needs (maps to `vscode.workspace.createFileSystemWatcher`). */

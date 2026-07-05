@@ -33,9 +33,9 @@ export function installVsCodeForwardingHost(): void {
 			watch: (baseDir: string, pattern: string) => {
 				const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(baseDir, pattern))
 				return {
-					onCreate: (h: () => void) => w.onDidCreate(h),
-					onChange: (h: () => void) => w.onDidChange(h),
-					onDelete: (h: () => void) => w.onDidDelete(h),
+					onCreate: (h: (path: string) => void) => w.onDidCreate((uri) => h(uri.fsPath)),
+					onChange: (h: (path: string) => void) => w.onDidChange((uri) => h(uri.fsPath)),
+					onDelete: (h: (path: string) => void) => w.onDidDelete((uri) => h(uri.fsPath)),
 					dispose: () => w.dispose(),
 				}
 			},

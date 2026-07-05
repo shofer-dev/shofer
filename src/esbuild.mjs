@@ -11,6 +11,42 @@ import { copyPaths, copyWasms } from "@shofer/build"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+/** Directory/file names never shipped into a packaged plugin (dev-only cruft). */
+const PLUGIN_COPY_EXCLUDE_DIRS = new Set(["node_modules", "__tests__"])
+const PLUGIN_COPY_EXCLUDE_FILES = new Set(["tsconfig.json", "vitest.config.ts", "build-ui.mjs"])
+const PLUGIN_COPY_EXCLUDE_EXT = new Set([".tsx"]) // built .js ships; .tsx source doesn't.
+
+/**
+ * Recursively copy the first-party plugins tree into the packaged output, skipping
+ * dev-only cruft. Runtime needs each plugin's `plugin.json`, its `main` .ts sources
+ * (the code loader transpiles them at load), built UI bundles (`ui/panel.js`), and
+ * the skills/commands markdown — everything except {@link PLUGIN_COPY_EXCLUDE_DIRS}
+ * / {@link PLUGIN_COPY_EXCLUDE_FILES} / {@link PLUGIN_COPY_EXCLUDE_EXT}.
+ */
+function copyBundledPlugins(srcRoot, dstRoot) {
+	if (!fs.existsSync(srcRoot)) {
+		console.warn(`[esbuild] No plugins dir to bundle at ${srcRoot} — skipping.`)
+		return
+	}
+	let count = 0
+	const walk = (src, dst) => {
+		fs.mkdirSync(dst, { recursive: true })
+		for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+			if (entry.isDirectory()) {
+				if (PLUGIN_COPY_EXCLUDE_DIRS.has(entry.name)) continue
+				walk(path.join(src, entry.name), path.join(dst, entry.name))
+			} else if (entry.isFile()) {
+				if (PLUGIN_COPY_EXCLUDE_FILES.has(entry.name)) continue
+				if (PLUGIN_COPY_EXCLUDE_EXT.has(path.extname(entry.name))) continue
+				fs.copyFileSync(path.join(src, entry.name), path.join(dst, entry.name))
+				count++
+			}
+		}
+	}
+	walk(srcRoot, dstRoot)
+	console.log(`[esbuild] Copied ${count} bundled-plugin files to ${dstRoot}`)
+}
+
 async function main() {
 	const name = "extension"
 	const production = process.argv.includes("--production")
@@ -118,6 +154,14 @@ async function main() {
 						srcDir,
 						distDir,
 					)
+					// Ship the first-party (bundled) plugins tree into dist/plugins so the
+					// runtime resolves it at `<extensionPath>/dist/plugins` (design §7 —
+					// bundled scope). Mirrors the tree-sitter-wasm copy above. The P2 code
+					// loader transpiles each plugin's `main` (e.g. main.ts) at runtime, so the
+					// .ts SOURCES must ship — we copy everything except dev-only cruft
+					// (node_modules, __tests__, tsconfig/vitest/build scripts, .tsx sources
+					// whose built .js is already present).
+					copyBundledPlugins(path.join(srcDir, "..", "plugins"), path.join(distDir, "plugins"))
 				})
 			},
 		},

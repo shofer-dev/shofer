@@ -1,0 +1,14 @@
+{
+	"//": "Standalone tsconfig for the Live Memory plugin. The plugin's TS is transpiled at RUNTIME by the P2 loader (esbuild), NOT by the extension build — so these sources sit OUTSIDE every extension/package tsc root (root `shofer` includes only `src/`; `@shofer/core` includes only `packages/core/src`). This config exists purely so a developer/CI can typecheck the plugin against the public @shofer/types surface in isolation.",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"baseUrl": ".",
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"]
+		}
+	},
+	"include": ["*.ts"],
+	"exclude": ["node_modules", "__fixtures__", "__tests__", "vitest.config.ts"]
+}

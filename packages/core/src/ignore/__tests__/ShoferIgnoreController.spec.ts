@@ -19,9 +19,9 @@ vi.mock("../../fs/fs.js", () => ({ fileExistsAtPath: vi.fn() }))
 // A host whose file watcher is spyable, so we can assert the .shoferignore watcher wiring
 // (the controller calls getHost().watcher.watch(...) then registers onChange/onCreate/onDelete).
 const fileWatcher = {
-	onChange: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
-	onCreate: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
-	onDelete: vi.fn((_h: () => void) => ({ dispose: vi.fn() })),
+	onChange: vi.fn((_h: (path: string) => void) => ({ dispose: vi.fn() })),
+	onCreate: vi.fn((_h: (path: string) => void) => ({ dispose: vi.fn() })),
+	onDelete: vi.fn((_h: (path: string) => void) => ({ dispose: vi.fn() })),
 	dispose: vi.fn(),
 }
 const mockWatch = vi.fn(() => fileWatcher)
@@ -468,7 +468,7 @@ describe("ShoferIgnoreController", () => {
 
 			// Find and trigger the onDelete handler
 			const onDeleteHandler = fileWatcher.onDelete.mock.calls[0]![0]
-			await onDeleteHandler()
+			await onDeleteHandler("/workspace/.shofer/shoferignore")
 
 			// Verify content was reset
 			expect(controller.shoferIgnoreContent).toBeUndefined()

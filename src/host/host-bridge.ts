@@ -329,10 +329,11 @@ class VsCodeWorkspace implements HostWorkspace {
 class VsCodeWatcher implements HostWatcher {
 	watch(baseDir: string, pattern: string): HostFileWatcher {
 		const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(baseDir, pattern))
+		// Thread the vscode.Uri's absolute fsPath to the handler (P7 — path-carrying watch).
 		return {
-			onCreate: (handler) => w.onDidCreate(handler),
-			onChange: (handler) => w.onDidChange(handler),
-			onDelete: (handler) => w.onDidDelete(handler),
+			onCreate: (handler) => w.onDidCreate((uri) => handler(uri.fsPath)),
+			onChange: (handler) => w.onDidChange((uri) => handler(uri.fsPath)),
+			onDelete: (handler) => w.onDidDelete((uri) => handler(uri.fsPath)),
 			dispose: () => w.dispose(),
 		}
 	}

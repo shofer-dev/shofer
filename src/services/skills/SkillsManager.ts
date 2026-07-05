@@ -6,7 +6,8 @@ import matter from "gray-matter"
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "@shofer/core"
 import { directoryExists, fileExists } from "@shofer/core"
-import { SkillMetadata, SkillContent } from "@shofer/types"
+import { getSharedPluginManager } from "@shofer/core"
+import { SkillMetadata, SkillContent, qualifiedSkillName } from "@shofer/types"
 import { modes, getAllModes } from "@shofer/core"
 import {
 	validateSkillName as validateSkillNameShared,
@@ -45,8 +46,8 @@ export class SkillsManager {
 		this.skills.clear()
 		const skillsDirs = await this.getSkillsDirectories()
 
-		for (const { dir, source, mode } of skillsDirs) {
-			await this.scanSkillsDirectory(dir, source, mode)
+		for (const { dir, source, mode, pluginName, privateNames } of skillsDirs) {
+			await this.scanSkillsDirectory(dir, source, mode, pluginName, privateNames)
 		}
 	}
 
@@ -56,7 +57,13 @@ export class SkillsManager {
 	 * 1. The skills directory itself is a symlink (resolved by directoryExists using realpath)
 	 * 2. Individual skill subdirectories are symlinks
 	 */
-	private async scanSkillsDirectory(dirPath: string, source: "global" | "project", mode?: string): Promise<void> {
+	private async scanSkillsDirectory(
+		dirPath: string,
+		source: "global" | "project" | "plugin",
+		mode?: string,
+		pluginName?: string,
+		privateNames: string[] = [],
+	): Promise<void> {
 		if (!(await directoryExists(dirPath))) {
 			return
 		}
@@ -76,7 +83,7 @@ export class SkillsManager {
 				if (!stats?.isDirectory()) continue
 
 				// Load skill metadata - the skill name comes from the entry name (symlink name if symlinked)
-				await this.loadSkillMetadata(entryPath, source, mode, entryName)
+				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName, privateNames)
 			}
 		} catch {
 			// Directory doesn't exist or can't be read - this is fine
@@ -92,9 +99,11 @@ export class SkillsManager {
 	 */
 	private async loadSkillMetadata(
 		skillDir: string,
-		source: "global" | "project",
+		source: "global" | "project" | "plugin",
 		mode?: string,
 		skillName?: string,
+		pluginName?: string,
+		privateNames: string[] = [],
 	): Promise<void> {
 		const skillMdPath = path.join(skillDir, "SKILL.md")
 		if (!(await fileExists(skillMdPath))) return
@@ -161,13 +170,17 @@ export class SkillsManager {
 			// Create unique key combining name, source, and modeSlugs for override resolution
 			// For backward compatibility, use first mode slug or undefined for the key
 			const primaryMode = modeSlugs?.[0]
-			const skillKey = this.getSkillKey(effectiveSkillName, source, primaryMode)
+			const skillKey = this.getSkillKey(effectiveSkillName, source, primaryMode, pluginName)
 
 			this.skills.set(skillKey, {
 				name: effectiveSkillName,
 				description,
 				path: skillMdPath,
 				source,
+				pluginName, // Set only for plugin-contributed skills (attribution)
+				// Private plugin skills: invocable by qualified name, hidden from
+				// user-facing enumerations (owner directive #4).
+				private: source === "plugin" && privateNames.includes(effectiveSkillName) ? true : undefined,
 				mode: primaryMode, // Deprecated: kept for backward compatibility
 				modeSlugs, // New: array of mode slugs, undefined = any mode
 			})
@@ -177,32 +190,51 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Get skills available for the current mode.
-	 * Resolves overrides: project > global, mode-specific > generic.
+	 * Get skills **advertised** for the current mode — the list shown to the model
+	 * (system-prompt skills section, skill tool) and to the user (slash-command
+	 * menu). Excludes {@link SkillMetadata.private} skills (owner directive #4); those
+	 * remain resolvable/invocable by qualified name via {@link getSkillContent}.
 	 *
 	 * @param currentMode - The current mode slug (e.g., 'code', 'architect')
 	 */
 	getSkillsForMode(currentMode: string): SkillMetadata[] {
+		return this.resolveSkillsForMode(currentMode, false)
+	}
+
+	/**
+	 * Resolve the skills applicable to `currentMode`, keyed by each skill's
+	 * **addressing identifier** ({@link qualifiedSkillName}): file skills by their bare
+	 * name, plugin skills by `<pluginName>:<name>` (§14.7 → namespacing). This isolates
+	 * plugin skills by construction — a plugin skill can never shadow a built-in/user
+	 * skill or another plugin's skill. Within a single identifier, overrides resolve by
+	 * {@link skillPrecedence} (project > global for files) with mode-specific > generic
+	 * on a tie. `includePrivate` gates whether private skills participate: `false` for
+	 * the advertised list, `true` for invocation-time resolution.
+	 */
+	private resolveSkillsForMode(currentMode: string, includePrivate: boolean): SkillMetadata[] {
 		const resolvedSkills = new Map<string, SkillMetadata>()
 
 		for (const skill of this.skills.values()) {
+			if (skill.private && !includePrivate) continue
+
 			// Check if skill is available in current mode:
 			// - modeSlugs undefined or empty = available in all modes ("Any mode")
 			// - modeSlugs array with values = available only if currentMode is in the array
 			const isAvailableInMode = this.isSkillAvailableInMode(skill, currentMode)
 			if (!isAvailableInMode) continue
 
-			const existingSkill = resolvedSkills.get(skill.name)
+			const key = qualifiedSkillName(skill)
+			const existingSkill = resolvedSkills.get(key)
 
 			if (!existingSkill) {
-				resolvedSkills.set(skill.name, skill)
+				resolvedSkills.set(key, skill)
 				continue
 			}
 
 			// Apply override rules
 			const shouldOverride = this.shouldOverrideSkill(existingSkill, skill)
 			if (shouldOverride) {
-				resolvedSkills.set(skill.name, skill)
+				resolvedSkills.set(key, skill)
 			}
 		}
 
@@ -224,31 +256,39 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Determine if newSkill should override existingSkill based on priority rules.
-	 * Priority: project > global, mode-specific > generic
+	 * Resolution precedence for a skill within a single addressing identifier. Higher
+	 * wins. Because plugin skills are namespaced ({@link qualifiedSkillName}), a plugin
+	 * entry is only ever compared against another entry of the *same* plugin+name, so
+	 * cross-plugin/plugin-vs-file precedence is moot (they resolve under distinct
+	 * keys). File skills keep the established chain: project > global.
+	 */
+	private skillPrecedence(skill: SkillMetadata): number {
+		if (skill.source === "plugin") return 3
+		if (skill.source === "project") return 2
+		return 1 // global
+	}
+
+	/**
+	 * Determine if newSkill should override existingSkill. Higher {@link skillPrecedence}
+	 * wins (project > global for files). On a tie, mode-specific overrides generic,
+	 * else the first-seen wins.
 	 */
 	private shouldOverrideSkill(existing: SkillMetadata, newSkill: SkillMetadata): boolean {
-		// Define source priority: project > global
-		const sourcePriority: Record<string, number> = {
-			project: 2,
-			global: 1,
-		}
+		const existingPriority = this.skillPrecedence(existing)
+		const newPriority = this.skillPrecedence(newSkill)
 
-		const existingPriority = sourcePriority[existing.source] ?? 0
-		const newPriority = sourcePriority[newSkill.source] ?? 0
-
-		// Higher priority source always wins
+		// Higher precedence always wins
 		if (newPriority > existingPriority) return true
 		if (newPriority < existingPriority) return false
 
-		// Same source: mode-specific overrides generic
+		// Tie: mode-specific overrides generic
 		// A skill with modeSlugs (restricted) is more specific than one without (any mode)
 		const existingHasModes = existing.modeSlugs && existing.modeSlugs.length > 0
 		const newHasModes = newSkill.modeSlugs && newSkill.modeSlugs.length > 0
 		if (newHasModes && !existingHasModes) return true
 		if (!newHasModes && existingHasModes) return false
 
-		// Same source and same mode-specificity: keep existing (first wins)
+		// Same precedence and same mode-specificity: keep existing (first wins)
 		return false
 	}
 
@@ -263,12 +303,16 @@ export class SkillsManager {
 		// If mode is provided, try to find the best matching skill
 		let skill: SkillMetadata | undefined
 
+		// Skills are addressed by their qualified identifier: a bare name for file
+		// skills, `<pluginName>:<name>` for plugin skills (§14.7 → namespacing).
+		// Invocation resolution includes private skills (hidden from listings, but
+		// still callable by qualified name — owner directive #4).
 		if (currentMode) {
-			const modeSkills = this.getSkillsForMode(currentMode)
-			skill = modeSkills.find((s) => s.name === name)
+			const modeSkills = this.resolveSkillsForMode(currentMode, true)
+			skill = modeSkills.find((s) => qualifiedSkillName(s) === name)
 		} else {
-			// Fall back to any skill with this name
-			skill = Array.from(this.skills.values()).find((s) => s.name === name)
+			// Fall back to any skill with this addressing identifier
+			skill = Array.from(this.skills.values()).find((s) => qualifiedSkillName(s) === name)
 		}
 
 		if (!skill) return null
@@ -292,11 +336,13 @@ export class SkillsManager {
 	}
 
 	/**
-	 * Get all skills metadata (for UI display)
-	 * Returns skills from all sources without content
+	 * Get all skills metadata (for UI display). Returns skills from all sources
+	 * without content, **excluding** private plugin skills — this is a user-facing
+	 * enumeration (the skills UI list), so private skills stay hidden here (they
+	 * remain invocable by qualified name via {@link getSkillContent}).
 	 */
 	getSkillsMetadata(): SkillMetadata[] {
-		return this.getAllSkills()
+		return this.getAllSkills().filter((s) => !s.private)
 	}
 
 	/**
@@ -576,11 +622,19 @@ Add your skill instructions here.
 	private async getSkillsDirectories(): Promise<
 		Array<{
 			dir: string
-			source: "global" | "project"
+			source: "global" | "project" | "plugin"
 			mode?: string
+			pluginName?: string
+			privateNames?: string[]
 		}>
 	> {
-		const dirs: Array<{ dir: string; source: "global" | "project"; mode?: string }> = []
+		const dirs: Array<{
+			dir: string
+			source: "global" | "project" | "plugin"
+			mode?: string
+			pluginName?: string
+			privateNames?: string[]
+		}> = []
 		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
 		const provider = this.providerRef.deref()
@@ -619,11 +673,22 @@ Add your skill instructions here.
 			dirs.push({ dir: path.join(globalShoferDir, `skills-${mode}`), source: "global", mode })
 		}
 
-		// Project .shofer directories (highest priority)
+		// Project .shofer directories (highest priority among file sources)
 		if (projectRooDir) {
 			dirs.push({ dir: path.join(projectRooDir, "skills"), source: "project" })
 			for (const mode of modesList) {
 				dirs.push({ dir: path.join(projectRooDir, `skills-${mode}`), source: "project", mode })
+			}
+		}
+
+		// Plugin-contributed skills (design §6.4 — highest precedence). Each enabled
+		// plugin ships a `<root>/skills/` directory scanned like any other; mode
+		// scoping comes from each SKILL.md's frontmatter. Empty when no plugin
+		// manager is wired or no plugins are enabled ⇒ behavior unchanged.
+		const pluginManager = getSharedPluginManager()
+		if (pluginManager) {
+			for (const { pluginName, dir, privateNames } of pluginManager.getContributedSkillDirs()) {
+				dirs.push({ dir, source: "plugin", pluginName, privateNames: privateNames ?? [] })
 			}
 		}
 
@@ -650,8 +715,11 @@ Add your skill instructions here.
 		}
 	}
 
-	private getSkillKey(name: string, source: string, mode?: string): string {
-		return `${source}:${mode || "generic"}:${name}`
+	private getSkillKey(name: string, source: string, mode?: string, pluginName?: string): string {
+		// Plugin skills include the plugin name so two plugins can each ship a
+		// same-named skill without their discovery keys colliding.
+		const scope = source === "plugin" && pluginName ? `plugin:${pluginName}` : source
+		return `${scope}:${mode || "generic"}:${name}`
 	}
 
 	private async setupFileWatchers(): Promise<void> {

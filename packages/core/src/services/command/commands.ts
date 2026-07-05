@@ -5,6 +5,7 @@ import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
 import { configLog } from "../../logging/subsystems.js"
+import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
 
 /**
  * Maximum depth for resolving symlinks to prevent cyclic symlink loops
@@ -14,11 +15,19 @@ const MAX_DEPTH = 5
 export interface Command {
 	name: string
 	content: string
-	source: "global" | "project" | "built-in"
+	source: "global" | "project" | "built-in" | "plugin"
 	filePath: string
 	description?: string
 	argumentHint?: string
 	mode?: string
+	/** When source === "plugin", the contributing plugin's name (attribution). */
+	pluginName?: string
+	/**
+	 * A **private** (internal) plugin command — invocable by its qualified name but
+	 * hidden from user-facing enumerations. {@link getCommands} filters these out;
+	 * {@link getCommand} still resolves them. Absent for normal/file commands.
+	 */
+	private?: boolean
 }
 
 /**
@@ -142,7 +151,21 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	await scanCommandDirectory(projectDir, "project", commands)
 
-	return Array.from(commands.values())
+	// Scan plugin-contributed commands (design §6.5). Each is keyed under its
+	// **namespaced** name `<pluginName>:<command>` (design §14.7 → namespacing), so a
+	// plugin command can never collide with a built-in/user command or another
+	// plugin's — no override/warning is needed. Empty when no plugin manager is wired.
+	const pluginManager = getSharedPluginManager()
+	if (pluginManager) {
+		for (const { pluginName, dir, privateNames } of pluginManager.getContributedCommandDirs()) {
+			await scanCommandDirectory(dir, "plugin", commands, pluginName, privateNames ?? [])
+		}
+	}
+
+	// `getCommands` is the **enumeration** surface (command palette / slash-command
+	// menu / autocomplete). Private plugin commands are registered + invocable by
+	// their qualified name (via `getCommand`) but hidden here (owner directive #4).
+	return Array.from(commands.values()).filter((c) => !c.private)
 }
 
 /**
@@ -154,7 +177,30 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 	const projectDir = path.join(getProjectShoferDirectoryForCwd(cwd), "commands")
 	const globalDir = path.join(getGlobalShoferDirectory(), "commands")
 
-	// Check project directory first (highest priority)
+	// Plugin-contributed commands are addressed by their **namespaced** name
+	// `<pluginName>:<command>` (design §14.7 → namespacing). A bare name can never
+	// resolve to a plugin command, so plugins can neither shadow nor be shadowed by
+	// built-in/user commands. Parse the qualified form, find that specific plugin's
+	// dir, and load the bare `<command>.md` from it.
+	const pluginManager = getSharedPluginManager()
+	if (pluginManager) {
+		const sep = name.indexOf(":")
+		if (sep > 0) {
+			const pluginName = name.slice(0, sep)
+			const bareName = name.slice(sep + 1)
+			const contribution = pluginManager
+				.getContributedCommandDirs()
+				.find((c) => c.pluginName === pluginName)
+			if (contribution) {
+				const pluginCommand = await tryLoadCommand(contribution.dir, bareName, "plugin")
+				if (pluginCommand) {
+					return { ...pluginCommand, name, source: "plugin", pluginName }
+				}
+			}
+		}
+	}
+
+	// Check project directory next (highest priority among file sources)
 	const projectCommand = await tryLoadCommand(projectDir, name, "project")
 	if (projectCommand) {
 		return projectCommand
@@ -166,7 +212,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 		return globalCommand
 	}
 
-	// Check built-in commands if not found in project or global (lowest priority)
+	// Check built-in commands if not found anywhere else (lowest priority)
 	return await getBuiltInCommand(name)
 }
 
@@ -176,7 +222,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 async function tryLoadCommand(
 	dirPath: string,
 	name: string,
-	source: "global" | "project",
+	source: "global" | "project" | "plugin",
 ): Promise<Command | undefined> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -269,8 +315,10 @@ export async function getCommandNames(cwd: string): Promise<string[]> {
  */
 async function scanCommandDirectory(
 	dirPath: string,
-	source: "global" | "project",
+	source: "global" | "project" | "plugin",
 	commands: Map<string, Command>,
+	pluginName?: string,
+	privateNames: string[] = [],
 ): Promise<void> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -293,8 +341,12 @@ async function scanCommandDirectory(
 
 		// Process each collected file
 		for (const { originalPath, resolvedPath } of fileInfo) {
-			// Command name comes from the original path (symlink name if symlinked)
-			const commandName = getCommandNameFromFile(path.basename(originalPath))
+			// Command name comes from the original path (symlink name if symlinked).
+			// Plugin commands are **namespaced** as `<pluginName>:<command>` (design
+			// §14.7 → namespacing) so they can never collide with built-in/user
+			// commands or with another plugin's commands.
+			const bareName = getCommandNameFromFile(path.basename(originalPath))
+			const commandName = source === "plugin" && pluginName ? `${pluginName}:${bareName}` : bareName
 
 			try {
 				const content = await fs.readFile(resolvedPath, "utf-8")
@@ -329,8 +381,12 @@ async function scanCommandDirectory(
 					commandContent = content.trim()
 				}
 
-				// Project commands override global ones
-				if (source === "project" || !commands.has(commandName)) {
+				// File precedence: project overrides global overrides built-in (unchanged).
+				// Plugin commands are namespaced (`<pluginName>:<command>`), so their key
+				// can never collide with a built-in/user command or another plugin's
+				// command — no last-installed-wins tie-break or warning is needed here
+				// (design §14.7 → namespacing).
+				if (source === "plugin") {
 					commands.set(commandName, {
 						name: commandName,
 						content: commandContent,
@@ -339,6 +395,20 @@ async function scanCommandDirectory(
 						description,
 						argumentHint,
 						mode,
+						pluginName,
+						// Hidden from enumerations, still invocable by qualified name.
+						private: privateNames.includes(bareName),
+					})
+				} else if (source === "project" || !commands.has(commandName)) {
+					commands.set(commandName, {
+						name: commandName,
+						content: commandContent,
+						source,
+						filePath: resolvedPath,
+						description,
+						argumentHint,
+						mode,
+						pluginName: undefined,
 					})
 				}
 			} catch (error) {

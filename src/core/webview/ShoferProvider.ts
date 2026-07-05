@@ -79,13 +79,29 @@ import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
 
 import { McpHub } from "@shofer/core"
+import {
+	PluginManager,
+	createNodePluginFs,
+	createNodePluginCodeLoader,
+	setSharedPluginManager,
+	getGlobalShoferDirectory,
+	pluginRegistry,
+	unpackPlugin,
+	installPluginFromUrl as installPluginArchiveFromUrl,
+	PluginPackError,
+} from "@shofer/core"
+import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
+import type { ApiHandler, PluginAiProvider, PluginAgentProvider, PluginSearchProvider } from "@shofer/core"
+import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "@shofer/core"
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodeIndexConfigManager } from "../../services/code-index/config-manager"
+import { CacheManager } from "../../services/code-index/cache-manager"
+import { CodeIndexServiceFactory } from "../../services/code-index/service-factory"
 import type { IndexProgressUpdate } from "@shofer/core"
 import { GitIndexManager } from "../../services/git-index/git-index-manager"
-import { LiveMemoryManager } from "../../services/live-memory/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -162,11 +178,11 @@ export class ShoferProvider
 	private codeIndexManager?: CodeIndexManager
 	private gitIndexStatusSubscription?: vscode.Disposable
 	private gitIndexManager?: GitIndexManager
-	private liveMemoryStatusSubscription?: vscode.Disposable
-	private liveMemoryManager?: LiveMemoryManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
+	/** Declarative plugin manager (design §7). Lazily built via {@link getPluginManager}. */
+	private pluginManager?: PluginManager
 	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
 	/**
@@ -1184,6 +1200,10 @@ export class ShoferProvider
 		this.mcpHub = undefined
 		await this.skillsManager?.dispose()
 		this.skillsManager = undefined
+		if (this.pluginManager) {
+			setSharedPluginManager(undefined)
+			this.pluginManager = undefined
+		}
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 
@@ -1395,6 +1415,16 @@ export class ShoferProvider
 			resourceRoots.push(...vscode.workspace.workspaceFolders.map((folder) => folder.uri))
 		}
 
+		// Serve plugin UI bundles (design §6.8, P4): register the global + project
+		// plugin base dirs so any enabled plugin's built UI module under them is
+		// reachable as a `vscode-webview://` resource (converted via `asWebviewUri`).
+		// Registering the parents (not per-plugin dirs) keeps enable/disable/install
+		// working without recreating the webview. Non-existent dirs are simply inert.
+		resourceRoots.push(vscode.Uri.file(path.join(getGlobalShoferDirectory(), "plugins")))
+		if (this.cwd) {
+			resourceRoots.push(vscode.Uri.file(path.join(this.cwd, ".shofer", "plugins")))
+		}
+
 		webviewView.webview.options = {
 			enableScripts: true,
 			localResourceRoots: resourceRoots,
@@ -1446,9 +1476,6 @@ export class ShoferProvider
 
 		// Initialize git index status subscription for the current workspace.
 		this.updateGitIndexStatusSubscription()
-
-		// Initialize live memory status subscription.
-		this.updateLiveMemoryStatusSubscription()
 
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
@@ -1516,7 +1543,6 @@ export class ShoferProvider
 					// Reset current workspace manager reference when view is disposed
 					this.codeIndexManager = undefined
 					this.gitIndexManager = undefined
-					this.liveMemoryManager = undefined
 					if (this.webviewInstanceId === instanceId) {
 						this.view = undefined
 						this.webviewInstanceId = undefined
@@ -2052,6 +2078,467 @@ export class ShoferProvider
 		await this.postMessageToWebview({ type: "shoferNodes", shoferNodes })
 	}
 
+	/**
+	 * Lazily construct the declarative {@link PluginManager} (design §7) and install
+	 * it as the process-wide shared instance so core subsystems (McpHub, command
+	 * service) and src subsystems (SkillsManager, CustomModesManager) pick up plugin
+	 * contributions. Scans `<extensionPath>/dist/plugins` (bundled first-party),
+	 * `~/.shofer/plugins` (global) and `<cwd>/.shofer/plugins` (project); enabled
+	 * state is persisted in globalState.
+	 */
+	public async getPluginManager(): Promise<PluginManager> {
+		if (this.pluginManager) return this.pluginManager
+		const stateKey = "shofer.plugins.enabledPlugins"
+		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
+		const cwd = this.cwd
+		const pluginDirs = [
+			// First-party bundled plugins shipped inside the extension (design §7 —
+			// bundled scope). Copied by esbuild into `<extensionPath>/dist/plugins`
+			// (mirroring the tree-sitter-wasm copy). Scanned first ⇒ lowest precedence,
+			// so a same-named global/project plugin can shadow a bundled one. Missing dir
+			// (e.g. an unbundled dev run) discovers nothing — the manager tolerates it.
+			{ dir: path.join(this.context.extensionPath, "dist", "plugins"), scope: "bundled" as const },
+			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
+			...(cwd ? [{ dir: path.join(cwd, ".shofer", "plugins"), scope: "project" as const }] : []),
+		]
+		const manager = new PluginManager({
+			fs: createNodePluginFs(),
+			pluginDirs,
+			stateStore: {
+				getEnabledPlugins: () => this.context.globalState.get<string[]>(stateKey) ?? [],
+				setEnabledPlugins: async (names) => {
+					await this.context.globalState.update(stateKey, names)
+				},
+			},
+			// Phase 2: load enabled code plugins (`main`) and register their hooks.
+			// The esbuild binary lives in the extension's dist/bin in production.
+			codeLoader: createNodePluginCodeLoader({ extensionPath: this.context.extensionPath }),
+			// Base host for each code plugin's restricted, permission-checked sandbox (§8).
+			host: getHost(),
+			// Per-plugin config (merged with manifest defaults) from ContextProxy.
+			getPluginConfigs: () =>
+				this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined,
+			workspacePath: cwd,
+			// P6.G1 — host LLM/embeddings seam for `ctx.ai` (never leaks keys). Wired here
+			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
+			// + code-index embedder to reach buildApiHandler.
+			aiProvider: this.buildPluginAiProvider(),
+			// P7 — host seam for `ctx.agent.notify` (proactive agent-steering). Wired here
+			// (not in @shofer/core) because it needs the provider's task stack + message
+			// queue; gated on `permissions.agent` inside the manager.
+			agentProvider: this.buildPluginAgentProvider(),
+			// §6.11 — host seam for `ctx.host.search` (read-only index/symbol/diagnostics
+			// queries). Wired here (not in @shofer/core) because it needs the extension's
+			// CodeIndexManager / GitIndexManager / vscode symbol+diagnostics providers; gated
+			// on `permissions.search` inside the manager.
+			searchProvider: this.buildPluginSearchProvider(),
+			// §6.8 — host seam for `ctx.ui` (extension→UI push). Delivers a plugin's UI
+			// message to its mounted component(s) via the scoped, namespaced channel
+			// (`postPluginUiMessage`); gated on a granted `permissions.ui` region inside the
+			// manager. Wired here (not in @shofer/core) because it needs the webview provider.
+			uiProvider: { post: (pluginName, message) => void this.postPluginUiMessage(pluginName, message) },
+			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
+			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
+			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
+			aiConsentStore: {
+				getAiConsentedPlugins: () => this.context.globalState.get<string[]>(aiConsentKey) ?? [],
+				setAiConsentedPlugins: async (names) => {
+					await this.context.globalState.update(aiConsentKey, names)
+				},
+			},
+		})
+		await manager.discover()
+		this.pluginManager = manager
+		setSharedPluginManager(manager)
+		// Load code plugins asynchronously — must NOT block task start (owner decision
+		// #8). Discovery (declarative) is done; code-plugin hooks begin firing once
+		// each finishes loading. Failures are warned + isolated inside activateCodePlugins.
+		void manager.activateCodePlugins()
+		return manager
+	}
+
+	/**
+	 * Build the host {@link PluginAiProvider} seam that backs a consented plugin's `ctx.ai`
+	 * (P6.G1). `buildHandler` resolves a provider profile — a named/id `profileRef`, or the
+	 * active `apiConfiguration` when omitted — and returns the same `ApiHandler`
+	 * `buildApiHandler` gives the main agent (the plugin never sees the settings or keys).
+	 * `embed` reuses the **configured Code Index embedder** (the thinnest useful embedding
+	 * seam; `profileRef` is accepted for symmetry but embeddings follow the Code Index
+	 * config). Any resolution/embedding failure surfaces as a rejected promise to the plugin.
+	 */
+	private buildPluginAiProvider(): PluginAiProvider {
+		const PLUGIN_TASK_ID = "shofer-plugin"
+		return {
+			buildHandler: async (profileRef?: string): Promise<ApiHandler> => {
+				if (profileRef) {
+					// Try by name, then by id (a profileRef may be either).
+					let profile
+					try {
+						profile = await this.providerSettingsManager.getProfile({ name: profileRef })
+					} catch {
+						profile = await this.providerSettingsManager.getProfile({ id: profileRef })
+					}
+					return buildApiHandler(profile, { taskId: PLUGIN_TASK_ID })
+				}
+				const { apiConfiguration } = await this.getState()
+				return buildApiHandler(apiConfiguration, { taskId: PLUGIN_TASK_ID })
+			},
+			embed: async (texts: string[]): Promise<number[][]> => {
+				const configManager = new CodeIndexConfigManager(this.contextProxy)
+				await configManager.loadConfiguration()
+				if (!configManager.isFeatureConfigured) {
+					throw new Error(
+						"ctx.ai.embed: Code Index embeddings are not configured — enable and configure Code Index in Settings.",
+					)
+				}
+				const workspacePath = this.cwd ?? getGlobalShoferDirectory()
+				const factory = new CodeIndexServiceFactory({
+					configManager,
+					workspacePath,
+					cacheManager: new CacheManager(this.context, workspacePath),
+				})
+				const embedder = factory.createEmbedder()
+				const { embeddings } = await embedder.createEmbeddings(texts)
+				return embeddings
+			},
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginAgentProvider} seam that backs a granted plugin's
+	 * `ctx.agent.notify` (P7). Lets a plugin proactively steer the running agent:
+	 *
+	 * - `mode: "spawn"` ⇒ start a **new** task seeded with the message ({@link createTask}).
+	 * - `mode: "queue"` (default) ⇒ enqueue into the target task's message queue (the same
+	 *   {@link MessageQueueService} the webview "Send" uses), so the agent picks it up on its
+	 *   next `ask()`. If the loop has already terminated (e.g. `attempt_completion` set
+	 *   `abort`), the tested {@link Task.cancelAndProcessQueuedMessages} path is kicked so the
+	 *   message isn't stranded.
+	 * - `mode: "interrupt"` ⇒ **reduced** to the same queued-ASAP behavior (no fragile
+	 *   mid-turn injection; see PLUGINS.md).
+	 *
+	 * The target is an explicit `opts.taskId` (resolved against the live task stack) or the
+	 * current task. With no task to steer, it falls back to spawning so a proactive notify is
+	 * never silently dropped.
+	 */
+	private buildPluginAgentProvider(): PluginAgentProvider {
+		return {
+			notify: async (message: string, opts): Promise<void> => {
+				const mode = opts?.mode ?? "queue"
+				if (mode === "spawn") {
+					await this.createTask(message)
+					return
+				}
+				// queue / interrupt (both reduced to queued-ASAP): resolve the target task.
+				const target =
+					(opts?.taskId ? this.shoferStack.find((t) => t.taskId === opts.taskId) : undefined) ??
+					this.getCurrentTask()
+				if (!target) {
+					// Nothing to steer — don't drop the message; start a task with it instead.
+					await this.createTask(message)
+					return
+				}
+				target.messageQueueService.addMessage(message)
+				// A terminated loop won't ask() again to drain the queue; kick the same
+				// cancel-and-process path "Send Now" uses so the message is picked up ASAP.
+				if (target.abort) {
+					await target.cancelAndProcessQueuedMessages()
+				}
+			},
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginSearchProvider} seam that backs a granted plugin's
+	 * `ctx.host.search` (§6.11). Read-only index/symbol/diagnostics queries, the same
+	 * providers the built-in Live Memory reaches, mapped to plain DTOs (no `vscode` types
+	 * cross the boundary):
+	 *
+	 * - `ragSearch` ⇒ the code-index `searchIndex` (via {@link getCodeIndexManagerFactory}).
+	 * - `gitSearch` ⇒ the git-index `searchIndex` (via {@link getGitIndexManagerFactory}).
+	 * - `codeUsages` ⇒ `vscode.executeWorkspaceSymbolProvider`.
+	 * - `diagnostics` ⇒ `vscode.languages.getDiagnostics`.
+	 *
+	 * Fail-soft (never throws): when a backing service is absent/unconfigured (e.g. the code
+	 * index is off, or a headless workspace) the method returns an empty result, so a plugin
+	 * can probe capabilities without special-casing. `permissions.search` gating happens in
+	 * the manager; this seam is unconditionally read-only.
+	 */
+	private buildPluginSearchProvider(): PluginSearchProvider {
+		return {
+			ragSearch: async (query, opts) => {
+				const mgr = getCodeIndexManagerFactory()?.(this.context, this.cwd)
+				// Guard both the missing manager and the enabled-but-uninitialized case
+				// (searchIndex asserts initialization) so we degrade to empty, never throw.
+				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
+				const results = await mgr.searchIndex(query, opts?.directoryPrefix, opts?.maxResults)
+				return results.map((r) => ({
+					filePath: r.payload?.filePath ?? "",
+					startLine: r.payload?.startLine ?? 0,
+					endLine: r.payload?.endLine ?? 0,
+					score: r.score ?? 0,
+					snippet: (r.payload?.codeChunk ?? "").slice(0, 800),
+				}))
+			},
+			gitSearch: async (query, opts) => {
+				const mgr = getGitIndexManagerFactory()?.(this.context, this.cwd)
+				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
+				const results = await mgr.searchIndex(query, opts?.maxResults)
+				return results.map((r) => ({
+					commitHash: r.payload.commit_hash,
+					shortHash: r.payload.short_hash,
+					author: r.payload.author,
+					authorDate: r.payload.author_date,
+					subject: r.payload.subject,
+					body: r.payload.body ?? "",
+					score: r.score,
+				}))
+			},
+			codeUsages: async (symbol, opts) => {
+				const cwd = this.cwd
+				const symbols =
+					(await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+						"vscode.executeWorkspaceSymbolProvider",
+						symbol,
+					)) ?? []
+				const filtered = opts?.filePath
+					? symbols.filter((s) => {
+							const rel = cwd ? path.relative(cwd, s.location.uri.fsPath) : s.location.uri.fsPath
+							return (
+								rel === opts.filePath ||
+								rel.startsWith(opts.filePath!) ||
+								s.location.uri.fsPath === opts.filePath
+							)
+						})
+					: symbols
+				const limited = opts?.maxResults ? filtered.slice(0, opts.maxResults) : filtered
+				return limited.map((s) => ({
+					name: s.name,
+					kind: vscode.SymbolKind[s.kind],
+					filePath: cwd ? path.relative(cwd, s.location.uri.fsPath) : s.location.uri.fsPath,
+					line: s.location.range.start.line + 1,
+				}))
+			},
+			diagnostics: async (filterPath) => {
+				const cwd = this.cwd
+				const out: {
+					filePath: string
+					line: number
+					column: number
+					severity: "error" | "warning" | "info" | "hint"
+					message: string
+					source?: string
+				}[] = []
+				const sevMap = {
+					[vscode.DiagnosticSeverity.Error]: "error" as const,
+					[vscode.DiagnosticSeverity.Warning]: "warning" as const,
+					[vscode.DiagnosticSeverity.Information]: "info" as const,
+					[vscode.DiagnosticSeverity.Hint]: "hint" as const,
+				}
+				for (const [uri, diags] of vscode.languages.getDiagnostics()) {
+					const rel = cwd ? path.relative(cwd, uri.fsPath) : uri.fsPath
+					if (filterPath && rel !== filterPath && !rel.startsWith(filterPath)) continue
+					for (const d of diags) {
+						out.push({
+							filePath: rel,
+							line: d.range.start.line + 1,
+							column: d.range.start.character + 1,
+							severity: sevMap[d.severity],
+							message: d.message,
+							source: d.source,
+						})
+					}
+				}
+				return out
+			},
+		}
+	}
+
+	/** Push the discovered-plugins snapshot to the webview (design §12). */
+	public async pushPluginsState(): Promise<void> {
+		const manager = await this.getPluginManager()
+		const plugins: PluginView[] = manager.listPlugins().map((p) => ({
+			name: p.name,
+			version: p.version,
+			description: p.description,
+			scope: p.scope,
+			// First-party (bundled) plugins are non-uninstallable — the panel hides the
+			// uninstall affordance for them (they ship with the extension).
+			firstParty: p.firstParty,
+			enabled: p.enabled,
+			// Surface *why* an enabled plugin is inactive (unmet dependency / cycle,
+			// design §14.3) so the Plugins panel can show it (fail-closed).
+			disabledReason: p.disabledReason,
+			hasCode: p.hasCode,
+			contributionCounts: p.contributionCounts,
+			// P6.G1 — surface the billed-AI grant + consent so the panel can render the
+			// "uses AI (billed)" badge and the separate consent affordance (design §8).
+			usesAi: p.manifest.permissions?.ai === true,
+			aiConsented: manager.isAiConsented(p.name),
+		}))
+		const state: PluginsState = { plugins }
+		await this.postMessageToWebview({ type: "plugins", plugins: state })
+	}
+
+	/**
+	 * Handle a Plugins-tab request (list / enable-disable / uninstall / install-from-file /
+	 * install-from-url), then re-push state. Uninstall and both installs re-run discovery so
+	 * the change is reflected immediately; install-from-file opens a native file picker for a
+	 * local `.shofer-plugin` archive, install-from-url downloads a `.shofer-plugin` from a
+	 * direct http(s) URL (registry lookup stays deferred, design §14 Q5).
+	 */
+	public async handlePluginRequest(request: PluginRequest): Promise<void> {
+		const manager = await this.getPluginManager()
+		switch (request.action) {
+			case "setEnabled":
+				await manager.setEnabled(request.name, request.enabled)
+				await this.resyncAfterPluginChange()
+				break
+			case "setAiConsent":
+				// P6.G1 — separate consent gate for billed AI calls (design §8). Reloads the
+				// affected code plugin so its `ctx.ai` flips live/denied immediately.
+				await manager.setAiConsent(request.name, request.consented)
+				break
+			case "uninstall":
+				await manager.uninstall(request.name)
+				await this.resyncAfterPluginChange()
+				break
+			case "installFromFile":
+				await this.installPluginFromFile(manager)
+				break
+			case "installFromUrl":
+				await this.installPluginFromUrl(manager, request.url, request.enable)
+				break
+			case "list":
+				break
+		}
+		await this.pushPluginsState()
+	}
+
+	/**
+	 * Re-sync every discovery-dependent subsystem after a plugin's contributions change
+	 * (enable/disable/install/uninstall) so the change takes effect without a reload.
+	 */
+	private async resyncAfterPluginChange(): Promise<void> {
+		await this.skillsManager?.discoverSkills().catch(() => {})
+		await this.mcpHub?.refreshProjectMcpServers().catch(() => {})
+		this.customModesManager.invalidateCache()
+		await this.postInitState().catch(() => {})
+		// A change can add/remove UI contributions — re-push so slots update live.
+		await this.pushPluginUiContributions().catch(() => {})
+	}
+
+	/**
+	 * Open a native file picker for a local `.shofer-plugin` archive and install it into
+	 * the global plugins dir (design §9, Phase 5.3). Unpacking is validated + zip-slip-safe
+	 * (Phase 5.1); a bad archive surfaces as an error notification rather than a crash.
+	 * A cancelled picker is a no-op.
+	 */
+	private async installPluginFromFile(manager: PluginManager): Promise<void> {
+		const picked = await vscode.window.showOpenDialog({
+			canSelectFiles: true,
+			canSelectFolders: false,
+			canSelectMany: false,
+			filters: { "Shofer plugin": ["shofer-plugin"] },
+			title: "Select a .shofer-plugin archive to install",
+		})
+		if (!picked || !picked[0]) {
+			return
+		}
+		const globalPluginsDir = path.join(getGlobalShoferDirectory(), "plugins")
+		try {
+			const installed = await unpackPlugin(picked[0].fsPath, globalPluginsDir)
+			// Rebuild discovery so the freshly written plugin dir is picked up.
+			await manager.discover()
+			await this.resyncAfterPluginChange()
+			vscode.window.showInformationMessage(
+				`Installed plugin "${installed.name}" v${installed.version}. Enable it in the Plugins tab.`,
+			)
+		} catch (error) {
+			const message = error instanceof PluginPackError ? error.message : String(error)
+			vscode.window.showErrorMessage(`Failed to install plugin: ${message}`)
+		}
+	}
+
+	/**
+	 * Install a plugin from a direct http(s) URL to a `.shofer-plugin` archive (design §9,
+	 * Phase 5.3). Delegates the download + unpack to the core `installPluginFromUrl` helper
+	 * (https-only + size-capped + zip-slip / manifest validated) — no download logic is
+	 * duplicated here — then re-discovers so the freshly written plugin appears immediately.
+	 * With `enable`, the plugin is turned on after install; otherwise it lands disabled like
+	 * install-from-file. A bad URL / archive surfaces the helper's `PluginPackError` message
+	 * as an error notification rather than a crash.
+	 */
+	private async installPluginFromUrl(manager: PluginManager, url: string, enable?: boolean): Promise<void> {
+		const trimmed = url.trim()
+		if (!trimmed) {
+			vscode.window.showErrorMessage("Enter a plugin URL to install.")
+			return
+		}
+		const globalPluginsDir = path.join(getGlobalShoferDirectory(), "plugins")
+		try {
+			const installed = await installPluginArchiveFromUrl(trimmed, globalPluginsDir, { overwrite: false })
+			// Rebuild discovery so the freshly downloaded plugin dir is picked up.
+			await manager.discover()
+			if (enable) {
+				await manager.setEnabled(installed.name, true)
+			}
+			await this.resyncAfterPluginChange()
+			vscode.window.showInformationMessage(
+				enable
+					? `Installed and enabled plugin "${installed.name}" v${installed.version}.`
+					: `Installed plugin "${installed.name}" v${installed.version}. Enable it in the Plugins tab.`,
+			)
+		} catch (error) {
+			const message = error instanceof PluginPackError ? error.message : String(error)
+			vscode.window.showErrorMessage(`Failed to install plugin: ${message}`)
+		}
+	}
+
+	/**
+	 * Push the enabled plugins' UI contributions per region to the webview (design
+	 * §6.8, Phase 4). `PluginSlot` renders these; with zero UI-contributing plugins the
+	 * snapshot is empty and every slot renders nothing (non-breaking).
+	 */
+	public async pushPluginUiContributions(): Promise<void> {
+		const manager = await this.getPluginManager()
+		// Resolve each external UI bundle's absolute module path to a served
+		// `vscode-webview://` URI so the webview can dynamic-import it under the CSP
+		// (`strict-dynamic` permits importing same-origin `cspSource` resources). When
+		// no webview is attached yet, omit the resolver ⇒ contributions carry no
+		// `source` and fall back to the co-bundled registry (non-breaking).
+		const webview = this.view?.webview
+		const resolveSource = webview
+			? (absolutePath: string) => String(webview.asWebviewUri(vscode.Uri.file(absolutePath)))
+			: undefined
+		const contributions = manager.getContributedUiContributions(resolveSource)
+		await this.postMessageToWebview({
+			type: "pluginUiContributions",
+			pluginUiContributions: { contributions },
+		})
+	}
+
+	/**
+	 * Route a scoped plugin-UI channel message (webview → extension) to its plugin's
+	 * `onUiMessage` (design §6.8). Namespaced by `pluginName`: only that plugin's
+	 * receiver fires. Delivery is error-isolated inside the registry.
+	 */
+	public async handlePluginUiMessage(envelope: PluginUiMessageEnvelope): Promise<void> {
+		await pluginRegistry.dispatchUiMessage(envelope.pluginName, envelope.message)
+	}
+
+	/**
+	 * Send a scoped plugin-UI channel message (extension → the plugin's UI). Namespaced
+	 * by `pluginName` so only that plugin's mounted component(s) receive it. This is the
+	 * host-side sender a plugin's extension code uses to push to its UI.
+	 */
+	public async postPluginUiMessage(pluginName: string, message: unknown): Promise<void> {
+		await this.postMessageToWebview({
+			type: "pluginUiMessage",
+			pluginUiMessage: { pluginName, message },
+		})
+	}
+
 	// ------------------------------------------------------------------
 	// FileChangesPanel push notifications.
 	//
@@ -2234,6 +2721,19 @@ export class ShoferProvider
 		const file = "src/index.tsx"
 		const scriptUri = `http://${localServerUrl}/${file}`
 
+		// Shared-React import map for external plugin UI bundles (design §6.8, P4). In
+		// HMR the shim modules are served from the Vite dev server's public dir. Mirrors
+		// the prod map in getHtmlContent; unused when no plugin contributes UI.
+		const pluginImportMap = JSON.stringify({
+			imports: {
+				react: `http://${localServerUrl}/plugin-host/react.js`,
+				"react-dom": `http://${localServerUrl}/plugin-host/react-dom.js`,
+				"react-dom/client": `http://${localServerUrl}/plugin-host/react-dom-client.js`,
+				"react/jsx-runtime": `http://${localServerUrl}/plugin-host/jsx-runtime.js`,
+				"react/jsx-dev-runtime": `http://${localServerUrl}/plugin-host/jsx-dev-runtime.js`,
+			},
+		})
+
 		const reactRefresh = /*html*/ `
 			<script nonce="${nonce}" type="module">
 				import RefreshRuntime from "http://localhost:${localPort}/@react-refresh"
@@ -2268,6 +2768,8 @@ export class ShoferProvider
 					<meta http-equiv="Content-Security-Policy" content="${csp.join("; ")}">
 					<link rel="stylesheet" type="text/css" href="${stylesUri}">
 					<link href="${codiconsUri}" rel="stylesheet" />
+					<!-- Shared-React import map (design §6.8, P4) — must precede the module scripts below. -->
+					<script type="importmap" nonce="${nonce}">${pluginImportMap}</script>
 					<script nonce="${nonce}">
 						window.IMAGES_BASE_URI = "${imagesUri}"
 						window.AUDIO_BASE_URI = "${audioUri}"
@@ -2313,6 +2815,24 @@ export class ShoferProvider
 
 		const scriptUri = getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "assets", "index.js"])
 		const codiconsUri = getUri(webview, this.contextProxy.extensionUri, ["assets", "codicons", "codicon.css"])
+
+		// Shared-React import map for external plugin UI bundles (design §6.8, P4). A
+		// plugin bundle externalizes react/react-dom/react/jsx-runtime; these bare
+		// specifiers resolve to host-shim modules (served from webview-ui/build) that
+		// re-export the host's running React instance (published on the global by
+		// index.tsx). Importing same-origin `cspSource` modules is allowed under the
+		// CSP's `strict-dynamic`. Absent any UI plugin the map is simply unused.
+		const pluginHostUri = (file: string) =>
+			String(getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "plugin-host", file]))
+		const pluginImportMap = JSON.stringify({
+			imports: {
+				react: pluginHostUri("react.js"),
+				"react-dom": pluginHostUri("react-dom.js"),
+				"react-dom/client": pluginHostUri("react-dom-client.js"),
+				"react/jsx-runtime": pluginHostUri("jsx-runtime.js"),
+				"react/jsx-dev-runtime": pluginHostUri("jsx-dev-runtime.js"),
+			},
+		})
 		const materialIconsUri = getUri(webview, this.contextProxy.extensionUri, [
 			"assets",
 			"vscode-material-icons",
@@ -2351,6 +2871,10 @@ export class ShoferProvider
             <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https://storage.googleapis.com https://img.clerk.com data:; media-src ${webview.cspSource}; script-src ${webview.cspSource} 'wasm-unsafe-eval' 'nonce-${nonce}' https://ph.shofer.dev 'strict-dynamic'; connect-src ${webview.cspSource} ${openRouterDomain} https://api.requesty.ai https://ph.shofer.dev; frame-src 'self'; clipboard-read 'self'; clipboard-write 'self';">
             <link rel="stylesheet" type="text/css" href="${stylesUri}">
 			<link href="${codiconsUri}" rel="stylesheet" />
+			<!-- Shared-React import map for external plugin UI bundles (design §6.8, P4).
+			     MUST precede the app module script so bare react specifiers in a
+			     dynamically-imported plugin bundle resolve to the host-shim modules. -->
+			<script type="importmap" nonce="${nonce}">${pluginImportMap}</script>
 			<script nonce="${nonce}">
 				window.IMAGES_BASE_URI = "${imagesUri}"
 				window.AUDIO_BASE_URI = "${audioUri}"
@@ -3768,10 +4292,6 @@ export class ShoferProvider
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
 			lockApiConfigAcrossModes,
-			liveMemoryEnabled,
-			liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold,
 			logLevel,
 			logCategories,
 		} = await this.getState()
@@ -3952,7 +4472,10 @@ export class ShoferProvider
 			customSupportPrompts: customSupportPrompts ?? {},
 			enhancementApiConfigId,
 			autoApprovalEnabled: autoApprovalEnabled ?? false,
-			customModes,
+			// User-facing state → hide **private** modes from the mode selector/picker
+			// (owner directive #4). Private plugin modes stay switch-able by their
+			// qualified slug (getCustomModes still returns them for resolution).
+			customModes: (customModes ?? []).filter((m) => !m.private),
 			experiments: experiments ?? experimentDefault,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
 			maxOpenTabsContext: maxOpenTabsContext ?? 20,
@@ -4026,10 +4549,6 @@ export class ShoferProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
-			liveMemoryEnabled: liveMemoryEnabled ?? true,
-			liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold,
 			logLevel: logLevel ?? "info",
 			logCategories: logCategories ?? undefined,
 			logCategoriesKnown: (() => {
@@ -4278,10 +4797,6 @@ export class ShoferProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
-			liveMemoryEnabled: stateValues.liveMemoryEnabled,
-			liveMemoryApiConfigId: stateValues.liveMemoryApiConfigId,
-			liveMemoryMaxContextTokens: stateValues.liveMemoryMaxContextTokens,
-			liveMemoryContextFillThreshold: stateValues.liveMemoryContextFillThreshold,
 			logLevel: stateValues.logLevel,
 			logCategories: stateValues.logCategories,
 		}
@@ -4601,91 +5116,6 @@ export class ShoferProvider
 				},
 			})
 		}
-	}
-
-	/**
-	 * Updates the live memory status subscription to push status to the webview.
-	 * Follows the same pattern as updateCodeIndexStatusSubscription.
-	 */
-	private updateLiveMemoryStatusSubscription(): void {
-		const currentManager = LiveMemoryManager.getInstance(this.context)
-
-		if (currentManager === this.liveMemoryManager) {
-			return
-		}
-
-		if (this.liveMemoryStatusSubscription) {
-			this.liveMemoryStatusSubscription.dispose()
-			this.liveMemoryStatusSubscription = undefined
-		}
-
-		this.liveMemoryManager = currentManager
-
-		if (currentManager) {
-			const sendStatus = () => {
-				if (currentManager !== this.liveMemoryManager) return
-				this.postMessageToWebview({
-					type: "liveMemoryStatusUpdate",
-					text: JSON.stringify({
-						state: currentManager.state,
-						stateMessage: currentManager.stateMessage,
-						isAvailable: currentManager.isLiveMemoryAvailable,
-						modelId: currentManager.modelId,
-						provider: currentManager.provider,
-						contextUsage: currentManager.getContextUsage(),
-						contextWindowSource: currentManager.contextWindowSource,
-						costSnapshot: currentManager.getCostSnapshot(),
-						conversationTurnCount: currentManager.conversationTurnCount,
-						pendingQuestionCount: currentManager.pendingQuestionCount,
-						contextFiles: currentManager.contextFiles,
-					}),
-				})
-			}
-
-			// Combine state-change and conversation-update subscriptions
-			// into a single disposable so both are cleaned up on re-subscribe.
-			const stateSubscription = currentManager.onStateChange(() => sendStatus())
-			const convSubscription = currentManager.onConversationUpdate(() => sendStatus())
-			this.liveMemoryStatusSubscription = vscode.Disposable.from(stateSubscription, convSubscription)
-
-			if (this.view) {
-				this.webviewDisposables.push(this.liveMemoryStatusSubscription)
-			}
-
-			sendStatus()
-		}
-	}
-
-	/**
-	 * Pushes a fresh Live Memory status snapshot to the webview. Used by the
-	 * webview status badge to populate itself on mount, since the periodic
-	 * subscription only fires on state/conversation changes.
-	 */
-	public sendLiveMemoryStatus(): void {
-		const manager = this.liveMemoryManager ?? LiveMemoryManager.getInstance(this.context)
-		if (!manager) {
-			this.postMessageToWebview({
-				type: "liveMemoryStatusUpdate",
-				text: JSON.stringify({ state: "Standby", isAvailable: false }),
-			})
-			return
-		}
-		this.postMessageToWebview({
-			type: "liveMemoryStatusUpdate",
-			text: JSON.stringify({
-				state: manager.state,
-				stateMessage: manager.stateMessage,
-				isAvailable: manager.isLiveMemoryAvailable,
-				modelId: manager.modelId,
-				provider: manager.provider,
-				contextUsage: manager.getContextUsage(),
-				contextWindowSource: manager.contextWindowSource,
-				costSnapshot: manager.getCostSnapshot(),
-				conversationTurnCount: manager.conversationTurnCount,
-				pendingQuestionCount: manager.pendingQuestionCount,
-				contextFiles: manager.contextFiles,
-			}),
-		})
 	}
 
 	/**

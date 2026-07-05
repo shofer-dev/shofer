@@ -112,8 +112,18 @@ export const groupEntryArraySchema = rawGroupEntryArraySchema
  * ZodObject methods like `.omit()`, `.extend()`, `.pick()`, etc. that are not
  * available on ZodEffects.
  */
+/**
+ * Mode-slug regex. Accepts either a **natural** slug (`deploy`) — used by built-in,
+ * global, and project modes — or a **qualified** plugin slug (`<pluginName>:<slug>`,
+ * e.g. `live-memory:verifier`) with a single `:` separator. Plugin-contributed modes
+ * are namespaced under their plugin name so a plugin can never silently shadow a
+ * built-in or another plugin's mode (design §14.7 → namespacing). Both segments allow
+ * only letters, numbers, and dashes.
+ */
+export const MODE_SLUG_REGEX = /^[a-zA-Z0-9-]+(:[a-zA-Z0-9-]+)?$/
+
 export const modeConfigObjectSchema = z.object({
-	slug: z.string().regex(/^[a-zA-Z0-9-]+$/, "Slug must contain only letters numbers and dashes"),
+	slug: z.string().regex(MODE_SLUG_REGEX, "Slug must contain only letters numbers and dashes"),
 	name: z.string().min(1, "Name is required"),
 	roleDefinition: z.string().min(1, "Role definition is required"),
 	whenToUse: z.string().optional(),
@@ -122,7 +132,22 @@ export const modeConfigObjectSchema = z.object({
 	tools: groupEntryArraySchema.optional(),
 	tools_allowed: z.array(z.string()).optional(),
 	tools_denied: z.array(z.string()).optional(),
-	source: z.enum(["global", "project"]).optional(),
+	source: z.enum(["global", "project", "plugin"]).optional(),
+	/**
+	 * When `source === "plugin"`, the name of the plugin that contributed this
+	 * mode (attribution shown in the UI as `plugin:<pluginName>`). Unset for
+	 * built-in / global / project modes.
+	 */
+	pluginName: z.string().optional(),
+	/**
+	 * A **private** (internal) contribution — registered and switch-able by its
+	 * qualified slug, but hidden from every user-facing surface (the mode
+	 * selector/picker and the Plugins settings panel). Primarily set by a plugin
+	 * (e.g. a browser plugin's `verifier` mode the agent runs but the user never
+	 * picks); a private mode still governs its subtask's tools once switched into.
+	 * Absent/false ⇒ a normal, user-visible mode.
+	 */
+	private: z.boolean().optional(),
 	provider: z.string().optional(),
 })
 

@@ -12,7 +12,6 @@ import React, {
 import {
 	CheckCheck,
 	GitBranch,
-	MessageCircle,
 	Archive,
 	Database,
 	SquareTerminal,
@@ -26,6 +25,7 @@ import {
 	Plug,
 	Server,
 	Network,
+	Blocks,
 	Users2,
 	ArrowLeft,
 	GitCommitVertical,
@@ -70,7 +70,6 @@ import ApiConfigManager from "./ApiConfigManager"
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
 import { CheckpointSettings } from "./CheckpointSettings"
-import { LiveMemorySettings } from "./LiveMemorySettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -86,6 +85,7 @@ import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
 import { ShoferNodesSettings } from "./ShoferNodesSettings"
+import { PluginsSettings } from "./PluginsSettings"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
@@ -109,13 +109,13 @@ export const sectionNames = [
 	"slashCommands",
 	"skills",
 	"checkpoints",
-	"liveMemory",
 	"contextManagement",
 	"terminal",
 	"codebaseIndex",
 	"modes",
 	"mcp",
 	"shoferNodes",
+	"plugins",
 	"worktrees",
 	"prompts",
 	"ui",
@@ -257,10 +257,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		defaultCostLimit,
 		archivedTaskRetentionDays,
 		maxParallelTasks,
-		liveMemoryEnabled,
-		liveMemoryApiConfigId,
-		liveMemoryMaxContextTokens,
-		liveMemoryContextFillThreshold,
 		codebaseIndexConfig,
 		logLevel,
 		logCategories,
@@ -506,10 +502,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
-					liveMemoryEnabled: liveMemoryEnabled ?? true,
-					liveMemoryApiConfigId: liveMemoryApiConfigId ?? "",
-					liveMemoryMaxContextTokens: liveMemoryMaxContextTokens,
-					liveMemoryContextFillThreshold: liveMemoryContextFillThreshold,
 					codebaseIndexConfig,
 					logLevel,
 					logCategories,
@@ -667,8 +659,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
 			{ id: "shoferNodes", icon: Network },
+			{ id: "plugins", icon: Blocks },
 			{ id: "checkpoints", icon: GitCommitVertical },
-			{ id: "liveMemory", icon: MessageCircle },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "codebaseIndex", icon: Archive },
@@ -1007,18 +999,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							/>
 						)}
 
-						{/* Live Memory Section */}
-						{renderTab === "liveMemory" && (
-							<LiveMemorySettings
-								liveMemoryEnabled={liveMemoryEnabled}
-								liveMemoryApiConfigId={liveMemoryApiConfigId}
-								liveMemoryMaxContextTokens={liveMemoryMaxContextTokens}
-								liveMemoryContextFillThreshold={liveMemoryContextFillThreshold}
-								listApiConfigMeta={listApiConfigMeta ?? []}
-								setCachedStateField={setCachedStateField}
-							/>
-						)}
-
 						{/* Context Management Section */}
 						{renderTab === "contextManagement" && (
 							<ContextManagementSettings
@@ -1081,6 +1061,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Shofer Nodes (remote agents) Section */}
 						{renderTab === "shoferNodes" && <ShoferNodesSettings />}
+					{renderTab === "plugins" && <PluginsSettings />}
 
 						{/* Worktrees Section */}
 						{renderTab === "worktrees" && <WorktreesView />}

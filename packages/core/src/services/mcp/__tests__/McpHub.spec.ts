@@ -11,6 +11,7 @@ import type {
 	DisconnectedMcpConnection,
 } from "../McpHub.js"
 import { ServerConfigSchema, McpHub } from "../McpHub.js"
+import { setSharedPluginManager } from "../../../plugins/plugin-manager.js"
 
 // Mock fs/promises before importing anything that uses it
 vi.mock("fs/promises", () => ({
@@ -2065,6 +2066,70 @@ describe("McpHub", () => {
 					args: ["/c", "echo", "test"],
 				}),
 			)
+		})
+	})
+
+	describe("plugin-contributed MCP servers (Phase 1)", () => {
+		afterEach(() => {
+			setSharedPluginManager(undefined)
+		})
+
+		it("merges plugin-contributed servers into the project source", async () => {
+			// No user servers in .shofer/mcp.json for this test.
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+
+			setSharedPluginManager({
+				getContributedMcpServers: () => [
+					{
+						pluginName: "my-plugin",
+						name: "plugin-srv",
+						config: { type: "stdio", command: "node", args: ["srv.js"] },
+					},
+				],
+			} as any)
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			const spy = vi.spyOn(hub, "updateServerConnections").mockResolvedValue(undefined)
+
+			await hub.refreshProjectMcpServers()
+
+			const projectCall = spy.mock.calls.find((c) => c[1] === "project")
+			expect(projectCall).toBeDefined()
+			expect(projectCall![0]).toHaveProperty("plugin-srv")
+		})
+
+		it("lets .shofer/mcp.json win on a name collision with a plugin server", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(
+				JSON.stringify({ mcpServers: { srv: { type: "stdio", command: "file-cmd" } } }),
+			)
+
+			setSharedPluginManager({
+				getContributedMcpServers: () => [
+					{ pluginName: "p", name: "srv", config: { type: "stdio", command: "plugin-cmd" } },
+				],
+			} as any)
+
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			const spy = vi.spyOn(hub, "updateServerConnections").mockResolvedValue(undefined)
+
+			await hub.refreshProjectMcpServers()
+
+			const projectCall = spy.mock.calls.find((c) => c[1] === "project")
+			expect((projectCall![0] as any).srv.command).toBe("file-cmd")
+		})
+
+		it("contributes nothing when no plugin manager is wired", async () => {
+			vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({ mcpServers: {} }))
+			const hub = new McpHub(mockProvider as unknown as TaskProviderLike)
+			await hub.waitUntilReady()
+			const spy = vi.spyOn(hub, "updateServerConnections").mockResolvedValue(undefined)
+
+			await hub.refreshProjectMcpServers()
+
+			const projectCall = spy.mock.calls.find((c) => c[1] === "project")
+			expect(Object.keys(projectCall![0] as object)).toHaveLength(0)
 		})
 	})
 })

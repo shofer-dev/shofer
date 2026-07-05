@@ -32,10 +32,10 @@ import { AutoApproveDropdown } from "./AutoApproveDropdown"
 import { WorktreeIndicator } from "./WorktreeIndicator"
 import { CommandsButton } from "./CommandsButton"
 import { SkillsButton } from "./SkillsButton"
+import { PluginSlot } from "../plugins/PluginSlot"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
-import { LiveMemoryStatusBadge } from "./LiveMemoryStatusBadge"
 import { NodeStatus } from "./NodeStatus"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 // CloudAccountSwitcher removed
@@ -1582,6 +1582,9 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						<WorktreeIndicator />
 						{!isWorkflow && <CommandsButton />}
 						{!isWorkflow && <SkillsButton />}
+						{/* Plugin contributions for the chat-input toolbar (design §6.8). Renders
+						    nothing when no plugin contributes here — layout unchanged. */}
+						<PluginSlot region="chat-input-toolbar" />
 					</div>
 					<div
 						className={cn(
@@ -1609,7 +1612,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</StandardTooltip>
 						)}
 						{!isEditMode ? <NodeStatus /> : null}
-						{!isEditMode ? <LiveMemoryStatusBadge /> : null}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{/* CloudAccountSwitcher removed */}
 					</div>

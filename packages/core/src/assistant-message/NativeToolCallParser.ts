@@ -732,18 +732,6 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "ask_live_memory":
-				if (partialArgs.question !== undefined) {
-					nativeArgs = {
-						question: partialArgs.question,
-						contextFiles: Array.isArray(partialArgs.contextFiles) ? partialArgs.contextFiles : undefined,
-						timeoutMs: this.coerceOptionalNumber(partialArgs.timeoutMs),
-						softTimeoutSec: this.coerceOptionalNumber(partialArgs.softTimeoutSec),
-						softResultLength: this.coerceOptionalNumber(partialArgs.softResultLength),
-					}
-				}
-				break
-
 			case "apply_diff":
 				if (
 					partialArgs.path !== undefined ||
@@ -1489,18 +1477,6 @@ export class NativeToolCallParser {
 							question: args.question,
 							follow_up: args.follow_up,
 							form: args.form,
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "ask_live_memory":
-					if (args.question !== undefined) {
-						nativeArgs = {
-							question: args.question,
-							contextFiles: Array.isArray(args.contextFiles) ? args.contextFiles : undefined,
-							timeoutMs: this.coerceOptionalNumber(args.timeoutMs),
-							softTimeoutSec: this.coerceOptionalNumber(args.softTimeoutSec),
-							softResultLength: this.coerceOptionalNumber(args.softResultLength),
 						} as NativeArgsFor<TName>
 					}
 					break
