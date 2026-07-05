@@ -221,6 +221,70 @@ describe("PluginManager (design §7, Phase 1)", () => {
 	})
 })
 
+describe("PluginManager — bundled first-party plugins", () => {
+	const BUNDLED = "/ext/plugins"
+	const GLOBAL = "/home/.shofer/plugins"
+	const PROJECT = "/ws/.shofer/plugins"
+	// Bundled scanned first (lowest precedence), then global, then project — the
+	// order ShoferProvider.getPluginManager supplies.
+	const dirs: PluginDir[] = [
+		{ dir: BUNDLED, scope: "bundled" },
+		{ dir: GLOBAL, scope: "global" },
+		{ dir: PROJECT, scope: "project" },
+	]
+
+	let fs: MemoryFs
+	let store: MemoryStore
+
+	beforeEach(() => {
+		fs = new MemoryFs()
+		store = new MemoryStore()
+	})
+
+	it("discovers a bundled plugin with scope 'bundled', first-party, disabled by default", async () => {
+		fs.addManifest(`${BUNDLED}/lm`, modeManifest("lm"))
+		const pm = new PluginManager({ fs, stateStore: store, pluginDirs: dirs })
+		await pm.discover()
+		const p = pm.getPlugin("lm")!
+		expect(p.scope).toBe("bundled")
+		expect(p.firstParty).toBe(true)
+		// Default-disabled: not in the enabled allow-list ⇒ dormant (non-breaking).
+		expect(p.enabled).toBe(false)
+		expect(pm.enabledPlugins()).toEqual([])
+		expect(pm.getContributedModes()).toEqual([])
+	})
+
+	it("enables a bundled plugin like any other once the user opts in", async () => {
+		fs.addManifest(`${BUNDLED}/lm`, modeManifest("lm"))
+		const pm = new PluginManager({ fs, stateStore: store, pluginDirs: dirs })
+		await pm.discover()
+		await pm.setEnabled("lm", true)
+		expect(pm.isEnabled("lm")).toBe(true)
+		expect(pm.getContributedModes()).toHaveLength(1)
+	})
+
+	it("refuses to uninstall a bundled first-party plugin (non-uninstallable, no-op)", async () => {
+		fs.addManifest(`${BUNDLED}/lm`, modeManifest("lm"))
+		const pm = new PluginManager({ fs, stateStore: new MemoryStore(["lm"]), pluginDirs: dirs })
+		await pm.discover()
+		await pm.uninstall("lm")
+		// Still discovered, its dir untouched, still enabled.
+		expect(pm.getPlugin("lm")).toBeDefined()
+		expect(await fs.exists(`${BUNDLED}/lm/plugin.json`)).toBe(true)
+		expect(pm.isEnabled("lm")).toBe(true)
+	})
+
+	it("lets a global/project plugin shadow a same-named bundled one", async () => {
+		fs.addManifest(`${BUNDLED}/lm`, { ...modeManifest("lm"), version: "0.0.1" })
+		fs.addManifest(`${PROJECT}/lm`, { ...modeManifest("lm"), version: "9.9.9" })
+		const pm = new PluginManager({ fs, stateStore: store, pluginDirs: dirs })
+		await pm.discover()
+		const found = pm.listPlugins()
+		expect(found).toHaveLength(1)
+		expect(found[0]).toMatchObject({ version: "9.9.9", scope: "project", firstParty: false })
+	})
+})
+
 describe("PluginManager — fail-closed dependencies (design §14.3, Q3)", () => {
 	const PROJECT = "/ws/.shofer/plugins"
 	const GLOBAL = "/home/.shofer/plugins"

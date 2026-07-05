@@ -120,10 +120,21 @@ export interface PluginAiConsentStore {
 	setAiConsentedPlugins(names: string[]): void | Promise<void>
 }
 
+/**
+ * A plugin's provenance:
+ * - `"bundled"` — a **first-party** plugin shipped inside the extension itself
+ *   (the packaged `plugins/` dir). Discovered like the others but non-uninstallable
+ *   (it is part of the install, not user-added) and lowest-precedence, so a
+ *   same-named global/project plugin can shadow it.
+ * - `"global"` — installed into `~/.shofer/plugins`.
+ * - `"project"` — installed into `<cwd>/.shofer/plugins` (highest precedence).
+ */
+export type PluginScope = "bundled" | "global" | "project"
+
 /** A directory the manager was told to scan, with its scope tag. */
 export interface PluginDir {
 	dir: string
-	scope: "global" | "project"
+	scope: PluginScope
 }
 
 /** Per-kind counts of a plugin's declarative contributions (for UI summaries). */
@@ -144,7 +155,15 @@ export interface DiscoveredPlugin {
 	root: string
 	/** Absolute path to the plugin's `plugin.json`. */
 	manifestPath: string
-	scope: "global" | "project"
+	scope: PluginScope
+	/**
+	 * Whether this is a **first-party** plugin shipped inside the extension
+	 * (`scope: "bundled"`). First-party plugins are non-uninstallable — they are
+	 * part of the install, not user-added — and the Plugins panel hides their
+	 * uninstall affordance accordingly. They still follow the normal enable
+	 * allow-list (disabled by default; the user opts in), like any other plugin.
+	 */
+	firstParty: boolean
 	/** The user's persisted intent — did they toggle this plugin on? (design §7). */
 	enabled: boolean
 	/**
@@ -318,7 +337,8 @@ export class PluginManager {
 	 * Scan every configured plugin directory, validate manifests, and rebuild the
 	 * in-memory plugin list. Invalid manifests are skipped with a warning. When two
 	 * plugins share a name, the later-scanned directory wins (callers pass
-	 * `global` before `project` so a project plugin shadows a global one).
+	 * `bundled` before `global` before `project`, so a project plugin shadows a
+	 * global one, which in turn shadows a first-party bundled one).
 	 */
 	async discover(): Promise<void> {
 		const enabledList = await this.stateStore.getEnabledPlugins()
@@ -420,7 +440,7 @@ export class PluginManager {
 	private async loadPlugin(
 		root: string,
 		manifestPath: string,
-		scope: "global" | "project",
+		scope: PluginScope,
 		enabled: Set<string>,
 	): Promise<DiscoveredPlugin | undefined> {
 		if (!(await this.fs.exists(manifestPath))) {
@@ -459,6 +479,7 @@ export class PluginManager {
 			root,
 			manifestPath,
 			scope,
+			firstParty: scope === "bundled",
 			enabled: enabled.has(manifest.name),
 			// Recomputed by resolveDependencies() right after discovery; seed to the
 			// user intent so a manager inspected mid-discovery is never inconsistent.
@@ -573,10 +594,21 @@ export class PluginManager {
 	/**
 	 * Uninstall a plugin: delete its directory and drop it from the enabled set and
 	 * the in-memory list. All its contributions disappear on the next read.
+	 *
+	 * **First-party (bundled) plugins are never uninstalled** — they ship inside the
+	 * extension, so deleting their directory would only have them reappear on the next
+	 * build/update and is a category error. The call is a no-op (the panel also hides
+	 * the affordance); disabling is the way to turn a bundled plugin off.
 	 */
 	async uninstall(name: string): Promise<void> {
 		const plugin = this.getPlugin(name)
 		if (!plugin) {
+			return
+		}
+		if (plugin.firstParty) {
+			warnPlugin(
+				`[plugins] "${name}" is a bundled first-party plugin and cannot be uninstalled; disable it instead.`,
+			)
 			return
 		}
 		await this.fs.removeDir(plugin.root)
