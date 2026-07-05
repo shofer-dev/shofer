@@ -15,9 +15,11 @@
 		"filesystem": ["."],
 		"search": true,
 		"skills": true,
-		"commands": true
+		"commands": true,
+		"ui": ["sidebar-panel"]
 	},
 	"contributes": {
+		"ui": [{ "region": "sidebar-panel", "entry": "ui/panel.js" }],
 		"skills": [
 			{
 				"name": "live-memory-stats",

@@ -71,7 +71,9 @@ function cfg(ctx: PluginContext) {
 		watchGlob: typeof c.watchGlob === "string" ? c.watchGlob : "**/*",
 		compactIntervalMs: typeof c.compactIntervalMs === "number" ? c.compactIntervalMs : 300000,
 		maxContextTokens:
-			typeof c.maxContextTokens === "number" && c.maxContextTokens > 0 ? c.maxContextTokens : DEFAULT_MAX_CONTEXT_TOKENS,
+			typeof c.maxContextTokens === "number" && c.maxContextTokens > 0
+				? c.maxContextTokens
+				: DEFAULT_MAX_CONTEXT_TOKENS,
 		contextFillThreshold:
 			typeof c.contextFillThreshold === "number" && c.contextFillThreshold > 0 && c.contextFillThreshold <= 1
 				? c.contextFillThreshold
@@ -100,6 +102,51 @@ function getStore(ctx: PluginContext): MemoryStore | undefined {
 /** An already-created agent for this workspace, if any (non-creating — for cheap hooks). */
 function peekAgent(ctx: PluginContext): LiveMemoryAgent | undefined {
 	return state.agents.get(workspaceKey(ctx))
+}
+
+/**
+ * Push the current panel state over the scoped plugin-UI channel (`ctx.ui`, §6.8) —
+ * the Stage-E chat panel's data source. Mirrors the built-in
+ * `LiveMemoryChatProvider._postState`: a single `state` message carrying the agent
+ * state header, context-window usage, the typed conversation, and the accumulated
+ * observation/Q&A counters. No-op when the plugin has no UI sender (headless / no
+ * `permissions.ui`). `agent` is passed directly during streaming (it may not yet be in
+ * the workspace map); otherwise the already-created agent (if any) is used. Best-effort:
+ * fire-and-forget and never throws into a hook.
+ */
+async function pushPanelState(ctx: PluginContext, agent?: LiveMemoryAgent): Promise<void> {
+	if (!ctx.ui) return
+	const a = agent ?? peekAgent(ctx)
+	let observations = 0
+	let questions = 0
+	const store = getStore(ctx)
+	if (store) {
+		try {
+			const data = await store.snapshot()
+			observations = data.stats.totalObservations
+			questions = data.stats.totalQuestions
+		} catch {
+			// Best-effort stats; never block a state push.
+		}
+	}
+	const contextUsage = a?.getContextUsage() ?? {
+		currentTokens: 0,
+		maxTokens: 0,
+		fillFraction: 0,
+		isNearlyFull: false,
+	}
+	try {
+		ctx.ui.postMessage({
+			type: "state",
+			state: a?.state ?? "Standby",
+			stateMessage: a?.stateMessage ?? "Live Memory is idle — ask a question to start a session.",
+			contextUsage,
+			messages: a ? a.getMessages() : [],
+			stats: { observations, questions, pendingQuestions: a?.pendingQuestionCount ?? 0 },
+		})
+	} catch {
+		// A detached webview must never break the caller (ctx.ui already isolates errors).
+	}
 }
 
 /**
@@ -143,6 +190,12 @@ async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined
 		// Sandboxed reads for contextFiles, scoped by `permissions.filesystem`.
 		readFile: (abs) => fs.readFile(abs),
 		persist: (snapshot) => store.saveConversation(snapshot),
+		// Stage-E: stream every state transition + conversation mutation to the chat
+		// panel over `ctx.ui` (the plugin-native replacement for the built-in manager's
+		// onStateChange/onConversationUpdate emitters the LiveMemoryChatProvider subscribes
+		// to). `agent` is passed directly so streaming works before it lands in the map.
+		onStateChange: () => void pushPanelState(ctx, agent),
+		onConversationUpdate: () => void pushPanelState(ctx, agent),
 	})
 
 	// Restore any persisted conversation window + cost ledger, then promote to Ready.
@@ -256,23 +309,36 @@ const plugin: ShoferPlugin = {
 						.optional(),
 					timeoutMs: z
 						.number()
-						.describe("HARD limit (ms) for the whole call, covering queue-wait + processing. Default 300000.")
+						.describe(
+							"HARD limit (ms) for the whole call, covering queue-wait + processing. Default 300000.",
+						)
 						.optional(),
 					softTimeoutSec: z
 						.number()
-						.describe("Soft (advisory) wall-time recommendation in seconds, embedded in the prompt. Default 60.")
+						.describe(
+							"Soft (advisory) wall-time recommendation in seconds, embedded in the prompt. Default 60.",
+						)
 						.optional(),
 					softResultLength: z
 						.number()
-						.describe("Soft (advisory) answer-length recommendation in characters, embedded in the prompt. Default 2000.")
+						.describe(
+							"Soft (advisory) answer-length recommendation in characters, embedded in the prompt. Default 2000.",
+						)
 						.optional(),
 				}),
-				async execute({ question, contextFiles, timeoutMs, softTimeoutSec, softResultLength }): Promise<string> {
+				async execute({
+					question,
+					contextFiles,
+					timeoutMs,
+					softTimeoutSec,
+					softResultLength,
+				}): Promise<string> {
 					if (!store) return "Live Memory error: no persistent storage is available (ctx.storage unwired)."
 					if (!ctx.ai) {
 						return "Live Memory error: this plugin is not granted host AI access (ctx.ai absent). Grant permissions.ai."
 					}
-					if (!question || question.trim() === "") return "Live Memory error: a non-empty `question` is required."
+					if (!question || question.trim() === "")
+						return "Live Memory error: a non-empty `question` is required."
 					try {
 						const agent = await getAgent(ctx)
 						if (!agent) {
@@ -336,6 +402,49 @@ Files in context: ${result.contextFiles.length}`
 		return `${prompt}\n\n${section}`
 	},
 
+	/**
+	 * Stage-E: the extension-side receiver for the chat panel's scoped UI channel (§6.8).
+	 * The panel drives the plugin with a tiny command vocabulary; the plugin answers by
+	 * pushing fresh state back over `ctx.ui` (via {@link pushPanelState}). Observer-style —
+	 * never throws (the registry isolates + warns on a throw).
+	 *
+	 *  - `ready` / `getState` → push the current state (panel mount / manual refresh).
+	 *  - `clear`  → clear the memory agent's context window (keeps the observation/Q&A log),
+	 *               mirroring the built-in `liveMemory.clearContext`.
+	 *  - `empty`  → wipe the persisted store (`ctx.storage.delete`) and drop the live agent
+	 *               so the next question re-initializes from a blank slate.
+	 */
+	async onUiMessage(message: unknown, ctx: PluginContext): Promise<void> {
+		const type =
+			message && typeof message === "object" && "type" in message
+				? String((message as { type: unknown }).type)
+				: ""
+		switch (type) {
+			case "ready":
+			case "getState":
+				await pushPanelState(ctx)
+				return
+			case "clear": {
+				const agent = peekAgent(ctx)
+				if (agent) await agent.clearContext()
+				await pushPanelState(ctx)
+				return
+			}
+			case "empty": {
+				const store = getStore(ctx)
+				if (store) await store.empty()
+				// Drop the live agent so the next `ask_live_memory` rebuilds it from the now-empty
+				// store (its persisted conversation window was in the deleted file).
+				state.agents.delete(workspaceKey(ctx))
+				await pushPanelState(ctx)
+				return
+			}
+			default:
+				// Unknown command — ignore (forward-compatible; never throws).
+				return
+		}
+	},
+
 	onEvent(event: PluginEvent, ctx: PluginContext): void {
 		// Lightweight, read-only observation of the telemetry catalog. Task starts/
 		// completions are captured with richer detail by the lifecycle hooks below;
@@ -353,7 +462,13 @@ Files in context: ${result.contextFiles.length}`
 			if (!store) return
 			const prompt = ctx.prompt ? truncate(ctx.prompt, 200) : "(no prompt)"
 			void store
-				.recordObservation({ at: Date.now(), kind: "task", subject: "task started", via: "lifecycle", note: prompt })
+				.recordObservation({
+					at: Date.now(),
+					kind: "task",
+					subject: "task started",
+					via: "lifecycle",
+					note: prompt,
+				})
 				.catch(() => {})
 		},
 

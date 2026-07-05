@@ -16,7 +16,13 @@
 import { createHash } from "node:crypto"
 import { resolve as resolvePath } from "node:path"
 
-import type { PluginStorage, HostFileSystem, AgentMessage, FileContextEntry, LiveMemoryCostTracking } from "@shofer/types"
+import type {
+	PluginStorage,
+	HostFileSystem,
+	AgentMessage,
+	FileContextEntry,
+	LiveMemoryCostTracking,
+} from "@shofer/types"
 
 /**
  * Schema version of the persisted document; bump on an incompatible shape change.
@@ -189,7 +195,12 @@ export class MemoryStore {
 			if (await this.storage.exists(this.fileName)) {
 				const raw = await this.storage.readFile(this.fileName)
 				const parsed = JSON.parse(raw) as MemoryData
-				if (parsed && typeof parsed.version === "number" && parsed.version >= 1 && parsed.version <= MEMORY_STORE_VERSION) {
+				if (
+					parsed &&
+					typeof parsed.version === "number" &&
+					parsed.version >= 1 &&
+					parsed.version <= MEMORY_STORE_VERSION
+				) {
 					const data = normalize(parsed, this.workspacePath)
 					data.fileContexts = await this.validateFileContexts(data.fileContexts)
 					this.cache = data
@@ -273,6 +284,25 @@ export class MemoryStore {
 		return validated
 	}
 
+	/**
+	 * **Empty** the workspace memory: delete the persisted document via the plugin's
+	 * traversal-blocked storage sandbox (`ctx.storage.delete`) and drop the in-memory
+	 * cache so the next {@link load} starts from empty defaults. The plugin-native
+	 * analogue of removing the built-in `ConversationStore`'s JSON file. Best-effort on
+	 * a missing file (a not-yet-persisted store is already "empty"). Only affects THIS
+	 * workspace's file; other workspaces are stored separately and untouched.
+	 */
+	async empty(): Promise<void> {
+		try {
+			if (await this.storage.exists(this.fileName)) {
+				await this.storage.delete(this.fileName)
+			}
+		} catch {
+			// Missing/unreadable ⇒ already effectively empty (never throws to a hook/UI).
+		}
+		this.cache = undefined
+	}
+
 	private async persist(data: MemoryData): Promise<void> {
 		data.updatedAt = Date.now()
 		await this.storage.writeFile(this.fileName, JSON.stringify(data, null, "\t"))
@@ -297,8 +327,6 @@ function normalize(parsed: MemoryData, workspacePath: string): MemoryData {
 		// v2 fields — default empty when loading a v1 document.
 		messages: Array.isArray(parsed.messages) ? parsed.messages : base.messages,
 		fileContexts: Array.isArray(parsed.fileContexts) ? parsed.fileContexts : base.fileContexts,
-		costTracking: parsed.costTracking
-			? { ...base.costTracking, ...parsed.costTracking }
-			: base.costTracking,
+		costTracking: parsed.costTracking ? { ...base.costTracking, ...parsed.costTracking } : base.costTracking,
 	}
 }

@@ -152,7 +152,10 @@ describe("MemoryStore (v2 conversation + validation)", () => {
 	it("starts fresh on an unknown/future version", async () => {
 		const storage = new FakeStorage()
 		const fileName = `memory-${hashWorkspace(WS)}.json`
-		storage.files.set(fileName, JSON.stringify({ version: 999, observations: [{ at: 1, kind: "edit", subject: "x" }] }))
+		storage.files.set(
+			fileName,
+			JSON.stringify({ version: 999, observations: [{ at: 1, kind: "edit", subject: "x" }] }),
+		)
 		const store = new MemoryStore(storage, WS)
 		const data = await store.load()
 		expect(data.observations).toEqual([])
@@ -167,7 +170,13 @@ describe("MemoryStore (v2 conversation + validation)", () => {
 			await s1.saveConversation({
 				messages: [],
 				fileContexts: [fc("keep.ts", sha256("content"))],
-				costTracking: { totalInputTokens: 0, totalOutputTokens: 0, totalTokensTruncated: 0, estimatedCostUSD: 0, lastUpdated: 1 },
+				costTracking: {
+					totalInputTokens: 0,
+					totalOutputTokens: 0,
+					totalTokensTruncated: 0,
+					estimatedCostUSD: 0,
+					lastUpdated: 1,
+				},
 			})
 
 			const s2 = new MemoryStore(storage, WS, { hostFs })
@@ -184,7 +193,13 @@ describe("MemoryStore (v2 conversation + validation)", () => {
 			await s1.saveConversation({
 				messages: [],
 				fileContexts: [fc("stale.ts", sha256("old content")), fc("gone.ts", sha256("whatever"))],
-				costTracking: { totalInputTokens: 0, totalOutputTokens: 0, totalTokensTruncated: 0, estimatedCostUSD: 0, lastUpdated: 1 },
+				costTracking: {
+					totalInputTokens: 0,
+					totalOutputTokens: 0,
+					totalTokensTruncated: 0,
+					estimatedCostUSD: 0,
+					lastUpdated: 1,
+				},
 			})
 
 			const s2 = new MemoryStore(storage, WS, { hostFs })
@@ -198,7 +213,13 @@ describe("MemoryStore (v2 conversation + validation)", () => {
 			await s1.saveConversation({
 				messages: [],
 				fileContexts: [fc("unchecked.ts", "anyhash")],
-				costTracking: { totalInputTokens: 0, totalOutputTokens: 0, totalTokensTruncated: 0, estimatedCostUSD: 0, lastUpdated: 1 },
+				costTracking: {
+					totalInputTokens: 0,
+					totalOutputTokens: 0,
+					totalTokensTruncated: 0,
+					estimatedCostUSD: 0,
+					lastUpdated: 1,
+				},
 			})
 			// No hostFs → validation is skipped even though the file does not exist.
 			const s2 = new MemoryStore(storage, WS)
@@ -219,5 +240,29 @@ describe("MemoryStore (v2 conversation + validation)", () => {
 		expect(data.qa.map((q) => q.question)).toEqual(["q2"])
 		expect(data.stats.totalObservations).toBe(3)
 		expect(data.stats.totalQuestions).toBe(2)
+	})
+
+	it("empty() deletes the persisted file and resets to blank defaults on next load", async () => {
+		const storage = new FakeStorage()
+		const store = new MemoryStore(storage, WS)
+		await store.recordObservation({ at: 1, kind: "edit", subject: "a.ts" })
+		await store.recordQa("q", "a")
+		expect(storage.files.size).toBe(1)
+
+		await store.empty()
+		// The persisted document is gone (ctx.storage.delete), and the in-memory cache is dropped.
+		expect(storage.files.size).toBe(0)
+
+		const after = await store.snapshot()
+		expect(after.observations).toEqual([])
+		expect(after.qa).toEqual([])
+		expect(after.stats.totalObservations).toBe(0)
+		expect(after.stats.totalQuestions).toBe(0)
+		expect(after.messages).toEqual([])
+	})
+
+	it("empty() is a no-op (never throws) when nothing was persisted yet", async () => {
+		const store = new MemoryStore(new FakeStorage(), WS)
+		await expect(store.empty()).resolves.toBeUndefined()
 	})
 })

@@ -415,6 +415,20 @@ export interface PluginService {
 }
 
 /**
+ * Host-side sender a plugin uses to **push** a message to its own mounted UI
+ * component(s) over the scoped plugin-UI channel (design §6.8) — the extension→UI
+ * direction that complements the UI→extension {@link ShoferPlugin.onUiMessage} hook.
+ * Namespaced by construction: the host tags the message with the plugin's name so it
+ * reaches only that plugin's components (`PluginUIApi.onMessage`), never another's.
+ * Surfaced on {@link PluginContext.ui} only when the plugin granted `permissions.ui`
+ * **and** the host wired its UI sender (headless/pure-core ⇒ absent). Fire-and-forget.
+ */
+export interface PluginUiSender {
+	/** Push a message to this plugin's mounted UI component(s) (scoped to the plugin). */
+	postMessage(message: unknown): void
+}
+
+/**
  * Context handed to plugin hooks. Host-agnostic (no `vscode` types). The first two
  * fields are always populated by the hook call sites; {@link taskId}, {@link cwd},
  * {@link config}, and {@link host} are threaded in by the {@link PluginManager} when
@@ -453,6 +467,13 @@ export interface PluginContext {
 	readonly agent?: PluginAgent
 	/** This plugin's private persistent storage (design §6.11 G2; Phase 6). */
 	readonly storage?: PluginStorage
+	/**
+	 * Push messages to this plugin's mounted UI component(s) — the extension→UI half of
+	 * the scoped plugin-UI channel (design §6.8). Present only when the plugin granted
+	 * `permissions.ui` and the host wired its UI sender; absent otherwise (headless/
+	 * pure-core, or an ungranted plugin). See {@link PluginUiSender}.
+	 */
+	readonly ui?: PluginUiSender
 	/**
 	 * Register a supervised background service tied to this plugin's lifecycle (design
 	 * §6.11 G7; Phase 6). Returns a {@link HostDisposable} that stops + removes the

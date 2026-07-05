@@ -2132,6 +2132,11 @@ export class ShoferProvider
 			// CodeIndexManager / GitIndexManager / vscode symbol+diagnostics providers; gated
 			// on `permissions.search` inside the manager.
 			searchProvider: this.buildPluginSearchProvider(),
+			// §6.8 — host seam for `ctx.ui` (extension→UI push). Delivers a plugin's UI
+			// message to its mounted component(s) via the scoped, namespaced channel
+			// (`postPluginUiMessage`); gated on a granted `permissions.ui` region inside the
+			// manager. Wired here (not in @shofer/core) because it needs the webview provider.
+			uiProvider: { post: (pluginName, message) => void this.postPluginUiMessage(pluginName, message) },
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
@@ -2299,7 +2304,11 @@ export class ShoferProvider
 				const filtered = opts?.filePath
 					? symbols.filter((s) => {
 							const rel = cwd ? path.relative(cwd, s.location.uri.fsPath) : s.location.uri.fsPath
-							return rel === opts.filePath || rel.startsWith(opts.filePath!) || s.location.uri.fsPath === opts.filePath
+							return (
+								rel === opts.filePath ||
+								rel.startsWith(opts.filePath!) ||
+								s.location.uri.fsPath === opts.filePath
+							)
 						})
 					: symbols
 				const limited = opts?.maxResults ? filtered.slice(0, opts.maxResults) : filtered

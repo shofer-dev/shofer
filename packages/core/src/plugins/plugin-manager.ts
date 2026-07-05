@@ -19,6 +19,7 @@ import { pluginRegistry } from "./plugin-registry.js"
 import type { PluginCodeLoader } from "./plugin-loader.js"
 import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
+import { type PluginUiProvider, createPluginUi } from "./plugin-ui.js"
 import { type PluginAgentProvider, createPluginAgent, createDeniedPluginAgent } from "./plugin-agent.js"
 import { type PluginSearchProvider, createPluginSearch, createDeniedPluginSearch } from "./plugin-search.js"
 import { createPluginStorage } from "./plugin-storage.js"
@@ -248,6 +249,14 @@ export interface PluginManagerOptions {
 	 */
 	searchProvider?: PluginSearchProvider
 	/**
+	 * Host seam delivering a plugin's `ctx.ui` push (extension→UI, design §6.8). When
+	 * omitted, no plugin gets a UI sender (even a `permissions.ui`-granted one) —
+	 * headless/pure-core stays host-agnostic and `ctx.ui` is absent. Supplied by the
+	 * extension where the webview channel lives (e.g. `ShoferProvider.postPluginUiMessage`);
+	 * gated on a granted `permissions.ui` region inside the manager.
+	 */
+	uiProvider?: PluginUiProvider
+	/**
 	 * Absolute base dir for per-plugin storage (design §6.11 G2). A plugin's
 	 * `ctx.storage.dir` is `<storageBaseDir>/<name>`. When omitted (or when no host fs
 	 * is available), `ctx.storage` is absent. Host-provided (e.g. `<globalStorage>/plugins`).
@@ -269,6 +278,7 @@ export class PluginManager {
 	private readonly aiConsentStore?: PluginAiConsentStore
 	private readonly agentProvider?: PluginAgentProvider
 	private readonly searchProvider?: PluginSearchProvider
+	private readonly uiProvider?: PluginUiProvider
 	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
@@ -300,6 +310,7 @@ export class PluginManager {
 		this.aiConsentStore = options.aiConsentStore
 		this.agentProvider = options.agentProvider
 		this.searchProvider = options.searchProvider
+		this.uiProvider = options.uiProvider
 		this.storageBaseDir = options.storageBaseDir
 	}
 
@@ -674,6 +685,7 @@ export class PluginManager {
 			host,
 			ai: this.buildPluginAi(plugin),
 			agent: this.buildPluginAgent(plugin),
+			ui: this.buildPluginUi(plugin),
 			storage:
 				this.storageBaseDir && this.host
 					? createPluginStorage(plugin.name, path.join(this.storageBaseDir, plugin.name), this.host.fs)
@@ -722,6 +734,20 @@ export class PluginManager {
 		if (!this.searchProvider) return undefined
 		if (plugin.manifest.permissions?.search !== true) return createDeniedPluginSearch(plugin.name)
 		return createPluginSearch(plugin.name, this.searchProvider)
+	}
+
+	/**
+	 * Construct a plugin's `ctx.ui` surface (design §6.8 — the extension→UI push half).
+	 * Fail-closed: no host {@link PluginUiProvider} wired (headless/pure-core) ⇒ `undefined`
+	 * (`ctx.ui` absent — there is nothing to render into); wired but the plugin granted no
+	 * `permissions.ui` region ⇒ also `undefined` (a plugin that renders no UI has nothing to
+	 * push to). Pushing to a component is side-effect-free + unbilled, so — unlike `ctx.ai` —
+	 * a granted region alone gates it (no consent step, no denying stub).
+	 */
+	private buildPluginUi(plugin: DiscoveredPlugin): PluginContext["ui"] {
+		if (!this.uiProvider) return undefined
+		if ((plugin.manifest.permissions?.ui?.length ?? 0) === 0) return undefined
+		return createPluginUi(plugin.name, this.uiProvider)
 	}
 
 	/**
@@ -906,9 +932,7 @@ export class PluginManager {
 	 * VS Code URI conversion lives in the extension. Without `resolveSource` (CLI/tests)
 	 * every `source` is `undefined`, so resolution falls back to co-bundled (safe).
 	 */
-	getContributedUiContributions(
-		resolveSource?: (entryAbsolutePath: string) => string,
-	): PluginUiContribution[] {
+	getContributedUiContributions(resolveSource?: (entryAbsolutePath: string) => string): PluginUiContribution[] {
 		const plugins: UiContributingPlugin[] = this.enabledPlugins()
 			.filter((p) => (p.manifest.permissions?.ui?.length ?? 0) > 0)
 			.sort((a, b) => this.installRank(a.name) - this.installRank(b.name))
