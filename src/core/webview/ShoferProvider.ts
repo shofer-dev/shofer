@@ -2301,7 +2301,7 @@ export class ShoferProvider
 		// `source` and fall back to the co-bundled registry (non-breaking).
 		const webview = this.view?.webview
 		const resolveSource = webview
-			? (absolutePath: string) => webview.asWebviewUri(vscode.Uri.file(absolutePath)).toString()
+			? (absolutePath: string) => String(webview.asWebviewUri(vscode.Uri.file(absolutePath)))
 			: undefined
 		const contributions = manager.getContributedUiContributions(resolveSource)
 		await this.postMessageToWebview({
@@ -2615,7 +2615,7 @@ export class ShoferProvider
 		// index.tsx). Importing same-origin `cspSource` modules is allowed under the
 		// CSP's `strict-dynamic`. Absent any UI plugin the map is simply unused.
 		const pluginHostUri = (file: string) =>
-			getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "plugin-host", file]).toString()
+			String(getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "plugin-host", file]))
 		const pluginImportMap = JSON.stringify({
 			imports: {
 				react: pluginHostUri("react.js"),
