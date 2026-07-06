@@ -4591,6 +4591,11 @@ export const webviewMessageHandler = async (
 
 				await provider.refreshWorkspace()
 				await provider.postMessageToWebview({ type: "action", action: "chatButtonClicked" })
+				// Reset the chat surface to a blank new-task input. `popFromStackWithoutAborting`
+				// only clears when a task is on the stack — after a task *completes* the stack is
+				// empty, so without this explicit reset the finished conversation stays on screen
+				// and "New Task" appears to do nothing. Mirrors the createParallelTask path.
+				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
 				await provider.postMessageToWebview({ type: "action", action: "focusInput" })
 			} catch (error) {
 				provider.log(`Error launching task: ${error}`)
