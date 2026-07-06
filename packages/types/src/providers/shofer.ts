@@ -3,10 +3,12 @@ import { z } from "zod"
 import type { ModelInfo } from "../model.js"
 
 /**
- * Shofer Cloud is a dynamic provider - models are loaded from the /v1/models API endpoint.
- * Default model ID used as fallback when no model is specified.
+ * Shofer Router is a dynamic provider — models are autodiscovered from the router's
+ * `/v1/models` endpoint. There is deliberately NO default/fallback model: a request
+ * with no model selected must fail loudly (ShoferHandler.getModel throws; the settings
+ * UI shows a validation error) rather than silently misroute to some arbitrary model.
  */
-export const shoferDefaultModelId = "xai/grok-code-fast-1"
+export const shoferDefaultModelId = ""
 
 /**
  * Empty models object maintained for type compatibility.

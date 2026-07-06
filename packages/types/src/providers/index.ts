@@ -118,6 +118,8 @@ export function getProviderDefaultModelId(
 			return unboundDefaultModelId
 		case "vercel-ai-gateway":
 			return vercelAiGatewayDefaultModelId
+		case "shofer":
+			return "" // Shofer Router autodiscovers models — no default; an unset model is an error.
 		case "anthropic":
 		case "gemini-cli":
 		case "fake-ai":
