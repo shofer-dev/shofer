@@ -51,14 +51,18 @@ interface BadgeState {
 	stats?: { observations: number; questions: number; pendingQuestions: number }
 }
 
-/** Dot color per agent state (mirrors the built-in badge's state→color map). */
+/**
+ * Dot color per agent state. Uses the exact Tailwind hexes the built-in badge and the
+ * IndexingStatusBadge (RAG) use (`green-500`/`yellow-500`/`red-500`/`amber-500`) so the
+ * dots match across badges — a plugin bundle can't use the host's Tailwind classes.
+ */
 const DOT_COLOR: Record<string, string> = {
 	Standby: "var(--vscode-descriptionForeground)",
-	Initializing: "var(--vscode-charts-yellow, #d7ba7d)",
-	Ready: "var(--vscode-charts-green, #89d185)",
-	Busy: "var(--vscode-charts-yellow, #d7ba7d)",
-	Error: "var(--vscode-errorForeground, #f14c4c)",
-	Stopping: "var(--vscode-charts-orange, #d18616)",
+	Initializing: "#eab308", // yellow-500
+	Ready: "#22c55e", // green-500
+	Busy: "#eab308", // yellow-500
+	Error: "#ef4444", // red-500
+	Stopping: "#f59e0b", // amber-500
 }
 const PULSING = new Set(["Initializing", "Busy", "Stopping"])
 
