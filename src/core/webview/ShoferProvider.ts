@@ -6368,15 +6368,10 @@ export class ShoferProvider
 	 * Extracts the first meaningful sentence/phrase (up to 50 chars).
 	 */
 	private generateTaskNameFromText(text: string): string {
-		// Remove markdown formatting
-		let cleaned = text
-			.replace(/^#+\s*/gm, "") // Remove headers
-			.replace(/\*\*?|__?/g, "") // Remove bold/italic
-			.replace(/`{1,3}[^`]*`{1,3}/g, "") // Remove inline/block code
-			.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Extract link text
-			.replace(/^\s*[-*+]\s*/gm, "") // Remove list markers
-			.replace(/\n+/g, " ") // Replace newlines with spaces
-			.trim()
+		// The task title is LITERAL text, not markdown — do NOT strip `_`/`*`/backticks,
+		// which would mangle identifiers/paths (e.g. `ask_live_memory` → `asklivememory`).
+		// Just collapse whitespace, take the first sentence/phrase, and truncate.
+		const cleaned = text.replace(/\s+/g, " ").trim()
 
 		// Get first sentence or phrase
 		const firstSentence = cleaned.split(/[.!?]\s/)[0] || cleaned
