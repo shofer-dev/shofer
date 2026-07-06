@@ -90,7 +90,7 @@ import {
 	installPluginFromUrl as installPluginArchiveFromUrl,
 	PluginPackError,
 } from "@shofer/core"
-import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope } from "@shofer/types"
+import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope, PluginUiRegion } from "@shofer/types"
 import type { ApiHandler, PluginAiProvider, PluginAgentProvider, PluginSearchProvider } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
@@ -129,6 +129,8 @@ import type { ShoferMessage, TodoItem, TaskLogLine } from "@shofer/types"
 import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
+import { buildPluginHostImportMap } from "./pluginHostImportMap"
+import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
 import { addTaskLogListener } from "@shofer/core"
@@ -185,6 +187,11 @@ export class ShoferProvider
 	private pluginManager?: PluginManager
 	/** In-flight {@link getPluginManager} build, memoized so concurrent callers share one manager. */
 	private pluginManagerBuild?: Promise<PluginManager>
+	/**
+	 * Opens plugin UI bundles as standalone `WebviewPanel` editor tabs (design §6.8 —
+	 * `ctx.ui.showPanel`). Lazily created; owns its panels' lifecycle.
+	 */
+	private readonly pluginPanelManager = new PluginPanelManager(this)
 	private marketplaceManager: MarketplaceManager
 	private taskCreationCallback: (task: Task) => void
 	/**
@@ -1210,6 +1217,7 @@ export class ShoferProvider
 			this.pluginManager = undefined
 		}
 		this.pluginManagerBuild = undefined
+		this.pluginPanelManager.dispose()
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 
@@ -2161,7 +2169,19 @@ export class ShoferProvider
 			// message to its mounted component(s) via the scoped, namespaced channel
 			// (`postPluginUiMessage`); gated on a granted `permissions.ui` region inside the
 			// manager. Wired here (not in @shofer/core) because it needs the webview provider.
-			uiProvider: { post: (pluginName, message) => void this.postPluginUiMessage(pluginName, message) },
+			uiProvider: {
+				post: (pluginName, message) => void this.postPluginUiMessage(pluginName, message),
+				// §6.8 — open the plugin's UI bundle in a standalone WebviewPanel editor tab.
+				// Region defaults to "sidebar-panel" (the drawer's former region); title to the
+				// plugin name. The region is a granted PluginUiRegion by construction (ctx.ui only
+				// exists for a permissions.ui plugin).
+				showPanel: (pluginName, opts) =>
+					void this.pluginPanelManager.openPluginUiPanel({
+						pluginName,
+						region: (opts?.region as PluginUiRegion) ?? "sidebar-panel",
+						title: opts?.title ?? pluginName,
+					}),
+			},
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
@@ -2605,6 +2625,9 @@ export class ShoferProvider
 			type: "pluginUiMessage",
 			pluginUiMessage: { pluginName, message },
 		})
+		// Fan out to any open standalone plugin panels for this plugin (design §6.8), so a
+		// plugin's `ctx.ui` state pushes reach its editor-tab panel, not just the sidebar.
+		this.pluginPanelManager.broadcast(pluginName, message)
 	}
 
 	// ------------------------------------------------------------------
@@ -2890,17 +2913,7 @@ export class ShoferProvider
 		// re-export the host's running React instance (published on the global by
 		// index.tsx). Importing same-origin `cspSource` modules is allowed under the
 		// CSP's `strict-dynamic`. Absent any UI plugin the map is simply unused.
-		const pluginHostUri = (file: string) =>
-			String(getUri(webview, this.contextProxy.extensionUri, ["webview-ui", "build", "plugin-host", file]))
-		const pluginImportMap = JSON.stringify({
-			imports: {
-				react: pluginHostUri("react.js"),
-				"react-dom": pluginHostUri("react-dom.js"),
-				"react-dom/client": pluginHostUri("react-dom-client.js"),
-				"react/jsx-runtime": pluginHostUri("jsx-runtime.js"),
-				"react/jsx-dev-runtime": pluginHostUri("jsx-dev-runtime.js"),
-			},
-		})
+		const pluginImportMap = buildPluginHostImportMap(webview, this.contextProxy.extensionUri)
 		const materialIconsUri = getUri(webview, this.contextProxy.extensionUri, [
 			"assets",
 			"vscode-material-icons",
