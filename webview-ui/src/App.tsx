@@ -12,7 +12,6 @@ import { telemetryClient } from "./utils/TelemetryClient"
 import { initializeSourceMaps, exposeSourceMapsForDebugging } from "./utils/sourceMapInitializer"
 import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
 import ChatView, { ChatViewRef } from "./components/chat/ChatView"
-import { PluginSidebarPanel } from "./components/plugins/PluginSidebarPanel"
 import WorkflowView, { WorkflowViewRef } from "./components/chat/WorkflowView"
 import { TaskSelector } from "./components/chat/TaskSelector"
 import HistoryView from "./components/history/HistoryView"
@@ -372,9 +371,6 @@ const App = () => {
 					{tab === "settings" && (
 						<SettingsView ref={settingsRef} onDone={() => setTab("chat")} targetSection={currentSection} />
 					)}
-					{/* Plugin `sidebar-panel` contributions (e.g. Live Memory's live chat/agent
-					    panel). Collapsible; renders nothing when no plugin contributes one. */}
-					{tab === "chat" && !currentTaskItem?.isWorkflow && <PluginSidebarPanel />}
 					<ChatView
 						ref={chatViewRef}
 						isHidden={tab !== "chat" || !!currentTaskItem?.isWorkflow}
