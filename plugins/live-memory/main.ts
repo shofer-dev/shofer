@@ -436,6 +436,13 @@ Files in context: ${result.contextFiles.length}`
 			case "getState":
 				await pushPanelState(ctx)
 				return
+			case "showChat":
+				// The badge popover's "View Chat" — open the live chat bundle (the
+				// `sidebar-panel` region) in a standalone editor panel, matching the built-in
+				// "Live Memory Chat" panel. Then push fresh state so it renders immediately.
+				ctx.ui?.showPanel({ title: "Live Memory Chat" })
+				await pushPanelState(ctx)
+				return
 			case "clear": {
 				const agent = peekAgent(ctx)
 				if (agent) await agent.clearContext()

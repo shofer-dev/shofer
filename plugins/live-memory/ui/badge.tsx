@@ -207,11 +207,9 @@ export default function LiveMemoryBadge({ api }: { api: PluginUIApi }) {
 		fn()
 		setOpen(false)
 	}
-	const viewChat = act(() =>
-		window.dispatchEvent(
-			new CustomEvent("shofer:reveal-plugin-panel", { detail: { pluginName: api.context.pluginName } }),
-		),
-	)
+	// "View Chat" asks the plugin to open its chat bundle in a standalone editor panel
+	// (WebviewPanel) via ctx.ui.showPanel — matching the built-in's separate chat panel.
+	const viewChat = act(() => api.postMessage({ type: "showChat" }))
 	const clearContext = act(() => api.postMessage({ type: "clear" }))
 	const emptyMemory = act(() => api.postMessage({ type: "empty" }))
 	const configure = act(() =>

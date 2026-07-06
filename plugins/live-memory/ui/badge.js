@@ -1,4 +1,4 @@
-// ui/badge.tsx
+// plugins/live-memory/ui/badge.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var DOT_COLOR = {
@@ -139,11 +139,7 @@ function LiveMemoryBadge({ api }) {
     fn();
     setOpen(false);
   };
-  const viewChat = act(
-    () => window.dispatchEvent(
-      new CustomEvent("shofer:reveal-plugin-panel", { detail: { pluginName: api.context.pluginName } })
-    )
-  );
+  const viewChat = act(() => api.postMessage({ type: "showChat" }));
   const clearContext = act(() => api.postMessage({ type: "clear" }));
   const emptyMemory = act(() => api.postMessage({ type: "empty" }));
   const configure = act(
