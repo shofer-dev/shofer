@@ -61,6 +61,18 @@ export class PluginRegistry {
 	private readonly plugins: ShoferPlugin[] = []
 	/** Names of plugins granted `permissions.lifecycle` (see {@link PluginGrants}). */
 	private readonly lifecycleGranted = new Set<string>()
+	/**
+	 * Monotonic counter bumped on every register/unregister. Consumers that **cache**
+	 * plugin-derived state (e.g. the per-task tool catalog in {@link Task}) fold this into
+	 * their cache key so the cache invalidates when the plugin set changes — critical
+	 * because code plugins load **asynchronously** (fire-and-forget), so a task's first
+	 * tool build can happen before a plugin's `registerTools` has contributed.
+	 */
+	private _revision = 0
+	/** See {@link _revision}. */
+	get revision(): number {
+		return this._revision
+	}
 
 	/**
 	 * Register a plugin and run its `initialize` hook. Names must be unique. `grants`
@@ -73,6 +85,7 @@ export class PluginRegistry {
 		}
 		this.plugins.push(plugin)
 		if (grants.lifecycle) this.lifecycleGranted.add(plugin.name)
+		this._revision++
 		await plugin.initialize?.(context)
 	}
 
@@ -96,6 +109,7 @@ export class PluginRegistry {
 		if (index === -1) return false
 		this.plugins.splice(index, 1)
 		this.lifecycleGranted.delete(name)
+		this._revision++
 		return true
 	}
 

@@ -5,6 +5,7 @@ import type OpenAI from "openai"
 import type { ProviderSettings, ModeConfig, ModelInfo, ToolGroup } from "@shofer/types"
 import { toolGroupsSchema, getHost } from "@shofer/types"
 import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
+import { toolsLog } from "../logging/subsystems.js"
 import { formatNative } from "../custom-tools/format-native.js"
 import { pluginRegistry } from "../plugins/plugin-registry.js"
 import { setPrivateToolInvokeMap } from "../tools/private-tool-registry.js"
@@ -359,6 +360,13 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	for (const def of pluginTools) {
 		customToolRegistry.register(def, "plugin")
 	}
+	// Diagnostic: which plugin tools made it into this build (output channel). If a plugin
+	// tool a user expects (e.g. `ask_live_memory`) is missing here, the plugin either
+	// isn't loaded yet or its `registerTools` failed (see the `Plugin:<name>` log category).
+	toolsLog.debug(
+		`[plugin-tools] ${pluginTools.length} contributed (registry rev ${pluginRegistry.revision}): ` +
+			(pluginTools.map((t) => t.name).join(", ") || "(none)"),
+	)
 	if (experiments?.customTools) {
 		const toolDirs = getRooDirectoriesForCwd(cwd).map((dir) => path.join(dir, "tools"))
 		await customToolRegistry.loadFromDirectoriesIfStale(toolDirs)

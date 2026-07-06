@@ -6558,6 +6558,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.api.getModel().id,
 			JSON.stringify(this.completionSchema ?? null),
 			JSON.stringify(this.agentToolGroups ?? null),
+			// Plugins load asynchronously (fire-and-forget); fold the registry revision in
+			// so the cached tool catalog rebuilds once a plugin's tools register — otherwise
+			// a task that built tools before the plugin loaded would never see e.g.
+			// `ask_live_memory`, even though the system prompt (rebuilt per request) shows it.
+			pluginRegistry.revision,
 		].join("|")
 	}
 

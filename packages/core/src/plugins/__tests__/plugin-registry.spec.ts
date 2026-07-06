@@ -13,6 +13,23 @@ describe("PluginRegistry (§10)", () => {
 		await expect(reg.register({ name: "a" })).rejects.toThrow(/already registered/)
 	})
 
+	it("bumps `revision` on register + unregister so cached plugin-derived state invalidates", async () => {
+		const reg = new PluginRegistry()
+		const r0 = reg.revision
+		await reg.register({ name: "a" })
+		expect(reg.revision).toBeGreaterThan(r0)
+		const r1 = reg.revision
+		await reg.register({ name: "b" })
+		expect(reg.revision).toBeGreaterThan(r1)
+		const r2 = reg.revision
+		expect(reg.unregister("a")).toBe(true)
+		expect(reg.revision).toBeGreaterThan(r2)
+		// A no-op unregister must NOT bump the revision.
+		const r3 = reg.revision
+		expect(reg.unregister("missing")).toBe(false)
+		expect(reg.revision).toBe(r3)
+	})
+
 	it("collects tools from all plugins in registration order", async () => {
 		const reg = new PluginRegistry()
 		const tool = (name: string) => ({ name, description: name, execute: async () => "" })
