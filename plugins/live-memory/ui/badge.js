@@ -1,4 +1,4 @@
-// plugins/live-memory/ui/badge.tsx
+// ui/badge.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var DOT_COLOR = {

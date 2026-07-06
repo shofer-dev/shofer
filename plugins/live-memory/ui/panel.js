@@ -1,4 +1,4 @@
-// plugins/live-memory/ui/panel.tsx
+// ui/panel.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function escapeHtml(s) {
