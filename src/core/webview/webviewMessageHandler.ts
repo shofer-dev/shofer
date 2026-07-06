@@ -1304,6 +1304,17 @@ export const webviewMessageHandler = async (
 					},
 				},
 				{ key: "vercel-ai-gateway", options: { provider: "vercel-ai-gateway" } },
+				{
+					key: "shofer",
+					options: {
+						provider: "shofer",
+						// Prefer live-typed values from the Refresh button so a just-changed
+						// URL/key applies without a Save first; fall back to saved config.
+						apiKey: (message?.values?.shoferApiKey as string | undefined) || apiConfiguration.shoferApiKey,
+						baseUrl:
+							(message?.values?.shoferBaseUrl as string | undefined) || apiConfiguration.shoferBaseUrl,
+					},
+				},
 			]
 
 			// LiteLLM is conditional on baseUrl+apiKey

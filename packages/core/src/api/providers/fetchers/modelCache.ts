@@ -21,6 +21,7 @@ import { GetModelsOptions, getModelsCacheDir, getModelsCacheDirSync, safeWriteJs
 import { getOllamaModels } from "./ollama.js"
 import { getLMStudioModels } from "./lmstudio.js"
 import { getPoeModels } from "./poe.js"
+import { getShoferModels } from "./shofer.js"
 import { apiLog } from "../_deps.js"
 
 const memoryCache = new NodeCache({ stdTTL: 5 * 60, checkperiod: 5 * 60 })
@@ -84,8 +85,10 @@ async function fetchModelsFromProvider(options: GetModelsOptions): Promise<Model
 			break
 
 		case "shofer":
-			// Shofer Router presents an OpenRouter-compatible /models endpoint.
-			models = await getOpenRouterModels()
+			// Shofer Router (llm-router) exposes an OpenRouter-*shaped* /models endpoint
+			// at a configurable base URL — but prices per 1K tokens, so it needs its own
+			// fetcher (see getShoferModels) rather than the OpenRouter one.
+			models = await getShoferModels(options.baseUrl, options.apiKey)
 			break
 
 		case "poe":

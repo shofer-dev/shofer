@@ -68,4 +68,5 @@ export const PROVIDERS = [
 	{ value: "baseten", label: "Baseten", proxy: false },
 	{ value: "unbound", label: "Unbound", proxy: false },
 	{ value: "poe", label: "Poe", proxy: false },
+	{ value: "shofer", label: "Shofer Router", proxy: true },
 ].sort((a, b) => a.label.localeCompare(b.label))

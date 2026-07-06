@@ -176,6 +176,13 @@ function getSelectedModel({
 			const routerInfo = routerModels.litellm?.[id]
 			return { id, info: routerInfo ?? litellmDefaultModelInfo }
 		}
+		case "shofer": {
+			// Shofer Router is a dynamic provider — models (+ pricing) come from the
+			// llm-router /models catalog. The canonical model field is `apiModelId`.
+			const id = getValidatedModelId(apiConfiguration.apiModelId, routerModels.shofer, defaultModelId)
+			const routerInfo = routerModels.shofer?.[id]
+			return { id, info: routerInfo }
+		}
 		case "xai": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = xaiModels[id as keyof typeof xaiModels]
@@ -383,9 +390,8 @@ function getSelectedModel({
 		}
 		// case "anthropic":
 		// case "fake-ai":
-		case "shofer":
 		default: {
-			provider satisfies "anthropic" | "gemini-cli" | "fake-ai" | "shofer" | "mock"
+			provider satisfies "anthropic" | "gemini-cli" | "fake-ai" | "mock"
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const baseInfo = anthropicModels[id as keyof typeof anthropicModels]
 

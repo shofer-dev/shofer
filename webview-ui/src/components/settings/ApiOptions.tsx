@@ -76,6 +76,7 @@ import {
 	Gemini,
 	LMStudio,
 	LiteLLM,
+	Shofer,
 	Mistral,
 	Moonshot,
 	Dashscope,
@@ -667,6 +668,16 @@ const ApiOptions = ({
 
 					{selectedProvider === "litellm" && (
 						<LiteLLM
+							apiConfiguration={apiConfiguration}
+							setApiConfigurationField={setApiConfigurationField}
+							organizationAllowList={organizationAllowList}
+							modelValidationError={modelValidationError}
+							simplifySettings={fromWelcomeView}
+						/>
+					)}
+
+					{selectedProvider === "shofer" && (
+						<Shofer
 							apiConfiguration={apiConfiguration}
 							setApiConfigurationField={setApiConfigurationField}
 							organizationAllowList={organizationAllowList}
