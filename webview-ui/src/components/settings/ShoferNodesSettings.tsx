@@ -260,7 +260,7 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 							<span className="font-medium">Host (IP:port or DNS)</span>
 							<Input
 								value={form.host}
-								placeholder="e.g. 10.0.0.5:7878"
+								placeholder="e.g. 127.0.0.1:30099"
 								onChange={(e) => setForm({ ...form, host: e.target.value })}
 							/>
 						</label>
@@ -268,7 +268,7 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 							type="password"
 							value={form.token}
 							placeholder={
-								form.id ? "leave blank to keep current token" : "connection token (AGENT_WS_TOKEN)"
+								form.id ? "leave blank to keep current token" : "bearer token (SHOFER_NODE_TOKEN)"
 							}
 							onInput={(e: any) => setForm({ ...form, token: e.target.value })}
 							className="w-full">
@@ -279,9 +279,9 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 								checked={form.tls}
 								onChange={() => setForm({ ...form, tls: !form.tls })}
 								size="small"
-								aria-label="Use TLS (wss)"
+								aria-label="Use TLS (https)"
 							/>
-							<span>Use TLS (wss)</span>
+							<span>Use TLS (https)</span>
 						</div>
 						<div className="flex gap-2 justify-end">
 							<Button variant="secondary" size="sm" onClick={() => setForm(null)}>

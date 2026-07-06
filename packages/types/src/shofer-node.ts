@@ -3,8 +3,9 @@
  *
  * A *node* is an executor that runs `extension.js`. The built-in **Local** node
  * is today's in-extension-host agent (non-removable, the default). **Remote**
- * nodes run the same bundle elsewhere and are driven over the remote-agent
- * WebSocket protocol (see `./remote-agent.ts`). These types are the contract
+ * nodes run the same bundle elsewhere (`shofer serve`) and are driven over the
+ * HTTP/SSE control plane (`AgentApi`; see `transport/http-client.ts`, `docs/agentapi.md`).
+ * These types are the contract
  * between the webview UI (Settings → Shofer Nodes, the Nodes header button) and
  * the extension. Design: `docs/remote-agents.md` (§4, §4b).
  *
@@ -38,9 +39,9 @@ export interface ShoferNodeDef {
 	kind: ShoferNodeKind
 	/** Friendly name shown in the header Nodes list. */
 	label: string
-	/** Remote only: `IP:port` or DNS host, composed into `ws(s)://<host>/agent/:ws`. */
+	/** Remote only: `IP:port` or DNS host, composed into `http(s)://<host>/api/v1`. */
 	host?: string
-	/** Remote only: use `wss` (TLS) instead of `ws`. */
+	/** Remote only: use `https` (TLS) instead of `http`. */
 	tls?: boolean
 	/**
 	 * Reconnect this node automatically on extension/VS Code start. Set when the
