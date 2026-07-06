@@ -132,6 +132,13 @@ async function pushPanelState(ctx: PluginContext, agent?: LiveMemoryAgent): Prom
 		fillFraction: 0,
 		isNearlyFull: false,
 	}
+	// Best-effort model label (for the badge popover's "Model" row). Never block/throw.
+	let modelId: string | undefined
+	try {
+		modelId = a ? await a.getModelLabel() : undefined
+	} catch {
+		// model label is best-effort — omit on failure.
+	}
 	try {
 		ctx.ui.postMessage({
 			type: "state",
@@ -140,6 +147,12 @@ async function pushPanelState(ctx: PluginContext, agent?: LiveMemoryAgent): Prom
 			contextUsage,
 			messages: a ? a.getMessages() : [],
 			stats: { observations, questions, pendingQuestions: a?.pendingQuestionCount ?? 0 },
+			// Extra fields for the chat-input badge popover (mirrors the built-in
+			// LiveMemoryPopover's info rows).
+			modelId,
+			contextFiles: a?.contextFiles ?? [],
+			conversationTurnCount: a?.conversationTurnCount ?? 0,
+			costSnapshot: a?.getCostSnapshot(),
 		})
 	} catch {
 		// A detached webview must never break the caller (ctx.ui already isolates errors).

@@ -1,9 +1,16 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 
 import { PluginSlot } from "./PluginSlot"
+
+/**
+ * Event a plugin's chat-input badge dispatches to reveal + focus its sidebar panel
+ * (the plugin-native "View Chat"). `detail.pluginName` targets a specific plugin;
+ * omitted reveals any sidebar-panel drawer.
+ */
+export const REVEAL_PLUGIN_PANEL_EVENT = "shofer:reveal-plugin-panel"
 
 /**
  * Host mount point for plugin `sidebar-panel` UI contributions — a collapsible drawer
@@ -16,15 +23,32 @@ import { PluginSlot } from "./PluginSlot"
  */
 export function PluginSidebarPanel() {
 	const { pluginUiContributions } = useExtensionState()
-	const [open, setOpen] = useState(true)
+	// Collapsed by default so the panel doesn't crowd the chat view — opened on demand
+	// (chevron, or the badge popover's "View Chat"), mirroring the built-in's on-demand
+	// "View Chat" panel rather than an always-open drawer.
+	const [open, setOpen] = useState(false)
+	const rootRef = useRef<HTMLDivElement>(null)
 
 	const contributions = (pluginUiContributions?.contributions ?? []).filter((c) => c.region === "sidebar-panel")
+
+	// Reveal + scroll into view when a plugin badge fires the reveal event ("View Chat").
+	useEffect(() => {
+		const onReveal = (e: Event) => {
+			const target = (e as CustomEvent<{ pluginName?: string }>).detail?.pluginName
+			if (target && !contributions.some((c) => c.pluginName === target)) return
+			setOpen(true)
+			requestAnimationFrame(() => rootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }))
+		}
+		window.addEventListener(REVEAL_PLUGIN_PANEL_EVENT, onReveal)
+		return () => window.removeEventListener(REVEAL_PLUGIN_PANEL_EVENT, onReveal)
+	}, [contributions])
+
 	if (contributions.length === 0) return null
 
 	const label = contributions.length === 1 ? contributions[0]!.pluginName : `Plugin panels (${contributions.length})`
 
 	return (
-		<div className="border-b border-vscode-panel-border shrink-0">
+		<div ref={rootRef} className="border-b border-vscode-panel-border shrink-0">
 			<button
 				type="button"
 				onClick={() => setOpen((o) => !o)}

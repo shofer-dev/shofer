@@ -1582,9 +1582,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						<WorktreeIndicator />
 						{!isWorkflow && <CommandsButton />}
 						{!isWorkflow && <SkillsButton />}
-						{/* Plugin contributions for the chat-input toolbar (design §6.8). Renders
-						    nothing when no plugin contributes here — layout unchanged. */}
-						<PluginSlot region="chat-input-toolbar" />
 					</div>
 					<div
 						className={cn(
@@ -1612,6 +1609,10 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 							</StandardTooltip>
 						)}
 						{!isEditMode ? <NodeStatus /> : null}
+						{/* Plugin chat-input-toolbar contributions (design §6.8) — placed in the
+						    right-hand indicator cluster next to IndexingStatusBadge, matching where
+						    the built-in LiveMemoryStatusBadge sat. Renders nothing without a plugin. */}
+						{!isEditMode ? <PluginSlot region="chat-input-toolbar" /> : null}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{/* CloudAccountSwitcher removed */}
 					</div>
