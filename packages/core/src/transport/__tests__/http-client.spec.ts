@@ -28,6 +28,17 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		)
 	})
 
+	it("createTask includes the per-task apiConfiguration in the POST body", async () => {
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ taskId: "t1" }), { status: 200 }))
+		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
+		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" } as never
+		await client.createTask({ prompt: "hi", apiConfiguration })
+		expect(fetchMock).toHaveBeenCalledWith(
+			"http://host:1/api/v1/task",
+			expect.objectContaining({ method: "POST", body: JSON.stringify({ prompt: "hi", apiConfiguration }) }),
+		)
+	})
+
 	it("sendMessage + cancelTask POST to the task subroutes", async () => {
 		const fetchMock = vi.fn(async () => new Response("", { status: 202 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })

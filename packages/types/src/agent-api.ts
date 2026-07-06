@@ -12,12 +12,30 @@
  */
 
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
+import type { ProviderSettings } from "./provider-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
 export interface ServerEvent {
 	type: string
 	[key: string]: unknown
+}
+
+/**
+ * Parameters for {@link AgentApi.createTask}.
+ *
+ * `apiConfiguration` carries the controller's per-task API Configuration (the
+ * resolved {@link ProviderSettings}: provider, model, base URL, key, …) to the
+ * executor. A remote node applies it so the task runs on the SAME provider the
+ * VS Code front-end picked (and it can differ per task) — UNLESS the node was
+ * launched with explicit CLI overrides (`--provider`/`--model`/`--api-key`/
+ * `--base-url`), in which case the node's own config wins and this is ignored.
+ * Omitted for local/in-process tasks (they read the provider's live config).
+ */
+export interface CreateTaskInput {
+	prompt: string
+	taskId?: string
+	apiConfiguration?: ProviderSettings
 }
 
 /** A reply to an outstanding `ask` (interactive tool approval / follow-up). */
@@ -34,7 +52,7 @@ export interface AskResponse {
 
 /** The agent control plane a transport drives. */
 export interface AgentApi {
-	createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }>
+	createTask(input: CreateTaskInput): Promise<{ taskId: string }>
 	sendMessage(taskId: string, message: string): Promise<void>
 	cancelTask(taskId: string): Promise<void>
 	/**

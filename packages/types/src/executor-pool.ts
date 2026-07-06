@@ -1,4 +1,4 @@
-import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
+import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "./agent-api.js"
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
@@ -155,7 +155,7 @@ export class ExecutorPool implements AgentApi {
 	 * (`createTaskOn(pickNext(), …)`), which is exactly what {@link createTask}
 	 * now does.
 	 */
-	async createTaskOn(id: string, input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+	async createTaskOn(id: string, input: CreateTaskInput): Promise<{ taskId: string }> {
 		const executor = this.executors.find((e) => e.id === id)
 		if (!executor) throw new Error(`ExecutorPool: unknown executor ${id}`)
 		const result = await executor.api.createTask(input)
@@ -172,7 +172,7 @@ export class ExecutorPool implements AgentApi {
 		this.taskOwner.set(taskId, executorId)
 	}
 
-	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
 		const id = this.pickNext()
 		if (id === undefined) throw new Error("ExecutorPool: no executor available")
 		return this.createTaskOn(id, input)

@@ -5,6 +5,7 @@ import type {
 	CheckpointDiffEntry,
 	CheckpointDiffOptions,
 	CheckpointRestoreOptions,
+	CreateTaskInput,
 	ServerEvent,
 } from "@shofer/types"
 
@@ -36,7 +37,10 @@ export class ShoferHttpClient implements AgentApi {
 		this.authHeaders = options.token ? { authorization: `Bearer ${options.token}` } : {}
 	}
 
-	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
+	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
+		// The whole input (incl. `apiConfiguration`, when present) is forwarded as
+		// the POST body — the server applies the config per-task unless it has a
+		// local CLI override.
 		return (await this.post("/task", input)) as { taskId: string }
 	}
 

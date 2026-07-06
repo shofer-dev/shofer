@@ -93,7 +93,6 @@ import {
 	handleGetWorktreeStatus,
 } from "./worktree"
 
-
 export const webviewMessageHandler = async (
 	provider: ShoferProvider,
 	message: WebviewMessage,
@@ -831,6 +830,14 @@ export const webviewMessageHandler = async (
 				const shouldRoute =
 					!!registry && (registry.hasEnabledRemote() || typeof message.preferredNodeId === "string")
 				if (shouldRoute) {
+					// Resolve the task's API Configuration controller-side and ship it
+					// with the task, so a remote owner runs on the same provider/model
+					// the front-end picked (per task). A node with a CLI override ignores
+					// it; the Local path ignores it too (it reads live config directly).
+					const apiConfiguration = await provider.resolveTaskApiConfiguration({
+						apiConfigName: message.apiConfigName,
+						mode: message.mode,
+					})
 					await registry!.routeNewTask(
 						{
 							prompt: messageText,
@@ -839,6 +846,7 @@ export const webviewMessageHandler = async (
 							apiConfigName: message.apiConfigName,
 							worktreeDir,
 							preferredNodeId: message.preferredNodeId,
+							apiConfiguration,
 						},
 						// This provider is the render target — the task renders in the
 						// webview (sidebar or editor tab) the user started it from.

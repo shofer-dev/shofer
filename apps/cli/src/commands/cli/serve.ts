@@ -30,8 +30,16 @@ export interface ServeOptions {
  * Boots the agent, then exposes it on `http://<host>:<port>` via the versioned
  * task-control API + SSE event stream (see `@shofer/core` `createHttpServer`), which
  * the typed `ShoferHttpClient` SDK consumes. Runs until interrupted (SIGINT/SIGTERM).
+ *
+ * API Configuration: with NO `--provider`/`--model`/`--api-key`/`--base-url` flag,
+ * the node has no manual override and each task runs on whatever API Configuration
+ * the controlling VS Code front-end picked for it (per-task; shipped over the wire).
+ * Pass any of those flags to pin the node to a fixed config that always wins.
  */
 export async function serve(options: ServeOptions = {}): Promise<void> {
+	// A manual override is any explicit provider/model/key/base-url flag. When none
+	// are given the node defers to the controller's per-task API Configuration.
+	const hasOverride = !!(options.provider || options.model || options.apiKey || options.baseUrl)
 	const provider = (options.provider ?? "openrouter") as SupportedProvider
 	const port = Number.parseInt(options.port ?? "30099", 10)
 	const host = options.host ?? "127.0.0.1"
@@ -56,7 +64,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 
 	const extHost = new ExtensionHost(hostOptions)
 	await extHost.activate()
-	const server = extHost.serve({ port, host, token })
+	const server = extHost.serve({ port, host, token, allowClientConfig: !hasOverride })
 
 	// Await the actual bind before claiming success — `listen()` is async, so without
 	// this a taken port (EADDRINUSE) would print "serving on …" and then silently fail,
@@ -73,7 +81,10 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		process.exit(1)
 	})
 
-	console.error(`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""}`)
+	console.error(
+		`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""} · ` +
+			(hasOverride ? `API config: pinned to ${provider} (CLI override)` : "API config: per-task from controller"),
+	)
 
 	await new Promise<void>((resolve) => {
 		const shutdown = () => server.close(() => resolve())

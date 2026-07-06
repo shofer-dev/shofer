@@ -20,12 +20,15 @@ export { runAcpAgent } from "./run-acp-agent.js"
 /**
  * Start the HTTP/SSE server over a live {@link ShoferAPI} and begin listening. The
  * single entrypoint the `shofer serve` command calls. Returns the listening server.
+ *
+ * `allowClientConfig` lets the controller's per-task API Configuration drive each
+ * task (set when the node was started without CLI provider/model/key/url overrides).
  */
 export function serveHttpOverShoferApi(
 	api: ShoferAPI,
-	opts: { port: number; host?: string; token?: string; version?: string },
+	opts: { port: number; host?: string; token?: string; version?: string; allowClientConfig?: boolean },
 ): Server {
-	const server = createHttpServer(new ShoferApiAgent(api), {
+	const server = createHttpServer(new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig }), {
 		token: opts.token,
 		version: opts.version ?? Package.version,
 	})

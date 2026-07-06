@@ -3156,6 +3156,42 @@ export class ShoferProvider
 	}
 
 	/**
+	 * Resolve the effective {@link ProviderSettings} a new task would run under,
+	 * WITHOUT creating the task — the same precedence {@link createTask} applies:
+	 * an explicit `apiConfigName` (or the one the task's `mode` maps to) names a
+	 * profile; on any miss it falls back to the global active `apiConfiguration`.
+	 *
+	 * This is what the controller ships to a REMOTE node so a distributed task runs
+	 * on the exact provider/model the front-end selected (see
+	 * {@link NodeRegistry.routeNewTask}). It resolves controller-side because remote
+	 * nodes don't share the front-end's saved profiles.
+	 */
+	public async resolveTaskApiConfiguration(seeds: {
+		apiConfigName?: string
+		mode?: string
+	}): Promise<ProviderSettings> {
+		const { apiConfiguration } = await this.getState()
+		let apiConfigName = seeds.apiConfigName
+		if (!apiConfigName && seeds.mode) {
+			apiConfigName = await this.resolveModeApiConfigName(seeds.mode as Mode)
+		}
+		if (apiConfigName) {
+			try {
+				const profile = await this.providerSettingsManager.getProfile({ name: apiConfigName })
+				if (profile?.apiProvider) {
+					return profile
+				}
+			} catch (error) {
+				this.log(
+					`[resolveTaskApiConfiguration] Failed to load API profile "${apiConfigName}"; ` +
+						`using global default: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+		return apiConfiguration
+	}
+
+	/**
 	 * Set the PER-MODE API-config association for `mode` (Settings → Modes),
 	 * WITHOUT activating the profile or changing the global default (that is
 	 * Settings → Providers). Keeps all three sources of truth 1:1:

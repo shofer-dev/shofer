@@ -7,8 +7,23 @@ import type {
 	CheckpointDiffEntry,
 	CheckpointDiffOptions,
 	CheckpointRestoreOptions,
+	CreateTaskInput,
 	ServerEvent,
 } from "@shofer/types"
+
+/** Construction options for {@link ShoferApiAgent}. */
+export interface ShoferApiAgentOptions {
+	/**
+	 * Whether to honor the per-task `apiConfiguration` a controller ships with
+	 * {@link AgentApi.createTask}. `true` on a `shofer serve` node started WITHOUT
+	 * explicit CLI provider/model/api-key/base-url overrides, so the front-end's
+	 * API Configuration drives each task (and can differ per task). `false` when
+	 * the node has a manual CLI override — the node's own config always wins and
+	 * the incoming config is ignored. Defaults to `false` (the in-process/local
+	 * adapter, which never receives a remote config anyway).
+	 */
+	allowClientConfig?: boolean
+}
 
 /**
  * Live {@link AgentApi} backed by the in-process {@link ShoferAPI} (§11).
@@ -37,10 +52,23 @@ const FORWARDED_EVENTS = [
 ] as const
 
 export class ShoferApiAgent implements AgentApi {
-	constructor(private readonly api: ShoferAPI) {}
+	constructor(
+		private readonly api: ShoferAPI,
+		private readonly options: ShoferApiAgentOptions = {},
+	) {}
 
-	async createTask(input: { prompt: string; taskId?: string }): Promise<{ taskId: string }> {
-		const taskId = await this.api.startNewTask({ text: input.prompt, taskId: input.taskId })
+	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
+		// Apply the controller's per-task API Configuration only when this node has
+		// no local CLI override (`allowClientConfig`). `configuration` is a partial
+		// ShoferSettings; ProviderSettings is a subset of it, so it seeds the task's
+		// provider/model/base-url/key for this task.
+		const configuration =
+			this.options.allowClientConfig && input.apiConfiguration ? input.apiConfiguration : undefined
+		const taskId = await this.api.startNewTask({
+			text: input.prompt,
+			taskId: input.taskId,
+			configuration,
+		})
 		return { taskId }
 	}
 

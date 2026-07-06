@@ -120,7 +120,18 @@ describe("createRequestHandler (§11)", () => {
 		await run(mockReq("POST", "/api/v1/task", { prompt: "hello" }), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(201)
 		expect(JSON.parse(res.body)).toEqual({ taskId: "task-for-hello" })
-		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", taskId: undefined })
+		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", taskId: undefined, apiConfiguration: undefined })
+	})
+
+	it("POST /api/v1/task forwards the per-task apiConfiguration to createTask", async () => {
+		const res = mockRes()
+		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" }
+		await run(
+			mockReq("POST", "/api/v1/task", { prompt: "hello", apiConfiguration }),
+			res as unknown as ServerResponse,
+		)
+		expect(res.statusCode).toBe(201)
+		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", taskId: undefined, apiConfiguration })
 	})
 
 	it("400s on missing prompt", async () => {
@@ -179,7 +190,10 @@ describe("createRequestHandler (§11)", () => {
 
 	it("L3: checkpoint-diff 400s without a commitHash", async () => {
 		const res = mockRes()
-		await run(mockReq("POST", "/api/v1/task/t1/checkpoint-diff", { mode: "checkpoint" }), res as unknown as ServerResponse)
+		await run(
+			mockReq("POST", "/api/v1/task/t1/checkpoint-diff", { mode: "checkpoint" }),
+			res as unknown as ServerResponse,
+		)
 		expect(res.statusCode).toBe(400)
 		expect(api.getCheckpointDiff).not.toHaveBeenCalled()
 	})
@@ -215,7 +229,10 @@ describe("createRequestHandler (§11)", () => {
 
 	it("L3: revert/accept route to per-file vs all by relPath presence, 202", async () => {
 		const r1 = mockRes()
-		await run(mockReq("POST", "/api/v1/task/t1/changed-files/revert", { relPath: "a.ts" }), r1 as unknown as ServerResponse)
+		await run(
+			mockReq("POST", "/api/v1/task/t1/changed-files/revert", { relPath: "a.ts" }),
+			r1 as unknown as ServerResponse,
+		)
 		expect(r1.statusCode).toBe(202)
 		expect(api.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
 
@@ -224,7 +241,10 @@ describe("createRequestHandler (§11)", () => {
 		expect(api.revertAllChangedFiles).toHaveBeenCalledWith("t1")
 
 		const a1 = mockRes()
-		await run(mockReq("POST", "/api/v1/task/t1/changed-files/accept", { relPath: "a.ts" }), a1 as unknown as ServerResponse)
+		await run(
+			mockReq("POST", "/api/v1/task/t1/changed-files/accept", { relPath: "a.ts" }),
+			a1 as unknown as ServerResponse,
+		)
 		expect(api.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
 
 		const a2 = mockRes()

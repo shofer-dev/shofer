@@ -559,6 +559,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		host?: string
 		token?: string
 		version?: string
+		/** Honor the controller's per-task API Configuration (no local CLI override). */
+		allowClientConfig?: boolean
 	}): import("node:http").Server {
 		const serve = this.extensionModule?.serveHttpOverShoferApi
 		if (!serve) {

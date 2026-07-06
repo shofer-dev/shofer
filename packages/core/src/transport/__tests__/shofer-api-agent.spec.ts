@@ -17,7 +17,9 @@ describe("ShoferApiAgent (§11)", () => {
 			sendMessage: vi.fn(async () => {}),
 			cancelCurrentTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
-			getCheckpointDiff: vi.fn(async () => [{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } }]),
+			getCheckpointDiff: vi.fn(async () => [
+				{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } },
+			]),
 			getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" })),
 			getChangedFileDiff: vi.fn(async () => ({ original: "o", final: "f" })),
 			restoreCheckpoint: vi.fn(async () => {}),
@@ -36,6 +38,30 @@ describe("ShoferApiAgent (§11)", () => {
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
 			text: "hi",
 			taskId: undefined,
+			configuration: undefined,
+		})
+	})
+
+	it("createTask applies the client apiConfiguration when allowClientConfig is set", async () => {
+		const api = makeApi()
+		const agent = new ShoferApiAgent(api, { allowClientConfig: true })
+		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" } as never
+		await agent.createTask({ prompt: "hi", apiConfiguration })
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
+			text: "hi",
+			taskId: undefined,
+			configuration: apiConfiguration,
+		})
+	})
+
+	it("createTask ignores the client apiConfiguration when it has a CLI override (default)", async () => {
+		const api = makeApi()
+		const agent = new ShoferApiAgent(api) // allowClientConfig defaults to false
+		await agent.createTask({ prompt: "hi", apiConfiguration: { apiProvider: "openai" } as never })
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
+			text: "hi",
+			taskId: undefined,
+			configuration: undefined,
 		})
 	})
 

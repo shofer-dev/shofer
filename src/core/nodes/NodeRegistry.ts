@@ -10,6 +10,7 @@ import {
 	type CheckpointRestoreOptions,
 	type LoadBalancerPolicy,
 	type LoadSample,
+	type ProviderSettings,
 	type ServerEvent,
 	type ShoferAPI,
 	type ShoferMessage,
@@ -95,6 +96,13 @@ export interface RouteNewTaskInput {
 	worktreeDir?: string
 	/** Optional caller-preferred node; honored when enabled+assignable, else round-robin. */
 	preferredNodeId?: string
+	/**
+	 * The controller-resolved API Configuration for this task, shipped to a REMOTE
+	 * owner so the task runs on the same provider/model the front-end picked (a node
+	 * without a CLI override applies it; one with an override ignores it). Unused on
+	 * the Local path — the in-process task reads the provider's live config directly.
+	 */
+	apiConfiguration?: ProviderSettings
 }
 
 export interface NodeRegistryOptions {
@@ -300,7 +308,10 @@ export class NodeRegistry {
 		// Remote owner: the node runs the task; we only buffer/render it (Stage B).
 		// The INITIATING view focuses the new shadow (per-view focus) — other views
 		// are untouched and keep showing whatever they were on.
-		const { taskId } = await this.pool.createTaskOn(owner, { prompt: input.prompt })
+		const { taskId } = await this.pool.createTaskOn(owner, {
+			prompt: input.prompt,
+			apiConfiguration: input.apiConfiguration,
+		})
 		this.ensureShadow(taskId, owner, input.prompt)
 		if (view) this.focusShadow(view, taskId)
 		return taskId

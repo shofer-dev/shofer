@@ -1,7 +1,7 @@
 import http from "node:http"
 import os from "node:os"
 
-import type { AgentApi, CheckpointDiffOptions, CheckpointRestoreOptions } from "@shofer/types"
+import type { AgentApi, CheckpointDiffOptions, CheckpointRestoreOptions, ProviderSettings } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -57,7 +57,7 @@ export interface HttpServerOptions {
  *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) (open)
  *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
  *   GET  /api/v1/event               → SSE event stream
- *   POST /api/v1/task                → { prompt, taskId? } → { taskId }
+ *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId? } (interactive approval)
@@ -129,7 +129,13 @@ export function createRequestHandler(
 		if (method === "POST" && path === `${base}/task`) {
 			const body = await readJson(req)
 			if (typeof body.prompt !== "string") return send(res, 400, { error: "prompt is required" })
-			const result = await api.createTask({ prompt: body.prompt, taskId: body.taskId as string | undefined })
+			const result = await api.createTask({
+				prompt: body.prompt,
+				taskId: body.taskId as string | undefined,
+				// Per-task API Configuration shipped by the controller. Honored only
+				// when this node has no local CLI override (gated in ShoferApiAgent).
+				apiConfiguration: body.apiConfiguration as ProviderSettings | undefined,
+			})
 			return send(res, 201, result)
 		}
 
