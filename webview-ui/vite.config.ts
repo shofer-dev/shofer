@@ -148,6 +148,11 @@ export default defineConfig(({ mode }) => {
 				external: ["vscode"],
 				input: {
 					index: resolve(__dirname, "index.html"),
+					// Standalone host for a single plugin UI bundle opened in a WebviewPanel
+					// (editor tab) via ctx.ui.showPanel (design §6.8). Emits
+					// build/plugin-panel.html + build/assets/pluginPanel.js; the extension's
+					// PluginPanelManager references the built JS/CSS via asWebviewUri.
+					pluginPanel: resolve(__dirname, "plugin-panel.html"),
 				},
 				output: {
 					entryFileNames: `assets/[name].js`,
