@@ -17,7 +17,7 @@
  * `ctx.ai` — the grant alone gates it (no consent step).
  */
 
-import type { PluginUiSender } from "@shofer/types"
+import type { PluginPanelOptions, PluginUiSender } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
 
@@ -29,6 +29,12 @@ import { warnPlugin } from "./plugin-warnings.js"
 export interface PluginUiProvider {
 	/** Deliver `message` to the named plugin's mounted UI component(s) (scoped by name). */
 	post(pluginName: string, message: unknown): void | Promise<void>
+	/**
+	 * Open — or focus — the named plugin's UI bundle in a standalone editor panel (design
+	 * §6.8). Optional: a host without a panel surface (headless/pure-core) omits it, in
+	 * which case {@link PluginUiSender.showPanel} is a warned no-op.
+	 */
+	showPanel?(pluginName: string, opts?: PluginPanelOptions): void | Promise<void>
 }
 
 /**
@@ -46,6 +52,22 @@ export function createPluginUi(pluginName: string, provider: PluginUiProvider): 
 				})
 			} catch (error) {
 				warnPlugin(`[plugin:${pluginName}] ctx.ui.postMessage failed: ${String(error)}`)
+			}
+		},
+		showPanel(opts?: PluginPanelOptions): void {
+			// Gated by the same `permissions.ui` grant as the rest of `ctx.ui` (this whole
+			// sender is only built for a UI-granted plugin). No-op + warn when the host wired
+			// no panel surface, so a plugin's call is safe on any host. Fire-and-forget.
+			if (!provider.showPanel) {
+				warnPlugin(`[plugin:${pluginName}] ctx.ui.showPanel: host has no panel surface (ignored)`)
+				return
+			}
+			try {
+				void Promise.resolve(provider.showPanel(pluginName, opts)).catch((error) => {
+					warnPlugin(`[plugin:${pluginName}] ctx.ui.showPanel delivery failed: ${String(error)}`)
+				})
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.ui.showPanel failed: ${String(error)}`)
 			}
 		},
 	}

@@ -446,6 +446,23 @@ export interface PluginService {
 export interface PluginUiSender {
 	/** Push a message to this plugin's mounted UI component(s) (scoped to the plugin). */
 	postMessage(message: unknown): void
+	/**
+	 * Open — or focus, if already open — this plugin's UI bundle in a standalone editor
+	 * panel (a `WebviewPanel` tab beside the editor), rather than an in-sidebar mount
+	 * (design §6.8). The panel hosts the plugin's built UI bundle for {@link PluginPanelOptions.region}
+	 * (default `"sidebar-panel"`) and is wired to the SAME scoped, name-tagged channel as
+	 * the sidebar mount — {@link postMessage} pushes and {@link ShoferPlugin.onUiMessage}
+	 * receives reach it too. Fire-and-forget; a no-op on a host with no panel surface.
+	 */
+	showPanel(opts?: PluginPanelOptions): void
+}
+
+/** Options for {@link PluginUiSender.showPanel} (design §6.8). */
+export interface PluginPanelOptions {
+	/** Editor-tab title. Defaults to the plugin's name. */
+	title?: string
+	/** Which contributed UI region's bundle to host. Defaults to `"sidebar-panel"`. */
+	region?: string
 }
 
 /**

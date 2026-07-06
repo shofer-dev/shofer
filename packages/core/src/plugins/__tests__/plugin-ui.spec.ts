@@ -89,8 +89,38 @@ describe("plugin-ui — createPluginUi (unit)", () => {
 			{ name: "p", message: { type: "state", n: 1 } },
 			{ name: "p", message: "hello" },
 		])
-		// Surface exposes ONLY postMessage — no host internals leak.
-		expect(Object.keys(ui)).toEqual(["postMessage"])
+		// Surface exposes ONLY the scoped push + panel-open — no host internals leak.
+		expect(Object.keys(ui)).toEqual(["postMessage", "showPanel"])
+	})
+
+	it("delegates showPanel to the host provider, name-tagged, and is a safe no-op without one", () => {
+		const opened: Array<{ name: string; opts: unknown }> = []
+		const provider: PluginUiProvider = {
+			post() {},
+			showPanel(name, opts) {
+				opened.push({ name, opts })
+			},
+		}
+		const ui = createPluginUi("p", provider)
+		ui.showPanel({ title: "My Panel" })
+		ui.showPanel()
+		expect(opened).toEqual([
+			{ name: "p", opts: { title: "My Panel" } },
+			{ name: "p", opts: undefined },
+		])
+
+		// A host with no panel surface: showPanel must never throw (warned no-op).
+		const uiNoPanel = createPluginUi("p", { post() {} })
+		expect(() => uiNoPanel.showPanel({ title: "x" })).not.toThrow()
+
+		// A throwing/rejecting provider is isolated (a closed webview never breaks the hook).
+		const uiThrows = createPluginUi("p", {
+			post() {},
+			showPanel() {
+				throw new Error("panel gone")
+			},
+		})
+		expect(() => uiThrows.showPanel()).not.toThrow()
 	})
 
 	it("swallows a delivery failure (a closed webview never breaks the hook)", () => {
