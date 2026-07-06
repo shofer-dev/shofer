@@ -97,13 +97,22 @@ function PluginContributionMount({
 
 	useEffect(() => {
 		let cancelled = false
+		console.log(
+			`[plugin:${contribution.pluginName}] loading UI component for region "${region}" (componentId=${contribution.componentId}, source=${contribution.source ?? "(co-bundled)"})`,
+		)
 		resolvePluginComponent(contribution)
 			.then((resolved) => {
-				if (!cancelled) setComponent(() => resolved ?? null)
+				if (cancelled) return
+				setComponent(() => resolved ?? null)
+				console.log(
+					`[plugin:${contribution.pluginName}] UI component for "${region}" ${resolved ? "loaded ✓" : "resolved to NOTHING (no default/component export?)"}`,
+				)
 			})
 			.catch((error) => {
 				if (!cancelled) setComponent(null)
-				console.warn(`[plugin:${contribution.pluginName}] failed to load UI component:`, error)
+				// This is the usual failure when the shared-React shims aren't served
+				// (import map → `react.js` 404) — the plugin's `import "react"` rejects here.
+				console.warn(`[plugin:${contribution.pluginName}] failed to load UI component for "${region}":`, error)
 			})
 		return () => {
 			cancelled = true

@@ -2557,6 +2557,29 @@ export class ShoferProvider
 			? (absolutePath: string) => String(webview.asWebviewUri(vscode.Uri.file(absolutePath)))
 			: undefined
 		const contributions = manager.getContributedUiContributions(resolveSource)
+		// Diagnostics (output channel) — the webview-side load result is a console.warn in
+		// the webview devtools, invisible here; this shows whether the extension produced
+		// and pushed contributions with a resolvable source at all.
+		if (contributions.length === 0) {
+			const uiPlugins = manager
+				.listPlugins()
+				.filter((p) => (p.manifest.permissions?.ui?.length ?? 0) > 0)
+				.map((p) => `${p.name}(enabled=${p.enabled},inactive=${p.disabledReason ?? "no"})`)
+			this.log(
+				`[plugin-ui] pushing 0 UI contributions (webview ${webview ? "attached" : "DETACHED"}). ` +
+					`Plugins declaring permissions.ui: ${uiPlugins.length ? uiPlugins.join(", ") : "(none)"}`,
+			)
+		} else {
+			this.log(
+				`[plugin-ui] pushing ${contributions.length} UI contribution(s) (webview ${webview ? "attached" : "DETACHED"}): ` +
+					contributions
+						.map(
+							(c) =>
+								`${c.pluginName}:${c.region}[${c.componentId}] ${c.source ? "src=" + c.source : "NO-SOURCE(co-bundled fallback)"}`,
+						)
+						.join(" | "),
+			)
+		}
 		await this.postMessageToWebview({
 			type: "pluginUiContributions",
 			pluginUiContributions: { contributions },

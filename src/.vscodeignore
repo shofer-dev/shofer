@@ -20,6 +20,10 @@
 !webview-ui/build/assets/fonts/*.woff
 !webview-ui/build/assets/fonts/*.woff2
 !webview-ui/build/assets/fonts/*.ttf
+# Shared-React shims for plugin UI bundles (the prod import map resolves `react`,
+# `react-dom`, `react/jsx-runtime`, … to these). Without them, an external plugin UI
+# bundle's `import "react"` 404s and the component never loads → no plugin UI.
+!webview-ui/build/plugin-host/*.js
 
 # Exclude source maps from webview build (Vite generates these; not needed at runtime)
 webview-ui/build/**/*.map
