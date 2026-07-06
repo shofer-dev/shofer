@@ -161,6 +161,7 @@ program
 	.option("--base-url <url>", "Base URL for the API provider (e.g., http://localhost:30081/v1 for llm-router)")
 	.option("-m, --model <model>", "Model to use")
 	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
+	.option("-q, --quiet", "Suppress the live per-task activity log on stderr", false)
 	.option("-d, --debug", "Enable debug output", false)
 	.action(
 		async (options: {
@@ -173,6 +174,7 @@ program
 			baseUrl?: string
 			model?: string
 			token?: string
+			quiet?: boolean
 			debug?: boolean
 		}) => {
 			await serve(options)
@@ -223,18 +225,20 @@ pluginCommand
 	.description("Install a plugin from a .shofer-plugin archive, a plugin directory, or an http(s) URL")
 	.option("--overwrite", "Replace an already-installed plugin of the same name", false)
 	.option("--enable", "Enable the plugin immediately after installing", false)
-	.option("--allow-insecure-http", "Allow a plain http:// URL from a non-localhost host (https is required by default)", false)
-	.action(
-		async (source: string, options: { overwrite?: boolean; enable?: boolean; allowInsecureHttp?: boolean }) => {
-			await runPluginAction(() =>
-				pluginInstall(source, {
-					overwrite: options.overwrite,
-					enable: options.enable,
-					allowInsecureHttp: options.allowInsecureHttp,
-				}),
-			)
-		},
+	.option(
+		"--allow-insecure-http",
+		"Allow a plain http:// URL from a non-localhost host (https is required by default)",
+		false,
 	)
+	.action(async (source: string, options: { overwrite?: boolean; enable?: boolean; allowInsecureHttp?: boolean }) => {
+		await runPluginAction(() =>
+			pluginInstall(source, {
+				overwrite: options.overwrite,
+				enable: options.enable,
+				allowInsecureHttp: options.allowInsecureHttp,
+			}),
+		)
+	})
 
 pluginCommand
 	.command("list")

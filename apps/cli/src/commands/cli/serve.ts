@@ -1,7 +1,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 
-import { getProviderDefaultModelId } from "@shofer/types"
+import { getProviderDefaultModelId, ShoferEventName, type TokenUsage } from "@shofer/types"
 
 import { ExtensionHost, type ExtensionHostOptions } from "@/agent/index.js"
 import { getDefaultExtensionPath } from "@/lib/utils/extension.js"
@@ -22,6 +22,8 @@ export interface ServeOptions {
 	debug?: boolean
 	/** Bearer token required on `/api/v1/*`. Falls back to `SHOFER_NODE_TOKEN`. */
 	token?: string
+	/** Suppress the live per-task activity log on stderr (on by default). */
+	quiet?: boolean
 }
 
 /**
@@ -86,9 +88,46 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 			(hasOverride ? `API config: pinned to ${provider} (CLI override)` : "API config: per-task from controller"),
 	)
 
+	// Live per-task activity on stderr. Headless mode stubs console.log/warn/info to
+	// no-ops (ExtensionHost.setupQuietMode), so a running task is otherwise invisible
+	// without `--debug` (which only writes ~/.shofer/cli-debug.log). stderr survives
+	// quiet mode, so a concise lifecycle line per task confirms the node is working.
+	if (!options.quiet) {
+		wireActivityLog(extHost.api)
+	}
+
 	await new Promise<void>((resolve) => {
 		const shutdown = () => server.close(() => resolve())
 		process.on("SIGINT", shutdown)
 		process.on("SIGTERM", shutdown)
+	})
+}
+
+/**
+ * Subscribe to the node's task lifecycle and print one concise `[shofer]` line per
+ * event to **stderr** (not suppressed by headless quiet mode). Deliberately terse —
+ * created / started / completed (with tokens + cost) / aborted / error — so a test
+ * node shows it's doing work without the volume of `--debug`'s file log.
+ */
+function wireActivityLog(api: ExtensionHost["api"]): void {
+	const short = (id: string) => id.slice(0, 8)
+	api.on(ShoferEventName.TaskCreated, (taskId: string) => {
+		console.error(`[shofer] task ${short(taskId)} created`)
+	})
+	api.on(ShoferEventName.TaskStarted, (taskId: string) => {
+		console.error(`[shofer] task ${short(taskId)} started`)
+	})
+	api.on(ShoferEventName.TaskCompleted, (taskId: string, usage: TokenUsage) => {
+		const cost = usage?.totalCost != null ? `$${usage.totalCost.toFixed(4)}` : "?"
+		console.error(
+			`[shofer] task ${short(taskId)} completed · ` +
+				`${usage?.totalTokensIn ?? "?"} in / ${usage?.totalTokensOut ?? "?"} out · ${cost}`,
+		)
+	})
+	api.on(ShoferEventName.TaskAborted, (taskId: string, info: { reason: string }) => {
+		console.error(`[shofer] task ${short(taskId)} aborted (${info?.reason ?? "?"})`)
+	})
+	api.on(ShoferEventName.TaskError, (taskId: string, errorType: string) => {
+		console.error(`[shofer] task ${short(taskId)} error: ${errorType}`)
 	})
 }
