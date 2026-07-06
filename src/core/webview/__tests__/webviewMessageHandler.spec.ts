@@ -402,7 +402,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
-				shofer: {},
+				shofer: mockModels,
 			},
 			values: undefined,
 		})
@@ -488,7 +488,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
-				shofer: {},
+				shofer: mockModels,
 			},
 			values: undefined,
 		})
@@ -510,6 +510,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockResolvedValueOnce(mockModels) // unbound
 			.mockResolvedValueOnce(mockModels) // vercel-ai-gateway
+			.mockResolvedValueOnce(mockModels) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
 		await webviewMessageHandler(mockShoferProvider, {
@@ -543,7 +544,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 				lmstudio: {},
 				"vercel-ai-gateway": mockModels,
 				poe: {},
-				shofer: {},
+				shofer: mockModels,
 			},
 			values: undefined,
 		})
@@ -556,6 +557,7 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			.mockRejectedValueOnce(new Error("Requesty API error")) // requesty
 			.mockRejectedValueOnce(new Error("Unbound error")) // unbound
 			.mockRejectedValueOnce(new Error("Vercel AI Gateway error")) // vercel-ai-gateway
+			.mockRejectedValueOnce(new Error("Shofer error")) // shofer
 			.mockRejectedValueOnce(new Error("LiteLLM connection failed")) // litellm
 
 		await webviewMessageHandler(mockShoferProvider, {
@@ -589,6 +591,13 @@ describe("webviewMessageHandler - requestRouterModels", () => {
 			success: false,
 			error: "Vercel AI Gateway error",
 			values: { provider: "vercel-ai-gateway" },
+		})
+
+		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
+			type: "singleRouterModelFetchResponse",
+			success: false,
+			error: "Shofer error",
+			values: { provider: "shofer" },
 		})
 
 		expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
