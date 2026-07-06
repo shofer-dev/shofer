@@ -179,6 +179,24 @@ export class CustomToolRegistry {
 	}
 
 	/**
+	 * Whether tool `id` is dispatchable/executable right now. **Plugin-contributed tools**
+	 * (registered with `source: "plugin"` in build-tools §10) are always executable — they
+	 * are advertised to the model independent of the `customTools` experiment, so gating
+	 * their execution on it would offer the model a tool it then can't call ("Unknown
+	 * tool"). User custom-tool *files* remain gated on `customToolsExperiment`.
+	 */
+	isDispatchable(id: string, customToolsExperiment: boolean): boolean {
+		const t = this.tools.get(id)
+		return !!t && (t.source === "plugin" || customToolsExperiment)
+	}
+
+	/** The dispatchable definition for `id` (see {@link isDispatchable}), else undefined. */
+	getDispatchable(id: string, customToolsExperiment: boolean): CustomToolDefinition | undefined {
+		const t = this.tools.get(id)
+		return t && (t.source === "plugin" || customToolsExperiment) ? t : undefined
+	}
+
+	/**
 	 * Check if a tool exists.
 	 */
 	has(id: string): boolean {

@@ -622,7 +622,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			// This avoids executing an invalid tool_use block and prevents duplicate/fragmented
 			// error reporting.
 			if (!block.partial) {
-				const customTool = stateExperiments?.customTools ? customToolRegistry.get(block.name) : undefined
+				const customTool = customToolRegistry.getDispatchable(block.name, !!stateExperiments?.customTools)
 				const isKnownTool = isValidToolName(String(block.name), stateExperiments)
 				if (isKnownTool && !block.nativeArgs && !customTool) {
 					// Include the parser's specific failure reason when available.
@@ -875,7 +875,7 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			if (!block.partial) {
 				// Check if this is a custom tool - if so, record as "custom_tool" (like MCP tools)
-				const isCustomTool = stateExperiments?.customTools && customToolRegistry.has(block.name)
+				const isCustomTool = customToolRegistry.isDispatchable(block.name, !!stateExperiments?.customTools)
 				const recordName = isCustomTool ? "custom_tool" : block.name
 				shofer.recordToolUsage(recordName)
 				TelemetryService.instance.captureToolUsage(shofer.taskId, recordName)
@@ -1483,7 +1483,13 @@ export async function presentAssistantMessage(shofer: Task) {
 						break
 					}
 
-					const customTool = stateExperiments?.customTools ? customToolRegistry.get(block.name) : undefined
+					// Plugin-contributed tools (e.g. `ask_live_memory`) are dispatchable
+					// independent of the customTools experiment (they are advertised to the
+					// model unconditionally); user custom-tool files stay experiment-gated.
+					const customTool = customToolRegistry.getDispatchable(
+						block.name,
+						!!stateExperiments?.customTools,
+					)
 
 					if (customTool) {
 						try {

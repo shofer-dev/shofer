@@ -19,6 +19,36 @@ describe("CustomToolRegistry", () => {
 		registry = new CustomToolRegistry()
 	})
 
+	describe("dispatchability (plugin vs file tools + customTools experiment)", () => {
+		const tool = (name: string) => ({
+			name,
+			description: `tool ${name}`,
+			parameters: z.object({}),
+			execute: async () => "ok",
+		})
+
+		it("dispatches a plugin-sourced tool even when the customTools experiment is OFF", () => {
+			registry.register(tool("ask_live_memory"), "plugin")
+			// This is the regression: a plugin tool must be executable regardless of the
+			// experiment (it is advertised to the model unconditionally).
+			expect(registry.isDispatchable("ask_live_memory", false)).toBe(true)
+			expect(registry.getDispatchable("ask_live_memory", false)?.name).toBe("ask_live_memory")
+		})
+
+		it("gates a file-sourced tool on the customTools experiment", () => {
+			registry.register(tool("user_tool"), "/abs/path/user_tool.ts")
+			expect(registry.isDispatchable("user_tool", false)).toBe(false)
+			expect(registry.getDispatchable("user_tool", false)).toBeUndefined()
+			expect(registry.isDispatchable("user_tool", true)).toBe(true)
+			expect(registry.getDispatchable("user_tool", true)?.name).toBe("user_tool")
+		})
+
+		it("returns not-dispatchable for an unknown tool", () => {
+			expect(registry.isDispatchable("nope", true)).toBe(false)
+			expect(registry.getDispatchable("nope", true)).toBeUndefined()
+		})
+	})
+
 	describe("validation", () => {
 		it("should accept a valid tool definition", () => {
 			const validTool = {
