@@ -638,7 +638,9 @@ export class NodeRegistry {
 				return {
 					...def,
 					status: disabled ? "disconnected" : "running",
-					isActive: activeNodeId === LOCAL_NODE_ID,
+					// A disabled node is out of the pool — never "active", even if it was
+					// the last-resolved active node (avoids showing active + disabled at once).
+					isActive: !disabled && activeNodeId === LOCAL_NODE_ID,
 					disabled,
 					agentVersion: this.controllerVersion,
 				}
@@ -650,7 +652,7 @@ export class NodeRegistry {
 				latencyMs: conn?.latencyMs,
 				agentVersion: conn?.agentVersion,
 				error: conn?.error,
-				isActive: activeNodeId === def.id,
+				isActive: !disabled && activeNodeId === def.id,
 				disabled,
 				hasToken: this.hasTokenCache.has(def.id),
 			}
