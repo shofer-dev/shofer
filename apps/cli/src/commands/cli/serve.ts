@@ -16,6 +16,8 @@ export interface ServeOptions {
 	extension?: string
 	apiKey?: string
 	provider?: string
+	/** Base URL for the API provider (e.g. `http://localhost:30081/v1` for llm-router). */
+	baseUrl?: string
 	model?: string
 	debug?: boolean
 	/** Bearer token required on `/api/v1/*`. Falls back to `SHOFER_NODE_TOKEN`. */
@@ -42,6 +44,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		provider,
 		model: options.model ?? getProviderDefaultModelId(provider),
 		apiKey: options.apiKey,
+		baseUrl: options.baseUrl,
 		workspacePath: path.resolve(options.workspace || process.cwd()),
 		extensionPath: path.resolve(options.extension || getDefaultExtensionPath(__dirname)),
 		nonInteractive: true,
@@ -54,6 +57,22 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 	const extHost = new ExtensionHost(hostOptions)
 	await extHost.activate()
 	const server = extHost.serve({ port, host, token })
+
+	// Await the actual bind before claiming success — `listen()` is async, so without
+	// this a taken port (EADDRINUSE) would print "serving on …" and then silently fail,
+	// leaving requests to hit whatever else owns the port. Fail loudly instead.
+	await new Promise<void>((resolve, reject) => {
+		server.once("listening", () => resolve())
+		server.once("error", (err) => reject(err))
+	}).catch((err: NodeJS.ErrnoException) => {
+		console.error(
+			err.code === "EADDRINUSE"
+				? `[shofer] port ${port} on ${host} is already in use — pick a free port with --port`
+				: `[shofer] failed to start server: ${err.message}`,
+		)
+		process.exit(1)
+	})
+
 	console.error(`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""}`)
 
 	await new Promise<void>((resolve) => {

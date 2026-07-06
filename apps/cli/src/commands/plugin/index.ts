@@ -123,7 +123,7 @@ export interface PluginListEntry {
 	name: string
 	version: string
 	description?: string
-	scope: "global" | "project"
+	scope: "bundled" | "global" | "project"
 	enabled: boolean
 	/** Enabled but inert (unmet/cyclic dependency), design §14.3. */
 	disabledReason?: string

@@ -158,6 +158,7 @@ program
 	.option("-e, --extension <path>", "Path to the extension bundle directory")
 	.option("-k, --api-key <key>", "API key for the LLM provider")
 	.option("--provider <provider>", "API provider (defaults to openrouter)")
+	.option("--base-url <url>", "Base URL for the API provider (e.g., http://localhost:30081/v1 for llm-router)")
 	.option("-m, --model <model>", "Model to use")
 	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
 	.option("-d, --debug", "Enable debug output", false)
@@ -169,6 +170,7 @@ program
 			extension?: string
 			apiKey?: string
 			provider?: string
+			baseUrl?: string
 			model?: string
 			token?: string
 			debug?: boolean

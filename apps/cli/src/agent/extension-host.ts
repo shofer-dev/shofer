@@ -114,11 +114,12 @@ interface ExtensionModule {
 		api: unknown,
 		streams: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream; agentVersion?: string },
 	) => Promise<void>
-	/** §11 — start the HTTP/SSE server over the activated ShoferAPI. */
+	/** §11 — start the HTTP/SSE server over the activated ShoferAPI. Returns the node
+	 *  `http.Server` so the caller can await `listening`/`error` before reporting success. */
 	serveHttpOverShoferApi?: (
 		api: unknown,
 		opts: { port: number; host?: string; token?: string; version?: string },
-	) => { close: (cb?: () => void) => void }
+	) => import("node:http").Server
 }
 
 interface WebviewViewProvider {
@@ -558,7 +559,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		host?: string
 		token?: string
 		version?: string
-	}): { close: (cb?: () => void) => void } {
+	}): import("node:http").Server {
 		const serve = this.extensionModule?.serveHttpOverShoferApi
 		if (!serve) {
 			throw new Error("ExtensionHost: this extension bundle does not export serveHttpOverShoferApi")
