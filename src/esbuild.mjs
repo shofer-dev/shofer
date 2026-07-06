@@ -294,8 +294,21 @@ async function main() {
 		outfile: "dist/extension.js",
 		// Prepend the navigator shim so it runs before any bundled module evaluates
 		// (neutralizes VS Code's throwing `navigator` proxy in the Node ext host;
-		// see navigator-shim.js).
-		banner: { js: fs.readFileSync(path.join(__dirname, "navigator-shim.js"), "utf8") },
+		// see navigator-shim.js). Then define a CJS-safe `import.meta.url`: bundled ESM
+		// deps (notably web-tree-sitter's Emscripten glue) call
+		// `createRequire(import.meta.url)`, but `import.meta` is `{}` in CJS output, so
+		// that becomes `createRequire(undefined)` and throws — breaking ALL tree-sitter
+		// code indexing. Point it at the bundle's own file URL (dist/extension.js), which
+		// also makes web-tree-sitter resolve `tree-sitter.wasm` from dist/ (where it ships).
+		banner: {
+			js:
+				fs.readFileSync(path.join(__dirname, "navigator-shim.js"), "utf8") +
+				"\nconst __shoferImportMetaUrl = require('url').pathToFileURL(__filename).href;\n",
+		},
+		define: {
+			...buildOptions.define,
+			"import.meta.url": "__shoferImportMetaUrl",
+		},
 		// global-agent must be external because it dynamically patches Node.js http/https modules
 		// which breaks when bundled. It needs access to the actual Node.js module instances.
 		// undici must be bundled because our VSIX is packaged with `--no-dependencies`.
