@@ -3,11 +3,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var DOT_COLOR = {
   Standby: "var(--vscode-descriptionForeground)",
-  Initializing: "var(--vscode-charts-yellow, #d7ba7d)",
-  Ready: "var(--vscode-charts-green, #89d185)",
-  Busy: "var(--vscode-charts-yellow, #d7ba7d)",
-  Error: "var(--vscode-errorForeground, #f14c4c)",
-  Stopping: "var(--vscode-charts-orange, #d18616)"
+  Initializing: "#eab308",
+  // yellow-500
+  Ready: "#22c55e",
+  // green-500
+  Busy: "#eab308",
+  // yellow-500
+  Error: "#ef4444",
+  // red-500
+  Stopping: "#f59e0b"
+  // amber-500
 };
 var PULSING = /* @__PURE__ */ new Set(["Initializing", "Busy", "Stopping"]);
 var P = {

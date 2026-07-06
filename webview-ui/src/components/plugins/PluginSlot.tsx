@@ -1,6 +1,12 @@
 import React, { Component, useEffect, useMemo, useRef, useState } from "react"
 
-import type { PluginUIApi, PluginUIContext, PluginUiContribution, PluginUiRegion, PluginUiTaskSummary } from "@shofer/types"
+import type {
+	PluginUIApi,
+	PluginUIContext,
+	PluginUiContribution,
+	PluginUiRegion,
+	PluginUiTaskSummary,
+} from "@shofer/types"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 
@@ -24,10 +30,7 @@ import { postPluginUiMessage, subscribePluginUiMessages } from "./pluginUiChanne
  */
 
 /** Error boundary around one plugin component: on throw, render nothing + warn once. */
-class PluginErrorBoundary extends Component<
-	{ pluginName: string; children: React.ReactNode },
-	{ crashed: boolean }
-> {
+class PluginErrorBoundary extends Component<{ pluginName: string; children: React.ReactNode }, { crashed: boolean }> {
 	constructor(props: { pluginName: string; children: React.ReactNode }) {
 		super(props)
 		this.state = { crashed: false }
@@ -64,10 +67,7 @@ function usePluginUiApi(pluginName: string, region: PluginUiRegion, task: Plugin
 		return unsubscribe
 	}, [pluginName])
 
-	const context = useMemo<PluginUIContext>(
-		() => ({ region, pluginName, task }),
-		[region, pluginName, task],
-	)
+	const context = useMemo<PluginUIContext>(() => ({ region, pluginName, task }), [region, pluginName, task])
 
 	return useMemo<PluginUIApi>(
 		() => ({
@@ -117,7 +117,9 @@ function PluginContributionMount({
 		return () => {
 			cancelled = true
 		}
-		// componentId + source fully identify the module to load.
+		// componentId + source fully identify the module to load; `region` appears only
+		// in log strings, so reloading when it changes (but the module doesn't) is waste.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [contribution, contribution.componentId, contribution.source])
 
 	if (!Component) return null
