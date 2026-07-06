@@ -406,12 +406,12 @@ numbers are local to this document):
   tool assembly, `transformSystemPrompt` threads the system prompt, and
   `dispatchEvent` receives every captured event (via `TelemetryService.onEvent`).
 - **§10 HTTP/SDK** — `createHttpServer` + a typed `ShoferHttpClient` that _implements
-  `AgentApi`_ (so client/server can't drift) + a `shofer serve` entrypoint.
-- **§11 ACP** — the full agent-side ACP (`AcpAgentServer` over `AgentApi` + mapping)
-  and a `shofer acp` entrypoint. _Deferred:_ swapping the direct JSON-RPC framing for
-  `@zed-industries/agent-client-protocol` (not in this registry), wiring
-  `session/request_permission` (needs an approval surface on `AgentApi`), and
-  live-client validation.
+  `AgentApi`_ (so client/server can't drift) + a `shofer serve` entrypoint. The
+  transport-agnostic surface, its full method set, and the HTTP/SSE routes are specified
+  in **[`agentapi.md`](./agentapi.md)** (the source of truth for the control plane).
+- **§11 ACP** — the full agent-side ACP (`AcpAgentServer` over `AgentApi` + mapping) and a
+  `shofer acp` entrypoint. The method map, event/permission mapping, and how ACP differs
+  from `AgentApi` are in **[`acp.md`](./acp.md)**; deferred items are tracked there.
 - **§12 distributed** — see below; the Category-I-over-RPC split adapter, the session
   transport, and the controller-side `ExecutorPool` (root-task routing + merged view)
   are built.
