@@ -552,51 +552,44 @@ export const ChatRowContent = ({
 	// are called unconditionally (React rules-of-hooks).  Each is keyed on
 	// message.text or message.ts so it re-evaluates only when the data changes,
 	// skipping the JSON.parse / reverse-scan work on every parent re-render.
-	const parsedRagSearch = useMemo(() => {
-		try {
-			return message.text
-				? (JSON.parse(message.text) as {
-						content: {
-							query: string
-							results: Array<{
-								filePath: string
-								score: number
-								startLine: number
-								endLine: number
-								codeChunk: string
-							}>
-						}
-					} | null)
-				: null
-		} catch (error) {
-			console.error("Failed to parse ragSearch content:", error)
-			return null
-		}
-	}, [message.text])
+	// These hooks run unconditionally on every message render (React rules-of-hooks),
+	// so message.text is only JSON for rag_search_result/git_search_result say types.
+	// safeJsonParse returns undefined for non-JSON text instead of throwing+logging.
+	const parsedRagSearch = useMemo(
+		() =>
+			safeJsonParse<{
+				content: {
+					query: string
+					results: Array<{
+						filePath: string
+						score: number
+						startLine: number
+						endLine: number
+						codeChunk: string
+					}>
+				}
+			}>(message.text),
+		[message.text],
+	)
 
-	const parsedGitSearch = useMemo(() => {
-		try {
-			return message.text
-				? (JSON.parse(message.text) as {
-						content: {
-							query: string
-							results: Array<{
-								commit_hash: string
-								short_hash: string
-								author: string
-								author_date: string
-								subject: string
-								body: string
-								score: number
-							}>
-						}
-					} | null)
-				: null
-		} catch (error) {
-			console.error("Failed to parse gitSearch content:", error)
-			return null
-		}
-	}, [message.text])
+	const parsedGitSearch = useMemo(
+		() =>
+			safeJsonParse<{
+				content: {
+					query: string
+					results: Array<{
+						commit_hash: string
+						short_hash: string
+						author: string
+						author_date: string
+						subject: string
+						body: string
+						score: number
+					}>
+				}
+			}>(message.text),
+		[message.text],
+	)
 
 	const rateLimitWaitSeconds = useMemo(() => {
 		if (!message.text) return undefined
