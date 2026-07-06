@@ -52,12 +52,6 @@ export interface ShoferNodeDef {
 	 * connected or used for tasks (applies to Local too) until re-enabled.
 	 */
 	disabled?: boolean
-	/**
-	 * Remote only: which headless-compatible LLM provider the node uses
-	 * (`llm-router` by default, or a direct upstream). The VS Code LM provider
-	 * can't run remotely. See `docs/remote-agents.md` §6b.
-	 */
-	remoteProvider?: string
 }
 
 /** A node definition plus its live status — pushed to the webview (no secrets). */

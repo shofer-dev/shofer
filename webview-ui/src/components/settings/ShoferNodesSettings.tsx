@@ -46,12 +46,11 @@ interface NodeForm {
 	label: string
 	host: string
 	tls: boolean
-	remoteProvider: string
 	token: string
 }
 
 function emptyForm(): NodeForm {
-	return { id: "", label: "", host: "", tls: false, remoteProvider: "llm-router", token: "" }
+	return { id: "", label: "", host: "", tls: false, token: "" }
 }
 
 function post(shoferNode: ShoferNodeRequest) {
@@ -85,7 +84,6 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 			label: n.label,
 			host: n.host ?? "",
 			tls: n.tls ?? false,
-			remoteProvider: n.remoteProvider ?? "llm-router",
 			token: "", // never pre-filled; leave blank to keep the existing token
 		})
 
@@ -98,7 +96,6 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 			label: form.label.trim() || form.host || id,
 			host: form.host.trim(),
 			tls: form.tls,
-			remoteProvider: form.remoteProvider.trim() || undefined,
 		}
 		post({ action: "upsert", node, token: form.token ? form.token : undefined })
 		setForm(null)
@@ -277,14 +274,6 @@ export const ShoferNodesSettings = (props: HTMLAttributes<HTMLDivElement>) => {
 							className="w-full">
 							<label className="block font-medium mb-1">Auth token</label>
 						</VSCodeTextField>
-						<label className="flex flex-col gap-1 text-sm">
-							<span className="font-medium">Remote LLM provider</span>
-							<Input
-								value={form.remoteProvider}
-								placeholder="llm-router"
-								onChange={(e) => setForm({ ...form, remoteProvider: e.target.value })}
-							/>
-						</label>
 						<div className="flex items-center gap-2 text-sm">
 							<ToggleSwitch
 								checked={form.tls}
