@@ -72,16 +72,47 @@ export class ShoferHandler extends OpenRouterHandler {
 		// with HTTP 400, which is the correct behaviour — we want to know.
 		const conversationId = metadata!.taskId
 
-		// Patch the OpenAI client so every downstream call to
-		// `chat.completions.create` includes `conversation_id`.
+		// Patch the OpenAI client so every downstream `chat.completions.create`:
+		//  1. carries `conversation_id` (llm-router requires it), and
+		//  2. (streaming only) has its chain-of-thought surfaced. GLM/DeepSeek/Moonshot/
+		//     Qwen stream thinking as `delta.reasoning_content` (the direct OpenAI-
+		//     compatible convention), which llm-router forwards verbatim — but the
+		//     inherited OpenRouter loop only reads `delta.reasoning`. We normalize it
+		//     here rather than in OpenRouterHandler because reasoning_content does NOT
+		//     apply to OpenRouter.ai (it emits `reasoning`); direct OpenAI-compatible
+		//     endpoints use the "OpenAI Compatible" provider, which already handles it.
 		const originalCreate = this["client"].chat.completions.create.bind(this["client"].chat.completions)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		this["client"].chat.completions.create = ((params: any, options?: any) => {
 			const body = { conversation_id: conversationId, ...params }
-			return originalCreate(body, options)
+			const result = originalCreate(body, options)
+			// Non-streaming (completePrompt) needs no transform — pass it through.
+			if (!params?.stream) return result
+			// `create` is cast to `any` below; `result` is the streaming Promise<Stream>.
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			return (async () => normalizeReasoningStream(await (result as any)))()
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		}) as any
 
 		yield* super.createMessage(systemPrompt, messages, metadata)
+	}
+}
+
+/**
+ * Wrap a streaming chat-completion so each chunk's `delta.reasoning_content`
+ * (GLM/DeepSeek/Moonshot/Zhipu convention, forwarded by llm-router) is mirrored
+ * into `delta.reasoning` — the field {@link OpenRouterHandler}'s stream loop reads.
+ * Only fills `reasoning` when absent so a chunk carrying both never doubles up. The
+ * parent consumes the stream purely via `Symbol.asyncIterator`, so an async generator
+ * is a drop-in replacement (abort still flows through the request's AbortSignal).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function* normalizeReasoningStream(stream: AsyncIterable<any>): AsyncGenerator<any> {
+	for await (const chunk of stream) {
+		const delta = chunk?.choices?.[0]?.delta
+		if (delta && delta.reasoning == null && typeof delta.reasoning_content === "string") {
+			delta.reasoning = delta.reasoning_content
+		}
+		yield chunk
 	}
 }
