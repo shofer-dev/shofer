@@ -28,7 +28,11 @@ export function isValidToolName(toolName: string, experiments?: Record<string, b
 		return true
 	}
 
-	if (experiments?.customTools && customToolRegistry.has(toolName)) {
+	// Plugin-contributed tools (source "plugin") are valid regardless of the customTools
+	// experiment — they're advertised to the model unconditionally (build-tools §10), so
+	// validating them against the experiment would reject a tool the model was offered
+	// (e.g. `ask_live_memory`). User custom-tool *files* stay experiment-gated.
+	if (customToolRegistry.isDispatchable(toolName, experiments?.customTools ?? false)) {
 		return true
 	}
 
@@ -310,9 +314,11 @@ export function isToolAllowedForMode(
 		return true
 	}
 
-	// For now, allow all custom tools in any mode.
+	// For now, allow all custom tools in any mode. Plugin-contributed tools are allowed
+	// regardless of the customTools experiment (they're advertised unconditionally);
+	// user custom-tool files stay experiment-gated.
 	// As a follow-up we should expand the custom tool definition to include mode restrictions.
-	if (experiments?.customTools && customToolRegistry.has(tool)) {
+	if (customToolRegistry.isDispatchable(tool, experiments?.customTools ?? false)) {
 		return true
 	}
 
