@@ -276,17 +276,27 @@ export const ModeSelector = ({
 								{t("chat:modeSelector.noResults")}
 							</div>
 						) : (
-							<div className="py-1">
+							<div className="py-1" role="listbox" aria-label={t("chat:modeSelector.title")}>
 								{filteredModes.map((mode) => {
 									const isSelected = mode.slug === value
 									return (
 										<div
 											key={mode.slug}
 											ref={isSelected ? selectedItemRef : null}
+											role="option"
+											aria-selected={isSelected}
+											tabIndex={0}
 											onClick={() => handleSelect(mode.slug)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault()
+													handleSelect(mode.slug)
+												}
+											}}
 											className={cn(
 												"px-3 py-1.5 text-sm cursor-pointer flex items-center",
 												"hover:bg-vscode-list-hoverBackground",
+												"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder focus-visible:ring-inset",
 												isSelected
 													? "bg-vscode-list-activeSelectionBackground text-vscode-list-activeSelectionForeground"
 													: "",
