@@ -27,6 +27,8 @@ vi.mock("../../custom-tools/custom-tool-registry.js", async (importOriginal) => 
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),
+		getDispatchable: vi.fn(),
+		isDispatchable: vi.fn(),
 		register: vi.fn(),
 		getAll: vi.fn().mockReturnValue([]),
 		getAllSerialized: vi.fn().mockReturnValue([]),
@@ -108,7 +110,7 @@ describe("presentAssistantMessage — lifecycle hooks (design §6.9, Phase 3)", 
 
 	it("beforeToolCall block short-circuits the tool (execute not called, denial pushed)", async () => {
 		const execute = vi.fn().mockResolvedValue("should not run")
-		vi.mocked(customToolRegistry.get).mockReturnValue({
+		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 			name: "danger",
 			description: "d",
 			parameters: { parse: (x: unknown) => x } as any,
@@ -132,7 +134,7 @@ describe("presentAssistantMessage — lifecycle hooks (design §6.9, Phase 3)", 
 
 	it("beforeToolCall modifiedArgs reach the tool", async () => {
 		const execute = vi.fn().mockResolvedValue("ok")
-		vi.mocked(customToolRegistry.get).mockReturnValue({
+		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 			name: "echo",
 			description: "d",
 			parameters: { parse: (x: unknown) => x } as any,
@@ -155,7 +157,7 @@ describe("presentAssistantMessage — lifecycle hooks (design §6.9, Phase 3)", 
 	})
 
 	it("afterToolCall transforms the pushed result in place", async () => {
-		vi.mocked(customToolRegistry.get).mockReturnValue({
+		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 			name: "greet",
 			description: "d",
 			parameters: { parse: (x: unknown) => x } as any,
@@ -177,7 +179,7 @@ describe("presentAssistantMessage — lifecycle hooks (design §6.9, Phase 3)", 
 
 	it("fast-path: with no lifecycle plugin the tool runs and result is untouched", async () => {
 		const execute = vi.fn().mockResolvedValue("plain-result")
-		vi.mocked(customToolRegistry.get).mockReturnValue({
+		vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 			name: "plain",
 			description: "d",
 			parameters: { parse: (x: unknown) => x } as any,

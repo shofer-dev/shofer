@@ -29,6 +29,8 @@ vi.mock("../../custom-tools/custom-tool-registry.js", async (importOriginal) => 
 	customToolRegistry: {
 		has: vi.fn(),
 		get: vi.fn(),
+		getDispatchable: vi.fn(),
+		isDispatchable: vi.fn(),
 		register: vi.fn(),
 		getAll: vi.fn().mockReturnValue([]),
 		getAllSerialized: vi.fn().mockReturnValue([]),
@@ -120,8 +122,8 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			]
 
 			// Mock customToolRegistry to recognize this as a custom tool
-			vi.mocked(customToolRegistry.has).mockReturnValue(true)
-			vi.mocked(customToolRegistry.get).mockReturnValue({
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(true)
+			vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 				name: "my_custom_tool",
 				description: "A custom tool",
 				execute: vi.fn().mockResolvedValue("Custom tool result"),
@@ -149,8 +151,8 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			]
 
 			// Mock customToolRegistry with a tool that throws an error
-			vi.mocked(customToolRegistry.has).mockReturnValue(true)
-			vi.mocked(customToolRegistry.get).mockReturnValue({
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(true)
+			vi.mocked(customToolRegistry.getDispatchable).mockReturnValue({
 				name: "failing_custom_tool",
 				description: "A failing custom tool",
 				execute: vi.fn().mockRejectedValue(new Error("Custom tool execution failed")),
@@ -178,7 +180,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			]
 
 			// read_file is not a custom tool
-			vi.mocked(customToolRegistry.has).mockReturnValue(false)
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(false)
 
 			await presentAssistantMessage(mockTask)
 
@@ -203,7 +205,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				},
 			]
 
-			vi.mocked(customToolRegistry.has).mockReturnValue(false)
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(false)
 
 			// Mock MCP hub for use_mcp_tool
 			mockTask.providerRef = {
@@ -256,13 +258,11 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				}),
 			}
 
-			// Even if registry recognizes it, experiment gate should prevent execution
-			vi.mocked(customToolRegistry.has).mockReturnValue(true)
-			vi.mocked(customToolRegistry.get).mockReturnValue({
-				name: "my_custom_tool",
-				description: "A custom tool",
-				execute: vi.fn().mockResolvedValue("Should not execute"),
-			} as any)
+			// The experiment gate now lives inside isDispatchable/getDispatchable:
+			// with customTools disabled, a (non-plugin) custom tool is not
+			// dispatchable, so both report "not a custom tool".
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(false)
+			vi.mocked(customToolRegistry.getDispatchable).mockReturnValue(undefined)
 
 			await presentAssistantMessage(mockTask)
 
@@ -271,7 +271,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 			expect(mockTask.consecutiveMistakeCount).toBe(1)
 
 			// Custom tool should NOT have been executed
-			const getMock = vi.mocked(customToolRegistry.get)
+			const getMock = vi.mocked(customToolRegistry.getDispatchable)
 			if (getMock.mock.results.length > 0) {
 				const customTool = getMock.mock.results[0]!.value
 				if (customTool) {
@@ -362,7 +362,7 @@ describe("presentAssistantMessage - Custom Tool Recording", () => {
 				},
 			]
 
-			vi.mocked(customToolRegistry.has).mockReturnValue(true)
+			vi.mocked(customToolRegistry.isDispatchable).mockReturnValue(true)
 
 			await presentAssistantMessage(mockTask)
 
