@@ -961,34 +961,146 @@ export const TaskSelector = memo(
 
 					{/* Scrollable list area */}
 					<div className="flex-1 overflow-y-auto">
-						{totalTaskCount === 0 && pinnedCount === 0 && archivedCount === 0 ? (
-							<div className="px-3 py-6 text-sm text-[var(--vscode-descriptionForeground)] text-center">
-								{t("chat:taskSelector.noTasks", "No tasks yet")}
-							</div>
-						) : (
+						{/* Only mount the (potentially long) task list while the drawer is
+						    open; when closed it's off-canvas, so keeping ~90 rows in the DOM
+						    just bloats webview snapshots and the chat view. (#2) */}
+						{isOpen && (
 							<>
-								{/* Pinned tasks — always shown first, before date buckets */}
-								{pinnedCount > 0 &&
-									(() => {
-										const visiblePinned = pinnedTree.filter((n) =>
-											visiblePinnedNodeIds.has(n.item.id),
-										)
-										if (visiblePinned.length === 0) return null
-										return (
-											<div className="mb-1">
-												<div
-													className={cn(
-														"flex items-center justify-between px-3 py-1",
-														"text-[11px] font-semibold uppercase tracking-wide",
-														"text-[var(--vscode-descriptionForeground)]",
-													)}>
-													<div className="flex items-center gap-1.5">
-														<Pin className="w-3 h-3" />
-														<span>{t("chat:taskSelector.groups.pinned", "Pinned")}</span>
+								{totalTaskCount === 0 && pinnedCount === 0 && archivedCount === 0 ? (
+									<div className="px-3 py-6 text-sm text-[var(--vscode-descriptionForeground)] text-center">
+										{t("chat:taskSelector.noTasks", "No tasks yet")}
+									</div>
+								) : (
+									<>
+										{/* Pinned tasks — always shown first, before date buckets */}
+										{pinnedCount > 0 &&
+											(() => {
+												const visiblePinned = pinnedTree.filter((n) =>
+													visiblePinnedNodeIds.has(n.item.id),
+												)
+												if (visiblePinned.length === 0) return null
+												return (
+													<div className="mb-1">
+														<div
+															className={cn(
+																"flex items-center justify-between px-3 py-1",
+																"text-[11px] font-semibold uppercase tracking-wide",
+																"text-[var(--vscode-descriptionForeground)]",
+															)}>
+															<div className="flex items-center gap-1.5">
+																<Pin className="w-3 h-3" />
+																<span>
+																	{t("chat:taskSelector.groups.pinned", "Pinned")}
+																</span>
+															</div>
+															{renderGroupActions(
+																"pinned",
+																pinnedTree,
+																visiblePinned.length,
+															)}
+														</div>
+														{visiblePinned.map((node) =>
+															renderTaskRow({
+																node,
+																runtimeStateMap,
+																currentTaskId,
+																editingTaskId,
+																editName,
+																setEditName,
+																handleFocusTask,
+																handleDeleteTask,
+																handleArchiveTask,
+																handleUnarchiveTask,
+																handlePinTask,
+																handleUnpinTask,
+																handleStartRename,
+																handleConfirmRename,
+																handleCancelRename,
+																collapsedNodes,
+																handleToggleCollapse,
+																t,
+																modeNameMap,
+																worktreeBranchMap,
+															}),
+														)}
 													</div>
-													{renderGroupActions("pinned", pinnedTree, visiblePinned.length)}
+												)
+											})()}
+										{DATE_BUCKET_ORDER.map((bucket) => {
+											const nodes = groupedTree[bucket]
+											const visibleNodes = nodes.filter((n) =>
+												visibleActiveNodeIds.has(n.item.id),
+											)
+											if (visibleNodes.length === 0) return null
+											const label = DATE_BUCKET_LABELS[bucket]
+											return (
+												<div key={bucket} className="mb-1">
+													{/* Section header */}
+													<div
+														className={cn(
+															"flex items-center justify-between px-3 py-1",
+															"text-[11px] font-semibold uppercase tracking-wide",
+															"text-[var(--vscode-descriptionForeground)]",
+														)}>
+														<span>{t(label.key, label.fallback)}</span>
+														{renderGroupActions(bucket, nodes, visibleNodes.length)}
+													</div>
+
+													{visibleNodes.map((node) =>
+														renderTaskRow({
+															node,
+															runtimeStateMap,
+															currentTaskId,
+															editingTaskId,
+															editName,
+															setEditName,
+															handleFocusTask,
+															handleDeleteTask,
+															handleArchiveTask,
+															handleUnarchiveTask,
+															handlePinTask,
+															handleUnpinTask,
+															handleStartRename,
+															handleConfirmRename,
+															handleCancelRename,
+															collapsedNodes,
+															handleToggleCollapse,
+															t,
+															modeNameMap,
+															worktreeBranchMap,
+														}),
+													)}
 												</div>
-												{visiblePinned.map((node) =>
+											)
+										})}
+									</>
+								)}
+
+								{/* Archived tasks — collapsible section */}
+								{archivedCount > 0 && (
+									<div className="mb-1">
+										<div
+											className={cn(
+												"flex items-center justify-between w-full px-3 py-1",
+												"text-[11px] font-semibold uppercase tracking-wide",
+												"text-[var(--vscode-descriptionForeground)]",
+											)}>
+											<button
+												onClick={() => setIsArchivedExpanded((v) => !v)}
+												className={cn(
+													"flex items-center gap-1.5 flex-1 min-w-0 text-left p-0 bg-transparent border-0 cursor-pointer",
+													"uppercase tracking-wide text-[var(--vscode-descriptionForeground)]",
+													"hover:text-[var(--vscode-foreground)] transition-colors",
+												)}>
+												<Archive className="w-3 h-3 flex-shrink-0" />
+												<span>{t("chat:taskSelector.groups.archived", "Archived")}</span>
+											</button>
+											{renderGroupActions("archived", archivedTree, archivedCount)}
+										</div>
+										{isArchivedExpanded &&
+											archivedTree
+												.filter((n) => visibleArchivedNodeIds.has(n.item.id))
+												.map((node) =>
 													renderTaskRow({
 														node,
 														runtimeStateMap,
@@ -1012,106 +1124,9 @@ export const TaskSelector = memo(
 														worktreeBranchMap,
 													}),
 												)}
-											</div>
-										)
-									})()}
-								{DATE_BUCKET_ORDER.map((bucket) => {
-									const nodes = groupedTree[bucket]
-									const visibleNodes = nodes.filter((n) => visibleActiveNodeIds.has(n.item.id))
-									if (visibleNodes.length === 0) return null
-									const label = DATE_BUCKET_LABELS[bucket]
-									return (
-										<div key={bucket} className="mb-1">
-											{/* Section header */}
-											<div
-												className={cn(
-													"flex items-center justify-between px-3 py-1",
-													"text-[11px] font-semibold uppercase tracking-wide",
-													"text-[var(--vscode-descriptionForeground)]",
-												)}>
-												<span>{t(label.key, label.fallback)}</span>
-												{renderGroupActions(bucket, nodes, visibleNodes.length)}
-											</div>
-
-											{visibleNodes.map((node) =>
-												renderTaskRow({
-													node,
-													runtimeStateMap,
-													currentTaskId,
-													editingTaskId,
-													editName,
-													setEditName,
-													handleFocusTask,
-													handleDeleteTask,
-													handleArchiveTask,
-													handleUnarchiveTask,
-													handlePinTask,
-													handleUnpinTask,
-													handleStartRename,
-													handleConfirmRename,
-													handleCancelRename,
-													collapsedNodes,
-													handleToggleCollapse,
-													t,
-													modeNameMap,
-													worktreeBranchMap,
-												}),
-											)}
-										</div>
-									)
-								})}
+									</div>
+								)}
 							</>
-						)}
-
-						{/* Archived tasks — collapsible section */}
-						{archivedCount > 0 && (
-							<div className="mb-1">
-								<div
-									className={cn(
-										"flex items-center justify-between w-full px-3 py-1",
-										"text-[11px] font-semibold uppercase tracking-wide",
-										"text-[var(--vscode-descriptionForeground)]",
-									)}>
-									<button
-										onClick={() => setIsArchivedExpanded((v) => !v)}
-										className={cn(
-											"flex items-center gap-1.5 flex-1 min-w-0 text-left p-0 bg-transparent border-0 cursor-pointer",
-											"uppercase tracking-wide text-[var(--vscode-descriptionForeground)]",
-											"hover:text-[var(--vscode-foreground)] transition-colors",
-										)}>
-										<Archive className="w-3 h-3 flex-shrink-0" />
-										<span>{t("chat:taskSelector.groups.archived", "Archived")}</span>
-									</button>
-									{renderGroupActions("archived", archivedTree, archivedCount)}
-								</div>
-								{isArchivedExpanded &&
-									archivedTree
-										.filter((n) => visibleArchivedNodeIds.has(n.item.id))
-										.map((node) =>
-											renderTaskRow({
-												node,
-												runtimeStateMap,
-												currentTaskId,
-												editingTaskId,
-												editName,
-												setEditName,
-												handleFocusTask,
-												handleDeleteTask,
-												handleArchiveTask,
-												handleUnarchiveTask,
-												handlePinTask,
-												handleUnpinTask,
-												handleStartRename,
-												handleConfirmRename,
-												handleCancelRename,
-												collapsedNodes,
-												handleToggleCollapse,
-												t,
-												modeNameMap,
-												worktreeBranchMap,
-											}),
-										)}
-							</div>
 						)}
 					</div>
 
