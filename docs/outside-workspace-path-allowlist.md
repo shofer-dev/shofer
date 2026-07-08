@@ -1,6 +1,6 @@
 # Outside-Workspace Path Allowlist (Design)
 
-**Status:** Proposed — not yet implemented.
+**Status:** Implementing (branch `feat/config-sync`). Rides the implemented config-sync channel.
 **Owner:** —
 **Related:** [`auto_approval.md`](auto_approval.md), [`settings_overlay.md`](settings_overlay.md), [`command-execution.md`](command-execution.md), [`configuration.md`](configuration.md), [`tool-categories.md`](tool-categories.md)
 
@@ -346,29 +346,19 @@ propagates. Concretely:
   registered nodes, so a path trusted mid-session takes effect on every node without a node
   restart or manual edit.
 
-**This generalizes an existing pattern, and is specified separately.** Today the controller
-already ships **per-task** provider config to a remote owner: `CreateTaskInput.apiConfiguration`
-([`agent-api.ts:35`](../packages/types/src/agent-api.ts),
-[`NodeRegistry.ts:100`](../src/core/nodes/NodeRegistry.ts)) — "so the task runs on the same
-provider/model the front-end picked." The auto-approval config (these fields plus
-`allowedCommands` and the `alwaysAllow*` toggles) is the **same idea, one level up**:
-controller-resolved state the node must honor. It is **new plumbing** — a controller→node
-config-sync channel does not exist yet (the handshake carries only liveness/version/auth/
-load) — and it is **broader than this feature** (it moves the whole node-scoped settings set,
-not just paths or even just auto-approval). It therefore has its **own design doc**:
-**[`config_sync.md`](config_sync.md)** — treat that as the authoritative spec for the channel.
-The path allowlist is one **consumer**: its two fields are part of the synced slice; it does
-not invent the channel.
+**This rides an existing channel, specified separately.** The controller→node config-sync
+channel is **implemented** ([`config_sync.md`](config_sync.md)) — it replicates the
+node-scoped `globalSettings` slice to every remote node on connect and on change. The path
+allowlist is one **consumer**: `allowedReadPaths`/`allowedWritePaths` are classified `"node"`
+in `SETTING_SYNC_SCOPE` (the exhaustiveness guard forces the classification when the keys are
+added), so they are part of the synced slice and reach every remote node **for free** — a
+path trusted on the controller (via Settings, an interactive grant, or auto-import)
+propagates to nodes with no node-side edit.
 
 Because this feature only _adds fields_ to the portable auto-approval state, it imposes just
 one hard requirement of its own: the fields must live in the serializable
-`globalSettingsSchema` state (so they can be shipped over the channel), and **not** in VS
-Code `settings.json`, which is front-end-only and would strand every non-VS-Code executor.
-
-> **Interim (before the sync channel lands):** a node can still be pre-provisioned via the
-> portable import channel (`shofer-code-settings.json` / `importConfiguration`,
-> [§8b](#8b-external--automated-setup-auto-import-the-recommended-channel)). That is a manual
-> stopgap, explicitly _not_ the target model — the target is zero node-side configuration.
+`globalSettingsSchema` state (so config-sync can ship them), and **not** in VS Code
+`settings.json`, which is front-end-only and would strand every non-VS-Code executor.
 
 ### 8e. Precedence
 
@@ -410,29 +400,25 @@ toggle is off, and never overrides the master switch.
 - **Persistence**: config-seeded path is honored on a cold start with empty globalState;
   interactive grant survives a provider reload; config + interactive grants union.
 
-## 11. Open questions
+## 11. Decisions & open questions
 
-1. **Granularity of the one-click grant** — default to the file's **parent directory**
-   (recommended), or always open an editable scope field? (Parent-dir default is the
-   convenience win; editable field is the safety win. Could do both: default + editable.)
-2. **`deniedPaths`?** Symmetry with `deniedCommands` argues for it (carve exceptions out of a
-   broad grant, or block sensitive subtrees like `~/.ssh` even when a parent is trusted). If
-   added, adopt the command engine's longest-prefix-wins arbitration. Deferred unless needed.
-3. **Protected-file interaction** — should a `write` grant under a trusted dir be allowed to
-   also satisfy the protected-file check, or must `alwaysAllowWriteProtected` still be
-   separately set? Proposed: keep protected independent (safer).
-4. **Symlink realpath** — lexical match (simpler, faster) vs `realpath` (defeats symlink
-   escape). Proposed: lexical for v1, document the caveat.
-5. **Ship the project-scoped `.shofer/allowed-paths.json` file in v1, or defer?**
-   ([§8c](#8c-optional-project-scoped-file-live-reload)) It is the only channel that gives
-   live reload + per-workspace scoping + a git-committable declaration, which is attractive
-   for the external-service case — but it is a meaningfully larger surface (schema + watcher
-    - merge) than globalState + auto-import. Proposed: defer to a follow-up; v1 is
-      globalState + auto-import.
-6. **Controller→node config-sync channel — sequencing.** The channel is specified in its own
-   doc, **[`config_sync.md`](config_sync.md)** (open questions for the channel itself live
-   there). The only path-allowlist-specific decision: is that channel a **prerequisite**
-   delivered ahead of this feature, or a **companion workstream** landed alongside it? Since
-   it is broader than paths, proposed: build it as its own workstream; this feature's two
-   fields ride its slice, and until it lands remote nodes use the interim import stopgap
-   ([§8d](#8d-reaching-every-executor-cli--remote-nodes)).
+### Decided (v1 implementation)
+
+- **One-click grant granularity** — default to the file's **parent directory**, editable
+  before confirming (the "both" option): convenience by default, safety when widened/narrowed.
+- **Protected files stay independent** — a `write` grant under a trusted dir does **not**
+  satisfy `alwaysAllowWriteProtected`; a protected file still prompts unless that toggle is on.
+- **Lexical matching for v1** — match on the `path.resolve`'d absolute path (defeats `..`
+  traversal), not `realpath`; the symlink caveat is documented ([§9](#9-security-considerations)).
+- **No `deniedPaths` in v1** — allow-only lists; revisit with the longest-prefix rule if a
+  carve-out need appears.
+- **Config-sync rides for free** — `allowedReadPaths`/`allowedWritePaths` are `"node"` in the
+  (implemented) config-sync `SETTING_SYNC_SCOPE`, so trusted paths propagate to remote nodes
+  with no extra work ([§8d](#8d-reaching-every-executor-cli--remote-nodes)).
+
+### Open / deferred
+
+1. **Project-scoped `.shofer/allowed-paths.json`** ([§8c](#8c-optional-project-scoped-file-live-reload)) —
+   the only channel giving live reload + per-workspace scoping + a git-committable
+   declaration, but a larger surface (schema + watcher + merge). Deferred; v1 is globalState +
+   auto-import + config-sync.
