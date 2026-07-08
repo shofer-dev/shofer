@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { AgentApi, LoadSample, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
-import { LOCAL_NODE_ID, ShoferEventName } from "@shofer/types"
+import type { AgentApi, GlobalSettings, LoadSample, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
+import { LOCAL_NODE_ID, ShoferEventName, TypedEmitter, computeConfigVersion, pickSyncedSettings } from "@shofer/types"
 
-import { NodeRegistry, type INodeConnection, type NodeConnectionFactory } from "../NodeRegistry.js"
+import {
+	NodeRegistry,
+	type INodeConnection,
+	type NodeConnectionFactory,
+	type SyncedConfigSource,
+} from "../NodeRegistry.js"
 
 /**
  * Controller-side registry (Shofer Nodes L1). Driven with an in-memory
@@ -109,7 +114,7 @@ class FakeConn implements INodeConnection {
 	}
 }
 
-function makeRegistry(seedDefs?: unknown[]) {
+function makeRegistry(seedDefs?: unknown[], configSource?: SyncedConfigSource) {
 	const { context, globals, secrets } = makeContext()
 	if (seedDefs) globals.set("shoferNodes.defs", seedDefs)
 	const conns = new Map<string, FakeConn>()
@@ -120,10 +125,35 @@ function makeRegistry(seedDefs?: unknown[]) {
 	}
 	const localAgent = makeAgent()
 	const registry = new NodeRegistry(
-		{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0" },
+		{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0", configSource },
 		{ createConnection, localAgent },
 	)
 	return { registry, globals, secrets, conns, localAgent }
+}
+
+/**
+ * A drivable fake {@link SyncedConfigSource} (config_sync §4c). `getValues` returns a
+ * live, mutable slice (default: one auto-approval key + one command allowlist key, both
+ * node-scoped so `pickSyncedSettings` yields a non-empty slice) and `onDidChange` is a
+ * real {@link TypedEmitter} the test fires. `slice()`/`version()` mirror what the registry
+ * resolves internally so assertions can compare against the exact pushed payload.
+ */
+function makeConfigSource(initial: Partial<GlobalSettings> = { allowedCommands: ["ls"], autoApprovalEnabled: true }) {
+	let values: Partial<GlobalSettings> = { ...initial }
+	const emitter = new TypedEmitter<{ key: string }>()
+	const source: SyncedConfigSource = {
+		getValues: () => values,
+		onDidChange: emitter.event,
+	}
+	return {
+		source,
+		setValues: (v: Partial<GlobalSettings>) => {
+			values = { ...v }
+		},
+		fire: (key: string) => emitter.fire({ key }),
+		slice: () => pickSyncedSettings(values),
+		version: () => computeConfigVersion(pickSyncedSettings(values)),
+	}
 }
 
 /** A fake {@link NodeProviderHost} recording the in-process Local new-task path. */
@@ -782,5 +812,129 @@ describe("NodeRegistry — load-average LB policy (Shofer Nodes)", () => {
 			affectsConfiguration: (s: string) => s === "shofer.nodes.loadBalancer",
 		} as vscode.ConfigurationChangeEvent)
 		expect(registry.executorPool.getPolicy()).toBe("least-load-1m")
+	})
+})
+
+describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)", () => {
+	const r2Def = { id: "r2", kind: "remote" as const, label: "box2", host: "host:2", tls: false }
+
+	/** Build a registry wired to a drivable {@link SyncedConfigSource}. */
+	function withConfigSync(initial?: Partial<GlobalSettings>) {
+		const cfg = makeConfigSource(initial)
+		const h = makeRegistry(undefined, cfg.source)
+		return { ...h, cfg }
+	}
+
+	/** Bring a remote def to `connected` with the given (spied) api; returns its FakeConn. */
+	async function connectRemote(
+		h: ReturnType<typeof makeRegistry>,
+		def: { id: string; kind: "remote"; label: string; host: string; tls: boolean },
+		api: AgentApi,
+		mutate?: (conn: FakeConn) => void,
+	): Promise<FakeConn> {
+		await h.registry.upsert(def, "tok")
+		await h.registry.connect(def.id)
+		const conn = h.conns.get(`http://${def.host}`)!
+		mutate?.(conn)
+		conn.drive("connected", { api })
+		return conn
+	}
+
+	// 1 ── Push on connect ───────────────────────────────────────────────────────
+	it("pushes the current synced slice + version to a remote node when it reaches connected", async () => {
+		const h = withConfigSync()
+		const api = makeAgent()
+		await connectRemote(h, remoteDef, api)
+
+		// The registry resolved the slice from configSource.getValues() and hashed it (§6).
+		expect(api.applyConfig).toHaveBeenCalledTimes(1)
+		expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version())
+	})
+
+	// 2 ── Broadcast on a synced-key change (and NOT on a frontend-only key) ───────
+	it("re-broadcasts applyConfig on a node-scoped settings change but ignores a frontend-only key", async () => {
+		const h = withConfigSync()
+		const api = makeAgent()
+		await connectRemote(h, remoteDef, api)
+		;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+
+		// A node-scoped key changed → recompute + broadcast the new slice/version.
+		h.cfg.setValues({ allowedCommands: ["ls", "pwd"], autoApprovalEnabled: true })
+		h.cfg.fire("allowedCommands")
+		expect(api.applyConfig).toHaveBeenCalledTimes(1)
+		expect(api.applyConfig).toHaveBeenLastCalledWith(h.cfg.slice(), h.cfg.version())
+
+		// A frontend-only key is filtered out (SYNCED_KEYS) → no broadcast.
+		;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+		h.cfg.fire("pinnedApiConfigs")
+		expect(api.applyConfig).not.toHaveBeenCalled()
+	})
+
+	// 3 ── Never pushes to the Local executor; broadcast count == remote connections ─
+	it("broadcasts to every connected remote but never to the Local executor", async () => {
+		const h = withConfigSync()
+		const api1 = makeAgent()
+		const api2 = makeAgent()
+		await connectRemote(h, remoteDef, api1)
+		await connectRemote(h, r2Def, api2)
+		;(api1.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+		;(api2.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+		;(h.localAgent.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+
+		h.cfg.fire("autoApprovalEnabled")
+
+		// Exactly one push per connected REMOTE node — the loop iterates `connections`.
+		expect(api1.applyConfig).toHaveBeenCalledTimes(1)
+		expect(api2.applyConfig).toHaveBeenCalledTimes(1)
+		// The Local executor reads controller state in-process — it is never pushed config.
+		expect(h.localAgent.applyConfig).not.toHaveBeenCalled()
+	})
+
+	// 4 ── Version-gate: a stale remote is not assignable until it converges ───────
+	it("keeps a connected-but-stale remote out of the assignable set until its configVersion matches", async () => {
+		const h = withConfigSync()
+		const api = makeAgent()
+		// The push fails, so the node never advances its applied version → stays stale.
+		;(api.applyConfig as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("push failed"))
+		const conn = await connectRemote(h, remoteDef, api)
+		await Promise.resolve() // let the (rejected) push settle
+
+		// Connected + in the pool, but version-gated out of new-task assignment.
+		expect(h.registry.executorPool.has("r1")).toBe(true)
+		expect(conn.configVersion).toBeUndefined()
+		expect(h.registry.executorPool.assignableIds()).not.toContain("r1")
+		expect(h.registry.hasEnabledRemote()).toBe(false)
+
+		// It applies the desired config (echoes the version) → becomes assignable.
+		conn.markConfigApplied(h.cfg.version())
+		expect(h.registry.executorPool.assignableIds()).toContain("r1")
+		expect(h.registry.hasEnabledRemote()).toBe(true)
+	})
+
+	// 5 ── Unmanaged remote is exempt from gating even with no applied version ─────
+	it("treats an unmanaged remote (managed:false) as assignable though it never applies config", async () => {
+		const h = withConfigSync()
+		const api = makeAgent()
+		;(api.applyConfig as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("push failed"))
+		// A self-administered node reports managed:false → exempt from config-version gating.
+		const conn = await connectRemote(h, remoteDef, api, (c) => {
+			c.managed = false
+		})
+		await Promise.resolve()
+
+		expect(conn.configVersion).toBeUndefined()
+		expect(h.registry.executorPool.assignableIds()).toContain("r1")
+		expect(h.registry.hasEnabledRemote()).toBe(true)
+	})
+
+	// 6 ── Inert without a configSource (unit-test / no-ContextProxy path) ─────────
+	it("is inert when no configSource is provided: no applyConfig push, node not gated", async () => {
+		const h = makeRegistry() // no configSource
+		const api = makeAgent()
+		await connectRemote(h, remoteDef, api)
+
+		expect(api.applyConfig).not.toHaveBeenCalled()
+		// desiredConfigVersion stays undefined → the pool never gates on config.
+		expect(h.registry.executorPool.assignableIds()).toContain("r1")
 	})
 })

@@ -267,6 +267,66 @@ describe("createRequestHandler (§11)", () => {
 		expect(events).toHaveLength(0)
 	})
 
+	describe("config sync (config_sync §4a/§6)", () => {
+		it("POST /api/v1/config applies the config with its version and returns 202", async () => {
+			const res = mockRes()
+			const config = { autoApprovalEnabled: true }
+			await run(mockReq("POST", "/api/v1/config", { config, version: "v1" }), res as unknown as ServerResponse)
+			expect(res.statusCode).toBe(202)
+			expect(JSON.parse(res.body)).toEqual({ applied: true })
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1")
+		})
+
+		it("400s a config push with no version", async () => {
+			const res = mockRes()
+			await run(
+				mockReq("POST", "/api/v1/config", { config: { autoApprovalEnabled: true } }),
+				res as unknown as ServerResponse,
+			)
+			expect(res.statusCode).toBe(400)
+			expect(api.applyConfig).not.toHaveBeenCalled()
+		})
+
+		it("401s the config push without a token when auth is enabled", async () => {
+			const authed = createRequestHandler(api, { token: "s3cret" })
+			const res = mockRes()
+			authed(mockReq("POST", "/api/v1/config", { config: {}, version: "v1" }), res as unknown as ServerResponse)
+			await flush()
+			expect(res.statusCode).toBe(401)
+			expect(api.applyConfig).not.toHaveBeenCalled()
+		})
+
+		it("GET /health includes configVersion + managed when the opts provide them", async () => {
+			const h = createRequestHandler(api, { getConfigVersion: () => "v1", getManaged: () => false })
+			const res = mockRes()
+			h(mockReq("GET", "/health"), res as unknown as ServerResponse)
+			await flush()
+			expect(JSON.parse(res.body)).toMatchObject({ ok: true, configVersion: "v1", managed: false })
+		})
+
+		it("GET /health does not crash when the config opts are absent", async () => {
+			const res = mockRes()
+			await run(mockReq("GET", "/health"), res as unknown as ServerResponse)
+			expect(res.statusCode).toBe(200)
+			const body = JSON.parse(res.body) as Record<string, unknown>
+			expect(body.ok).toBe(true)
+			expect(body.configVersion).toBeUndefined()
+			expect(body.managed).toBeUndefined()
+		})
+
+		it("GET /api/v1/whoami includes configVersion + managed", async () => {
+			const h = createRequestHandler(api, {
+				version: "1.2.3",
+				getConfigVersion: () => "v2",
+				getManaged: () => true,
+			})
+			const res = mockRes()
+			h(mockReq("GET", "/api/v1/whoami"), res as unknown as ServerResponse)
+			await flush()
+			expect(JSON.parse(res.body)).toEqual({ version: "1.2.3", configVersion: "v2", managed: true })
+		})
+	})
+
 	it("404s unknown routes", async () => {
 		const res = mockRes()
 		await run(mockReq("GET", "/nope"), res as unknown as ServerResponse)

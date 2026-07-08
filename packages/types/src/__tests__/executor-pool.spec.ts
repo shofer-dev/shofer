@@ -324,6 +324,111 @@ describe("ExecutorPool (§13 controller side)", () => {
 		})
 	})
 
+	describe("config-version gating (config_sync §6)", () => {
+		/** An executor exposing config-sync accessors: a mutable version and a managed flag. */
+		function cfgExecutor(id: string, version: string | undefined, managed = true) {
+			const e = makeExecutor(id)
+			let current = version
+			return {
+				...e,
+				configVersion: () => current,
+				managed: () => managed,
+				setVersion: (v: string | undefined) => {
+					current = v
+				},
+			}
+		}
+
+		it("no desired version → all non-disabled executors assignable (baseline)", () => {
+			const a = cfgExecutor("A", "v0")
+			const b = cfgExecutor("B", undefined)
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
+			// desiredConfigVersion unset → gating disabled regardless of reported versions.
+			expect(pool.assignableIds()).toEqual(["A", "B"])
+		})
+
+		it("gates on an exact version match once a desired version is set", () => {
+			const a = cfgExecutor("A", "v1") // matches
+			const b = cfgExecutor("B", "v0") // stale
+			const c = cfgExecutor("C", undefined) // never reported → not current
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
+			pool.add({ id: c.id, api: c.api, configVersion: c.configVersion, managed: c.managed })
+
+			pool.setDesiredConfigVersion("v1")
+			expect(pool.assignableIds()).toEqual(["A"]) // only the exact match
+		})
+
+		it("routes new tasks only to a matching managed executor", async () => {
+			const a = cfgExecutor("A", "v1")
+			const b = cfgExecutor("B", "v0")
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
+
+			pool.setDesiredConfigVersion("v1")
+			const t1 = await pool.createTask({ prompt: "1" })
+			const t2 = await pool.createTask({ prompt: "2" })
+			// B is stale → every task lands on A.
+			expect(pool.ownerOf(t1.taskId)).toBe("A")
+			expect(pool.ownerOf(t2.taskId)).toBe("A")
+			expect(b.api.createTask).not.toHaveBeenCalled()
+		})
+
+		it("exempts an unmanaged (self-administered) executor from version gating", () => {
+			// B is unmanaged and its version does NOT match — still assignable.
+			const a = cfgExecutor("A", "v1", true)
+			const b = cfgExecutor("B", "v0", false)
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
+
+			pool.setDesiredConfigVersion("v1")
+			expect(pool.assignableIds()).toEqual(["A", "B"])
+
+			// Even when the unmanaged node reports no version at all, it stays exempt.
+			b.setVersion(undefined)
+			expect(pool.assignableIds()).toEqual(["A", "B"])
+		})
+
+		it("re-includes everyone when the desired version is cleared back to undefined", () => {
+			const a = cfgExecutor("A", "v1")
+			const b = cfgExecutor("B", "v0")
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
+
+			pool.setDesiredConfigVersion("v1")
+			expect(pool.assignableIds()).toEqual(["A"]) // gated
+
+			pool.setDesiredConfigVersion(undefined)
+			expect(pool.assignableIds()).toEqual(["A", "B"]) // gate lifted
+		})
+
+		it("a stale executor becomes assignable once it reports the desired version", () => {
+			const a = cfgExecutor("A", "v0")
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
+
+			pool.setDesiredConfigVersion("v1")
+			expect(pool.assignableIds()).toEqual([]) // stale → excluded
+
+			a.setVersion("v1") // node applied the new config
+			expect(pool.assignableIds()).toEqual(["A"])
+		})
+
+		it("still excludes a disabled executor even when its config matches", () => {
+			const a = cfgExecutor("A", "v1")
+			const pool = new ExecutorPool()
+			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed, disabled: true })
+			pool.setDesiredConfigVersion("v1")
+			expect(pool.assignableIds()).toEqual([]) // matching version, but admin-disabled
+		})
+	})
+
 	it("round-robins over enabled executors and skips a runtime-disabled one via setDisabled", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")

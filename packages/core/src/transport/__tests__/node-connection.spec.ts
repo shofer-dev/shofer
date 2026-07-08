@@ -203,6 +203,42 @@ describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
 		expect(conn.api).toBeUndefined()
 	})
 
+	it("parses configVersion + managed from the whoami handshake (config_sync §Part A/§6)", async () => {
+		env.routes.whoami.mockResolvedValueOnce(json(200, { version: "1.0.0", configVersion: "v1", managed: false }))
+		await conn.connect()
+		expect(conn.status).toBe("connected")
+		expect(conn.configVersion).toBe("v1")
+		expect(conn.managed).toBe(false)
+	})
+
+	it("updates configVersion from a later health ping echo", async () => {
+		env.routes.whoami.mockResolvedValueOnce(json(200, { version: "1.0.0", configVersion: "v1" }))
+		await conn.connect()
+		expect(conn.configVersion).toBe("v1")
+		env.routes.health.mockResolvedValueOnce(json(200, { ok: true, configVersion: "v2" }))
+		await env.runInterval()
+		expect(conn.configVersion).toBe("v2")
+	})
+
+	it("managed defaults to true when the node never reports it (safe/gated direction)", async () => {
+		await conn.connect() // default whoami body has no managed field
+		expect(conn.managed).toBe(true)
+	})
+
+	it("clears configVersion on disconnect", async () => {
+		env.routes.whoami.mockResolvedValueOnce(json(200, { version: "1.0.0", configVersion: "v1" }))
+		await conn.connect()
+		expect(conn.configVersion).toBe("v1")
+		conn.disconnect()
+		expect(conn.configVersion).toBeUndefined()
+	})
+
+	it("markConfigApplied sets configVersion immediately (no wait for the next health tick)", async () => {
+		await conn.connect()
+		conn.markConfigApplied("v3")
+		expect(conn.configVersion).toBe("v3")
+	})
+
 	it("disconnect() tears down and stops pinging", async () => {
 		await conn.connect()
 		conn.disconnect()
