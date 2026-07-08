@@ -149,16 +149,29 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 		})
 	}
 
+	/**
+	 * Fetch the dynamic model catalog and per-provider endpoints this handler
+	 * should use. OpenRouter pulls from the public openrouter.ai catalog;
+	 * subclasses (e.g. {@link ShoferHandler}) override this to point at their own
+	 * router so model metadata (context window, max output tokens) is correct
+	 * instead of silently falling back to {@link openRouterDefaultModelInfo}.
+	 */
+	protected async loadModelsAndEndpoints(): Promise<{ models: ModelRecord; endpoints: ModelRecord }> {
+		const [models, endpoints] = await Promise.all([
+			getModels({ provider: "openrouter" }),
+			getModelEndpoints({
+				router: "openrouter",
+				modelId: this.options.openRouterModelId,
+				endpoint: this.options.openRouterSpecificProvider,
+			}),
+		])
+
+		return { models, endpoints }
+	}
+
 	private async loadDynamicModels(): Promise<void> {
 		try {
-			const [models, endpoints] = await Promise.all([
-				getModels({ provider: "openrouter" }),
-				getModelEndpoints({
-					router: "openrouter",
-					modelId: this.options.openRouterModelId,
-					endpoint: this.options.openRouterSpecificProvider,
-				}),
-			])
+			const { models, endpoints } = await this.loadModelsAndEndpoints()
 
 			this.models = models
 			this.endpoints = endpoints
@@ -549,14 +562,7 @@ export class OpenRouterHandler extends BaseProvider implements SingleCompletionH
 	}
 
 	public async fetchModel() {
-		const [models, endpoints] = await Promise.all([
-			getModels({ provider: "openrouter" }),
-			getModelEndpoints({
-				router: "openrouter",
-				modelId: this.options.openRouterModelId,
-				endpoint: this.options.openRouterSpecificProvider,
-			}),
-		])
+		const { models, endpoints } = await this.loadModelsAndEndpoints()
 
 		this.models = models
 		this.endpoints = endpoints

@@ -15,10 +15,12 @@
  */
 
 import { Anthropic } from "@anthropic-ai/sdk"
+import type { ModelRecord } from "@shofer/types"
 import type { ApiHandlerOptions } from "./_deps.js"
 import type { ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { ApiStream } from "./_deps.js"
 
+import { getModels } from "./fetchers/modelCache.js"
 import { OpenRouterHandler } from "./openrouter.js"
 
 export class ShoferHandler extends OpenRouterHandler {
@@ -58,6 +60,29 @@ export class ShoferHandler extends OpenRouterHandler {
 			)
 		}
 		return super.getModel()
+	}
+
+	/**
+	 * @inheritdoc
+	 *
+	 * The Shofer provider talks to a local llm-router, not openrouter.ai, so its
+	 * model catalog must be fetched from that router (`getModels({ provider: "shofer" })`).
+	 * The inherited OpenRouter implementation fetches from openrouter.ai, whose
+	 * catalog never contains Shofer-router model ids (e.g. `zhipu/glm-5.2`) — that
+	 * miss silently falls back to {@link openRouterDefaultModelInfo} (a 200k-context,
+	 * 8k-max-output Claude Sonnet stand-in), which makes context management condense
+	 * far too early (e.g. at ~20% of glm-5.2's real 1M window) and caps output tokens
+	 * incorrectly. The Shofer router exposes no per-provider endpoints API, so we
+	 * return an empty endpoints map.
+	 */
+	protected override async loadModelsAndEndpoints(): Promise<{ models: ModelRecord; endpoints: ModelRecord }> {
+		const models = await getModels({
+			provider: "shofer",
+			baseUrl: this.options.openRouterBaseUrl,
+			apiKey: this.options.openRouterApiKey,
+		})
+
+		return { models, endpoints: {} }
 	}
 
 	/** @inheritdoc */
