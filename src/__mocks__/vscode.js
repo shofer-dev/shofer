@@ -87,6 +87,7 @@ export const window = {
 	}),
 	onDidCloseTerminal: () => mockDisposable,
 	createTextEditorDecorationType: () => ({ dispose: () => {} }),
+	showQuickPick: () => Promise.resolve(undefined),
 }
 
 export const commands = {
@@ -107,8 +108,15 @@ export const extensions = {
 	getExtension: () => null,
 }
 
+export const UIKind = {
+	Desktop: 1,
+	Web: 2,
+}
+
 export const env = {
 	openExternal: () => Promise.resolve(),
+	// Default to a desktop host; tests that exercise web behaviour override this.
+	uiKind: UIKind.Desktop,
 }
 
 export const Uri = mockUri

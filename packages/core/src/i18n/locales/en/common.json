@@ -170,6 +170,13 @@
 		"export_task_json_open": "Open",
 		"export_task_json_reveal": "Reveal in File Explorer"
 	},
+	"export_destination": {
+		"prompt": "Where should the export be saved?",
+		"browser_label": "Download to this computer",
+		"browser_detail": "Save the file through your browser",
+		"remote_label": "Save on the remote server",
+		"remote_detail": "Write to the machine the editor is running on"
+	},
 	"answers": {
 		"yes": "Yes",
 		"no": "No",

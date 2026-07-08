@@ -1,6 +1,4 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import os from "os"
-import * as path from "path"
 import * as vscode from "vscode"
 
 // Extended content block types to support new Anthropic API features
@@ -29,13 +27,13 @@ export function getTaskFileName(dateTs: number): string {
 	return `shofer_task_${month}-${day}-${year}_${hours}-${minutes}-${seconds}-${ampm}.md`
 }
 
-export async function downloadTask(
-	dateTs: number,
-	conversationHistory: Anthropic.MessageParam[],
-	defaultUri: vscode.Uri,
-): Promise<vscode.Uri | undefined> {
-	// Generate markdown
-	const markdownContent = conversationHistory
+/**
+ * Render a task's API conversation history as a human-readable markdown
+ * transcript. Extracted so the same content can either be written to disk
+ * ({@link downloadTask}) or streamed to the browser for a client-side download.
+ */
+export function buildTaskMarkdown(conversationHistory: Anthropic.MessageParam[]): string {
+	return conversationHistory
 		.map((message) => {
 			const role = message.role === "user" ? "**User:**" : "**Assistant:**"
 			const content = Array.isArray(message.content)
@@ -44,8 +42,14 @@ export async function downloadTask(
 			return `${role}\n\n${content}\n\n`
 		})
 		.join("---\n\n")
+}
 
-	return saveMarkdownFile(markdownContent, defaultUri)
+export async function downloadTask(
+	dateTs: number,
+	conversationHistory: Anthropic.MessageParam[],
+	defaultUri: vscode.Uri,
+): Promise<vscode.Uri | undefined> {
+	return saveMarkdownFile(buildTaskMarkdown(conversationHistory), defaultUri)
 }
 
 /**
@@ -95,7 +99,10 @@ export async function downloadWorkflowEvents(
  * Prompt for a save location and write markdown content there, opening the
  * result in an editor. Shared by the task and workflow markdown exporters.
  */
-async function saveMarkdownFile(markdownContent: string, defaultUri: vscode.Uri): Promise<vscode.Uri | undefined> {
+export async function saveMarkdownFile(
+	markdownContent: string,
+	defaultUri: vscode.Uri,
+): Promise<vscode.Uri | undefined> {
 	// Prompt user for save location
 	const saveUri = await vscode.window.showSaveDialog({
 		filters: { Markdown: ["md"] },

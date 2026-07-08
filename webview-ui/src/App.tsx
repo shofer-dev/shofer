@@ -8,6 +8,7 @@ import { getAllModes } from "@shofer/types"
 import TranslationProvider from "./i18n/TranslationContext"
 
 import { vscode } from "./utils/vscode"
+import { triggerBrowserDownload } from "./utils/browserDownload"
 import { telemetryClient } from "./utils/TelemetryClient"
 import { initializeSourceMaps, exposeSourceMapsForDebugging } from "./utils/sourceMapInitializer"
 import { ExtensionStateContextProvider, useExtensionState } from "./context/ExtensionStateContext"
@@ -287,6 +288,14 @@ const App = () => {
 			// a workflow from LauncherView which leaves the tab on "launcher").
 			if (message.type === "invoke" && message.invoke === "newChat") {
 				switchTab("chat")
+			}
+
+			// The host streams an exported file here when the editor is accessed over
+			// the web (code-server / vscode.dev), so the browser saves it onto the
+			// user's own machine rather than the remote server's filesystem.
+			if (message.type === "browserDownload" && message.browserDownload) {
+				const { fileName, content, mime } = message.browserDownload
+				triggerBrowserDownload(fileName, content, mime)
 			}
 
 			if (message.type === "acceptInput") {
