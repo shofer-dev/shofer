@@ -87,6 +87,8 @@ export class NodeConnection {
 	private _agentVersion?: string
 	private _error?: string
 	private _load?: LoadSample
+	private _configVersion?: string
+	private _managed?: boolean
 	private _client?: ShoferHttpClient
 
 	private readonly emitter = new TypedEmitter<ShoferNodeConnState>()
@@ -117,9 +119,38 @@ export class NodeConnection {
 	get load(): LoadSample | undefined {
 		return this._load
 	}
+	/**
+	 * The node's last-applied config-sync version (config_sync §6), echoed on the
+	 * `whoami` handshake and every `GET /health` ping. The controller's ExecutorPool
+	 * gates pool eligibility on `configVersion === desiredVersion` (drift detection);
+	 * `undefined` until the node reports one.
+	 */
+	get configVersion(): string | undefined {
+		return this._configVersion
+	}
+	/**
+	 * Whether this node accepts controller config (config_sync §Part A). A node that
+	 * reports `managed: false` is self-administered (started with local CLI overrides):
+	 * it ignores config pushes and serves tasks on its own config, so the controller's
+	 * ExecutorPool EXEMPTS it from config-version gating. Defaults to `true` (gated —
+	 * the safe direction: a managed node that hasn't reported yet must not skip the gate).
+	 */
+	get managed(): boolean {
+		return this._managed ?? true
+	}
 	/** The live agent surface — only exposed while `connected`. */
 	get api(): AgentApi | undefined {
 		return this._status === "connected" ? this._client : undefined
+	}
+
+	/**
+	 * Mark this node as having applied `version` (config_sync §Part A). The controller
+	 * calls this right after a successful `applyConfig` push so a just-synced node
+	 * becomes pool-assignable immediately, without waiting for the next `/health` tick;
+	 * the health echo remains the ongoing source of truth (it overwrites this on ping).
+	 */
+	markConfigApplied(version: string): void {
+		this._configVersion = version
 	}
 
 	/** Subscribe to status changes (also fired on latency updates). Returns an unsubscribe. */
@@ -149,6 +180,8 @@ export class NodeConnection {
 		this.reconnectAttempt = 0
 		this._latencyMs = undefined
 		this._load = undefined
+		this._configVersion = undefined
+		this._managed = undefined
 		this.setStatus("disconnected")
 	}
 
@@ -190,6 +223,10 @@ export class NodeConnection {
 			// Accept load metrics from the handshake too, if the node volunteers them.
 			const sample = parseLoadSample(body)
 			if (sample) this._load = sample
+			const cv = (body as { configVersion?: unknown }).configVersion
+			if (typeof cv === "string") this._configVersion = cv
+			const mg = (body as { managed?: unknown }).managed
+			if (typeof mg === "boolean") this._managed = mg
 		} catch {
 			version = undefined
 		}
@@ -263,8 +300,13 @@ export class NodeConnection {
 		if (!res.ok) return this.onPingFailure(`health → ${res.status}`)
 		this._latencyMs = Math.max(0, Math.round(now() - start))
 		try {
-			const sample = parseLoadSample(await res.json())
+			const body = await res.json()
+			const sample = parseLoadSample(body)
 			if (sample) this._load = sample
+			const cv = (body as { configVersion?: unknown }).configVersion
+			if (typeof cv === "string") this._configVersion = cv
+			const mg = (body as { managed?: unknown }).managed
+			if (typeof mg === "boolean") this._managed = mg
 		} catch {
 			// Non-JSON / malformed health body — keep the previous sample.
 		}

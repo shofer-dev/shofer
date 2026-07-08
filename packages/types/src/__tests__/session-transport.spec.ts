@@ -16,6 +16,7 @@ function makeExecutorApi() {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		applyConfig: vi.fn(async () => {}),
 		getCheckpointDiff: vi.fn(async () => [
 			{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
 		]),
@@ -70,7 +71,9 @@ describe("session transport (controller ↔ executor)", () => {
 		// Data method: the computed diff comes back as the command result.
 		const diff = await controller.api.getCheckpointDiff("t1", { commitHash: "c1", mode: "checkpoint" })
 		expect(api.getCheckpointDiff).toHaveBeenCalledWith("t1", { commitHash: "c1", mode: "checkpoint" })
-		expect(diff).toEqual([{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } }])
+		expect(diff).toEqual([
+			{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
+		])
 
 		const changed = await controller.api.getChangedFileDiff("t1", "a.ts")
 		expect(api.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")

@@ -7,6 +7,7 @@ import type {
 	CheckpointRestoreOptions,
 	CreateTaskInput,
 	ServerEvent,
+	SyncedSettings,
 } from "@shofer/types"
 
 /**
@@ -54,6 +55,10 @@ export class ShoferHttpClient implements AgentApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
+	}
+
+	async applyConfig(config: SyncedSettings, version: string): Promise<void> {
+		await this.post("/config", { config, version })
 	}
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────

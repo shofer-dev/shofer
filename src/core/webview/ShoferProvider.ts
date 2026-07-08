@@ -66,7 +66,12 @@ import { EMBEDDING_MODEL_PROFILES } from "@shofer/core"
 import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
-import { downloadTask, downloadWorkflowEvents, getTaskFileName } from "../../integrations/misc/export-markdown"
+import {
+	buildTaskMarkdown,
+	formatWorkflowEventsToMarkdown,
+	getTaskFileName,
+	saveMarkdownFile,
+} from "../../integrations/misc/export-markdown"
 import {
 	buildJsonTrace,
 	buildJsonTraceTree,
@@ -74,6 +79,8 @@ import {
 	getJsonExportFileName,
 	type JsonExportTrace,
 } from "../../integrations/misc/export-json"
+import { pickExportDestination } from "../../integrations/misc/export-destination"
+import { stringifyJsonToFile } from "../../utils/exportJsonWorker"
 import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
 import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
@@ -2058,7 +2065,14 @@ export class ShoferProvider
 		// L2/D: the registry is a process-wide SHARED singleton. The sidebar
 		// activation (which owns the live ShoferAPI) constructs it; the editor-tab
 		// provider retrieves the same instance via attachSharedNodeRegistry().
-		const registry = NodeRegistry.getInstance({ context: this.context, localApi, controllerVersion })!
+		// config_sync §4c: the ContextProxy is the controller-authoritative settings
+		// source the registry reads + subscribes to, to replicate the synced slice to nodes.
+		const registry = NodeRegistry.getInstance({
+			context: this.context,
+			localApi,
+			controllerVersion,
+			configSource: this.contextProxy,
+		})!
 		this.attachNodeRegistry(registry)
 		void registry.init()
 	}
@@ -3855,17 +3869,20 @@ export class ShoferProvider
 	async exportTaskWithId(id: string) {
 		const { historyItem, apiConversationHistory } = await this.getTaskWithId(id)
 		const fileName = getTaskFileName(historyItem.ts)
-		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
-			useWorkspace: false,
-			fallbackDir: path.join(os.homedir(), "Downloads"),
-		})
 
-		let saveUri: vscode.Uri | undefined
+		// On a web host (code-server / vscode.dev) `showSaveDialog` writes to the
+		// remote server, not the user's machine, so offer a browser download too.
+		const destination = await pickExportDestination()
+		if (!destination) {
+			return // user dismissed the destination picker
+		}
+
+		// A workflow makes no direct LLM calls, so `apiConversationHistory` is empty
+		// — its transcript is the "Events" tab: the say/ask state-transition messages
+		// (peer-to-peer `peer_message` excluded, to match the JSON export's `events`
+		// field). Resolve the markdown content for whichever task kind this is.
+		let markdown: string
 		if (historyItem.isWorkflow) {
-			// A workflow makes no direct LLM calls, so `apiConversationHistory` is
-			// empty — its transcript is the "Events" tab: the say/ask
-			// state-transition messages (peer-to-peer `peer_message` excluded, to
-			// match the JSON export's `events` field).
 			let uiMessages: Array<{ type: string; say?: string; ask?: string; ts: number; text?: string }> = []
 			try {
 				const { readTaskMessages } = await import("@shofer/core")
@@ -3883,10 +3900,24 @@ export class ShoferProvider
 				((historyItem.flowState as Record<string, unknown> | undefined)?.flowName as string) ||
 				historyItem.task ||
 				""
-			saveUri = await downloadWorkflowEvents(flowName, events, defaultUri)
+			markdown = formatWorkflowEventsToMarkdown(flowName, events)
 		} else {
-			saveUri = await downloadTask(historyItem.ts, apiConversationHistory, defaultUri)
+			markdown = buildTaskMarkdown(apiConversationHistory)
 		}
+
+		if (destination === "browser") {
+			await this.postMessageToWebview({
+				type: "browserDownload",
+				browserDownload: { fileName, content: markdown, mime: "text/markdown" },
+			})
+			return
+		}
+
+		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
+			useWorkspace: false,
+			fallbackDir: path.join(os.homedir(), "Downloads"),
+		})
+		const saveUri = await saveMarkdownFile(markdown, defaultUri)
 
 		if (saveUri) {
 			await saveLastExportPath(this.contextProxy, "lastTaskExportPath", saveUri)
@@ -3939,6 +3970,38 @@ export class ShoferProvider
 		}
 
 		const fileName = getJsonExportFileName(historyItem.ts)
+
+		// On a web host (code-server / vscode.dev) `showSaveDialog` writes to the
+		// remote server, not the user's machine, so offer a browser download too.
+		const destination = await pickExportDestination()
+		if (!destination) {
+			return // user dismissed the destination picker
+		}
+
+		if (destination === "browser") {
+			// Serialize to an OS temp file via the worker (a workflow trace is the
+			// whole descendant task tree, so stringifying it on the main thread would
+			// freeze the webview), read the bytes back, and stream them to the webview
+			// for a client-side download. The temp file is removed afterwards.
+			const tmpFile = path.join(os.tmpdir(), fileName)
+			const content = await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title: t("common:info.exporting_task_json_writing"),
+				},
+				async () => {
+					await stringifyJsonToFile(trace, tmpFile)
+					return fs.readFile(tmpFile, "utf8")
+				},
+			)
+			await fs.unlink(tmpFile).catch(() => {})
+			await this.postMessageToWebview({
+				type: "browserDownload",
+				browserDownload: { fileName, content, mime: "application/json" },
+			})
+			return
+		}
+
 		const defaultUri = await resolveDefaultSaveUri(this.contextProxy, "lastTaskExportPath", fileName, {
 			useWorkspace: false,
 			fallbackDir: path.join(os.homedir(), "Downloads"),

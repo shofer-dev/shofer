@@ -1,7 +1,13 @@
 import http from "node:http"
 import os from "node:os"
 
-import type { AgentApi, CheckpointDiffOptions, CheckpointRestoreOptions, ProviderSettings } from "@shofer/types"
+import type {
+	AgentApi,
+	CheckpointDiffOptions,
+	CheckpointRestoreOptions,
+	ProviderSettings,
+	SyncedSettings,
+} from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -49,13 +55,25 @@ export interface HttpServerOptions {
 	 * node and controller run the exact same shofer version before connecting.
 	 */
 	version?: string
+	/**
+	 * The node's applied config-sync version (config_sync §6), surfaced on
+	 * `/health` and `/whoami` so the controller detects drift.
+	 */
+	getConfigVersion?: () => string | undefined
+	/**
+	 * Whether this node accepts controller config (config_sync §Part A). Surfaced on
+	 * `/health` and `/whoami` so the controller EXEMPTS a self-administered node
+	 * (`false`) from config-version pool-gating — it serves tasks on its own config.
+	 */
+	getManaged?: () => boolean
 }
 
 /**
  * Create the shofer HTTP/SSE server. Routes (all under `/api/<version>` except
  * `/health`):
- *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) (open)
- *   GET  /api/v1/whoami              → { version } (authed; one-shot liveness+version+auth)
+ *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) + configVersion (open)
+ *   GET  /api/v1/whoami              → { version, configVersion } (authed; one-shot liveness+version+auth)
+ *   POST /api/v1/config              → { config, version } → 202 (controller→node config sync, §config_sync)
  *   GET  /api/v1/event               → SSE event stream
  *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
@@ -80,7 +98,7 @@ export function createRequestHandler(
 	opts: HttpServerOptions = {},
 ): (req: http.IncomingMessage, res: http.ServerResponse) => void {
 	const base = `/api/${API_VERSION}`
-	const { token, version } = opts
+	const { token, version, getConfigVersion, getManaged } = opts
 
 	return (req, res) => {
 		void handle(req, res).catch((error) => {
@@ -97,7 +115,14 @@ export function createRequestHandler(
 		// load-metric channel: `loadavg`/`cpus` let a controller's ExecutorPool
 		// run a load-average LB policy (Shofer Nodes).
 		if (method === "GET" && path === "/health") {
-			return send(res, 200, { ok: true, version, loadavg: os.loadavg(), cpus: os.cpus().length })
+			return send(res, 200, {
+				ok: true,
+				version,
+				loadavg: os.loadavg(),
+				cpus: os.cpus().length,
+				configVersion: getConfigVersion?.(),
+				managed: getManaged?.(),
+			})
 		}
 
 		// Bearer-token gate for the entire versioned API surface.
@@ -110,7 +135,7 @@ export function createRequestHandler(
 
 		// Authed liveness+version+auth check in a single round-trip.
 		if (method === "GET" && path === `${base}/whoami`) {
-			return send(res, 200, { version })
+			return send(res, 200, { version, configVersion: getConfigVersion?.(), managed: getManaged?.() })
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
@@ -124,6 +149,13 @@ export function createRequestHandler(
 			})
 			req.on("close", unsubscribe)
 			return
+		}
+
+		if (method === "POST" && path === `${base}/config`) {
+			const body = await readJson(req)
+			if (typeof body.version !== "string") return send(res, 400, { error: "version is required" })
+			await api.applyConfig(body.config as SyncedSettings, body.version)
+			return send(res, 202, { applied: true })
 		}
 
 		if (method === "POST" && path === `${base}/task`) {

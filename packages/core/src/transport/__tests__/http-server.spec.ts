@@ -64,6 +64,7 @@ describe("createRequestHandler (§11)", () => {
 			sendMessage: vi.fn(async () => {}),
 			cancelTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
+			applyConfig: vi.fn(async () => {}),
 			getCheckpointDiff: vi.fn(async () => [
 				{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
 			]),

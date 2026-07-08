@@ -13,6 +13,7 @@ function makeExecutor(id: string) {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		applyConfig: vi.fn(async () => {}),
 		getCheckpointDiff: vi.fn(async () => []),
 		getTaskChangedFiles: vi.fn(async () => ({ taskId: `${id}-task-1`, entries: [], backend: "none" as const })),
 		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),

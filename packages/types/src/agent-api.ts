@@ -12,6 +12,7 @@
  */
 
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
+import type { SyncedSettings } from "./global-settings.js"
 import type { ProviderSettings } from "./provider-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
@@ -62,6 +63,12 @@ export interface AgentApi {
 	 * approvals round-trip exactly like a local task's.
 	 */
 	respondToAsk(taskId: string, response: AskResponse): Promise<void>
+
+	/** Node-scoped settings the controller replicates to this executor (config_sync §4a).
+	 *  `version` is the controller-assigned, node-opaque token the node stores and echoes
+	 *  on /health so the controller detects drift. Ignored when the node has local CLI
+	 *  overrides (allowClientConfig === false), same rule as apiConfiguration. */
+	applyConfig(config: SyncedSettings, version: string): Promise<void>
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
 	// Checkpoint diff/restore + the changed-files panel for a REMOTE (shadow) task:

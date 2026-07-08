@@ -32,6 +32,7 @@ function makeAgent(): AgentApi {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		applyConfig: vi.fn(async () => {}),
 		...l3Stubs(),
 		subscribe: vi.fn(() => () => {}),
 	}
@@ -68,12 +69,17 @@ class FakeConn implements INodeConnection {
 	agentVersion?: string
 	error?: string
 	load: LoadSample | undefined
+	configVersion: string | undefined
+	managed = true
 	api: AgentApi | undefined
 	disposed = false
 	private cbs = new Set<(s: ShoferNodeConnState) => void>()
 
 	constructor(readonly opts: { baseUrl: string; token?: string; controllerVersion: string }) {}
 
+	markConfigApplied(version: string): void {
+		this.configVersion = version
+	}
 	onStatusChange(cb: (s: ShoferNodeConnState) => void): () => void {
 		this.cbs.add(cb)
 		return () => this.cbs.delete(cb)
@@ -144,6 +150,7 @@ function makeDrivableAgent(taskId: string) {
 		sendMessage: vi.fn(async () => {}),
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
+		applyConfig: vi.fn(async () => {}),
 		...l3Stubs(),
 		subscribe: (listener) => {
 			emit = listener

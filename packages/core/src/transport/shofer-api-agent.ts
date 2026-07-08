@@ -9,6 +9,7 @@ import type {
 	CheckpointRestoreOptions,
 	CreateTaskInput,
 	ServerEvent,
+	SyncedSettings,
 } from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
@@ -52,10 +53,34 @@ const FORWARDED_EVENTS = [
 ] as const
 
 export class ShoferApiAgent implements AgentApi {
+	private appliedConfigVersion?: string
+
 	constructor(
 		private readonly api: ShoferAPI,
 		private readonly options: ShoferApiAgentOptions = {},
 	) {}
+
+	/** The last controller config-sync version this node applied (config_sync §6). */
+	get configVersion(): string | undefined {
+		return this.appliedConfigVersion
+	}
+
+	/**
+	 * Whether this node accepts controller config pushes (config_sync §Part A). A
+	 * self-administered node (`allowClientConfig === false`) ignores `applyConfig`, so
+	 * it never echoes the controller's `desiredVersion`; it advertises `managed: false`
+	 * on `/health` & `/whoami` so the controller EXEMPTS it from version-gating.
+	 */
+	get acceptsClientConfig(): boolean {
+		return !!this.options.allowClientConfig
+	}
+
+	async applyConfig(config: SyncedSettings, version: string): Promise<void> {
+		// Node CLI override wins — ignore controller pushes, same rule as apiConfiguration.
+		if (!this.options.allowClientConfig) return
+		await this.api.applySyncedSettings(config)
+		this.appliedConfigVersion = version // opaque; echoed on /health & /whoami so the controller sees convergence
+	}
 
 	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
 		// Apply the controller's per-task API Configuration only when this node has

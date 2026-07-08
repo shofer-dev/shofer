@@ -8,6 +8,8 @@ import {
 	type CheckpointDiffEntry,
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
+	type Event,
+	type GlobalSettings,
 	type LoadBalancerPolicy,
 	type LoadSample,
 	type ProviderSettings,
@@ -19,12 +21,16 @@ import {
 	type ShoferNodeRequest,
 	type ShoferNodeView,
 	type ShoferNodesState,
+	type SyncedSettings,
 	type TokenUsage,
 	ExecutorPool,
 	LOCAL_NODE_ID,
 	ShoferEventName,
+	SYNCED_SETTINGS_KEYS,
+	computeConfigVersion,
+	pickSyncedSettings,
 } from "@shofer/types"
-import { NodeConnection, ShoferApiAgent } from "@shofer/core"
+import { NodeConnection, ShoferApiAgent, configLog } from "@shofer/core"
 
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
@@ -52,11 +58,28 @@ export interface INodeConnection {
 	readonly error?: string
 	/** The node's latest load sample (from the health ping), for the LB policy. */
 	readonly load: LoadSample | undefined
+	/** The node's last-applied config-sync version (config_sync §6), echoed on /health. */
+	readonly configVersion: string | undefined
+	/** Whether the node accepts controller config (config_sync §Part A); `false` ⇒ exempt from gating. */
+	readonly managed: boolean
 	readonly api: AgentApi | undefined
 	onStatusChange(cb: (state: ShoferNodeConnState) => void): () => void
+	/** Record a just-pushed config version so the node is pool-assignable without waiting for the next ping. */
+	markConfigApplied(version: string): void
 	connect(): Promise<void>
 	disconnect(): void
 	dispose(): void
+}
+
+/**
+ * The minimal settings surface the registry reads to resolve + subscribe to the
+ * controller-authoritative synced slice (config_sync §4c). Satisfied by
+ * {@link import("../config/ContextProxy.js").ContextProxy}; declared locally to avoid
+ * an import cycle with the config layer.
+ */
+export interface SyncedConfigSource {
+	getValues(): Partial<GlobalSettings>
+	onDidChange: Event<{ key: string }>
 }
 
 /** Factory for a node connection (injectable so the registry is unit-testable). */
@@ -109,6 +132,13 @@ export interface NodeRegistryOptions {
 	context: vscode.ExtensionContext
 	localApi: ShoferAPI
 	controllerVersion: string
+	/**
+	 * Controller-authoritative settings source (config_sync §4c). The registry reads
+	 * the synced slice from it and subscribes to changes to push config to remote
+	 * nodes. Optional so unit tests can construct the registry without a ContextProxy;
+	 * when absent, config sync is inert (no desired version → the pool is never gated).
+	 */
+	configSource?: SyncedConfigSource
 }
 
 export interface NodeRegistryDeps {
@@ -161,7 +191,16 @@ export class NodeRegistry {
 	private shadowChangedFilesPendingTaskId?: string
 	/** Disposes the `onDidChangeConfiguration` subscription for the LB policy. */
 	private readonly configDisposable: vscode.Disposable
+	/** Controller-authoritative settings source (config_sync §4c); undefined disables sync. */
+	private readonly configSource?: SyncedConfigSource
+	/** Disposes the `configSource.onDidChange` subscription for config-sync broadcasts. */
+	private configChangeDisposable?: { dispose(): void }
+	/** The controller's current desired config-sync version (config_sync §6). */
+	private desiredConfigVersion?: string
 	private static readonly SHADOW_CHANGED_FILES_DEBOUNCE_MS = 500
+
+	/** The globalSettings keys that are actually synced — used to filter change events. */
+	private static readonly SYNCED_KEYS = new Set<string>(SYNCED_SETTINGS_KEYS as readonly string[])
 
 	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
 	private static _instance: NodeRegistry | undefined
@@ -189,6 +228,7 @@ export class NodeRegistry {
 	constructor(opts: NodeRegistryOptions, deps: NodeRegistryDeps = {}) {
 		this.context = opts.context
 		this.controllerVersion = opts.controllerVersion
+		this.configSource = opts.configSource
 		this.localAgent = deps.localAgent ?? new ShoferApiAgent(opts.localApi)
 		this.createConnection = deps.createConnection ?? ((o) => new NodeConnection(o))
 
@@ -205,6 +245,9 @@ export class NodeRegistry {
 			id: LOCAL_NODE_ID,
 			api: this.localAgent,
 			load: (): LoadSample => ({ loadavg: os.loadavg() as [number, number, number], cpus: os.cpus().length }),
+			// The Local executor reads controller state in-process — NEVER version-gated
+			// (and never pushed config, which would re-apply the controller's own settings).
+			managed: () => false,
 		})
 		if (this.getDef(LOCAL_NODE_ID)?.disabled) this.pool.setDisabled(LOCAL_NODE_ID, true)
 
@@ -216,6 +259,18 @@ export class NodeRegistry {
 
 		// L2: demux the merged pool feed into per-remote-task shadows + webview render.
 		this.pool.subscribe((event) => this.onPoolEvent(event))
+
+		// config_sync §4c: seed the desired config version from controller state and
+		// keep the pool's gate current on every synced-settings change. Inert without a
+		// configSource (unit tests) — desiredConfigVersion stays undefined ⇒ no gating.
+		if (this.configSource) {
+			this.desiredConfigVersion = computeConfigVersion(this.currentSyncedSlice())
+			this.pool.setDesiredConfigVersion(this.desiredConfigVersion)
+			this.configChangeDisposable = this.configSource.onDidChange((e) => {
+				// Only react to keys that are actually synced (ignore frontend-only churn).
+				if (NodeRegistry.SYNCED_KEYS.has(e.key)) this.recomputeAndBroadcast()
+			})
+		}
 	}
 
 	/** Read the `shofer.nodes.loadBalancer` setting (default `round-robin`). */
@@ -686,6 +741,7 @@ export class NodeRegistry {
 	dispose(): void {
 		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
 		this.configDisposable.dispose()
+		this.configChangeDisposable?.dispose()
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()
@@ -726,11 +782,61 @@ export class NodeRegistry {
 		const eligible = conn.status === "connected" && !!conn.api && !def?.disabled
 		const inPool = this.pool.has(id)
 		if (eligible && !inPool) {
-			this.pool.add({ id, api: conn.api!, load: () => conn.load })
+			this.pool.add({
+				id,
+				api: conn.api!,
+				load: () => conn.load,
+				configVersion: () => conn.configVersion,
+				managed: () => conn.managed,
+			})
 		} else if (!eligible && inPool) {
 			this.pool.remove(id)
 		}
+		// config_sync §4c: push the current slice to a node that (re)connected and isn't
+		// already at the desired version. Idempotent; the health-ping loop re-sends on drift.
+		if (this.configSource && conn.status === "connected" && conn.api) {
+			const slice = this.currentSyncedSlice()
+			const version = this.desiredConfigVersion ?? computeConfigVersion(slice)
+			if (conn.configVersion !== version) void this.pushConfig(id, conn, slice, version)
+		}
 		this.fireChange()
+	}
+
+	// ── controller→node config sync (config_sync §4c) ────────────────────────────
+
+	/** The controller-authoritative synced settings slice, resolved live from the source. */
+	private currentSyncedSlice(): SyncedSettings {
+		return pickSyncedSettings(this.configSource?.getValues() ?? {})
+	}
+
+	/**
+	 * Recompute the desired config version, update the pool's gate, and broadcast the new
+	 * slice to every connected REMOTE node. Never touches the Local executor (it reads
+	 * controller state in-process). Called on every synced-settings change.
+	 */
+	private recomputeAndBroadcast(): void {
+		const slice = this.currentSyncedSlice()
+		const version = computeConfigVersion(slice)
+		this.desiredConfigVersion = version
+		this.pool.setDesiredConfigVersion(version)
+		for (const [id, conn] of this.connections) {
+			if (conn.status === "connected" && conn.api) void this.pushConfig(id, conn, slice, version)
+		}
+		this.fireChange()
+	}
+
+	/**
+	 * Push one config slice to a single remote node. On success, mark the connection as
+	 * applied so it becomes pool-assignable promptly (the health echo stays the ongoing
+	 * source of truth). On failure, log and let the health-ping reconciliation retry.
+	 */
+	private async pushConfig(id: string, conn: INodeConnection, slice: SyncedSettings, version: string): Promise<void> {
+		try {
+			await conn.api!.applyConfig(slice, version)
+			conn.markConfigApplied(version)
+		} catch (e) {
+			configLog.warn(`config sync push to node ${id} failed: ${e instanceof Error ? e.message : String(e)}`)
+		}
 	}
 
 	private teardownConnection(id: string): void {

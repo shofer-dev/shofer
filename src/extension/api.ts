@@ -9,6 +9,7 @@ import pWaitFor from "p-wait-for"
 import {
 	type ShoferAPI,
 	type ShoferSettings,
+	type SyncedSettings,
 	type ShoferEvents,
 	type ProviderSettings,
 	type ProviderSettingsEntry,
@@ -437,7 +438,8 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		// drive the answer through the same ask-response channel a webview button
 		// takes. This is the executor side of the reverse ask channel: a controller
 		// routes a remote task's approval back here over the transport.
-		const task = this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
+		const task =
+			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
 
 		if (!task) {
 			this.log(`[API#respondToAsk] no task for ${taskId}; ask response dropped`)
@@ -459,7 +461,8 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 
 	/** Resolve a managed Task instance by id (else the current task) for L3 ops. */
 	private resolveTaskForL3(taskId: string, op: string) {
-		const task = this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
+		const task =
+			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ?? this.sidebarProvider.getCurrentTask()
 		if (!task) this.log(`[API#${op}] no task for ${taskId}`)
 		return task
 	}
@@ -726,6 +729,11 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	public async setConfiguration(values: ShoferSettings) {
 		await this.sidebarProvider.contextProxy.setValues(values)
 		await this.sidebarProvider.providerSettingsManager.saveConfig(values.currentApiConfigName || "default", values)
+		await this.sidebarProvider.postInitState()
+	}
+
+	public async applySyncedSettings(config: SyncedSettings): Promise<void> {
+		await this.sidebarProvider.contextProxy.setValues(config as ShoferSettings)
 		await this.sidebarProvider.postInitState()
 	}
 

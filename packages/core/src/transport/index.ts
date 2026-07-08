@@ -28,9 +28,12 @@ export function serveHttpOverShoferApi(
 	api: ShoferAPI,
 	opts: { port: number; host?: string; token?: string; version?: string; allowClientConfig?: boolean },
 ): Server {
-	const server = createHttpServer(new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig }), {
+	const agent = new ShoferApiAgent(api, { allowClientConfig: opts.allowClientConfig })
+	const server = createHttpServer(agent, {
 		token: opts.token,
 		version: opts.version ?? Package.version,
+		getConfigVersion: () => agent.configVersion,
+		getManaged: () => agent.acceptsClientConfig,
 	})
 	server.listen(opts.port, opts.host)
 	return server

@@ -4,7 +4,7 @@ import type { Socket } from "net"
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 import type { ShoferEvents } from "./events.js"
-import type { ShoferSettings } from "./global-settings.js"
+import type { ShoferSettings, SyncedSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
@@ -129,6 +129,10 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 * @param values An object containing key-value pairs to set.
 	 */
 	setConfiguration(values: ShoferSettings): Promise<void>
+	/** Apply a node-scoped settings slice to this executor's local state (config_sync).
+	 *  Writes only the given keys (a Partial of GlobalSettings) via ContextProxy — no
+	 *  provider-profile save, no secrets. */
+	applySyncedSettings(config: SyncedSettings): Promise<void>
 	/**
 	 * Returns a list of all configured profile names
 	 * @returns Array of profile names

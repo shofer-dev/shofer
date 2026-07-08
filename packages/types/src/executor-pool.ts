@@ -1,5 +1,6 @@
 import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "./agent-api.js"
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
+import type { SyncedSettings } from "./global-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /**
@@ -57,6 +58,19 @@ export interface PooledExecutor {
 	 * consumed by {@link ExecutorPool.pickNext} under a `least-load-*` policy.
 	 */
 	load?: () => LoadSample | undefined
+	/**
+	 * Optional accessor for this executor's last-applied config-sync version
+	 * (config_sync §6), read live so {@link ExecutorPool.assignable} can gate
+	 * new-task assignment on `configVersion === desiredConfigVersion` (drift).
+	 */
+	configVersion?: () => string | undefined
+	/**
+	 * Optional accessor for whether this executor is controller-managed
+	 * (config_sync §Part A). `false` = self-administered (its own config) → EXEMPT
+	 * from config-version gating. Absent/`true` = gated. The Local in-process
+	 * executor reports `false` (it reads controller state directly).
+	 */
+	managed?: () => boolean
 }
 
 export class ExecutorPool implements AgentApi {
@@ -66,6 +80,13 @@ export class ExecutorPool implements AgentApi {
 	private readonly listeners = new Set<(event: ServerEvent) => void>()
 	private roundRobin = 0
 	private policy: LoadBalancerPolicy = "round-robin"
+	/**
+	 * The controller's current desired config-sync version (config_sync §6). When set,
+	 * {@link assignable} excludes any managed executor NOT reporting this exact version
+	 * (stale config), so no new task is routed to a node running stale config. Read live
+	 * by {@link configMatches}; `undefined` (no desired version yet) disables gating.
+	 */
+	private desiredConfigVersion?: string
 
 	/** Select the new-task assignment strategy used by {@link pickNext}. */
 	setPolicy(policy: LoadBalancerPolicy): void {
@@ -75,6 +96,15 @@ export class ExecutorPool implements AgentApi {
 	/** The current new-task assignment strategy. */
 	getPolicy(): LoadBalancerPolicy {
 		return this.policy
+	}
+
+	/**
+	 * Set the controller's desired config-sync version (config_sync §6). Stored and read
+	 * live by {@link assignable}; setting it does NOT itself add/remove executors — the
+	 * gate is evaluated per {@link pickNext} against each executor's live reported version.
+	 */
+	setDesiredConfigVersion(version: string | undefined): void {
+		this.desiredConfigVersion = version
 	}
 
 	/** Register an executor; returns a fn that removes it (and stops forwarding its events). */
@@ -97,7 +127,15 @@ export class ExecutorPool implements AgentApi {
 
 	/** Executors currently eligible for new-task assignment. */
 	private assignable(): PooledExecutor[] {
-		return this.executors.filter((e) => !e.disabled)
+		return this.executors.filter((e) => !e.disabled && this.configMatches(e))
+	}
+
+	/** Whether an executor's config is current enough to receive new tasks (config_sync §6). */
+	private configMatches(e: PooledExecutor): boolean {
+		// No desired version yet, or an unmanaged (self-administered) node → not gated.
+		if (this.desiredConfigVersion === undefined) return true
+		if (e.managed && !e.managed()) return true
+		return e.configVersion?.() === this.desiredConfigVersion
 	}
 
 	/**
@@ -188,6 +226,11 @@ export class ExecutorPool implements AgentApi {
 
 	async respondToAsk(taskId: string, response: AskResponse): Promise<void> {
 		await this.owner(taskId).api.respondToAsk(taskId, response)
+	}
+
+	/** Broadcast the node-scoped config slice to every registered executor (config_sync §4c). */
+	async applyConfig(config: SyncedSettings, version: string): Promise<void> {
+		await Promise.all(this.executors.map((e) => e.api.applyConfig(config, version)))
 	}
 
 	// ── Reverse data channel (Shofer Nodes L3) — route to the owning executor ────
