@@ -140,6 +140,16 @@ export function getModelParams({
 
 	const params: BaseModelParams = { maxTokens, temperature, reasoningEffort, reasoningBudget, verbosity }
 
+	// Some models reject the `temperature` parameter entirely — e.g. Anthropic
+	// Opus 4.7+ / Sonnet 5 / Fable 5 return `400 temperature is deprecated for
+	// this model`, and OpenAI o1/o3. Honor an explicit `supportsTemperature:
+	// false` from the model info for every provider format (the openai/openrouter
+	// branches below additionally special-case specific model IDs). Omitting the
+	// field keeps the prior default behavior.
+	if (model.supportsTemperature === false) {
+		params.temperature = undefined
+	}
+
 	if (format === "anthropic") {
 		return {
 			format,

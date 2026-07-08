@@ -7,6 +7,66 @@ export type AnthropicModelId = keyof typeof anthropicModels
 export const anthropicDefaultModelId: AnthropicModelId = "claude-sonnet-4-5"
 
 export const anthropicModels = {
+	// Current flagship lineup. These use ADAPTIVE thinking + reasoning effort
+	// (output_config.effort) — `budget_tokens` is removed and returns a 400, so
+	// they set supportsReasoningEffort, NOT supportsReasoningBudget. `temperature`
+	// (and top_p/top_k) are ALSO removed on these models — sending it returns
+	// `400 "temperature is deprecated for this model"`, so supportsTemperature:false
+	// (unlike opus-4-6, which still accepts temperature). 1M context is standard
+	// (no long-context premium / no beta flag), so no `tiers`.
+	"claude-opus-4-8": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsTemperature: false,
+		inputPrice: 5.0, // $5 / 1M input
+		outputPrice: 25.0, // $25 / 1M output
+		cacheWritesPrice: 6.25, // $6.25 / 1M (5-min write)
+		cacheReadsPrice: 0.5, // $0.50 / 1M
+		supportsReasoningEffort: true,
+		reasoningEffort: "high",
+	},
+	"claude-opus-4-7": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsTemperature: false,
+		inputPrice: 5.0,
+		outputPrice: 25.0,
+		cacheWritesPrice: 6.25,
+		cacheReadsPrice: 0.5,
+		supportsReasoningEffort: true,
+		reasoningEffort: "high",
+	},
+	"claude-sonnet-5": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsTemperature: false,
+		inputPrice: 3.0, // $3 / 1M ($2 intro through 2026-08-31)
+		outputPrice: 15.0, // $15 / 1M ($10 intro)
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+		supportsReasoningEffort: true,
+		reasoningEffort: "high",
+	},
+	"claude-fable-5": {
+		maxTokens: 128_000,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsTemperature: false,
+		inputPrice: 10.0, // $10 / 1M
+		outputPrice: 50.0, // $50 / 1M
+		cacheWritesPrice: 12.5,
+		cacheReadsPrice: 1.0,
+		supportsReasoningEffort: true,
+		requiredReasoningEffort: true, // thinking is always on; cannot be disabled
+		reasoningEffort: "high",
+	},
 	"claude-sonnet-4-6": {
 		maxTokens: 64_000, // Overridden to 8k if `enableReasoningEffort` is false.
 		contextWindow: 200_000, // Default 200K, extendable to 1M with beta flag 'context-1m-2025-08-07'
