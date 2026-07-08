@@ -1,6 +1,6 @@
 # Outside-Workspace Path Allowlist (Design)
 
-**Status:** Implementing (branch `feat/config-sync`). Rides the implemented config-sync channel.
+**Status:** Implemented (branch `feat/config-sync`). Rides the implemented config-sync channel.
 **Owner:** —
 **Related:** [`auto_approval.md`](auto_approval.md), [`settings_overlay.md`](settings_overlay.md), [`command-execution.md`](command-execution.md), [`configuration.md`](configuration.md), [`tool-categories.md`](tool-categories.md)
 
