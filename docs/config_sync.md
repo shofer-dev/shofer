@@ -115,6 +115,20 @@ setting_, not a periodic manual audit. (Zod 3.25's `.meta()` could instead carry
 each field; the co-located `satisfies` map is chosen to match the file's existing
 array+predicate idiom and to keep the exhaustiveness guarantee obvious.)
 
+**Classification rule (two-part test).** A key is `"node"` iff **both**: (1) the behavior it
+controls runs in `@shofer/core` on the executor — a fast proxy is "consumed under
+`packages/core`" vs only `src/` (the controller); **and** (2) its value is host-portable — a
+boolean/count/byte-cap/timeout, not a machine-specific path or a front-end-only integration.
+Failing (1) → controller-only, `frontend` (e.g. `defaultCostLimit`, applied at task creation
+on the controller — `allowedMaxCost` is the synced enforcement knob; `enableLlmProviderIntegration`,
+a VS Code LM companion). Passing (1) but failing (2) → executor behavior but the node must own
+its own value, still excluded (e.g. `execaShellPath`, a host shell path). Two further
+exclusions: a key already shipped per-task via `apiConfiguration` (`rateLimitSeconds` — also a
+`ProviderSettings` field) is left out to avoid a double source; and `mcpEnabled` is **held**
+because remote MCP also needs the separate `mcp_settings.json` channel + non-loopback
+addressing, so syncing the toggle alone is insufficient. These calls are pinned by the
+`SETTING_SYNC_SCOPE` classification tests.
+
 **Excluded** (per [the table above](#3-what-is-synced-and-what-is-not)): per-task provider
 config (`apiConfiguration`), secrets (API keys — SecretStorage, never plaintext JSON), and
 front-end-only UI state (`pinnedApiConfigs`, `dismissedUpsells`, `lastShownAnnouncementId`,

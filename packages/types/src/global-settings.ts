@@ -380,7 +380,7 @@ export const SETTING_SYNC_SCOPE = {
 	alwaysAllowWriteProtected: "node",
 	alwaysAllowBrowser: "node",
 	writeDelayMs: "node",
-	requestDelaySeconds: "frontend", // provider request pacing; not in the node behavioral-limit set — conservative
+	requestDelaySeconds: "node", // API-request pacing applied where the executor makes LLM calls
 	alwaysAllowMcp: "node",
 	alwaysAllowUncategorized: "node",
 	alwaysAllowModeSwitch: "node",
@@ -407,8 +407,8 @@ export const SETTING_SYNC_SCOPE = {
 	includeDiagnosticMessages: "node",
 	maxDiagnosticMessages: "node",
 
-	enableCheckpoints: "frontend", // checkpoint persistence feature; not in the synced behavior set — conservative
-	checkpointTimeout: "frontend",
+	enableCheckpoints: "node", // checkpoints are created/owned on the executor (per-task shadow-git); controller diff/restore needs them enabled there
+	checkpointTimeout: "node",
 
 	// ── Notification prefs (front-end only) ──
 	ttsEnabled: "frontend",
@@ -418,11 +418,11 @@ export const SETTING_SYNC_SCOPE = {
 
 	maxOpenTabsContext: "node",
 	maxWorkspaceFiles: "node",
-	showShoferIgnoredFiles: "frontend", // file-listing display detail; borderline — conservative
-	enableSubfolderRules: "frontend", // rules loading is file-based (.shofer/rules); borderline — conservative
-	useAgentRules: "frontend", // as above — conservative
-	maxImageFileSize: "frontend", // image-read sizing; borderline — conservative
-	maxTotalImageSize: "frontend",
+	showShoferIgnoredFiles: "node", // drives the executor's ignore controller + tool-listing output
+	enableSubfolderRules: "node", // rules feed the system prompt built on the executor
+	useAgentRules: "node", // AGENTS.md rules feed the executor-built system prompt
+	maxImageFileSize: "node", // image ingestion happens on the executor
+	maxTotalImageSize: "node",
 
 	// ── Terminal behavior (terminal* — node-scoped shell/integration knobs) ──
 	terminalOutputPreviewSize: "node",
@@ -438,7 +438,7 @@ export const SETTING_SYNC_SCOPE = {
 
 	diagnosticsEnabled: "node", // master toggle for the diagnostics env-detail feature (with includeDiagnosticMessages)
 
-	rateLimitSeconds: "frontend", // provider rate-limit pacing; not in the node behavioral-limit set — conservative
+	rateLimitSeconds: "frontend", // also a ProviderSettings field (provider-settings.ts) — already shipped per-task via apiConfiguration; excluded here to avoid a double source
 	experiments: "frontend",
 
 	// ── Codebase index (front-end config; keys/host-bound) ──
@@ -447,7 +447,7 @@ export const SETTING_SYNC_SCOPE = {
 
 	language: "frontend",
 	telemetrySetting: "frontend",
-	mcpEnabled: "frontend", // MCP server enablement is a per-host capability; borderline — conservative
+	mcpEnabled: "frontend", // executor behavior, but HELD: remote MCP needs the separate mcp_settings.json channel + non-loopback addressing — syncing the toggle alone is insufficient (revisit with remote-MCP support)
 
 	// ── Mode/prompt config (own file-based channel) & UI state ──
 	mode: "frontend",
@@ -472,17 +472,17 @@ export const SETTING_SYNC_SCOPE = {
 
 	defaultCostLimit: "frontend", // per-task cost default applied at creation; allowedMaxCost is the synced enforcement knob — conservative
 	archivedTaskRetentionDays: "frontend", // task-history retention/persistence — no agent-core effect
-	maxParallelTasks: "frontend", // global orchestration limit (controller-managed in the node model) — conservative
+	maxParallelTasks: "node", // subtask concurrency evaluated by NewTaskTool on the executor (a task tree runs on one executor)
 	enableLlmProviderIntegration: "frontend", // depends on a host-installed companion extension — conservative
-	shoferBlobCapBytes: "frontend", // executor message-storage externalization knob; borderline — conservative
-	shoferMcpMaxResponseBytes: "frontend", // MCP response truncation knob; borderline — conservative
+	shoferBlobCapBytes: "node", // blob externalization/truncation on the executor
+	shoferMcpMaxResponseBytes: "node", // MCP response truncation on the executor
 	logLevel: "frontend", // logging is a host/UI concern
 	logCategories: "frontend",
 
 	// ── Captcha-solver budgets (sub-task tuning) ──
-	captchaSolverMaxAttempts: "frontend", // sub-task retry budget; borderline — conservative
-	captchaSolverMaxRounds: "frontend",
-	captchaSolverTimeoutSec: "frontend",
+	captchaSolverMaxAttempts: "node", // tune the captcha sub-task, which runs as a task on the executor
+	captchaSolverMaxRounds: "node",
+	captchaSolverTimeoutSec: "node",
 
 	pluginConfigs: "frontend",
 } satisfies Record<(typeof GLOBAL_SETTINGS_KEYS)[number], "node" | "frontend">

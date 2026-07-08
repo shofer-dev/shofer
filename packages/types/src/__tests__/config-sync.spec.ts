@@ -146,4 +146,42 @@ describe("SETTING_SYNC_SCOPE invariants (config_sync §3)", () => {
 		expect(SYNCED_SETTINGS_KEYS).toContain("alwaysAllowWrite")
 		expect(SYNCED_SETTINGS_KEYS).toContain("allowedCommands")
 	})
+
+	// Lock in the deliberate node/frontend classification calls (config_sync §3) so a
+	// future edit that flips one is caught here rather than silently changing sync behavior.
+	it("syncs settings whose behavior runs on the executor with a portable value", () => {
+		for (const key of [
+			"enableCheckpoints",
+			"checkpointTimeout",
+			"useAgentRules",
+			"enableSubfolderRules",
+			"showShoferIgnoredFiles",
+			"shoferBlobCapBytes",
+			"shoferMcpMaxResponseBytes",
+			"maxImageFileSize",
+			"maxTotalImageSize",
+			"maxParallelTasks",
+			"requestDelaySeconds",
+			"captchaSolverMaxAttempts",
+		] as const) {
+			expect(SETTING_SYNC_SCOPE[key]).toBe("node")
+		}
+	})
+
+	it("does NOT sync controller-only, host-specific, or double-sourced settings", () => {
+		// defaultCostLimit: applied at task creation on the controller (allowedMaxCost is the synced enforcement knob).
+		// execaShellPath: executor behavior but a host-specific path — the node owns its own shell.
+		// enableLlmProviderIntegration: VS Code LM companion; meaningless headless.
+		// rateLimitSeconds: a ProviderSettings field already shipped per-task via apiConfiguration.
+		// mcpEnabled: held pending remote-MCP support (mcp_settings.json is a separate channel).
+		for (const key of [
+			"defaultCostLimit",
+			"execaShellPath",
+			"enableLlmProviderIntegration",
+			"rateLimitSeconds",
+			"mcpEnabled",
+		] as const) {
+			expect(SETTING_SYNC_SCOPE[key]).toBe("frontend")
+		}
+	})
 })
