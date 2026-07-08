@@ -447,7 +447,7 @@ export const SETTING_SYNC_SCOPE = {
 
 	language: "frontend",
 	telemetrySetting: "frontend",
-	mcpEnabled: "frontend", // executor behavior, but HELD: remote MCP needs the separate mcp_settings.json channel + non-loopback addressing — syncing the toggle alone is insufficient (revisit with remote-MCP support)
+	mcpEnabled: "frontend", // HELD, not synced: in the shared-workspace-FS node model the node already has the mirrored .shofer/mcp.json and runs stdio servers node-locally, so it self-determines MCP — syncing the global toggle is unnecessary and could override a locally-correct node. Genuine cross-host gaps (global mcp_settings.json outside the workspace; loopback/controller-hosted servers) are out of scope — revisit with remote-MCP.
 
 	// ── Mode/prompt config (own file-based channel) & UI state ──
 	mode: "frontend",

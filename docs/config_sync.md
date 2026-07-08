@@ -125,9 +125,13 @@ a VS Code LM companion). Passing (1) but failing (2) → executor behavior but t
 its own value, still excluded (e.g. `execaShellPath`, a host shell path). Two further
 exclusions: a key already shipped per-task via `apiConfiguration` (`rateLimitSeconds` — also a
 `ProviderSettings` field) is left out to avoid a double source; and `mcpEnabled` is **held**
-because remote MCP also needs the separate `mcp_settings.json` channel + non-loopback
-addressing, so syncing the toggle alone is insufficient. These calls are pinned by the
-`SETTING_SYNC_SCOPE` classification tests.
+(not synced): in the shipped shared-workspace-FS node model the node already has the mirrored
+project `.shofer/mcp.json` and launches **stdio** servers node-locally, so it _self-determines_
+MCP — syncing the global toggle is unnecessary and could override a locally-correct node. The
+genuine cross-host gaps are narrow — the **global** `mcp_settings.json` (in globalStorage,
+outside the workspace, so not mirrored) and **loopback/controller-hosted** HTTP servers a
+remote node can't reach — and both are out of config-sync's scope; revisit with remote-MCP
+support. These calls are pinned by the `SETTING_SYNC_SCOPE` classification tests.
 
 **Excluded** (per [the table above](#3-what-is-synced-and-what-is-not)): per-task provider
 config (`apiConfiguration`), secrets (API keys — SecretStorage, never plaintext JSON), and
