@@ -80,6 +80,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 				tool: "viewImage",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -138,6 +139,7 @@ export class ViewImageTool extends BaseTool<"view_image"> {
 			tool: "viewImage",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

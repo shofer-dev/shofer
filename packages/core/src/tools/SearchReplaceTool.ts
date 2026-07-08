@@ -97,7 +97,7 @@ export class SearchReplaceTool extends BaseTool<"search_replace"> {
 				fileContent = await fs.readFile(absolutePath, "utf8")
 				// Normalize line endings to LF for consistent matching
 				fileContent = fileContent.replace(/\r\n/g, "\n")
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			} catch (error) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("search_replace")
@@ -178,6 +178,7 @@ export class SearchReplaceTool extends BaseTool<"search_replace"> {
 				path: getReadablePath(task.cwd, relPath),
 				diff: sanitizedDiff,
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -270,6 +271,7 @@ export class SearchReplaceTool extends BaseTool<"search_replace"> {
 			path: getReadablePath(task.cwd, relPath),
 			diff: operationPreview,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		await task.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})

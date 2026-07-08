@@ -55,6 +55,7 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 				tool: "createDirectory",
 				path: getReadablePath(task.cwd, relDirPath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -91,6 +92,7 @@ export class CreateDirectoryTool extends BaseTool<"create_directory"> {
 			tool: "createDirectory",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

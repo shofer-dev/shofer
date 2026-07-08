@@ -173,6 +173,7 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 			path: getReadablePath(task.cwd, relPath),
 			content: prompt,
 			isOutsideWorkspace,
+			absolutePath: fullPath,
 			isProtected: isWriteProtected,
 		}
 
@@ -197,7 +198,12 @@ export class GenerateImageTool extends BaseTool<"generate_image"> {
 				// Use OpenRouter provider (only supports chat completions API)
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const openRouterHandler = new OpenRouterHandler({} as any)
-				result = await openRouterHandler.generateImage(prompt, selectedModel!, openRouterApiKey!, inputImageData)
+				result = await openRouterHandler.generateImage(
+					prompt,
+					selectedModel!,
+					openRouterApiKey!,
+					inputImageData,
+				)
 			}
 
 			if (!result.success) {

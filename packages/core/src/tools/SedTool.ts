@@ -190,6 +190,7 @@ export class SedTool extends BaseTool<"sed"> {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, relPath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			// Capture original content before mutation for FileChangesPanel.

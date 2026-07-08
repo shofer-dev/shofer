@@ -1,5 +1,7 @@
 import type { ExtensionState, ToolGroup } from "@shofer/types"
 
+import { isPathAutoApproved } from "./paths.js"
+
 /**
  * Unified per-group auto-approval gating (v3 architecture §4).
  *
@@ -38,6 +40,8 @@ export type AutoApprovalStateOptions =
 	| "mcpServers" // For `alwaysAllowMcp`.
 	| "allowedCommands" // For `alwaysAllowExecute`.
 	| "deniedCommands"
+	| "allowedReadPaths" // Outside-workspace path allowlist (read + write superset).
+	| "allowedWritePaths" // Outside-workspace path allowlist (read+write).
 
 type AutoApprovalSettings = Pick<ExtensionState, AutoApprovalState | AutoApprovalStateOptions>
 
@@ -75,6 +79,8 @@ export const GROUP_GATE: Record<ToolGroup, GroupGate> = {
 export interface GroupGateContext {
 	isOutsideWorkspace?: boolean
 	isProtected?: boolean
+	/** Resolved absolute path of the resource — matched against the outside-workspace path allowlist. */
+	absolutePath?: string
 }
 
 /**
@@ -97,7 +103,20 @@ export function isGroupAutoApproved(
 	if (gate.base === null) return true
 	if (state[gate.base] !== true) return false
 	if (applyModifiers) {
-		if (ctx.isOutsideWorkspace && gate.outsideToggle && state[gate.outsideToggle] !== true) return false
+		if (ctx.isOutsideWorkspace && gate.outsideToggle && state[gate.outsideToggle] !== true) {
+			// Blanket outside-workspace toggle off — fall back to the per-path allowlist before denying.
+			if (group !== "read" && group !== "write") return false
+			if (!ctx.absolutePath) return false
+			if (
+				!isPathAutoApproved(
+					ctx.absolutePath,
+					group,
+					state.allowedReadPaths ?? [],
+					state.allowedWritePaths ?? [],
+				)
+			)
+				return false
+		}
 		if (ctx.isProtected && gate.protectedToggle && state[gate.protectedToggle] !== true) return false
 	}
 	return true

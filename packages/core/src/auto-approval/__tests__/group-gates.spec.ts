@@ -44,4 +44,84 @@ describe("GROUP_GATE / isGroupAutoApproved", () => {
 		).toBe(true)
 		expect(isGroupAutoApproved("write", writeOn, { isProtected: true }, { applyModifiers: true })).toBe(false)
 	})
+
+	describe("outside-workspace path allowlist fallback", () => {
+		const writeOn = { alwaysAllowWrite: true } as any
+		const readOn = { alwaysAllowReadOnly: true } as any
+		const ctx = (absolutePath?: string) => ({ isOutsideWorkspace: true, absolutePath })
+
+		it("approves an outside write when the path is under allowedWritePaths (blanket toggle off)", () => {
+			const state = { alwaysAllowWrite: true, allowedWritePaths: ["/data/out"] } as any
+			expect(isGroupAutoApproved("write", state, ctx("/data/out/sub/f.ts"), { applyModifiers: true })).toBe(true)
+			expect(isGroupAutoApproved("write", state, ctx("/data/other/f.ts"), { applyModifiers: true })).toBe(false)
+		})
+
+		it("read is satisfied by allowedReadPaths OR allowedWritePaths (write ⊇ read)", () => {
+			expect(
+				isGroupAutoApproved(
+					"read",
+					{ alwaysAllowReadOnly: true, allowedReadPaths: ["/ref"] } as any,
+					ctx("/ref/a.md"),
+					{ applyModifiers: true },
+				),
+			).toBe(true)
+			// A write grant also covers reads there.
+			expect(
+				isGroupAutoApproved(
+					"read",
+					{ alwaysAllowReadOnly: true, allowedWritePaths: ["/ref"] } as any,
+					ctx("/ref/a.md"),
+					{ applyModifiers: true },
+				),
+			).toBe(true)
+		})
+
+		it("a read grant does NOT authorize a write (no superset in reverse)", () => {
+			const state = { alwaysAllowWrite: true, allowedReadPaths: ["/ref"] } as any
+			expect(isGroupAutoApproved("write", state, ctx("/ref/a.ts"), { applyModifiers: true })).toBe(false)
+		})
+
+		it("falls through to not-approved when absolutePath is missing", () => {
+			expect(
+				isGroupAutoApproved(
+					"write",
+					{ alwaysAllowWrite: true, allowedWritePaths: ["/data"] } as any,
+					ctx(undefined),
+					{
+						applyModifiers: true,
+					},
+				),
+			).toBe(false)
+		})
+
+		it("does not bypass the protected-file gate", () => {
+			// Path is trusted for write, but the file is protected and the protected toggle is off → still not approved.
+			const state = { alwaysAllowWrite: true, allowedWritePaths: ["/data"] } as any
+			expect(
+				isGroupAutoApproved(
+					"write",
+					state,
+					{ isOutsideWorkspace: true, absolutePath: "/data/f", isProtected: true },
+					{
+						applyModifiers: true,
+					},
+				),
+			).toBe(false)
+		})
+
+		it("is not consulted when the blanket outside toggle is on (already approved) or on the MCP path", () => {
+			// Blanket on → approved regardless of paths.
+			expect(
+				isGroupAutoApproved(
+					"write",
+					{ alwaysAllowWrite: true, alwaysAllowWriteOutsideWorkspace: true } as any,
+					ctx("/anywhere/f"),
+					{ applyModifiers: true },
+				),
+			).toBe(true)
+			// MCP path ignores outside-workspace modifiers entirely.
+			expect(isGroupAutoApproved("write", writeOn, ctx("/anywhere/f"), { applyModifiers: false })).toBe(true)
+			void readOn
+		})
+	})
 })

@@ -308,6 +308,7 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			regex: query,
 			filePattern: fileTypes ?? undefined,
 			isOutsideWorkspace,
+			absolutePath: resolvedPath,
 		}
 
 		try {
@@ -505,6 +506,7 @@ export class GrepSearchTool extends BaseTool<"grep_search"> {
 			regex: query ?? "",
 			filePattern: (block.nativeArgs?.fileTypes as string) ?? "",
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

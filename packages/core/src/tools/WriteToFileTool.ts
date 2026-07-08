@@ -98,6 +98,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			path: getReadablePath(task.cwd, relPath),
 			content: newContent,
 			isOutsideWorkspace,
+			absolutePath: fullPath,
 			isProtected: isWriteProtected,
 		}
 
@@ -243,6 +244,7 @@ export class WriteToFileTool extends BaseTool<"write_to_file"> {
 			path: getReadablePath(task.cwd, relPath!),
 			content: newContent || "",
 			isOutsideWorkspace,
+			absolutePath,
 			isProtected: isWriteProtected,
 		}
 

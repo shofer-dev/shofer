@@ -85,6 +85,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -191,6 +192,7 @@ export class RenameSymbolTool extends BaseTool<"rename_symbol"> {
 			tool: "editedExistingFile",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

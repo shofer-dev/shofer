@@ -113,6 +113,8 @@ export const globalSettingsSchema = z.object({
 	followupAutoApproveTimeoutMs: z.number().optional(),
 	allowedCommands: z.array(z.string()).optional(),
 	deniedCommands: z.array(z.string()).optional(),
+	allowedReadPaths: z.array(z.string()).optional(),
+	allowedWritePaths: z.array(z.string()).optional(),
 	commandExecutionTimeout: z.number().optional(),
 	commandTimeoutAllowlist: z.array(z.string()).optional(),
 	preventCompletionWithOpenTodos: z.boolean().optional(),
@@ -390,6 +392,8 @@ export const SETTING_SYNC_SCOPE = {
 	followupAutoApproveTimeoutMs: "node",
 	allowedCommands: "node",
 	deniedCommands: "node",
+	allowedReadPaths: "node", // outside-workspace path allowlist — auto-approval gate on the executor
+	allowedWritePaths: "node",
 	commandExecutionTimeout: "node",
 	commandTimeoutAllowlist: "node",
 	preventCompletionWithOpenTodos: "node",

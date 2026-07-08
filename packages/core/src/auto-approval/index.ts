@@ -13,6 +13,7 @@ import { getToolGroupForSayTool } from "./tools.js"
 import { getMcpToolGroup } from "./mcp.js"
 import { getCommandDecision } from "./commands.js"
 import { type AutoApprovalState, type AutoApprovalStateOptions, isGroupAutoApproved } from "./group-gates.js"
+import { isPathAutoApproved } from "./paths.js"
 import { webviewLog } from "../logging/subsystems.js"
 
 // Per-group gating is centralized in ./group-gates (the §4 single source of
@@ -264,9 +265,41 @@ export async function checkAutoApproval({
 		// to a user prompt. The native path applies the outside-workspace /
 		// protected-file modifiers (applyModifiers:true).
 		if (toolGroup === "browser" || toolGroup === "read" || toolGroup === "write") {
-			return isGroupAutoApproved(toolGroup, state, { isOutsideWorkspace, isProtected }, { applyModifiers: true })
-				? { decision: "approve" }
-				: { decision: "ask" }
+			const approved = isGroupAutoApproved(
+				toolGroup,
+				state,
+				{ isOutsideWorkspace, isProtected, absolutePath: tool.absolutePath },
+				{ applyModifiers: true },
+			)
+
+			if (!approved) {
+				return { decision: "ask" }
+			}
+
+			// Batch reads (design §6): a `read_file` may bundle several files, each with its
+			// own `isOutsideWorkspace`/`absolutePath`. The base check above only covered the
+			// top-level tool path. When the blanket read-outside toggle is OFF, EVERY
+			// outside-workspace batch entry must itself be path-approved; any unmatched entry
+			// falls the whole tool back to a prompt. (When the blanket toggle is ON the group
+			// check already approved every outside entry — no per-entry check needed.)
+			if (toolGroup === "read" && tool.batchFiles?.length && state.alwaysAllowReadOnlyOutsideWorkspace !== true) {
+				const everyOutsideEntryTrusted = tool.batchFiles.every(
+					(entry) =>
+						entry.isOutsideWorkspace !== true ||
+						isPathAutoApproved(
+							entry.absolutePath ?? "",
+							"read",
+							state.allowedReadPaths ?? [],
+							state.allowedWritePaths ?? [],
+						),
+				)
+
+				if (!everyOutsideEntryTrusted) {
+					return { decision: "ask" }
+				}
+			}
+
+			return { decision: "approve" }
 		}
 	}
 

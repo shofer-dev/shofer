@@ -189,6 +189,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			path: getReadablePath(task.cwd, relPath),
 			diff: sanitizedDiff,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const completeMessage = JSON.stringify({
@@ -260,6 +261,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			path: getReadablePath(task.cwd, relPath),
 			diff: `File will be deleted: ${relPath}`,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const completeMessage = JSON.stringify({
@@ -346,6 +348,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			diff: sanitizedDiff,
 			originalContent,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const completeMessage = JSON.stringify({
@@ -473,6 +476,7 @@ export class ApplyPatchTool extends BaseTool<"apply_patch"> {
 			path: displayPath || path.basename(task.cwd) || "workspace",
 			diff: patchPreview || "Parsing patch...",
 			isOutsideWorkspace: isPathOutsideWorkspace(absolutePath),
+			absolutePath,
 		}
 
 		await task.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})

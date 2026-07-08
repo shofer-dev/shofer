@@ -163,6 +163,8 @@ describe("SETTING_SYNC_SCOPE invariants (config_sync §3)", () => {
 			"maxParallelTasks",
 			"requestDelaySeconds",
 			"captchaSolverMaxAttempts",
+			"allowedReadPaths",
+			"allowedWritePaths",
 		] as const) {
 			expect(SETTING_SYNC_SCOPE[key]).toBe("node")
 		}

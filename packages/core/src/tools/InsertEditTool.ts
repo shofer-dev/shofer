@@ -163,6 +163,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 				tool: "editedExistingFile",
 				path: getReadablePath(task.cwd, filePath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			if (isPreventFocusDisruptionEnabled) {
@@ -235,6 +236,7 @@ export class InsertEditTool extends BaseTool<"insert_edit"> {
 			tool: "editedExistingFile",
 			path: getReadablePath(task.cwd, filePath ?? ""),
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

@@ -92,7 +92,7 @@ export class EditTool extends BaseTool<"edit"> {
 				fileContent = await fs.readFile(absolutePath, "utf8")
 				// Normalize line endings to LF for consistent matching
 				fileContent = fileContent.replace(/\r\n/g, "\n")
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			} catch (error) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("edit")
@@ -182,6 +182,7 @@ export class EditTool extends BaseTool<"edit"> {
 				path: getReadablePath(task.cwd, relPath),
 				diff: sanitizedDiff,
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -261,6 +262,7 @@ export class EditTool extends BaseTool<"edit"> {
 			path: getReadablePath(task.cwd, relPath!),
 			diff: block.params.old_string ? "1 edit operation" : undefined,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		await task.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})

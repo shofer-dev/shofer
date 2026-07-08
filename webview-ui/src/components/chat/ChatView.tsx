@@ -52,6 +52,24 @@ import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
+import { OutsideWorkspacePathSelector } from "./OutsideWorkspacePathSelector"
+
+/**
+ * ShoferSayTool.tool values that belong to the write group (mirrors the outside-workspace
+ * write-tool sites in the core). Used to decide whether the "always allow read+write under
+ * <dir>" grant is offered — read-group tools only ever get the reads grant.
+ */
+const WRITE_GROUP_TOOLS = new Set<string>([
+	"editedExistingFile",
+	"appliedDiff",
+	"newFileCreated",
+	"insertEdit",
+	"renameSymbol",
+	"createDirectory",
+	"generateImage",
+	"removeFile",
+	"moveFile",
+])
 
 export interface ChatViewProps {
 	isHidden: boolean
@@ -150,6 +168,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setPendingWorktreeDir,
 		hasMoreShoferMessages,
 		preferredNodeId,
+		allowedReadPaths,
+		allowedWritePaths,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -486,6 +506,25 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	// would have to true again even if messages didn't change.
 	const lastMessage = useMemo(() => messages.at(-1), [messages])
 	const secondLastMessage = useMemo(() => messages.at(-2), [messages])
+
+	// Outside-workspace path-allowlist grant: for a pending `tool` ask whose payload is
+	// flagged `isOutsideWorkspace` and carries an `absolutePath`, surface the "trust the
+	// whole path" affordance next to Approve. `isWriteTool` decides whether the read+write
+	// grant is offered (write ⊇ read).
+	const outsideWorkspaceGrant = useMemo<{ absolutePath: string; isWriteTool: boolean } | undefined>(() => {
+		if (shoferAsk !== "tool" || lastMessage?.type !== "ask" || lastMessage.ask !== "tool") {
+			return undefined
+		}
+		try {
+			const tool = JSON.parse(lastMessage.text || "{}") as ShoferSayTool
+			if (!tool.isOutsideWorkspace || !tool.absolutePath) {
+				return undefined
+			}
+			return { absolutePath: tool.absolutePath, isWriteTool: WRITE_GROUP_TOOLS.has(tool.tool) }
+		} catch {
+			return undefined
+		}
+	}, [shoferAsk, lastMessage])
 
 	const volume = typeof soundVolume === "number" ? soundVolume : 0.5
 	const [playNotification] = useSound(`${audioBaseUri}/notification.wav`, { volume, soundEnabled, interrupt: true })
@@ -2512,6 +2551,21 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 											<span className="codicon codicon-chevron-down"></span>
 										</Button>
 									</StandardTooltip>
+								</div>
+							)}
+							{/* Outside-workspace path allowlist: one-click "trust the whole path"
+							     grant next to Approve for a tool ask touching a file outside every
+							     workspace root. Persists to allowedReadPaths/allowedWritePaths and
+							     approves the current ask. */}
+							{outsideWorkspaceGrant && enableButtons && (
+								<div className="mb-1 px-[15px]">
+									<OutsideWorkspacePathSelector
+										absolutePath={outsideWorkspaceGrant.absolutePath}
+										isWriteTool={outsideWorkspaceGrant.isWriteTool}
+										allowedReadPaths={allowedReadPaths ?? []}
+										allowedWritePaths={allowedWritePaths ?? []}
+										onApprove={() => handlePrimaryButtonClick(inputValue, selectedImages)}
+									/>
 								</div>
 							)}
 							{/* Shofer Nodes: a remote (shadow) task's asks now round-trip to the

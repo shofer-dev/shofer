@@ -53,6 +53,7 @@ export class ListFilesTool extends BaseTool<"list_files"> {
 				tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
 				path: getReadablePath(task.cwd, relDirPath),
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({ ...sharedMessageProps, content: result } satisfies ShoferSayTool)
@@ -80,6 +81,7 @@ export class ListFilesTool extends BaseTool<"list_files"> {
 			tool: !recursive ? "listFilesTopLevel" : "listFilesRecursive",
 			path: getReadablePath(task.cwd, relDirPath ?? ""),
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		const partialMessage = JSON.stringify({ ...sharedMessageProps, content: "" } satisfies ShoferSayTool)

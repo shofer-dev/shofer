@@ -35,6 +35,8 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	allowedMaxRequests?: number | undefined
 	allowedMaxCost?: number | undefined
 	deniedCommands?: string[]
+	allowedReadPaths?: string[]
+	allowedWritePaths?: string[]
 	autoApprovalEnabled?: boolean
 	setCachedStateField: SetCachedStateField<
 		| "alwaysAllowReadOnly"
@@ -54,6 +56,8 @@ type AutoApproveSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "allowedMaxRequests"
 		| "allowedMaxCost"
 		| "deniedCommands"
+		| "allowedReadPaths"
+		| "allowedWritePaths"
 		| "autoApprovalEnabled"
 	>
 }
@@ -76,6 +80,8 @@ export const AutoApproveSettings = ({
 	allowedMaxRequests,
 	allowedMaxCost,
 	deniedCommands,
+	allowedReadPaths,
+	allowedWritePaths,
 	autoApprovalEnabled,
 	setCachedStateField,
 	...props
@@ -83,6 +89,8 @@ export const AutoApproveSettings = ({
 	const { t } = useAppTranslation()
 	const [commandInput, setCommandInput] = useState("")
 	const [deniedCommandInput, setDeniedCommandInput] = useState("")
+	const [readPathInput, setReadPathInput] = useState("")
+	const [writePathInput, setWritePathInput] = useState("")
 
 	const toggles = useAutoApprovalToggles()
 
@@ -105,6 +113,28 @@ export const AutoApproveSettings = ({
 			const newCommands = [...currentCommands, deniedCommandInput]
 			setCachedStateField("deniedCommands", newCommands)
 			setDeniedCommandInput("")
+		}
+	}
+
+	const handleAddReadPath = () => {
+		const currentPaths = allowedReadPaths ?? []
+		const value = readPathInput.trim()
+
+		if (value && !currentPaths.includes(value)) {
+			const newPaths = [...currentPaths, value]
+			setCachedStateField("allowedReadPaths", newPaths)
+			setReadPathInput("")
+		}
+	}
+
+	const handleAddWritePath = () => {
+		const currentPaths = allowedWritePaths ?? []
+		const value = writePathInput.trim()
+
+		if (value && !currentPaths.includes(value)) {
+			const newPaths = [...currentPaths, value]
+			setCachedStateField("allowedWritePaths", newPaths)
+			setWritePathInput("")
 		}
 	}
 
@@ -388,6 +418,119 @@ export const AutoApproveSettings = ({
 						</div>
 					</div>
 				)}
+
+				{/* Outside-workspace path allowlist */}
+				<div className="flex flex-col gap-3 pl-3 border-l-2 border-vscode-button-background">
+					<div className="flex items-center gap-4 font-bold">
+						<span className="codicon codicon-folder-opened" />
+						<div>{t("settings:autoApprove.outsideWorkspacePaths.readLabel")}</div>
+					</div>
+
+					{/* Allowed Read Paths Section */}
+					<SearchableSetting
+						settingId="auto-approve-allowed-read-paths"
+						section="autoApprove"
+						label={t("settings:autoApprove.outsideWorkspacePaths.readLabel")}>
+						<label className="block font-medium mb-1" data-testid="allowed-read-paths-heading">
+							{t("settings:autoApprove.outsideWorkspacePaths.readLabel")}
+						</label>
+						<div className="text-vscode-descriptionForeground text-sm mt-1">
+							{t("settings:autoApprove.outsideWorkspacePaths.readDescription")}
+						</div>
+					</SearchableSetting>
+
+					<div className="flex gap-2">
+						<Input
+							value={readPathInput}
+							onChange={(e: any) => setReadPathInput(e.target.value)}
+							onKeyDown={(e: any) => {
+								if (e.key === "Enter") {
+									e.preventDefault()
+									handleAddReadPath()
+								}
+							}}
+							placeholder={t("settings:autoApprove.outsideWorkspacePaths.readPlaceholder")}
+							className="grow"
+							data-testid="read-path-input"
+						/>
+						<Button className="h-8" onClick={handleAddReadPath} data-testid="add-read-path-button">
+							{t("settings:autoApprove.outsideWorkspacePaths.addButton")}
+						</Button>
+					</div>
+
+					<div className="flex flex-wrap gap-2">
+						{(allowedReadPaths ?? []).map((path, index) => (
+							<Button
+								key={index}
+								variant="secondary"
+								data-testid={`remove-read-path-${index}`}
+								onClick={() => {
+									const newPaths = (allowedReadPaths ?? []).filter((_, i) => i !== index)
+									setCachedStateField("allowedReadPaths", newPaths)
+								}}>
+								<div className="flex flex-row items-center gap-1">
+									<div>{path}</div>
+									<X className="text-foreground scale-75" />
+								</div>
+							</Button>
+						))}
+					</div>
+
+					{/* Allowed Read+Write Paths Section */}
+					<div className="flex items-center gap-4 font-bold mt-4">
+						<span className="codicon codicon-edit" />
+						<div>{t("settings:autoApprove.outsideWorkspacePaths.writeLabel")}</div>
+					</div>
+
+					<SearchableSetting
+						settingId="auto-approve-allowed-write-paths"
+						section="autoApprove"
+						label={t("settings:autoApprove.outsideWorkspacePaths.writeLabel")}>
+						<label className="block font-medium mb-1" data-testid="allowed-write-paths-heading">
+							{t("settings:autoApprove.outsideWorkspacePaths.writeLabel")}
+						</label>
+						<div className="text-vscode-descriptionForeground text-sm mt-1">
+							{t("settings:autoApprove.outsideWorkspacePaths.writeDescription")}
+						</div>
+					</SearchableSetting>
+
+					<div className="flex gap-2">
+						<Input
+							value={writePathInput}
+							onChange={(e: any) => setWritePathInput(e.target.value)}
+							onKeyDown={(e: any) => {
+								if (e.key === "Enter") {
+									e.preventDefault()
+									handleAddWritePath()
+								}
+							}}
+							placeholder={t("settings:autoApprove.outsideWorkspacePaths.writePlaceholder")}
+							className="grow"
+							data-testid="write-path-input"
+						/>
+						<Button className="h-8" onClick={handleAddWritePath} data-testid="add-write-path-button">
+							{t("settings:autoApprove.outsideWorkspacePaths.addButton")}
+						</Button>
+					</div>
+
+					<div className="flex flex-wrap gap-2">
+						{(allowedWritePaths ?? []).map((path, index) => (
+							<Button
+								key={index}
+								variant="secondary"
+								data-testid={`remove-write-path-${index}`}
+								onClick={() => {
+									const newPaths = (allowedWritePaths ?? []).filter((_, i) => i !== index)
+									setCachedStateField("allowedWritePaths", newPaths)
+								}}>
+								<div className="flex flex-row items-center gap-1">
+									<div>{path}</div>
+									<X className="text-foreground scale-75" />
+								</div>
+							</Button>
+						))}
+					</div>
+				</div>
 			</Section>
 		</div>
 	)

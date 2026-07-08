@@ -25,7 +25,14 @@ import { readWithIndentation, readWithSlice } from "../integrations/misc/indenta
 import { DEFAULT_LINE_LIMIT } from "../prompts/tools/native-tools/read_file.js"
 import { type ToolUse, type PushToolResult } from "@shofer/types"
 
-import { DEFAULT_MAX_IMAGE_FILE_SIZE_MB, DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB, isSupportedImageFormat, validateImageForProcessing, processImageFile, ImageMemoryTracker } from "./helpers/imageHelpers.js"
+import {
+	DEFAULT_MAX_IMAGE_FILE_SIZE_MB,
+	DEFAULT_MAX_TOTAL_IMAGE_SIZE_MB,
+	isSupportedImageFormat,
+	validateImageForProcessing,
+	processImageFile,
+	ImageMemoryTracker,
+} from "./helpers/imageHelpers.js"
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
 import { taskLog } from "../logging/subsystems.js"
 
@@ -436,7 +443,14 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				const lineSnippet = this.getLineSnippet(fileResult.entry!)
 				const key = `${readablePath}${lineSnippet ? ` (${lineSnippet})` : ""}`
 
-				return { path: readablePath, lineSnippet, isOutsideWorkspace, key, content: fullPath }
+				return {
+					path: readablePath,
+					lineSnippet,
+					isOutsideWorkspace,
+					absolutePath: fullPath,
+					key,
+					content: fullPath,
+				}
 			})
 
 			const completeMessage = JSON.stringify({ tool: "readFile", batchFiles } satisfies ShoferSayTool)
@@ -504,6 +518,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				tool: "readFile",
 				path: getReadablePath(task.cwd, relPath),
 				isOutsideWorkspace,
+				absolutePath: fullPath,
 				content: fullPath,
 				reason: lineSnippet,
 				startLine,
@@ -650,6 +665,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 			tool: "readFile",
 			path: getReadablePath(task.cwd, filePath),
 			isOutsideWorkspace: filePath ? isPathOutsideWorkspace(fullPath) : false,
+			absolutePath: fullPath,
 		}
 		const partialMessage = JSON.stringify({
 			...sharedMessageProps,
@@ -707,6 +723,7 @@ export class ReadFileTool extends BaseTool<"read_file"> {
 				tool: "readFile",
 				path: getReadablePath(task.cwd, relPath),
 				isOutsideWorkspace,
+				absolutePath: fullPath,
 				content: fullPath,
 				reason: lineSnippet || undefined,
 			} satisfies ShoferSayTool)

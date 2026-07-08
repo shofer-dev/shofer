@@ -20,12 +20,7 @@ import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
 import type { ShoferNodesState, ShoferNodeRequest } from "./shofer-node.js"
-import type {
-	PluginsState,
-	PluginRequest,
-	PluginUiContributionsState,
-	PluginUiMessageEnvelope,
-} from "./plugin.js"
+import type { PluginsState, PluginRequest, PluginUiContributionsState, PluginUiMessageEnvelope } from "./plugin.js"
 
 // Types previously from cloud.ts, now defined inline
 type CloudUserInfo = {
@@ -229,9 +224,14 @@ export interface ExtensionMessage {
 		| "pluginUiContributions"
 		// Plugin UI channel (design §6.8) — extension → a plugin's UI (scoped/namespaced)
 		| "pluginUiMessage"
+		// Stream an exported file to the webview so the browser downloads it
+		// (used when the editor is accessed over the web — code-server / vscode.dev).
+		| "browserDownload"
 		// Webview health messages
 		| "ping"
 	text?: string
+	/** For `browserDownload`: the file the browser should save client-side. */
+	browserDownload?: { fileName: string; content: string; mime: string }
 	/** For `shoferNodes`: registry + live status of every node (no secrets). */
 	shoferNodes?: ShoferNodesState
 	/** For `plugins`: discovered plugins + enabled state (design §12). */
@@ -471,6 +471,8 @@ export type ExtensionState = Pick<
 	| "followupAutoApproveTimeoutMs"
 	| "allowedCommands"
 	| "deniedCommands"
+	| "allowedReadPaths"
+	| "allowedWritePaths"
 	| "allowedMaxRequests"
 	| "allowedMaxCost"
 	| "ttsEnabled"
@@ -841,6 +843,8 @@ export interface WebviewMessage {
 		| "getTaskWithAggregatedCosts"
 		| "getTaskInteractions"
 		| "deniedCommands"
+		| "allowedReadPaths"
+		| "allowedWritePaths"
 		| "openDebugApiHistory"
 		| "openDebugUiHistory"
 		| "downloadErrorDiagnostics"
@@ -1275,6 +1279,13 @@ export interface ShoferSayTool {
 	mode?: string
 	reason?: string
 	isOutsideWorkspace?: boolean
+	/**
+	 * The resolved absolute path of the file this tool touches, needed to match against the
+	 * outside-workspace path allowlist (`allowedReadPaths`/`allowedWritePaths`); the
+	 * workspace-relative `path` can't be matched against absolute prefixes. Set alongside
+	 * `isOutsideWorkspace` at tool sites.
+	 */
+	absolutePath?: string
 	isProtected?: boolean
 	additionalFileCount?: number // Number of additional files in the same read_file request
 	lineNumber?: number
@@ -1284,12 +1295,16 @@ export interface ShoferSayTool {
 		path: string
 		lineSnippet: string
 		isOutsideWorkspace?: boolean
+		/** Resolved absolute path for this batch entry — matched against the path allowlist. */
+		absolutePath?: string
 		key: string
 		content?: string
 	}>
 	batchDiffs?: Array<{
 		path: string
 		changeCount: number
+		/** Resolved absolute path for this batch entry — matched against the path allowlist. */
+		absolutePath?: string
 		key: string
 		content: string
 		// Per-file unified diff statistics computed by the extension

@@ -458,6 +458,15 @@
 		"maxLimits": {
 			"description": "Automatically make requests up to these limits before asking for approval to continue."
 		},
+		"outsideWorkspacePaths": {
+			"readLabel": "Auto-approved read paths (outside workspace)",
+			"readDescription": "Absolute directory prefixes outside the workspace that may be read without approval. Files under these paths are auto-approved for read operations even when the blanket outside-workspace toggle is off.",
+			"writeLabel": "Auto-approved read+write paths (outside workspace)",
+			"writeDescription": "Absolute directory prefixes outside the workspace that may be read and written without approval. Write trust implies read trust.",
+			"readPlaceholder": "Enter an absolute path (e.g., '/data/reference')",
+			"writePlaceholder": "Enter an absolute path (e.g., '/workspace/generated')",
+			"addButton": "Add"
+		},
 		"toggleAriaLabel": "Toggle auto-approval",
 		"disabledAriaLabel": "Auto-approval disabled - select options first",
 		"selectOptionsFirst": "Select at least one option below to enable auto-approval"

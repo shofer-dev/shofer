@@ -114,6 +114,7 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 				path: getReadablePath(task.cwd, relPath),
 				diff: operationPreviewForErrorHandling,
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			// Finalize the existing partial tool ask row so the UI doesn't get stuck in a spinner state.
@@ -329,6 +330,7 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 				path: getReadablePath(task.cwd, relPath),
 				diff: sanitizedDiff,
 				isOutsideWorkspace,
+				absolutePath,
 			}
 
 			const completeMessage = JSON.stringify({
@@ -442,6 +444,7 @@ export class EditFileTool extends BaseTool<"edit_file"> {
 			path: getReadablePath(task.cwd, relPath),
 			diff: operationPreview,
 			isOutsideWorkspace,
+			absolutePath,
 		}
 
 		await task.ask("tool", JSON.stringify(sharedMessageProps), block.partial).catch(() => {})
