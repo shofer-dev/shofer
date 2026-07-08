@@ -50,12 +50,17 @@ export const NodeStatus = () => {
 		// Count every node that's up — Local (running, unless disabled) plus any
 		// connected remotes — so a Local-only-plus-one-remote setup reads "2".
 		const count = nodes.filter((n) => !n.disabled && (n.status === "running" || n.status === "connected")).length
-		const remote = nodes.filter((n) => n.kind === "remote" && !n.disabled)
-		const hasError = remote.some(
+
+		// Health dot considers every non-disabled node (Local + remotes):
+		//   red    — all nodes down or disabled (nothing is up)
+		//   yellow — at least one non-disabled node in a failed/error state
+		//   green  — all non-disabled nodes are up
+		const active = nodes.filter((n) => !n.disabled)
+		const up = active.filter((n) => n.status === "running" || n.status === "connected")
+		const failed = active.filter(
 			(n) => n.status === "error" || n.status === "unauthorized" || n.status === "version-mismatch",
 		)
-		const connecting = remote.some((n) => n.status === "connecting" || n.status === "reconnecting")
-		const dot = hasError ? "bg-red-500" : connecting ? "bg-amber-500 animate-pulse" : "bg-green-500"
+		const dot = up.length === 0 ? "bg-red-500" : failed.length > 0 ? "bg-yellow-500" : "bg-green-500"
 		return { count, dot }
 	}, [nodes])
 
