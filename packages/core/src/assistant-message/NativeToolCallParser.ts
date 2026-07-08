@@ -416,6 +416,30 @@ export class NativeToolCallParser {
 	}
 
 	/**
+	 * Detect whether a diff string value has a leaked `:path` suffix —
+	 * the pattern where the model appends "\n:path\nVALUE" after the last
+	 * ">>>>>>> REPLACE" barrier instead of emitting `path` as a separate
+	 * JSON key. This is a boolean detector (not a recovery extractor) —
+	 * it returns true to trigger an actionable rejection that tells the
+	 * model exactly what went wrong, so it self-corrects on the next call.
+	 *
+	 * Observed with: zhipu/glm-5.2 via the shofer proxy.
+	 *
+	 * The pattern is structurally unambiguous: the ":path" marker appears
+	 * after the last ">>>>>>> REPLACE" barrier, which is the structural end
+	 * of a well-formed diff. No legitimate diff content follows that barrier.
+	 */
+	private static detectColonLeak(value: unknown): boolean {
+		if (typeof value !== "string") return false
+		const lastReplaceIdx = value.lastIndexOf(">>>>>>> REPLACE")
+		if (lastReplaceIdx === -1) return false
+		const afterReplace = value.slice(lastReplaceIdx)
+		// Match: ">>>>>>> REPLACE" followed by optional whitespace/newlines,
+		// then ":path", then newline(s), then a non-empty value to end of string.
+		return />>>>>>> REPLACE\s*\n:path\s*\n.+$/s.test(afterReplace)
+	}
+
+	/**
 	 * Common argument-name aliases that some models emit instead of Shofer's
 	 * canonical `path` (e.g. Anthropic/Claude-Code's `file_path`, Cursor's
 	 * `target_directory`). Mapped to `path` so a model trained on a different
@@ -1438,6 +1462,28 @@ export class NativeToolCallParser {
 									`\`<parameter name="path">\` tag appears to have leaked into the \`diff\` value. ` +
 									`Re-send apply_diff with \`path\` as a separate parameter and a clean \`diff\` ` +
 									`(SEARCH/REPLACE blocks only, no XML parameter tags).`,
+							)
+						}
+
+						// Some models (notably zhipu/glm-5.2) leak the `path`
+						// parameter into the `diff` string value as a trailing
+						// "\n:path\nVALUE" suffix instead of emitting `path` as a
+						// separate JSON key. The JSON is valid ({ "diff": "...\n:path\nVALUE" }),
+						// so JSON.parse succeeds, but `path` is missing as a key.
+						// Reject with actionable feedback so the model self-corrects
+						// on the next call — same approach as the XML-leak above.
+						if (path === undefined && this.detectColonLeak(diff)) {
+							this.recordRecovery({
+								layerId: "apply_diff_colon_leak",
+								tool: "apply_diff",
+								rejected: true,
+							})
+							throw new Error(
+								`[NativeToolCallParser] apply_diff is missing the required \`path\` parameter, and a ` +
+									`\`:path\` suffix appears to have leaked into the \`diff\` value. ` +
+									`The \`diff\` value must contain ONLY SEARCH/REPLACE blocks. ` +
+									`Re-send apply_diff with \`path\` as a separate JSON key (e.g., {"path": "src/file.ts", "diff": "..."}) ` +
+									`and a clean \`diff\` (SEARCH/REPLACE blocks only, no \`:path\` suffix).`,
 							)
 						}
 

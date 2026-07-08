@@ -590,6 +590,113 @@ describe("NativeToolCallParser", () => {
 
 					expect(result).toBeNull()
 				})
+
+				describe("zhipu/glm colon-leak rejection", () => {
+					it("rejects apply_diff that leaked path as :path suffix in diff (real-world glm-5.2 bug)", () => {
+						// Real-world zhipu/glm-5.2 bug: the model emits the path as a
+						// trailing "\n:path\nVALUE" suffix inside `diff` instead of a
+						// separate JSON key. The JSON is valid, so JSON.parse succeeds,
+						// but `path` is missing as a key. Reject with actionable feedback
+						// so the model self-corrects on the next call.
+						const diffContent =
+							"<<<<<<< SEARCH\n:start_line:359\n-------\n" +
+							"CREATE INDEX idx_resources_project ON resources(project_id);\n" +
+							"=======\n" +
+							"CREATE INDEX idx_resources_project ON resources(project_id);\n" +
+							">>>>>>> REPLACE\n:path\nextensions/shofer/docs/saas.md"
+
+						const result = NativeToolCallParser.parseToolCall({
+							id: "toolu_colon_leak",
+							name: "apply_diff" as const,
+							arguments: JSON.stringify({ diff: diffContent }),
+						})
+
+						expect(result).toBeNull()
+						const err = NativeToolCallParser.consumeLastParseError()
+						expect(err).toMatch(/apply_diff/)
+						expect(err).toMatch(/path/i)
+						expect(err).toMatch(/:path/)
+						expect(err).toMatch(/separate JSON key/)
+					})
+
+					it("records the colon-leak rejection for telemetry", () => {
+						NativeToolCallParser.consumeRecoveries() // clear any prior state
+
+						const diffContent =
+							"<<<<<<< SEARCH\n:start_line:1\nold\n=======\nnew\n>>>>>>> REPLACE\n:path\nsrc/foo.ts"
+
+						NativeToolCallParser.parseToolCall({
+							id: "toolu_colon_leak_telemetry",
+							name: "apply_diff" as const,
+							arguments: JSON.stringify({ diff: diffContent }),
+						})
+
+						const recoveries = NativeToolCallParser.consumeRecoveries()
+						expect(recoveries).toHaveLength(1)
+						expect(recoveries[0]).toMatchObject({
+							layerId: "apply_diff_colon_leak",
+							tool: "apply_diff",
+							rejected: true,
+						})
+					})
+
+					it("does NOT false-reject when diff has no >>>>>>> REPLACE barrier", () => {
+						// A diff without a REPLACE barrier should not trigger colon-leak
+						// detection — the ":path" suffix could be legitimate diff content.
+						const diffContent = "some content\n:path\nsrc/foo.ts"
+
+						const result = NativeToolCallParser.parseToolCall({
+							id: "toolu_no_barrier",
+							name: "apply_diff" as const,
+							arguments: JSON.stringify({ diff: diffContent }),
+						})
+
+						// Should fall through to the generic "missing path" error, not the colon-leak error
+						expect(result).toBeNull()
+						const err = NativeToolCallParser.consumeLastParseError()
+						// The generic error should NOT contain the colon-leak-specific guidance
+						expect(err).not.toMatch(/separate JSON key/)
+					})
+
+					it("does NOT false-reject when :path appears before >>>>>>> REPLACE barrier", () => {
+						// The ":path" text appears inside the SEARCH block, before the
+						// REPLACE barrier — it's legitimate diff content, not a leak.
+						const diffContent =
+							"<<<<<<< SEARCH\n:path\nlegit content\n-------\nunchanged\n=======\nnew\n>>>>>>> REPLACE"
+
+						const result = NativeToolCallParser.parseToolCall({
+							id: "toolu_path_before_barrier",
+							name: "apply_diff" as const,
+							arguments: JSON.stringify({ diff: diffContent }),
+						})
+
+						// Should NOT trigger colon-leak detection — falls through to generic error
+						const err = NativeToolCallParser.consumeLastParseError()
+						expect(err).not.toMatch(/separate JSON key/)
+					})
+
+					it("rejects colon-leak with large diff (real-world Phase 1 scenario)", () => {
+						// Reproduces the exact failure from the bug report: a large diff
+						// with the path leaked at the end.
+						const diffContent =
+							"<<<<<<< SEARCH\n:start_line:909\n-------\n" +
+							"### Phase 1: Workspace Lifecycle\n\n" +
+							"**Goal**: Users can create, start, stop, and destroy code-server workspaces.\n\n" +
+							"=======\n" +
+							"### Phase 1: Projects & Workspace Lifecycle\n\n" +
+							"**Goal**: Users can create projects and workspaces.\n\n" +
+							">>>>>>> REPLACE\n:path\nextensions/shofer/docs/saas.md"
+
+						const result = NativeToolCallParser.parseToolCall({
+							id: "toolu_large_colon_leak",
+							name: "apply_diff" as const,
+							arguments: JSON.stringify({ diff: diffContent }),
+						})
+
+						expect(result).toBeNull()
+						expect(NativeToolCallParser.consumeLastParseError()).toMatch(/:path/)
+					})
+				})
 			})
 		})
 	})
