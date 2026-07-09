@@ -238,19 +238,20 @@ Revisit only if power-users later need scoped `kubectl` write.
 
 All services below are **org-global** (one per cluster, §2.1).
 
-| Service                  | Language            | Port | Owns                                                                                                                                                                                                                                                                                   |
-| ------------------------ | ------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **user-console**         | Go                  | 8000 | User-facing API + UI; control plane for workspaces, chat, notifications; **drives the L2 agent over `AgentApi`**; writes control-plane + audit rows                                                                                                                                    |
-| **resource-manager**     | Go                  | 8006 | Infrastructure provisioning: k8s workloads, S3 buckets, filesystems                                                                                                                                                                                                                    |
-| **L2 backend**           | TS (`@shofer/core`) | 5111 | Headless Shofer executor pool; the agent loop driven by user-console over `AgentApi` (§5.3)                                                                                                                                                                                            |
-| **agent registrar**      | Go                  | 5120 | Mesh control plane: agent registration, health, tier/scope/trust-class assignment, scoped-credential issuance, discovery (§5.5)                                                                                                                                                        |
-| **arkware-orchestrator** | TS (companion)      | —    | Per-agent participation layer: **Temporal worker** that pulls tagged pipeline tasks and drives the co-located Shofer via `ShoferAPI` (§5.6); also the mesh sidecar (register/heartbeat, inbound A2A delivery, §5.5) and config-sync consumer. Runs beside each L1 (and the L2 backend) |
-| **NATS**                 | —                   | 4222 | Single bus: event ingress (§5.6) + A2A + cluster-event notifications (§5.5); real-time telemetry/token side-channels (kept out of Temporal history)                                                                                                                                    |
-| **Temporal**             | —                   | 7233 | Durable pipeline orchestration: deterministic workflows, retries/timeouts, human-approval gates (signals), capability-tagged runner pool (§5.6)                                                                                                                                        |
-| **event-ingress**        | Go/TS               | —    | Stateless adapters normalizing sources (GitLab/Alertmanager webhooks, cron) onto NATS, and starting Temporal workflows from trigger rules (§5.6)                                                                                                                                       |
-| llm-router (existing)    | Go                  | 3000 | LLM provider routing; **records conversation narration** (§5.4)                                                                                                                                                                                                                        |
-| mcp-server (existing)    | Go                  | 3001 | MCP tool server for L1 & L2 + **A2A gateway** (authz + audit of mesh tool calls, §5.5); **records tool-call ground truth** (§5.4)                                                                                                                                                      |
-| tools-backend (existing) | Go                  | 8001 | Tool execution backend for mcp-server                                                                                                                                                                                                                                                  |
+| Service                      | Language                                   | Port | Owns                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------ | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **user-console**             | Go                                         | 8000 | User-facing API + UI; control plane for workspaces, chat, notifications; **drives the L2 agent over `AgentApi`**; writes control-plane + audit rows                     |
+| **resource-manager**         | Go                                         | 8006 | Infrastructure provisioning: k8s workloads, S3 buckets, filesystems                                                                                                     |
+| **L2 backend**               | TS (`@shofer/core`)                        | 5111 | Headless Shofer executor pool; the agent loop driven by user-console over `AgentApi` (§5.3)                                                                             |
+| **agent registrar**          | Go                                         | 5120 | Mesh control plane: agent registration, health, tier/scope/trust-class assignment, scoped-credential issuance, discovery (§5.5)                                         |
+| **agent-mesh** (plugin)      | TS (Shofer plugin)                         | —    | Pure-JS NATS mesh participant: inbound notification delivery (`ctx.agent.notify`) + telemetry + `mesh_publish`/`mesh_subscribe` tools (§5.5–§5.6). Loadable on any node |
+| **temporal-runner** (plugin) | TS (Shofer plugin, native `@temporalio/*`) | —    | Temporal activity worker: pulls tagged tasks, drives Shofer via `ctx.agent.spawn` (§14), + introspection tools (§5.6). Loaded on runner nodes                           |
+| **NATS**                     | —                                          | 4222 | Single bus: event ingress (§5.6) + A2A + cluster-event notifications (§5.5); real-time telemetry/token side-channels (kept out of Temporal history)                     |
+| **Temporal**                 | —                                          | 7233 | Durable pipeline orchestration: deterministic workflows, retries/timeouts, human-approval gates (signals), capability-tagged runner pool (§5.6)                         |
+| **event-ingress**            | Go/TS                                      | —    | Stateless adapters normalizing sources (GitLab/Alertmanager webhooks, cron) onto NATS, and starting Temporal workflows from trigger rules (§5.6)                        |
+| llm-router (existing)        | Go                                         | 3000 | LLM provider routing; **records conversation narration** (§5.4)                                                                                                         |
+| mcp-server (existing)        | Go                                         | 3001 | MCP tool server for L1 & L2 + **A2A gateway** (authz + audit of mesh tool calls, §5.5); **records tool-call ground truth** (§5.4)                                       |
+| tools-backend (existing)     | Go                                         | 8001 | Tool execution backend for mcp-server                                                                                                                                   |
 
 ### Communication Patterns
 
@@ -1355,14 +1356,14 @@ cores find and message one another.
 
 Adding a site costs nothing new, because the coordination model is not workspace-shaped.
 
-#### arkware-orchestrator — the mesh sidecar
+#### The mesh sidecar — the `agent-mesh` plugin
 
-`extensions/arkware-orchestrator` is the **SaaS face of an otherwise-local Shofer**: a
-companion (using Shofer's public plugin API + `ShoferAPI`) that makes any Shofer instance a
-mesh participant. It adds **zero SaaS code to `@shofer/core`** — everything stays on the
-_config_ side of the line (Shofer Router provider + a centralized `mcp-server` + this
-companion), never the _code_ side. A non-Shofer agent would join by implementing an
-equivalent adapter.
+The mesh sidecar is realized as a **general Shofer plugin, `agent-mesh`** (pure JS; §5.6) — the
+**SaaS face of an otherwise-local Shofer** that makes any Shofer instance a mesh participant. It
+adds **zero SaaS code to `@shofer/core`** — everything stays on the _config_ side of the line
+(Shofer Router provider + a centralized `mcp-server` + this plugin), never the _code_ side, and it's
+a standard Shofer feature (not arkware-specific). A non-Shofer agent would join by implementing an
+equivalent adapter. (The runner role is a _separate_ plugin, `temporal-runner`, §5.6.)
 
 The division of labor is by **who drives the operation** — _if the mesh depends on it, or it
 is done to the agent, it is arkware-orchestrator; if the agent chooses to do it, it is an MCP
@@ -1491,30 +1492,67 @@ just stops pulling, and scaling = more runners join. **That pull model _is_ the 
 no-SPOF property**, and it's where GitLab's logical assignment (the auditable claim/assignee) meets
 physical scheduling.
 
-**The runner is arkware-orchestrator** — a Temporal worker that, on pickup, drives the co-located
-**Shofer** via `ShoferAPI`. The **determinism rule** is strict: the agent/LLM loop is
-non-deterministic, so it runs **only inside a Temporal _Activity_, never a Workflow**.
+**The runner is the `temporal-runner` plugin** — a general Shofer plugin
+([`temporal_plugin.md`](./temporal_plugin.md)) that hosts a Temporal worker via `ctx.registerService`
+and, on pickup, drives the co-located **Shofer** through the scoped **`ctx.agent.spawn`** API
+([`plugin_system.md` §14](./plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins)).
+The **determinism rule** is strict: the agent/LLM loop is non-deterministic, so it runs **only inside
+a Temporal _Activity_, never a Workflow**.
 
 ```ts
 // Deterministic controller — routing, gates, sequencing. No LLM calls here.
 async function devPipeline(ticket) {
-	const patch = await act({
+	const result = await act({
 		taskQueue: "runner:coding",
 		startToCloseTimeout: "2h",
 		heartbeatTimeout: "2m",
-	}).runShoferTask({ ticket })
+	}).runShoferTask({ prompt: ticket.spec })
 	await condition(() => approved) // hard-gate: signal-driven pause/resume
-	await act({ taskQueue: "glue" }).mergeAndDeploy(patch) // e.g. a python worker
+	await act({ taskQueue: "glue" }).mergeAndDeploy(result)
 }
-// Activity on the runner: non-determinism isolated; drives Shofer; streams telemetry to NATS.
-async function runShoferTask({ ticket }) {
-	const api = getShoferApi() // in-process, like the CLI ExtensionHost
-	api.on("message", (m) => nats.publish(`agents.telemetry.${ticket.id}`, m)) // → NATS, not Temporal
-	api.on("progress", () => activity.heartbeat())
-	const id = await api.startNewTask({ text: ticket.spec })
-	return await waitForCompletion(api, id) // resume-safe via checkpoints
+// Activity in the temporal-runner plugin: non-determinism isolated; drives Shofer via ctx.agent (§14).
+async function runShoferTask({ prompt }) {
+	const h = await ctx.agent.spawn(prompt) // §14 handle
+	h.onEvent(() => activity.heartbeat()) // telemetry is the agent-mesh plugin's job, not the runner's
+	return await h.result() // resume-safe via checkpoints
 }
 ```
+
+#### Two plugins, one transport each (mesh vs runner)
+
+The per-node capability ships as **two composable, general Shofer plugins** — not one — split by
+transport, each exposing agent-facing tools:
+
+- **`agent-mesh`** (pure JS, owns **NATS**): registration + inbound **notification delivery** into the
+  agent (`ctx.agent.notify`) + opt-in telemetry; agent tools **`mesh_publish` / `mesh_subscribe`**
+  (emit/subscribe to async events) plus **static config subscriptions**. Loadable on **any** node.
+- **`temporal-runner`** (native `@temporalio/*`, owns **Temporal**): pull → `ctx.agent.spawn` →
+  return; agent tools **`temporal_task_queue_status` / `list_workflows` / `describe_workflow`**
+  (read-only introspection). Loaded only on runner nodes.
+
+They share nothing and **coordinate through Shofer** (the runner spawns tasks; the mesh plugin
+observes their events via `onEvent` and publishes telemetry). Splitting by transport keeps
+`agent-mesh` pure-JS/portable and confines the native Temporal core to nodes that actually run
+pipelines. (This refines the earlier "one plugin subsumes runner + mesh".)
+
+#### How NATS and Temporal interlock (they never talk directly)
+
+NATS is the **event/notification/telemetry** plane; Temporal is the **durable orchestration** plane.
+They connect only at **two bridge points that each hold both a NATS connection and a Temporal
+client** — Temporal itself is NATS-agnostic (a workflow is deterministic and can't do I/O; the way a
+running workflow reacts to the outside is a **signal**):
+
+| Pattern                                  | Direction                  | Handled by                                                                                             |
+| ---------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Trigger** — an event starts a pipeline | NATS → Temporal            | **ingress bridge** (NATS consumer + Temporal client → `workflow.start`)                                |
+| **Execute** — a pipeline runs agent work | Temporal → runner          | `temporal-runner` plugin (Temporal **task queue** — no NATS)                                           |
+| **Telemetry** — live agent output        | agent → NATS               | `agent-mesh` plugin (`onEvent` → publish; _not_ Temporal history)                                      |
+| **Human-gate / notify**                  | Temporal ↔ human via NATS | workflow waits on a **signal**; notification rides NATS; approval → Temporal **signal** (user-console) |
+
+So "an event triggers a pipeline" is **NATS → ingress bridge → `client.workflow.start()`** — never
+Temporal subscribing to NATS. The two bridges — the **ingress adapter** (trigger plane, above) and
+**user-console** (which holds a Temporal client + a NATS subscription) — are the _only_ components
+that speak both; the two per-node plugins each speak exactly one transport.
 
 #### The agent runtime is Shofer (LangChain considered, rejected)
 
