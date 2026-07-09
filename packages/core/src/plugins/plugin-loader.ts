@@ -19,6 +19,7 @@ import fs from "fs"
 import path from "path"
 import os from "os"
 import { createHash } from "crypto"
+import { spawnSync } from "child_process"
 import { pathToFileURL } from "url"
 
 import { PLUGIN_API_VERSION, isPluginApiCompatible, type ShoferPlugin } from "@shofer/types"
@@ -86,6 +87,68 @@ function extractPlugin(mod: Record<string, unknown>, expectedName: string): Shof
 	}
 	if (isShoferPlugin(mod)) return mod
 	return undefined
+}
+
+/**
+ * Ensure a plugin's runtime dependencies are present AND match the current platform, doing a
+ * clean `npm install` when they are not. This is the escape hatch for plugins shipped with
+ * `node_modules` **baked for one platform** (see `shofer-plugins/build.sh`, which writes a
+ * `.shofer-baked-arch` marker of `<platform>-<arch>`): on a matching host the baked deps are used
+ * as-is (fast path, no network); on a different host — or when deps are simply missing — we
+ * reinstall so the correct native binaries (`@temporalio/core-bridge`, `@swc/core-*`) are fetched.
+ *
+ * Fast, safe no-ops for the common cases: no `package.json`/no deps → return; `node_modules`
+ * present and either baked for this arch or unmarked (host-installed, e.g. a workspace plugin or a
+ * unit-test fixture) → return without touching anything. Only a real mismatch spawns `npm`.
+ */
+function ensurePluginDeps(pluginRoot: string): void {
+	let pkg: { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }
+	try {
+		const pkgPath = path.join(pluginRoot, "package.json")
+		if (!fs.existsSync(pkgPath)) return
+		pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
+	} catch {
+		return
+	}
+	const depCount = Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.optionalDependencies ?? {}) }).length
+	if (depCount === 0) return
+
+	const nodeModules = path.join(pluginRoot, "node_modules")
+	const marker = path.join(pluginRoot, ".shofer-baked-arch")
+	const current = `${process.platform}-${process.arch}`
+	const haveNodeModules = fs.existsSync(nodeModules)
+	const bakedFor = fs.existsSync(marker) ? fs.readFileSync(marker, "utf8").trim() : ""
+
+	// Present + (baked for us OR host-installed/unmarked) → use as-is.
+	if (haveNodeModules && (bakedFor === "" || bakedFor === current)) return
+
+	// Mismatch or missing → (re)install. A baked-for-another-arch tree is pruned to that arch's
+	// native binaries, so wipe it first for a clean, correct install.
+	const reason = !haveNodeModules ? "dependencies not installed" : `deps baked for ${bakedFor}, running on ${current}`
+	if (haveNodeModules) {
+		try {
+			fs.rmSync(nodeModules, { recursive: true, force: true })
+		} catch {
+			/* proceed; npm will reconcile */
+		}
+	}
+	const res = spawnSync("npm", ["install", "--omit=dev", "--no-audit", "--no-fund"], {
+		cwd: pluginRoot,
+		encoding: "utf8",
+		stdio: "pipe",
+	})
+	if (res.status !== 0) {
+		const detail = (res.stderr || res.error?.message || `exit ${res.status}`).slice(0, 400)
+		throw new Error(
+			`plugin "${path.basename(pluginRoot)}": ${reason}, and the automatic \`npm install\` failed (${detail}). ` +
+				`Run \`npm install\` in ${pluginRoot}.`,
+		)
+	}
+	try {
+		fs.writeFileSync(marker, current)
+	} catch {
+		/* marker is best-effort */
+	}
 }
 
 /**
@@ -220,6 +283,11 @@ export async function loadPluginFromEntry(
 	if (!fs.existsSync(entry)) {
 		throw new Error(`plugin "${source.name}" entry not found: ${entry}`)
 	}
+
+	// Make runtime deps present + arch-correct before transpiling — handles plugins shipped with
+	// node_modules baked for one platform (and re-installs on a mismatching host). No-op for
+	// plugins with no deps or host-installed deps.
+	ensurePluginDeps(path.dirname(entry))
 
 	const mod = await importEntry(entry, options)
 	const plugin = extractPlugin(mod, source.name)
