@@ -21,7 +21,7 @@
  * entirely — there is nothing to steer.
  */
 
-import type { PluginAgent, PluginAgentNotifyOptions } from "@shofer/types"
+import type { PluginAgent, PluginAgentNotifyOptions, PluginAgentSpawnOptions, PluginTaskHandle } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
 
@@ -35,6 +35,10 @@ import { warnPlugin } from "./plugin-warnings.js"
 export interface PluginAgentProvider {
 	/** Deliver `message` to the agent per `opts` (default `mode: "queue"`). */
 	notify(message: string, opts?: PluginAgentNotifyOptions): Promise<void>
+	/** Start a task and return an awaitable, cancellable handle (§14). */
+	spawn(prompt: string, opts?: PluginAgentSpawnOptions): Promise<PluginTaskHandle>
+	/** Cancel a task by id (§14). No-op if not found. */
+	cancel(taskId: string): Promise<void>
 }
 
 /**
@@ -52,6 +56,22 @@ export function createPluginAgent(pluginName: string, provider: PluginAgentProvi
 				throw error
 			}
 		},
+		async spawn(prompt: string, opts?: PluginAgentSpawnOptions): Promise<PluginTaskHandle> {
+			try {
+				return await provider.spawn(prompt, opts)
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.agent.spawn failed: ${String(error)}`)
+				throw error
+			}
+		},
+		async cancel(taskId: string): Promise<void> {
+			try {
+				await provider.cancel(taskId)
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.agent.cancel failed: ${String(error)}`)
+				throw error
+			}
+		},
 	}
 }
 
@@ -62,19 +82,25 @@ export function createPluginAgent(pluginName: string, provider: PluginAgentProvi
  * Distinct from an *absent* `ctx.agent` (no host seam): here the field is present so a
  * plugin author gets a clear "not granted" error rather than a missing API.
  */
-export function createDeniedPluginAgent(
-	pluginName: string,
-	warn: (message: string) => void = warnPlugin,
-): PluginAgent {
+export function createDeniedPluginAgent(pluginName: string, warn: (message: string) => void = warnPlugin): PluginAgent {
+	const deny = (method: string): never => {
+		const message =
+			`[plugin:${pluginName}] ctx.agent.${method} denied — the plugin declares no permissions.agent grant. ` +
+			`Steering the agent is billed/behavioral; add "agent": true to the manifest permissions.`
+		warn(message)
+		throw new Error(message)
+	}
 	return {
 		// `async` so the throw surfaces as a rejected promise (matching the
 		// `Promise`-returning contract), not a synchronous throw at the call site.
 		async notify(): Promise<void> {
-			const message =
-				`[plugin:${pluginName}] ctx.agent.notify denied — the plugin declares no permissions.agent grant. ` +
-				`Steering the agent is billed/behavioral; add "agent": true to the manifest permissions.`
-			warn(message)
-			throw new Error(message)
+			deny("notify")
+		},
+		async spawn(): Promise<never> {
+			return deny("spawn")
+		},
+		async cancel(): Promise<void> {
+			deny("cancel")
 		},
 	}
 }

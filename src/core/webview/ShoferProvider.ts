@@ -97,7 +97,16 @@ import {
 	installPluginFromUrl as installPluginArchiveFromUrl,
 	PluginPackError,
 } from "@shofer/core"
-import type { PluginRequest, PluginView, PluginsState, PluginUiMessageEnvelope, PluginUiRegion } from "@shofer/types"
+import type {
+	PluginRequest,
+	PluginView,
+	PluginsState,
+	PluginUiMessageEnvelope,
+	PluginUiRegion,
+	PluginTaskHandle,
+	PluginTaskResult,
+	PluginEvent,
+} from "@shofer/types"
 import type { ApiHandler, PluginAiProvider, PluginAgentProvider, PluginSearchProvider } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
@@ -2303,6 +2312,53 @@ export class ShoferProvider
 				if (target.abort) {
 					await target.cancelAndProcessQueuedMessages()
 				}
+			},
+			// §14: awaitable, cancellable job control. Starts a task and returns a handle whose
+			// result() settles on the task's completion/abort, with task-scoped events + cancel.
+			spawn: async (prompt, opts): Promise<PluginTaskHandle> => {
+				const task = await this.createTask(prompt, opts?.images)
+				const taskId = task.taskId
+				const metadata = opts?.metadata
+				let settle: ((r: PluginTaskResult) => void) | undefined
+				const resultPromise = new Promise<PluginTaskResult>((res) => {
+					settle = res
+				})
+				const cleanup = () => {
+					task.off(ShoferEventName.TaskCompleted, onCompleted)
+					task.off(ShoferEventName.TaskAborted, onAborted)
+				}
+				const onCompleted = () => {
+					cleanup()
+					settle?.({ taskId, status: "completed", metadata })
+				}
+				const onAborted = () => {
+					cleanup()
+					settle?.({ taskId, status: "aborted", metadata })
+				}
+				task.on(ShoferEventName.TaskCompleted, onCompleted)
+				task.on(ShoferEventName.TaskAborted, onAborted)
+				return {
+					taskId,
+					result: () => resultPromise,
+					onEvent: (cb: (event: PluginEvent) => void) => {
+						const handler = (data: { action: "created" | "updated" }) =>
+							cb({
+								name: ShoferEventName.Message,
+								taskId,
+								properties: { action: data.action },
+								timestamp: Date.now(),
+							})
+						task.on(ShoferEventName.Message, handler)
+						return () => task.off(ShoferEventName.Message, handler)
+					},
+					cancel: async () => {
+						await task.abortTask(true)
+					},
+				}
+			},
+			cancel: async (taskId: string): Promise<void> => {
+				const target = this.shoferStack.find((t) => t.taskId === taskId)
+				if (target) await target.abortTask(true)
 			},
 		}
 	}

@@ -71,6 +71,15 @@ function makeAgentProvider(): PluginAgentProvider & {
 		async notify(message, opts) {
 			calls.push({ message, mode: opts?.mode, taskId: opts?.taskId })
 		},
+		async spawn() {
+			return {
+				taskId: "task-stub",
+				result: async () => ({ taskId: "task-stub", status: "completed" as const }),
+				onEvent: () => () => {},
+				cancel: async () => {},
+			}
+		},
+		async cancel() {},
 	}
 }
 
@@ -91,14 +100,20 @@ describe("plugin-agent — createPluginAgent / createDeniedPluginAgent (P7 unit)
 			{ message: "deploy failed", mode: "queue", taskId: undefined },
 			{ message: "start over", mode: "spawn", taskId: "t1" },
 		])
-		// Surface exposes ONLY notify — no host internals leak through.
-		expect(Object.keys(agent)).toEqual(["notify"])
+		// Surface exposes notify + the §14 job-control methods — no host internals leak through.
+		expect(Object.keys(agent)).toEqual(["notify", "spawn", "cancel"])
 	})
 
 	it("surfaces + warns on a provider failure", async () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 		const provider: PluginAgentProvider = {
 			async notify() {
+				throw new Error("boom")
+			},
+			async spawn() {
+				throw new Error("boom")
+			},
+			async cancel() {
 				throw new Error("boom")
 			},
 		}
