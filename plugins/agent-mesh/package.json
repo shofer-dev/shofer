@@ -1,0 +1,12 @@
+{
+	"name": "@shofer/plugin-agent-mesh",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Shofer plugin: NATS agent-mesh participant (inbound notification delivery + emit/subscribe tools). Pure JS.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"main": "index.ts",
+	"dependencies": {
+		"nats": "^2.28.0"
+	}
+}

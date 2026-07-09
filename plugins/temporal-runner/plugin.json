@@ -7,9 +7,9 @@
 	"license": "Apache-2.0",
 	"main": "index.ts",
 	"permissions": {
+		"tools": true,
 		"agent": true,
-		"events": true,
-		"network": ["grpc://temporal:7233", "nats://nats:4222"]
+		"network": ["grpc://temporal:7233"]
 	},
 	"config": {
 		"type": "object",
@@ -38,11 +38,6 @@
 				"type": "number",
 				"default": 1,
 				"description": "maxConcurrentActivityExecutions — capacity + backpressure (1 = one agent task at a time)."
-			},
-			"natsUrl": {
-				"type": "string",
-				"default": "",
-				"description": "Optional NATS url for live telemetry (agents.telemetry.<taskId>). Empty ⇒ telemetry disabled."
 			},
 			"heartbeatMs": {
 				"type": "number",
