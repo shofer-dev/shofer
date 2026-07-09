@@ -8,7 +8,7 @@
 	"main": "index.ts",
 	"dependencies": {
 		"@temporalio/activity": "^1.11.6",
-		"@temporalio/worker": "^1.11.6",
-		"nats": "^2.28.0"
+		"@temporalio/client": "^1.11.6",
+		"@temporalio/worker": "^1.11.6"
 	}
 }

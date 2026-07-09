@@ -11,13 +11,21 @@ On enable, `ctx.registerService` starts a Temporal `Worker` that long-polls `con
 On pickup, the `runShoferTask` activity:
 
 1. `ctx.agent.spawn(prompt, { metadata })` → a `PluginTaskHandle`,
-2. streams task events → NATS (`agents.telemetry.<taskId>`) if `config.natsUrl` is set,
-3. `heartbeat()`s (liveness + cancellation delivery),
-4. `await handle.result()` → returns the structured `PluginTaskResult` to Temporal,
-5. on Temporal cancellation → `handle.cancel()` (structured cancellation).
+2. `heartbeat()`s (liveness + cancellation delivery),
+3. `await handle.result()` → returns the structured `PluginTaskResult` to Temporal,
+4. on Temporal cancellation → `handle.cancel()` (structured cancellation).
 
-`maxConcurrentActivityExecutions = config.concurrency` (default 1) is capacity + backpressure —
+`maxConcurrentActivityTaskExecutions = config.concurrency` (default 1) is capacity + backpressure —
 polling only resumes when a slot is free (pull-based, no central dispatcher).
+
+It carries **no NATS** — live telemetry/notifications are the `agent-mesh` plugin's job (they
+coordinate through Shofer, not with each other).
+
+## Agent tools (read-only introspection)
+
+- `temporal_task_queue_status` — how many runners poll a queue (pool health).
+- `temporal_list_workflows` — list workflow executions (optional visibility query).
+- `temporal_describe_workflow` — status of a workflow by id.
 
 ## Requirements
 
@@ -25,8 +33,9 @@ polling only resumes when a slot is free (pull-based, no central dispatcher).
 - `permissions.agent` (granted in `plugin.json`) + a host that wires the agent seam (the VS Code
   extension / the CLI under the shim).
 - Its own runtime deps installed alongside the plugin: `@temporalio/worker`,
-  `@temporalio/activity`, `nats` (see `package.json`). These are dynamically `import()`ed, so a
-  Shofer without them (or with the plugin disabled) is unaffected — it just logs a warning.
+  `@temporalio/activity`, `@temporalio/client` (see `package.json`). These are dynamically
+  `import()`ed; if they're missing the plugin surfaces a **user notification** (not just a log)
+  with an actionable "npm install" message, and does nothing else.
 
 ## Config (`ctx.config`)
 
@@ -36,8 +45,7 @@ polling only resumes when a slot is free (pull-based, no central dispatcher).
 | `namespace`       | `default`       | Temporal namespace                                  |
 | `taskQueue`       | `runner:coding` | capability-tagged queue (polling = pool membership) |
 | `activityName`    | `runShoferTask` | activity type driven by Shofer                      |
-| `concurrency`     | `1`             | `maxConcurrentActivityExecutions`                   |
-| `natsUrl`         | `""`            | NATS url for telemetry (empty ⇒ disabled)           |
+| `concurrency`     | `1`             | `maxConcurrentActivityTaskExecutions`               |
 | `heartbeatMs`     | `10000`         | activity heartbeat interval                         |
 
 ## Note
