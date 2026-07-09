@@ -89,9 +89,8 @@ On activation the plugin:
       Shofer's existing structured cancellation.
 
 Concurrency = the worker's `maxConcurrentActivityTaskExecutions` (from `config.concurrency`; capacity
-
-- backpressure; often **1** for clean per-task worktree isolation — an idle Shofer pod pulls one job,
-  runs it in-process, returns to polling).
+and backpressure; often **1** for clean per-task worktree isolation — an idle Shofer pod pulls one
+job, runs it in-process, returns to polling).
 
 ### Illustrative sketch
 
@@ -105,7 +104,7 @@ export default {
 		ctx.registerService({
 			name: "temporal-worker",
 			start: async () => {
-				const connection = await NativeConnection.connect({ address: ctx.config.temporal.host })
+				const connection = await NativeConnection.connect({ address: ctx.config.temporalAddress })
 				worker = await Worker.create({
 					connection,
 					namespace: ctx.config.namespace,
