@@ -24,8 +24,17 @@
 
 ## 1. Goals & Scope
 
-Transform the current single-user code-server development environment into a multi-tenant
-SaaS platform where:
+**North star.** The end state is a **native AI-agentic environment where agents do most of the
+work to build _and run_ a software product**, and the human is involved the way a CEO/CTO (with
+an Architect hat on demand) is: setting direction, owning trade-offs, and approving the
+decisions that shouldn't be delegated — not operating the tooling. Agents **build** the product
+(SDLC-triggered pipelines) and **operate** it (ops-triggered pipelines), coordinating with each
+other and with the human through standard SDLC tools. The multi-tenant dev platform below is the
+substrate this runs on; the agent layer ([§5.6](#56-agentic-pipelines--orchestration)) is
+additive and removable (principles 9–10).
+
+Concretely, transform the current single-user code-server development environment into a
+multi-tenant SaaS platform where:
 
 - **Multiple users** belong to **organizations** and can create or participate in multiple
   **projects** concurrently.
@@ -78,6 +87,18 @@ that org's projects. See [§2.1 Tenancy & service scope](#21-tenancy--service-sc
    is append-only telemetry sinks (multi-producer, immutable rows, zero mutation — see the
    `agent_activity_kpi` note in [§4.15](#415-agent-audit-trail-phase-4)). Ownership map in
    [§3 Communication Patterns](#communication-patterns).
+9. **Agents are a strippable layer over a fully-manual platform.** The system is a complete,
+   standard SDLC platform (GitLab + workspaces + resources + Grafana) that a human can drive
+   entirely by hand; the agent automation sits on top and can be removed. **No agent is ever a
+   hard dependency for a core operation, and every hard-gated agent action has a manual
+   equivalent.** A global kill switch disables all agent workflows and reverts to pure manual
+   operation with zero loss of function (the "Tesla autopilot" model — must stay drivable by
+   hand, take over anytime, everything recorded). See [§5.6](#56-agentic-pipelines--orchestration).
+10. **Don't replace the SDLC — work through it.** Agents act through the same standard tools a
+    human engineer uses (GitLab issues for intent, MRs for changes, CI for delivery, Grafana
+    for ops). Every agent action is therefore a native, inspectable artifact, which makes
+    **transparency and takeover properties of the substrate, not features to build.** Corollary:
+    don't invent proprietary state where a standard tool already exists.
 
 ---
 
@@ -128,10 +149,10 @@ cross-tenant data separation.
 
 Services therefore have one of two scopes:
 
-| Scope                                                              | Count   | Services                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Org-global** — one per cluster, shared by all the org's projects | 1 / org | `user-console` (+ the L2 headless-Shofer backend it drives, §5.3), `llm-router`, `mcp-server`/`tools-backend`, `resource-manager`, the **mesh control plane** (agent **registrar** + **NATS** bus, §5.5), and the platform data stores: **YugabyteDB** (control + audit + registry), **ClickHouse** (KPIs), Redis, Qdrant, MinIO, CephFS, and the observability stack (Mimir/Tempo/Loki/Grafana) |
-| **Project-scoped** — per namespace                                 | N / org | **workspaces** (code-server + Shofer **L1** + the **arkware-orchestrator** mesh sidecar, §5.5; the MCP tool surface is served by the org-global `mcp-server`) and **user-provisioned resources** (project databases, S3 buckets, compute/services created via `resource-manager`)                                                                                                                |
+| Scope                                                              | Count   | Services                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Org-global** — one per cluster, shared by all the org's projects | 1 / org | `user-console` (+ the L2 headless-Shofer backend it drives, §5.3), `llm-router`, `mcp-server`/`tools-backend`, `resource-manager`, the **mesh control plane** (agent **registrar** + **NATS** bus, §5.5), the **pipeline orchestration** plane (**Temporal** + event-ingress adapters, §5.6), self-hosted **GitLab** (coordination system of record), and the platform data stores: **YugabyteDB** (control + audit + registry), **ClickHouse** (KPIs), Redis, Qdrant, MinIO, CephFS, and the observability stack (Mimir/Tempo/Loki/Grafana, incl. **Alertmanager** as an event source) |
+| **Project-scoped** — per namespace                                 | N / org | **workspaces** (code-server + Shofer **L1** + the **arkware-orchestrator** mesh sidecar, §5.5; the MCP tool surface is served by the org-global `mcp-server`) and **user-provisioned resources** (project databases, S3 buckets, compute/services created via `resource-manager`)                                                                                                                                                                                                                                                                                                       |
 
 The line between org-global platform data stores and project-scoped resources matters:
 YugabyteDB, ClickHouse, Redis and Qdrant are **platform** infrastructure shared across the
@@ -217,17 +238,19 @@ Revisit only if power-users later need scoped `kubectl` write.
 
 All services below are **org-global** (one per cluster, §2.1).
 
-| Service                  | Language            | Port | Owns                                                                                                                                                         |
-| ------------------------ | ------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **user-console**         | Go                  | 8000 | User-facing API + UI; control plane for workspaces, chat, notifications; **drives the L2 agent over `AgentApi`**; writes control-plane + audit rows          |
-| **resource-manager**     | Go                  | 8006 | Infrastructure provisioning: k8s workloads, S3 buckets, networks, filesystems                                                                                |
-| **L2 backend**           | TS (`@shofer/core`) | 5111 | Headless Shofer executor pool; the agent loop driven by user-console over `AgentApi` (§5.3)                                                                  |
-| **agent registrar**      | Go                  | 5120 | Mesh control plane: agent registration, health, tier/scope/trust-class assignment, scoped-credential issuance, discovery (§5.5)                              |
-| **arkware-orchestrator** | TS (companion)      | —    | Per-agent mesh sidecar: registers/heartbeats its Shofer, delivers inbound A2A into the loop via `ShoferAPI` (§5.5). Runs beside each L1 (and the L2 backend) |
-| **NATS**                 | —                   | 4222 | Single bus for A2A + cluster-event notifications (§5.5)                                                                                                      |
-| llm-router (existing)    | Go                  | 3000 | LLM provider routing; **records conversation narration** (§5.4)                                                                                              |
-| mcp-server (existing)    | Go                  | 3001 | MCP tool server for L1 & L2 + **A2A gateway** (authz + audit of mesh tool calls, §5.5); **records tool-call ground truth** (§5.4)                            |
-| tools-backend (existing) | Go                  | 8001 | Tool execution backend for mcp-server                                                                                                                        |
+| Service                  | Language            | Port | Owns                                                                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **user-console**         | Go                  | 8000 | User-facing API + UI; control plane for workspaces, chat, notifications; **drives the L2 agent over `AgentApi`**; writes control-plane + audit rows                                                                                                                                    |
+| **resource-manager**     | Go                  | 8006 | Infrastructure provisioning: k8s workloads, S3 buckets, filesystems                                                                                                                                                                                                                    |
+| **L2 backend**           | TS (`@shofer/core`) | 5111 | Headless Shofer executor pool; the agent loop driven by user-console over `AgentApi` (§5.3)                                                                                                                                                                                            |
+| **agent registrar**      | Go                  | 5120 | Mesh control plane: agent registration, health, tier/scope/trust-class assignment, scoped-credential issuance, discovery (§5.5)                                                                                                                                                        |
+| **arkware-orchestrator** | TS (companion)      | —    | Per-agent participation layer: **Temporal worker** that pulls tagged pipeline tasks and drives the co-located Shofer via `ShoferAPI` (§5.6); also the mesh sidecar (register/heartbeat, inbound A2A delivery, §5.5) and config-sync consumer. Runs beside each L1 (and the L2 backend) |
+| **NATS**                 | —                   | 4222 | Single bus: event ingress (§5.6) + A2A + cluster-event notifications (§5.5); real-time telemetry/token side-channels (kept out of Temporal history)                                                                                                                                    |
+| **Temporal**             | —                   | 7233 | Durable pipeline orchestration: deterministic workflows, retries/timeouts, human-approval gates (signals), capability-tagged runner pool (§5.6)                                                                                                                                        |
+| **event-ingress**        | Go/TS               | —    | Stateless adapters normalizing sources (GitLab/Alertmanager webhooks, cron) onto NATS, and starting Temporal workflows from trigger rules (§5.6)                                                                                                                                       |
+| llm-router (existing)    | Go                  | 3000 | LLM provider routing; **records conversation narration** (§5.4)                                                                                                                                                                                                                        |
+| mcp-server (existing)    | Go                  | 3001 | MCP tool server for L1 & L2 + **A2A gateway** (authz + audit of mesh tool calls, §5.5); **records tool-call ground truth** (§5.4)                                                                                                                                                      |
+| tools-backend (existing) | Go                  | 8001 | Tool execution backend for mcp-server                                                                                                                                                                                                                                                  |
 
 ### Communication Patterns
 
@@ -245,13 +268,13 @@ All services below are **org-global** (one per cluster, §2.1).
 4. **Shared database, single-writer per table** (design principle 8): every table has exactly
    one owning writer; any service may read any table. Ownership map:
 
-    | Owner (sole writer)  | Tables                                                                                                                                   |
-    | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-    | **user-console**     | identity (Phase 0), `projects`, `project_members`, `workspaces`, `tasks`, `agent_approvals`, `notifications`, `observability_dashboards` |
-    | **resource-manager** | `resources` + all `resource_*` extensions, `workspace_resources`, `resource_versions`, `snapshots`                                       |
-    | **llm-router**       | `agent_conversation_turns` (§4.15)                                                                                                       |
-    | **mcp-server**       | `agent_tool_calls` (§4.15), `agent_messages` (§4.16, as the A2A gateway)                                                                 |
-    | **agent registrar**  | `agent_registry` (§4.16)                                                                                                                 |
+    | Owner (sole writer)  | Tables                                                                                                                                                                |
+    | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | **user-console**     | identity (Phase 0), `projects`, `project_members`, `workspaces`, `tasks`, `agent_approvals`, `notifications`, `observability_dashboards`, `pipeline_triggers` (§4.17) |
+    | **resource-manager** | `resources` + all `resource_*` extensions, `workspace_resources`, `resource_versions`, `snapshots`                                                                    |
+    | **llm-router**       | `agent_conversation_turns` (§4.15)                                                                                                                                    |
+    | **mcp-server**       | `agent_tool_calls` (§4.15), `agent_messages` (§4.16, as the A2A gateway)                                                                                              |
+    | **agent registrar**  | `agent_registry` (§4.16)                                                                                                                                              |
 
     The one carve-out is the append-only KPI sink `agent_activity_kpi` (§4.15) — a
     multi-producer telemetry stream with immutable, source-tagged rows (no shared mutation).
@@ -485,7 +508,7 @@ CREATE TABLE resources (
     updated_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     UNIQUE (project_id, resource_type, provider, name),
     CONSTRAINT check_resource_type CHECK (resource_type IN (
-        'filesystem', 'sqldb', 's3', 'container', 'network', 'compute', 'service'
+        'filesystem', 'sqldb', 's3', 'container', 'compute', 'service'
     )),
     CONSTRAINT check_resource_state CHECK (state IN (
         'pending', 'starting', 'creating', 'running', 'stopped', 'stopping',
@@ -514,7 +537,6 @@ CREATE TABLE resource_container (
     labels           JSONB,
     ports            JSONB,
     volumes          JSONB,
-    networks         TEXT[],
     cpu_cores        NUMERIC(10,2),
     memory_mb        INTEGER,
     memory_high_mb   INTEGER,         -- cgroups soft limit (throttle threshold)
@@ -543,19 +565,11 @@ CREATE TABLE resource_compute (
 );
 ```
 
-#### Extension: Network
-
-```sql
-CREATE TABLE resource_network (
-    resource_id      UUID         PRIMARY KEY REFERENCES resources(resource_id) ON DELETE CASCADE,
-    network_id       VARCHAR(64),
-    driver           VARCHAR(50),     -- bridge, overlay, host, none
-    subnet           VARCHAR(50),
-    gateway          VARCHAR(50),
-    internal         BOOLEAN,         -- TRUE = no internet access
-    labels           JSONB
-);
-```
+> **No `network` resource.** k3s has no user-provisioned "network" object (Docker-style
+> driver/subnet/gateway don't map — every pod is on one flat cluster network). Networking
+> intent is realized without a tenant resource: the **project namespace** gives automatic
+> intra-project connectivity, **platform-managed NetworkPolicy** does isolation + egress
+> lockdown (§5.4), and **Services** do discovery.
 
 #### Extension: Filesystem
 
@@ -1048,6 +1062,37 @@ ephemeral NATS request-reply, the latter rides JetStream. Only the claim-id para
 durable ledger. The messages themselves are A2A MCP tool calls, so they are _also_ captured in
 the audit trail (§4.15) as ordinary tool ground truth.
 
+### 4.17 Pipeline Triggers (Phase 4)
+
+The **only** new platform table the orchestration layer ([§5.6](#56-agentic-pipelines--orchestration))
+needs: the trigger→pipeline binding rules. Pipeline **run/execution state lives in Temporal**, not
+here (principle 8 — don't duplicate the orchestrator's store); GitLab owns tickets; `tasks` (§4.8)
+cross-references a run's ticket + Temporal workflow id in its `metadata`.
+
+```sql
+-- Which events wake which pipeline, with what params, and whether it is hard-gated.
+-- A governance surface: curated by the human / L2 (changes may themselves require approval).
+CREATE TABLE pipeline_triggers (
+    trigger_id       UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id       UUID         REFERENCES projects(project_id),   -- NULL = org-wide
+    name             VARCHAR(255) NOT NULL,
+    event_pattern    VARCHAR(255) NOT NULL,   -- NATS subject/pattern, e.g. ops.alert.firing
+    match            JSONB        NOT NULL DEFAULT '{}',   -- extra predicate (e.g. {"severity":"critical"})
+    pipeline         VARCHAR(255) NOT NULL,   -- Temporal workflow type to start
+    default_params   JSONB        NOT NULL DEFAULT '{}',
+    task_queue       VARCHAR(100),            -- capability tag for the runner pool (§5.6)
+    hard_gated       BOOLEAN      NOT NULL DEFAULT FALSE,  -- requires human approval to run
+    enabled          BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_by       UUID         REFERENCES users(user_id),
+    created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_pipeline_triggers_project ON pipeline_triggers(project_id);
+CREATE INDEX idx_pipeline_triggers_event   ON pipeline_triggers(event_pattern);
+```
+
+Owned (sole writer) by **user-console** (the human/L2 curate it via its API).
+
 ---
 
 ## 5. Services
@@ -1061,6 +1106,21 @@ the audit trail (§4.15) as ordinary tool ground truth.
 - Project management (CRUD, membership, k8s namespace lifecycle)
 - User-facing REST API + UI (workspace CRUD, chat, notifications, observability)
 - Workspace lifecycle coordination (delegates container ops to resource-manager)
+- **Unified presentation layer (single pane of glass)** — user-console renders a _curated subset_
+  of each backend system's state **in its own UI**, via that system's API: **Temporal** (pipelines
+  — list/status/stages/pending-approvals), **Grafana** (metrics), **ArgoCD** (deploy/sync health),
+  **GitLab** (tickets/MRs), **resource-manager** (resources). It does **not** re-implement their
+  state — presentation + action-proxy over authoritative APIs (principle 10); each system stays the
+  system of record and remains independently accessible for deep-dive/takeover.
+- **Pipeline surface** — the Temporal slice of the above: lists all agentic pipelines + status
+  (Temporal Visibility API, filtered by custom search attributes, joined with GitLab), maps event
+  history → business-level stages, and manages them (pause/terminate/restart/resume) plus the
+  **global kill switch** (§5.6). Operable **both manually** (UI) **and by L2** (the same ops are MCP
+  tools) — the two paths converge on the same Temporal API and are both recorded.
+- **Resource surface** — create + attach/detach project resources in the general sense (S3
+  buckets, databases, filesystems, compute; §4.4) via resource-manager. Same duality: a human
+  provisions/mounts by hand in the UI, or L2 does it via MCP tools — so the platform runs with
+  agents off (principle 9). (Prod-deploy hard-gates surface here as gated **ArgoCD** syncs.)
 - **L2 Agent control plane** — _drives_ the headless Shofer executor pool over `AgentApi`
   (start/message/cancel tasks, stream output, surface asks); it does **not** implement an
   agent loop (§5.3)
@@ -1134,8 +1194,6 @@ audit trail tables (§4.15) — those are owned by `llm-router` and `mcp-server`
 | `POST /api/compute/{id}/stop`       | Stop compute                             |
 | `PUT /api/compute/{id}/limits`      | Update resource limits                   |
 | `PUT /api/compute/{id}/filesystems` | Add/remove filesystem mounts             |
-| `GET/POST/DELETE /api/networks`     | Network management                       |
-| `POST /api/networks/{id}/attach`    | Attach compute to network                |
 | `GET/POST/DELETE /api/buckets`      | S3 bucket management                     |
 | `GET/POST/DELETE /api/filesystems`  | Filesystem management                    |
 | `POST /api/resources/{id}/mount`    | Mount resource to workspace              |
@@ -1151,7 +1209,6 @@ audit trail tables (§4.15) — those are owned by `llm-router` and `mcp-server`
 | Provider                 | Manages                                                             |
 | ------------------------ | ------------------------------------------------------------------- |
 | `kube_compute`           | K8s Deployments/StatefulSets with replicas, sidecars, volume claims |
-| `kube_network`           | K8s NetworkPolicies/Services                                        |
 | `kube_cephfs_filesystem` | CephFS PVCs (RWX for shared, RBD for databases)                     |
 | `s3_buckets`             | MinIO/S3 bucket lifecycle                                           |
 
@@ -1183,17 +1240,22 @@ agent-to-agent mechanism: L2↔L1 goes over the **agent mesh** (§5.5), never ov
 
 **What L2 is, precisely:**
 
-- **A pure controller/tool-caller with no filesystem access.** L2 acts only through MCP
-  tools: infra ops (`create_workspace`, `scale_service`, `list_resources`, …) on the
-  org-global `mcp-server`, and **mesh tools** (§5.5) to spawn/observe/message other agents.
+- **A pure controller/tool-caller with no filesystem access.** L2 acts through MCP tools: infra
+  ops (`create_workspace`, `scale_service`, `list_resources`, provision/attach resources, …) on
+  the org-global `mcp-server`, **pipeline tools** (list/pause/terminate/restart/resume, §5.6),
+  **GitLab tools** to create/assign/update tickets (how it delegates product work, §5.6), and
+  **mesh tools** (§5.5) to observe/message other agents at runtime. Every one of these has a
+  manual equivalent in user-console's UI (principle 9).
 - **Read-only on the _work_ inside a Project; the exclusive provisioner of Project
   resources.** L2 delegates work to L1 and observes it, but never touches project files/code
   itself. Provisioning (which costs money) is L2-only and always approval-gated — the
   asymmetry follows from user-console being the end-user's front door.
-- **Delegation to L1 is an A2A message over the mesh** (§5.5): a mesh tool that spawns a
-  _new top-level task_ in a workspace (creating the workspace first, with approval, if none is
-  available). It never hijacks the human's interactive task, and it is _not_ an `AgentApi`
-  client into the workspace. Delegation sets `parent_task_id` on the child (§4.15).
+- **Delegation to L1 goes through GitLab, not a direct spawn.** L2's primary way to get work
+  done is to **create/update a GitLab ticket** (the north star, §5.6); a Temporal-pooled runner
+  then claims it and runs an L1 agent. L2 does **not** directly drive an L1 over `AgentApi` (an
+  intra-agent channel) — the mesh (§5.5) is only for runtime signalling/escalation, and the
+  ticket is the durable, human-legible, take-over-able unit of work. Any spawned L1 task is a
+  _new top-level task_ (never a hijack of the human's interactive task).
 - **Locked-down mode.** No code workspace, checkpoints, code index, or diff views — gated off
   via the permission engine, leaving only the infra + mesh tool surface.
 - **Approvals are Shofer-native.** Dangerous tools emit an `ask`; user-console surfaces it and
@@ -1204,6 +1266,22 @@ existing `NodeRegistry` + `ExecutorPool` (root-task routing across headless-Shof
 an easy target since its conversations hold no shared working-tree state). _Horizontal_
 coordination with L1 and other agents is the mesh. An L2 backend can be a vertical pool **and**
 a single horizontal mesh participant at once.
+
+**Config replication to the pool — shipped.** The vertical pool's node-scoped settings — the
+**auto-approval policy** (toggles, command allowlists, and the outside-workspace trusted-path
+allowlist) plus behavioral/cost limits — are **controller-authoritative and replicated to every
+headless pod** by the config-sync channel ([`config_sync.md`](./config_sync.md), implemented):
+`user-console` sets policy once and it reaches each `shofer serve` pod on connect and on every
+change with **zero node-side admin**, and is _version-gated_ so a pod becomes assignable only
+after it has applied the current config. That is what lets the pods be stateless replicas the
+control plane can provision, scale, and reconfigure freely — a per-tenant/per-agent policy
+change on the controller propagates to the fleet without touching any pod. (This is the shipped
+shared-workspace model; `mcpEnabled` is deliberately not replicated — see `config_sync.md` §3.)
+For **L1** workspace agents, which _do_ touch files, the
+[outside-workspace path allowlist](./outside-workspace-path-allowlist.md) (a config-sync
+consumer) lets the platform pre-trust a project's mounted resource paths so the agent
+auto-approves reads/writes under them instead of prompting per file — read/write separated,
+with `write ⊇ read`.
 
 ### 5.4 Agent Recording & Audit Pipeline
 
@@ -1354,13 +1432,168 @@ verb/message-type layer (e.g. L1 holds `request:provision→L2` but not `command
 as defense-in-depth. An untrusted L1 never holds direct bus access — its only A2A path is the
 gateway tool, and egress lockdown (§5.4) means it cannot reach NATS to target another L1.
 
-#### The three channels, unified
+#### What rides the mesh (and what doesn't)
 
-- **L2 spawns L1** = a 1-1 message → the workspace's arkware-orchestrator → local
-  `ShoferAPI.startNewTask` (the sidecar is the adapter from the horizontal mesh down to the
-  vertical intra-agent plane; `AgentApi` never crosses between two agents).
-- **L1 escalates to L2** = an async req/resp (claim id) — durable in `agent_messages`.
+The mesh is **runtime signalling**, not the work-handoff backbone — durable work assignment is
+GitLab tickets + the Temporal runner pool (§5.6). On the mesh:
+
+- **L1 escalates to L2** (e.g. "I need infra provisioned") = an async req/resp (claim id) —
+  durable in `agent_messages`.
 - **cluster events → L1** = a 1-N async notification, delivered by subscription.
+- **live telemetry / token streams / status** = fire-and-forget pub/sub (feeds user-console's
+  live view), deliberately kept out of Temporal's workflow history (§5.6).
+
+When a mesh signal must actually start local work, arkware-orchestrator translates it to a
+**local `ShoferAPI` call** — the sidecar is the adapter from the horizontal mesh down to the
+vertical intra-agent plane; `AgentApi` never crosses between two agents.
+
+### 5.6 Agentic Pipelines & Orchestration
+
+The agent-automation layer (principles 9–10): a **source-agnostic, event-driven** pipeline system
+that triggers and durably runs agent work, sitting **on top of** a platform that stays fully
+operable by hand. Each system does one thing:
+
+| Layer                     | Responsibility                                                                        | Tech                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **Orchestration**         | when/sequence, durability, retries/timeouts, human-approval gates, capability routing | **Temporal**                                         |
+| **Coordination (record)** | intent, assignment, handoff, the take-over-able trail                                 | **GitLab** (tickets/MRs/CI) + the **mesh** (runtime) |
+| **Agent runtime**         | the loop, tools, reasoning, checkpoints                                               | **Shofer** (`@shofer/core`) — the _sole_ runtime     |
+| **Model access**          | provider routing, cost/limits                                                         | **llm-router**                                       |
+| **Tools**                 | file/exec/search/LSP + integrations                                                   | native (Shofer) + **MCP**                            |
+| **Signalling & ingress**  | event normalization, telemetry, A2A                                                   | **NATS**                                             |
+| **Human control plane**   | oversight, decisions, kill switch                                                     | **user-console**                                     |
+
+#### Trigger / ingress plane (source-agnostic)
+
+Pipelines bind to **events**, not to any one system — **GitLab is one source among many.** All
+sources normalize onto **NATS**, and a stateless **event-ingress** adapter maps subjects to
+pipeline starts:
+
+- GitLab webhook → `sdlc.ticket.ready` / `sdlc.mr.opened` …
+- Alertmanager webhook → `ops.alert.firing` …
+- cron → `schedule.*`
+- user-console + agents → publish directly
+
+The **trigger→pipeline binding rules** (`pipeline_triggers`, [§4.17](#417-pipeline-triggers-phase-4))
+say _which events wake which pipelines, with what params, and which are hard-gated_ — e.g.
+"`ops.alert.firing` severity=critical → incident-response pipeline." This is a governance surface
+the human/L2 curates. On a match, the adapter starts a Temporal workflow with an **idempotency key**
+(a duplicate webhook can't double-run).
+
+#### Execution plane (durable, no-SPOF)
+
+**Temporal** runs each pipeline as a **deterministic workflow** (routing, retries, timeouts,
+sequencing, and human-approval **gates via signals** — a workflow can block for hours/days on an
+approval, then resume). Work is dispatched **pull-based**: workers long-poll **capability-tagged
+task queues** (`runner:coding`, `runner:sre`, `gpu`, …). **There is no central dispatcher** —
+runners self-select when they have capacity (natural load-balancing/backpressure), a dead runner
+just stops pulling, and scaling = more runners join. **That pull model _is_ the horizontal-scale +
+no-SPOF property**, and it's where GitLab's logical assignment (the auditable claim/assignee) meets
+physical scheduling.
+
+**The runner is arkware-orchestrator** — a Temporal worker that, on pickup, drives the co-located
+**Shofer** via `ShoferAPI`. The **determinism rule** is strict: the agent/LLM loop is
+non-deterministic, so it runs **only inside a Temporal _Activity_, never a Workflow**.
+
+```ts
+// Deterministic controller — routing, gates, sequencing. No LLM calls here.
+async function devPipeline(ticket) {
+	const patch = await act({
+		taskQueue: "runner:coding",
+		startToCloseTimeout: "2h",
+		heartbeatTimeout: "2m",
+	}).runShoferTask({ ticket })
+	await condition(() => approved) // hard-gate: signal-driven pause/resume
+	await act({ taskQueue: "glue" }).mergeAndDeploy(patch) // e.g. a python worker
+}
+// Activity on the runner: non-determinism isolated; drives Shofer; streams telemetry to NATS.
+async function runShoferTask({ ticket }) {
+	const api = getShoferApi() // in-process, like the CLI ExtensionHost
+	api.on("message", (m) => nats.publish(`agents.telemetry.${ticket.id}`, m)) // → NATS, not Temporal
+	api.on("progress", () => activity.heartbeat())
+	const id = await api.startNewTask({ text: ticket.spec })
+	return await waitForCompletion(api, id) // resume-safe via checkpoints
+}
+```
+
+#### The agent runtime is Shofer (LangChain considered, rejected)
+
+Shofer is the **single agent runtime**; nothing else occupies that slot. LangChain/LangGraph was
+evaluated and **rejected**: it overlaps Shofer's exact role (loop + tools + model dispatch + state)
+and would rebuild — and bypass — what Shofer already gives us and this design depends on: the
+**code-specialized tool suite** (apply-patch/diff, ripgrep, LSP tools, process-managed exec), the
+**permission engine** (the hard-gates), the **§5.4 audit + cost accounting**, and **checkpoints +
+worktree isolation** (which is precisely what makes Temporal retries _resume-safe_). Decisively,
+Shofer is **the same engine the human drives interactively in VS Code (L1)** — so using it
+everywhere is what makes **takeover uniform** (a human can take over a pipeline's workspace in
+their IDE and continue identically). Steps needing only a one-shot completion (classify/summarize)
+call **llm-router directly** (no agent framework); Python glue runs in **polyglot Temporal workers**.
+
+#### Temporal vs Shofer/Slang workflows — outer vs inner loop (complementary, not redundant)
+
+Shofer has its own workflow system (**Slang**, `.slang` in `@shofer/core`). It does **not** overlap
+Temporal — they sit at different altitudes and **nest**:
+
+- **Temporal** orchestrates **between** agent runs, across the fleet: durable, distributed,
+  long-running (spans human approvals/deploys), retried, cross-service. It's the pipeline's
+  "when/where/gate/retry."
+- **Slang** orchestrates **within** a single agent run, in-process: a repeatable/introspectable
+  procedure that structures one agent's multi-step / sub-agent work. Ephemeral to the task.
+
+They compose one-directionally: `Temporal pipeline → Activity → Shofer → (optionally) Slang →
+sub-agents`. Slang can't wrap Temporal (it's in-process; it can't survive a runner death or wait a
+week for approval). This mirrors v3's own split — Slang lives on the **in-process/vertical** side
+(like `new_task`), Temporal + the mesh on the **distributed/horizontal** side. And it reinforces the
+determinism rule: a Slang workflow _is_ non-deterministic Shofer execution, so it runs **inside an
+Activity, never as a Temporal Workflow**. Rule of thumb: durable/cross-run/gated → Temporal; a
+structured procedure inside one agent's step → Slang (most steps need neither — a plain agent run
+suffices).
+
+#### Resume-safety = the "leave the wheel safe" contract
+
+Agent activities have **side effects** (files written, branch pushed, MR opened, LLM spend), so
+Temporal's "retry on a healthy runner" is correct only if the activity is **resume-safe, not
+blindly re-run**:
+
+- **Shofer checkpoints + per-task worktree** — a retry reattaches and continues from the last
+  checkpoint, never restarts from zero.
+- **Idempotency keys** on outward actions (MR keyed to the ticket, provisioning keyed to a request
+  id) so a retry reconciles instead of duplicating.
+- **Activity heartbeat** so a long agent run isn't mistaken for a dead worker.
+
+This is the same contract a **human takeover** or the **global kill switch** relies on: an agent
+always leaves its work in a resumable state — status + next step in the ticket, WIP branch pushed,
+no half-applied irreversible op.
+
+#### Build and Operate pipelines
+
+Same engine, same pool, same hard-gates — two trigger classes (this is the "build _and run_ the
+product" north star, §1):
+
+- **Build** (SDLC-triggered): `sdlc.ticket.ready` → a coding L1 agent → branch → MR → CI → ticket closed.
+- **Operate** (ops-triggered): `ops.alert.firing` → an SRE agent investigates via Grafana/logs,
+  diagnoses, hard-gated remediation if prod, opens + resolves the incident ticket.
+
+Either way the pipeline **externalizes into GitLab** for the record — so **trigger ≠ coordination
+store: NATS carries the trigger, GitLab carries the record**, even for non-GitLab-triggered runs.
+
+#### Lifecycle, manual operation & the kill switch
+
+- **user-console lists every running pipeline** (querying Temporal, joined with GitLab assignment)
+  and exposes **pause / terminate / restart / resume** on in-flight runs. These same lifecycle ops
+  are **also MCP tools**, so **L2 can manage pipelines** just as the human does — manual (UI) and
+  agent (MCP) paths converge on the same Temporal API, both recorded.
+- **Manual overrides:** a human takes over a **ticket** (the agent yields — never fights for the
+  wheel), or tells the agent directly; workspaces/resources/provisioning are operable **by hand**
+  (L2 is _one_ path, not the only one), so the system runs with agents off.
+- **Global agent switch** halts and disables all agent workflows → pure manual operation, agents
+  leaving the wheel safe on the way down (principle 9).
+- **Hard-gates = the reserved-rights / delegation-of-authority set** (provisioning, prod deploys;
+  grows over time): each is human-approved (a Temporal signal), recorded, and has a manual equivalent.
+
+**State ownership** (principle 8): run/execution state lives in **Temporal**; intent/coordination
+in **GitLab**; `tasks`/audit in **Yugabyte**; only the binding rules are a new platform table (§4.17).
+A `task` cross-references its ticket + Temporal workflow id (in `metadata`) so the three views align.
 
 ---
 
@@ -1436,15 +1669,16 @@ this into resource-manager.
 **Goal**: Introduce resource-manager as the infrastructure provisioning service. Refactor
 user-console to delegate all container/filesystem operations.
 
-**Tables**: `resources`, `resource_container`, `resource_compute`, `resource_network`,
+**Tables**: `resources`, `resource_container`, `resource_compute`,
 `resource_filesystem`, `resource_s3`, `resource_sqldb`, `workspace_resources`.
 
 **Services**: resource-manager (initial version).
 
 **Deliverables:**
 
-- resource-manager service with compute, network, filesystem, S3 bucket APIs.
-- Kubernetes provider (Deployments, StatefulSets, PVCs, NetworkPolicies).
+- resource-manager service with compute, filesystem, S3 bucket APIs.
+- Kubernetes provider (Deployments, StatefulSets, PVCs; platform-managed NetworkPolicies for
+  project isolation + egress lockdown — not a tenant `network` resource).
 - MinIO provider for S3 buckets.
 - CephFS filesystem provider.
 - user-console refactored to call resource-manager via HTTP for all infrastructure ops.
@@ -1485,14 +1719,17 @@ user notifications.
 
 **Tables**: `tasks`, `agent_approvals`, `agent_conversation_turns`,
 `agent_tool_calls`, `agent_activity_kpi` (ClickHouse), `agent_registry`, `agent_messages`,
-`notifications`, `observability_dashboards`, `resource_versions`, `snapshots`,
-`snapshot_resource_versions`.
+`pipeline_triggers`, `notifications`, `observability_dashboards`, `resource_versions`,
+`snapshots`, `snapshot_resource_versions`.
 
-**Infrastructure**: Deploy ClickHouse (agent KPIs), **NATS** (mesh + event bus). Headless
-Shofer L2 backend (`shofer serve`). Workspace-namespace egress lockdown (NetworkPolicy).
+**Infrastructure**: Deploy ClickHouse (agent KPIs), **NATS** (mesh + event bus), **Temporal**
+(pipeline orchestration), self-hosted **GitLab** (coordination system of record), **event-ingress**
+adapters (GitLab/Alertmanager webhooks, cron → NATS → Temporal). Headless Shofer L2 backend
+(`shofer serve`). Workspace-namespace egress lockdown (NetworkPolicy).
 
-**Services**: user-console (the L2 FE/controller); **agent registrar** + **arkware-orchestrator**
-sidecar (§5.5); recorder + A2A-gateway responsibilities added to llm-router + mcp-server.
+**Services**: user-console (the L2 FE/controller + pipeline list/lifecycle + kill switch);
+**agent registrar**; **arkware-orchestrator** (mesh sidecar **+ Temporal worker**, §5.5–§5.6);
+event-ingress; recorder + A2A-gateway responsibilities added to llm-router + mcp-server.
 
 **Deliverables:**
 
@@ -1504,8 +1741,16 @@ sidecar (§5.5); recorder + A2A-gateway responsibilities added to llm-router + m
 - **Agent mesh** (§5.5): `arkware-orchestrator` sidecar (registration/heartbeat/inbound
   delivery), the registrar, NATS transport, the A2A MCP tools + tier×scope×capability authz
   at the mcp-server gateway. Three paradigms: sync req/resp, async req/resp (claim id,
-  `agent_messages`), async notifications. L2↔L1 (spawn/observe/escalate) rides this — **never
-  `AgentApi`**.
+  `agent_messages`), async notifications. Runtime signalling/escalation only — **never `AgentApi`**.
+- **Agentic pipelines** (§5.6): source-agnostic ingress (NATS-normalized GitLab/Alertmanager/cron
+  → `pipeline_triggers` rules → Temporal), Temporal durable workflows with human-approval gates,
+  the pull-based capability-tagged runner pool (arkware-orchestrator = Temporal worker driving
+  Shofer in Activities), resume-safety (checkpoints + idempotency + heartbeat). **Shofer is the
+  sole agent runtime — LangChain considered and rejected.** Build + Operate pipeline classes.
+- **Governance & manual operation** (§5.6): GitLab as coordination system of record (L2 creates
+  tickets from user input; runners claim them); pipeline list + pause/terminate/restart/resume in
+  user-console; the **global agent kill switch**; hard-gates (provisioning, prod deploys) each with
+  a manual equivalent.
 - **Audit pipeline** (§5.4): llm-router records conversation narration; mcp-server records
   MCP + A2A tool ground truth; large payloads → MinIO/S3; KPIs dual-emitted → ClickHouse.
 - Egress lockdown so llm-router is a complete choke point (and L1 cannot reach NATS directly).
@@ -1519,10 +1764,12 @@ confirm egress lockdown in the NetworkPolicy plan; sync-over-bus liveness semant
 queue) and whether authz needs per-capability grants beyond
 tier×scope from day one (§5.5).
 
-**Exit criteria**: A user converses with L2, which provisions a workspace (with approval),
-spawns an L1 task in it over the mesh, and observes it; an L1 escalation for new infra reaches
-L2 via async req/resp and is gated by user approval; and every turn + tool/A2A call is
-reconstructable from the audit trail without trusting the workspace.
+**Exit criteria**: A user converses with L2, which (with approval) provisions and **files a
+GitLab ticket**; a pooled runner **pulls** it, prepares a workspace, runs an L1 agent that opens
+an MR, and the run is visible + pausable/terminable in user-console; an Alertmanager alert
+triggers an **operate** pipeline through the same engine; an L1 escalation for new infra is gated
+by user approval; the **global kill switch** returns the system to full manual operation; and
+every turn + tool/A2A call is reconstructable from the audit trail without trusting the workspace.
 
 ---
 
@@ -1556,15 +1803,15 @@ Summary of what infrastructure each phase requires beyond what is already deploy
 
 Everything below is **per organization cluster** (§2.1).
 
-| Phase | New Infrastructure                                                                                  | New Services                                                                                                                                                                                                | New Tables                                                                                                                                                                  |
-| ----- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | Keycloak                                                                                            | —                                                                                                                                                                                                           | 8 identity tables                                                                                                                                                           |
-| 1     | —                                                                                                   | user-console (Go)                                                                                                                                                                                           | `projects`, `project_members`, `workspaces`                                                                                                                                 |
-| 2     | —                                                                                                   | resource-manager (Go)                                                                                                                                                                                       | `resources` + 6 extension tables + `workspace_resources`                                                                                                                    |
-| 3     | —                                                                                                   | —                                                                                                                                                                                                           | `resource_limits_project` (→ k8s ResourceQuota); per-resource privileges deferred (§4.6)                                                                                    |
-| 4     | ClickHouse; **NATS** (mesh + event bus); headless Shofer L2 backend; workspace egress NetworkPolicy | L2 = user-console FE + headless Shofer backend (`@shofer/core`, deployed not written); **agent registrar**; **arkware-orchestrator** sidecar; recorder + A2A-gateway roles added to llm-router + mcp-server | `tasks`, `agent_approvals`, `agent_conversation_turns`, `agent_tool_calls`, `agent_activity_kpi` (CH), `agent_registry`, `agent_messages`, + notification/versioning tables |
-| 4+    | YugabyteDB (replaces PostgreSQL when volume warrants; same schema)                                  | —                                                                                                                                                                                                           | —                                                                                                                                                                           |
-| 5     | (ClickHouse resource-metric tables — conditional)                                                   | —                                                                                                                                                                                                           | `git_repositories` + 4 ClickHouse tables                                                                                                                                    |
+| Phase | New Infrastructure                                                                                                                                                                    | New Services                                                                                                                                                                                                                                        | New Tables                                                                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0     | Keycloak                                                                                                                                                                              | —                                                                                                                                                                                                                                                   | 8 identity tables                                                                                                                                                                                |
+| 1     | —                                                                                                                                                                                     | user-console (Go)                                                                                                                                                                                                                                   | `projects`, `project_members`, `workspaces`                                                                                                                                                      |
+| 2     | —                                                                                                                                                                                     | resource-manager (Go)                                                                                                                                                                                                                               | `resources` + 5 extension tables + `workspace_resources`                                                                                                                                         |
+| 3     | —                                                                                                                                                                                     | —                                                                                                                                                                                                                                                   | `resource_limits_project` (→ k8s ResourceQuota); per-resource privileges deferred (§4.6)                                                                                                         |
+| 4     | ClickHouse; **NATS** (mesh + event bus); **Temporal** (orchestration); self-hosted **GitLab**; **event-ingress** adapters; headless Shofer L2 backend; workspace egress NetworkPolicy | L2 = user-console FE + headless Shofer backend (`@shofer/core`, deployed not written); **agent registrar**; **arkware-orchestrator** (mesh sidecar + Temporal worker); event-ingress; recorder + A2A-gateway roles added to llm-router + mcp-server | `tasks`, `agent_approvals`, `agent_conversation_turns`, `agent_tool_calls`, `agent_activity_kpi` (CH), `agent_registry`, `agent_messages`, `pipeline_triggers`, + notification/versioning tables |
+| 4+    | YugabyteDB (replaces PostgreSQL when volume warrants; same schema)                                                                                                                    | —                                                                                                                                                                                                                                                   | —                                                                                                                                                                                                |
+| 5     | (ClickHouse resource-metric tables — conditional)                                                                                                                                     | —                                                                                                                                                                                                                                                   | `git_repositories` + 4 ClickHouse tables                                                                                                                                                         |
 
 ### Database Init Strategy
 
@@ -1581,6 +1828,7 @@ infra/kapitan/templates/setup/
 ├── 23-init-limits.sh.j2          (Phase 3 — resource_limits_project)
 ├── 24-init-chat-agent.sh.j2      (Phase 4 — tasks + agent_approvals + audit trail)
 ├── 24a-init-agent-mesh.sh.j2     (Phase 4 — agent_registry + agent_messages)
+├── 24b-init-pipelines.sh.j2      (Phase 4 — pipeline_triggers)
 ├── 25-init-versioning.sh.j2      (Phase 4 — versions + snapshots)
 ├── 26-init-git.sh.j2             (Phase 5 — git repositories)
 └── 30-init-clickhouse.sh.j2      (Phase 5 — ClickHouse tables, conditional)
@@ -1647,7 +1895,10 @@ infra/kapitan/templates/manifests/
 ├── 26-user-console.yaml.j2       (Phase 1, expanded in Phase 4)
 ├── 27-l2-agent.yaml.j2           (Phase 4 — headless Shofer L2 backend + workspace egress NetworkPolicy)
 ├── 28-agent-registrar.yaml.j2    (Phase 4 — mesh registrar)
-└── 29-nats.yaml.j2               (Phase 4 — NATS mesh + event bus)
+├── 29-nats.yaml.j2               (Phase 4 — NATS mesh + event bus)
+├── 30-temporal.yaml.j2           (Phase 4 — Temporal orchestration server)
+├── 31-event-ingress.yaml.j2      (Phase 4 — GitLab/Alertmanager/cron → NATS → Temporal adapters)
+└── 32-gitlab.yaml.j2             (Phase 4 — self-hosted GitLab, coordination system of record)
 ```
 
 Configuration in `infra/kapitan/inventory/classes/common.yml`:
@@ -1680,9 +1931,23 @@ nats:
     url: "nats://nats:4222" # single bus: A2A + cluster-event notifications
     jetstream: true # durable delivery for must-deliver notifications
 arkware_orchestrator:
-    # per-agent mesh sidecar (companion loaded into each L1 workspace Shofer and the L2 backend)
+    # per-agent companion (loaded into each L1 workspace Shofer and the L2 backend):
+    # mesh sidecar + Temporal worker (§5.5–§5.6)
     heartbeat_interval_s: 15
     a2a_gateway_url: "http://mcp-server:3001" # voluntary A2A tools are gated + audited here
+    temporal_task_queues: ["runner:coding"] # capability tags this node pulls (pull-based pool)
+
+# Agentic pipeline orchestration (§5.6)
+temporal:
+    host: "temporal:7233"
+    namespace: "arkware"
+    # workflows = deterministic controllers; Shofer runs only inside Activities (never Workflows)
+event_ingress:
+    # stateless adapters: GitLab/Alertmanager webhooks + cron → NATS → start Temporal workflows
+    sources: ["gitlab", "alertmanager", "cron"]
+    nats_subject_prefix: "ingress"
+gitlab:
+    url: "http://gitlab" # coordination system of record (tickets/MRs/CI); agents act as bot users
 
 # resource-manager configuration
 resource_manager:
