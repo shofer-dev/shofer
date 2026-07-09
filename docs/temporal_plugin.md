@@ -3,8 +3,8 @@
 A Shofer **plugin** that turns any Shofer node into a **Temporal activity worker** ("runner"):
 it registers to capability-tagged task queues, **pulls** agent jobs, and drives the co-located
 Shofer to execute them — durably, distributed, and resumable. It is a **general Shofer
-capability**, not an arkware-specific one: any Shofer user can run distributed, durable,
-human-gated agent pipelines by enabling one plugin.
+capability**: any Shofer user can run distributed, durable, human-gated agent pipelines by
+enabling one plugin.
 
 > **Status: proposed.** The plugin depends on the small, additive plugin-API changes in
 > [`plugin_system.md` §14](./plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins)
@@ -17,11 +17,10 @@ human-gated agent pipelines by enabling one plugin.
 
 ## 1. Why a plugin (not a companion)
 
-Shofer already ships a companion for this role in spirit — `extensions/orchestrator`
-(`arkware-orchestrator`), the reference consumer of the public `ShoferAPI`
-([`public_api.md`](./public_api.md)). But a companion is a **VS Code extension** (proprietary,
-arkware-specific, tied to the VS Code extension host), which fits a code-server workspace but is
-awkward for a **headless runner pool**.
+Shofer's public `ShoferAPI` ([`public_api.md`](./public_api.md)) can already fill this role via a
+**companion VS Code extension** (the API's reference-consumer pattern). But a companion is tied to
+the **VS Code extension host**, which fits a code-server workspace but is awkward for a **headless
+runner pool**.
 
 A **plugin** is the better home because it is:
 
@@ -29,8 +28,8 @@ A **plugin** is the better home because it is:
   in the VS Code extension, the CLI, and a **headless server** (`shofer serve`), which is exactly
   where a runner pool lives.
 - **A standard, upstream Shofer feature** — every Shofer user benefits from distributed durable
-  pipelines, not just arkware. The enabling API additions (§14 there) are generally useful (the
-  "workflow plugin" category §5.9 already names).
+  pipelines. The enabling API additions (§14 there) are generally useful (the "workflow plugin"
+  category §5.9 already names).
 - **Config-gated and non-contaminating** — disabled by default, permission-gated; a standalone
   Shofer without it is byte-for-byte unchanged.
 - **Precedented** — the Live Memory plugin already bundles and runs a background **server** via
@@ -168,7 +167,7 @@ Via the plugin manifest `config` schema → `ctx.config`
 ```jsonc
 {
 	"config": {
-		"temporal": { "host": "temporal:7233", "namespace": "arkware", "taskQueue": "runner:coding" },
+		"temporal": { "host": "temporal:7233", "namespace": "default", "taskQueue": "runner:coding" },
 		"nats": { "url": "nats://nats:4222" },
 		"concurrency": 1,
 	},
@@ -201,23 +200,23 @@ not new subsystems.
 
 ---
 
-## 8. Relationship to arkware-orchestrator
+## 8. Relationship to the companion (ShoferAPI) path
 
-`extensions/orchestrator` (`arkware-orchestrator`) is the **companion** (VS Code, public
-`ShoferAPI`) — the proprietary/reference consumer that today bridges Shofer events to external
-systems. This plugin is the **general, host-agnostic** equivalent of its runner role: same job, but a
-standard Shofer feature that benefits all users and runs **headless**. The two can share the
-Temporal/NATS/mesh logic as a library; the plugin is the upstream home, and the companion remains the
-code-server/VS-Code binding where a rich local UI + human takeover already live.
+The same runner role can be filled by a **companion VS Code extension** over the public `ShoferAPI`
+([`public_api.md`](./public_api.md)) — the API's reference-consumer pattern, which bridges Shofer
+events to external systems. That path is the **VS Code / workspace binding**, natural where a rich
+local UI and human takeover already live (code-server). This **plugin** is the **host-agnostic**
+equivalent: same job, but it runs **headless** (the runner pool) and is a standard, upstream Shofer
+feature. The two can share the Temporal/NATS logic as a library; the plugin is the general home.
 
 ---
 
 ## Related documents
 
-| Document                                                                                                | Relationship                                                                         |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [`plugin_system.md` §14](./plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins) | The plugin-API additions this plugin needs (spawn-handle/cancel, socket egress).     |
-| [`saas.md` §5.6](./saas.md#56-agentic-pipelines--orchestration)                                         | Platform orchestration context: NATS ingress + Temporal pool + Shofer runtime.       |
-| [`v3_architecture.md`](./v3_architecture.md)                                                            | Host-agnostic core + distributed execution (the substrate this builds on).           |
-| [`agentapi.md`](./agentapi.md)                                                                          | The transport-agnostic control-plane surface the scoped `ctx.agent` mirrors.         |
-| [`public_api.md`](./public_api.md)                                                                      | The companion (`ShoferAPI`) path — `arkware-orchestrator` is its reference consumer. |
+| Document                                                                                                | Relationship                                                                          |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [`plugin_system.md` §14](./plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins) | The plugin-API additions this plugin needs (spawn-handle/cancel, socket egress).      |
+| [`saas.md` §5.6](./saas.md#56-agentic-pipelines--orchestration)                                         | Platform orchestration context: NATS ingress + Temporal pool + Shofer runtime.        |
+| [`v3_architecture.md`](./v3_architecture.md)                                                            | Host-agnostic core + distributed execution (the substrate this builds on).            |
+| [`agentapi.md`](./agentapi.md)                                                                          | The transport-agnostic control-plane surface the scoped `ctx.agent` mirrors.          |
+| [`public_api.md`](./public_api.md)                                                                      | The companion (`ShoferAPI`) path — the VS Code extension binding, complementary here. |
