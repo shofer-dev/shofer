@@ -85,11 +85,11 @@ Stage F — Escalation (after tool returns)
 
 **Error message:**
 
-> Invalid tool call for '\<name\>': missing nativeArgs.\<details\>\<receivedParams\>
+> Tool call '\<name\>' failed: \<parseError\>\<receivedParams\>
 
-Where `\<details\>` is ` Parser error: <parseError>` when the parser captured a specific failure (via `NativeToolCallParser.consumeLastParseError()`), otherwise the fallback ` This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`; and `\<receivedParams\>` is ` Received partial params: <json>.` when partial params exist.
+Where `\<parseError\>` is the actionable parser error from `NativeToolCallParser.consumeLastParseError()` — which includes the tool name, the raw JSON.parse error, a snippet of the malformed arguments (first 200 chars), and explicit retry guidance ("Re-emit the tool call with properly formatted JSON arguments…"). When no parser error is available, the fallback is `the arguments could not be parsed. Re-emit the tool call with valid JSON arguments.`; and `\<receivedParams\>` is ` Partial params seen during streaming: <json>.` when partial params exist.
 
-**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — L572-608 (message construction L578-586)
+**Location:** [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) — L572-608 (message construction L630-640); parser error construction in [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts) — catch block at L2030-2045
 
 **Effect:**
 

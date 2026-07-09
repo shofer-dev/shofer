@@ -2,6 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { presentAssistantMessage } from "../presentAssistantMessage.js"
+import { NativeToolCallParser } from "../NativeToolCallParser.js"
 
 // ---------------------------------------------------------------------------
 // Mock dependencies — minimal set, identical pattern to
@@ -108,7 +109,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 		await presentAssistantMessage(mockTask)
 
 		// Guard must fire → say("error", …)
-		expect(mockTask.say).toHaveBeenCalledWith("error", expect.stringContaining("missing nativeArgs"))
+		expect(mockTask.say).toHaveBeenCalledWith("error", expect.stringContaining("Tool call 'read_file' failed"))
 
 		// Mistake counter incremented
 		expect(mockTask.consecutiveMistakeCount).toBe(1)
@@ -116,7 +117,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 		// recordToolError called
 		expect(mockTask.recordToolError).toHaveBeenCalledWith(
 			"read_file",
-			expect.stringContaining("missing nativeArgs"),
+			expect.stringContaining("Tool call 'read_file' failed"),
 		)
 
 		// is_error tool_result pushed so the LLM can self-correct
@@ -153,7 +154,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 		// via the guard path.
 		const guardErrorCalls = (mockTask.say as ReturnType<typeof vi.fn>).mock.calls.filter(
 			([askType, msg]: any[]) =>
-				askType === "error" && typeof msg === "string" && msg.includes("missing nativeArgs"),
+				askType === "error" && typeof msg === "string" && msg.includes("Tool call 'read_file' failed"),
 		)
 		expect(guardErrorCalls).toHaveLength(0)
 
@@ -193,7 +194,7 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 		// The guard error was surfaced exactly once (for the bad block)
 		const guardErrorCalls = (mockTask.say as ReturnType<typeof vi.fn>).mock.calls.filter(
 			([askType, msg]: any[]) =>
-				askType === "error" && typeof msg === "string" && msg.includes("missing nativeArgs"),
+				askType === "error" && typeof msg === "string" && msg.includes("Tool call 'read_file' failed"),
 		)
 		expect(guardErrorCalls).toHaveLength(1)
 
@@ -206,5 +207,49 @@ describe("presentAssistantMessage — missing nativeArgs guard (§C)", () => {
 
 		// Good tool was dispatched (tool_result may or may not exist depending on approval)
 		expect(mockTask.consecutiveMistakeCount).toBe(1)
+	})
+
+	// -----------------------------------------------------------------------
+	// ERROR MESSAGE QUALITY: the error message must be actionable for the LLM.
+	// It should include the tool name, the parse error, a snippet of the
+	// malformed arguments, and explicit retry guidance — not just "missing
+	// nativeArgs" which is an internal implementation detail.
+	// -----------------------------------------------------------------------
+	it("should produce an actionable error message with retry guidance", async () => {
+		const toolCallId = "toolu_actionable_msg"
+
+		// Set a parse error as if JSON.parse failed on malformed arguments
+		NativeToolCallParser.lastParseError =
+			"The arguments for tool 'write_to_file' are not valid JSON: " +
+			"Expected ':' after property name in JSON at position 7. " +
+			'Received 50 character(s) of arguments: "{\\"path\\" \\"s3-proxy/go.mod\\"...". ' +
+			"Re-emit the tool call with properly formatted JSON arguments..."
+
+		mockTask.assistantMessageContent = [
+			{
+				type: "tool_use",
+				id: toolCallId,
+				name: "write_to_file",
+				params: { path: "s3-proxy/go.mod" },
+				partial: false,
+			},
+		]
+
+		await presentAssistantMessage(mockTask)
+
+		const errorCall = (mockTask.say as ReturnType<typeof vi.fn>).mock.calls.find(
+			([askType]: any[]) => askType === "error",
+		)
+		expect(errorCall).toBeDefined()
+		const msg = errorCall![1] as string
+
+		// Must start with the tool name for quick identification
+		expect(msg).toContain("Tool call 'write_to_file' failed")
+		// Must include the parse error so the LLM knows what's wrong
+		expect(msg).toContain("not valid JSON")
+		// Must include retry guidance
+		expect(msg).toContain("Re-emit")
+		// Must include partial params if available
+		expect(msg).toContain("Partial params")
 	})
 })

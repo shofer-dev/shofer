@@ -2034,11 +2034,26 @@ export class NativeToolCallParser {
 
 			return result
 		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : String(error)
-			this.lastParseError = errorMessage
+			const rawError = error instanceof Error ? error.message : String(error)
 
-			webviewLog.error(`Failed to parse tool call arguments: ${errorMessage}`)
+			// Build an actionable error message that helps the LLM understand
+			// what went wrong and how to fix it. The raw V8 JSON.parse error
+			// (e.g. "Expected ':' after property name in JSON at position 7")
+			// is cryptic on its own — we add context about which tool failed,
+			// a snippet of the malformed arguments, and explicit retry guidance.
+			const argSnippet = toolCall.arguments.slice(0, 200)
+			const argLen = toolCall.arguments.length
+			this.lastParseError =
+				`The arguments for tool '${resolvedName}' are not valid JSON: ${rawError}.` +
+				` Received ${argLen} character(s) of arguments` +
+				(argLen > 200 ? ` (showing first 200)` : "") +
+				`: ${JSON.stringify(argSnippet)}` +
+				`. Re-emit the tool call with properly formatted JSON arguments` +
+				` — ensure all string values are properly quoted and escaped,` +
+				` all key-value pairs are separated by colons, and the entire` +
+				` arguments object is a single valid JSON document.`
 
+			webviewLog.error(`Failed to parse tool call arguments: ${rawError}`)
 			webviewLog.error(`Tool call: ${JSON.stringify(toolCall, null, 2)}`)
 			return null
 		}

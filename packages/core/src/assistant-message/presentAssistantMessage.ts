@@ -627,31 +627,32 @@ export async function presentAssistantMessage(shofer: Task) {
 				if (isKnownTool && !block.nativeArgs && !customTool) {
 					// Include the parser's specific failure reason when available.
 					const parseError = NativeToolCallParser.consumeLastParseError()
-					const details = parseError
-						? ` Parser error: ${parseError}`
-						: ` This usually means the model streamed invalid or incomplete arguments and the call could not be finalized.`
+					const errorMessage = parseError
+						? `Tool call '${block.name}' failed: ${parseError}`
+						: `Tool call '${block.name}' failed: the arguments could not be parsed.` +
+							` Re-emit the tool call with valid JSON arguments.`
 					const receivedParams =
 						block.params && Object.keys(block.params).length > 0
-							? ` Received partial params: ${JSON.stringify(block.params)}.`
+							? ` Partial params seen during streaming: ${JSON.stringify(block.params)}.`
 							: ""
-					const errorMessage = `Invalid tool call for '${block.name}': missing nativeArgs.${details}${receivedParams}`
+					const fullErrorMessage = `${errorMessage}${receivedParams}`
 
 					shofer.consecutiveMistakeCount++
 					try {
-						shofer.recordToolError(block.name as ToolName, errorMessage)
+						shofer.recordToolError(block.name as ToolName, fullErrorMessage)
 					} catch {
 						// Best-effort only
 					}
 
 					// Surface the error in the chat UI so the user can see what went wrong.
-					await shofer.say("error", errorMessage)
+					await shofer.say("error", fullErrorMessage)
 
 					// Push tool_result directly without setting didAlreadyUseTool so streaming can
 					// continue gracefully.
 					shofer.pushToolResultToUserContent({
 						type: "tool_result",
 						tool_use_id: sanitizeToolUseId(toolCallId),
-						content: formatResponse.toolError(errorMessage),
+						content: formatResponse.toolError(fullErrorMessage),
 						is_error: true,
 					})
 
@@ -1486,10 +1487,7 @@ export async function presentAssistantMessage(shofer: Task) {
 					// Plugin-contributed tools (e.g. `ask_live_memory`) are dispatchable
 					// independent of the customTools experiment (they are advertised to the
 					// model unconditionally); user custom-tool files stay experiment-gated.
-					const customTool = customToolRegistry.getDispatchable(
-						block.name,
-						!!stateExperiments?.customTools,
-					)
+					const customTool = customToolRegistry.getDispatchable(block.name, !!stateExperiments?.customTools)
 
 					if (customTool) {
 						try {
@@ -1526,7 +1524,7 @@ export async function presentAssistantMessage(shofer: Task) {
 
 							pushToolResult(result)
 							shofer.consecutiveMistakeCount = 0
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						} catch (executionError: any) {
 							shofer.consecutiveMistakeCount++
 							// Record custom tool error with static name
@@ -1605,7 +1603,7 @@ export async function presentAssistantMessage(shofer: Task) {
 								} else {
 									pushToolResult(resultText)
 								}
-							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
 							} catch (execError: any) {
 								shofer.consecutiveMistakeCount++
 								await handleError(
