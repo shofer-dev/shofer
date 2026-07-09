@@ -1507,8 +1507,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				askId: askIdRef.current,
 				taskId: currentTaskItem?.id,
 			})
-			setInputValue("")
-			setSelectedImages([])
+			// Only consume the composer draft if the user explicitly attached text/images
+			// (they didn't, since the button calls this with no args) — a plain "Trust path"
+			// click must leave the draft in the box, sent only via the dedicated Send button.
+			if (trimmedInput || (images && images.length > 0)) {
+				setInputValue("")
+				setSelectedImages([])
+			}
 			setSendingDisabled(true)
 			setShoferAsk(undefined)
 			setEnableButtons(false)
@@ -2297,10 +2302,13 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				return
 			}
 
-			if (enableButtons && primaryButtonText) {
-				handlePrimaryButtonClick(inputValue, selectedImages)
-			} else if (!sendingDisabled && !isProfileDisabled && hasInput) {
+			// Enter is the keyboard equivalent of the Send button: if there is a draft
+			// (and sending is allowed), send it — mirroring the Send button's gate — rather
+			// than triggering the approval. Only approve via Enter when the box is empty.
+			if (!sendingDisabled && !isProfileDisabled && hasInput) {
 				handleSendMessage(inputValue, selectedImages)
+			} else if (enableButtons && primaryButtonText) {
+				handlePrimaryButtonClick()
 			}
 		},
 	}))
@@ -2629,7 +2637,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 												variant="primary"
 												disabled={!enableButtons}
 												className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
-												onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
+												onClick={() => handlePrimaryButtonClick()}>
 												{primaryButtonText}
 											</Button>
 										</StandardTooltip>
@@ -2646,7 +2654,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 												variant="secondary"
 												disabled={!enableButtons}
 												className="flex-1 mx-[6px]"
-												onClick={() => handleTrustPathClick(inputValue, selectedImages)}>
+												onClick={() => handleTrustPathClick()}>
 												{t("chat:trustPath.title")}
 											</Button>
 										</StandardTooltip>
@@ -2668,7 +2676,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 												variant="secondary"
 												disabled={!enableButtons}
 												className="flex-1 ml-[6px]"
-												onClick={() => handleSecondaryButtonClick(inputValue, selectedImages)}>
+												onClick={() => handleSecondaryButtonClick()}>
 												{secondaryButtonText}
 											</Button>
 										</StandardTooltip>
