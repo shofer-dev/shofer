@@ -1515,7 +1515,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			setPrimaryButtonText(undefined)
 			setSecondaryButtonText(undefined)
 		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[outsideWorkspaceGrant, currentTaskItem?.id],
 	)
 
