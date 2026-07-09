@@ -89,6 +89,32 @@ function extractPlugin(mod: Record<string, unknown>, expectedName: string): Shof
 }
 
 /**
+ * Names of a plugin's declared runtime dependencies (dependencies + optional + peer) that are
+ * actually installed in its `node_modules`. These get externalized from the esbuild bundle and
+ * resolved at runtime — so native/wasm packages don't have to be (and cannot be) inlined. A
+ * declared-but-not-installed dep is left out, so it stays bundled (unchanged behavior).
+ */
+function installedRuntimeDeps(pluginDir: string, pluginNodeModules: string): string[] {
+	try {
+		const pkgPath = path.join(pluginDir, "package.json")
+		if (!fs.existsSync(pkgPath)) return []
+		const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+			dependencies?: Record<string, string>
+			optionalDependencies?: Record<string, string>
+			peerDependencies?: Record<string, string>
+		}
+		const names = new Set<string>([
+			...Object.keys(pkg.dependencies ?? {}),
+			...Object.keys(pkg.optionalDependencies ?? {}),
+			...Object.keys(pkg.peerDependencies ?? {}),
+		])
+		return [...names].filter((name) => fs.existsSync(path.join(pluginNodeModules, ...name.split("/"))))
+	} catch {
+		return []
+	}
+}
+
+/**
  * Transpile (if TypeScript) and dynamic-import a plugin entry file, returning the
  * module namespace. Mirrors `CustomToolRegistry.import()`: TS is esbuild-bundled to
  * a content-addressed cache file (Node built-ins external, deps bundled with a
@@ -116,6 +142,18 @@ async function importEntry(entry: string, options: PluginCodeLoaderOptions): Pro
 		const pluginNodeModules = path.join(path.dirname(entry), "node_modules")
 		const defaultNodePaths = options.nodePaths ?? [path.join(process.cwd(), "node_modules")]
 		const nodePaths = fs.existsSync(pluginNodeModules) ? [pluginNodeModules, ...defaultNodePaths] : defaultNodePaths
+
+		// Externalize the plugin's declared runtime dependencies that are actually installed in its
+		// own node_modules, so esbuild does NOT try to bundle them. Native addons (`.node`), wasm,
+		// and other non-bundlable packages (e.g. `@temporalio/*`, which pulls `@swc/wasm` + a native
+		// core-bridge) simply cannot be inlined — attempting to fails the whole load. They are
+		// `import()`ed at runtime from the plugin's node_modules instead. Deps NOT present in the
+		// plugin's node_modules stay bundled, so self-contained plugins are unaffected.
+		const externalDeps = fs.existsSync(pluginNodeModules)
+			? installedRuntimeDeps(path.dirname(entry), pluginNodeModules)
+			: []
+		const externalPatterns = externalDeps.flatMap((d) => [d, `${d}/*`])
+
 		await runEsbuild(
 			{
 				entryPoint: entry,
@@ -127,11 +165,23 @@ async function importEntry(entry: string, options: PluginCodeLoaderOptions): Pro
 				sourcemap: "inline",
 				packages: "bundle",
 				nodePaths,
-				external: NODE_BUILTIN_MODULES,
+				external: [...NODE_BUILTIN_MODULES, ...externalPatterns],
 				banner: COMMONJS_REQUIRE_BANNER,
 			},
 			options.extensionPath,
 		)
+
+		// ESM bare-specifier resolution walks up from the importing file. The cached bundle lives in
+		// a temp dir with no node_modules, so link the plugin's installed deps next to it — that is
+		// how the externalized `import("@temporalio/worker")` etc. resolve at runtime.
+		if (externalDeps.length > 0) {
+			const link = path.join(bundleDir, "node_modules")
+			try {
+				if (!fs.existsSync(link)) fs.symlinkSync(pluginNodeModules, link, "junction")
+			} catch {
+				/* best-effort; a failed link surfaces later as a clear MODULE_NOT_FOUND at import */
+			}
+		}
 	}
 
 	return (await import(pathToFileURL(bundle).href)) as Record<string, unknown>

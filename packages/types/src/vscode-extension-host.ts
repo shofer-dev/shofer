@@ -839,6 +839,7 @@ export interface WebviewMessage {
 		| "getDismissedUpsells"
 		| "openMarkdownPreview"
 		| "updateSettings"
+		| "trustOutsideWorkspacePath"
 		| "allowedCommands"
 		| "getTaskWithAggregatedCosts"
 		| "getTaskInteractions"
@@ -1069,6 +1070,10 @@ export interface WebviewMessage {
 	 */
 	codebaseIndexConfigPartial?: Partial<CodebaseIndexConfig>
 	updatedSettings?: ShoferSettings
+	/** For `trustOutsideWorkspacePath`: the directory to task-scope trust (the pending file's parent dir). */
+	outsideWorkspacePath?: string
+	/** For `trustOutsideWorkspacePath`: whether to trust read only, or read+write (write-group tool). */
+	outsideWorkspaceAccess?: "read" | "write"
 	/** Task configuration applied via `createTask()` when starting a cloud task. */
 	taskConfiguration?: ShoferSettings
 	// Parallel task properties

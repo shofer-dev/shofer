@@ -56,10 +56,7 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 			`,
 		)
 
-		const plugin = await loadPluginFromEntry(
-			{ name: "ts-plugin", root, main: "index.ts" },
-			{ cacheDir },
-		)
+		const plugin = await loadPluginFromEntry({ name: "ts-plugin", root, main: "index.ts" }, { cacheDir })
 		expect(plugin.name).toBe("ts-plugin")
 
 		const reg = new PluginRegistry()
@@ -73,6 +70,45 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 
 		reg.dispatchEvent({ name: "task.created" })
 		expect((globalThis as unknown as { __tsPluginSeen: string[] }).__tsPluginSeen).toEqual(["task.created"])
+	})
+
+	it("externalizes an installed runtime dependency instead of bundling it", async () => {
+		// A plugin that declares + installs a dep whose code is deliberately UNBUNDLABLE (it
+		// requires a native `.node` file — esbuild has no loader for those). If the loader tried
+		// to bundle the dep, the transpile would fail and loadPluginFromEntry would throw. With the
+		// dep externalized, esbuild never descends into it, and the plugin `import()`s it at runtime.
+		const root = writePlugin(
+			"ext-plugin",
+			"index.ts",
+			`
+			const plugin = {
+				name: "ext-plugin",
+				async registerTools() {
+					const m = await import("native-dep")
+					return [{ name: "probe", description: "", execute: async () => m.value }]
+				},
+			}
+			export default plugin
+			`,
+		)
+		fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ dependencies: { "native-dep": "1.0.0" } }))
+		const depDir = path.join(root, "node_modules", "native-dep")
+		fs.mkdirSync(depDir, { recursive: true })
+		fs.writeFileSync(path.join(depDir, "package.json"), JSON.stringify({ name: "native-dep", main: "index.js" }))
+		// `value` is bundle-safe; `native()` (never called here) forces a `.node` require that only
+		// esbuild-bundling would choke on — proving the dep was left external.
+		fs.writeFileSync(
+			path.join(depDir, "index.js"),
+			`exports.value = "EXTERNAL"; exports.native = () => require("./addon.node")`,
+		)
+		fs.writeFileSync(path.join(depDir, "addon.node"), "not a real addon")
+
+		const plugin = await loadPluginFromEntry({ name: "ext-plugin", root, main: "index.ts" }, { cacheDir })
+		const reg = new PluginRegistry()
+		await reg.register(plugin)
+		const tools = await reg.collectTools()
+		expect(tools.map((t) => t.name)).toEqual(["probe"])
+		expect(await tools[0].execute!({}, {} as never)).toBe("EXTERNAL")
 	})
 
 	it("loads a plain .js entry directly (no transpile)", async () => {
@@ -113,22 +149,22 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 
 	it("rejects a manifest/module name mismatch", async () => {
 		const root = writePlugin("named-a", "e.mjs", `export default { name: "actually-b" }`)
-		await expect(
-			loadPluginFromEntry({ name: "named-a", root, main: "e.mjs" }, { cacheDir }),
-		).rejects.toThrow(/name mismatch/)
+		await expect(loadPluginFromEntry({ name: "named-a", root, main: "e.mjs" }, { cacheDir })).rejects.toThrow(
+			/name mismatch/,
+		)
 	})
 
 	it("rejects a module that is not a ShoferPlugin", async () => {
 		const root = writePlugin("no-plugin", "e.mjs", `export const notAPlugin = 42`)
-		await expect(
-			loadPluginFromEntry({ name: "no-plugin", root, main: "e.mjs" }, { cacheDir }),
-		).rejects.toThrow(/does not export a ShoferPlugin/)
+		await expect(loadPluginFromEntry({ name: "no-plugin", root, main: "e.mjs" }, { cacheDir })).rejects.toThrow(
+			/does not export a ShoferPlugin/,
+		)
 	})
 
 	it("rejects an entry that escapes the plugin directory", async () => {
 		const root = writePlugin("escape", "e.mjs", `export default { name: "escape" }`)
-		await expect(
-			loadPluginFromEntry({ name: "escape", root, main: "../evil.mjs" }, { cacheDir }),
-		).rejects.toThrow(/escapes the plugin directory/)
+		await expect(loadPluginFromEntry({ name: "escape", root, main: "../evil.mjs" }, { cacheDir })).rejects.toThrow(
+			/escapes the plugin directory/,
+		)
 	})
 })

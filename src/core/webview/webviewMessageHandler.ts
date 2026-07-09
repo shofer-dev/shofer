@@ -911,6 +911,31 @@ export const webviewMessageHandler = async (
 			}
 			break
 
+		case "trustOutsideWorkspacePath":
+			{
+				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
+				const messageText = resolved.text
+
+				// Resolve the target task exactly like `askResponse` so the trust
+				// grant + approval land on the task that raised the pending ask.
+				const targetTask = message.taskId
+					? provider.taskManager.getManagedTaskInstance(message.taskId)
+					: provider.getCurrentTask()
+
+				if (!targetTask) {
+					break
+				}
+
+				// Task-scope trust the parent directory, then approve the pending ask
+				// in one click (mirrors the askResponse "yesButtonClicked" path).
+				targetTask.trustOutsideWorkspacePath(
+					message.outsideWorkspacePath!,
+					message.outsideWorkspaceAccess ?? "read",
+				)
+				targetTask.handleWebviewAskResponse("yesButtonClicked", messageText, resolved.images, message.askId)
+			}
+			break
+
 		case "updateSettings":
 			if (message.updatedSettings) {
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
