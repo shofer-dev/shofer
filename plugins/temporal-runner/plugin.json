@@ -1,0 +1,54 @@
+{
+	"name": "temporal-runner",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "Turns a Shofer node into a Temporal activity worker (runner): registers to capability-tagged task queues, pulls agent jobs, and drives the co-located Shofer via ctx.agent.spawn — durable, distributed, resumable. See docs/temporal_plugin.md.",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"main": "index.ts",
+	"permissions": {
+		"agent": true,
+		"events": true,
+		"network": ["grpc://temporal:7233", "nats://nats:4222"]
+	},
+	"config": {
+		"type": "object",
+		"properties": {
+			"temporalAddress": {
+				"type": "string",
+				"default": "temporal:7233",
+				"description": "Temporal frontend gRPC address."
+			},
+			"namespace": {
+				"type": "string",
+				"default": "default",
+				"description": "Temporal namespace."
+			},
+			"taskQueue": {
+				"type": "string",
+				"default": "runner:coding",
+				"description": "Capability-tagged task queue this node pulls from (polling = pool membership)."
+			},
+			"activityName": {
+				"type": "string",
+				"default": "runShoferTask",
+				"description": "The activity type this worker registers and executes by driving Shofer."
+			},
+			"concurrency": {
+				"type": "number",
+				"default": 1,
+				"description": "maxConcurrentActivityExecutions — capacity + backpressure (1 = one agent task at a time)."
+			},
+			"natsUrl": {
+				"type": "string",
+				"default": "",
+				"description": "Optional NATS url for live telemetry (agents.telemetry.<taskId>). Empty ⇒ telemetry disabled."
+			},
+			"heartbeatMs": {
+				"type": "number",
+				"default": 10000,
+				"description": "Activity heartbeat interval (ms) — liveness + cancellation delivery for long agent runs."
+			}
+		}
+	}
+}

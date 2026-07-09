@@ -1,0 +1,14 @@
+{
+	"//": "Standalone tsconfig for the temporal-runner plugin. The plugin TS is transpiled at RUNTIME by the plugin loader (esbuild), NOT by the extension build — it sits outside every extension/package tsc root. This config lets a developer/CI typecheck the plugin against @shofer/types (and its own @temporalio/* + nats deps) in isolation.",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"baseUrl": ".",
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"]
+		}
+	},
+	"include": ["*.ts"],
+	"exclude": ["node_modules"]
+}
