@@ -1,14 +1,22 @@
 # Adding New Tools to Shofer.
 
-## Three Kinds of Tools
+## Four Kinds of Tools
 
-Shofer supports three tool integration patterns. Choose the one that fits your use case:
+Shofer supports four tool integration patterns. Choose the one that fits your use case:
 
-| Kind                 | Where the tool lives               | How Shofer discovers it              | See doc                                                          |
-| -------------------- | ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
-| **Native tool**      | Inside Shofer (TypeScript handler) | Compiled into the extension          | This document                                                    |
-| **External LM tool** | Separate VS Code extension         | `shofer.privateToolProviders` config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
-| **MCP tool**         | External MCP server                | MCP protocol                         | [`tool-categories.md`](tool-categories.md) § "MCP Tools"         |
+| Kind                   | Where the tool lives               | How Shofer discovers it              | See doc                                                          |
+| ---------------------- | ---------------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| **Native tool**        | Inside Shofer (TypeScript handler) | Compiled into the extension          | This document                                                    |
+| **Plugin-contributed** | Inside a Shofer **plugin**         | `registerTools` **or** `mcpServers`  | [§ Plugin-Contributed Tools](#plugin-contributed-tools) below    |
+| **External LM tool**   | Separate VS Code extension         | `shofer.privateToolProviders` config | [`tool-categories.md`](tool-categories.md) § "External LM Tools" |
+| **MCP tool**           | External MCP server                | MCP protocol                         | [`tool-categories.md`](tool-categories.md) § "MCP Tools"         |
+
+> **Native vs. plugin — which do I want?** A **native tool** is baked into Shofer core (this
+> document's 11-step checklist) and always present. A **plugin-contributed tool** ships in a
+> separately-installed, permission-gated, disabled-by-default plugin — the right vehicle when the
+> capability is optional, host-agnostic, or shouldn't contaminate core. Plugins are the only way to
+> add tools **without recompiling Shofer**, and they work in **headless mode** (`shofer serve` /
+> CLI) exactly as in the VS Code host. See [`plugin_system.md`](plugin_system.md).
 
 ---
 
@@ -287,6 +295,103 @@ See [`tool-categories.md`](tool-categories.md) § "External LM Tools" for the fu
 
 ---
 
+## Plugin-Contributed Tools
+
+A [Shofer **plugin**](plugin_system.md) can add tools **without touching Shofer core or
+recompiling** — it's the vehicle for capabilities that are optional, host-agnostic, and
+permission-gated (disabled by default). Plugins run identically in the VS Code extension host, the
+CLI, and a **headless server** (`shofer serve`), so their tools are available in headless mode too —
+which is exactly why the runner/mesh plugins (`plugins/temporal-runner`, `plugins/agent-mesh`) use
+this path.
+
+A plugin has **two independent ways** to contribute tools. They use different transports; pick by
+where the tool logic already lives.
+
+### Option A — `registerTools` (in-process native tools)
+
+The plugin returns tool definitions from its `registerTools(ctx)` hook, built with the
+`defineCustomTool` helper. These are **not MCP and not AgentApi** — they are registered directly into
+the core custom-tool registry (`source: "plugin"`), serialized to native function schemas, advertised
+to the model unconditionally (no `customTools` experiment flag needed), and **dispatched in-process
+inside the core Task tool loop**. This is the same execution path a native tool takes, minus the
+11-step core wiring.
+
+```typescript
+import { defineCustomTool, parametersSchema as z } from "@shofer/types"
+import type { PluginContext, ShoferPlugin } from "@shofer/types"
+
+const plugin: ShoferPlugin = {
+	name: "my-plugin",
+	registerTools(ctx: PluginContext) {
+		return [
+			defineCustomTool({
+				name: "my_plugin_tool",
+				description: "What the model sees.",
+				parameters: z.object({ arg: z.string().describe("…") }),
+				async execute({ arg }): Promise<string> {
+					return `did something with ${arg}`
+				},
+			}),
+		]
+	},
+}
+export default plugin
+```
+
+- **Manifest**: needs `permissions.tools` in `plugin.json`.
+- **Wiring**: `pluginRegistry.collectTools()` gathers them in
+  [`build-tools.ts`](../packages/core/src/task/build-tools.ts) and registers each via
+  `customToolRegistry.register(def, "plugin")`; dispatch is in
+  [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
+  (`customToolRegistry.getDispatchable(name).execute(...)`).
+- **Use when**: the tool logic is TypeScript that runs in-process (introspection, calling a client
+  the plugin already holds, emitting on a bus). The `agent-mesh` (`mesh_publish`/`mesh_subscribe`)
+  and `temporal-runner` (introspection) tools are live examples.
+- **Diagnostics**: the output channel logs `[plugin-tools] N contributed (…): <names>` per build — if
+  an expected tool is missing, the plugin isn't loaded or its `registerTools` threw.
+
+### Option B — `contributes.mcpServers` (bundle an MCP server)
+
+The plugin manifest declares one or more MCP server configs. Shofer merges them into the singleton
+`McpHub` alongside user-configured servers ([`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts)
+`getContributedMcpServers()`), and their tools reach the model through the **standard MCP path**
+(`use_mcp_tool` / `access_mcp_resource`). This is the way to wrap an **existing MCP server** (stdio,
+sse, streamable-http) that a plugin ships.
+
+```jsonc
+// plugin.json
+{
+	"permissions": ["mcpServers"],
+	"contributes": {
+		"mcpServers": {
+			"my-bundled-server": { "type": "stdio", "command": "node", "args": ["server.js"] },
+		},
+	},
+}
+```
+
+- **Manifest**: needs the `mcpServers` permission.
+- **Use when**: the capability is an out-of-process MCP server (its own runtime/binary), not
+  TypeScript you'd run in the plugin. On a name collision the last enabled plugin wins (a warning is
+  logged).
+- **Full transport/config/auto-approval reference**: [`mcp.md`](mcp.md).
+
+### Choosing between A and B
+
+| Question                         | A — `registerTools`         | B — `mcpServers`                 |
+| -------------------------------- | --------------------------- | -------------------------------- |
+| Where does the tool run?         | in-process (plugin code)    | separate MCP server process/host |
+| Transport to the model           | native custom-tool (direct) | MCP protocol (`use_mcp_tool`)    |
+| Works headless (`shofer serve`)? | ✅                          | ✅ (if the server is reachable)  |
+| Extra runtime process?           | no                          | yes (the MCP server)             |
+| Best for                         | plugin-local TS logic       | wrapping an existing MCP server  |
+| Manifest permission              | `tools`                     | `mcpServers`                     |
+
+See [`plugin_system.md`](plugin_system.md) for the plugin lifecycle, `ctx` capabilities, permission
+model, and the scoped `ctx.agent` surface (§14) some tool-hosting plugins also use.
+
+---
+
 ## Alias Tools (delegating to another tool's handler)
 
 Sometimes a "new" tool is just an existing tool invoked with canned/remapped
@@ -418,3 +523,5 @@ The Step 4 handler example is intentionally minimal, but real tool implementatio
 | [`tool_access.md`](tool_access.md)         | `tools`, `tools_allowed`, `tools_denied` field reference and decision rules                  |
 | [`native_tools.md`](native_tools.md)       | Complete reference of all native tools, their groups, params, and mode availability          |
 | [`host-boundary.md`](host-boundary.md)     | Extending the host boundary — adding a `HostBridge` capability the core (or a tool) can call |
+| [`plugin_system.md`](plugin_system.md)     | Plugin lifecycle, `ctx` capabilities & permissions — the two plugin tool paths (A/B above)   |
+| [`mcp.md`](mcp.md)                         | MCP discovery/lifecycle/execution — the transport for MCP tools and plugin Option B          |
