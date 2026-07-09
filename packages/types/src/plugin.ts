@@ -379,6 +379,53 @@ export interface PluginAgent {
 	 * `permissions.agent` or the host has no task to steer.
 	 */
 	notify(message: string, opts?: PluginAgentNotifyOptions): Promise<void>
+
+	/**
+	 * Start a task and get an awaitable, cancellable {@link PluginTaskHandle} (design §14).
+	 * Unlike {@link notify} (fire-and-forget), this is the **job-oriented** path a
+	 * workflow/runner plugin uses: `await handle.result()` for the structured outcome,
+	 * `handle.cancel()` to abort. Scoped, gated (`permissions.agent`); the plugin never
+	 * touches the task stack or `ShoferAPI`.
+	 */
+	spawn(prompt: string, opts?: PluginAgentSpawnOptions): Promise<PluginTaskHandle>
+
+	/** Cancel a task by id (structured cancellation). No-op if the task is not found. */
+	cancel(taskId: string): Promise<void>
+}
+
+/** Options for {@link PluginAgent.spawn} (design §14). */
+export interface PluginAgentSpawnOptions {
+	/** Optional images to seed the task with. */
+	images?: string[]
+	/** Agent mode slug to start the task in (defaults to the host's current mode). */
+	mode?: string
+	/** Opaque metadata echoed back on {@link PluginTaskResult.metadata}; the host never interprets it. */
+	metadata?: Record<string, unknown>
+}
+
+/**
+ * A handle to a task started via {@link PluginAgent.spawn} (design §14). Awaitable result,
+ * task-scoped event subscription, and cancellation — the primitives a runner needs to drive
+ * an agent run as a durable job (e.g. a Temporal activity).
+ */
+export interface PluginTaskHandle {
+	readonly taskId: string
+	/** Resolves when the task completes or aborts. */
+	result(): Promise<PluginTaskResult>
+	/** Subscribe to events scoped to **this** task; returns an unsubscribe fn. */
+	onEvent(cb: (event: PluginEvent) => void): () => void
+	/** Cancel this task (structured cancellation). */
+	cancel(): Promise<void>
+}
+
+/** The outcome of a spawned task (design §14). */
+export interface PluginTaskResult {
+	readonly taskId: string
+	readonly status: "completed" | "aborted" | "error"
+	/** Best-effort final output (e.g. the `attempt_completion` summary), if available. */
+	readonly output?: string
+	/** The `metadata` passed to {@link PluginAgent.spawn}, echoed back. */
+	readonly metadata?: Record<string, unknown>
 }
 
 /** Options for {@link PluginAgent.notify} (design §6.11 G8; Phase 7). */
@@ -881,10 +928,7 @@ export interface PluginView {
 /** A plugin's config JSON-schema (manifest `config`) as surfaced to the Plugins panel. */
 export interface PluginConfigSchema {
 	type?: string
-	properties?: Record<
-		string,
-		{ type?: string; default?: unknown; description?: string; enum?: unknown[] }
-	>
+	properties?: Record<string, { type?: string; default?: unknown; description?: string; enum?: unknown[] }>
 }
 
 /** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */
