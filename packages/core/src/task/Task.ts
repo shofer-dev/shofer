@@ -382,6 +382,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	readonly taskNumber: number
 	readonly workspacePath: string
 
+	/** Outside-workspace dirs the user trusted for THIS task (+ subtasks) via the
+	 *  inline "Trust path" button. In-memory only; the persistent equivalent is
+	 *  allowedReadPaths/allowedWritePaths. */
+	readonly trustedReadPaths: string[]
+	readonly trustedWritePaths: string[]
+
 	/**
 	 * Maximum characters the parent will accept as the completion result.
 	 * Set by {@link NewTaskTool} via {@link CreateTaskOptions.softResultLength} when a parent
@@ -1046,6 +1052,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		this.parentTask = parentTask
 		this.rootTask = rootTask
+		// Inherit task-scoped outside-workspace trust from the parent as a snapshot
+		// at creation time (subtasks trust what the parent trusted so far).
+		this.trustedReadPaths = [...(parentTask?.trustedReadPaths ?? [])]
+		this.trustedWritePaths = [...(parentTask?.trustedWritePaths ?? [])]
 		this.taskNumber = taskNumber
 		this.agentRole = agentRole
 		this.agentToolGroups = agentToolGroups
@@ -1220,6 +1230,32 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} else {
 			this._messagesReadyResolve()
 		}
+	}
+
+	/**
+	 * Trust an outside-workspace directory for this task (and its subtasks) via the
+	 * inline "Trust path" approval button. In-memory only; not persisted. A write-group
+	 * tool trusts read+write (callers pass `"write"`); a read tool trusts read.
+	 */
+	public trustOutsideWorkspacePath(dir: string, access: "read" | "write"): void {
+		const list = access === "write" ? this.trustedWritePaths : this.trustedReadPaths
+		if (!list.includes(dir)) list.push(dir)
+	}
+
+	/**
+	 * Merge this task's task-scoped trusted paths into a settings state object so
+	 * {@link checkAutoApproval} treats them like the persistent allowlists. Returns
+	 * the state untouched when there is nothing trusted for this task.
+	 */
+	private withTaskTrust<T extends { allowedReadPaths?: string[]; allowedWritePaths?: string[] } | undefined>(
+		state: T,
+	): T {
+		if (!state || (this.trustedReadPaths.length === 0 && this.trustedWritePaths.length === 0)) return state
+		return {
+			...state,
+			allowedReadPaths: [...(state.allowedReadPaths ?? []), ...this.trustedReadPaths],
+			allowedWritePaths: [...(state.allowedWritePaths ?? []), ...this.trustedWritePaths],
+		} as T
 	}
 
 	/**
@@ -2573,7 +2609,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					// momentarily before the follow-up `messageUpdated` arrives.
 					const provider = this.providerRef.deref()
 					const state = provider ? await provider.getState() : undefined
-					const quickApproval = await checkAutoApproval({ state, ask: type, text, isProtected })
+					const quickApproval = await checkAutoApproval({
+						state: this.withTaskTrust(state),
+						ask: type,
+						text,
+						isProtected,
+					})
 					const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
 					const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
 
@@ -2612,7 +2653,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// momentarily before the follow-up `messageUpdated` arrives.
 			const provider = this.providerRef.deref()
 			const state = provider ? await provider.getState() : undefined
-			const quickApproval = await checkAutoApproval({ state, ask: type, text, isProtected })
+			const quickApproval = await checkAutoApproval({
+				state: this.withTaskTrust(state),
+				ask: type,
+				text,
+				isProtected,
+			})
 			const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
 			const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
 
@@ -2641,7 +2687,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Automatically approve if the ask according to the user's settings.
 		const provider = this.providerRef.deref()
 		const state = provider ? await provider.getState() : undefined
-		const approval = await checkAutoApproval({ state, ask: type, text, isProtected })
+		const approval = await checkAutoApproval({ state: this.withTaskTrust(state), ask: type, text, isProtected })
 
 		// Note: the auto-approved / auto-denied fast-path was moved inside the
 		// two complete-message branches above so the `autoApproved` flag is

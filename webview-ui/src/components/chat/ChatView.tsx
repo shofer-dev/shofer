@@ -52,7 +52,6 @@ import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
 import { createIncrementalMessageProcessor } from "./incrementalMessageProcessing"
-import { OutsideWorkspacePathSelector } from "./OutsideWorkspacePathSelector"
 
 /**
  * ShoferSayTool.tool values that belong to the write group (mirrors the outside-workspace
@@ -70,6 +69,21 @@ const WRITE_GROUP_TOOLS = new Set<string>([
 	"removeFile",
 	"moveFile",
 ])
+
+/**
+ * Derive the parent directory of an absolute path without `node:path` (unavailable in the
+ * webview). Splits on both POSIX and Windows separators and drops the final segment.
+ * Falls back to the input itself when there is no parent to strip.
+ */
+function dirnameLike(absolutePath: string): string {
+	const trimmed = absolutePath.replace(/[/\\]+$/, "")
+	const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"))
+	if (idx <= 0) {
+		// Root-level entry (e.g. "/etc" -> "/", or "C:\\x" -> "C:\\").
+		return trimmed.slice(0, idx + 1) || trimmed
+	}
+	return trimmed.slice(0, idx)
+}
 
 export interface ChatViewProps {
 	isHidden: boolean
@@ -168,8 +182,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		setPendingWorktreeDir,
 		hasMoreShoferMessages,
 		preferredNodeId,
-		allowedReadPaths,
-		allowedWritePaths,
 	} = useExtensionState()
 
 	// Show a WarningRow when the user sends a message with a retired provider.
@@ -1475,6 +1487,38 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[shoferAsk, startNewTask, isStreaming, setDidClickCancel],
 	)
 
+	// "Trust path" (third approval button): task-scope trust the pending file's parent
+	// dir, then approve the ask in one click. Mirrors handlePrimaryButtonClick's
+	// askId/taskId/text/images wiring but posts `trustOutsideWorkspacePath`.
+	const handleTrustPathClick = useCallback(
+		(text?: string, images?: string[]) => {
+			if (!outsideWorkspaceGrant) {
+				return
+			}
+			userRespondedRef.current = true
+
+			const trimmedInput = text?.trim()
+			vscode.postMessage({
+				type: "trustOutsideWorkspacePath",
+				outsideWorkspacePath: dirnameLike(outsideWorkspaceGrant.absolutePath),
+				outsideWorkspaceAccess: outsideWorkspaceGrant.isWriteTool ? "write" : "read",
+				text: trimmedInput || undefined,
+				images: images && images.length > 0 ? images : undefined,
+				askId: askIdRef.current,
+				taskId: currentTaskItem?.id,
+			})
+			setInputValue("")
+			setSelectedImages([])
+			setSendingDisabled(true)
+			setShoferAsk(undefined)
+			setEnableButtons(false)
+			setPrimaryButtonText(undefined)
+			setSecondaryButtonText(undefined)
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[outsideWorkspaceGrant, currentTaskItem?.id],
+	)
+
 	const { info: model } = useSelectedModel(apiConfiguration)
 
 	const selectImages = useCallback(() => vscode.postMessage({ type: "selectImages" }), [])
@@ -2553,21 +2597,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									</StandardTooltip>
 								</div>
 							)}
-							{/* Outside-workspace path allowlist: one-click "trust the whole path"
-							     grant next to Approve for a tool ask touching a file outside every
-							     workspace root. Persists to allowedReadPaths/allowedWritePaths and
-							     approves the current ask. */}
-							{outsideWorkspaceGrant && enableButtons && (
-								<div className="mb-1 px-[15px]">
-									<OutsideWorkspacePathSelector
-										absolutePath={outsideWorkspaceGrant.absolutePath}
-										isWriteTool={outsideWorkspaceGrant.isWriteTool}
-										allowedReadPaths={allowedReadPaths ?? []}
-										allowedWritePaths={allowedWritePaths ?? []}
-										onApprove={() => handlePrimaryButtonClick(inputValue, selectedImages)}
-									/>
-								</div>
-							)}
 							{/* Shofer Nodes: a remote (shadow) task's asks now round-trip to the
 							     executor over the reverse ask channel, so it presents the SAME
 							     approve/deny buttons as a local task (auto-approved asks stay
@@ -2603,6 +2632,23 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 												className={secondaryButtonText ? "flex-1 mr-[6px]" : "flex-[2] mr-0"}
 												onClick={() => handlePrimaryButtonClick(inputValue, selectedImages)}>
 												{primaryButtonText}
+											</Button>
+										</StandardTooltip>
+									)}
+									{outsideWorkspaceGrant && enableButtons && (
+										<StandardTooltip
+											content={t("chat:trustPath.tooltip", {
+												access: outsideWorkspaceGrant.isWriteTool
+													? t("chat:trustPath.readWrite")
+													: t("chat:trustPath.read"),
+												dir: dirnameLike(outsideWorkspaceGrant.absolutePath),
+											})}>
+											<Button
+												variant="secondary"
+												disabled={!enableButtons}
+												className="flex-1 mx-[6px]"
+												onClick={() => handleTrustPathClick(inputValue, selectedImages)}>
+												{t("chat:trustPath.title")}
 											</Button>
 										</StandardTooltip>
 									)}

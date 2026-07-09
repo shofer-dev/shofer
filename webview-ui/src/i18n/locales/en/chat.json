@@ -326,14 +326,11 @@
 		"expandManagement": "Expand command management section",
 		"collapseManagement": "Collapse command management section"
 	},
-	"outsideWorkspacePath": {
-		"title": "Trust a path outside the workspace",
-		"description": "Auto-approve future access under a directory so you aren't prompted for each file.",
-		"dirLabel": "Directory to trust",
-		"allowReads": "Always allow reads under this path",
-		"allowWrites": "Always allow read+write under this path",
-		"reads": "reads",
-		"writes": "read+write"
+	"trustPath": {
+		"title": "Trust path",
+		"tooltip": "Auto-approve {{access}} under {{dir}} for this task",
+		"read": "read",
+		"readWrite": "read+write"
 	},
 	"response": "Response",
 	"arguments": "Arguments",
