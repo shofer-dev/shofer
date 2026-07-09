@@ -2,7 +2,7 @@
 	"name": "temporal-runner",
 	"version": "0.1.0",
 	"shoferPluginApiVersion": "1.0.0",
-	"description": "Turns a Shofer node into a Temporal activity worker (runner): registers to capability-tagged task queues, pulls agent jobs, and drives the co-located Shofer via ctx.agent.spawn — durable, distributed, resumable. See docs/temporal_plugin.md.",
+	"description": "Turns a Shofer node into a Temporal activity worker (runner): registers to capability-tagged task queues, pulls agent jobs, and drives the co-located Shofer via ctx.agent.spawn — durable, distributed, resumable. See DESIGN.md.",
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"main": "index.ts",

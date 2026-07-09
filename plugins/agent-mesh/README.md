@@ -4,6 +4,8 @@ Makes a Shofer node a participant in the **NATS agent mesh** (`saas.md` §5.5). 
 native deps — so it bundles anywhere and loads on **any** node (interactive L1 workspace, L2
 backend, or a runner), independent of the (native) `temporal-runner` plugin.
 
+Design + rationale: [`DESIGN.md`](./DESIGN.md). How to verify: [`TESTING.md`](./TESTING.md).
+
 ## What it does
 
 - **Inbound**: subscribes to configured/subscribed subjects and injects each message into the

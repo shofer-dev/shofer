@@ -2,8 +2,9 @@
 
 Turns a Shofer node into a **Temporal activity worker**: it registers to a capability-tagged
 task queue, **pulls** agent jobs, and drives the co-located Shofer as a durable job via the
-scoped `ctx.agent.spawn` API. Design + rationale: [`docs/temporal_plugin.md`](../../docs/temporal_plugin.md)
-(and the enabling plugin-API additions in [`docs/plugin_system.md` §14](../../docs/plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins)).
+scoped `ctx.agent.spawn` API. Design + rationale: [`DESIGN.md`](./DESIGN.md); how to verify:
+[`TESTING.md`](./TESTING.md) (enabling plugin-API additions in
+[`docs/plugin_system.md` §14](../../docs/plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins)).
 
 ## What it does
 

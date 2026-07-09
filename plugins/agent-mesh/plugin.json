@@ -2,7 +2,7 @@
 	"name": "agent-mesh",
 	"version": "0.1.0",
 	"shoferPluginApiVersion": "1.0.0",
-	"description": "Makes a Shofer node a participant in the NATS agent mesh: delivers inbound async notifications/events into the running agent, emits telemetry, and exposes mesh_publish/mesh_subscribe tools so the agent can emit and subscribe to events itself. Pure-JS (no native deps). See docs/temporal_plugin.md and saas.md §5.5.",
+	"description": "Makes a Shofer node a participant in the NATS agent mesh: delivers inbound async notifications/events into the running agent, emits telemetry, and exposes mesh_publish/mesh_subscribe tools so the agent can emit and subscribe to events itself. Pure-JS (no native deps). See ./DESIGN.md and saas.md §5.5.",
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"main": "index.ts",
