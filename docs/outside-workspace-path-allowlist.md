@@ -186,33 +186,44 @@ sets `isOutsideWorkspace`:
 > outside-workspace entry matches the allowlist (any unmatched entry → ask). Mirror this for
 > `batchDiffs`.
 
-## 7. Interactive grant (the "approve the whole path" option)
+## 7. Interactive grant — task-scoped "Trust path"
 
-Modeled on the in-chat command allowlist selector
-([`CommandExecution.tsx` / `CommandPatternSelector.tsx`](../webview-ui/src/components/chat/CommandExecution.tsx)),
-which already appends to `allowedCommands` and persists via a `updateSettings` postMessage.
+**As shipped, the inline grant is a third approval button, not a separate panel.** An earlier
+design put a persistent split-button/dropdown next to Approve that wrote the **permanent**
+`allowedReadPaths`/`allowedWritePaths` settings; user testing showed that two orthogonal
+surfaces (Approve/Deny **plus** a trust panel) is confusing, and that an inline grant reads
+as "just for now", not "forever". So the implemented model is:
 
-For a tool ask flagged `isOutsideWorkspace`, render an affordance next to **Approve** (a
-split-button / dropdown) offering:
+**One question, three buttons: `Save` · `Trust path` · `Deny`.** For a tool ask flagged
+`isOutsideWorkspace` with an `absolutePath`, ChatView renders a third button between Approve
+and Deny. Clicking **Trust path** trusts the file's **parent directory** and approves the ask
+in one click.
 
-- **Always allow reads under `<dir>`** → append `<dir>` to `allowedReadPaths`
-- **Always allow writes under `<dir>`** → append `<dir>` to `allowedWritePaths`
-  (shown only for write-group tools; implies read)
+**"Trust path" is task-scoped, not persistent.** It trusts the dir for the **current task and
+its subtasks only** — in-memory, gone when the task ends. The access level follows the
+operation: a write-group tool trusts **read+write**, a read tool trusts **read** (the
+`write ⊇ read` superset still applies via [`isPathAutoApproved`](#4-matching-semantics-the-readwrite-superset)).
+Mechanism:
 
-`<dir>` defaults to the **parent directory** of the file (`path.dirname(absolutePath)`) and
-is editable before confirming, so the user can widen (`/etc`) or narrow (the exact file).
-Clicking it (a) approves the current ask (`yesButtonClicked`) **and** (b) posts
-`{ type: "updateSettings", updatedSettings: { allowedReadPaths | allowedWritePaths } }`,
-which writes **globalState** (via `ContextProxy.setValues`, [§8a](#8a-store-contextproxy-globalstate-globalsettingsschema--source-of-truth))
-so the grant persists across restarts and covers subsequent files immediately. Do **not**
-also write VS Code config (that is the `allowedCommands` dual-write debt — [§8](#8-persistence--configuration)).
+- `Task` holds `trustedReadPaths` / `trustedWritePaths`, **snapshot-inherited** by subtasks at
+  creation (so a subtask sees what the parent trusted).
+- A private `Task.withTaskTrust(state)` merges them into the settings object at **all three**
+  `checkAutoApproval` call sites, so task trust rides the same gate as the persistent lists.
+- The button posts a `trustOutsideWorkspacePath` webview message (`{ path: parentDir, access }`);
+  its handler calls `task.trustOutsideWorkspacePath(dir, access)` then approves
+  (`handleWebviewAskResponse("yesButtonClicked", …)`) — trust-and-approve in one action.
 
-A read-side surface stays read-only ("Always allow reads"); the write surface offers both,
-since write ⊇ read.
+**Permanent trust lives in Settings**, not inline: `AutoApproveSettings.tsx` has two editable
+lists (read paths / read+write paths) next to the command lists, writing the persistent
+`allowedReadPaths`/`allowedWritePaths` via `updateSettings` → globalState (which config-sync
+then replicates to nodes). So the split is clean: **inline = this task; Settings = forever.**
 
-**Settings panel** ([`AutoApproveSettings.tsx`](../webview-ui/src/components/settings/AutoApproveSettings.tsx)):
-two editable list controls next to the existing command lists, for review/removal — same
-add/remove/`setCachedStateField` pattern as `allowedCommands` / `deniedCommands`.
+> **Implementation gotcha (fixed).** `checkAutoApproval` reads the allowlist from the object
+> `provider.getState()` returns, which is **curated** — it copies specific keys, not the whole
+> settings blob. The path keys must be added to **both** `getState()` (feeds the gate) and
+> `getStateToPostToWebview()` (feeds the UI lists) next to `allowedCommands`/`deniedCommands`.
+> Omitting them makes every grant silently ignored (the keys are written to globalState but
+> never read back) — the first shipped build had exactly this bug.
 
 ## 8. Persistence & configuration
 
@@ -404,8 +415,10 @@ toggle is off, and never overrides the master switch.
 
 ### Decided (v1 implementation)
 
-- **One-click grant granularity** — default to the file's **parent directory**, editable
-  before confirming (the "both" option): convenience by default, safety when widened/narrowed.
+- **Inline grant is a task-scoped third button** ([§7](#7-interactive-grant--task-scoped-trust-path)) —
+  `Save · Trust path · Deny`; "Trust path" trusts the file's **parent directory** for the
+  **current task + subtasks** (in-memory, not persisted). Permanent trust is Settings-only.
+  (Superseded the earlier permanent-inline-panel design after user testing.)
 - **Protected files stay independent** — a `write` grant under a trusted dir does **not**
   satisfy `alwaysAllowWriteProtected`; a protected file still prompts unless that toggle is on.
 - **Lexical matching for v1** — match on the `path.resolve`'d absolute path (defeats `..`
