@@ -47,15 +47,22 @@ const plugin: ShoferPlugin = {
 	async initialize(ctx: PluginContext): Promise<void> {
 		const cfg = readConfig(ctx)
 		const log = ctx.host?.log
+		const notifier = ctx.host?.notifier
+		// Surface a problem both to the plugin log AND to the user (toast) — a runner that
+		// can't start should never fail silently.
+		const fail = (m: string) => {
+			log?.error(m)
+			notifier?.error(m)
+		}
 
 		if (!ctx.agent) {
-			log?.warn(
-				"temporal-runner: ctx.agent unavailable (needs permissions.agent + a host agent seam); worker not started",
+			fail(
+				"temporal-runner: ctx.agent is unavailable — the plugin needs permissions.agent and a host that wires the agent seam. Worker not started.",
 			)
 			return
 		}
 		if (!ctx.registerService) {
-			log?.warn("temporal-runner: ctx.registerService unavailable; worker not started")
+			fail("temporal-runner: ctx.registerService is unavailable in this host. Worker not started.")
 			return
 		}
 
@@ -121,7 +128,17 @@ const plugin: ShoferPlugin = {
 						)
 						await worker.run()
 					} catch (e) {
-						log?.error(`temporal-runner: worker failed to start: ${String(e)}`)
+						const err = e instanceof Error ? e : new Error(String(e))
+						const code = (err as NodeJS.ErrnoException).code
+						const missingDep =
+							code === "ERR_MODULE_NOT_FOUND" ||
+							code === "MODULE_NOT_FOUND" ||
+							/cannot find (module|package)/i.test(err.message)
+						fail(
+							missingDep
+								? `temporal-runner: required dependencies are not installed (${err.message}). This plugin needs @temporalio/worker, @temporalio/activity and nats installed in its directory — run \`npm install\` in the plugin folder (the native @temporalio core is per-architecture). Worker not started.`
+								: `temporal-runner: worker failed to start: ${err.message}`,
+						)
 					}
 				})()
 			},
