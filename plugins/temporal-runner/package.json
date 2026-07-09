@@ -2,7 +2,7 @@
 	"name": "@shofer/plugin-temporal-runner",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Shofer plugin: Temporal activity worker that drives Shofer as a durable job (docs/temporal_plugin.md).",
+	"description": "Shofer plugin: Temporal activity worker that drives Shofer as a durable job (see DESIGN.md).",
 	"license": "Apache-2.0",
 	"type": "module",
 	"main": "index.ts",

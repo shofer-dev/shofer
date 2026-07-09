@@ -1358,7 +1358,7 @@ Adding a site costs nothing new, because the coordination model is not workspace
 
 #### The mesh sidecar — the `agent-mesh` plugin
 
-The mesh sidecar is realized as a **general Shofer plugin, `agent-mesh`** (pure JS; §5.6) — the
+The mesh sidecar is realized as a **general Shofer plugin, `agent-mesh`** ([`agent-mesh/DESIGN.md`](../plugins/agent-mesh/DESIGN.md); pure JS; §5.6) — the
 **SaaS face of an otherwise-local Shofer** that makes any Shofer instance a mesh participant. It
 adds **zero SaaS code to `@shofer/core`** — everything stays on the _config_ side of the line
 (Shofer Router provider + a centralized `mcp-server` + this plugin), never the _code_ side, and it's
@@ -1493,7 +1493,7 @@ no-SPOF property**, and it's where GitLab's logical assignment (the auditable cl
 physical scheduling.
 
 **The runner is the `temporal-runner` plugin** — a general Shofer plugin
-([`temporal_plugin.md`](./temporal_plugin.md)) that hosts a Temporal worker via `ctx.registerService`
+([`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)) that hosts a Temporal worker via `ctx.registerService`
 and, on pickup, drives the co-located **Shofer** through the scoped **`ctx.agent.spawn`** API
 ([`plugin_system.md` §14](./plugin_system.md#14-proposed-agent-control-api-for-workflow--runner-plugins)).
 The **determinism rule** is strict: the agent/LLM loop is non-deterministic, so it runs **only inside

@@ -9,7 +9,7 @@
  *
  * It owns Temporal only — it carries **no NATS**. Live telemetry/notifications are the
  * `agent-mesh` plugin's job (they coordinate through Shofer, not with each other). Design:
- * docs/temporal_plugin.md. Requires @temporalio/worker + @temporalio/activity + @temporalio/client
+ * ./DESIGN.md. Requires @temporalio/worker + @temporalio/activity + @temporalio/client
  * installed alongside it (the worker's core is native/per-architecture).
  */
 

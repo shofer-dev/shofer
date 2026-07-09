@@ -10,7 +10,7 @@
  *
  * It is transport-siblings with the (native) temporal-runner plugin but shares nothing with it —
  * they coordinate through Shofer (the runner spawns tasks; this plugin observes + publishes their
- * events). See docs/temporal_plugin.md.
+ * events). See ./DESIGN.md (and ../temporal-runner/DESIGN.md for the sibling).
  */
 
 import { defineCustomTool, parametersSchema as z } from "@shofer/types"
