@@ -24,6 +24,13 @@ Shofer implements the [Model Context Protocol](https://modelcontextprotocol.io/)
 
 A singleton [`McpHub`](../src/services/mcp/McpHub.ts) manages all connections. Tools discovered from MCP servers are exposed to the LLM as native tool schemas alongside Shofer's built-in tools.
 
+> **Two ways an MCP server gets here.** Besides the user-configured servers documented below, a
+> Shofer **plugin** can bundle MCP server configs via `contributes.mcpServers`; they merge into this
+> same `McpHub` (see [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts) > `getContributedMcpServers()`) and behave identically from here on. That is **Option B** of the two
+> plugin tool paths — plugins can alternatively contribute **in-process** tools via `registerTools`
+> (not MCP at all). See [`adding-new-tools.md` § Plugin-Contributed Tools](adding-new-tools.md#plugin-contributed-tools)
+> and [`plugin_system.md`](plugin_system.md).
+
 ---
 
 ## Configuration
@@ -342,21 +349,22 @@ MCP tool execution sends real-time status updates:
 
 ## Key Files
 
-| File                                                                                              | Role                                                  |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| [`McpHub.ts`](../src/services/mcp/McpHub.ts)                                                      | Central hub: connections, tool discovery, execution   |
-| [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                                  | Singleton lifecycle, provider notification            |
-| [`mcpLogger.ts`](../src/services/mcp/mcpLogger.ts)                                                | Output-channel logger                                 |
-| [`UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor   |
-| [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                         |
-| [`mcp_server.ts`](../packages/core/src/prompts/tools/native-tools/mcp_server.ts)                  | Generates LLM tool schemas from connected servers     |
-| [`mcp-name.ts`](../src/utils/mcp-name.ts)                                                         | Name sanitization, parsing, fuzzy matching            |
-| [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts)       | Parses `mcp--` prefixed tool calls from LLM           |
-| [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) | Routes `mcp_tool_use` blocks to handler               |
-| [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                                      | Assembles the final tool list sent to the LLM         |
-| [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts)                           | Decides auto-approval for MCP tool calls              |
-| [`auto-approval/mcp.ts`](../packages/core/src/auto-approval/mcp.ts)                               | Uncategorized tool detection                          |
-| [`use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts)                           | Shared helpers for both sync and async MCP tool paths |
+| File                                                                                              | Role                                                                           |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`McpHub.ts`](../src/services/mcp/McpHub.ts)                                                      | Central hub: connections, tool discovery, execution                            |
+| [`McpServerManager.ts`](../src/services/mcp/McpServerManager.ts)                                  | Singleton lifecycle, provider notification                                     |
+| [`mcpLogger.ts`](../src/services/mcp/mcpLogger.ts)                                                | Output-channel logger                                                          |
+| [`UseMcpToolTool.ts`](../packages/core/src/tools/UseMcpToolTool.ts)                               | `use_mcp_tool` handler and native MCP tool executor                            |
+| [`accessMcpResourceTool.ts`](../packages/core/src/tools/accessMcpResourceTool.ts)                 | `access_mcp_resource` handler                                                  |
+| [`mcp_server.ts`](../packages/core/src/prompts/tools/native-tools/mcp_server.ts)                  | Generates LLM tool schemas from connected servers                              |
+| [`mcp-name.ts`](../src/utils/mcp-name.ts)                                                         | Name sanitization, parsing, fuzzy matching                                     |
+| [`NativeToolCallParser.ts`](../packages/core/src/assistant-message/NativeToolCallParser.ts)       | Parses `mcp--` prefixed tool calls from LLM                                    |
+| [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts) | Routes `mcp_tool_use` blocks to handler                                        |
+| [`build-tools.ts`](../packages/core/src/task/build-tools.ts)                                      | Assembles the final tool list sent to the LLM                                  |
+| [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts)                           | Decides auto-approval for MCP tool calls                                       |
+| [`auto-approval/mcp.ts`](../packages/core/src/auto-approval/mcp.ts)                               | Uncategorized tool detection                                                   |
+| [`use-mcp-shared.ts`](../packages/core/src/tools/mcp/use-mcp-shared.ts)                           | Shared helpers for both sync and async MCP tool paths                          |
+| [`plugin-manager.ts`](../packages/core/src/plugins/plugin-manager.ts)                             | `getContributedMcpServers()` — plugin-bundled MCP servers merged into `McpHub` |
 
 ---
 
