@@ -108,7 +108,43 @@ describe("plugin-loader (§7 code loading, step 2.1)", () => {
 		await reg.register(plugin)
 		const tools = await reg.collectTools()
 		expect(tools.map((t) => t.name)).toEqual(["probe"])
-		expect(await tools[0].execute!({}, {} as never)).toBe("EXTERNAL")
+		expect(await tools[0]!.execute!({}, {} as never)).toBe("EXTERNAL")
+	})
+
+	it("uses baked deps as-is when the arch marker matches (no reinstall)", async () => {
+		// Deps present + a marker for THIS platform-arch → ensurePluginDeps must be a no-op (it must
+		// not shell out to npm). We assert by making the dep unbundlable and its resolution work via
+		// the existing baked node_modules; if it tried to reinstall, there's no registry in the test.
+		const root = writePlugin(
+			"baked-plugin",
+			"index.ts",
+			`
+			const plugin = {
+				name: "baked-plugin",
+				async registerTools() {
+					const m = await import("baked-dep")
+					return [{ name: "probe", description: "", execute: async () => m.value }]
+				},
+			}
+			export default plugin
+			`,
+		)
+		fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ dependencies: { "baked-dep": "1.0.0" } }))
+		fs.writeFileSync(path.join(root, ".shofer-baked-arch"), `${process.platform}-${process.arch}`)
+		const depDir = path.join(root, "node_modules", "baked-dep")
+		fs.mkdirSync(depDir, { recursive: true })
+		fs.writeFileSync(path.join(depDir, "package.json"), JSON.stringify({ name: "baked-dep", main: "index.js" }))
+		fs.writeFileSync(
+			path.join(depDir, "index.js"),
+			`exports.value = "BAKED"; exports.n = () => require("./x.node")`,
+		)
+		fs.writeFileSync(path.join(depDir, "x.node"), "stub")
+
+		const plugin = await loadPluginFromEntry({ name: "baked-plugin", root, main: "index.ts" }, { cacheDir })
+		const reg = new PluginRegistry()
+		await reg.register(plugin)
+		const tools = await reg.collectTools()
+		expect(await tools[0]!.execute!({}, {} as never)).toBe("BAKED")
 	})
 
 	it("loads a plain .js entry directly (no transpile)", async () => {
