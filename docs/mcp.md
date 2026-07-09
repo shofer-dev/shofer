@@ -26,7 +26,9 @@ A singleton [`McpHub`](../src/services/mcp/McpHub.ts) manages all connections. T
 
 > **Two ways an MCP server gets here.** Besides the user-configured servers documented below, a
 > Shofer **plugin** can bundle MCP server configs via `contributes.mcpServers`; they merge into this
-> same `McpHub` (see [`McpHub.ts`](../packages/core/src/services/mcp/McpHub.ts) > `getContributedMcpServers()`) and behave identically from here on. That is **Option B** of the two
+> same `McpHub` (via `getContributedMcpServers()` in
+> [`plugin-manager.ts`](../packages/core/src/plugins/plugin-manager.ts)) and behave identically from
+> here on. That is **Option B** of the two
 > plugin tool paths — plugins can alternatively contribute **in-process** tools via `registerTools`
 > (not MCP at all). See [`adding-new-tools.md` § Plugin-Contributed Tools](adding-new-tools.md#plugin-contributed-tools)
 > and [`plugin_system.md`](plugin_system.md).
