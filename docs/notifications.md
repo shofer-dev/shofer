@@ -6,6 +6,13 @@ How `send_message_to_task` with `wait=false` delivers peer notifications to a ru
 
 ## Design
 
+> **Also carries generic notifications.** The same `peerNotificationQueue` is the delivery
+> mechanism for `ctx.agent.notify` **mode `"notify"`** (plugins — e.g. agent-mesh/NATS events).
+> Those entries have `kind: "notification"` (+ a `source` label) and inject a `NOTIFICATION [source]`
+> system block with **no** reply channel and **no** `peer_message` chat row (system-prompt-only for
+> now). Everything below about draining/liveness applies identically. See
+> [`plugin_system.md`](plugin_system.md) / the `PluginAgentNotifyOptions` modes.
+
 Async peer messages (`wait=false`) use a **dedicated FIFO queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts:224–230)) that is completely independent of the user-message queue ([`MessageQueueService`](../packages/core/src/message-queue/MessageQueueService.ts)). This separation ensures:
 
 - Async notifications are **not** treated as user turns (they don't trigger `cancelAndProcessQueuedMessages`)
