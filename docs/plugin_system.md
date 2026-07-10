@@ -607,21 +607,33 @@ the host is unchanged.
 - **`ctx.agent.notify(message, opts?)` — proactive agent-steering.** A plugin (from
   a background service, a `ctx.host.watch` callback, or a lifecycle hook) can
   PROACTIVELY inject a message into the running agent — e.g. "the deploy just
-  failed, here's the log." `opts.mode` defaults to **`"queue"`** (enqueue into the
-  active task's `MessageQueueService`, seen on the next turn — non-disruptive);
-  **`"spawn"`** starts a new task; **`"interrupt"`** is reduced to queued-ASAP
-  (enqueue, and if the loop already ended, drain via the tested
-  `cancelAndProcessQueuedMessages` path — no fragile mid-turn injection). With **no
-  task to steer**, a `queue`/`interrupt` notify falls back to spawning so the
-  message is never dropped. Gated on a dedicated **`permissions.agent`** grant
-  (steering the agent has billed/behavioral impact): ungranted-but-seam-wired ⇒
-  denying stub; no seam ⇒ absent. Host-side behind a `PluginAgentProvider` seam
-  ([`plugin-agent.ts`](../packages/core/src/plugins/plugin-agent.ts)) mirroring
-  `PluginAiProvider`, wired in `ShoferProvider.getPluginManager` against the
-  provider's task stack / message queue. `notify` is deliberately **fire-and-forget**;
-  for an awaitable, cancellable _job_ surface (`spawn → TaskHandle`, `cancel`, structured
-  result) needed by workflow/runner plugins, see the proposed
-  [§14](#14-proposed-agent-control-api-for-workflow--runner-plugins).
+  failed, here's the log." `opts.mode` selects the delivery semantics (four modes):
+
+    - **`"notify"`** (default) — a one-way event appended to the target task's
+      **notification queue** ([`peerNotificationQueue`](../packages/core/src/task/Task.ts),
+      [`notifications.md`](notifications.md)) and drained ASAP into the **system prompt**
+      (role: system) on the task's next real agent request — no tool call needed. Delivered
+      **only while the task loop is running**; **dropped if idle** (by design). The channel
+      for fire-and-forget event routing.
+    - **`"queue"`** — enqueue into the active task's `MessageQueueService`
+      ([`message_queue.md`](message_queue.md)) like a user prompt typed while busy; drained on
+      the next turn, non-disruptive.
+    - **`"interrupt"`** — enqueue **and** `cancelAndProcessQueuedMessages` (Send-Now): abort the
+      current turn (same task instance) and resume with the message.
+    - **`"spawn"`** — start a new task seeded with the message.
+
+    `opts.taskId` targets a specific task (default: the active/current task); `opts.source`
+    is a short label shown with a `notify` event. With **no task to steer**, a `queue`/`interrupt`
+    notify falls back to spawning so the message is never dropped; a `notify` with no live target
+    is dropped. Gated on a dedicated **`permissions.agent`** grant
+    (steering the agent has billed/behavioral impact): ungranted-but-seam-wired ⇒
+    denying stub; no seam ⇒ absent. Host-side behind a `PluginAgentProvider` seam
+    ([`plugin-agent.ts`](../packages/core/src/plugins/plugin-agent.ts)) mirroring
+    `PluginAiProvider`, wired in `ShoferProvider.getPluginManager` against the
+    provider's task stack / message queue. `notify` is deliberately **fire-and-forget**;
+    for an awaitable, cancellable _job_ surface (`spawn → TaskHandle`, `cancel`, structured
+    result) needed by workflow/runner plugins, see the proposed
+    [§14](#14-proposed-agent-control-api-for-workflow--runner-plugins).
 
 ---
 

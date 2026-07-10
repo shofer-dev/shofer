@@ -613,10 +613,11 @@ Rejected at scope validation: `target.rootTaskId !== caller.rootTaskId`.
 - [`native_tools.md`](native_tools.md) — Complete tool reference with parameter schemas
 - [`task_states.md`](task_states.md) — Task lifecycle state model
 - [`notifications.md`](notifications.md) — the `peerNotificationQueue` / Form-A injection machinery this uses
+- [`plugin_system.md`](plugin_system.md) — `ctx.agent.notify` / `PluginAgentNotifyOptions` (the `notify` mode that also uses this queue)
 - [`todos/done/Shofer-parallel-tasks.md`](../../todos/done/Shofer-parallel-tasks.md) — Original parallel task execution design
 
-> **Cross-process reuse.** The same `peerNotificationQueue` (Form A) is the delivery substrate for
-> the out-of-process **event routing** done by the `agent-mesh` plugin (`ctx.agent.notify` mode
-> `notify`). Those entries carry `kind: "notification"` + a `source` label — a generic `NOTIFICATION`
-> block with no `send_message_to_task` reply channel — instead of the `PEER MESSAGE` framing here. See
-> [`shofer-plugins/agent-mesh/DELIVERY.md`](../../../shofer-plugins/agent-mesh/DELIVERY.md).
+> **Also carries generic notifications.** Beyond peer messages, the same `peerNotificationQueue`
+> (Form A) delivers **one-way notifications** enqueued via the host plugin API `ctx.agent.notify`
+> mode `notify` (see [`plugin_system.md`](plugin_system.md)). Those entries carry
+> `kind: "notification"` + a `source` label — a generic `NOTIFICATION` block with no
+> `send_message_to_task` reply channel — instead of the `PEER MESSAGE` framing here.

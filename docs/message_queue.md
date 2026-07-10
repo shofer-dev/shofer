@@ -320,13 +320,11 @@ changes but always sees the latest text.
   end-to-end. Send Now is a _soft_ variant of that flow that avoids the
   final `abortTask()`/`dispose()` step.
 - [task_states.md](task_states.md) — Task lifecycle and focus model.
-- **Cross-process reuse:** `ctx.agent.notify` delivery modes `queue` and `interrupt`
-  (used by out-of-process event sources like the `agent-mesh` plugin) reuse this exact
-  machinery — `queue` calls `addMessage`, `interrupt` calls `addMessage` +
-  `cancelAndProcessQueuedMessages` (Send Now). See
-  [`shofer-plugins/agent-mesh/DELIVERY.md`](../../../shofer-plugins/agent-mesh/DELIVERY.md).
-  (The `notify` mode uses the separate `peerNotificationQueue`, not this queue — see
-  [notifications.md](notifications.md).)
+- [plugin_system.md](plugin_system.md) — the host plugin API. `ctx.agent.notify`
+  (`PluginAgentNotifyOptions`) exposes delivery modes that drive this queue: `queue` →
+  `addMessage`; `interrupt` → `addMessage` + `cancelAndProcessQueuedMessages` (Send Now). Any
+  out-of-process event source that steers an agent does so through these core paths. (The `notify`
+  mode uses the separate `peerNotificationQueue`, not this queue — see [notifications.md](notifications.md).)
 
 ## Gaps, Issues & Improvement Areas
 
