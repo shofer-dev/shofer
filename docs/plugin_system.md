@@ -973,7 +973,18 @@ interface PluginAgentControl {
 	// Start a task and get a HANDLE (unlike fire-and-forget notify(spawn)).
 	spawn(
 		prompt: string,
-		opts?: { images?: string[]; mode?: string; metadata?: Record<string, unknown> },
+		opts?: {
+			images?: string[]
+			mode?: string
+			metadata?: Record<string, unknown>
+			// Headless execution: the task has no interactive approver, so an un-granted
+			// approval must NOT park on ask() — it resolves as Deny (tool fails, task continues).
+			unattended?: boolean
+			// What the task is pre-authorized to do (granted ⇒ auto-approve; miss ⇒ auto-deny).
+			// Expressed in Shofer's existing auto-approval vocabulary so checkAutoApproval()
+			// consumes it unchanged. See saas.md §5.6 "Runner-task approval".
+			approvalPolicy?: ApprovalPolicy
+		},
 	): Promise<TaskHandle>
 	// Cancel by id — exposes Shofer's EXISTING structured cancellation (v3 §5, terminateProcessTree/abortStream).
 	cancel(taskId: string): Promise<void>
@@ -1005,6 +1016,30 @@ interface TaskResult {
 - `ctx.agent.notify` stays as the lightweight fire-and-forget path (inbound message delivery, one-way
   steering); `spawn`/`cancel` are the job-oriented path. This completes the **"workflow plugin"**
   use-case §5.9 already names ("observe task start, post results externally").
+- **Unattended approval (`unattended` + `approvalPolicy`).** A spawned runner task has no interactive
+  approver, so it must never hang on `ask()`. In `unattended` mode any approval not granted by the
+  `approvalPolicy` resolves as **Deny** (the tool fails with the standard denial result and the task
+  continues) — never an interactive wait. The policy reuses Shofer's existing auto-approval vocabulary,
+  so `checkAutoApproval()` consumes it unchanged:
+
+    ```typescript
+    interface ApprovalPolicy {
+    	read?: boolean
+    	write?: { paths?: string[] } // allowedWritePaths
+    	execute?: { allow?: string[]; deny?: string[] } // command allow/deny lists
+    	mcp?: { servers?: string[] }
+    	browser?: boolean
+    	subtasks?: boolean
+    	onMiss?: "deny" | "escalate" // default "deny"; "escalate" ⇒ agent opens a ticket / signals a workflow
+    	neverAllow?: string[] // hard-gated even if otherwise matched (e.g. provisioning)
+    }
+    ```
+
+    Hard-gated actions (`neverAllow`, e.g. provisioning/prod-deploy) are never auto-approvable unattended
+    and route to **escalation** — an async human path (ticket / mesh event) or a Temporal **Workflow
+    Update/signal** the agent issues via a plugin tool (the runner already holds a Temporal client), which
+    blocks a coordination workflow on a human decision without parking the runner. Full model +
+    escalation flows: [`saas.md` §5.6 "Runner-task approval"](./saas.md#56-agentic-pipelines--orchestration).
 
 ### 14.3 Non-HTTP network egress (`permissions.network`)
 
