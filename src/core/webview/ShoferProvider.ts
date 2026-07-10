@@ -2292,24 +2292,43 @@ export class ShoferProvider
 	private buildPluginAgentProvider(): PluginAgentProvider {
 		return {
 			notify: async (message: string, opts): Promise<void> => {
-				const mode = opts?.mode ?? "queue"
+				const mode = opts?.mode ?? "notify"
+				// spawn: a self-contained new task seeded with the message.
 				if (mode === "spawn") {
 					await this.createTask(message)
 					return
 				}
-				// queue / interrupt (both reduced to queued-ASAP): resolve the target task.
 				const target =
 					(opts?.taskId ? this.shoferStack.find((t) => t.taskId === opts.taskId) : undefined) ??
 					this.getCurrentTask()
+
+				// notify: one-way event → the target's notification queue, drained into the
+				// system prompt on its next real agent request. Delivered ONLY to a task whose
+				// loop is running (drains on the next request); if there is no live target we
+				// drop it by design — notifications are for in-flight steering, not cold start.
+				if (mode === "notify") {
+					if (!target) return
+					target.peerNotificationQueue.push({
+						senderTaskId: "",
+						senderTitle: opts?.source ?? "notification",
+						message,
+						timestamp: Date.now(),
+						kind: "notification",
+						source: opts?.source,
+					})
+					return
+				}
+
+				// queue / interrupt: use the user-message queue.
 				if (!target) {
 					// Nothing to steer — don't drop the message; start a task with it instead.
 					await this.createTask(message)
 					return
 				}
 				target.messageQueueService.addMessage(message)
-				// A terminated loop won't ask() again to drain the queue; kick the same
-				// cancel-and-process path "Send Now" uses so the message is picked up ASAP.
-				if (target.abort) {
+				// interrupt: Send-Now semantics — abort the current turn (same instance) and
+				// resume with the queued message. queue: leave it for the next turn's drain.
+				if (mode === "interrupt") {
 					await target.cancelAndProcessQueuedMessages()
 				}
 			},

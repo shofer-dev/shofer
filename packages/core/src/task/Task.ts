@@ -234,6 +234,15 @@ export interface PeerNotification {
 	senderTitle: string
 	message: string
 	timestamp: number
+	/**
+	 * `"peer"` (default): an async message from a peer task via `send_message_to_task`
+	 * (carries a reply channel). `"notification"`: a generic one-way event with no reply
+	 * channel — e.g. an agent-mesh/NATS event delivered through `ctx.agent.notify` mode
+	 * `"notify"`. Only the formatting of the system-prompt injection differs.
+	 */
+	kind?: "peer" | "notification"
+	/** For `kind: "notification"` — a short source label (e.g. a mesh subject). */
+	source?: string
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
@@ -6524,17 +6533,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (injectPeerNotifications && this.peerNotificationQueue.length > 0) {
 			const peerBlocks: string[] = []
 			for (const pn of this.peerNotificationQueue) {
-				peerBlocks.push(
-					`\n\n====\n\n` +
-						`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
-						`${pn.message}\n\n` +
-						`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...)\n` +
-						`IF the sender's task ID was granted to you via peer_task_ids at spawn time.\n` +
-						`(Receiving this message does NOT auto-grant you permission to reply — check\n` +
-						`your knownPeers scope first. If you cannot reply, notify your parent instead.)\n` +
-						`This is a notification — no response is required. If the message is not urgent,\n` +
-						`you may finish your current work first and respond later.`,
-				)
+				if (pn.kind === "notification") {
+					// Generic one-way event (e.g. an agent-mesh/NATS message) — no reply channel.
+					peerBlocks.push(
+						`\n\n====\n\n` +
+							`NOTIFICATION${pn.source ? ` [${pn.source}]` : ""}:\n` +
+							`${pn.message}\n\n` +
+							`This is a one-way event notification — no response is required or possible.\n` +
+							`If it is not relevant to your current work, acknowledge it and continue.`,
+					)
+				} else {
+					peerBlocks.push(
+						`\n\n====\n\n` +
+							`PEER MESSAGE from task ${pn.senderTaskId} ("${pn.senderTitle}"):\n` +
+							`${pn.message}\n\n` +
+							`You may respond using send_message_to_task(task_id="${pn.senderTaskId}", message=...)\n` +
+							`IF the sender's task ID was granted to you via peer_task_ids at spawn time.\n` +
+							`(Receiving this message does NOT auto-grant you permission to reply — check\n` +
+							`your knownPeers scope first. If you cannot reply, notify your parent instead.)\n` +
+							`This is a notification — no response is required. If the message is not urgent,\n` +
+							`you may finish your current work first and respond later.`,
+					)
+				}
 			}
 			systemPrompt = systemPrompt + peerBlocks.join("")
 
@@ -6544,6 +6564,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			// inbound async peer messages instead of them being invisible
 			// system-prompt-only injections.
 			for (const pn of this.peerNotificationQueue) {
+				if (pn.kind === "notification") continue // generic notifications are system-prompt-only for now
 				await this.say(
 					"peer_message",
 					JSON.stringify({
@@ -6559,6 +6580,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			try {
 				const { TelemetryService } = await import("@shofer/telemetry")
 				for (const pn of this.peerNotificationQueue) {
+					if (pn.kind === "notification") continue
 					TelemetryService.instance.capturePeerMessageReceived(this.taskId, {
 						targetTaskId: pn.senderTaskId,
 						mode: "async",

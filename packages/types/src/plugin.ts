@@ -431,16 +431,28 @@ export interface PluginTaskResult {
 /** Options for {@link PluginAgent.notify} (design §6.11 G8; Phase 7). */
 export interface PluginAgentNotifyOptions {
 	/**
-	 * How the message reaches the agent. Default **`"queue"`**: enqueue into the active
-	 * task's message queue so the agent picks it up on its next turn (non-disruptive).
-	 * `"spawn"`: start a **new** task seeded with the message. `"interrupt"`: **reduced**
-	 * to queued-ASAP — the message is enqueued and, if the task loop has already
-	 * terminated, the tested cancel-and-process path is kicked so it is drained
-	 * immediately; there is no fragile mid-turn injection (see PLUGINS.md).
+	 * How the message reaches the agent. Four distinct delivery modes:
+	 *
+	 * - **`"notify"`** (default): one-way notification. Appended to the target task's
+	 *   **notification queue** and drained ASAP into the **system prompt** (role: system)
+	 *   on the task's next real agent request — no explicit tool call needed. Delivered
+	 *   **only while the task loop is running**; if the loop has ended the message is not
+	 *   delivered (by design). This is the channel for fire-and-forget event routing
+	 *   (all agent-mesh/NATS messages use it).
+	 * - **`"queue"`**: enqueue into the task's message queue exactly like a user prompt
+	 *   typed while the task is busy — drained on the next turn, no preemption.
+	 * - **`"interrupt"`**: enqueue **and** cancel-and-process (Send-Now semantics) —
+	 *   aborts the current turn (same task instance) and resumes with this message.
+	 * - **`"spawn"`**: start a **new** task seeded with the message.
 	 */
-	mode?: "queue" | "interrupt" | "spawn"
+	mode?: "notify" | "queue" | "interrupt" | "spawn"
 	/** Target a specific task by id; defaults to the host's active/current task. */
 	taskId?: string
+	/**
+	 * For `mode: "notify"` — a short human-readable source label (e.g. a mesh subject)
+	 * shown with the injected notification. Ignored by the other modes.
+	 */
+	source?: string
 }
 
 /**
