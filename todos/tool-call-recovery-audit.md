@@ -43,7 +43,7 @@
 >   integrator-owned `includedTools`/`excludedTools` mechanism (availability +
 >   dialect/naming) now flows through ALL three model-access paths: (a) llm-router
 >   emits `included_tools`/`excluded_tools` on `/v1/models` → OpenRouter fetcher; (c)
->   shofer-router carries them in its registry → capabilities side-channel →
+>   llm-local-router carries them in its registry → capabilities side-channel →
 >   `vscode-lm.ts`; (b) the curated provider files already did. Both new paths seed
 >   the known `openai → apply_patch` family default. See
 >   [`../docs/tool_preferences.md`](../docs/tool_preferences.md) — this is the proper

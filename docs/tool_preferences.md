@@ -50,7 +50,7 @@ carries them into `ModelInfo`.
  (a) shofer provider            (b) direct upstream            (c) vscode-llm provider
    (llm-router /v1/models)     (anthropic/openai/openrouter…)   (VS Code LM API)
         │                               │                               │
-   llm-router catalog          curated provider ModelInfo         shofer-router catalog
+   llm-router catalog          curated provider ModelInfo         llm-local-router catalog
  internal/types/             packages/types/src/providers/*.ts   src/model-registry.ts
    model_registry.go          + utils/router-tool-preferences.ts   (+ side-channel)
 ```
@@ -90,18 +90,18 @@ carries them into `ModelInfo`.
 - This is the only path that already carried tool preferences before the
   audit; (a) and (c) were brought up to parity.
 
-### (c) `vscode-llm` provider → `shofer-router`
+### (c) `vscode-llm` provider → `llm-local-router`
 
 - **In path:** when Shofer is configured to use the **VS Code LM API**. Models
-  are served by the **shofer-router** extension, registered as a
+  are served by the **llm-local-router** extension, registered as a
   `LanguageModelChatProvider` (vendor `shofer`).
-- **SoT:** the **shofer-router** catalog
-  (`extensions/shofer-router/src/model-registry.ts`, `ModelRegistryEntry`).
+- **SoT:** the **llm-local-router** catalog
+  (`extensions/llm-local-router/src/model-registry.ts`, `ModelRegistryEntry`).
   Per-entry `includedTools`/`excludedTools`, else provider-family defaults from
   `resolveModelToolPrefs` (`src/llm-client.ts`), mirroring llm-router.
 - **Transport:** the VS Code `LanguageModelChatInformation.capabilities` cannot
   carry arbitrary arrays, so preferences ride the **side-channel command**
-  `shofer.router.getModelCapabilities`, which returns shofer-router's own
+  `llmLocalRouter.getModelCapabilities`, which returns llm-local-router's own
   `ModelCapabilities` (now including `includedTools`/`excludedTools`).
 - **Into ModelInfo:** `src/api/providers/vscode-lm.ts` reads the capabilities
   side-channel in `refreshShoferCapabilities`, stores them on
@@ -110,11 +110,11 @@ carries them into `ModelInfo`.
 
 ## How to add a preference (per path)
 
-| Path                             | Where to edit                                                                                                                                                                                |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| (a) `shofer` / llm-router        | Set `IncludedTools`/`ExcludedTools` on the entry in `llm-router/internal/types/model_registry.go`, or add a provider-family rule in `resolveModelToolPrefs` (`internal/handlers/models.go`). |
-| (b) direct upstream              | Set `includedTools`/`excludedTools` on the model's `ModelInfo` in `packages/types/src/providers/<provider>.ts`, or extend `applyRouterToolPreferences`.                                      |
-| (c) `vscode-llm` / shofer-router | Set `includedTools`/`excludedTools` on the entry in `extensions/shofer-router/src/model-registry.ts`, or add a rule in `resolveModelToolPrefs` (`src/llm-client.ts`).                        |
+| Path                                | Where to edit                                                                                                                                                                                |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) `shofer` / llm-router           | Set `IncludedTools`/`ExcludedTools` on the entry in `llm-router/internal/types/model_registry.go`, or add a provider-family rule in `resolveModelToolPrefs` (`internal/handlers/models.go`). |
+| (b) direct upstream                 | Set `includedTools`/`excludedTools` on the model's `ModelInfo` in `packages/types/src/providers/<provider>.ts`, or extend `applyRouterToolPreferences`.                                      |
+| (c) `vscode-llm` / llm-local-router | Set `includedTools`/`excludedTools` on the entry in `extensions/llm-local-router/src/model-registry.ts`, or add a rule in `resolveModelToolPrefs` (`src/llm-client.ts`).                     |
 
 All three honor the same convention: explicit per-model values win; otherwise a
 provider-family default applies; otherwise the standard defaults stand. None of

@@ -121,13 +121,13 @@ Model selector for the VS Code Language Model API. Configures which
 Enable the companion-extension integration. When enabled, the `vscode-lm`
 provider queries well-known commands for:
 
-- `shofer.router.getModelPricing` — per-token USD rates (Path 1)
-- `shofer.router.getRequestCost` — per-conversation cumulative cost (Path 2)
-- `shofer.router.getModelCapabilities` — tool calling, image input, prompt cache
+- `llmLocalRouter.getModelPricing` — per-token USD rates (Path 1)
+- `llmLocalRouter.getRequestCost` — per-conversation cumulative cost (Path 2)
+- `llmLocalRouter.getModelCapabilities` — tool calling, image input, prompt cache
 
 > **Naming wart:** despite the `LlmProvider` in the setting name, `vscode-lm.ts`
-> actually calls the `shofer.router.*` commands registered by the **`shofer-router`**
-> extension (`extensions/shofer-router/`), not the `shofer.llm.*` commands of
+> actually calls the `llmLocalRouter.*` commands registered by the **`llm-local-router`**
+> extension (`extensions/llm-local-router/`), not the `shofer.llm.*` commands of
 > `extensions/llm-provider/`. Both register the same logical commands under different
 > namespaces — an unresolved inconsistency (see [`images.md`](images.md) gaps).
 

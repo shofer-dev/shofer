@@ -36,9 +36,9 @@ describe("integration tests with real .gitmodules", () => {
 		expect(shofer!.url).toBe("https://github.com/shofer-dev/shofer.git")
 		expect(shofer!.branch).toBe("master")
 
-		const shoferRouter = map.get("extensions/shofer-router")
-		expect(shoferRouter).toBeDefined()
-		expect(shoferRouter!.url).toBe("https://github.com/shofer-dev/shofer-router.git")
+		const llmLocalRouter = map.get("extensions/llm-local-router")
+		expect(llmLocalRouter).toBeDefined()
+		expect(llmLocalRouter!.url).toBe("https://github.com/shofer-dev/shofer-router.git")
 
 		// Verify the block renders correctly.
 		const entries: SubmoduleEntry[] = [...map.values()]

@@ -47,7 +47,7 @@ images per message reached") rather than the generic "Add images" label.
 
 Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../packages/core/src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
 
-For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `shofer.router.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `shofer-router` extension ([`shofer-router/src/main.ts`](../../shofer-router/src/main.ts)), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
+For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `llmLocalRouter.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `llm-local-router` extension ([`llm-local-router/src/main.ts`](../../llm-local-router/src/main.ts)), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
 
 The lookup is **fail-closed**: if the side-channel command is unavailable (provider extension not installed, not activated, or it throws), `shoferCapabilities` is left untouched and [`supportsImages` resolves to `false`](../../src/api/providers/vscode-lm.ts:939) (`this.shoferCapabilities?.imageInput ?? false`). A vision-capable model therefore has its images stripped whenever the capability lookup cannot complete, rather than risking an API error by sending image blocks to a model whose support is unknown.
 
@@ -375,18 +375,18 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
   `width: 34, height: 34` inline styles — correct.
 
 - **Capability side-channel namespace — diagnostics fixed; architecture wart remains.** The
-  `vscode-lm` capability/pricing lookup invokes `shofer.router.*` commands
-  ([`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `executeCommand("shofer.router.getModelCapabilities"…)`),
-  registered by the **`shofer-router`** extension ([`shofer-router/src/main.ts:679-680`](../../shofer-router/src/main.ts:679)).
+  `vscode-lm` capability/pricing lookup invokes `llmLocalRouter.*` commands
+  ([`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `executeCommand("llmLocalRouter.getModelCapabilities"…)`),
+  registered by the **`llm-local-router`** extension ([`llm-local-router/src/main.ts:679-680`](../../llm-local-router/src/main.ts:679)).
   Previously the doc-comments and all three catch-block warning strings inside `vscode-lm.ts` still named
   `shofer.llm.*` and "Shofer LLM Model Provider extension" (12 occurrences), so a developer debugging
   "images disabled on a vision model" saw a log naming a command the code never calls. **✅ Fixed** — the
-  warnings/comments now name `shofer.router.*` / the Shofer Router extension, matching the executed command.
+  warnings/comments now name `llmLocalRouter.*` / the Shofer Router extension, matching the executed command.
   **Remaining wart (not fixed here):** a **second** extension, `llm-provider`, registers the same logical
   commands under `shofer.llm.*` ([`llm-provider/src/main.ts:467,477`](../../llm-provider/src/main.ts:467)),
   and the gating setting is still named `enableLlmProviderIntegration`. Whether the canonical companion is
-  `shofer-router` (what the code calls) or `llm-provider` (what the setting name and registry suggest) is an
-  unresolved architectural ambiguity; if a deployment ships only `llm-provider`, the `shofer.router.*`
+  `llm-local-router` (what the code calls) or `llm-provider` (what the setting name and registry suggest) is an
+  unresolved architectural ambiguity; if a deployment ships only `llm-provider`, the `llmLocalRouter.*`
   lookup fails and images are stripped from vision-capable models. Consolidating the two extensions onto one
   namespace (and renaming the setting) is the proper follow-up.
 

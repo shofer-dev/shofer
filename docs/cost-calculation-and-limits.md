@@ -5,7 +5,7 @@ Status (cost limit): **shipped in 3.53.0**, hardened through 3.54.11.
 Backend coverage: enforcement is **backend-agnostic** — see the
 [Backend Coverage Matrix](#backend-coverage-matrix) for how cost is
 sourced (provider-stamped vs local-pricing fallback) for each of
-llm-router, shofer-router/llm-provider, OpenRouter, and direct upstream
+llm-router, llm-local-router/llm-provider, OpenRouter, and direct upstream
 providers, and [Known Gaps by backend](#known-gaps-by-backend) for the
 residual cases where cost is unknowable and the cap therefore can't
 trip.
@@ -385,17 +385,17 @@ genuinely `0`/unknown on **both** axes — i.e. the backend stamps no
 cost AND `getModel().info` has no pricing. The matrix below maps each
 backend the user can route through to its cost source.
 
-| Backend (as the user sees it)                       | Shofer provider / path                   | Stamps `usage.totalCost`?                                                             | Local-pricing fallback works?                                   | In-stream gate                      | Post-stream gate       |
-| --------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------- | ---------------------- |
-| **Direct upstream — Anthropic**                     | `anthropic.ts`                           | ✅ `calculateApiCostAnthropic` on final chunk                                         | ✅ (self-computed)                                              | ✅                                  | ✅                     |
-| **Direct upstream — OpenAI (native)**               | `openai-native.ts`                       | ✅ `calculateApiCostOpenAI` (tier-aware)                                              | ✅                                                              | ✅                                  | ✅                     |
-| **Direct upstream — Gemini**                        | `gemini.ts`                              | ✅ unless model lacks pricing                                                         | ✅ priced models                                                | ✅ priced models                    | ✅ priced models       |
-| **Direct upstream — OpenAI-compatible**             | `openai.ts`                              | ❌ never stamps                                                                       | ✅ **only if** custom model info has prices (sane defaults = 0) | ✅ via fallback (was ❌ pre-fix)    | ✅ if priced           |
-| **Direct upstream — Bedrock**                       | `bedrock.ts`                             | ❌ never stamps                                                                       | ⚠️ priced models only; custom-ARN / guessed models = 0          | ✅ via fallback for priced (was ❌) | ✅ if priced           |
-| **Direct upstream — DeepSeek**                      | `deepseek.ts`                            | ❌ never stamps                                                                       | ✅ `deepSeekModels` has real prices                             | ✅ via fallback (was ❌)            | ✅                     |
-| **OpenRouter (direct)**                             | `openrouter.ts`                          | ✅ provider-reported `cost` + `upstream_inference_cost`                               | ⚠️ weak (varies)                                                | ✅ when OR returns cost             | ✅                     |
-| **llm-router (local) — `shofer/*` & routed models** | `shofer.ts` (extends OpenRouter handler) | ✅ iff llm-router stamps `usage.cost`                                                 | ⚠️ composite info often has `inputPrice: 0`                     | ✅ when stamped                     | ✅ when stamped        |
-| **shofer-router / llm-provider (VS Code LM)**       | `vscode-lm.ts`                           | ✅ iff `enableLlmProviderIntegration` **and** `shofer.router.getRequestCost` resolves | ⚠️ pricing also via side-channel; `0` when integration off      | ✅ when integration on              | ✅ when integration on |
+| Backend (as the user sees it)                       | Shofer provider / path                   | Stamps `usage.totalCost`?                                                              | Local-pricing fallback works?                                   | In-stream gate                      | Post-stream gate       |
+| --------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------- | ---------------------- |
+| **Direct upstream — Anthropic**                     | `anthropic.ts`                           | ✅ `calculateApiCostAnthropic` on final chunk                                          | ✅ (self-computed)                                              | ✅                                  | ✅                     |
+| **Direct upstream — OpenAI (native)**               | `openai-native.ts`                       | ✅ `calculateApiCostOpenAI` (tier-aware)                                               | ✅                                                              | ✅                                  | ✅                     |
+| **Direct upstream — Gemini**                        | `gemini.ts`                              | ✅ unless model lacks pricing                                                          | ✅ priced models                                                | ✅ priced models                    | ✅ priced models       |
+| **Direct upstream — OpenAI-compatible**             | `openai.ts`                              | ❌ never stamps                                                                        | ✅ **only if** custom model info has prices (sane defaults = 0) | ✅ via fallback (was ❌ pre-fix)    | ✅ if priced           |
+| **Direct upstream — Bedrock**                       | `bedrock.ts`                             | ❌ never stamps                                                                        | ⚠️ priced models only; custom-ARN / guessed models = 0          | ✅ via fallback for priced (was ❌) | ✅ if priced           |
+| **Direct upstream — DeepSeek**                      | `deepseek.ts`                            | ❌ never stamps                                                                        | ✅ `deepSeekModels` has real prices                             | ✅ via fallback (was ❌)            | ✅                     |
+| **OpenRouter (direct)**                             | `openrouter.ts`                          | ✅ provider-reported `cost` + `upstream_inference_cost`                                | ⚠️ weak (varies)                                                | ✅ when OR returns cost             | ✅                     |
+| **llm-router (local) — `shofer/*` & routed models** | `shofer.ts` (extends OpenRouter handler) | ✅ iff llm-router stamps `usage.cost`                                                  | ⚠️ composite info often has `inputPrice: 0`                     | ✅ when stamped                     | ✅ when stamped        |
+| **llm-local-router / llm-provider (VS Code LM)**    | `vscode-lm.ts`                           | ✅ iff `enableLlmProviderIntegration` **and** `llmLocalRouter.getRequestCost` resolves | ⚠️ pricing also via side-channel; `0` when integration off      | ✅ when integration on              | ✅ when integration on |
 
 Legend: ✅ enforced, ⚠️ conditional (depends on pricing data),
 ❌ cannot enforce. "(was ❌)" marks the in-stream gaps closed by the
@@ -462,24 +462,24 @@ and [`internal/services/cost_stamper.go`](../../../llm-router/internal/services/
    the batch API, this is flagged for the router owner rather than
    "fixed" here. Either way the two paths must agree.
 
-**shofer-router vs llm-provider (the VS Code LM side-channel):**
+**llm-local-router vs llm-provider (the VS Code LM side-channel):**
 
 6. **The live cost path recomputes; it does not read the router's
-   stamped `usage.cost`.** `vscode-lm.ts` calls the **`shofer.router.*`**
-   commands (registered by the **shofer-router** extension), gated
+   stamped `usage.cost`.** `vscode-lm.ts` calls the **`llmLocalRouter.*`**
+   commands (registered by the **llm-local-router** extension), gated
    behind the setting named `enableLlmProviderIntegration` (the
    documented "naming wart" — see
    [Operational Dependencies](#operational-dependencies)).
-   shofer-router's ledger fills from a **local** `computeCost(model,
+   llm-local-router's ledger fills from a **local** `computeCost(model,
 tokens…)` against its own registry, **not** from the upstream
    `usage.cost`. (The separate `llm-provider` extension's ledger _does_
    read `usage.cost`, but `vscode-lm.ts` does not call its
    `shofer.llm.*` commands, so that path is dead for this consumer.)
-   Consequence: if shofer-router's registry is missing a served model,
+   Consequence: if llm-local-router's registry is missing a served model,
    `computeCost` returns `0` and the ledger stays `0` forever even when
    llm-router stamped a correct cost — `getRequestCost` then yields a
    `0` delta and the cap can't trip via this backend. **Recommended
-   fix:** have shofer-router prefer the upstream-stamped `usage.cost`
+   fix:** have llm-local-router prefer the upstream-stamped `usage.cost`
    when present, falling back to local recompute only when absent
    (i.e. converge its behavior with llm-provider's).
 
@@ -585,7 +585,7 @@ fired on every `usage` chunk during the main streaming loop:
    `spent = _priorAggregateUsd + currentRequestCostUsd`, where
    `currentRequestCostUsd = chunk.totalCost ?? estimateRequestCostUsd(…)`.
    When the backend stamps a per-request `totalCost` (anthropic,
-   openai-native, gemini, openrouter, llm-router/shofer-router via
+   openai-native, gemini, openrouter, llm-router/llm-local-router via
    vscode-lm) the chunk value is used. When it does NOT (openai.ts,
    bedrock.ts, deepseek.ts, raw OpenAI-compatible endpoints), the gate
    falls back to a **local-pricing estimate** computed from the
@@ -871,14 +871,14 @@ When enabled, both cost paths depend on well-known VS Code commands
 registered by the **Shofer LLM Model Provider** extension
 ([`extensions/llm-provider/`](../../../extensions/llm-provider/)):
 
-| Command                              | Registers in                                                             | Consumed by                                         | Role                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------- |
-| `shofer.router.getModelPricing`      | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
-| `shofer.router.getRequestCost`       | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
-| `shofer.router.getModelCapabilities` | [`shofer-router/main.ts`](../../../extensions/shofer-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
+| Command                               | Registers in                                                                   | Consumed by                                         | Role                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------- |
+| `llmLocalRouter.getModelPricing`      | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
+| `llmLocalRouter.getRequestCost`       | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
+| `llmLocalRouter.getModelCapabilities` | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
 
-> **Naming wart:** `vscode-lm.ts` actually calls the **`shofer.router.*`** commands
-> registered by the **`shofer-router`** extension (verified in source), not the
+> **Naming wart:** `vscode-lm.ts` actually calls the **`llmLocalRouter.*`** commands
+> registered by the **`llm-local-router`** extension (verified in source), not the
 > `shofer.llm.*` commands of `llm-provider` — even though the gating setting is named
 > `enableLlmProviderIntegration`. Both extensions register the same logical commands
 > under different namespaces; this is an unresolved architectural inconsistency (see
