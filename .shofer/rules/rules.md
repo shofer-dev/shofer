@@ -4,14 +4,23 @@
 
     - Before attempting completion, always make sure that any code changes have test coverage
     - Ensure all tests pass before submitting changes
-    - The vitest framework is used for testing; the `vi`, `describe`, `test`, `it`, etc functions are defined by default in `tsconfig.json` and therefore don't need to be imported from `vitest`
-    - Tests must be run from the same directory as the `package.json` file that specifies `vitest` in `devDependencies`
-    - Run tests with: `npx vitest run <relative-path-from-workspace-root>`
-    - Do NOT run tests from project root - this causes "vitest: command not found" error
-    - Tests must be run from inside the correct workspace:
-        - Backend tests: `cd src && npx vitest run path/to/test-file` (don't include `src/` in path)
-        - UI tests: `cd webview-ui && npx vitest run src/path/to/test-file`
-    - Example: For `src/tests/user.test.ts`, run `cd src && npx vitest run tests/user.test.ts` NOT `npx vitest run src/tests/user.test.ts`
+    - The vitest framework is used for testing; the `vi`, `describe`, `test`, `it`, etc functions
+      are configured as globals (via each package's `vitest.config.ts`) and therefore don't need to
+      be imported from `vitest`
+    - This is a pnpm/turbo monorepo of separate packages, each with its own `vitest`. Never run
+      `pnpm test` or `turbo test` — they fan out across every package at once and saturate the CPU
+      alongside local LLM inference, hanging the machine (see `commands/test.md`).
+    - Instead, run vitest per-package, from inside the package that owns the test (the dir with the
+      `package.json` that lists `vitest`), with `npx vitest run <path-relative-to-that-package>`:
+        - Types: `cd packages/types && npx vitest run`
+        - Main extension: `cd src && npx vitest run --exclude '**/e2e/**'` (path excludes the `src/`
+          prefix; e2e specs need a live VSCode runtime)
+        - CLI: `cd apps/cli && npx vitest run`
+        - Other packages, only when their files changed: `packages/core`, `packages/ipc`,
+          `packages/telemetry`
+        - Webview UI: `cd webview-ui && npx vitest run`
+    - Do NOT run tests from the repo root — vitest is not installed there ("command not found")
+    - Example: for `src/core/foo.spec.ts`, run `cd src && npx vitest run core/foo.spec.ts`
 
 2. Lint Rules:
 
