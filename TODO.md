@@ -16,3 +16,5 @@
 - preemptive summarization (in the background)
 
 - test the migration commands
+
+- Replace bare `console.log` in extension-host code (AGENTS.md Output Channel Logging Rule — use the shared output channel, not `console.log`): `src/integrations/diagnostics/index.ts` (3 calls), `src/api/providers/vscode-lm.ts` (1 call).
