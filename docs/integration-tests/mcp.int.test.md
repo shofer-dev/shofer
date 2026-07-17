@@ -40,7 +40,7 @@ fixture supports `stdio` and `streamable-http` transports.
    `mcp_tool_use` case, creates a synthetic `ToolUse<"use_mcp_tool">`,
    and invokes `useMcpToolTool.handle()`.
 4. **Assert:** `McpHub.callTool()` is called with the correct server,
-   tool, arguments, and `task.taskId` as `conversationId`.
+   tool, arguments, and `task.taskId` as `taskId`.
 5. **Assert:** The tool result appears in chat as a `mcp_server_response`
    message with the echoed text.
 

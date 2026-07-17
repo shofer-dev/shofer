@@ -250,7 +250,7 @@ tokens locally (VS Code LM API) and has no per-token cache metadata.
 `llm-router` computes and stamps `usage.cost` (USD float, OpenRouter
 convention) on the final streaming chunk via generic `stampUsageCost`
 in [`provider.go`](../../../llm-router/internal/services/provider.go) →
-`llm-provider` accumulates per-`conversationId` in a bounded LRU
+`llm-provider` accumulates per-`taskId` in a bounded LRU
 ledger → `vscode-lm` snapshots the ledger before and after the stream,
 yielding the **delta** as `totalCost` in the usage chunk.
 

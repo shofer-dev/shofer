@@ -222,7 +222,7 @@ UseMcpToolTool.execute()               ← validates params, server, tool
 McpHub.callTool(                       ← line 1820
   serverName, toolName,
   arguments, source,
-  conversationId,                      ← injected into _meta for tracing
+  taskId,                      ← injected into _meta for tracing
   abortSignal                          ← from Task for cancellation
 )
   └─ connection.client.request({

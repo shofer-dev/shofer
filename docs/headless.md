@@ -257,7 +257,7 @@ pnpm --filter @shofer/cli dev \
 
 The `shofer` provider ([`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)) is designed for
 connecting to a locally-running llm-router instance. It wraps the OpenRouter
-handler and auto-injects a UUID v7 `conversation_id` into every request body
+handler and auto-injects a UUID v7 `task_id` into every request body
 (llm-router requires this field).
 
 ```bash
@@ -384,7 +384,7 @@ instead of VSCode Terminal. File edits go through the real filesystem via
 | [`apps/cli/src/commands/cli/stdin-stream.ts`](../apps/cli/src/commands/cli/stdin-stream.ts)                           | NDJSON stdin command parsing and dispatching              |
 | [`apps/cli/src/lib/utils/provider.ts`](../apps/cli/src/lib/utils/provider.ts)                                         | Maps CLI provider flags to ShoferSettings                 |
 | [`apps/cli/src/ui/App.tsx`](../apps/cli/src/ui/App.tsx)                                                               | Ink-based TUI application component                       |
-| [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)                           | Shofer Router provider (conversation_id injection)        |
+| [`packages/core/src/api/providers/shofer.ts`](../packages/core/src/api/providers/shofer.ts)                           | Shofer Router provider (task_id injection)                |
 | [`packages/types/src/cli.ts`](../packages/types/src/cli.ts)                                                           | Stdin command and stream-json event schemas               |
 | [`packages/vscode-shim/src/api/create-vscode-api-mock.ts`](../packages/vscode-shim/src/api/create-vscode-api-mock.ts) | vscode mock factory                                       |
 | [`packages/core/src/tools/ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)                   | Command execution (fallback to execa in CLI)              |

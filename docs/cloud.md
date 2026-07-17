@@ -345,11 +345,11 @@ and is designed for connecting Shofer to a **locally-running llm-router** instan
 (default base URL `http://localhost:30081/v1`), not a hosted cloud proxy. It behaves
 identically to OpenRouter except for three deliberate differences:
 
-- **`conversation_id` injection:** every `createMessage` patches the OpenAI client so
-  each `/v1/chat/completions` body carries `conversation_id = metadata.taskId` (the
+- **`task_id` injection:** every `createMessage` patches the OpenAI client so
+  each `/v1/chat/completions` body carries `task_id = metadata.taskId` (the
   per-task UUID v7). llm-router requires this on every call; conversation IDs are
   per-task (a single handler is shared across concurrent tasks). See
-  [`conversationId.md`](conversationId.md).
+  [`taskId.md`](taskId.md).
 - **No default model:** `getModel()` throws if no model is configured rather than
   silently falling back to OpenRouter's default — misrouting every request to a model
   the user never asked for is worse than a loud failure.

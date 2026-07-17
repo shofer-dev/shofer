@@ -38,13 +38,13 @@ primary mechanism for out-of-band metadata exchange.
 ### `llmLocalRouter.getRequestCost`
 
 - **Direction**: Shofer → Shofer Router
-- **Parameter**: `conversationId: string`
+- **Parameter**: `taskId: string`
 - **Returns**: `number | undefined` (cumulative USD cost for the conversation)
 - **Context**: Called at stream completion to retrieve the running cost total.
 
 **Shofer usage** (in [`vscode-lm.ts`](src/api/providers/vscode-lm.ts)):
 
-- Called at line 293: `vscode.commands.executeCommand("llmLocalRouter.getRequestCost", this.conversationId)`
+- Called at line 293: `vscode.commands.executeCommand("llmLocalRouter.getRequestCost", this.taskId)`
 - Called once at conversation/task completion
 
 **Shofer Router source**: Commands registered in [`main.ts`](../../../extensions/llm-local-router/src/main.ts) around line 635.
