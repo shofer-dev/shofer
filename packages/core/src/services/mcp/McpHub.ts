@@ -1948,7 +1948,7 @@ export class McpHub {
 		toolName: string,
 		toolArguments?: Record<string, unknown>,
 		source?: "global" | "project",
-		conversationId?: string,
+		taskId?: string,
 		signal?: AbortSignal,
 	): Promise<McpToolCallResponse> {
 		const connection = this.findConnection(serverName, source)
@@ -1976,10 +1976,10 @@ export class McpHub {
 			arguments: toolArguments,
 		}
 
-		// Inject conversationId into _meta if provided (required by mcp-server for tracing)
-		if (conversationId) {
+		// Inject taskId into _meta if provided (required by mcp-server for tracing)
+		if (taskId) {
 			params._meta = {
-				"vscode.conversationId": conversationId,
+				"vscode.taskId": taskId,
 			}
 		}
 

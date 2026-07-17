@@ -92,9 +92,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private client: vscode.LanguageModelChat | null
 	private disposable: vscode.Disposable | null
 	private currentRequestCancellation: vscode.CancellationTokenSource | null
-	private conversationId: string
-	private parentConversationId: string | undefined
-	private rootConversationId: string | undefined
+	private taskId: string
+	private parentTaskId: string | undefined
+	private rootTaskId: string | undefined
 	/**
 	 * Pricing in USD per 1M tokens for the currently selected model, when
 	 * known. Populated asynchronously after `initializeClient` by querying
@@ -135,9 +135,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 		this.disposable = null
 		this.currentRequestCancellation = null
 		// Use taskId from options if provided, otherwise generate a fallback UUID
-		this.conversationId = options.taskId ?? uuidv7()
-		this.parentConversationId = options.parentTaskId
-		this.rootConversationId = options.rootTaskId
+		this.taskId = options.taskId ?? uuidv7()
+		this.parentTaskId = options.parentTaskId
+		this.rootTaskId = options.rootTaskId
 
 		try {
 			// Listen for model changes and reset client
@@ -262,7 +262,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	}
 
 	/**
-	 * Pull the running USD cost for `this.conversationId` from the Shofer
+	 * Pull the running USD cost for `this.taskId` from the Shofer
 	 * LLM Model Provider extension via the well-known
 	 * `llmLocalRouter.getRequestCost` command. Returns `undefined` when the
 	 * command isn't registered (no shofer extension), when the provider
@@ -279,11 +279,11 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	 */
 	private async fetchShoferRequestCost(): Promise<number | undefined> {
 		if (!VsCodeLmHandler.isLlmProviderIntegrationEnabled()) return undefined
-		if (!this.conversationId) return undefined
+		if (!this.taskId) return undefined
 		try {
 			const cost = await vscode.commands.executeCommand<number | undefined>(
 				"llmLocalRouter.getRequestCost",
-				this.conversationId,
+				this.taskId,
 			)
 			if (typeof cost === "number" && Number.isFinite(cost) && cost >= 0) {
 				return cost
@@ -591,9 +591,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				justification: `Shofer would like to use '${client.name}' from '${client.vendor}', Click 'Allow' to proceed.`,
 				tools: convertToVsCodeLmTools(metadata?.tools ?? []),
 				modelOptions: {
-					conversationId: this.conversationId,
-					...(this.parentConversationId && { parentConversationId: this.parentConversationId }),
-					...(this.rootConversationId && { rootConversationId: this.rootConversationId }),
+					taskId: this.taskId,
+					...(this.parentTaskId && { parentTaskId: this.parentTaskId }),
+					...(this.rootTaskId && { rootTaskId: this.rootTaskId }),
 					systemPrompt,
 					...(maxTokens && { maxTokens }),
 				},
@@ -611,7 +611,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 						messages_count: vsCodeLmMessages.length,
 						tools_count: metadata?.tools?.length ?? 0,
 						systemPrompt_length: systemPrompt?.length ?? 0,
-						conversationId: this.conversationId,
+						taskId: this.taskId,
 					},
 					null,
 					2,
@@ -936,9 +936,9 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 				[vscode.LanguageModelChatMessage.User(prompt)],
 				{
 					modelOptions: {
-						conversationId: this.conversationId,
-						...(this.parentConversationId && { parentConversationId: this.parentConversationId }),
-						...(this.rootConversationId && { rootConversationId: this.rootConversationId }),
+						taskId: this.taskId,
+						...(this.parentTaskId && { parentTaskId: this.parentTaskId }),
+						...(this.rootTaskId && { rootTaskId: this.rootTaskId }),
 					},
 				},
 				new vscode.CancellationTokenSource().token,

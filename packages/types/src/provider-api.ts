@@ -25,17 +25,17 @@ export type ApiHandlerOptions = Omit<ProviderSettings, "apiProvider"> & {
 	ollamaNumCtx?: number
 	/**
 	 * Task/conversation ID passed to providers that need session tracking.
-	 * Used by vscode-lm provider to pass conversationId in modelOptions.
+	 * Used by vscode-lm provider to pass taskId in modelOptions.
 	 */
 	taskId?: string
 	/**
 	 * Parent task/conversation ID for task hierarchy tracking.
-	 * Used by vscode-lm provider to pass parentConversationId in modelOptions.
+	 * Used by vscode-lm provider to pass parentTaskId in modelOptions.
 	 */
 	parentTaskId?: string
 	/**
 	 * Root task/conversation ID for task hierarchy tracking.
-	 * Used by vscode-lm provider to pass rootConversationId in modelOptions.
+	 * Used by vscode-lm provider to pass rootTaskId in modelOptions.
 	 */
 	rootTaskId?: string
 }

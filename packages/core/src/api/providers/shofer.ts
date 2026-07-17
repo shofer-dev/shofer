@@ -1,12 +1,12 @@
 /**
  * Shofer Router provider — delegates to OpenRouter and injects a per-request
- * `conversation_id` field that the local llm-router requires on every
+ * `task_id` field that the local llm-router requires on every
  * `/v1/chat/completions` call.
  *
  * This provider is designed for connecting Shofer to a locally-running
  * llm-router instance via `--base-url`.  It behaves identically to OpenRouter
  * except that every `createMessage` call stamps the request body with
- * `metadata.taskId` (the per-task UUID v7 identifier) as `conversation_id`.
+ * `metadata.taskId` (the per-task UUID v7 identifier) as `task_id`.
  *
  * Conversation IDs are per-session (per task), not per-provider-instance,
  * because a single provider/handler is shared across all concurrent tasks.
@@ -91,14 +91,14 @@ export class ShoferHandler extends OpenRouterHandler {
 		messages: Anthropic.Messages.MessageParam[],
 		metadata?: ApiHandlerCreateMessageMetadata,
 	): ApiStream {
-		// Derive conversation_id from the per-task metadata.  Every regular
+		// Derive task_id from the per-task metadata.  Every regular
 		// code path passes metadata with taskId; this will not be undefined
 		// in practice.  If it were missing, llm-router would reject the request
 		// with HTTP 400, which is the correct behaviour — we want to know.
-		const conversationId = metadata!.taskId
+		const taskId = metadata!.taskId
 
 		// Patch the OpenAI client so every downstream `chat.completions.create`:
-		//  1. carries `conversation_id` (llm-router requires it), and
+		//  1. carries `task_id` (llm-router requires it), and
 		//  2. (streaming only) has its chain-of-thought surfaced. GLM/DeepSeek/Moonshot/
 		//     Qwen stream thinking as `delta.reasoning_content` (the direct OpenAI-
 		//     compatible convention), which llm-router forwards verbatim — but the
@@ -109,7 +109,7 @@ export class ShoferHandler extends OpenRouterHandler {
 		const originalCreate = this["client"].chat.completions.create.bind(this["client"].chat.completions)
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		this["client"].chat.completions.create = ((params: any, options?: any) => {
-			const body = { conversation_id: conversationId, ...params }
+			const body = { task_id: taskId, ...params }
 			const result = originalCreate(body, options)
 			// Non-streaming (completePrompt) needs no transform — pass it through.
 			if (!params?.stream) return result

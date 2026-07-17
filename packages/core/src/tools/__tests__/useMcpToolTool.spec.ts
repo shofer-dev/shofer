@@ -640,7 +640,7 @@ describe("useMcpToolTool", () => {
 			expect(mockTask.say).toHaveBeenCalledWith("mcp_server_request_started")
 
 			// The original tool name (with hyphens) should be passed to callTool,
-			// along with source (undefined), conversationId (task.taskId), and signal (undefined)
+			// along with source (undefined), taskId (task.taskId), and signal (undefined)
 			expect(callToolMock).toHaveBeenCalledWith(
 				"test-server",
 				"get-user-profile",

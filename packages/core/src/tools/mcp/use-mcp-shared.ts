@@ -228,7 +228,7 @@ export async function runMcpToolCall(
 		toolName,
 	})
 
-	// Pass task.taskId as conversationId so mcp-server can track the conversation
+	// Pass task.taskId as taskId so mcp-server can track the conversation
 	const toolResult = await (task.providerRef.deref() as TaskProviderLike | undefined)
 		?.getMcpHub()
 		?.callTool(serverName, toolName, args, source, task.taskId, signal ?? task.abortSignal)
