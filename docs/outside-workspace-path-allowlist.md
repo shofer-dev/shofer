@@ -193,12 +193,15 @@ design put a persistent split-button/dropdown next to Approve; user testing show
 orthogonal surfaces (Approve/Deny **plus** a trust panel) is confusing. So the trust actions
 are inline buttons in the same question, and the choice of scope is explicit per-button.
 
-**One question, up to four buttons: `Save` · `Trust path` · `Trust path (always)` · `Deny`.**
+**One question, up to four buttons: `Save` · `Trust path (…)` · `Trust path (…, always)` · `Deny`.**
 For a tool ask flagged `isOutsideWorkspace` with an `absolutePath`, ChatView renders the two
 Trust buttons between Approve and Deny. Both trust the file's **parent directory** and approve
-the ask in one click; they differ only in scope. The access level follows the operation for
-both: a write-group tool trusts **read+write**, a read tool trusts **read** (the `write ⊇ read`
-superset still applies via [`isPathAutoApproved`](#4-matching-semantics-the-readwrite-superset)).
+the ask in one click; they differ only in scope. **The access level is auto-determined by the
+operation, not chosen by the user**: a write-group tool (`isWriteTool`, from `WRITE_GROUP_TOOLS`)
+trusts **read+write**, a read tool trusts **read** (the `write ⊇ read` superset still applies via
+[`isPathAutoApproved`](#4-matching-semantics-the-readwrite-superset)). The resolved access is
+rendered **in the button label** — `Trust path (read)` / `Trust path (read+write)` (and the
+`, always` variants) — so the grant's scope is visible without hovering the tooltip.
 
 **"Trust path" is task-scoped, not persistent.** It trusts the dir for the **current task and
 its subtasks only** — in-memory, gone when the task ends. Mechanism:

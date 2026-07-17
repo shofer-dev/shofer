@@ -327,13 +327,13 @@
 		"collapseManagement": "Collapse command management section"
 	},
 	"trustPath": {
-		"title": "Trust path",
+		"title": "Trust path ({{access}})",
 		"tooltip": "Auto-approve {{access}} under {{dir}} for this task",
 		"read": "read",
 		"readWrite": "read+write"
 	},
 	"trustPathAlways": {
-		"title": "Trust path (always)",
+		"title": "Trust path ({{access}}, always)",
 		"tooltip": "Always auto-approve {{access}} under {{dir}} (saved to settings, all tasks)"
 	},
 	"response": "Response",

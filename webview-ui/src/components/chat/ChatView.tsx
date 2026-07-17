@@ -2660,7 +2660,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 													disabled={!enableButtons}
 													className="flex-1 mx-[6px]"
 													onClick={() => handleTrustPathClick(false)}>
-													{t("chat:trustPath.title")}
+													{t("chat:trustPath.title", {
+														access: outsideWorkspaceGrant.isWriteTool
+															? t("chat:trustPath.readWrite")
+															: t("chat:trustPath.read"),
+													})}
 												</Button>
 											</StandardTooltip>
 											<StandardTooltip
@@ -2675,7 +2679,11 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 													disabled={!enableButtons}
 													className="flex-1 mx-[6px]"
 													onClick={() => handleTrustPathClick(true)}>
-													{t("chat:trustPathAlways.title")}
+													{t("chat:trustPathAlways.title", {
+														access: outsideWorkspaceGrant.isWriteTool
+															? t("chat:trustPath.readWrite")
+															: t("chat:trustPath.read"),
+													})}
 												</Button>
 											</StandardTooltip>
 										</>
