@@ -332,6 +332,10 @@
 		"read": "read",
 		"readWrite": "read+write"
 	},
+	"trustPathAlways": {
+		"title": "Trust path (always)",
+		"tooltip": "Always auto-approve {{access}} under {{dir}} (saved to settings, all tasks)"
+	},
 	"response": "Response",
 	"arguments": "Arguments",
 	"text": {

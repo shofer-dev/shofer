@@ -1074,6 +1074,12 @@ export interface WebviewMessage {
 	outsideWorkspacePath?: string
 	/** For `trustOutsideWorkspacePath`: whether to trust read only, or read+write (write-group tool). */
 	outsideWorkspaceAccess?: "read" | "write"
+	/**
+	 * For `trustOutsideWorkspacePath`: when `true`, persist the directory to the global
+	 * `allowedReadPaths`/`allowedWritePaths` allowlist (survives restarts, synced to nodes)
+	 * instead of the default in-memory, current-task-only trust.
+	 */
+	outsideWorkspacePersist?: boolean
 	/** Task configuration applied via `createTask()` when starting a cloud task. */
 	taskConfiguration?: ShoferSettings
 	// Parallel task properties

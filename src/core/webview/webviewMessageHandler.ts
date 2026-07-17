@@ -926,12 +926,30 @@ export const webviewMessageHandler = async (
 					break
 				}
 
-				// Task-scope trust the parent directory, then approve the pending ask
-				// in one click (mirrors the askResponse "yesButtonClicked" path).
-				targetTask.trustOutsideWorkspacePath(
-					message.outsideWorkspacePath!,
-					message.outsideWorkspaceAccess ?? "read",
-				)
+				const trustedDir = message.outsideWorkspacePath!
+				const trustedAccess = message.outsideWorkspaceAccess ?? "read"
+
+				if (message.outsideWorkspacePersist) {
+					// "Trust path (always)": persist the directory to the global
+					// outside-workspace allowlist. A write grant lands in
+					// `allowedWritePaths` (write ⊇ read); a read grant in
+					// `allowedReadPaths`. The `contextProxy.setValue` fires
+					// `onDidChange`, which drives NodeRegistry's config-sync
+					// broadcast to remote nodes (config_sync §4c).
+					const key = trustedAccess === "write" ? "allowedWritePaths" : "allowedReadPaths"
+					const current = provider.contextProxy.getValue(key) ?? []
+					if (!current.includes(trustedDir)) {
+						await provider.contextProxy.setValue(key, [...current, trustedDir])
+						await provider.postInitState()
+					}
+				} else {
+					// Default: task-scope trust the parent directory (in-memory,
+					// current task + subtasks only).
+					targetTask.trustOutsideWorkspacePath(trustedDir, trustedAccess)
+				}
+
+				// Approve the pending ask in one click (mirrors the askResponse
+				// "yesButtonClicked" path).
 				targetTask.handleWebviewAskResponse("yesButtonClicked", messageText, resolved.images, message.askId)
 			}
 			break

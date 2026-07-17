@@ -186,37 +186,45 @@ sets `isOutsideWorkspace`:
 > outside-workspace entry matches the allowlist (any unmatched entry → ask). Mirror this for
 > `batchDiffs`.
 
-## 7. Interactive grant — task-scoped "Trust path"
+## 7. Interactive grant — inline "Trust path" (task-scoped) and "Trust path (always)"
 
-**As shipped, the inline grant is a third approval button, not a separate panel.** An earlier
-design put a persistent split-button/dropdown next to Approve that wrote the **permanent**
-`allowedReadPaths`/`allowedWritePaths` settings; user testing showed that two orthogonal
-surfaces (Approve/Deny **plus** a trust panel) is confusing, and that an inline grant reads
-as "just for now", not "forever". So the implemented model is:
+**As shipped, the inline grant is a pair of approval buttons, not a separate panel.** An earlier
+design put a persistent split-button/dropdown next to Approve; user testing showed that two
+orthogonal surfaces (Approve/Deny **plus** a trust panel) is confusing. So the trust actions
+are inline buttons in the same question, and the choice of scope is explicit per-button.
 
-**One question, three buttons: `Save` · `Trust path` · `Deny`.** For a tool ask flagged
-`isOutsideWorkspace` with an `absolutePath`, ChatView renders a third button between Approve
-and Deny. Clicking **Trust path** trusts the file's **parent directory** and approves the ask
-in one click.
+**One question, up to four buttons: `Save` · `Trust path` · `Trust path (always)` · `Deny`.**
+For a tool ask flagged `isOutsideWorkspace` with an `absolutePath`, ChatView renders the two
+Trust buttons between Approve and Deny. Both trust the file's **parent directory** and approve
+the ask in one click; they differ only in scope. The access level follows the operation for
+both: a write-group tool trusts **read+write**, a read tool trusts **read** (the `write ⊇ read`
+superset still applies via [`isPathAutoApproved`](#4-matching-semantics-the-readwrite-superset)).
 
 **"Trust path" is task-scoped, not persistent.** It trusts the dir for the **current task and
-its subtasks only** — in-memory, gone when the task ends. The access level follows the
-operation: a write-group tool trusts **read+write**, a read tool trusts **read** (the
-`write ⊇ read` superset still applies via [`isPathAutoApproved`](#4-matching-semantics-the-readwrite-superset)).
-Mechanism:
+its subtasks only** — in-memory, gone when the task ends. Mechanism:
 
 - `Task` holds `trustedReadPaths` / `trustedWritePaths`, **snapshot-inherited** by subtasks at
   creation (so a subtask sees what the parent trusted).
 - A private `Task.withTaskTrust(state)` merges them into the settings object at **all three**
   `checkAutoApproval` call sites, so task trust rides the same gate as the persistent lists.
-- The button posts a `trustOutsideWorkspacePath` webview message (`{ path: parentDir, access }`);
+- The button posts a `trustOutsideWorkspacePath` webview message
+  (`{ outsideWorkspacePath: parentDir, outsideWorkspaceAccess, outsideWorkspacePersist: false }`);
   its handler calls `task.trustOutsideWorkspacePath(dir, access)` then approves
   (`handleWebviewAskResponse("yesButtonClicked", …)`) — trust-and-approve in one action.
 
-**Permanent trust lives in Settings**, not inline: `AutoApproveSettings.tsx` has two editable
-lists (read paths / read+write paths) next to the command lists, writing the persistent
-`allowedReadPaths`/`allowedWritePaths` via `updateSettings` → globalState (which config-sync
-then replicates to nodes). So the split is clean: **inline = this task; Settings = forever.**
+**"Trust path (always)" is persistent.** It writes the dir straight into the same permanent
+`allowedReadPaths`/`allowedWritePaths` settings the Settings panel edits — surviving restarts
+and replicated to nodes by config-sync — then approves the ask. Mechanism: the same
+`trustOutsideWorkspacePath` message is posted with `outsideWorkspacePersist: true`; the handler
+appends the dir (deduped) to `allowedWritePaths` (write grant) or `allowedReadPaths` (read grant)
+via `contextProxy.setValue`, calls `postInitState()` (so the Settings lists refresh), then
+approves. Because `contextProxy` is the `NodeRegistry` `configSource`, the `setValue`'s
+`onDidChange` drives the config-sync broadcast to remote nodes automatically ([§8](#8-persistence--configuration)).
+
+**Permanent trust is also editable in Settings**: `AutoApproveSettings.tsx` has two editable
+lists (read paths / read+write paths) next to the command lists, writing the same
+`allowedReadPaths`/`allowedWritePaths` via `updateSettings` → globalState. So the three surfaces
+are: **`Trust path` = this task; `Trust path (always)` = forever, inline; Settings = forever, curated.**
 
 > **Implementation gotcha (fixed).** `checkAutoApproval` reads the allowlist from the object
 > `provider.getState()` returns, which is **curated** — it copies specific keys, not the whole
@@ -415,9 +423,12 @@ toggle is off, and never overrides the master switch.
 
 ### Decided (v1 implementation)
 
-- **Inline grant is a task-scoped third button** ([§7](#7-interactive-grant--task-scoped-trust-path)) —
-  `Save · Trust path · Deny`; "Trust path" trusts the file's **parent directory** for the
-  **current task + subtasks** (in-memory, not persisted). Permanent trust is Settings-only.
+- **Inline grant is two scope-explicit buttons** ([§7](#7-interactive-grant--inline-trust-path-task-scoped-and-trust-path-always)) —
+  `Save · Trust path · Trust path (always) · Deny`, both trusting the file's **parent
+  directory**. **Trust path** is task-scoped (current task + subtasks, in-memory, not
+  persisted); **Trust path (always)** writes the dir to the permanent
+  `allowedReadPaths`/`allowedWritePaths` settings (via `outsideWorkspacePersist: true`) and
+  syncs to nodes. Settings remains the curated permanent editor.
   (Superseded the earlier permanent-inline-panel design after user testing.)
 - **Protected files stay independent** — a `write` grant under a trusted dir does **not**
   satisfy `alwaysAllowWriteProtected`; a protected file still prompts unless that toggle is on.

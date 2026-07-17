@@ -1487,11 +1487,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[shoferAsk, startNewTask, isStreaming, setDidClickCancel],
 	)
 
-	// "Trust path" (third approval button): task-scope trust the pending file's parent
-	// dir, then approve the ask in one click. Mirrors handlePrimaryButtonClick's
-	// askId/taskId/text/images wiring but posts `trustOutsideWorkspacePath`.
+	// "Trust path" approval buttons: trust the pending file's parent dir, then approve
+	// the ask in one click. `persist=false` (third button) → task-scope, in-memory trust
+	// for the current task + subtasks. `persist=true` (fourth button, "always") → write
+	// the dir to the global `allowedReadPaths`/`allowedWritePaths` allowlist (survives
+	// restarts, synced to nodes). Mirrors handlePrimaryButtonClick's askId/taskId/text/
+	// images wiring but posts `trustOutsideWorkspacePath`.
 	const handleTrustPathClick = useCallback(
-		(text?: string, images?: string[]) => {
+		(persist: boolean, text?: string, images?: string[]) => {
 			if (!outsideWorkspaceGrant) {
 				return
 			}
@@ -1502,6 +1505,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				type: "trustOutsideWorkspacePath",
 				outsideWorkspacePath: dirnameLike(outsideWorkspaceGrant.absolutePath),
 				outsideWorkspaceAccess: outsideWorkspaceGrant.isWriteTool ? "write" : "read",
+				outsideWorkspacePersist: persist,
 				text: trimmedInput || undefined,
 				images: images && images.length > 0 ? images : undefined,
 				askId: askIdRef.current,
@@ -2643,21 +2647,38 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 										</StandardTooltip>
 									)}
 									{outsideWorkspaceGrant && enableButtons && (
-										<StandardTooltip
-											content={t("chat:trustPath.tooltip", {
-												access: outsideWorkspaceGrant.isWriteTool
-													? t("chat:trustPath.readWrite")
-													: t("chat:trustPath.read"),
-												dir: dirnameLike(outsideWorkspaceGrant.absolutePath),
-											})}>
-											<Button
-												variant="secondary"
-												disabled={!enableButtons}
-												className="flex-1 mx-[6px]"
-												onClick={() => handleTrustPathClick()}>
-												{t("chat:trustPath.title")}
-											</Button>
-										</StandardTooltip>
+										<>
+											<StandardTooltip
+												content={t("chat:trustPath.tooltip", {
+													access: outsideWorkspaceGrant.isWriteTool
+														? t("chat:trustPath.readWrite")
+														: t("chat:trustPath.read"),
+													dir: dirnameLike(outsideWorkspaceGrant.absolutePath),
+												})}>
+												<Button
+													variant="secondary"
+													disabled={!enableButtons}
+													className="flex-1 mx-[6px]"
+													onClick={() => handleTrustPathClick(false)}>
+													{t("chat:trustPath.title")}
+												</Button>
+											</StandardTooltip>
+											<StandardTooltip
+												content={t("chat:trustPathAlways.tooltip", {
+													access: outsideWorkspaceGrant.isWriteTool
+														? t("chat:trustPath.readWrite")
+														: t("chat:trustPath.read"),
+													dir: dirnameLike(outsideWorkspaceGrant.absolutePath),
+												})}>
+												<Button
+													variant="secondary"
+													disabled={!enableButtons}
+													className="flex-1 mx-[6px]"
+													onClick={() => handleTrustPathClick(true)}>
+													{t("chat:trustPathAlways.title")}
+												</Button>
+											</StandardTooltip>
+										</>
 									)}
 									{secondaryButtonText && (
 										<StandardTooltip
