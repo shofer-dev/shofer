@@ -578,6 +578,7 @@
 		"moonshotApiKey": "Moonshot API Key",
 		"getMoonshotApiKey": "Get Moonshot API Key",
 		"moonshotBaseUrl": "Moonshot Entrypoint",
+		"moonshotBaseUrlNotice": "Base URL incl. path. Platform: https://api.moonshot.ai/v1 · Kimi-for-Coding (K3): https://api.kimi.com/coding/v1",
 		"dashScopeApiKey": "DashScope API Key",
 		"getDashScopeApiKey": "Get DashScope API Key",
 		"dashScopeBaseUrl": "DashScope Entrypoint",

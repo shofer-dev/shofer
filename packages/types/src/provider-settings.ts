@@ -333,9 +333,12 @@ const poeSchema = apiModelIdProviderModelSchema.extend({
 })
 
 const moonshotSchema = apiModelIdProviderModelSchema.extend({
-	moonshotBaseUrl: z
-		.union([z.literal("https://api.moonshot.ai/v1"), z.literal("https://api.moonshot.cn/v1")])
-		.optional(),
+	// Free-text base URL (including path) so the provider can target any
+	// OpenAI-compatible Moonshot/Kimi endpoint — the global platform
+	// (https://api.moonshot.ai/v1) or the Kimi-for-Coding subscription plane
+	// (https://api.kimi.com/coding/v1, which serves the `k3` model). A fixed
+	// enum can't express the coding endpoint's `/coding/v1` path.
+	moonshotBaseUrl: z.string().optional(),
 	moonshotApiKey: z.string().optional(),
 })
 

@@ -1,5 +1,5 @@
 import { useCallback } from "react"
-import { VSCodeTextField, VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type { ProviderSettings } from "@shofer/types"
 
@@ -32,18 +32,16 @@ export const Moonshot = ({ apiConfiguration, setApiConfigurationField }: Moonsho
 	return (
 		<>
 			<div>
-				<label className="block font-medium mb-1">{t("settings:providers.moonshotBaseUrl")}</label>
-				<VSCodeDropdown
-					value={apiConfiguration.moonshotBaseUrl}
-					onChange={handleInputChange("moonshotBaseUrl")}
+				<VSCodeTextField
+					value={apiConfiguration.moonshotBaseUrl || ""}
+					onInput={handleInputChange("moonshotBaseUrl")}
+					placeholder="https://api.moonshot.ai/v1"
 					className={cn("w-full")}>
-					<VSCodeOption value="https://api.moonshot.ai/v1" className="p-2">
-						api.moonshot.ai
-					</VSCodeOption>
-					<VSCodeOption value="https://api.moonshot.cn/v1" className="p-2">
-						api.moonshot.cn
-					</VSCodeOption>
-				</VSCodeDropdown>
+					<label className="block font-medium mb-1">{t("settings:providers.moonshotBaseUrl")}</label>
+				</VSCodeTextField>
+				<div className="text-sm text-vscode-descriptionForeground">
+					{t("settings:providers.moonshotBaseUrlNotice")}
+				</div>
 			</div>
 			<div>
 				<VSCodeTextField

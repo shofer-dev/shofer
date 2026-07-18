@@ -66,6 +66,27 @@ export const moonshotModels = {
 		description:
 			"Kimi K2.5 is the latest generation of Moonshot AI's Kimi series, featuring improved reasoning capabilities and enhanced performance across diverse tasks.",
 	},
+	// K3 is only served by the Kimi-for-Coding subscription plane
+	// (base URL https://api.kimi.com/coding/v1, model id `k3`), NOT the global
+	// platform api.moonshot.ai. Point moonshotBaseUrl at the coding endpoint and
+	// authenticate with a Kimi subscription key (sk-kimi-…) to use it. Billing is
+	// the flat membership quota, so per-token prices are 0 here. Thinking is always
+	// on (like kimi-k2-thinking): reasoning_content must be preserved across turns.
+	k3: {
+		maxTokens: 32_000,
+		contextWindow: 1_048_576, // 1M-token context
+		supportsImages: true, // vision-capable (image_in)
+		supportsPromptCache: true,
+		inputPrice: 0,
+		outputPrice: 0,
+		cacheWritesPrice: 0,
+		cacheReadsPrice: 0,
+		supportsTemperature: true,
+		defaultTemperature: 1.0,
+		preserveReasoning: true,
+		description:
+			"Kimi K3 is Moonshot AI's agentic coding model, served via the Kimi-for-Coding subscription endpoint (api.kimi.com/coding/v1). 1M-token context, always-on thinking, vision-capable.",
+	},
 } as const satisfies Record<string, ModelInfo>
 
 export const MOONSHOT_DEFAULT_TEMPERATURE = 0.6
