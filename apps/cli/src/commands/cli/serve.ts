@@ -24,6 +24,14 @@ export interface ServeOptions {
 	token?: string
 	/** Suppress the live per-task activity log on stderr (on by default). */
 	quiet?: boolean
+	/**
+	 * Interactive approvals. Default (false) is **non-interactive**: the node
+	 * auto-approves every tool (there is no local user to ask). With `--interactive`
+	 * the node instead surfaces approvals — `autoApprovalEnabled` is off, so
+	 * dangerous tools raise an `ask` over AgentApi that the driving controller
+	 * brokers to its user and answers via `respondToAsk`.
+	 */
+	interactive?: boolean
 }
 
 /**
@@ -70,7 +78,9 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		baseUrl: options.baseUrl,
 		workspacePath: path.resolve(options.workspace || process.cwd()),
 		extensionPath: path.resolve(options.extension || getDefaultExtensionPath(__dirname)),
-		nonInteractive: true,
+		// Default: non-interactive (auto-approve every tool — no local user to ask).
+		// `--interactive` turns approvals ON so the driving controller brokers them.
+		nonInteractive: !options.interactive,
 		ephemeral: false,
 		debug: options.debug ?? false,
 		exitOnComplete: false,
@@ -98,7 +108,10 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 
 	console.error(
 		`[shofer] serving on http://${host}:${port}${token ? " (token auth enabled)" : ""} · ` +
-			(hasOverride ? `API config: pinned to ${provider} (CLI override)` : "API config: per-task from controller"),
+			(hasOverride
+				? `API config: pinned to ${provider} (CLI override)`
+				: "API config: per-task from controller") +
+			` · approvals: ${options.interactive ? "interactive (brokered to controller)" : "auto-approve"}`,
 	)
 
 	// Live per-task activity on stderr. Headless mode stubs console.log/warn/info to

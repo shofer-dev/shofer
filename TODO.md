@@ -32,3 +32,17 @@
   `typescript@7` and `check-types` can go back to `tsc`.
 
 - Replace bare `console.log` in extension-host code (AGENTS.md Output Channel Logging Rule — use the shared output channel, not `console.log`): `src/integrations/diagnostics/index.ts` (3 calls), `src/api/providers/vscode-lm.ts` (1 call).
+
+- Give `ask` messages a **typed per-category payload** instead of overloading
+  `ShoferMessage.text`. Today an `ask`'s data is category-specific and untyped:
+  `command` → raw shell string in `text`; `followup` → question/suggestions;
+  `tool` → JSON-ish; `command_output` → empty. Every non-webview AgentApi consumer
+  (user-console, ACP clients) re-parses this per category with ad-hoc heuristics
+  that drift. Keep the `ask` discriminant but replace the free-text payload with a
+  typed field per category in `@shofer/types` (a discriminated union —
+  `commandAsk:{command}`, `toolAsk:{tool,args}`, `followupAsk:{question,suggestions}`,
+  …) so consumers get one stable, testable contract. NOT a flat opaque envelope
+  (that just relocates the per-category logic). Blast radius: the message contract +
+  the webview `ChatRow` per-category rendering + the ACP mapping + tests — do it when
+  a second non-webview consumer needs interactive approvals (L2 runs auto-approve, so
+  it doesn't today).

@@ -31,13 +31,13 @@ The full method set (see the source for exact signatures):
 
 ### Control plane
 
-| Method                                                              | Purpose                                                                                                                                                                                  |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createTask({ prompt, taskId?, apiConfiguration? })` → `{ taskId }` | Start a task. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. |
-| `sendMessage(taskId, message)`                                      | Send a follow-up message to a running task.                                                                                                                                              |
-| `cancelTask(taskId)`                                                | Abort a task.                                                                                                                                                                            |
-| `respondToAsk(taskId, AskResponse)`                                 | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.          |
-| `subscribe(listener)` → `unsubscribe`                               | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                     |
+| Method                                                                    | Purpose                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createTask({ prompt, mode, taskId?, apiConfiguration? })` → `{ taskId }` | Start a task. `mode` (**required**) is the mode slug it runs in. `apiConfiguration` ships the controller's resolved [API Configuration](#per-task-api-configuration) so a remote task runs on the same provider/model the front-end picked. |
+| `sendMessage(taskId, message)`                                            | Send a follow-up message to a running task.                                                                                                                                                                                                 |
+| `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
+| `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
+| `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
 
 ### Reverse data channel (Shofer Nodes L3)
 
@@ -74,7 +74,7 @@ Nodes. All routes under `/api/v1` except `/health`; bearer-token auth + version 
 GET  /health                      liveness + version + load metrics (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
 GET  /api/v1/event                SSE event stream            → subscribe()
-POST /api/v1/task                 { prompt, taskId?, apiConfiguration? } → createTask()
+POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
 POST /api/v1/task/:id/ask         AskResponse                 → respondToAsk()
@@ -86,7 +86,27 @@ POST /api/v1/task/:id/changed-files/revert  { relPath? }     (one file, or all w
 POST /api/v1/task/:id/changed-files/accept  { relPath? }     (one file, or all when omitted)
 ```
 
-Run it: `shofer serve` (headless executor). The controller connects with `ShoferHttpClient`.
+## Running `shofer serve`
+
+`shofer serve` boots the headless executor and exposes the surface above; a controller
+connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
+[`apps/cli/src/index.ts`](../apps/cli/src/index.ts), handled in
+[`commands/cli/serve.ts`](../apps/cli/src/commands/cli/serve.ts)):
+
+| Flag                     | Default                                          | Meaning                                                                                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-p, --port <port>`      | `30099`                                          | Port to listen on.                                                                                                                                                                                                                                                                     |
+| `--host <host>`          | `127.0.0.1`                                      | Bind address. **Use `0.0.0.0` to accept traffic from outside the process** (e.g. in a container).                                                                                                                                                                                      |
+| `-w, --workspace <path>` | cwd                                              | Workspace directory. Custom modes are read from `<workspace>/.shofer/shofermodes`.                                                                                                                                                                                                     |
+| `-e, --extension <path>` | auto (`ROO_EXTENSION_PATH` → sibling `src/dist`) | Path to the built extension bundle (`extension.js`).                                                                                                                                                                                                                                   |
+| `--provider <provider>`  | `openrouter`                                     | LLM provider. Any of `--provider/--model/--api-key/--base-url` **pins** the node to that config (per-task `apiConfiguration` from the controller is then ignored).                                                                                                                     |
+| `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                           |
+| `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                      |
+| `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                  |
+| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) node.                                                                                                                                                                                                          |
+| `--interactive`          | off                                              | **Approval mode.** Off = non-interactive: the node **auto-approves every tool** (no local user to ask). On = the node surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over AgentApi that the controller brokers to its user via `respondToAsk`. |
+| `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                          |
+| `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                            |
 
 ## Per-task API Configuration
 

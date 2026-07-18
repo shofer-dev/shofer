@@ -163,6 +163,11 @@ program
 	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
 	.option("-q, --quiet", "Suppress the live per-task activity log on stderr", false)
 	.option("-d, --debug", "Enable debug output", false)
+	.option(
+		"--interactive",
+		"Surface tool approvals to the controller instead of auto-approving (default: auto-approve)",
+		false,
+	)
 	.action(
 		async (options: {
 			port?: string
@@ -176,6 +181,7 @@ program
 			token?: string
 			quiet?: boolean
 			debug?: boolean
+			interactive?: boolean
 		}) => {
 			await serve(options)
 		},
