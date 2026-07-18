@@ -6,6 +6,7 @@ import type { ApiStreamUsageChunk } from "./_deps.js"
 import { getModelParams } from "./_deps.js"
 
 import { OpenAICompatibleHandler, OpenAICompatibleConfig } from "./openai-compatible.js"
+import { normalizeMoonshotToolSchema } from "./moonshot-schema.js"
 
 export class MoonshotHandler extends OpenAICompatibleHandler {
 	constructor(options: ApiHandlerOptions) {
@@ -45,6 +46,33 @@ export class MoonshotHandler extends OpenAICompatibleHandler {
 		// force 1 for any model whose catalog default is 1, regardless of profile.
 		const temperature = (info as { defaultTemperature?: number }).defaultTemperature === 1 ? 1 : params.temperature
 		return { id, info, ...params, temperature }
+	}
+
+	/**
+	 * Normalize every tool's parameter schema into the Moonshot-flavored JSON
+	 * Schema subset. The Kimi API validates tool schemas and rejects the whole
+	 * request (`400 … not a valid moonshot flavored json schema`) for constructs
+	 * shofer's generic schemas routinely carry — a `null` enum entry, a nullable
+	 * `type: [X, "null"]`, an empty union branch — which surfaces to the user as
+	 * "No output generated." Applied AFTER the base conversion so it also covers
+	 * MCP / plugin tools (whose schemas the base passes through untouched).
+	 */
+	protected override convertToolsForOpenAI(tools: Parameters<OpenAICompatibleHandler["convertToolsForOpenAI"]>[0]) {
+		const converted = super.convertToolsForOpenAI(tools)
+		if (!converted) {
+			return converted
+		}
+		return converted.map((tool) =>
+			tool?.type === "function" && tool.function?.parameters
+				? {
+						...tool,
+						function: {
+							...tool.function,
+							parameters: normalizeMoonshotToolSchema(tool.function.parameters),
+						},
+					}
+				: tool,
+		)
 	}
 
 	/**
