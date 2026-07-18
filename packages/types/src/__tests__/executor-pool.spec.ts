@@ -40,8 +40,8 @@ describe("ExecutorPool (§13 controller side)", () => {
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
-		const t1 = await pool.createTask({ prompt: "1" }) // → A
-		const t2 = await pool.createTask({ prompt: "2" }) // → B
+		const t1 = await pool.createTask({ prompt: "1", mode: "code" }) // → A
+		const t2 = await pool.createTask({ prompt: "2", mode: "code" }) // → B
 		expect(t1.taskId).toBe("A-task-1")
 		expect(t2.taskId).toBe("B-task-1")
 
@@ -67,8 +67,8 @@ describe("ExecutorPool (§13 controller side)", () => {
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
-		const t1 = await pool.createTask({ prompt: "1" }) // → A
-		await pool.createTask({ prompt: "2" }) // → B (advances round-robin)
+		const t1 = await pool.createTask({ prompt: "1", mode: "code" }) // → A
+		await pool.createTask({ prompt: "2", mode: "code" }) // → B (advances round-robin)
 
 		await pool.getCheckpointDiff(t1.taskId, { commitHash: "c1", mode: "checkpoint" })
 		expect(a.api.getCheckpointDiff).toHaveBeenCalledWith("A-task-1", { commitHash: "c1", mode: "checkpoint" })
@@ -123,7 +123,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		pool.add({ id: a.id, api: a.api, disabled: true })
 		pool.add({ id: b.id, api: b.api })
 
-		const t = await pool.createTask({ prompt: "x" }) // A disabled → B
+		const t = await pool.createTask({ prompt: "x", mode: "code" }) // A disabled → B
 		expect(t.taskId).toBe("B-task-1")
 
 		const seen: ServerEvent[] = []
@@ -135,7 +135,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 	it("throws when no executor is available", async () => {
 		const pool = new ExecutorPool()
-		await expect(pool.createTask({ prompt: "x" })).rejects.toThrow(/no executor/)
+		await expect(pool.createTask({ prompt: "x", mode: "code" })).rejects.toThrow(/no executor/)
 	})
 
 	it("exposes ids/has and ownerOf for assigned tasks", async () => {
@@ -150,8 +150,8 @@ describe("ExecutorPool (§13 controller side)", () => {
 		expect(pool.has("Z")).toBe(false)
 		expect(pool.ownerOf("nope")).toBeUndefined()
 
-		const t1 = await pool.createTask({ prompt: "1" }) // → A
-		const t2 = await pool.createTask({ prompt: "2" }) // → B
+		const t1 = await pool.createTask({ prompt: "1", mode: "code" }) // → A
+		const t2 = await pool.createTask({ prompt: "2", mode: "code" }) // → B
 		expect(pool.ownerOf(t1.taskId)).toBe("A")
 		expect(pool.ownerOf(t2.taskId)).toBe("B")
 	})
@@ -171,13 +171,13 @@ describe("ExecutorPool (§13 controller side)", () => {
 		expect(pool.assignableIds()).toEqual(["A", "B"])
 
 		// createTaskOn dispatches to exactly the named executor and records ownership.
-		const t = await pool.createTaskOn("B", { prompt: "hi" })
+		const t = await pool.createTaskOn("B", { prompt: "hi", mode: "code" })
 		expect(b.api.createTask).toHaveBeenCalledTimes(1)
 		expect(a.api.createTask).not.toHaveBeenCalled()
 		expect(pool.ownerOf(t.taskId)).toBe("B")
 
 		// createTaskOn on an unknown id throws.
-		await expect(pool.createTaskOn("Z", { prompt: "x" })).rejects.toThrow(/unknown executor/)
+		await expect(pool.createTaskOn("Z", { prompt: "x", mode: "code" })).rejects.toThrow(/unknown executor/)
 	})
 
 	it("assignOwner records ownership for an out-of-band task (Local bypass) without dispatch", async () => {
@@ -221,8 +221,8 @@ describe("ExecutorPool (§13 controller side)", () => {
 			expect(pool.pickNext()).toBe("B") // 0.25 < 1.0
 
 			// A clear winner does not rotate — repeated picks stay on the least-loaded.
-			const t1 = await pool.createTask({ prompt: "1" })
-			const t2 = await pool.createTask({ prompt: "2" })
+			const t1 = await pool.createTask({ prompt: "1", mode: "code" })
+			const t2 = await pool.createTask({ prompt: "2", mode: "code" })
 			expect(pool.ownerOf(t1.taskId)).toBe("B")
 			expect(pool.ownerOf(t2.taskId)).toBe("B")
 		})
@@ -370,8 +370,8 @@ describe("ExecutorPool (§13 controller side)", () => {
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 
 			pool.setDesiredConfigVersion("v1")
-			const t1 = await pool.createTask({ prompt: "1" })
-			const t2 = await pool.createTask({ prompt: "2" })
+			const t1 = await pool.createTask({ prompt: "1", mode: "code" })
+			const t2 = await pool.createTask({ prompt: "2", mode: "code" })
 			// B is stale → every task lands on A.
 			expect(pool.ownerOf(t1.taskId)).toBe("A")
 			expect(pool.ownerOf(t2.taskId)).toBe("A")
@@ -440,18 +440,18 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 		// Distributes across all three enabled executors.
 		const first = await Promise.all([
-			pool.createTask({ prompt: "1" }),
-			pool.createTask({ prompt: "2" }),
-			pool.createTask({ prompt: "3" }),
+			pool.createTask({ prompt: "1", mode: "code" }),
+			pool.createTask({ prompt: "2", mode: "code" }),
+			pool.createTask({ prompt: "3", mode: "code" }),
 		])
 		expect(first.map((t) => pool.ownerOf(t.taskId)).sort()).toEqual(["A", "B", "C"])
 
 		// Disable B at runtime → subsequent assignments never land on B.
 		pool.setDisabled("B", true)
 		const after = await Promise.all([
-			pool.createTask({ prompt: "4" }),
-			pool.createTask({ prompt: "5" }),
-			pool.createTask({ prompt: "6" }),
+			pool.createTask({ prompt: "4", mode: "code" }),
+			pool.createTask({ prompt: "5", mode: "code" }),
+			pool.createTask({ prompt: "6", mode: "code" }),
 		])
 		const owners = after.map((t) => pool.ownerOf(t.taskId))
 		expect(owners).not.toContain("B")
@@ -460,7 +460,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		// Re-enable B → it returns to the rotation.
 		pool.setDisabled("B", false)
 		const backCalls = (b.api.createTask as ReturnType<typeof vi.fn>).mock.calls.length
-		for (let i = 0; i < 6; i++) await pool.createTask({ prompt: `re-${i}` })
+		for (let i = 0; i < 6; i++) await pool.createTask({ prompt: `re-${i}`, mode: "code" })
 		expect((b.api.createTask as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(backCalls)
 	})
 })

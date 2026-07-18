@@ -23,7 +23,7 @@ import { type HostRpcChannel, type RemoteHostCapability, dispatchHostCall } from
 
 /** Controller → executor. */
 export type SessionClientFrame =
-	| { t: "cmd"; id: number; method: "createTask"; input: { prompt: string; taskId?: string } }
+	| { t: "cmd"; id: number; method: "createTask"; input: { prompt: string; mode: string; taskId?: string } }
 	| { t: "cmd"; id: number; method: "sendMessage"; taskId: string; message: string }
 	| { t: "cmd"; id: number; method: "cancelTask"; taskId: string }
 	| { t: "cmd"; id: number; method: "respondToAsk"; taskId: string; response: AskResponse }

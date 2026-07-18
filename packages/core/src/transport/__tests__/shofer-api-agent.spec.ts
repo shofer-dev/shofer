@@ -35,10 +35,11 @@ describe("ShoferApiAgent (§11)", () => {
 	it("createTask delegates to startNewTask", async () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api)
-		expect(await agent.createTask({ prompt: "hi" })).toEqual({ taskId: "task:hi" })
+		expect(await agent.createTask({ prompt: "hi", mode: "code" })).toEqual({ taskId: "task:hi" })
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
 			text: "hi",
 			taskId: undefined,
+			initialMode: "code",
 			configuration: undefined,
 		})
 	})
@@ -47,10 +48,11 @@ describe("ShoferApiAgent (§11)", () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api, { allowClientConfig: true })
 		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" } as never
-		await agent.createTask({ prompt: "hi", apiConfiguration })
+		await agent.createTask({ prompt: "hi", mode: "code", apiConfiguration })
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
 			text: "hi",
 			taskId: undefined,
+			initialMode: "code",
 			configuration: apiConfiguration,
 		})
 	})
@@ -58,10 +60,11 @@ describe("ShoferApiAgent (§11)", () => {
 	it("createTask ignores the client apiConfiguration when it has a CLI override (default)", async () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api) // allowClientConfig defaults to false
-		await agent.createTask({ prompt: "hi", apiConfiguration: { apiProvider: "openai" } as never })
+		await agent.createTask({ prompt: "hi", mode: "code", apiConfiguration: { apiProvider: "openai" } as never })
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).startNewTask).toHaveBeenCalledWith({
 			text: "hi",
 			taskId: undefined,
+			initialMode: "code",
 			configuration: undefined,
 		})
 	})

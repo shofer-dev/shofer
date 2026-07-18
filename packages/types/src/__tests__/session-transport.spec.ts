@@ -48,9 +48,9 @@ describe("session transport (controller ↔ executor)", () => {
 	it("drives the AgentApi across the link", async () => {
 		const { api } = makeExecutorApi()
 		const { controller } = wire(createInMemoryHost(), api)
-		const result = await controller.api.createTask({ prompt: "hello" })
+		const result = await controller.api.createTask({ prompt: "hello", mode: "code" })
 		expect(result).toEqual({ taskId: "task-for-hello" })
-		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello" })
+		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", mode: "code" })
 	})
 
 	it("round-trips respondToAsk across the link", async () => {

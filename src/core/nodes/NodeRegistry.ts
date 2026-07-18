@@ -28,6 +28,7 @@ import {
 	ShoferEventName,
 	SYNCED_SETTINGS_KEYS,
 	computeConfigVersion,
+	defaultModeSlug,
 	pickSyncedSettings,
 } from "@shofer/types"
 import { NodeConnection, ShoferApiAgent, configLog } from "@shofer/core"
@@ -365,6 +366,10 @@ export class NodeRegistry {
 		// are untouched and keep showing whatever they were on.
 		const { taskId } = await this.pool.createTaskOn(owner, {
 			prompt: input.prompt,
+			// `mode` is required on the AgentApi contract; routeNewTask's input keeps
+			// the historical optional-with-default semantics, so resolve the default
+			// here for the remote executor (the Local path defaults it downstream).
+			mode: input.mode ?? defaultModeSlug,
 			apiConfiguration: input.apiConfiguration,
 		})
 		this.ensureShadow(taskId, owner, input.prompt)

@@ -161,8 +161,10 @@ export function createRequestHandler(
 		if (method === "POST" && path === `${base}/task`) {
 			const body = await readJson(req)
 			if (typeof body.prompt !== "string") return send(res, 400, { error: "prompt is required" })
+			if (typeof body.mode !== "string") return send(res, 400, { error: "mode is required" })
 			const result = await api.createTask({
 				prompt: body.prompt,
+				mode: body.mode,
 				taskId: body.taskId as string | undefined,
 				// Per-task API Configuration shipped by the controller. Honored only
 				// when this node has no local CLI override (gated in ShoferApiAgent).

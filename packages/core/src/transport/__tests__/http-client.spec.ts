@@ -21,10 +21,10 @@ describe("ShoferHttpClient (typed SDK)", () => {
 	it("createTask POSTs to /api/v1/task and returns the taskId", async () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ taskId: "t1" }), { status: 200 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		expect(await client.createTask({ prompt: "hi" })).toEqual({ taskId: "t1" })
+		expect(await client.createTask({ prompt: "hi", mode: "code" })).toEqual({ taskId: "t1" })
 		expect(fetchMock).toHaveBeenCalledWith(
 			"http://host:1/api/v1/task",
-			expect.objectContaining({ method: "POST", body: JSON.stringify({ prompt: "hi" }) }),
+			expect.objectContaining({ method: "POST", body: JSON.stringify({ prompt: "hi", mode: "code" }) }),
 		)
 	})
 
@@ -32,10 +32,13 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ taskId: "t1" }), { status: 200 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
 		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" } as never
-		await client.createTask({ prompt: "hi", apiConfiguration })
+		await client.createTask({ prompt: "hi", mode: "code", apiConfiguration })
 		expect(fetchMock).toHaveBeenCalledWith(
 			"http://host:1/api/v1/task",
-			expect.objectContaining({ method: "POST", body: JSON.stringify({ prompt: "hi", apiConfiguration }) }),
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ prompt: "hi", mode: "code", apiConfiguration }),
+			}),
 		)
 	})
 
@@ -139,7 +142,7 @@ describe("ShoferHttpClient (typed SDK)", () => {
 	it("throws on a non-2xx response", async () => {
 		const fetchMock = vi.fn(async () => new Response("nope", { status: 500 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		await expect(client.createTask({ prompt: "x" })).rejects.toThrow(/500/)
+		await expect(client.createTask({ prompt: "x", mode: "code" })).rejects.toThrow(/500/)
 	})
 
 	it("subscribe parses SSE frames into events", async () => {

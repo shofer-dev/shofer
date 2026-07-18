@@ -89,9 +89,13 @@ export class ShoferApiAgent implements AgentApi {
 		// provider/model/base-url/key for this task.
 		const configuration =
 			this.options.allowClientConfig && input.apiConfiguration ? input.apiConfiguration : undefined
+		// `mode` is required and always applied per-task (independent of the config
+		// gate above): it selects behaviour, not credentials. Passed as `initialMode`
+		// so concurrent tasks can run different modes without a global mode switch.
 		const taskId = await this.api.startNewTask({
 			text: input.prompt,
 			taskId: input.taskId,
+			initialMode: input.mode,
 			configuration,
 		})
 		return { taskId }

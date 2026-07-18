@@ -68,7 +68,7 @@ describe("AcpAgentServer", () => {
 			params: { sessionId, prompt: [{ type: "text", text: "hello" }] },
 		})
 		await Promise.resolve()
-		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello" })
+		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", mode: "code" })
 
 		// A streamed assistant chunk → session/update notification for this session.
 		emit({ type: "text", taskId: "t1", text: "hi there" } as ServerEvent)

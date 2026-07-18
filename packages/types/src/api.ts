@@ -24,12 +24,16 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 		images,
 		newTab,
 		taskId,
+		initialMode,
 	}: {
 		configuration?: ShoferSettings
 		text?: string
 		images?: string[]
 		newTab?: boolean
 		taskId?: string
+		/** Per-task mode slug seed (applied via `CreateTaskOptions.initialMode`), so the
+		 *  task runs in this mode without a global mode switch. */
+		initialMode?: string
 	}): Promise<string>
 	/**
 	 * Resumes a task with the given ID.

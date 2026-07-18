@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { AgentApi, GlobalSettings, LoadSample, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
-import { LOCAL_NODE_ID, ShoferEventName, TypedEmitter, computeConfigVersion, pickSyncedSettings } from "@shofer/types"
+import {
+	LOCAL_NODE_ID,
+	ShoferEventName,
+	TypedEmitter,
+	computeConfigVersion,
+	defaultModeSlug,
+	pickSyncedSettings,
+} from "@shofer/types"
 
 import {
 	NodeRegistry,
@@ -357,7 +364,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 
 		// Force the remote owner via preferredNodeId (deterministic, no RR dependence).
 		const taskId = await h.registry.routeNewTask({ prompt: "remote-run", preferredNodeId: "r1" })
-		expect(remoteApi.createTask).toHaveBeenCalledWith({ prompt: "remote-run" })
+		expect(remoteApi.createTask).toHaveBeenCalledWith({ prompt: "remote-run", mode: defaultModeSlug })
 		expect(host.createManagedTask).not.toHaveBeenCalled()
 		expect(taskId).toBe("r1-task-1")
 		expect(h.registry.executorPool.ownerOf("r1-task-1")).toBe("r1")

@@ -118,26 +118,42 @@ describe("createRequestHandler (§11)", () => {
 
 	it("POST /api/v1/task creates a task", async () => {
 		const res = mockRes()
-		await run(mockReq("POST", "/api/v1/task", { prompt: "hello" }), res as unknown as ServerResponse)
+		await run(mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code" }), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(201)
 		expect(JSON.parse(res.body)).toEqual({ taskId: "task-for-hello" })
-		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", taskId: undefined, apiConfiguration: undefined })
+		expect(api.createTask).toHaveBeenCalledWith({
+			prompt: "hello",
+			mode: "code",
+			taskId: undefined,
+			apiConfiguration: undefined,
+		})
 	})
 
 	it("POST /api/v1/task forwards the per-task apiConfiguration to createTask", async () => {
 		const res = mockRes()
 		const apiConfiguration = { apiProvider: "openai", apiModelId: "gpt-4o" }
 		await run(
-			mockReq("POST", "/api/v1/task", { prompt: "hello", apiConfiguration }),
+			mockReq("POST", "/api/v1/task", { prompt: "hello", mode: "code", apiConfiguration }),
 			res as unknown as ServerResponse,
 		)
 		expect(res.statusCode).toBe(201)
-		expect(api.createTask).toHaveBeenCalledWith({ prompt: "hello", taskId: undefined, apiConfiguration })
+		expect(api.createTask).toHaveBeenCalledWith({
+			prompt: "hello",
+			mode: "code",
+			taskId: undefined,
+			apiConfiguration,
+		})
 	})
 
 	it("400s on missing prompt", async () => {
 		const res = mockRes()
-		await run(mockReq("POST", "/api/v1/task", {}), res as unknown as ServerResponse)
+		await run(mockReq("POST", "/api/v1/task", { mode: "code" }), res as unknown as ServerResponse)
+		expect(res.statusCode).toBe(400)
+	})
+
+	it("400s on missing mode", async () => {
+		const res = mockRes()
+		await run(mockReq("POST", "/api/v1/task", { prompt: "hello" }), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(400)
 	})
 
@@ -369,7 +385,7 @@ describe("createRequestHandler (§11)", () => {
 		})
 
 		it("allows the task API with the correct token", async () => {
-			const req = mockReq("POST", "/api/v1/task", { prompt: "hi" })
+			const req = mockReq("POST", "/api/v1/task", { prompt: "hi", mode: "code" })
 			;(req.headers as Record<string, string>) = { authorization: "Bearer s3cret" }
 			const res = await call(authed(), req)
 			expect(res.statusCode).toBe(201)

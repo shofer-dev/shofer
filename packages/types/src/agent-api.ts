@@ -25,6 +25,13 @@ export interface ServerEvent {
 /**
  * Parameters for {@link AgentApi.createTask}.
  *
+ * `mode` is **required**: every task runs in a specific mode (its slug, e.g.
+ * `"code"`), so the controller must always state which one. It is applied
+ * per-task (via `CreateTaskOptions.initialMode`), so concurrent tasks on the same
+ * executor can run in different modes without a global mode switch. Unlike
+ * `apiConfiguration`, `mode` is honoured even when the node has local CLI
+ * overrides — it selects behaviour, not provider credentials.
+ *
  * `apiConfiguration` carries the controller's per-task API Configuration (the
  * resolved {@link ProviderSettings}: provider, model, base URL, key, …) to the
  * executor. A remote node applies it so the task runs on the SAME provider the
@@ -35,6 +42,7 @@ export interface ServerEvent {
  */
 export interface CreateTaskInput {
 	prompt: string
+	mode: string
 	taskId?: string
 	apiConfiguration?: ProviderSettings
 }

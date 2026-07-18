@@ -25,6 +25,10 @@ import {
 /** ACP protocol version this agent implements. */
 export const ACP_PROTOCOL_VERSION = 1
 
+/** Mode a session runs in until the client selects one via `session/set_mode`.
+ *  `createTask` requires a mode, and ACP creates the task lazily on first prompt. */
+const DEFAULT_SESSION_MODE = "code"
+
 /** shofer stream events that end a prompt turn, → ACP `stopReason`. */
 const TURN_END_EVENTS: Record<string, "end_turn" | "cancelled" | "error"> = {
 	TaskCompleted: "end_turn",
@@ -73,6 +77,8 @@ export class AcpAgentServer {
 	private sessionSeq = 0
 	private readonly taskToSession = new Map<string, string>()
 	private readonly sessionToTask = new Map<string, string>()
+	/** Current shofer mode per session (seeds the task's mode on lazy create). */
+	private readonly sessionMode = new Map<string, string>()
 	private readonly turnWaiters = new Map<string, (stopReason: string) => void>()
 	private readonly unsubscribe: () => void
 
@@ -108,6 +114,7 @@ export class AcpAgentServer {
 	private newSession(): { sessionId: string } {
 		const sessionId = `sess-${++this.sessionSeq}`
 		this.sessionToTask.set(sessionId, "")
+		this.sessionMode.set(sessionId, DEFAULT_SESSION_MODE)
 		return { sessionId }
 	}
 
@@ -123,7 +130,8 @@ export class AcpAgentServer {
 
 		let taskId = this.sessionToTask.get(sessionId) || ""
 		if (!taskId) {
-			taskId = (await this.api.createTask({ prompt: text })).taskId
+			const mode = this.sessionMode.get(sessionId) ?? DEFAULT_SESSION_MODE
+			taskId = (await this.api.createTask({ prompt: text, mode })).taskId
 			this.sessionToTask.set(sessionId, taskId)
 			this.taskToSession.set(taskId, sessionId)
 		} else {
@@ -135,9 +143,12 @@ export class AcpAgentServer {
 	}
 
 	private setMode(params: unknown): { modeId: string } {
-		const { modeId } = (params ?? {}) as { sessionId?: string; modeId?: string }
-		// 1:1 mode mapping; a real impl would also drive ShoferAPI mode switching.
+		const { sessionId, modeId } = (params ?? {}) as { sessionId?: string; modeId?: string }
+		// 1:1 mode mapping. Store it per session so the task created on the next
+		// prompt runs in this mode; for an already-created task, switching mid-task
+		// still needs ShoferAPI mode switching (not yet wired — see agentapi.md).
 		const shoferMode = acpSessionModeToShoferMode(modeId ?? "")
+		if (sessionId && this.sessionMode.has(sessionId)) this.sessionMode.set(sessionId, shoferMode)
 		return { modeId: shoferModeToAcpSessionMode(shoferMode) }
 	}
 
