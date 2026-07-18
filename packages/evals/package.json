@@ -6,7 +6,7 @@
 	"exports": "./src/index.ts",
 	"scripts": {
 		"lint": "eslint src --ext=ts --max-warnings=0",
-		"check-types": "tsc --noEmit",
+		"check-types": "tsgo --noEmit",
 		"_test": "dotenvx run -f .env.test -- vitest run",
 		"clean": "rimraf dist .turbo",
 		"cli": "dotenvx run -f .env.development .env.local -- tsx src/cli/index.ts",

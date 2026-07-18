@@ -17,4 +17,14 @@
 
 - test the migration commands
 
+- TypeScript 7 checker uses the **`@typescript/native-preview`** (`tsgo`) dev
+  build, not stable `typescript@7`. Stable TS 7 can't be a devDep here: its
+  package's real name is `typescript`, so under pnpm it hijacks the `typescript`
+  peer of every TS 6-only consumer (typescript-eslint, tsup's `.d.ts` generator,
+  zod-to-ts) and breaks them (TS 7 ships no classic compiler API). The clean fix
+  is Microsoft's distinctly-named `@typescript/native` wrapper — **not mirrored
+  in our Nexus npm proxy** (404). When it lands there, replace
+  `@typescript/native-preview` (bin `tsgo`) with `@typescript/native` (bin `tsc`)
+  and point the `check-types` scripts back at `tsc`.
+
 - Replace bare `console.log` in extension-host code (AGENTS.md Output Channel Logging Rule — use the shared output channel, not `console.log`): `src/integrations/diagnostics/index.ts` (3 calls), `src/api/providers/vscode-lm.ts` (1 call).

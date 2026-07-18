@@ -172,6 +172,22 @@ code (webview, `ContextProxy`, activation, task/skill managers) stays under
 
 - Shared `ApiHandler` Rule: Any service that talks to an LLM MUST go through `buildApiHandler(providerSettings, { taskId })` in [`api/index.ts`](packages/core/src/api/index.ts) and consume the resulting `ApiHandler` interface — never instantiate provider SDKs (`@anthropic-ai/sdk`, `openai`, `@google/genai`, `ollama`, …) directly and never write bespoke per-provider `fetch()`. The shared handler gives streaming, abort handling, the full provider catalog, model info/pricing, telemetry, and retries. Depend only on `ApiHandler` + `ApiStream` chunk types so a new provider becomes available everywhere by editing the provider switch in one place. See [`docs/cost-calculation-and-limits.md`](docs/cost-calculation-and-limits.md).
 
+## TypeScript toolchain
+
+- Split-Compiler Rule: This workspace runs **two** TypeScript compilers on
+  purpose. **Type-checking** (every `check-types` script) uses the **TypeScript 7
+  native compiler** — `tsgo`, from the `@typescript/native-preview` devDep — for
+  the ~5× speedup. **The library / API / emit path stays on TypeScript 6**
+  (`typescript@6.0.3`, `.bin/tsc`): typescript-eslint, tsup's `.d.ts` generator,
+  zod-to-ts, and `@shofer/build`'s `tsc` emit all need the classic compiler API,
+  which TS 7 does not ship. So: a `check-types` script invokes `tsgo`; a `build`
+  script that emits invokes `tsc` (TS 6). Do **not** "upgrade" `typescript` to 7
+  or rename `tsgo`→`tsc` in `check-types` — `typescript@6.0.3` being pinned is
+  correct, not stale (see the toolchain note in [`TODO.md`](TODO.md)). Two tsup
+  packages (`@shofer/types`, `@shofer/cli`) carry `ignoreDeprecations: "6.0"`
+  because tsup injects a `baseUrl` we don't own; that is scoped to them
+  deliberately — app tsconfigs dropped `baseUrl` outright.
+
 ## Testing
 
 - Test Layout Rule: Tests live in `__tests__/` folders adjacent to the source they cover. Vitest is configured with `globals: true` everywhere, so do NOT import `describe`/`it`/`expect`/`vi` from `vitest`. Naming: extension-host and CLI use `*.test.ts(x)` (Node env); the webview uses `*.spec.ts(x)` (jsdom env, with the shared [`webview-ui/vitest.setup.ts`](webview-ui/vitest.setup.ts) and the `vscode` mock at [`webview-ui/src/__mocks__/vscode.ts`](webview-ui/src/__mocks__/vscode.ts)). Test verbosity is centralized via [`vitest-verbosity.ts`](src/utils/vitest-verbosity.ts) — silent-by-default with `--no-silent`; never wire ad-hoc `console.log` filtering per package. See `.shofer/commands/test.md` for the per-package run recipe (never `pnpm test` / `turbo test`).

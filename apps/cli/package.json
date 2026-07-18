@@ -16,7 +16,7 @@
 	"scripts": {
 		"format": "prettier --write 'src/**/*.ts'",
 		"lint": "eslint src --ext .ts --max-warnings=0",
-		"check-types": "tsc --noEmit",
+		"check-types": "tsgo --noEmit",
 		"test": "vitest run",
 		"test:integration": "SKIP_CLI=1 bash ../../scripts/smoke/harness.sh ds",
 		"test:harness": "bash ../../scripts/smoke/harness.sh",
