@@ -117,6 +117,17 @@ describe("MoonshotHandler", () => {
 			expect(model).toHaveProperty("temperature")
 			expect(model).toHaveProperty("maxTokens")
 		})
+
+		it("forces temperature to 1 for fixed-temperature Kimi models (k3) even with a custom modelTemperature", () => {
+			// The Kimi-for-Coding endpoint rejects any temperature != 1; a profile
+			// carrying temperature 0 would 400 the request otherwise.
+			const k3Handler = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: "k3",
+				modelTemperature: 0,
+			})
+			expect(k3Handler.getModel().temperature).toBe(1)
+		})
 	})
 
 	describe("createMessage", () => {

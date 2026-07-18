@@ -36,7 +36,15 @@ export class MoonshotHandler extends OpenAICompatibleHandler {
 			settings: this.options,
 			defaultTemperature: 0,
 		})
-		return { id, info, ...params }
+		// The thinking / coding Kimi models (kimi-k2-thinking, kimi-k2.5, k3,
+		// kimi-k3) fix temperature at 1 and reject anything else with
+		// `400 invalid temperature: only 1 is allowed for this model`. The base
+		// handler always sends a temperature (defaulting to 0) and a profile may
+		// carry its own, so a custom/0 value would 400 the request ("No output
+		// generated"). These models ignore the sampling temperature anyway, so
+		// force 1 for any model whose catalog default is 1, regardless of profile.
+		const temperature = (info as { defaultTemperature?: number }).defaultTemperature === 1 ? 1 : params.temperature
+		return { id, info, ...params, temperature }
 	}
 
 	/**
