@@ -387,6 +387,16 @@ export async function presentAssistantMessage(shofer: Task) {
 				// Strip any streamed <thinking> tags from text output.
 				content = content.replace(/<thinking>\s?/g, "")
 				content = content.replace(/\s?<\/thinking>/g, "")
+
+				// Strip the skills prompt's internal skill-check marker
+				// (<internal_verification>/<skill_check_completed>) from visible
+				// text. It's a control-only forcing function with no consumer;
+				// thinking models keep it in reasoning, but some models (e.g. Kimi
+				// k3) emit it as a text block, leaking it into the chat. The last
+				// replace drops a partially-streamed opener so it doesn't linger.
+				content = content.replace(/<skill_check_completed>[\s\S]*?<\/skill_check_completed>\s?/g, "")
+				content = content.replace(/<\/?internal_verification>\s?/g, "")
+				content = content.replace(/<skill_check_completed>[^<]*$/g, "")
 			}
 
 			// Finalization is located by the block's stable identity (assigned
