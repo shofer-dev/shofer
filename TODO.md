@@ -21,10 +21,14 @@
   build, not stable `typescript@7`. Stable TS 7 can't be a devDep here: its
   package's real name is `typescript`, so under pnpm it hijacks the `typescript`
   peer of every TS 6-only consumer (typescript-eslint, tsup's `.d.ts` generator,
-  zod-to-ts) and breaks them (TS 7 ships no classic compiler API). The clean fix
-  is Microsoft's distinctly-named `@typescript/native` wrapper — **not mirrored
-  in our Nexus npm proxy** (404). When it lands there, replace
-  `@typescript/native-preview` (bin `tsgo`) with `@typescript/native` (bin `tsc`)
-  and point the `check-types` scripts back at `tsc`.
+  zod-to-ts) and breaks them (TS 7 ships no classic compiler API). There is no
+  distinctly-named stable wrapper to escape that collision: `@typescript/native`
+  does not exist on npm (confirmed against the public registry — not a Nexus
+  mirroring gap), and `@typescript/native-preview` has no non-`-dev` release yet.
+  So `tsgo` (a pre-GA build of the same TS 7 engine) is the best available TS 7
+  compiler with a non-colliding package name. Revisit when either a stable
+  distinctly-named native package ships, or typescript-eslint + tsup gain TS 7 /
+  API support — at which point the whole toolchain can collapse onto a single
+  `typescript@7` and `check-types` can go back to `tsc`.
 
 - Replace bare `console.log` in extension-host code (AGENTS.md Output Channel Logging Rule — use the shared output channel, not `console.log`): `src/integrations/diagnostics/index.ts` (3 calls), `src/api/providers/vscode-lm.ts` (1 call).
