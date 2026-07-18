@@ -68,7 +68,7 @@ describe("shofer plugin CLI (Phase 5.2)", () => {
 		await packPluginToFile(src, archivePath)
 		const bytes = await nodeFs.readFile(archivePath)
 		const fetchImpl = (async () =>
-			new Response(bytes, {
+			new Response(new Uint8Array(bytes), {
 				status: 200,
 				headers: { "content-length": String(bytes.byteLength) },
 			})) as unknown as typeof fetch
@@ -90,7 +90,7 @@ describe("shofer plugin CLI (Phase 5.2)", () => {
 		const src = await writePluginDir(tmp, { name: "big", version: "1.0.0" })
 		const bytes = await packPlugin(src)
 		const fetchImpl = (async () =>
-			new Response(bytes, {
+			new Response(new Uint8Array(bytes), {
 				status: 200,
 				headers: { "content-length": String(bytes.byteLength) },
 			})) as unknown as typeof fetch

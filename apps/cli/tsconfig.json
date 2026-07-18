@@ -5,10 +5,13 @@
 		"outDir": "dist",
 		"jsx": "react-jsx",
 		"jsxImportSource": "react",
-		"baseUrl": ".",
 		"paths": {
-			"@/*": ["src/*"]
-		}
+			"@/*": ["./src/*"]
+		},
+		// tsup's `.d.ts` generator (rollup-plugin-dts) injects a deprecated `baseUrl`
+		// into the compiler options it drives; we can't remove it, so acknowledge the
+		// 6.0 deprecation here. (Our own `baseUrl` was dropped above.)
+		"ignoreDeprecations": "6.0"
 	},
 	"include": ["src", "*.config.ts"],
 	"exclude": ["node_modules"]

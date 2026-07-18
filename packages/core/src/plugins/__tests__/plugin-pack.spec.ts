@@ -188,7 +188,7 @@ describe("plugin-pack (Phase 5.1)", () => {
 		/** A `fetch` stub that returns `bytes` as a 200 archive response. */
 		function okFetch(bytes: Buffer): typeof fetch {
 			return (async () =>
-				new Response(bytes, {
+				new Response(new Uint8Array(bytes), {
 					status: 200,
 					headers: { "content-length": String(bytes.byteLength) },
 				})) as unknown as typeof fetch
@@ -221,7 +221,9 @@ describe("plugin-pack (Phase 5.1)", () => {
 		it("honors overwrite on a URL install", async () => {
 			const destPlugins = path.join(tmp, "plugins")
 			const v1 = await packPlugin(await writePlugin(tmp, validManifest))
-			await installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, { fetchImpl: okFetch(v1) })
+			await installPluginFromUrl("https://example.com/demo.shofer-plugin", destPlugins, {
+				fetchImpl: okFetch(v1),
+			})
 
 			const v2 = await packPlugin(await writePlugin(path.join(tmp, "v2"), { ...validManifest, version: "2.0.0" }))
 			await expect(
@@ -269,7 +271,8 @@ describe("plugin-pack (Phase 5.1)", () => {
 			const src = await writePlugin(tmp, validManifest)
 			const archive = await packPlugin(src)
 			// No content-length header → the cap must be enforced while streaming the body.
-			const fetchImpl = (async () => new Response(archive, { status: 200 })) as unknown as typeof fetch
+			const fetchImpl = (async () =>
+				new Response(new Uint8Array(archive), { status: 200 })) as unknown as typeof fetch
 			await expect(
 				installPluginFromUrl("https://example.com/demo.shofer-plugin", path.join(tmp, "plugins"), {
 					fetchImpl,

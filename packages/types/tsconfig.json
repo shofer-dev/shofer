@@ -2,7 +2,13 @@
 	"extends": "@shofer/config-typescript/base.json",
 	"compilerOptions": {
 		"types": ["vitest/globals"],
-		"outDir": "dist"
+		"outDir": "dist",
+		// tsup's `.d.ts` generator (rollup-plugin-dts) injects `baseUrl` into the
+		// compiler options it drives; we don't set it here and can't remove it.
+		// Under TS 6.0 that injected option is a deprecation-error, so acknowledge
+		// it for the 6.0 line. Scoped to this package on purpose — the app configs
+		// dropped `baseUrl` outright.
+		"ignoreDeprecations": "6.0"
 	},
 	"include": ["src", "scripts", "*.config.ts"],
 	"exclude": ["node_modules"]

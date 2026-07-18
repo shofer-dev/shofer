@@ -2,7 +2,8 @@
 	"extends": "@shofer/config-typescript/base.json",
 	"compilerOptions": {
 		"types": ["vitest/globals"],
-		"outDir": "dist"
+		"outDir": "dist",
+		"rootDir": "src"
 	},
 	"include": ["src"],
 	"exclude": ["node_modules"]

@@ -1014,7 +1014,7 @@ export async function presentAssistantMessage(shofer: Task) {
 				mode: mode ?? defaultModeSlug,
 			}
 			if (!block.partial && pluginRegistry.hasLifecycleHook("beforeToolCall")) {
-				const toolArgs = ((block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>) ?? {}
+				const toolArgs = (block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>
 				const gate = await pluginRegistry.applyBeforeToolCall(String(block.name), toolArgs, pluginCtx)
 				if (!gate.allow) {
 					// Surface the block like a denied tool so the model gets a matching result.
@@ -1637,7 +1637,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			// participates and the tool actually produced a result (captured above). A
 			// transformed string replaces the already-pushed tool_result in place.
 			if (capturedToolResult !== undefined && pluginRegistry.hasLifecycleHook("afterToolCall")) {
-				const toolArgs = ((block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>) ?? {}
+				const toolArgs = (block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>
 				const transformed = await pluginRegistry.applyAfterToolCall(
 					String(block.name),
 					toolArgs,
