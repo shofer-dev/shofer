@@ -39,6 +39,19 @@ export interface ServeOptions {
  * Pass any of those flags to pin the node to a fixed config that always wins.
  */
 export async function serve(options: ServeOptions = {}): Promise<void> {
+	// Resilience: a single task's uncaught error must NOT take down the whole node
+	// — it serves many tasks (and, in SaaS, many users). Log and keep serving
+	// instead of letting an unhandled rejection/exception exit the process (e.g. a
+	// misconfigured task throwing deep in the agent loop). The owning task still
+	// fails and surfaces its error over AgentApi; the server stays up.
+	process.on("unhandledRejection", (reason) => {
+		const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+		console.error(`[shofer] unhandledRejection (task error; node stays up): ${detail}`)
+	})
+	process.on("uncaughtException", (err) => {
+		console.error(`[shofer] uncaughtException (task error; node stays up): ${err.stack ?? err.message}`)
+	})
+
 	// A manual override is any explicit provider/model/key/base-url flag. When none
 	// are given the node defers to the controller's per-task API Configuration.
 	const hasOverride = !!(options.provider || options.model || options.apiKey || options.baseUrl)
