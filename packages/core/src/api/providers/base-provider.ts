@@ -89,6 +89,15 @@ export abstract class BaseProvider implements ApiHandler {
 					prop.type = nonNullTypes.length === 1 ? nonNullTypes[0] : nonNullTypes
 				}
 
+				// Drop JSON `null` entries from an enum. A null enum value is malformed
+				// for every OpenAI-compatible provider, and Moonshot/Kimi rejects the
+				// whole request (`enum value (<nil>) does not match any type`). Cheap,
+				// universal insurance; provider-specific subsets (e.g. Moonshot's) still
+				// apply their own fuller normalization on top.
+				if (prop && Array.isArray(prop.enum) && prop.enum.includes(null)) {
+					prop.enum = prop.enum.filter((v: unknown) => v !== null)
+				}
+
 				// Recursively process nested objects
 				if (prop && prop.type === "object") {
 					newProps[key] = this.convertToolSchemaForOpenAI(prop)

@@ -153,6 +153,19 @@ describe("BaseProvider", () => {
 			expect(result.properties.name.type).toBe("string")
 		})
 
+		it("should drop null entries from an enum", () => {
+			const schema = {
+				type: "object",
+				properties: {
+					mode: { type: "string", enum: ["code", "ask", null] },
+				},
+			}
+
+			const result = provider.testConvertToolSchemaForOpenAI(schema)
+
+			expect(result.properties.mode.enum).toEqual(["code", "ask"])
+		})
+
 		it("should return non-object schemas unchanged", () => {
 			const schema = { type: "string" }
 			const result = provider.testConvertToolSchemaForOpenAI(schema)
