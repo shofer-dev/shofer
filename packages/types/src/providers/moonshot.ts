@@ -85,7 +85,24 @@ export const moonshotModels = {
 		defaultTemperature: 1.0,
 		preserveReasoning: true,
 		description:
-			"Kimi K3 is Moonshot AI's agentic coding model, served via the Kimi-for-Coding subscription endpoint (api.kimi.com/coding/v1). 1M-token context, always-on thinking, vision-capable.",
+			"Kimi K3 (subscription) — Moonshot AI's agentic coding model, served via the Kimi-for-Coding subscription endpoint (api.kimi.com/coding/v1) with a Kimi subscription key. 1M-token context, always-on thinking, vision-capable. Membership-billed, so prices are 0.",
+	},
+	// The SAME model on the pay-as-you-go platform (default api.moonshot.ai/v1)
+	// uses a DIFFERENT id — `kimi-k3` — and a platform (not subscription) key.
+	"kimi-k3": {
+		maxTokens: 32_000,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0,
+		outputPrice: 0,
+		cacheWritesPrice: 0,
+		cacheReadsPrice: 0,
+		supportsTemperature: true,
+		defaultTemperature: 1.0,
+		preserveReasoning: true,
+		description:
+			"Kimi K3 on the pay-as-you-go platform (api.moonshot.ai). 1M-token context, always-on thinking, vision-capable.",
 	},
 } as const satisfies Record<string, ModelInfo>
 
