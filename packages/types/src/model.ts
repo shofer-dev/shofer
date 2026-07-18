@@ -70,6 +70,9 @@ export const isModelParameter = (value: string): value is ModelParameter =>
  */
 
 export const modelInfoSchema = z.object({
+	// Human-friendly label shown in the model picker instead of the raw id.
+	// Optional: when absent, the picker falls back to the model id.
+	displayName: z.string().optional(),
 	maxTokens: z.number().nullish(),
 	maxThinkingTokens: z.number().nullish(),
 	contextWindow: z.number(),

@@ -152,6 +152,15 @@ export const handleModelChangeSideEffects = <K extends keyof ProviderSettings>(
 		setApiConfigurationField("awsCustomArn" as K, "" as ProviderSettings[K])
 	}
 
+	// Moonshot / Kimi: prepopulate the right Entrypoint (base URL) for the chosen
+	// model. K3 is served only by the Kimi-for-Coding subscription plane; every
+	// other moonshot/kimi id lives on the pay-as-you-go platform. Still editable
+	// afterward; switching models resets it to that model's default.
+	if (provider === "moonshot") {
+		const entrypoint = modelId === "k3" ? "https://api.kimi.com/coding/v1" : "https://api.moonshot.ai/v1"
+		setApiConfigurationField("moonshotBaseUrl" as K, entrypoint as ProviderSettings[K])
+	}
+
 	// All providers: Clear reasoning settings when switching models to allow
 	// the new model's defaults to take effect. Different models within the
 	// same provider can have different reasoning defaults/options.

@@ -105,6 +105,19 @@ export const ModelPicker = ({
 		return selectedModelId
 	}, [displayTransform, apiConfiguration, modelIdKey, selectedModelId])
 
+	// Human-friendly label for a model id: the catalog's `displayName` when set,
+	// else the raw id (which is what the picker showed before). The stored value
+	// stays the id — only the visible text changes.
+	const labelForModel = useCallback((id: string) => models?.[id]?.displayName ?? id, [models])
+
+	// The trigger shows the friendly label for the selection. A `displayTransform`
+	// (compound selectors like VSCodeLM) already produces its own display string,
+	// so don't remap that.
+	const displayLabel = useMemo(
+		() => (displayValue && !displayTransform ? labelForModel(displayValue) : displayValue),
+		[displayValue, displayTransform, labelForModel],
+	)
+
 	const activeProvider =
 		apiConfiguration.apiProvider && isRetiredProvider(apiConfiguration.apiProvider)
 			? undefined
@@ -217,7 +230,7 @@ export const ModelPicker = ({
 							aria-expanded={open}
 							className="w-full justify-between"
 							data-testid="model-picker-button">
-							<div className="truncate">{displayValue ?? t("settings:common.select")}</div>
+							<div className="truncate">{displayLabel ?? t("settings:common.select")}</div>
 							<ChevronsUpDown className="opacity-50" />
 						</Button>
 					</PopoverTrigger>
@@ -257,7 +270,7 @@ export const ModelPicker = ({
 											onSelect={onSelect}
 											data-testid={`model-option-${model}`}>
 											<span className="truncate" title={model}>
-												{model}
+												{labelForModel(model)}
 											</span>
 											<Check
 												className={cn(

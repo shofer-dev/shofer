@@ -73,6 +73,7 @@ export const moonshotModels = {
 	// the flat membership quota, so per-token prices are 0 here. Thinking is always
 	// on (like kimi-k2-thinking): reasoning_content must be preserved across turns.
 	k3: {
+		displayName: "kimi-k3 (subscription)",
 		maxTokens: 32_000,
 		contextWindow: 1_048_576, // 1M-token context
 		supportsImages: true, // vision-capable (image_in)
@@ -90,6 +91,7 @@ export const moonshotModels = {
 	// The SAME model on the pay-as-you-go platform (default api.moonshot.ai/v1)
 	// uses a DIFFERENT id — `kimi-k3` — and a platform (not subscription) key.
 	"kimi-k3": {
+		displayName: "kimi-k3",
 		maxTokens: 32_000,
 		contextWindow: 1_048_576,
 		supportsImages: true,
