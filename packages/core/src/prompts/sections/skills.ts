@@ -99,12 +99,12 @@ CONSTRAINTS:
 - Mode-specific skills may come from skills-${currentMode}/ with project-level overrides taking precedence over global skills.
 </context_notes>
 
-<internal_verification>
-This section is for internal control only.
-Do NOT include this section in user-facing output.
-
-After completing the evaluation, internally confirm:
-<skill_check_completed>true|false</skill_check_completed>
-</internal_verification>
+<skill_check_discipline>
+This check is a SILENT internal precondition. Perform it as the first step of
+your private reasoning, before any user-facing output. Do NOT surface the check
+in your response in any form — no confirmation, status line, marker, tag, or
+restatement of having done it. The user only ever sees the actual answer or the
+skill-defined flow.
+</skill_check_discipline>
 `
 }
