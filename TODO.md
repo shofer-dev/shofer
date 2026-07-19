@@ -46,3 +46,20 @@
   the webview `ChatRow` per-category rendering + the ACP mapping + tests — do it when
   a second non-webview consumer needs interactive approvals (L2 runs auto-approve, so
   it doesn't today).
+
+- **Index identity is controller-scoped, not globally unique.** `_resolveIndexKeyPath`
+  prefers the controller-assigned `codebaseIndexKey`, which fixes the case that bit us
+  (executor pods all running `--workspace /home/node/workspace` colliding on one Qdrant
+  collection despite unshared filesystems). It does NOT cover two *independent
+  controllers* that both sit at an identical path and share one Qdrant — they still
+  derive the same collection name from different content. Closing that means deriving
+  the key from something globally stable (git remote URL + repo root, or an explicit
+  operator-assigned index id) rather than a path. Deferred: today every deployment has
+  one controller per Qdrant, so the collision is unreachable.
+
+- **The RAG indexer is transient.** The controller being the sole indexer is a
+  consequence of the indexer living in-process. When it moves to a standalone k3s
+  service that everyone queries, `codebaseIndexSearchOnly` collapses — the controller
+  becomes just another query client and the sole-writer invariant moves into the
+  service. Don't build more machinery on top of "the controller is special" than the
+  sole-writer rule already requires.

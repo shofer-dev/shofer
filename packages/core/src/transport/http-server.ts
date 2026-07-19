@@ -105,7 +105,7 @@ export interface HttpServerOptions {
  * `/health`):
  *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) + configVersion (open)
  *   GET  /api/v1/whoami              → { version, configVersion } (authed; one-shot liveness+version+auth)
- *   POST /api/v1/config              → { config, version } → 202 (controller→node config sync, §config_sync)
+ *   POST /api/v1/config              → { config, version, secrets } → 202 (controller→node config sync, §config_sync)
  *   GET  /api/v1/event               → SSE event stream (node-wide: ALL tasks)
  *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
  *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }

@@ -233,7 +233,9 @@ built-in `node:sqlite` — no flat files, no native dependency.
 > transport (`serveSession`/`connectSession`) remain available substrate for the future
 > "executor uses the _controller's_ host over RPC" model; the **shipped** node model instead
 > assumes a **shared workspace filesystem** (each remote `shofer serve` has the same mounted
-> workspace) and serves fs/config executor-locally. With **zero remote nodes registered,
+> workspace) and serves fs executor-locally, while node-scoped **settings and the
+> allow-listed credential slice are replicated from the controller** and gate pool
+> eligibility on a config version ([`config_sync.md`](./config_sync.md)). With **zero remote nodes registered,
 > everything runs on the Local executor exactly as today**.
 
 The Category I/II split is also what makes Shofer **horizontally scalable**: the
@@ -322,11 +324,25 @@ Distributing execution uses two boundaries that the v3 split already defines:
 A few subsystems are workspace-scoped singletons and must be reconciled across
 executors. The governing principles:
 
-- **Single-writer for shared indexes.** The code index has one writer — the
-  controller, which shares the workspace filesystem and already sees every change
-  (including those a remote executor makes). Executors are **search-only** against
-  the shared store. (End state: extract the index/embeddings/memory into standalone
-  services every node queries — at which point even the controller is just a client.)
+- **Single-writer for shared indexes — enforced.** The code index has one writer,
+  the controller: it shares the workspace filesystem and already sees every change
+  (including those a remote executor makes), so a second indexer would only duplicate
+  embedding work and race it as a writer. Executors are **search-only** against the
+  shared store, and that is now structural rather than conventional: the controller
+  stamps `codebaseIndexSearchOnly` on the code-index config **as it leaves** on the
+  config-sync slice (it never imports its own outgoing slice, so it stays a full
+  indexer), and `CodeIndexManager` honours the flag at both its `initialize()` and
+  `startIndexing()` entry points. The same slice carries a controller-owned
+  `codebaseIndexKey` — the logical index identity the collection name is hashed from —
+  so a node addresses the exact collection the controller indexed instead of hashing
+  its own mount path, which would both miss the shared index and collide with
+  unrelated hosts that happen to share a container path. The embedder/Qdrant
+  credentials ride the synced-secrets slice of the same `applyConfig` call, since
+  the config alone would describe a store the node cannot open. Details:
+  [`rag_indexing.md`](./rag_indexing.md#multi-node--search-only-nodes) and
+  [`config_sync.md`](./config_sync.md). (End state: extract the
+  index/embeddings/memory into standalone services every node queries — at which
+  point even the controller is just a client.)
 - **Serialize shared-repo mutations.** Worktree and shadow-git creation on the shared
   `.git` must be serialized and per-executor-namespaced to avoid ref/object races.
 - **Network addressing, not loopback.** A remote executor cannot reach the
@@ -365,7 +381,7 @@ numbers are local to this document):
 | 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)                                                                                           |
 | 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                |
 | 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                     |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + checkpoint/changed-files reverse data channel, per-view shadow focus. Split-host RPC/session-transport substrate remains for the controller-host model; shared-index single-writer reconciliation is the remaining hardening |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + checkpoint/changed-files reverse data channel, per-view shadow focus, controller→node config sync incl. search-only RAG (nodes answer `rag_search` against the controller's index). Split-host RPC/session-transport substrate remains for the controller-host model; serializing shadow-git/worktree creation on the shared repo is the remaining hardening |
 
 ### What "done" means, per initiative
 
@@ -536,8 +552,9 @@ prerequisites:
   full-fidelity remote render, per-view shadow focus, and the reverse data channel
   (checkpoint diff/restore + changed-files).
 
-**Remaining hardening**: shared-resource reconciliation (enforce single-writer index,
-serialize shadow-git/worktree creation on the shared repo), the split-host
+**Remaining hardening**: serializing shadow-git/worktree creation on the shared repo
+(single-writer for the code index is enforced — see _Shared-resource reconciliation_
+above), the split-host
 session-transport model (an executor using the _controller's_ host over RPC, vs today's
 shared-workspace executor-local host), and reconnect resilience / stream resync.
 

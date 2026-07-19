@@ -56,7 +56,8 @@ Two axes decide whether a setting belongs on this channel:
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | **Per-task** provider/model/key/base-url              | Stays on `CreateTaskInput.apiConfiguration` (already shipped; can differ per task) |
 | **Node-scoped** behavior settings (auto-approval, …)  | **This channel** — one node-wide config, replicated on registration + on change    |
-| **Secrets** (API keys)                                | _Not_ on this channel (see below)                                                  |
+| **LLM provider keys**                                 | _Not_ on this channel — per-task via `apiConfiguration` (see below)                |
+| **Code-index (RAG) credentials**                      | **This channel**, as the separate `SyncedSecrets` argument → SecretStorage         |
 | **Front-end-only** UI state (pinned tabs, dismissals) | Not synced (no executor effect)                                                    |
 
 **In scope (v1): the whole node-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
@@ -134,14 +135,21 @@ remote node can't reach — and both are out of config-sync's scope; revisit wit
 support. These calls are pinned by the `SETTING_SYNC_SCOPE` classification tests.
 
 **Excluded** (per [the table above](#3-what-is-synced-and-what-is-not)): per-task provider
-config (`apiConfiguration`), secrets (API keys — SecretStorage, never plaintext JSON), and
-front-end-only UI state (`pinnedApiConfigs`, `dismissedUpsells`, `lastShownAnnouncementId`,
-task history) that has no executor effect.
+config (`apiConfiguration`) and front-end-only UI state (`pinnedApiConfigs`,
+`dismissedUpsells`, `lastShownAnnouncementId`, task history) that has no executor effect.
 
-**Secrets are excluded.** API keys must not travel as plaintext settings. They already reach
-a node per-task via `apiConfiguration` (resolved by the controller, gated by
-`allowClientConfig`). If node-scoped secrets are ever needed, route them through the same
-SecretStorage/token path nodes already use — not this JSON config channel.
+**Secrets travel on their own allow-list, not in `SyncedSettings`.** Credentials are never
+plaintext *settings* — `SyncedSettings` carries none, and a secret key in that slice is a
+bug. They ride the same `applyConfig` call as a separate `SyncedSecrets` argument, written
+on the node through `ContextProxy.storeSecret` (SecretStorage), never into globalState JSON.
+The allow-list is deliberately narrow: only the code-index (RAG) credentials, because a
+search-only node must embed a query and authenticate to Qdrant, and both keys are secrets
+rather than settings — so the synced index config would otherwise describe a store the node
+cannot open. **LLM provider keys are NOT on this channel**: they already reach a node
+per-task via `apiConfiguration` (resolved by the controller, gated by `allowClientConfig`),
+and replicating them globally would create a second, unversioned source for the same
+credential. Adding a key to `SYNCED_SECRET_KEYS` means the controller pushes it to every
+managed node — justify it before extending the list.
 
 ## 4. Design
 
@@ -290,12 +298,18 @@ a just-connected or reconnected node may hold stale config. The model is a **con
 convergence loop keyed on a config version**, so that **no task is ever routed to a node
 running stale config**, yet a lagging node self-heals without manual intervention.
 
-**The version.** The controller computes `desiredVersion = hash(canonicalSerialize(slice))` —
-a **content hash**, not a monotonic counter. Content-addressing makes it stateless (survives a
-controller restart with no drift), idempotent (identical content ⇒ identical version ⇒ no
-spurious churn), and **opaque to the node**: it travels _with_ the config
-(`applyConfig(config, version)`, [§4a](#4a-agentapiapplyconfig-the-wire-method)), and the node
-merely stores and echoes it — the two sides never need matching hash logic.
+**The version.** The controller computes
+`desiredVersion = hash(canonicalSerialize({ config, secrets }))` — a **content hash**, not a
+monotonic counter. Content-addressing makes it stateless (survives a controller restart with
+no drift), idempotent (identical content ⇒ identical version ⇒ no spurious churn), and
+**opaque to the node**: it travels _with_ the config
+(`applyConfig(config, version, secrets)`, [§4a](#4a-agentapiapplyconfig-the-wire-method)), and
+the node merely stores and echoes it — the two sides never need matching hash logic.
+
+The **secrets participate in the hash**. Hashing the settings slice alone would leave a
+rotated credential invisible to the convergence loop: the settings never changed, so the
+version never moves, so the reconciliation never re-pushes and the node holds the stale key
+indefinitely. Note the consequence for `/health`, below.
 
 **Reporting (piggybacked on the health ping).** The node echoes its last-applied version on
 the existing `GET /health` body, which already carries `loadavg`/`cpus` and is parsed every
@@ -346,7 +360,12 @@ its applied version — defense-in-depth against a pool-gating race.
 - **Authed transport.** `applyConfig` rides the token-gated `/api/v1/*` surface
   ([`http-server.ts:104`](../packages/core/src/transport/http-server.ts)); an unauthenticated
   caller cannot push config (which could otherwise widen auto-approval on a node).
-- **No secrets on this channel** ([§3](#3-what-is-synced-and-what-is-not)).
+- **Narrow credential allow-list.** The only secrets on this channel are
+  `SYNCED_SECRET_KEYS` — the code-index (RAG) credentials
+  ([§3](#3-what-is-synced-and-what-is-not)). They are written to SecretStorage via
+  `ContextProxy.storeSecret`, never to globalState JSON, and the receiving loop iterates the
+  allow-list rather than the wire payload's keys, so a compromised or buggy controller cannot
+  write a secret outside that scope. LLM provider keys stay off this channel entirely.
 - **Blast radius.** This channel can grant readwrite/exec auto-approval on a node
   non-interactively — treat `resolveSyncedSettings` output with the same care as
   `allowedCommands: ["*"]`. It only ever carries what the controller already trusts locally.
@@ -357,6 +376,13 @@ its applied version — defense-in-depth against a pool-gating race.
   leaks no settings content — it only lets the controller (and any prober) see _whether_ a
   node is current, not _what_ the config is. Config **writes** stay on the authed
   `/api/v1/config` route.
+
+  Since [§6](#6-convergence--config-version--pool-gating) folds the synced secrets into that
+  hash, the digest is now taken over credential values too. It stays a 32-bit non-cryptographic
+  FNV-1a digest of the *whole* slice, so it is not a practical oracle for any individual key —
+  but it is **not** a secrecy boundary and must never be treated as proof of knowing a secret,
+  nor compared against an attacker-supplied value to authorize anything. It exists solely so
+  the controller can tell a converged node from a stale one.
 
 ## 8. Failure handling
 

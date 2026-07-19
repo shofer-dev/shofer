@@ -38,6 +38,7 @@ The full method set (see the source for exact signatures):
 | `cancelTask(taskId)`                                                      | Abort a task.                                                                                                                                                                                                                               |
 | `respondToAsk(taskId, AskResponse)`                                       | Answer an outstanding `ask` (interactive tool approval / follow-up). The reverse of the `ask` events on the stream, so a remote task's approvals round-trip like a local one's.                                                             |
 | `subscribe(listener)` → `unsubscribe`                                     | Subscribe to the agent event stream ([`ServerEvent`](#event-model)).                                                                                                                                                                        |
+| `applyConfig(config, version, secrets)`                                   | Apply a controller-pushed settings slice + its allow-listed credentials, stamped with an opaque convergence `version` the node echoes on `/health` & `/whoami`. Ignored wholesale by a node pinned with its own CLI config (`allowClientConfig`), exactly like per-task `apiConfiguration`. See [config_sync.md](./config_sync.md). |
 
 ### Reverse data channel (Shofer Nodes L3)
 
@@ -77,6 +78,7 @@ GET  /health                      liveness + version + load metrics (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
 GET  /api/v1/event                SSE event stream (node-wide: ALL tasks) → subscribe()
 GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
+POST /api/v1/config               { config, version, secrets }  → applyConfig()
 POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()

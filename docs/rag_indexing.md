@@ -41,7 +41,7 @@ CodeIndexManager (singleton per workspace)
 | `src/services/code-index/config-manager.ts`                | Reads settings from `ContextProxy` (global state + secrets). Detects config changes requiring restart.                                                                                                                                                                                                        |
 | `packages/core/src/services/code-index/state-manager.ts`   | `TypedEmitter` (`@shofer/types`)-based progress reporting to UI — no `vscode` dependency.                                                                                                                                                                                                                     |
 | `src/services/code-index/cache-manager.ts`                 | Persists per-file cache (v3: hash + mtimeMs + size + `segmentHashes[]`) to skip unchanged files during scans and to drive per-segment dedup in the file watcher.                                                                                                                                              |
-| `src/services/code-index/vector-store/qdrant-client.ts`    | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per workspace. Stores metadata with commit info.                                                                                                                                                                                     |
+| `packages/core/src/services/code-index/vector-store/qdrant-client.ts` | Implements `IVectorStore` using `@qdrant/js-client-rest`. One collection per index key. Stores metadata with commit info.                                                                                                                                                                          |
 | `packages/types/src/codebase-index.ts`                     | Zod schemas for config, shared constants, and cache entries.                                                                                                                                                                                                                                                  |
 | `packages/core/src/services/tree-sitter/languageParser.ts` | Maps file extensions to tree-sitter WASM parsers and language-specific AST queries. Fallthrough to `default:` throws for unsupported extensions.                                                                                                                                                              |
 | `packages/core/src/services/tree-sitter/queries/`          | Per-language tree-sitter query files (e.g., `scala.ts`, `css.ts`, `python.ts`) that define AST capture patterns for definitions.                                                                                                                                                                              |
@@ -242,8 +242,10 @@ The system uses **two separate storage locations** for different kinds of data:
 The `CacheManager` persists a version 3 JSON cache to VS Code's extension global storage directory:
 
 ```
-~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<sha256-of-workspace-path>.json
+~/.config/Code/User/globalStorage/shofer.dev/shofer-index-cache-<sha256-of-index-key>.json
 ```
+
+(the index key, not the raw workspace path — see [Index Identity](#index-identity-_resolveindexkeypath))
 
 **v3 format** (Phase 1 stat() fast-path + per-segment dedup):
 
@@ -335,16 +337,21 @@ The scanner ([`scanner.ts`](extensions/shofer/src/services/code-index/processors
 
 The same per-segment dedup logic applies in the scanner's [`processBatch()`](extensions/shofer/src/services/code-index/processors/scanner.ts:447) during startup reconciliation: before creating embeddings, the scanner checks each block's `segmentHash` against the cache's `segmentHashes[]` for that file. Reused blocks skip both the embedding API call and the Qdrant upsert. If every block in a batch is reused, the embedder is bypassed entirely — cache entries are updated in-place. Stale segments (cached hashes no longer in the current parse) are deleted from Qdrant by their deterministic point ID.
 
-#### Worktree-Shared Collections
+#### Index Identity (`_resolveIndexKeyPath`)
 
-Git worktrees are separate directories and would normally get separate Qdrant collections and cache files. To avoid re-indexing when switching between worktrees of the same repository, the system resolves a stable **index key path** equal to the main repository root.
+Both storage names are hashed from **one** value, the **index key**, resolved by `CodeIndexManager._resolveIndexKeyPath()`:
 
-[`GitSource.resolveWorktreeMainRepoPath()`](extensions/shofer/src/services/code-index/git/git-source.ts:95) reads the `.git` file in a worktree directory, parses the `gitdir:` line (`gitdir: /path/to/main/.git/worktrees/name`), and derives the main repository root. This resolved path is passed as `indexKeyPath` to [`CacheManager`](extensions/shofer/src/services/code-index/cache-manager.ts:41) (for cache file naming) and [`QdrantVectorStore`](extensions/shofer/src/services/code-index/vector-store/qdrant-client.ts:63) (for collection naming). For regular repos, `indexKeyPath` defaults to the workspace path.
+- The Qdrant collection — `${collectionPrefix}${sha256(keyPath)[:16]}`, prefix `"ws-"` by default ([`qdrant-client.ts`](extensions/shofer/packages/core/src/services/code-index/vector-store/qdrant-client.ts)).
+- The local cache file — `shofer-index-cache-<sha256(keyPath)>.json` ([`cache-manager.ts`](extensions/shofer/src/services/code-index/cache-manager.ts)).
 
-All worktrees of the same repository share:
+`_resolveIndexKeyPath()` resolves in two steps:
 
-- One Qdrant collection (`ws-<sha256(main-repo-path)[:16]>`)
-- One local cache file (`shofer-index-cache-<sha256(main-repo-path)>.json`)
+1. **A controller-assigned `codebaseIndexKey` wins** when present (surfaced by `CodeIndexConfigManager.indexKey`). This is the logical identity of the index, not a path — see [Multi-node — search-only nodes](#multi-node--search-only-nodes) for why index identity must not be host-derived.
+2. **Otherwise fall back to the local derivation.** Git worktrees are separate directories and would normally get separate collections and cache files, so [`GitSource.resolveWorktreeMainRepoPath()`](extensions/shofer/src/services/code-index/git/git-source.ts) reads the `.git` file in a worktree directory, parses the `gitdir:` line (`gitdir: /path/to/main/.git/worktrees/name`), and derives the main repository root. For regular repos this returns the workspace path unchanged.
+
+So all worktrees of the same repository share one collection (`ws-<sha256(main-repo-path)[:16]>`) and one cache file (`shofer-index-cache-<sha256(main-repo-path)>.json`), and switching between them re-indexes nothing.
+
+Whichever branch is taken, the resolved value is recorded and exposed as `CodeIndexManager.resolvedIndexKey` — that getter is what a controller publishes to its nodes.
 
 #### Reboot Behavior
 
@@ -458,6 +465,8 @@ Defined in `packages/types/src/codebase-index.ts`:
 
 ```typescript
 codebaseIndexEnabled: boolean
+codebaseIndexSearchOnly: boolean // query the store; never scan or watch (see Multi-node)
+codebaseIndexKey: string // controller-assigned logical index identity (see Multi-node)
 codebaseIndexQdrantUrl: string
 codebaseIndexEmbedderProvider: "openai" |
 	"ollama" |
@@ -514,7 +523,53 @@ Defined in `src/services/code-index/constants/index.ts`:
 
 ## Multi-Workspace Support
 
-`CodeIndexManager` uses a **singleton-per-workspace** pattern via `Map<string, CodeIndexManager>` keyed by `workspacePath`. Per-workspace enablement is stored in `workspaceState` under key `codeIndexWorkspaceEnabled:<folder-uri>`. Each workspace gets its own Qdrant collection name derived from a hash of the workspace path.
+`CodeIndexManager` uses a **singleton-per-workspace** pattern via `Map<string, CodeIndexManager>` keyed by `workspacePath`. Per-workspace enablement is stored in `workspaceState` under key `codeIndexWorkspaceEnabled:<folder-uri>`. Each workspace gets its own Qdrant collection, named from a hash of its resolved **index key** — see [Index Identity](#index-identity-_resolveindexkeypath).
+
+---
+
+## Multi-node — search-only nodes
+
+In the [Shofer Nodes](v3_architecture.md#distributed-execution-horizontal-scaling) model several hosts share one workspace filesystem: the **controller** (the VS Code front-end) and N remote executors running `shofer serve`. The code index is a workspace-scoped shared resource, so it needs exactly one writer.
+
+**The model: the controller is the sole indexer; nodes are search-only readers.**
+
+### Why it is race-free
+
+The controller shares the workspace filesystem, so its scanner and file-watcher already observe **every** change — including edits a remote node's task makes. A second indexer would therefore add nothing: it would re-embed content the controller is already embedding (duplicated API cost) while racing it as a concurrent writer into the same collection. Making the controller the only writer removes the race by construction rather than by locking.
+
+### `codebaseIndexSearchOnly` — where the constraint is enforced
+
+`NodeRegistry.currentSyncedSlice()` ([`NodeRegistry.ts`](../src/core/nodes/NodeRegistry.ts)) rewrites the code-index config on the **outbound** slice only, setting `codebaseIndexSearchOnly: true`. The controller never imports its own outgoing slice, so it stays a full indexer while every node it feeds is pinned to search-only. The flag then holds the node in two places, so neither entry point can sneak past it:
+
+| Entry point                       | Behavior when `isSearchOnly`                                                                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CodeIndexManager.initialize()`   | Step 7 calls `this._orchestrator?.stopWatcher()` and returns early. Steps 5–6 already ran, so the cache manager, embedder, vector store and **search service** exist — `rag_search` answers normally. |
+| `CodeIndexManager.startIndexing()` | Returns early. This is the path a settings change or a manual re-index command reaches, so a node cannot be talked into scanning after the fact.           |
+
+Because service creation completes, `isInitialized` is true on a node and `rag_search` survives the `filterNativeToolsForMode` gate (enabled + configured + initialized). Nothing drives the orchestrator's state machine, though, so a search-only host's reported `systemStatus` stays `Standby`.
+
+`CodeIndexConfigManager` exposes the flag as the `isSearchOnly` getter (and the key below as `indexKey`).
+
+> **Not a headless-vs-VS-Code distinction.** `shofer serve` loads the same extension bundle through `ExtensionHost.activate()` ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts), [`extension-host.ts`](../apps/cli/src/agent/extension-host.ts)), so a served node **does** register the code-index factory and construct a real `CodeIndexManager`. What holds a node to querying is `codebaseIndexSearchOnly`, not a missing factory.
+
+### `codebaseIndexKey` — why index identity cannot be host-derived
+
+A search-only node has to open **the controller's collection**. Since both the collection name and the cache filename are hashed from the index key ([Index Identity](#index-identity-_resolveindexkeypath)), deriving that key from the local workspace path is wrong in both directions:
+
+- **False miss** — a node that mounts the shared workspace at a different path than the controller hashes a different name and finds an empty collection, so `rag_search` returns nothing on a fully-indexed repo.
+- **False collision** — unrelated hosts that merely happen to share a container path land in the _same_ collection holding entirely different content. This is structural rather than hypothetical for a deployed executor image, which runs every pod with the same `--workspace /home/node/workspace`.
+
+So the controller publishes its own `CodeIndexManager.resolvedIndexKey` on the synced slice as `codebaseIndexKey`, and `_resolveIndexKeyPath()` prefers it over any local derivation. Both sides then name the same collection no matter where each mounted the workspace. Absent a controller key (the standalone case) the local git-worktree fallback applies unchanged.
+
+### How the config and credentials reach a node
+
+Delivery is [controller→node config sync](config_sync.md), not a node-local setup step:
+
+- `codebaseIndexConfig` and `codebaseIndexModels` are classified `"node"` in `SETTING_SYNC_SCOPE` ([`global-settings.ts`](../packages/types/src/global-settings.ts)), so they ride the synced settings slice. `codebaseIndexModels` carries the embedding dimensions the node needs to embed a query.
+- The embedder and Qdrant credentials are **secrets, not settings**, so they cannot ride in `SyncedSettings`. They travel on the same `applyConfig(config, version, secrets)` call as the allow-listed `SYNCED_SECRET_KEYS` slice (`SyncedSecrets`, built by `pickSyncedSecrets`), applied node-side by `ShoferAPI.applySyncedSecrets`. Without that channel the synced index config would describe a store the node cannot open.
+- `computeConfigVersion(config, secrets)` hashes the secrets too, so rotating a credential moves the desired version and the node is re-pushed instead of holding the stale key.
+
+See [`config_sync.md`](config_sync.md) for the transport, the `allowClientConfig` gate, and the version-gated convergence loop.
 
 ---
 
@@ -582,10 +637,6 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 ### Constants
 
 - **The constants table (§Key Constants) presents a flattened list** — in the source, constants are grouped by consumer: `/**Parser */`, `/**Search */`, `/**File Watcher */`, `/**Directory Scanner */`, `/**OpenAI Embedder */`, `/**Gemini Embedder */`. The doc table loses this grouping, making it unclear which subsystem owns each constant.
-
-### Multi-Workspace Support
-
-- **Collection naming is not explained** — the doc says each workspace gets its own Qdrant collection "derived from a hash of the workspace path" but doesn't show the hash function or the collection name pattern. This is relevant for anyone debugging Qdrant directly.
 
 ### Architecture Diagram
 
