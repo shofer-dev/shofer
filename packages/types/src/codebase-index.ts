@@ -102,6 +102,23 @@ export const CODEBASE_INDEX_IGNORED_DIRS: readonly string[] = [
 
 export const codebaseIndexConfigSchema = z.object({
 	codebaseIndexEnabled: z.boolean().optional(),
+	/**
+	 * Search-only mode: query the vector store but never run the indexing scan or
+	 * the file-watcher. Set by the controller on the slice it syncs to remote nodes
+	 * (never on its own state) — the controller is the sole indexer, so nodes read
+	 * the shared index without duplicating embedding work or racing as writers.
+	 * See `docs/rag_indexing.md` §"Multi-node — search-only nodes".
+	 */
+	codebaseIndexSearchOnly: z.boolean().optional(),
+	/**
+	 * Stable logical identity of the index, owned by the controller and synced to
+	 * nodes. The Qdrant collection name is derived from this rather than from the
+	 * host's workspace path: hosts that deliberately share an index agree on it,
+	 * while unrelated hosts that merely happen to mount the same container path
+	 * (e.g. every executor pod at `/home/node/workspace`) no longer collide on one
+	 * collection. Absent → falls back to the local path derivation.
+	 */
+	codebaseIndexKey: z.string().optional(),
 	codebaseIndexQdrantUrl: z.string().optional(),
 	codebaseIndexEmbedderProvider: z
 		.enum([

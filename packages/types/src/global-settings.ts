@@ -445,9 +445,13 @@ export const SETTING_SYNC_SCOPE = {
 	rateLimitSeconds: "frontend", // also a ProviderSettings field (provider-settings.ts) — already shipped per-task via apiConfiguration; excluded here to avoid a double source
 	experiments: "frontend",
 
-	// ── Codebase index (front-end config; keys/host-bound) ──
-	codebaseIndexModels: "frontend",
-	codebaseIndexConfig: "frontend",
+	// ── Codebase index (RAG) ──
+	// Synced so a remote node can answer `rag_search` against the controller's index.
+	// The controller forces `codebaseIndexSearchOnly: true` on the synced slice
+	// (NodeRegistry.currentSyncedSlice) — a node queries, only the controller writes.
+	// The embedder/Qdrant credentials travel separately as SYNCED_SECRET_KEYS.
+	codebaseIndexModels: "node", // embedding dimensions — the node needs them to embed a query
+	codebaseIndexConfig: "node",
 
 	language: "frontend",
 	telemetrySetting: "frontend",
@@ -615,6 +619,46 @@ export type SecretState = Pick<ProviderSettings, Extract<ProviderSecretKey, keyo
 
 export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 	SECRET_STATE_KEYS.includes(key as ProviderSecretKey) || GLOBAL_SECRET_KEYS.includes(key as GlobalSecretKey)
+
+/**
+ * Secrets replicated controller→node (config_sync §4a), the credential counterpart
+ * of SETTING_SYNC_SCOPE.
+ *
+ * Deliberately a strict allow-list rather than "every secret": a node only receives
+ * the credentials it cannot do its job without. Today that is the codebase-index
+ * (RAG) pair — a search-only node must embed the query and authenticate to Qdrant,
+ * and both keys are secrets rather than settings, so `codebaseIndexConfig` alone
+ * would reach the node describing a store it cannot open.
+ *
+ * LLM provider keys are NOT here: they already travel per-task on `CreateTaskInput.
+ * apiConfiguration`, so replicating them globally would be a second, unversioned
+ * source for the same credential. Adding a key here means the controller pushes it
+ * to every managed node — justify it before extending this list.
+ */
+export const SYNCED_SECRET_KEYS = [
+	"codeIndexOpenAiKey",
+	"codeIndexQdrantApiKey",
+	"codebaseIndexOpenAiCompatibleApiKey",
+	"codebaseIndexGeminiApiKey",
+	"codebaseIndexMistralApiKey",
+	"codebaseIndexVercelAiGatewayApiKey",
+	"codebaseIndexOpenRouterApiKey",
+] as const satisfies readonly ProviderSecretKey[]
+
+/** The node-scoped, syncable subset of secrets replicated controller→node. */
+export type SyncedSecrets = Partial<Record<(typeof SYNCED_SECRET_KEYS)[number], string>>
+
+/** Pick the node-scoped, syncable secrets from a secret bag (undefined keys omitted). */
+export function pickSyncedSecrets(secrets: Partial<Record<string, string | undefined>>): SyncedSecrets {
+	const out: Record<string, string> = {}
+	for (const key of SYNCED_SECRET_KEYS) {
+		const value = secrets[key]
+		if (value !== undefined) {
+			out[key] = value
+		}
+	}
+	return out as SyncedSecrets
+}
 
 /**
  * GlobalState
