@@ -2600,6 +2600,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					lastMessage.partial = false
 					lastMessage.progressStatus = progressStatus
 					lastMessage.isProtected = isProtected
+					// Carry the askId onto the finalized message so it reaches the
+					// wire (the streaming partial→final path otherwise never sets it,
+					// unlike the single-complete-message branch below). A controller
+					// echoes it back on respondToAsk so handleWebviewAskResponse can
+					// enforce it matches the current ask instead of resolving whatever
+					// ask is outstanding — closing wrong-ask / double-submit races.
+					lastMessage.askId = askId
 					this._debouncedSaveShoferMessages.cancel()
 					await this.saveShoferMessages()
 					this.updateShoferMessage(lastMessage)
