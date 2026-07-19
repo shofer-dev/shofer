@@ -14,7 +14,15 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OB
 # WS is the repo root (where this script is located, one level up from scripts/)
 WS="$(cd "$(dirname "$0")/.." && pwd)"
 
-VITEST_OPTS="--maxConcurrency=2"
+# `--maxConcurrency` only caps concurrent `test.concurrent` tests WITHIN one file;
+# it does not limit worker processes. The worker cap is `--maxWorkers` — without it
+# vitest forks one worker per core, each with its own Vite SSR transform pipeline.
+# On a 16-core laptop that drove load average past 70 and starved the workers into
+# spurious timeouts (vitest-worker "Timeout calling fetch", 5s tests taking 6.7s)
+# with no real assertion failure. Measured on packages/core (371 files):
+# uncapped 796s + 25 bogus failures; --maxWorkers=8 43s green; =4 55s green.
+VITEST_MAX_WORKERS="${VITEST_MAX_WORKERS:-50%}"
+VITEST_OPTS="--maxConcurrency=2 --maxWorkers=${VITEST_MAX_WORKERS}"
 
 run_suite() {
     local label="$1" dir="$2" extra="${3:-}" max_retries="${4:-1}" ts0 ts1 elapsed rc attempt
