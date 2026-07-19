@@ -507,6 +507,22 @@ export class ProviderSettingsManager {
 		}
 	}
 
+	/**
+	 * Get the full mode → API-config-id map. This store is the single source of
+	 * truth for per-mode associations; the webview receives it as a projection
+	 * via `getStateToPostToWebview` and never persists its own copy.
+	 */
+	public async getModeConfigs(): Promise<Record<string, string>> {
+		try {
+			return await this.lock(async () => {
+				const { modeApiConfigs } = await this.load()
+				return { ...(modeApiConfigs ?? {}) }
+			})
+		} catch (error) {
+			throw new Error(`Failed to get mode configs: ${error}`)
+		}
+	}
+
 	public async export() {
 		try {
 			return await this.lock(async () => {

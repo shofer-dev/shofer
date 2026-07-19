@@ -3295,12 +3295,12 @@ export class ShoferProvider
 	/**
 	 * Set the PER-MODE API-config association for `mode` (Settings → Modes),
 	 * WITHOUT activating the profile or changing the global default (that is
-	 * Settings → Providers). Keeps all three sources of truth 1:1:
-	 *  - `modeApiConfigs[mode]` in the providerProfiles store (read by
-	 *    `getModeConfigId` for mode switch / task creation),
+	 * Settings → Providers). Keeps the two sources of truth 1:1:
+	 *  - `modeApiConfigs[mode]` in the providerProfiles store — the single
+	 *    persisted mapping, read by `getModeConfigId` for mode switch / task
+	 *    creation and projected to the webview by `getStateToPostToWebview`,
 	 *  - the custom-mode YAML `provider:` field (read FIRST in
-	 *    `handleUserModeSwitch` — without syncing it a stale value would win),
-	 *  - the `contextProxy` `modeApiConfigs` copy the webview reads.
+	 *    `handleUserModeSwitch` — without syncing it a stale value would win).
 	 * Then pushes the new state.
 	 */
 	public async setModeApiConfig(mode: Mode, configId: string): Promise<void> {
@@ -3308,8 +3308,6 @@ export class ShoferProvider
 		const listApiConfig = await this.providerSettingsManager.listConfig()
 		const configName = listApiConfig.find((c) => c.id === configId)?.name
 		await this.syncCustomModeProviderToYaml(mode, configName)
-		const currentModeApiConfigs = (this.contextProxy.getValues().modeApiConfigs ?? {}) as Record<string, string>
-		await this.contextProxy.setValue("modeApiConfigs", { ...currentModeApiConfigs, [mode]: configId })
 		await this.postInitState()
 	}
 
@@ -4514,7 +4512,6 @@ export class ShoferProvider
 			mode,
 			currentApiConfigName,
 			listApiConfigMeta,
-			modeApiConfigs,
 			pinnedApiConfigs,
 			customModePrompts,
 			customSupportPrompts,
@@ -4734,9 +4731,12 @@ export class ShoferProvider
 			mcpEnabled: mcpEnabled ?? true,
 			currentApiConfigName: currentTask?.taskApiConfigName || currentApiConfigName || "default",
 			listApiConfigMeta: listApiConfigMeta ?? [],
-			// Per-mode API-config associations, so the chat dropdown can reflect
-			// modeApiConfigs[mode] when a new task is started on a given mode.
-			modeApiConfigs: modeApiConfigs ?? {},
+			// Per-mode API-config associations, so the chat dropdown and
+			// Settings → Modes can reflect modeApiConfigs[mode]. Read from the
+			// providerProfiles store — the single source of truth — NOT from a
+			// globalState copy (a copy drifts: profile activation and mode-switch
+			// backfills write the store without any webview-side mirror).
+			modeApiConfigs: await this.providerSettingsManager.getModeConfigs(),
 			pinnedApiConfigs: pinnedApiConfigs ?? {},
 			mode: (currentTask as any)?._taskMode || mode || defaultModeSlug,
 			customModePrompts: customModePrompts ?? {},
@@ -5000,7 +5000,6 @@ export class ShoferProvider
 				this.getCurrentTask()?.taskApiConfigName || stateValues.currentApiConfigName || "default",
 			listApiConfigMeta: stateValues.listApiConfigMeta ?? [],
 			pinnedApiConfigs: stateValues.pinnedApiConfigs ?? {},
-			modeApiConfigs: stateValues.modeApiConfigs ?? ({} as Record<Mode, string>),
 			customModePrompts: stateValues.customModePrompts ?? {},
 			customSupportPrompts: stateValues.customSupportPrompts ?? {},
 			enhancementApiConfigId: stateValues.enhancementApiConfigId,

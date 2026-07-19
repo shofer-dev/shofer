@@ -2569,9 +2569,10 @@ export const webviewMessageHandler = async (
 			}
 			break
 		case "setModeApiConfig":
-			// Per-mode API-config association, set from Settings → Modes. Keeps
-			// modeApiConfigs + the custom-mode YAML provider + the contextProxy copy
-			// 1:1; does NOT activate the profile or touch the global default.
+			// Per-mode API-config association, set from Settings → Modes. Writes
+			// the providerProfiles store (the single source of truth) and syncs
+			// the custom-mode YAML provider; does NOT activate the profile or
+			// touch the global default.
 			if (message.mode && typeof message.text === "string") {
 				try {
 					await provider.setModeApiConfig(message.mode as Mode, message.text)

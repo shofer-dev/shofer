@@ -385,8 +385,9 @@ absent:
 - **Terminal** — `terminalOutputPreviewSize`,
   `terminalShellIntegrationTimeout`, `terminalCommandDelay`
 - **Checkpoints** — `enableCheckpoints`, `checkpointTimeout`
-- **Modes** — `mode`, `modeApiConfigs`, `customModes`,
-  `customModePrompts`
+- **Modes** — `mode`, `customModes`, `customModePrompts` (per-mode API
+  profile assignments live in the SecretStorage provider-profiles blob
+  as `modeApiConfigs`, not in `globalSettingsSchema`)
 - **Rate limiting** — `allowedMaxRequests`, `allowedMaxCost`,
   `rateLimitSeconds`
 - **Images** — `maxImageFileSize`, `maxTotalImageSize`

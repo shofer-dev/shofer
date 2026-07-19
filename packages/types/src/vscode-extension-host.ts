@@ -491,7 +491,6 @@ export type ExtensionState = Pick<
 	| "execaShellPath"
 	| "diagnosticsEnabled"
 	| "language"
-	| "modeApiConfigs"
 	| "customModePrompts"
 	| "customSupportPrompts"
 	| "enhancementApiConfigId"
@@ -519,6 +518,10 @@ export type ExtensionState = Pick<
 > & {
 	logCategoriesKnown?: string[]
 	lockApiConfigAcrossModes?: boolean
+	/** Per-mode API-config associations. A read-only projection of
+	 *  `modeApiConfigs` in the providerProfiles store (the single source of
+	 *  truth, secrets-backed) — the webview never persists its own copy. */
+	modeApiConfigs?: Record<string, string>
 	version: string
 	shoferMessages: ShoferMessage[]
 	/** T1.B: true when cold-load only read the tail of the message log. */

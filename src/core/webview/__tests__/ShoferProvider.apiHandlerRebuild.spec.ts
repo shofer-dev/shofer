@@ -236,6 +236,7 @@ describe("ShoferProvider - API Handler Rebuild Guard", () => {
 					{ name: "test-config", id: "test-id", apiProvider: "openrouter", modelId: "openai/gpt-4" },
 				]),
 			setModeConfig: vi.fn(),
+			getModeConfigs: vi.fn().mockResolvedValue({}),
 			activateProfile: vi.fn().mockResolvedValue({
 				name: "test-config",
 				id: "test-id",
