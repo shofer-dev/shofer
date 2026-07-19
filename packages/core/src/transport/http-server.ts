@@ -6,6 +6,7 @@ import type {
 	CheckpointDiffOptions,
 	CheckpointRestoreOptions,
 	ProviderSettings,
+	ServerEvent,
 	SyncedSettings,
 } from "@shofer/types"
 
@@ -31,6 +32,19 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
 	const json = JSON.stringify(body)
 	res.writeHead(status, { "content-type": "application/json" })
 	res.end(json)
+}
+
+/**
+ * Extract the owning task id from a forwarded event so a per-task stream can
+ * filter to one task. Mirrors the wire contract: a `message` event carries it at
+ * `args[0].taskId`; every other forwarded event has the task id as `args[0]`.
+ */
+function eventTaskId(event: ServerEvent): string | undefined {
+	const first = (event as { args?: unknown[] }).args?.[0]
+	if (event.type === "message") {
+		return (first as { taskId?: string } | undefined)?.taskId
+	}
+	return typeof first === "string" ? first : undefined
 }
 
 async function readJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {
@@ -74,7 +88,8 @@ export interface HttpServerOptions {
  *   GET  /health                     → liveness + version + load metrics (loadavg, cpus) + configVersion (open)
  *   GET  /api/v1/whoami              → { version, configVersion } (authed; one-shot liveness+version+auth)
  *   POST /api/v1/config              → { config, version } → 202 (controller→node config sync, §config_sync)
- *   GET  /api/v1/event               → SSE event stream
+ *   GET  /api/v1/event               → SSE event stream (node-wide: ALL tasks)
+ *   GET  /api/v1/task/:id/event      → SSE event stream filtered to ONE task
  *   POST /api/v1/task                → { prompt, taskId?, apiConfiguration? } → { taskId }
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
@@ -146,6 +161,28 @@ export function createRequestHandler(
 			})
 			const unsubscribe = api.subscribe((event) => {
 				res.write(`data: ${JSON.stringify(event)}\n\n`)
+			})
+			req.on("close", unsubscribe)
+			return
+		}
+
+		// Per-task event stream — the same SSE as /event, filtered to ONE task's
+		// events. Multi-tenant isolation: a controller driving many users' tasks on
+		// a shared node subscribes per authorized task instead of to the node-wide
+		// firehose, so it never receives (or has to demux) other tenants' content.
+		// The node-wide /event stays for single-tenant / whole-node consumers.
+		const taskEventMatch = path.match(new RegExp(`^${base}/task/([^/]+)/event$`))
+		if (method === "GET" && taskEventMatch) {
+			const taskId = decodeURIComponent(taskEventMatch[1]!)
+			res.writeHead(200, {
+				"content-type": "text/event-stream",
+				"cache-control": "no-cache",
+				connection: "keep-alive",
+			})
+			const unsubscribe = api.subscribe((event) => {
+				if (eventTaskId(event) === taskId) {
+					res.write(`data: ${JSON.stringify(event)}\n\n`)
+				}
 			})
 			req.on("close", unsubscribe)
 			return

@@ -73,7 +73,8 @@ Nodes. All routes under `/api/v1` except `/health`; bearer-token auth + version 
 ```
 GET  /health                      liveness + version + load metrics (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
-GET  /api/v1/event                SSE event stream            → subscribe()
+GET  /api/v1/event                SSE event stream (node-wide: ALL tasks) → subscribe()
+GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
 POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
@@ -85,6 +86,13 @@ POST /api/v1/task/:id/changed-files/diff    { relPath }      → { original, fin
 POST /api/v1/task/:id/changed-files/revert  { relPath? }     (one file, or all when omitted)
 POST /api/v1/task/:id/changed-files/accept  { relPath? }     (one file, or all when omitted)
 ```
+
+`GET /api/v1/event` is the whole node's firehose — every task's events. `GET
+/api/v1/task/:id/event` is the same SSE filtered to one task (by `args[0]` /
+`args[0].taskId`). A controller multiplexing many users' tasks on a **shared**
+executor subscribes per authorized task, so it never receives — or has to demux —
+other tenants' content; the node-wide stream stays for single-tenant / whole-node
+consumers.
 
 ## Running `shofer serve`
 

@@ -283,6 +283,31 @@ describe("createRequestHandler (§11)", () => {
 		expect(events).toHaveLength(0)
 	})
 
+	it("GET /api/v1/task/:id/event streams ONLY that task's events", async () => {
+		const res = mockRes()
+		const req = mockReq("GET", "/api/v1/task/t9/event")
+		await run(req, res as unknown as ServerResponse)
+		expect(res.headers["content-type"]).toContain("text/event-stream")
+		expect(events).toHaveLength(1)
+
+		// Lifecycle events carry the task id at args[0]; message events at args[0].taskId.
+		events.forEach((l) => l({ type: "taskStarted", args: ["t9"] } as unknown as ServerEvent))
+		events.forEach((l) => l({ type: "taskStarted", args: ["other"] } as unknown as ServerEvent))
+		events.forEach((l) => l({ type: "message", args: [{ taskId: "t9", message: {} }] } as unknown as ServerEvent))
+		events.forEach((l) =>
+			l({ type: "message", args: [{ taskId: "other", message: {} }] } as unknown as ServerEvent),
+		)
+
+		const out = res.chunks.join("")
+		expect(out).toContain('"type":"taskStarted","args":["t9"]')
+		expect(out).toContain('"taskId":"t9"')
+		// The other task's events are filtered out.
+		expect(out).not.toContain('"other"')
+
+		req.fireClose()
+		expect(events).toHaveLength(0)
+	})
+
 	describe("config sync (config_sync §4a/§6)", () => {
 		it("POST /api/v1/config applies the config with its version and returns 202", async () => {
 			const res = mockRes()
