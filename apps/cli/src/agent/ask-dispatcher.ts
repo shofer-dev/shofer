@@ -71,6 +71,17 @@ export interface AskDispatcherOptions {
 	disabled?: boolean
 
 	/**
+	 * Whether a driving controller brokers interactive asks (approval + followup)
+	 * to a remote user over the transport. On a headless node driven over AgentApi
+	 * (`shofer serve`) there is no local stdin user, so the dispatcher must NOT try
+	 * to prompt for or auto-answer these asks — it leaves them outstanding for the
+	 * controller to answer via `respondToAsk`. Idle / flow-control asks
+	 * (api_req_failed, resume_task, …) are still handled locally regardless, as
+	 * they are node policy, not user decisions.
+	 */
+	brokerInteractiveAsks?: boolean
+
+	/**
 	 * Maximum number of times an interrupted task may be auto-resumed in
 	 * non-interactive mode. Defaults to 0 (do not auto-resume). Each auto-resume
 	 * consumes one unit of this budget; when exhausted the dispatcher declines
@@ -110,6 +121,7 @@ export class AskDispatcher {
 	private nonInteractive: boolean
 	private exitOnError: boolean
 	private disabled: boolean
+	private brokerInteractiveAsks: boolean
 	private maxResumeRetries: number
 	private onResumeDeclined?: () => void
 
@@ -132,6 +144,7 @@ export class AskDispatcher {
 		this.nonInteractive = options.nonInteractive ?? false
 		this.exitOnError = options.exitOnError ?? false
 		this.disabled = options.disabled ?? false
+		this.brokerInteractiveAsks = options.brokerInteractiveAsks ?? false
 		this.maxResumeRetries = options.maxResumeRetries ?? 0
 		this.onResumeDeclined = options.onResumeDeclined
 		this.resumeRetriesRemaining = this.maxResumeRetries
@@ -293,6 +306,14 @@ export class AskDispatcher {
 	 * These require user approval or input.
 	 */
 	private async handleInteractiveAsk(ts: number, ask: ShoferAsk, text: string): Promise<AskHandleResult> {
+		// When a controller brokers interactive asks to a remote user, do NOT resolve
+		// them on the node: leave the ask outstanding so the controller can surface it
+		// and answer via respondToAsk. Prompting stdin here would hang (no local user)
+		// or auto-answer with a default, pre-empting the real user's decision.
+		if (this.brokerInteractiveAsks) {
+			return { handled: false }
+		}
+
 		switch (ask) {
 			case "followup":
 				return await this.handleFollowupQuestion(ts, text)

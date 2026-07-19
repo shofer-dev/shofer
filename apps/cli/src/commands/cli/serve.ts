@@ -81,6 +81,12 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		// Default: non-interactive (auto-approve every tool — no local user to ask).
 		// `--interactive` turns approvals ON so the driving controller brokers them.
 		nonInteractive: !options.interactive,
+		// A served node is always driven by a remote controller, never a local stdin
+		// user — so interactive asks (approvals + followup questions) are ALWAYS
+		// brokered to the controller, not prompted/auto-answered on the node. Whether
+		// approvals arise at all still depends on `--interactive` (auto-approve vs
+		// surface); followup questions are brokered in either mode.
+		brokerInteractiveAsks: true,
 		ephemeral: false,
 		debug: options.debug ?? false,
 		exitOnComplete: false,

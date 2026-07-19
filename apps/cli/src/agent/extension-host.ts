@@ -79,6 +79,14 @@ export interface ExtensionHostOptions {
 	extensionPath: string
 	nonInteractive?: boolean
 	/**
+	 * When true, a driving controller brokers interactive asks (approval +
+	 * followup) to a remote user over the transport, so the local AskDispatcher
+	 * leaves them outstanding instead of prompting/auto-answering. Set on a headless
+	 * `shofer serve` node — it has no local stdin user. Idle / flow-control asks are
+	 * still handled locally.
+	 */
+	brokerInteractiveAsks?: boolean
+	/**
 	 * When true, uses a temporary storage directory that is cleaned up on exit.
 	 */
 	ephemeral: boolean
@@ -242,6 +250,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			promptManager: this.promptManager,
 			sendMessage: (msg) => this.sendToExtension(msg),
 			nonInteractive: options.nonInteractive,
+			brokerInteractiveAsks: options.brokerInteractiveAsks,
 			exitOnError: options.exitOnError,
 			maxResumeRetries: options.retry ?? 0,
 			onResumeDeclined: () => this.onResumeDeclined?.(),

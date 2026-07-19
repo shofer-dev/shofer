@@ -116,6 +116,16 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 | `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                          |
 | `-d, --debug`            | off                                              | Debug logging to `~/.shofer/cli-debug.log`.                                                                                                                                                                                                                                            |
 
+**Ask brokering (contract).** A served node has no local stdin user, so it **never
+resolves interactive asks locally** — tool/command/MCP approvals _and_ `followup`
+questions are left outstanding for the controller to surface and answer via
+`respondToAsk`. (Idle / flow-control asks — `api_req_failed`, `resume_task`, … — are
+node policy and are still handled on the node.) A controller that drives a served
+node MUST answer brokered asks, or the task blocks: approvals with
+`yesButtonClicked`/`noButtonClicked`, a `followup` with `messageResponse` + `text`.
+`--interactive` only decides whether _approvals arise at all_ (auto-approve vs
+surface); `followup` questions are brokered in either mode.
+
 ## Per-task API Configuration
 
 A remote node runs each task on the **API Configuration the controlling front-end picked
