@@ -35,6 +35,23 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
 }
 
 /**
+ * Open an SSE response and flush the headers immediately. Flushing NOW (rather
+ * than letting Node buffer headers until the first body write) is essential for
+ * both event streams: a controller that opens the stream and then waits for it to
+ * be established before triggering the first event (e.g. createTask) would
+ * otherwise deadlock — the headers never arrive because no event has been written,
+ * and no event is written because the controller is still blocked on the headers.
+ */
+function startEventStream(res: http.ServerResponse): void {
+	res.writeHead(200, {
+		"content-type": "text/event-stream",
+		"cache-control": "no-cache",
+		connection: "keep-alive",
+	})
+	res.flushHeaders()
+}
+
+/**
  * Extract the owning task id from a forwarded event so a per-task stream can
  * filter to one task. Mirrors the wire contract: a `message` event carries it at
  * `args[0].taskId`; every other forwarded event has the task id as `args[0]`.
@@ -154,11 +171,7 @@ export function createRequestHandler(
 		}
 
 		if (method === "GET" && path === `${base}/event`) {
-			res.writeHead(200, {
-				"content-type": "text/event-stream",
-				"cache-control": "no-cache",
-				connection: "keep-alive",
-			})
+			startEventStream(res)
 			const unsubscribe = api.subscribe((event) => {
 				res.write(`data: ${JSON.stringify(event)}\n\n`)
 			})
@@ -174,11 +187,7 @@ export function createRequestHandler(
 		const taskEventMatch = path.match(new RegExp(`^${base}/task/([^/]+)/event$`))
 		if (method === "GET" && taskEventMatch) {
 			const taskId = decodeURIComponent(taskEventMatch[1]!)
-			res.writeHead(200, {
-				"content-type": "text/event-stream",
-				"cache-control": "no-cache",
-				connection: "keep-alive",
-			})
+			startEventStream(res)
 			const unsubscribe = api.subscribe((event) => {
 				if (eventTaskId(event) === taskId) {
 					res.write(`data: ${JSON.stringify(event)}\n\n`)

@@ -39,6 +39,7 @@ function mockRes() {
 			if (headers) res.headers = headers
 			return res
 		},
+		flushHeaders() {},
 		write(chunk: string) {
 			res.chunks.push(chunk)
 			return true
