@@ -237,6 +237,7 @@ export function createRequestHandler(
 					text: body.text as string | undefined,
 					images: body.images as string[] | undefined,
 					askId: body.askId as string | undefined,
+					mode: body.mode as string | undefined,
 				})
 				return send(res, 202, { taskId, answered: true })
 			}

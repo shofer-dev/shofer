@@ -435,7 +435,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 
 	public async respondToAsk(
 		taskId: string,
-		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
 	): Promise<void> {
 		// Resolve the addressed task (a managed instance, else the current task) and
 		// drive the answer through the same ask-response channel a webview button
@@ -447,6 +447,14 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		if (!task) {
 			this.log(`[API#respondToAsk] no task for ${taskId}; ask response dropped`)
 			return
+		}
+
+		// A followup suggestion may carry a mode: switch this task to it before
+		// resolving the answer, mirroring the webview (which calls switchToMode then
+		// sends the messageResponse). Scoped to this task via handleModeSwitch's
+		// sourceTask arg so it never retargets another task.
+		if (response.mode) {
+			await this.sidebarProvider.handleModeSwitch(response.mode, task)
 		}
 
 		task.handleWebviewAskResponse(

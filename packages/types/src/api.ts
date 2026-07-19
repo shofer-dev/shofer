@@ -73,11 +73,11 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 * approve/deny button takes. Lets a transport (HTTP/SSE) route a remote task's
 	 * approval back to the executor.
 	 * @param taskId The id of the task whose ask is being answered.
-	 * @param response The ask response verb plus optional text/images/askId.
+	 * @param response The ask response verb plus optional text/images/askId/mode.
 	 */
 	respondToAsk(
 		taskId: string,
-		response: { askResponse: string; text?: string; images?: string[]; askId?: string },
+		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
 	): Promise<void>
 
 	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────

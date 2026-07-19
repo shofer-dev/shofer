@@ -57,6 +57,13 @@ export interface AskResponse {
 	images?: string[]
 	/** The id of the ask being answered (routes to the correct outstanding ask). */
 	askId?: string
+	/**
+	 * Optional mode slug to switch the task to as part of this answer. Mirrors the
+	 * webview picking an `ask_followup_question` suggestion that carries a `mode`:
+	 * the mode switch is applied to this task before the answer is resolved. Ignored
+	 * when absent.
+	 */
+	mode?: string
 }
 
 /** The agent control plane a transport drives. */

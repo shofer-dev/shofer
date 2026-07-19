@@ -59,7 +59,9 @@ in-process service:
 `subscribe()` delivers `ServerEvent { type: string; …event-specific }` — a **superset,
 open-ended** stream (assistant text, reasoning, tool-call start/result, asks, task
 lifecycle, token usage, changed-files, …). Front-ends match on `type`. An `ask` event is
-answered back via `respondToAsk` (`AskResponse { askResponse, text?, images?, askId? }`).
+answered back via `respondToAsk` (`AskResponse { askResponse, text?, images?, askId?, mode? }`;
+`mode` switches the task to that mode slug as part of the answer — for an
+`ask_followup_question` suggestion that carries one).
 
 Transports project this stream onto their own shape: HTTP/SSE emits it verbatim over SSE;
 ACP maps the common cases onto its typed `session/update` variants and wraps the rest as
