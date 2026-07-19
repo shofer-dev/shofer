@@ -609,6 +609,8 @@ In a workflow, agents spawned by `WorkflowTask` also receive `knownPeers` derive
 
 Check the current status of a background child task started with `new_task` using `is_background=true`. Returns the task's current mode, status, and — if it has completed/errored/cancelled — its result or error message. If the child is blocked waiting for clarification from the parent (it called `ask_followup_question`), the pending question is surfaced here so the parent can answer it via `answer_subtask_question`. Set `include_activity` to `true` to also see what the child is currently doing.
 
+> **Post-restart resilience:** The in-memory `backgroundChildren` map is rebuilt from persisted history when the parent task is resumed (`Task.rehydrateBackgroundChildren()`), so `check_task_status` continues to recognize its own children after a VS Code / code-server restart. Even before rehydration runs, the tool falls back to the persisted `TaskHistoryStore` to recognize background children — a child whose live `Task` instance was torn down by the restart is reported with its last persisted lifecycle (e.g. `idle` → `running`), not as an error.
+
 | Param              | Type            | Required | Description                                                                    |
 | ------------------ | --------------- | :------: | ------------------------------------------------------------------------------ |
 | `task_id`          | string          |    ✅    | The task ID returned when the background task started                          |
