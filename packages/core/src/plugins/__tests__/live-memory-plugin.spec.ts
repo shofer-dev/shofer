@@ -151,13 +151,19 @@ describe("Live Memory plugin (P1–P6 dogfood)", () => {
 		for (const name of pluginRegistry.list()) pluginRegistry.unregister(name)
 	})
 
+	// This is the only test in the file that pays for a COLD esbuild bundle of the real
+	// on-disk plugin — `cacheDir` is a fresh mkdtemp per run, so the first buildHarness()
+	// bundles main.ts from scratch (~2.3s idle) and the rest hit the warm cache (~10ms
+	// each). Against vitest's 5s default that is barely a 2x margin, so under full-suite
+	// parallelism it times out while every other test in the file passes. Give it the same
+	// explicit budget the other real-esbuild suite uses (custom-tool-registry.spec.ts).
 	it("discovers, loads (esbuild), and registers the on-disk plugin with a tool", async () => {
 		expect(fs.existsSync(path.join(PLUGIN_DIR, "plugin.json"))).toBe(true)
 		await buildHarness({ consented: true })
 		expect(pluginRegistry.has("live-memory")).toBe(true)
 		const tools = await pluginRegistry.collectTools()
 		expect(tools.map((t) => t.name)).toContain("ask_live_memory")
-	})
+	}, 60_000)
 
 	it("afterToolCall accumulates memory and transformSystemPrompt injects a live section", async () => {
 		await buildHarness({ consented: true })
@@ -184,10 +190,7 @@ describe("Live Memory plugin (P1–P6 dogfood)", () => {
 
 		const tools = await pluginRegistry.collectTools()
 		const ask = tools.find((t) => t.name === "ask_live_memory")!
-		const answer = await ask.execute(
-			{ question: "What changed recently?" },
-			{ mode: "code", task: {} as never },
-		)
+		const answer = await ask.execute({ question: "What changed recently?" }, { mode: "code", task: {} as never })
 		// The echo handler surfaces the file names it found in the injected memory
 		// context — proving the answer is grounded in the plugin's own store.
 		expect(answer).toContain("Live Memory Answer")
