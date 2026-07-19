@@ -1,5 +1,5 @@
 import { TaskStatus } from "@shofer/types"
-import type { BackgroundTaskStatus } from "@shofer/types"
+import type { BackgroundTaskStatus, TaskHandle } from "@shofer/types"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle.js"
@@ -39,9 +39,38 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 		const { askApproval, pushToolResult } = callbacks
 
 		// Gate: accept direct children (fast path) OR same-root peers.
-		const handle = task.backgroundChildren.get(task_id)
-		const isDirectChild = !!handle
+		// A "direct child" is a task this task spawned via new_task. The live
+		// in-memory handle is the fast path; if it is missing (e.g. after a
+		// process restart, before rehydrateBackgroundChildren has run), fall
+		// back to the persisted history to recognize our own background children.
+		let handle: TaskHandle | undefined = task.backgroundChildren.get(task_id)
+		let isDirectChild = !!handle
 		let isPeer = false
+
+		if (!isDirectChild) {
+			const provider = task.providerRef.deref()
+			if (provider) {
+				// Persisted-child fallback: a background task whose parentTaskId
+				// is this task is our own child regardless of the in-memory map.
+				try {
+					const persisted = provider.taskHistoryStore.get(task_id)
+					if (persisted?.isBackground && persisted.parentTaskId === task.taskId) {
+						isDirectChild = true
+						// No live handle — synthesize one so the status-resolution
+						// block below treats this as a direct child. Status will be
+						// resolved authoritatively from live/persisted state.
+						handle = {
+							taskId: task_id,
+							status: "running",
+							createdAt: persisted.createdAt ?? persisted.ts ?? Date.now(),
+							parentTaskId: task.taskId,
+						}
+					}
+				} catch {
+					// taskHistoryStore.get is best-effort; fall through to peer check.
+				}
+			}
+		}
 
 		if (!isDirectChild) {
 			// Check if the task_id shares the caller's rootTaskId.
@@ -150,7 +179,26 @@ export class CheckTaskStatusTool extends BaseTool<"check_task_status"> {
 					if (liveTask) {
 						handle.status = mapTaskStatusToBackground(liveTask.taskStatus)
 					} else {
-						handle.status = "error"
+						// No live instance (e.g. the child was stopped / the process
+						// restarted and the child has not been re-activated). Resolve
+						// from the persisted lifecycle rather than assuming "error" —
+						// an idle or completed-on-disk child is not an error.
+						try {
+							const { historyItem } = await provider.getTaskWithId(task_id)
+							const lc = historyItem.taskState?.lifecycle
+							if (lc === "completed") {
+								handle.status = "completed"
+							} else if (lc === "error") {
+								handle.status = "error"
+							} else {
+								// idle / paused / waiting / running-on-disk → treat as
+								// running so the parent can wait or re-inspect rather
+								// than seeing a false "error".
+								handle.status = "running"
+							}
+						} catch (_) {
+							handle.status = "error"
+						}
 					}
 				}
 			}

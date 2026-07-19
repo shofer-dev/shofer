@@ -29,6 +29,10 @@ describe("WaitForTaskTool", () => {
 				on: vi.fn(),
 				off: vi.fn(),
 			},
+			taskHistoryStore: {
+				get: vi.fn().mockReturnValue(undefined),
+				getAll: vi.fn().mockReturnValue([]),
+			},
 			getTaskWithId: vi.fn(),
 			getState: vi.fn().mockResolvedValue({ customModes: [] }),
 			contextProxy: { globalStorageUri: { fsPath: "/tmp/test-storage" } },
@@ -65,6 +69,46 @@ describe("WaitForTaskTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_ids: ["child-1"] }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task: child-1"))
+	})
+
+	// ─── Post-restart: persisted-child fallback ────────────────────────
+
+	it("accepts persisted background child when in-memory handle is missing (post-restart)", async () => {
+		// After a restart, backgroundChildren is empty. The tool must still
+		// recognize its own persisted background child via taskHistoryStore.
+		const task = buildTask({ rootTaskId: undefined, backgroundChildren: new Map() })
+		const provider = task.providerRef.deref()
+		provider.taskHistoryStore.get.mockReturnValue({
+			id: "child-1",
+			isBackground: true,
+			parentTaskId: "caller-1",
+			taskState: { lifecycle: "completed" },
+			createdAt: 100,
+		})
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: {
+				id: "child-1",
+				taskState: { lifecycle: "completed" },
+			},
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "completed" })
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_ids: ["child-1"] }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Task: child-1"))
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Completed: [child-1]"))
+	})
+
+	it("rejects unknown task id not in children, peers, or persisted history", async () => {
+		const task = buildTask({ rootTaskId: undefined, backgroundChildren: new Map() })
+		const provider = task.providerRef.deref()
+		provider.taskHistoryStore.get.mockReturnValue(undefined)
+		provider.getTaskWithId.mockRejectedValue(new Error("ENOENT"))
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_ids: ["unknown-1"] }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not found"))
 	})
 
 	// ─── Cancellation while blocked on a subtask ─────────────────────

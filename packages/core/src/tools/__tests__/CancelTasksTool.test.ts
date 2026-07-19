@@ -11,12 +11,17 @@ describe("CancelTasksTool", () => {
 		return { taskId: "child-1", status, createdAt: Date.now(), parentTaskId: "parent" } as any
 	}
 
-	function buildProvider(liveInstance: any = undefined) {
+	function buildProvider(liveInstance: any = undefined, overrides: Record<string, any> = {}) {
 		return {
 			taskManager: {
 				getManagedTaskInstance: vi.fn().mockReturnValue(liveInstance),
 				getManagedTask: vi.fn().mockReturnValue(undefined),
 			},
+			taskHistoryStore: {
+				get: vi.fn().mockReturnValue(undefined),
+				getAll: vi.fn().mockReturnValue([]),
+			},
+			...overrides,
 		}
 	}
 
@@ -47,6 +52,49 @@ describe("CancelTasksTool", () => {
 
 		expect(callOrder).toEqual(["askApproval", "abortTask"])
 		expect(handle.status).toBe("cancelled")
+	})
+
+	// ─── Post-restart: persisted-child fallback ────────────────────────
+
+	it("recognizes persisted background child when in-memory handle is missing (post-restart)", async () => {
+		// After a restart, backgroundChildren is empty. The tool must still
+		// recognize its own persisted background child via taskHistoryStore so
+		// it reports an accurate outcome instead of "not found".
+		const abortTaskMock = vi.fn(async () => {})
+		const provider = buildProvider(
+			{ abortTask: abortTaskMock },
+			{
+				taskHistoryStore: {
+					get: vi.fn().mockReturnValue({
+						id: "child-1",
+						isBackground: true,
+						parentTaskId: "parent",
+						taskState: { lifecycle: "idle" },
+						createdAt: 100,
+					}),
+					getAll: vi.fn().mockReturnValue([]),
+				},
+			},
+		)
+		const task: any = {
+			taskId: "parent",
+			backgroundChildren: new Map(),
+			providerRef: { deref: () => provider },
+		}
+
+		const pushToolResult = vi.fn()
+		await cancelTasksTool.execute({ task_ids: ["child-1"] }, task, {
+			askApproval: vi.fn().mockResolvedValue(true),
+			pushToolResult,
+			handleError: vi.fn(),
+		} as any)
+
+		// Should NOT report "not found" — the persisted child is recognized.
+		const result = pushToolResult.mock.calls[0]?.[0] as string
+		expect(result).not.toContain("not found")
+		// idle-on-disk child has no live instance, so abort is a no-op but the
+		// plan still classifies it (was_running=true since idle maps to "running").
+		expect(result).toContain("child-1")
 	})
 
 	it("does NOT call abortTask if the user rejects the approval", async () => {

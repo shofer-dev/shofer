@@ -83,6 +83,7 @@ import { defaultModeSlug, getModeBySlug } from "@shofer/types"
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { DiffStrategy, type ToolUse, type McpToolUse, type ToolParamName, toolParamNames } from "@shofer/types"
 import { getModelMaxOutputTokens } from "@shofer/types"
+import type { BackgroundTaskStatus } from "@shofer/types"
 
 // services
 import { McpHub } from "../services/mcp/McpHub.js"
@@ -368,6 +369,96 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					handle.status = "error"
 				}
 			}
+		}
+	}
+
+	/**
+	 * Rebuild the in-memory {@link backgroundChildren} map from persisted history
+	 * after a process restart.
+	 *
+	 * `backgroundChildren` is a runtime-only `Map` populated by `NewTaskTool` when
+	 * spawning background subtasks. It is never serialized. After a VS Code /
+	 * code-server restart, a resumed parent task starts with an empty map, so
+	 * `check_task_status`, `wait_for_task`, `cancel_tasks`, and
+	 * `answer_subtask_question` — all of which gate on
+	 * `task.backgroundChildren.get(task_id)` — reject the parent's own children
+	 * with "Task not found in background children or peers" even though
+	 * `list_background_tasks` (which has a persisted-history fallback) still
+	 * shows them. This method closes that gap by repopulating the map from the
+	 * persisted `HistoryItem` rows that carry `isBackground && parentTaskId ===
+	 * this.taskId`.
+	 *
+	 * Status resolution mirrors {@link cleanupBackgroundChildren}: the live
+	 * `TaskManager.getTaskState()` wins (set synchronously by lifecycle events);
+	 * otherwise the persisted `HistoryItem.taskState.lifecycle` is used. Children
+	 * whose persisted lifecycle was transient (`running`, `waiting`,
+	 * `waiting_input`) are mapped to `idle`-equivalent handle statuses so the
+	 * tools treat them as resumable rather than terminal.
+	 *
+	 * Idempotent: existing live handles are preserved (a live handle always
+	 * reflects more-current state than the persisted snapshot).
+	 */
+	async rehydrateBackgroundChildren(): Promise<void> {
+		const provider = this.providerRef.deref()
+		if (!provider) return
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const taskHistoryStore = (provider as any).taskHistoryStore as { getAll?: () => any[] } | undefined
+		if (!taskHistoryStore || typeof taskHistoryStore.getAll !== "function") return
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let historyItems: any[]
+		try {
+			historyItems = taskHistoryStore.getAll() ?? []
+		} catch {
+			return
+		}
+
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const taskManager = (provider as any).taskManager as { getTaskState?: (id: string) => any } | undefined
+
+		for (const item of historyItems) {
+			// Only persisted background children of THIS task belong in the map.
+			if (!item || !item.isBackground) continue
+			if (item.parentTaskId !== this.taskId) continue
+
+			const childId: string = item.id
+			// Preserve any live handle already present — it is more current.
+			if (this.backgroundChildren.has(childId)) continue
+
+			// Resolve the most authoritative status available post-restart.
+			let status: BackgroundTaskStatus
+			const liveState = taskManager?.getTaskState?.(childId)
+			const lifecycle = liveState?.lifecycle ?? item.taskState?.lifecycle
+
+			switch (lifecycle) {
+				case "completed":
+					status = "completed"
+					break
+				case "error":
+					status = "error"
+					break
+				// Transient lifetimes do not survive a restart (sanitizeRestoredState
+				// downgrades them to `idle`). Map them to the resumable handle status
+				// so the parent can wait on / re-inspect them rather than treating
+				// them as gone.
+				case "running":
+				case "waiting":
+				case "waiting_input":
+				case "idle":
+				case "paused":
+					status = "running"
+					break
+				default:
+					status = "running"
+			}
+
+			this.backgroundChildren.set(childId, {
+				taskId: childId,
+				status,
+				createdAt: item.createdAt ?? item.ts ?? Date.now(),
+				parentTaskId: this.taskId,
+			})
 		}
 	}
 
@@ -3760,6 +3851,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			if (!this.historyPreloaded) {
 				await this.preloadShoferMessages()
 			}
+
+			// Rebuild the in-memory backgroundChildren map from persisted history.
+			// After a process restart the map is empty (it is never serialized),
+			// which would cause check_task_status / wait_for_task / cancel_tasks /
+			// answer_subtask_question to reject the parent's own children with
+			// "Task not found". Idempotent and safe when the map is already populated.
+			await this.rehydrateBackgroundChildren()
 
 			const lastShoferMessage = this.shoferMessages
 				.slice()

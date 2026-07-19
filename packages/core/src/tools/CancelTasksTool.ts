@@ -33,8 +33,38 @@ export class CancelTasksTool extends BaseTool<"cancel_tasks"> {
 			abortTarget?: { id: string }
 		}
 
+		const provider = task.providerRef.deref()
+
 		const plan: PlannedResult[] = task_ids.map((id) => {
-			const handle = task.backgroundChildren.get(id)
+			let handle = task.backgroundChildren.get(id)
+			// Persisted-child fallback: after a process restart the in-memory
+			// handle may be missing even though the child exists on disk. If the
+			// persisted history shows this is our background child, synthesize a
+			// handle so cancel_tasks can still report an accurate outcome instead
+			// of a false "not found".
+			if (!handle && provider) {
+				try {
+					const persisted = provider.taskHistoryStore.get(id)
+					if (persisted?.isBackground && persisted.parentTaskId === task.taskId) {
+						const lc = persisted.taskState?.lifecycle
+						// TaskLifecycle has no "cancelled" — a cancelled task is torn
+						// down to "idle" (or "error" if the abort threw). Map terminal
+						// lifecycles to their matching handle status; everything else
+						// (idle/paused/waiting/running) is treated as "running" so the
+						// cancel plan can still classify and act on it.
+						const status: BackgroundTaskStatus =
+							lc === "completed" ? "completed" : lc === "error" ? "error" : "running"
+						handle = {
+							taskId: id,
+							status,
+							createdAt: persisted.createdAt ?? persisted.ts ?? Date.now(),
+							parentTaskId: task.taskId,
+						}
+					}
+				} catch {
+					// best-effort
+				}
+			}
 			if (!handle) {
 				return {
 					task_id: id,
@@ -86,7 +116,6 @@ export class CancelTasksTool extends BaseTool<"cancel_tasks"> {
 
 		// Now perform the aborts. We mutate `plan` in place to record the
 		// authoritative outcome and to flip handle.status accordingly.
-		const provider = task.providerRef.deref()
 		for (const r of plan) {
 			if (!r.abortTarget) continue
 			const handle = task.backgroundChildren.get(r.abortTarget.id)

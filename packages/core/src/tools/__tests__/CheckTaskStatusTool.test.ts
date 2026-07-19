@@ -22,6 +22,10 @@ describe("CheckTaskStatusTool", () => {
 				getManagedTask: vi.fn(),
 				getManagedTasks: vi.fn().mockReturnValue([]),
 			},
+			taskHistoryStore: {
+				get: vi.fn().mockReturnValue(undefined),
+				getAll: vi.fn().mockReturnValue([]),
+			},
 			getTaskWithId: vi.fn(),
 			getState: vi.fn().mockResolvedValue({ customModes: [] }),
 			contextProxy: { globalStorageUri: { fsPath: "/tmp/test-storage" } },
@@ -62,6 +66,87 @@ describe("CheckTaskStatusTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "child-1" }, task, cbs)
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: completed"))
+	})
+
+	// ─── Post-restart: persisted-child fallback ────────────────────────
+	//
+	// After a process restart, backgroundChildren is empty (it is never
+	// serialized). The tool must still recognize its own persisted background
+	// children via taskHistoryStore so the parent can check their status.
+
+	it("recognizes persisted background child when in-memory handle is missing (post-restart)", async () => {
+		const task = buildTask({ rootTaskId: undefined, backgroundChildren: new Map() })
+		const provider = task.providerRef.deref()
+		// Simulate a persisted child that survived the restart.
+		provider.taskHistoryStore.get.mockReturnValue({
+			id: "child-1",
+			isBackground: true,
+			parentTaskId: "caller-1",
+			taskState: { lifecycle: "completed" },
+			createdAt: 100,
+		})
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: {
+				id: "child-1",
+				isBackground: true,
+				parentTaskId: "caller-1",
+				taskState: { lifecycle: "completed" },
+				mode: "code",
+			},
+		})
+		provider.taskManager.getTaskState.mockReturnValue({ lifecycle: "completed" })
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "child-1" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: completed"))
+		expect(cbs.pushToolResult).not.toHaveBeenCalledWith(expect.stringContaining("not found"))
+	})
+
+	it("persisted child with idle lifecycle resolves to 'running' (not error) post-restart", async () => {
+		const task = buildTask({ rootTaskId: undefined, backgroundChildren: new Map() })
+		const provider = task.providerRef.deref()
+		provider.taskHistoryStore.get.mockReturnValue({
+			id: "child-2",
+			isBackground: true,
+			parentTaskId: "caller-1",
+			taskState: { lifecycle: "idle" },
+			createdAt: 200,
+		})
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: {
+				id: "child-2",
+				isBackground: true,
+				parentTaskId: "caller-1",
+				taskState: { lifecycle: "idle" },
+				mode: "code",
+			},
+		})
+		provider.taskManager.getTaskState.mockReturnValue(null)
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "child-2" }, task, cbs)
+		// idle-on-disk child should be "running" (resumable), NOT "error"
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Status: running"))
+	})
+
+	it("rejects persisted task that is not a background child of this task", async () => {
+		const task = buildTask({ rootTaskId: undefined, backgroundChildren: new Map() })
+		const provider = task.providerRef.deref()
+		// Persisted, but belongs to a different parent.
+		provider.taskHistoryStore.get.mockReturnValue({
+			id: "other-child",
+			isBackground: true,
+			parentTaskId: "different-parent",
+			taskState: { lifecycle: "running" },
+		})
+		provider.getTaskWithId.mockRejectedValue(new Error("ENOENT"))
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "other-child" }, task, cbs)
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining("not found"))
 	})
 
 	// ─── Peer access — not found ─────────────────────────────────────

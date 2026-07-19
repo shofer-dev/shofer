@@ -43,7 +43,10 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 		const effectiveTimeout = timeout ?? DEFAULT_TIMEOUT_SECONDS
 
 		// Validate all task IDs exist in this task's background children OR as
-		// same-root peers (relaxed gate for peer-aware wait).
+		// same-root peers (relaxed gate for peer-aware wait). A persisted
+		// background child (isBackground && parentTaskId === this task) is also
+		// accepted even when the in-memory handle is missing — e.g. after a
+		// process restart before rehydrateBackgroundChildren has run.
 		const handles = new Map<string, TaskHandle>()
 		const missing: string[] = []
 		for (const id of task_ids) {
@@ -53,9 +56,30 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 				continue
 			}
 
+			// Persisted-child fallback: recognize our own background children from
+			// the task history store when the live handle is absent.
+			const provider = task.providerRef.deref()
+			let recognizedAsPersistedChild = false
+			if (provider) {
+				try {
+					const persisted = provider.taskHistoryStore.get(id)
+					if (persisted?.isBackground && persisted.parentTaskId === task.taskId) {
+						handles.set(id, {
+							taskId: id,
+							status: "running",
+							createdAt: persisted.createdAt ?? persisted.ts ?? Date.now(),
+							parentTaskId: task.taskId,
+						})
+						recognizedAsPersistedChild = true
+					}
+				} catch {
+					// taskHistoryStore.get is best-effort; fall through to peer check.
+				}
+			}
+			if (recognizedAsPersistedChild) continue
+
 			// Peer check: same rootTaskId, not a direct child.
 			if (task.rootTaskId) {
-				const provider = task.providerRef.deref()
 				let isPeer = false
 				if (provider) {
 					try {
@@ -236,7 +260,15 @@ export class WaitForTaskTool extends BaseTool<"wait_for_task"> {
 									handle.status = "completed"
 								} else {
 									const liveInstance = provider.taskManager.getManagedTaskInstance(id)
-									handle.status = liveInstance ? mapTaskStatus(liveInstance.taskStatus) : "error"
+									if (liveInstance) {
+										handle.status = mapTaskStatus(liveInstance.taskStatus)
+									} else {
+										// No live instance and not completed on disk — the
+										// child may simply be idle post-restart and not yet
+										// re-activated. Treat as "running" (timed out) rather
+										// than "error" so the parent sees an accurate status.
+										handle.status = "running"
+									}
 								}
 							}
 						}
