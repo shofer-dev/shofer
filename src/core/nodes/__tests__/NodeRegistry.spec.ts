@@ -359,6 +359,39 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.localAgent.createTask).not.toHaveBeenCalled()
 	})
 
+	it("routeNewTask refuses when Local is disabled and nothing else is assignable", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+
+		await h.registry.setDisabled(LOCAL_NODE_ID, true)
+		expect(h.registry.isLocalDisabled()).toBe(true)
+
+		// The pool has nothing assignable, so the bare LOCAL_NODE_ID fallback is the
+		// only candidate — the refusal must fire instead of an in-process run.
+		await expect(h.registry.routeNewTask({ prompt: "nowhere-to-run" })).rejects.toThrow(
+			/Local executor is disabled and no remote node is available/,
+		)
+		expect(host.createManagedTask).not.toHaveBeenCalled()
+	})
+
+	it("routeNewTask with Local disabled still routes to an assignable remote", async () => {
+		const host = makeProviderHost()
+		h.registry.attachProvider(host)
+		const remoteApi = makeAgent()
+		;(remoteApi.createTask as ReturnType<typeof vi.fn>).mockResolvedValue({ taskId: "r1-task-1" })
+
+		await h.registry.setDisabled(LOCAL_NODE_ID, true)
+		await h.registry.upsert(remoteDef, "tok")
+		await h.registry.connect("r1")
+		h.conns.get("http://host:1")!.drive("connected", { api: remoteApi })
+
+		// Round-robin has exactly one assignable executor (the remote) — no throw.
+		const taskId = await h.registry.routeNewTask({ prompt: "remote-only" })
+		expect(remoteApi.createTask).toHaveBeenCalledWith({ prompt: "remote-only", mode: defaultModeSlug })
+		expect(host.createManagedTask).not.toHaveBeenCalled()
+		expect(taskId).toBe("r1-task-1")
+	})
+
 	it("routeNewTask on a remote owner dispatches through the pool (never the in-process path)", async () => {
 		const host = makeProviderHost()
 		h.registry.attachProvider(host)

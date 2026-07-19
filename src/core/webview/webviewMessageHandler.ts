@@ -823,12 +823,19 @@ export const webviewMessageHandler = async (
 
 				// Shofer Nodes L2: route through the executor pool ONLY when there is a
 				// real distributed decision to make — at least one enabled remote node,
-				// or an explicit preferredNodeId. Otherwise (the overwhelmingly common
-				// local-only case) the existing in-process createManagedTask path is
-				// used UNCHANGED, so local behavior is byte-for-byte identical.
+				// an explicit preferredNodeId, or an admin-disabled Local executor.
+				// Otherwise (the overwhelmingly common local-only case) the existing
+				// in-process createManagedTask path is used UNCHANGED, so local behavior
+				// is byte-for-byte identical. The disabled-Local case MUST route even
+				// with no remote in sight: taking the fast path would silently run the
+				// task on the executor the admin disabled, whereas routeNewTask refuses
+				// it with a clear error.
 				const registry = provider.nodeRegistry
 				const shouldRoute =
-					!!registry && (registry.hasEnabledRemote() || typeof message.preferredNodeId === "string")
+					!!registry &&
+					(registry.hasEnabledRemote() ||
+						registry.isLocalDisabled() ||
+						typeof message.preferredNodeId === "string")
 				if (shouldRoute) {
 					// Resolve the task's API Configuration controller-side and ship it
 					// with the task, so a remote owner runs on the same provider/model
@@ -2544,6 +2551,9 @@ export const webviewMessageHandler = async (
 						try {
 							const { historyItem } = await provider.getTaskWithId(currentTask.taskId)
 							await provider.updateTaskHistory({ ...historyItem, apiConfigName: profile.name })
+							provider.log(
+								`[setTaskApiConfiguration] task=${currentTask.taskId} instance=${currentTask.instanceId} persisted apiConfigName="${profile.name}"`,
+							)
 						} catch {
 							// Brand-new task not yet in history — it will persist its
 							// apiConfigName via its own metadata write. Non-fatal.

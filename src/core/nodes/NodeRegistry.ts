@@ -342,6 +342,17 @@ export class NodeRegistry {
 	}
 
 	/**
+	 * True when the Local executor is admin-disabled. The controller itself stays fully
+	 * alive regardless (UI, node relay, indexing) — disabled means Local must not pick
+	 * up NEW tasks. Callers that would start a task in-process without consulting the
+	 * pool (the webview's local fast path) must check this and route instead, so the
+	 * refusal in {@link routeNewTask} is reachable.
+	 */
+	isLocalDisabled(): boolean {
+		return this.getDef(LOCAL_NODE_ID)?.disabled ?? false
+	}
+
+	/**
 	 * Route a webview new-task through the pool (Level 2 load-balancing).
 	 *
 	 * Owner selection: an enabled+assignable `preferredNodeId` wins; otherwise the
@@ -365,6 +376,17 @@ export class NodeRegistry {
 			input.preferredNodeId && assignable.includes(input.preferredNodeId) ? input.preferredNodeId : undefined
 		// A preferred pick must NOT also advance the round-robin cursor.
 		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_NODE_ID
+
+		// An admin-disabled Local is excluded from `assignable()`, so the only way it
+		// can become owner is this bare fallback — meaning nothing else was assignable.
+		// Refuse with a clear error (surfaced by the caller's notifier) instead of
+		// silently running the task on the executor the admin disabled.
+		if (owner === LOCAL_NODE_ID && this.isLocalDisabled()) {
+			throw new Error(
+				"The Local executor is disabled and no remote node is available to run this task. " +
+					"Enable the Local executor or connect/enable a remote node in Settings → Shofer Nodes.",
+			)
+		}
 
 		if (owner === LOCAL_NODE_ID) {
 			if (!view) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
