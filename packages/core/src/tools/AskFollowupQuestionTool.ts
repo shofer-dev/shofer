@@ -72,10 +72,13 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 
 			task.consecutiveMistakeCount = 0
 
-			// Background child tasks route their question to the parent agent (which
-			// answers with free text via answer_subtask_question), so the typed form
-			// UI never reaches an interactive user. For those, fall through to the
-			// parent-routing path below and present the question as plain text.
+			// Background child tasks route their question to BOTH the parent agent
+			// (which answers with free text via answer_subtask_question) AND the
+			// user (interactively, via the child's own followup ask UI). The
+			// question is rendered in the child's chat using `task.ask("followup")`
+			// — the same mechanism used for user-facing questions — so suggestion
+			// buttons appear when the user views the child task. Either channel
+			// can answer; whichever fires first resolves the ask.
 			const isBackgroundChild = !!(task.providerRef?.deref() && task.parentTaskId && task.isBackgroundTask)
 
 			// Form mode: render a typed input form (dropdown/radio/checkbox/slider/
@@ -84,6 +87,10 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 			// with that JSON string. We embed the answers back onto the question
 			// message so it replays read-only after a reload, then hand the JSON to
 			// the model as the tool result.
+			//
+			// Background children never use form mode — the parent answers in free
+			// text via answer_subtask_question, and the form UI is designed for
+			// interactive human input. Fall through to the followup-ask path below.
 			if (hasForm && !isBackgroundChild) {
 				const form_json = { question, paramForm: form }
 				const { text, images } = await task.ask("followup", JSON.stringify(form_json), false)
@@ -114,17 +121,28 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 				suggest: suggestions,
 			}
 
-			// When this is a background child task, route the question to the
-			// parent instead of blocking on user input. The parent discovers
-			// the question via check_task_status / wait_for_task (which show
-			// status "waiting_for_parent" and the question text) and answers
-			// via answer_subtask_question.
+			// When this is a background child task, the question is rendered in
+			// the child's own chat via `task.ask("followup", …)` — the same
+			// mechanism used for user-facing questions. This means:
+			//
+			//   1. The question + suggestion buttons appear in the child's chat UI
+			//      when the user views the child task, so the USER can answer
+			//      interactively (click a suggestion or type a response).
+			//   2. The parent agent can answer via `answer_subtask_question`, which
+			//      resolves the pending ask by calling `handleWebviewAskResponse`.
+			//   3. The `task.ask("followup")` emits `TaskInteractive` → the
+			//      TaskManager adds a `needs_input` notification so the user knows
+			//      a background child has a question.
+			//
+			// Whichever channel answers first resolves the ask; the other becomes
+			// a no-op (the ask is no longer pending).
 			const provider = task.providerRef?.deref()
 			if (provider && task.parentTaskId && task.isBackgroundTask) {
-				// Finalize the streaming "tool" ChatRow before routing to the
-				// parent. This tool is in the "questions" group and auto-approved
-				// for background children (which inherit alwaysAllow* settings),
-				// so askApproval returns immediately while rendering a ChatRow entry.
+				// Finalize the streaming "tool" ChatRow before presenting the
+				// followup ask. This tool is in the "questions" group and
+				// auto-approved for background children (which inherit
+				// alwaysAllow* settings), so askApproval returns immediately
+				// while rendering a ChatRow entry.
 				const completeMessage = JSON.stringify({
 					tool: "askFollowupQuestion",
 					question,
@@ -142,44 +160,43 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 				if (handleOnParent) {
 					handleOnParent.status = "waiting_for_parent"
 				}
-
-				// Transition the child to "waiting" while blocked on the parent's
-				// answer, matching WaitForTaskTool / WaitForMcpCallTool: the child
-				// is blocked on a non-user external event (the parent agent
-				// answering via answer_subtask_question), not actively processing.
-				provider.taskManager.setState(task.taskId, { lifecycle: "waiting" })
-
 				try {
-					// Register the pending question on the child and wake any
-					// wait_for_task currently blocked on this child.
-					const answerPromise = task.setPendingParentQuestion({
-						question,
-						suggestions,
-					})
+					// Store the question metadata so check_task_status / wait_for_task
+					// can surface the question text and suggestions to the parent agent.
+					task.setPendingParentQuestionInfo({ question, suggestions })
+
+					// Wake any wait_for_task currently blocked on this child so the
+					// parent agent can discover the question immediately.
 					provider.taskManager.emit("managedTask:needs-parent-input", task.taskId, question)
 
-					const answer = await answerPromise
-					await task.say("user_feedback", answer, undefined)
-					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`))
-				} catch (rejectErr) {
-					// The promise rejected because the task was aborted (or the
-					// question was superseded). Surface a clean tool error rather
-					// than letting the cast-style error leak up.
+					// Block on the followup ask. This renders the question (with
+					// suggestion buttons) in the child's chat UI. The ask is
+					// resolved when EITHER the parent answers (via
+					// answer_subtask_question → handleWebviewAskResponse) OR the
+					// user answers interactively (clicking a suggestion / typing
+					// in the child's chat). The `followup` ask type is an
+					// interactiveAsk, so TaskManager emits a `needs_input`
+					// notification for background children — the user is alerted.
+					const { text, images } = await task.ask("followup", JSON.stringify(follow_up_json), false)
+					const answer = text ?? ""
+					await task.say("user_feedback", answer, images)
+					pushToolResult(formatResponse.toolResult(`<user_message>\n${answer}\n</user_message>`, images))
+				} catch (askErr) {
+					// The ask was aborted (AskIgnoredError) — the task was stopped
+					// or superseded. Surface a clean tool error.
 					pushToolResult(
 						formatResponse.toolError(
-							`ask_followup_question was cancelled before the parent answered: ${
-								rejectErr instanceof Error ? rejectErr.message : String(rejectErr)
+							`ask_followup_question was cancelled before an answer was received: ${
+								askErr instanceof Error ? askErr.message : String(askErr)
 							}`,
 						),
 					)
 				} finally {
-					// The child is resuming — whether the parent answered, the wait
-					// was aborted/superseded, or setup (setPendingParentQuestion /
-					// emit) threw synchronously. Restore "running" and the parent's
-					// handle view here so neither is stranded in
-					// "waiting"/"waiting_for_parent". Mirrors the finally in
-					// WaitForTaskTool / WaitForMcpCallTool.
-					provider.taskManager.setState(task.taskId, { lifecycle: "running" })
+					// The child is resuming — whether the parent answered, the user
+					// answered, the wait was aborted, or setup threw. Clear the
+					// pending question metadata and restore the parent's handle
+					// view so neither is stranded in "waiting_for_parent".
+					task.clearPendingParentQuestion()
 					if (handleOnParent && handleOnParent.status === "waiting_for_parent") {
 						handleOnParent.status = previousHandleStatus ?? "running"
 					}

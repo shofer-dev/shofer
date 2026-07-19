@@ -1435,10 +1435,7 @@ export class WorkflowTask extends Task {
 
 		workflowLog.info(`[WorkflowTask#${this.taskId}] Relay answer for task ${childTaskId} (${answer.length} chars)`)
 
-		// Deliver the answer via answer_subtask_question path —
-		// resolvePendingParentQuestion settles the Promise the child
-		// is awaiting in AskFollowupQuestionTool.execute.
-		liveInstance.resolvePendingParentQuestion(answer)
+		// Deliver the answer by resolving the child's pending\n\t\t// `task.ask("followup")` via handleWebviewAskResponse — the same\n\t\t// path the webview and answer_subtask_question use. This unblocks\n\t\t// the child's AskFollowupQuestionTool.execute().\n\t\tliveInstance.handleWebviewAskResponse("messageResponse", answer)
 		return true
 	}
 

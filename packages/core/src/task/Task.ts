@@ -279,16 +279,21 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * When this task is a background child whose `ask_followup_question`
-	 * routed up to the parent, stores the question + the promise hooks the
-	 * tool handler is awaiting. Accessed only through the typed
-	 * `getPendingParentQuestion / setPendingParentQuestion / resolve / reject`
+	 * is awaiting an answer from either the parent agent (via
+	 * `answer_subtask_question`) or the user (interactively, via the
+	 * child's own `followup` ask UI), stores the question metadata so
+	 * `check_task_status` / `wait_for_task` can surface the question text.
+	 *
+	 * The blocking itself is handled by `task.ask("followup", …)` — the
+	 * same mechanism used for user-facing questions — so the question
+	 * renders with suggestion buttons in the child's chat UI and can be
+	 * resolved by EITHER channel calling `handleWebviewAskResponse`.
+	 *
+	 * Accessed only through the typed
+	 * `getPendingParentQuestion / setPendingParentQuestionInfo / clearPendingParentQuestion`
 	 * accessors below — never via cast.
 	 */
-	private _pendingParentQuestion?: {
-		info: PendingParentQuestionInfo
-		resolve: (answer: string) => void
-		reject: (reason: Error) => void
-	}
+	private _pendingParentQuestion?: PendingParentQuestionInfo
 
 	/**
 	 * In-flight async MCP tool calls (mirrors `backgroundChildren` for MCP calls).
@@ -2722,6 +2727,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						text,
 						isProtected,
 					})
+					// Suppress auto-approval for a background child's routed
+					// followup question — it must wait for the parent agent or
+					// the user to answer, not be auto-answered with the first
+					// suggestion.
+					if (type === "followup" && this.isRoutedFollowupPending()) {
+						quickApproval.decision = "ask"
+					}
 					const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
 					const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
 
@@ -2766,6 +2778,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				text,
 				isProtected,
 			})
+			// Suppress auto-approval for a background child's routed
+			// followup question — it must wait for the parent agent or
+			// the user to answer, not be auto-answered with the first
+			// suggestion.
+			if (type === "followup" && this.isRoutedFollowupPending()) {
+				quickApproval.decision = "ask"
+			}
 			const isAutoApproved = quickApproval.decision === "approve" || quickApproval.decision === "deny"
 			const isAutoApprovedTool = isAutoApproved && quickApproval.decision === "approve" && type === "tool"
 
@@ -2795,6 +2814,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const provider = this.providerRef.deref()
 		const state = provider ? await provider.getState() : undefined
 		const approval = await checkAutoApproval({ state: this.withTaskTrust(state), ask: type, text, isProtected })
+
+		// Suppress auto-approval for a background child's routed followup
+		// question — it must wait for the parent agent or the user to
+		// answer, not be auto-answered with the first suggestion.
+		if (type === "followup" && this.isRoutedFollowupPending()) {
+			approval.decision = "ask"
+		}
 
 		// Note: the auto-approved / auto-denied fast-path was moved inside the
 		// two complete-message branches above so the `autoApproved` flag is
@@ -4144,41 +4170,53 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		return this.isBackground
 	}
 
-	/** Typed read-only view of a question this background child has routed to its parent. */
+	/**
+	 * Typed read-only view of a question this background child has pending.
+	 *
+	 * The question is awaiting an answer from EITHER the parent agent (via
+	 * `answer_subtask_question`) OR the user (interactively, via the child's
+	 * own `followup` ask UI rendered by `task.ask("followup", …)`). The
+	 * metadata stored here lets `check_task_status` / `wait_for_task`
+	 * surface the question text and suggestions to the parent agent.
+	 */
 	public getPendingParentQuestion(): PendingParentQuestionInfo | undefined {
-		return this._pendingParentQuestion?.info
+		return this._pendingParentQuestion
 	}
 
 	/**
-	 * Register a pending parent question. Returns a promise that resolves with
-	 * the parent's answer (via `resolvePendingParentQuestion`) or rejects when
-	 * the task is aborted (via `rejectPendingParentQuestion`).
+	 * Register the metadata for a pending question this background child has
+	 * asked via `ask_followup_question`. The blocking itself is handled by
+	 * `task.ask("followup", …)` in `AskFollowupQuestionTool.execute` — this
+	 * method only stores the question info so orchestration tools
+	 * (`check_task_status`, `wait_for_task`) can surface it.
 	 *
-	 * Only one pending question can be outstanding at a time per task — calling
-	 * this while one is already pending rejects the previous one.
+	 * Only one pending question can be outstanding at a time per task.
 	 */
-	public setPendingParentQuestion(info: PendingParentQuestionInfo): Promise<string> {
-		// Reject any previous outstanding question to avoid leaking promises.
-		this.rejectPendingParentQuestion(new Error("superseded by a new question"))
-		return new Promise<string>((resolve, reject) => {
-			this._pendingParentQuestion = { info, resolve, reject }
-		})
+	public setPendingParentQuestionInfo(info: PendingParentQuestionInfo): void {
+		this._pendingParentQuestion = info
 	}
 
-	public resolvePendingParentQuestion(answer: string): boolean {
-		const pq = this._pendingParentQuestion
-		if (!pq) return false
+	/**
+	 * Clear the pending parent question metadata. Called when the question
+	 * has been answered (by either channel) or when the task is aborted.
+	 */
+	public clearPendingParentQuestion(): void {
 		this._pendingParentQuestion = undefined
-		pq.resolve(answer)
-		return true
 	}
 
-	public rejectPendingParentQuestion(reason: Error): boolean {
-		const pq = this._pendingParentQuestion
-		if (!pq) return false
-		this._pendingParentQuestion = undefined
-		pq.reject(reason)
-		return true
+	/**
+	 * True when this task is a background child that currently has a routed
+	 * `ask_followup_question` pending (i.e. a question awaiting an answer
+	 * from either the parent agent or the user via the child's own followup
+	 * ask UI).
+	 *
+	 * Used by `task.ask()` to suppress the `followup` auto-approval timeout
+	 * for routed questions — the question must NOT be auto-answered with the
+	 * first suggestion, since it is directed at the parent/user, not at an
+	 * auto-approval policy.
+	 */
+	private isRoutedFollowupPending(): boolean {
+		return this.isBackground && !!this.parentTaskId && this._pendingParentQuestion !== undefined
 	}
 
 	public async abortTask(isAbandoned = false) {
@@ -4197,10 +4235,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			)
 		}
 
-		// If this task was blocked awaiting a parent answer (via the
-		// ask_followup_question → parent routing), reject that promise NOW so
-		// the child wakes and unwinds the tool handler instead of hanging.
-		this.rejectPendingParentQuestion(new Error("task aborted"))
+		// If this task was blocked awaiting an answer to a routed
+		// ask_followup_question (either from the parent agent or the user),
+		// clear the pending-question metadata now. The blocking itself is
+		// handled by `task.ask("followup", …)`, whose `pWaitFor` already
+		// checks `this.abort` and unwinds via `AskIgnoredError` — so no
+		// promise rejection is needed here.
+		this.clearPendingParentQuestion()
 
 		// Abort all background children before aborting self (Decision: abort propagation).
 		await this.abortBackgroundChildren()

@@ -5,7 +5,7 @@
 -- ask_followup_question mid-stake. Because the agent is a background
 -- child of the WorkflowTask, the question is routed to the executor,
 -- which relays it to the user via this.ask("followup", …). The user
--- answers, the reply is fed back via resolvePendingParentQuestion,
+-- answers, the reply is fed back via handleWebviewAskResponse,
 -- and the agent continues to completion.
 --
 -- Unlike simple2.slang (single agent, ask → research → complete),

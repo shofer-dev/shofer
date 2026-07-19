@@ -54,16 +54,14 @@ export class AnswerSubtaskQuestionTool extends BaseTool<"answer_subtask_question
 			return
 		}
 
-		// Resolve the child's pending question with the parent's answer.
-		const resolved = liveInstance.resolvePendingParentQuestion(answer)
-		if (!resolved) {
-			pushToolResult(
-				formatResponse.toolError(
-					`Task ${task_id} was no longer waiting for an answer (resolved between check and write).`,
-				),
-			)
-			return
-		}
+		// Resolve the child's pending `task.ask("followup")` by feeding the
+		// parent's answer through the same `handleWebviewAskResponse` path
+		// the webview uses. This unblocks the child's `AskFollowupQuestionTool`
+		// execute() — the `task.ask("followup")` call returns with the answer.
+		// If the user already answered interactively (via the child's own
+		// followup UI), the ask is no longer pending and this is a no-op
+		// (handleWebviewAskResponse guards on isAwaitingAskResponse).
+		liveInstance.handleWebviewAskResponse("messageResponse", answer)
 
 		// Flip the parent-side handle back to "running" so subsequent
 		// check_task_status / wait_for_task calls see live status again.

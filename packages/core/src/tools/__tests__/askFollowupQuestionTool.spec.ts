@@ -460,14 +460,18 @@ describe("askFollowupQuestionTool", () => {
 		})
 	})
 
-	describe("background child state transitions", () => {
-		let setStateSpy: ReturnType<typeof vi.fn>
+	describe("background child question routing", () => {
+		let emitSpy: ReturnType<typeof vi.fn>
 		let providerRef: { deref: () => any }
 		let handleOnParent: { status: string }
+		let setPendingParentQuestionInfoSpy: ReturnType<typeof vi.fn>
+		let clearPendingParentQuestionSpy: ReturnType<typeof vi.fn>
 
 		beforeEach(() => {
-			setStateSpy = vi.fn()
+			emitSpy = vi.fn()
 			handleOnParent = { status: "running" }
+			setPendingParentQuestionInfoSpy = vi.fn()
+			clearPendingParentQuestionSpy = vi.fn()
 
 			const parentInstance = {
 				backgroundChildren: new Map([["child-task-1", handleOnParent]]),
@@ -475,29 +479,35 @@ describe("askFollowupQuestionTool", () => {
 
 			const provider = {
 				taskManager: {
-					setState: setStateSpy,
 					getManagedTaskInstance: vi.fn().mockReturnValue(parentInstance),
-					emit: vi.fn(),
+					emit: emitSpy,
 				},
 			}
 
 			providerRef = { deref: () => provider }
 		})
 
-		function buildBackgroundChildTask(answerPromise: Promise<string>): typeof mockShofer {
+		/**
+		 * Builds a mock background child task. The `ask` mock controls how the
+		 * routed followup ask resolves — by default it resolves with a text
+		 * answer (simulating either the parent answering via
+		 * answer_subtask_question or the user clicking a suggestion).
+		 */
+		function buildBackgroundChildTask(askImpl?: ReturnType<typeof vi.fn>): typeof mockShofer {
 			return {
 				...mockShofer,
 				taskId: "child-task-1",
 				parentTaskId: "parent-task-1",
 				isBackgroundTask: true,
 				providerRef,
-				setPendingParentQuestion: vi.fn().mockReturnValue(answerPromise),
+				setPendingParentQuestionInfo: setPendingParentQuestionInfoSpy,
+				clearPendingParentQuestion: clearPendingParentQuestionSpy,
+				ask: askImpl ?? vi.fn().mockResolvedValue({ text: "parent's answer" }),
 			}
 		}
 
-		it("transitions to waiting while awaiting parent answer, then running on resolve", async () => {
-			const answerPromise = Promise.resolve("parent's answer")
-			const task = buildBackgroundChildTask(answerPromise)
+		it("renders the question via task.ask('followup') so both parent and user can answer", async () => {
+			const task = buildBackgroundChildTask()
 
 			const block: ToolUse = {
 				type: "tool_use",
@@ -518,15 +528,15 @@ describe("askFollowupQuestionTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
-			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "running" })
-			expect(setStateSpy.mock.calls[0]).toEqual(["child-task-1", { lifecycle: "waiting" }])
-			expect(setStateSpy.mock.calls[1]).toEqual(["child-task-1", { lifecycle: "running" }])
+			// The question is rendered in the child's chat via task.ask("followup"),
+			// so suggestion buttons appear and EITHER the parent or the user can answer.
+			expect(task.ask).toHaveBeenCalledWith("followup", expect.stringContaining('"question":"Need help?"'), false)
+			// The answer is surfaced to the model as a tool result.
+			expect(toolResult).toContain("parent's answer")
 		})
 
-		it("transitions to waiting then back to running on rejection", async () => {
-			const answerPromise = Promise.reject(new Error("task aborted"))
-			const task = buildBackgroundChildTask(answerPromise)
+		it("stores question metadata and emits needs-parent-input so wait_for_task wakes", async () => {
+			const task = buildBackgroundChildTask()
 
 			const block: ToolUse = {
 				type: "tool_use",
@@ -539,32 +549,83 @@ describe("askFollowupQuestionTool", () => {
 				partial: false,
 			}
 
-			const askApproval = vi.fn().mockResolvedValue(true)
-
-			// The catch block swallows the rejection and emits a tool error,
-			// so handle() does not throw.
 			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
-				askApproval,
+				askApproval: vi.fn().mockResolvedValue(true),
 				handleError: vi.fn(),
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
-			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "running" })
-			expect(setStateSpy.mock.calls[0]).toEqual(["child-task-1", { lifecycle: "waiting" }])
-			expect(setStateSpy.mock.calls[1]).toEqual(["child-task-1", { lifecycle: "running" }])
-
-			// The tool error should surface the rejection reason.
-			expect(toolResult).toContain("task aborted")
+			// Question metadata is stored for check_task_status / wait_for_task.
+			expect(setPendingParentQuestionInfoSpy).toHaveBeenCalledWith({
+				question: "Need help?",
+				suggestions: [{ answer: "Yes" }],
+			})
+			// The needs-parent-input event wakes any blocked wait_for_task.
+			expect(emitSpy).toHaveBeenCalledWith("managedTask:needs-parent-input", "child-task-1", "Need help?")
+			// Metadata is cleared in the finally after the ask resolves.
+			expect(clearPendingParentQuestionSpy).toHaveBeenCalled()
 		})
 
-		it("restores running (in finally) when setup throws synchronously — no stranding", async () => {
+		it("flips parent handle to waiting_for_parent and restores on resolve", async () => {
+			const task = buildBackgroundChildTask()
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: {
+					question: "Need help?",
+					follow_up: [{ text: "Yes" }],
+				},
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn().mockResolvedValue(true),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// After the ask resolves, the parent handle is restored to "running".
+			expect(handleOnParent.status).toBe("running")
+		})
+
+		it("surfaces a tool error when the ask is aborted (task stopped)", async () => {
+			// Simulate task.ask throwing an AskIgnoredError (task aborted).
+			const task = buildBackgroundChildTask(
+				vi.fn().mockRejectedValue(new Error("aborted while awaiting ask response")),
+			)
+
+			const block: ToolUse = {
+				type: "tool_use",
+				name: "ask_followup_question",
+				params: { question: "Need help?" },
+				nativeArgs: {
+					question: "Need help?",
+					follow_up: [{ text: "Yes" }],
+				},
+				partial: false,
+			}
+
+			await askFollowupQuestionTool.handle(task as any, block as ToolUse<"ask_followup_question">, {
+				askApproval: vi.fn().mockResolvedValue(true),
+				handleError: vi.fn(),
+				pushToolResult: mockPushToolResult,
+			})
+
+			// The abort error is surfaced as a clean tool error.
+			expect(toolResult).toContain("cancelled before an answer was received")
+			// The finally still clears the metadata and restores the handle.
+			expect(clearPendingParentQuestionSpy).toHaveBeenCalled()
+			expect(handleOnParent.status).toBe("running")
+		})
+
+		it("restores handle (in finally) when setup throws synchronously — no stranding", async () => {
 			// Regression: a synchronous throw during setup (here the
 			// needs-parent-input emit, e.g. a wait_for_task listener throwing)
-			// must not strand the child in "waiting" nor the parent handle in
-			// "waiting_for_parent". The finally restores both.
-			const task = buildBackgroundChildTask(Promise.resolve("never awaited"))
-			providerRef.deref().taskManager.emit.mockImplementation(() => {
+			// must not strand the parent handle in "waiting_for_parent".
+			const task = buildBackgroundChildTask()
+			emitSpy.mockImplementation(() => {
 				throw new Error("listener boom")
 			})
 
@@ -583,17 +644,13 @@ describe("askFollowupQuestionTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// waiting was set, and running was STILL restored despite the throw.
-			expect(setStateSpy).toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
-			expect(setStateSpy).toHaveBeenLastCalledWith("child-task-1", { lifecycle: "running" })
-			// Parent's view of the child is restored too (not stranded).
+			// Parent's view of the child is restored (not stranded).
 			expect(handleOnParent.status).toBe("running")
 			expect(toolResult).toContain("listener boom")
 		})
 
-		it("does NOT set waiting when askApproval returns false", async () => {
-			const answerPromise = Promise.resolve("parent's answer")
-			const task = buildBackgroundChildTask(answerPromise)
+		it("does NOT proceed when askApproval returns false", async () => {
+			const task = buildBackgroundChildTask()
 
 			const block: ToolUse = {
 				type: "tool_use",
@@ -614,11 +671,14 @@ describe("askFollowupQuestionTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			expect(setStateSpy).not.toHaveBeenCalledWith("child-task-1", { lifecycle: "waiting" })
-			expect(setStateSpy).not.toHaveBeenCalled()
+			// The followup ask was never called.
+			expect(task.ask).not.toHaveBeenCalled()
+			// No metadata stored, no event emitted.
+			expect(setPendingParentQuestionInfoSpy).not.toHaveBeenCalled()
+			expect(emitSpy).not.toHaveBeenCalled()
 		})
 
-		it("foreground task does NOT call setState('waiting')", async () => {
+		it("foreground task does NOT route to parent — uses normal task.ask('followup')", async () => {
 			// Foreground task has no parentTaskId and no isBackgroundTask —
 			// it goes through the normal task.ask("followup", ...) path.
 			const block: ToolUse = {
@@ -643,10 +703,7 @@ describe("askFollowupQuestionTool", () => {
 				pushToolResult: mockPushToolResult,
 			})
 
-			// No setState spy on the foreground task — the mock doesn't have
-			// taskManager at all. The state transition goes through TaskInteractive
-			// → waiting_input, which is out of scope for this test. We just verify
-			// that the foreground path was taken (task.ask was called).
+			// The foreground path was taken (task.ask was called).
 			expect(mockShofer.ask).toHaveBeenCalledWith("followup", expect.any(String), false)
 		})
 	})

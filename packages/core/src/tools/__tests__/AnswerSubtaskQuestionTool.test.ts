@@ -20,11 +20,11 @@ describe("AnswerSubtaskQuestionTool", () => {
 		} as any
 	}
 
-	it("resolves the typed pending question on the child and flips handle status", async () => {
+	it("resolves the child's pending followup ask via handleWebviewAskResponse and flips handle status", async () => {
 		const handle = { taskId: "c1", status: "waiting_for_parent", createdAt: 0, parentTaskId: "p" } as any
 		const liveInstance = {
 			getPendingParentQuestion: vi.fn().mockReturnValue({ question: "ok?", suggestions: [] }),
-			resolvePendingParentQuestion: vi.fn().mockReturnValue(true),
+			handleWebviewAskResponse: vi.fn(),
 		}
 		const task = buildParentTask(new Map([["c1", handle]]), liveInstance)
 
@@ -35,7 +35,7 @@ describe("AnswerSubtaskQuestionTool", () => {
 			handleError: vi.fn(),
 		} as any)
 
-		expect(liveInstance.resolvePendingParentQuestion).toHaveBeenCalledWith("yes")
+		expect(liveInstance.handleWebviewAskResponse).toHaveBeenCalledWith("messageResponse", "yes")
 		expect(handle.status).toBe("running")
 		expect(pushToolResult).toHaveBeenCalledWith(expect.stringContaining("Answered question for task c1"))
 	})
@@ -44,7 +44,7 @@ describe("AnswerSubtaskQuestionTool", () => {
 		const handle = { taskId: "c1", status: "running", createdAt: 0, parentTaskId: "p" } as any
 		const liveInstance = {
 			getPendingParentQuestion: vi.fn().mockReturnValue(undefined),
-			resolvePendingParentQuestion: vi.fn(),
+			handleWebviewAskResponse: vi.fn(),
 		}
 		const task = buildParentTask(new Map([["c1", handle]]), liveInstance)
 
@@ -55,7 +55,7 @@ describe("AnswerSubtaskQuestionTool", () => {
 			handleError: vi.fn(),
 		} as any)
 
-		expect(liveInstance.resolvePendingParentQuestion).not.toHaveBeenCalled()
+		expect(liveInstance.handleWebviewAskResponse).not.toHaveBeenCalled()
 		expect(pushToolResult).toHaveBeenCalledWith(expect.stringContaining("does not have a pending question"))
 	})
 })

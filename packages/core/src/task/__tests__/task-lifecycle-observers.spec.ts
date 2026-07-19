@@ -40,7 +40,7 @@ describe("Task lifecycle observers — afterTaskComplete", () => {
 			consecutiveNoToolUseCount: 0,
 			consecutiveNoAssistantMessagesCount: 0,
 			_taskAbortController: { signal: { aborted: true }, abort: vi.fn() },
-			rejectPendingParentQuestion: vi.fn(),
+			clearPendingParentQuestion: vi.fn(),
 			abortBackgroundChildren: vi.fn(async () => {}),
 			abortBackgroundTerminalProcesses: vi.fn(),
 			emitFinalTokenUsageUpdate: vi.fn(),
