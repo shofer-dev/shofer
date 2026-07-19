@@ -21,18 +21,22 @@ import {
 	type ShoferNodeRequest,
 	type ShoferNodeView,
 	type ShoferNodesState,
+	type SyncedSecrets,
 	type SyncedSettings,
 	type TokenUsage,
 	ExecutorPool,
 	LOCAL_NODE_ID,
 	ShoferEventName,
+	SYNCED_SECRET_KEYS,
 	SYNCED_SETTINGS_KEYS,
 	computeConfigVersion,
 	defaultModeSlug,
+	pickSyncedSecrets,
 	pickSyncedSettings,
 } from "@shofer/types"
 import { NodeConnection, ShoferApiAgent, configLog } from "@shofer/core"
 
+import { CodeIndexManager } from "../../services/code-index/manager.js"
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
 /**
@@ -80,6 +84,12 @@ export interface INodeConnection {
  */
 export interface SyncedConfigSource {
 	getValues(): Partial<GlobalSettings>
+	/**
+	 * Live read of a single secret. The registry pulls only {@link SYNCED_SECRET_KEYS}
+	 * through this, so the source hands over one credential at a time rather than
+	 * exposing its whole secret bag. `ContextProxy` satisfies this as-is.
+	 */
+	getSecret(key: (typeof SYNCED_SECRET_KEYS)[number]): string | undefined
 	onDidChange: Event<{ key: string }>
 }
 
@@ -200,8 +210,15 @@ export class NodeRegistry {
 	private desiredConfigVersion?: string
 	private static readonly SHADOW_CHANGED_FILES_DEBOUNCE_MS = 500
 
-	/** The globalSettings keys that are actually synced — used to filter change events. */
-	private static readonly SYNCED_KEYS = new Set<string>(SYNCED_SETTINGS_KEYS as readonly string[])
+	/**
+	 * The keys that are actually synced — used to filter change events. Includes the
+	 * synced SECRET keys as well: rotating a code-index credential must re-broadcast,
+	 * and a secret change is delivered through the same `onDidChange` stream.
+	 */
+	private static readonly SYNCED_KEYS = new Set<string>([
+		...(SYNCED_SETTINGS_KEYS as readonly string[]),
+		...(SYNCED_SECRET_KEYS as readonly string[]),
+	])
 
 	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
 	private static _instance: NodeRegistry | undefined
@@ -265,7 +282,7 @@ export class NodeRegistry {
 		// keep the pool's gate current on every synced-settings change. Inert without a
 		// configSource (unit tests) — desiredConfigVersion stays undefined ⇒ no gating.
 		if (this.configSource) {
-			this.desiredConfigVersion = computeConfigVersion(this.currentSyncedSlice())
+			this.desiredConfigVersion = computeConfigVersion(this.currentSyncedSlice(), this.currentSyncedSecrets())
 			this.pool.setDesiredConfigVersion(this.desiredConfigVersion)
 			this.configChangeDisposable = this.configSource.onDidChange((e) => {
 				// Only react to keys that are actually synced (ignore frontend-only churn).
@@ -801,17 +818,56 @@ export class NodeRegistry {
 		// already at the desired version. Idempotent; the health-ping loop re-sends on drift.
 		if (this.configSource && conn.status === "connected" && conn.api) {
 			const slice = this.currentSyncedSlice()
-			const version = this.desiredConfigVersion ?? computeConfigVersion(slice)
-			if (conn.configVersion !== version) void this.pushConfig(id, conn, slice, version)
+			const secrets = this.currentSyncedSecrets()
+			const version = this.desiredConfigVersion ?? computeConfigVersion(slice, secrets)
+			if (conn.configVersion !== version) void this.pushConfig(id, conn, slice, version, secrets)
 		}
 		this.fireChange()
 	}
 
 	// ── controller→node config sync (config_sync §4c) ────────────────────────────
 
-	/** The controller-authoritative synced settings slice, resolved live from the source. */
+	/**
+	 * The controller-authoritative synced settings slice, resolved live from the source.
+	 *
+	 * The code-index config is rewritten on the way out — and ONLY on the way out. The
+	 * controller never imports its own outgoing slice, so it stays a full indexer while
+	 * every node it feeds is pinned to search-only:
+	 *
+	 * - `codebaseIndexSearchOnly: true` — nodes query the shared vector store but never
+	 *   scan or watch. The controller's own watcher already sees every change on the
+	 *   shared workspace, including node-made ones, so a second indexer would only
+	 *   duplicate embedding work and race it as a writer.
+	 * - `codebaseIndexKey` — the key the controller's own index actually resolved, so a
+	 *   node addresses that exact collection instead of hashing its own workspace path.
+	 */
 	private currentSyncedSlice(): SyncedSettings {
-		return pickSyncedSettings(this.configSource?.getValues() ?? {})
+		const slice = pickSyncedSettings(this.configSource?.getValues() ?? {})
+		if (slice.codebaseIndexConfig) {
+			slice.codebaseIndexConfig = {
+				...slice.codebaseIndexConfig,
+				codebaseIndexSearchOnly: true,
+				codebaseIndexKey:
+					CodeIndexManager.getInstance(this.context)?.resolvedIndexKey ??
+					slice.codebaseIndexConfig.codebaseIndexKey,
+			}
+		}
+		return slice
+	}
+
+	/**
+	 * The controller-authoritative synced secrets slice (the credential counterpart of
+	 * {@link currentSyncedSlice}). Pulled key-by-key through the config source so only
+	 * the allow-listed credentials ever leave the controller.
+	 */
+	private currentSyncedSecrets(): SyncedSecrets {
+		const source = this.configSource
+		if (!source) return {}
+		const bag: Record<string, string | undefined> = {}
+		for (const key of SYNCED_SECRET_KEYS) {
+			bag[key] = source.getSecret(key)
+		}
+		return pickSyncedSecrets(bag)
 	}
 
 	/**
@@ -821,11 +877,12 @@ export class NodeRegistry {
 	 */
 	private recomputeAndBroadcast(): void {
 		const slice = this.currentSyncedSlice()
-		const version = computeConfigVersion(slice)
+		const secrets = this.currentSyncedSecrets()
+		const version = computeConfigVersion(slice, secrets)
 		this.desiredConfigVersion = version
 		this.pool.setDesiredConfigVersion(version)
 		for (const [id, conn] of this.connections) {
-			if (conn.status === "connected" && conn.api) void this.pushConfig(id, conn, slice, version)
+			if (conn.status === "connected" && conn.api) void this.pushConfig(id, conn, slice, version, secrets)
 		}
 		this.fireChange()
 	}
@@ -835,9 +892,15 @@ export class NodeRegistry {
 	 * applied so it becomes pool-assignable promptly (the health echo stays the ongoing
 	 * source of truth). On failure, log and let the health-ping reconciliation retry.
 	 */
-	private async pushConfig(id: string, conn: INodeConnection, slice: SyncedSettings, version: string): Promise<void> {
+	private async pushConfig(
+		id: string,
+		conn: INodeConnection,
+		slice: SyncedSettings,
+		version: string,
+		secrets: SyncedSecrets,
+	): Promise<void> {
 		try {
-			await conn.api!.applyConfig(slice, version)
+			await conn.api!.applyConfig(slice, version, secrets)
 			conn.markConfigApplied(version)
 		} catch (e) {
 			configLog.warn(`config sync push to node ${id} failed: ${e instanceof Error ? e.message : String(e)}`)

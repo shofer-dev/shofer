@@ -7,6 +7,7 @@ import type {
 	CheckpointRestoreOptions,
 	ProviderSettings,
 	ServerEvent,
+	SyncedSecrets,
 	SyncedSettings,
 } from "@shofer/types"
 
@@ -200,7 +201,11 @@ export function createRequestHandler(
 		if (method === "POST" && path === `${base}/config`) {
 			const body = await readJson(req)
 			if (typeof body.version !== "string") return send(res, 400, { error: "version is required" })
-			await api.applyConfig(body.config as SyncedSettings, body.version)
+			await api.applyConfig(
+				body.config as SyncedSettings,
+				body.version,
+				(body.secrets as SyncedSecrets | undefined) ?? {},
+			)
 			return send(res, 202, { applied: true })
 		}
 

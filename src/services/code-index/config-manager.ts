@@ -12,6 +12,8 @@ import { codeIndexLog } from "@shofer/core"
  */
 export class CodeIndexConfigManager {
 	private codebaseIndexEnabled: boolean = false
+	private codebaseIndexSearchOnly: boolean = false
+	private codebaseIndexKey?: string
 	private embedderProvider: EmbedderProvider = "openai"
 	private modelId?: string
 	private modelDimension?: number
@@ -60,6 +62,8 @@ export class CodeIndexConfigManager {
 
 		const {
 			codebaseIndexEnabled,
+			codebaseIndexSearchOnly,
+			codebaseIndexKey,
 			codebaseIndexQdrantUrl,
 			codebaseIndexEmbedderProvider,
 			codebaseIndexEmbedderBaseUrl,
@@ -83,6 +87,8 @@ export class CodeIndexConfigManager {
 
 		// Update instance variables with configuration
 		this.codebaseIndexEnabled = codebaseIndexEnabled ?? false
+		this.codebaseIndexSearchOnly = codebaseIndexSearchOnly ?? false
+		this.codebaseIndexKey = codebaseIndexKey
 		this.qdrantUrl = codebaseIndexQdrantUrl
 		this.qdrantApiKey = qdrantApiKey ?? ""
 		this.searchMinScore = codebaseIndexSearchMinScore
@@ -469,6 +475,26 @@ export class CodeIndexConfigManager {
 	 */
 	public get isFeatureEnabled(): boolean {
 		return this.codebaseIndexEnabled
+	}
+
+	/**
+	 * Search-only mode: this host may query the index but MUST NOT run the scan or
+	 * the file-watcher. Set on remote Shofer Nodes, which read the controller's
+	 * index over the shared vector store; the controller is the sole writer.
+	 */
+	public get isSearchOnly(): boolean {
+		return this.codebaseIndexSearchOnly
+	}
+
+	/**
+	 * The controller-assigned logical index identity, or undefined when this host
+	 * indexes on its own behalf. Consumers derive the vector-store collection from
+	 * this in preference to the local workspace path, so hosts sharing an index
+	 * agree on the collection and unrelated hosts that merely share a container
+	 * path do not silently land in the same one.
+	 */
+	public get indexKey(): string | undefined {
+		return this.codebaseIndexKey
 	}
 
 	/**

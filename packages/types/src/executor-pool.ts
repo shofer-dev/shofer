@@ -1,6 +1,6 @@
 import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "./agent-api.js"
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
-import type { SyncedSettings } from "./global-settings.js"
+import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /**
@@ -228,9 +228,9 @@ export class ExecutorPool implements AgentApi {
 		await this.owner(taskId).api.respondToAsk(taskId, response)
 	}
 
-	/** Broadcast the node-scoped config slice to every registered executor (config_sync §4c). */
-	async applyConfig(config: SyncedSettings, version: string): Promise<void> {
-		await Promise.all(this.executors.map((e) => e.api.applyConfig(config, version)))
+	/** Broadcast the node-scoped config + secret slices to every registered executor (config_sync §4c). */
+	async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
+		await Promise.all(this.executors.map((e) => e.api.applyConfig(config, version, secrets)))
 	}
 
 	// ── Reverse data channel (Shofer Nodes L3) — route to the owning executor ────

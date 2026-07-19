@@ -543,13 +543,20 @@ function canonicalize(value: unknown): unknown {
 }
 
 /**
- * Deterministic content hash of a synced-settings slice — the config version (§6).
+ * Deterministic content hash of a synced slice — the config version (§6).
  * Pure JS (no node:crypto / node:os) so it runs identically on both sides of the wire
  * and in the browser. Canonicalizes (sorted keys), JSON.stringify, then FNV-1a → base36.
  * Identical content ⇒ identical string, regardless of key insertion order.
+ *
+ * `secrets` participates in the hash so that rotating a credential moves the version
+ * and the health-echo reconciliation re-pushes it; hashing settings alone would leave
+ * nodes holding a stale key forever, since the settings slice never changed. The
+ * version is an opaque convergence token, not a security boundary — it is a 32-bit
+ * non-cryptographic digest and is echoed on `/health` & `/whoami`, so it must never be
+ * treated as proof of knowing a secret.
  */
-export function computeConfigVersion(config: SyncedSettings): string {
-	const canonical = JSON.stringify(canonicalize(config))
+export function computeConfigVersion(config: SyncedSettings, secrets: SyncedSecrets = {}): string {
+	const canonical = JSON.stringify(canonicalize({ config, secrets }))
 	let hash = 0x811c9dc5 // FNV-1a 32-bit offset basis
 	for (let i = 0; i < canonical.length; i++) {
 		hash ^= canonical.charCodeAt(i)

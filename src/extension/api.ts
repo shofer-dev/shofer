@@ -9,6 +9,7 @@ import pWaitFor from "p-wait-for"
 import {
 	type ShoferAPI,
 	type ShoferSettings,
+	type SyncedSecrets,
 	type SyncedSettings,
 	type ShoferEvents,
 	type ProviderSettings,
@@ -20,6 +21,7 @@ import {
 	type CheckpointDiffOptions,
 	type CheckpointRestoreOptions,
 	type ChangedFilesPayload,
+	SYNCED_SECRET_KEYS,
 	ShoferEventName,
 	TaskCommandName,
 	isSecretStateKey,
@@ -745,6 +747,22 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 
 	public async applySyncedSettings(config: SyncedSettings): Promise<void> {
 		await this.sidebarProvider.contextProxy.setValues(config as ShoferSettings)
+		await this.sidebarProvider.postInitState()
+	}
+
+	public async applySyncedSecrets(secrets: SyncedSecrets): Promise<void> {
+		// Iterate the allow-list, not the payload's own keys: the slice arrives as
+		// untrusted JSON off the wire, so driving the loop from SYNCED_SECRET_KEYS is
+		// what keeps a controller from writing a secret outside the synced scope.
+		// A key the controller omitted is left alone rather than cleared — the
+		// controller only ever sends the credentials it holds.
+		await Promise.all(
+			SYNCED_SECRET_KEYS.filter((key) => secrets[key] !== undefined).map((key) =>
+				this.sidebarProvider.contextProxy.storeSecret(key, secrets[key]),
+			),
+		)
+		// The Settings view renders each code-index credential as a set/unset indicator
+		// derived from the posted state, so the push must refresh it like a local edit.
 		await this.sidebarProvider.postInitState()
 	}
 

@@ -42,6 +42,8 @@ export class CodeIndexManager {
 	private _orchestrator: CodeIndexOrchestrator | undefined
 	private _searchService: CodeIndexSearchService | undefined
 	private _cacheManager: CacheManager | undefined
+	/** Last value returned by {@link _resolveIndexKeyPath}; see {@link resolvedIndexKey}. */
+	private _resolvedIndexKey: string | undefined
 	private _shoferIgnoreController: ShoferIgnoreController | undefined
 	private _gitIgnoreFilter: GitIgnoreFilter | undefined
 	private _gitIgnoreWatcher: vscode.FileSystemWatcher | undefined
@@ -262,7 +264,16 @@ export class CodeIndexManager {
 		// Made it through service creation — cancel any pending recovery.
 		this._cancelReinitialize()
 
-		// 7. Handle Indexing Start/Restart
+		// 7. Handle Indexing Start/Restart.
+		// A search-only host (a remote Shofer Node) stops here: the search service is
+		// already constructed above, so `rag_search` answers against the controller's
+		// index, but this host must never scan or watch. The controller is the sole
+		// writer — see `docs/rag_indexing.md` §"Multi-node — search-only nodes".
+		if (this._configManager.isSearchOnly) {
+			this._orchestrator?.stopWatcher()
+			return { requiresRestart }
+		}
+
 		const shouldStartOrRestartIndexing =
 			requiresRestart ||
 			(needsServiceRecreation && (!this._orchestrator || this._orchestrator.state !== "Indexing"))
@@ -283,6 +294,12 @@ export class CodeIndexManager {
 	 */
 	public async startIndexing(): Promise<void> {
 		if (!this.isFeatureEnabled || !this.isWorkspaceEnabled) {
+			return
+		}
+
+		// Search-only hosts never index, even when asked directly (a settings-change
+		// handler or a manual re-index command reaches this path too).
+		if (this._configManager?.isSearchOnly) {
 			return
 		}
 
@@ -667,15 +684,44 @@ export class CodeIndexManager {
 	}
 
 	/**
-	 * Resolve the stable index key path for this workspace. If the workspace
-	 * is a git worktree, returns the main repo path so that linked worktrees
-	 * share the same Qdrant collection and local cache file. Otherwise returns
-	 * the workspace path unchanged.
+	 * Resolve the stable index key for this workspace — the value the Qdrant
+	 * collection name and the local cache filename are hashed from.
+	 *
+	 * A controller-assigned `codebaseIndexKey` wins when present: it is the
+	 * logical identity of the index, so a search-only node resolves the SAME
+	 * collection as the controller that indexed it, regardless of where each
+	 * host happens to mount the workspace. Deriving from the local path instead
+	 * would be wrong in both directions — a node mounting the shared workspace
+	 * at a different path would miss the controller's index, while unrelated
+	 * hosts that coincidentally share a path (every executor pod runs with
+	 * `--workspace /home/node/workspace`) would collide on one collection while
+	 * holding entirely different content.
+	 *
+	 * Absent a controller key, fall back to the local derivation: the main repo
+	 * path for a git worktree, so linked worktrees share one collection and
+	 * cache file; otherwise the workspace path unchanged.
 	 */
 	private async _resolveIndexKeyPath(): Promise<string> {
+		const assignedKey = this._configManager?.indexKey
+		if (assignedKey) {
+			this._resolvedIndexKey = assignedKey
+			return assignedKey
+		}
 		// Lazy import to avoid a circular dependency at the module level.
 		const { GitSource } = await import("./git/git-source")
-		return GitSource.resolveWorktreeMainRepoPath(this.workspacePath)
+		const resolved = await GitSource.resolveWorktreeMainRepoPath(this.workspacePath)
+		this._resolvedIndexKey = resolved
+		return resolved
+	}
+
+	/**
+	 * The index key this host actually resolved, or undefined before the first
+	 * resolution. A controller publishes this to its nodes as `codebaseIndexKey`
+	 * so they address the very collection it indexed — reading it here is what
+	 * keeps the two sides from deriving different names from different paths.
+	 */
+	public get resolvedIndexKey(): string | undefined {
+		return this._resolvedIndexKey
 	}
 
 	/**

@@ -162,7 +162,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Register the host accessors the portable Task core / FileContextTracker use to
 	// reach the Category II code-index and git-index managers (Chunk B).
 	// The concrete singletons need a vscode.ExtensionContext (cast back here at the
-	// boundary); headless hosts leave these unset and the features degrade to off.
+	// boundary). Note this runs on headless hosts too: `shofer serve` loads this same
+	// extension bundle through ExtensionHost.activate(), so a served node DOES register
+	// these factories and construct a CodeIndexManager. What keeps a node from indexing
+	// is `codebaseIndexSearchOnly` on the controller-synced config, not the absence of a
+	// factory — see `docs/rag_indexing.md` §"Multi-node — search-only nodes".
 	setCodeIndexManagerFactory((context, workspacePath) =>
 		CodeIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
 	)

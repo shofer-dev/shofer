@@ -153,25 +153,31 @@ Add one method to the transport-agnostic surface
 ([`AgentApi`](../packages/types/src/agent-api.ts:54)):
 
 ```ts
-/** Node-scoped settings the controller replicates to this executor (§config_sync).
+/** Node-scoped settings + secrets the controller replicates to this executor (§config_sync).
  *  A Partial<GlobalSettings> restricted to the synced allowlist; authoritative
  *  (last-write-wins) for the keys present. `version` is the controller-assigned,
  *  node-opaque token (a content hash of the canonical slice, §6) the node stores
- *  and echoes back on /health so the controller can detect drift. Ignored when the
- *  node has local CLI overrides (allowClientConfig === false), same rule as
- *  apiConfiguration. */
-applyConfig(config: SyncedSettings, version: string): Promise<void>
+ *  and echoes back on /health so the controller can detect drift. `secrets` is the
+ *  allow-listed credential slice the node needs to act on `config` — `{}` when there
+ *  is nothing to replicate. Both are ignored when the node has local CLI overrides
+ *  (allowClientConfig === false), same rule as apiConfiguration. */
+applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
 ```
 
 `SyncedSettings` is a `Pick<GlobalSettings, …node-scoped keys…>` in `@shofer/types`
 (vscode-free, so both sides share it) — the positive allowlist defined in
 [§3](#3-what-is-synced-and-what-is-not) (auto-approval + behavioral/context-management keys),
-not just the auto-approval subset. Transport bindings follow the existing pattern exactly:
+not just the auto-approval subset. `SyncedSecrets` is its credential counterpart: a
+`Partial<Record<SYNCED_SECRET_KEYS[number], string>>` over the code-index (RAG) credentials,
+which are secrets rather than settings and so cannot ride in `SyncedSettings`. LLM provider
+keys are deliberately NOT in it — they already travel per-task on
+`CreateTaskInput.apiConfiguration`. Transport bindings follow the existing pattern exactly:
 
 - **HTTP route** ([`http-server.ts`](../packages/core/src/transport/http-server.ts:58)):
-  `POST /api/v1/config → { config } → 202` (token-authed like every `/api/v1/*` route).
+  `POST /api/v1/config → { config, version, secrets } → 202` (token-authed like every
+  `/api/v1/*` route; an absent `secrets` defaults to `{}`).
 - **Client** ([`http-client.ts`](../packages/core/src/transport/http-client.ts)):
-  `applyConfig(config) → this.post("/config", { config })`.
+  `applyConfig(config, version, secrets) → this.post("/config", { config, version, secrets })`.
 
 Because `ShoferHttpClient implements AgentApi`, adding the method to the interface makes
 client/server drift a compile error (the property the doc-comment at
@@ -185,12 +191,19 @@ slice into the node's in-process settings so the very next `provider.getState()`
 `checkAutoApproval`) sees it:
 
 ```ts
-async applyConfig(config: SyncedSettings, version: string): Promise<void> {
+async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
   if (!this.options.allowClientConfig) return   // node CLI override wins — ignore, like apiConfiguration
   await this.api.applySyncedSettings(config)     // → ContextProxy.setValues(slice) on the node
+  await this.api.applySyncedSecrets(secrets)     // → ContextProxy.storeSecret per allow-listed key
   this.appliedConfigVersion = version            // opaque; echoed on /health (§6) so the controller sees convergence
 }
 ```
+
+Credentials are written after the settings they belong to, so a node never briefly holds a
+store/embedder config it has no key for. `applySyncedSecrets` iterates `SYNCED_SECRET_KEYS`
+rather than the payload's own keys — the slice arrives as untrusted JSON off the wire, so
+driving the loop from the allow-list is what stops a controller writing a secret outside the
+synced scope. A key the controller omits is left untouched, not cleared.
 
 Reuse the **same `allowClientConfig` gate** that already governs `apiConfiguration`
 ([`shofer-api-agent.ts:14`](../packages/core/src/transport/shofer-api-agent.ts)): a node
@@ -201,7 +214,7 @@ flips closed only when the operator supplies explicit local config, so the zero-
 replica is the default and self-administration is the opt-out. The node-side apply is a `ContextProxy.setValues`
 of the slice (the same write path `importConfiguration` uses,
 [`settings_overlay.md` §10c](settings_overlay.md)), **not** a full import (no provider
-profiles, no secrets).
+profiles; the only secrets written are the `SYNCED_SECRET_KEYS` allow-list).
 
 ### 4c. Controller side — push on registration + on change
 

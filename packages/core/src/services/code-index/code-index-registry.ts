@@ -7,8 +7,13 @@
  * manager through this registered factory instead.
  *
  * The VS Code extension registers a factory at activation (wrapping the manager's
- * static `getInstance`). Headless hosts leave it unset and the getter returns
- * `undefined`, so code indexing / rag_search is simply off.
+ * static `getInstance`). A host that never runs that activation leaves it unset and
+ * the getter returns `undefined`, so code indexing / rag_search is simply off.
+ *
+ * `shofer serve` is NOT such a host: it loads the same extension bundle via
+ * `ExtensionHost.activate()`, so a served node registers this factory and gets a real
+ * manager. A node is held to querying — never indexing — by `codebaseIndexSearchOnly`
+ * on the controller-synced config, not by this seam.
  */
 import type { VectorStoreSearchResult } from "./interfaces/vector-store.js"
 

@@ -310,13 +310,25 @@ describe("createRequestHandler (§11)", () => {
 	})
 
 	describe("config sync (config_sync §4a/§6)", () => {
-		it("POST /api/v1/config applies the config with its version and returns 202", async () => {
+		it("POST /api/v1/config applies the config, secrets and version and returns 202", async () => {
+			const res = mockRes()
+			const config = { autoApprovalEnabled: true }
+			const secrets = { codeIndexOpenAiKey: "sk-test" }
+			await run(
+				mockReq("POST", "/api/v1/config", { config, version: "v1", secrets }),
+				res as unknown as ServerResponse,
+			)
+			expect(res.statusCode).toBe(202)
+			expect(JSON.parse(res.body)).toEqual({ applied: true })
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", secrets)
+		})
+
+		it("defaults the secret slice to empty when the push carries none", async () => {
 			const res = mockRes()
 			const config = { autoApprovalEnabled: true }
 			await run(mockReq("POST", "/api/v1/config", { config, version: "v1" }), res as unknown as ServerResponse)
 			expect(res.statusCode).toBe(202)
-			expect(JSON.parse(res.body)).toEqual({ applied: true })
-			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1")
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", {})
 		})
 
 		it("400s a config push with no version", async () => {

@@ -8,6 +8,7 @@ import {
 	TypedEmitter,
 	computeConfigVersion,
 	defaultModeSlug,
+	pickSyncedSecrets,
 	pickSyncedSettings,
 } from "@shofer/types"
 
@@ -147,9 +148,11 @@ function makeRegistry(seedDefs?: unknown[], configSource?: SyncedConfigSource) {
  */
 function makeConfigSource(initial: Partial<GlobalSettings> = { allowedCommands: ["ls"], autoApprovalEnabled: true }) {
 	let values: Partial<GlobalSettings> = { ...initial }
+	let secrets: Partial<Record<string, string>> = {}
 	const emitter = new TypedEmitter<{ key: string }>()
 	const source: SyncedConfigSource = {
 		getValues: () => values,
+		getSecret: (key) => secrets[key],
 		onDidChange: emitter.event,
 	}
 	return {
@@ -157,9 +160,13 @@ function makeConfigSource(initial: Partial<GlobalSettings> = { allowedCommands: 
 		setValues: (v: Partial<GlobalSettings>) => {
 			values = { ...v }
 		},
+		setSecret: (key: string, value: string | undefined) => {
+			secrets = { ...secrets, [key]: value }
+		},
 		fire: (key: string) => emitter.fire({ key }),
 		slice: () => pickSyncedSettings(values),
-		version: () => computeConfigVersion(pickSyncedSettings(values)),
+		secrets: () => pickSyncedSecrets(secrets),
+		version: () => computeConfigVersion(pickSyncedSettings(values), pickSyncedSecrets(secrets)),
 	}
 }
 
@@ -855,7 +862,7 @@ describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)"
 
 		// The registry resolved the slice from configSource.getValues() and hashed it (§6).
 		expect(api.applyConfig).toHaveBeenCalledTimes(1)
-		expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version())
+		expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets())
 	})
 
 	// 2 ── Broadcast on a synced-key change (and NOT on a frontend-only key) ───────
@@ -869,12 +876,47 @@ describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)"
 		h.cfg.setValues({ allowedCommands: ["ls", "pwd"], autoApprovalEnabled: true })
 		h.cfg.fire("allowedCommands")
 		expect(api.applyConfig).toHaveBeenCalledTimes(1)
-		expect(api.applyConfig).toHaveBeenLastCalledWith(h.cfg.slice(), h.cfg.version())
+		expect(api.applyConfig).toHaveBeenLastCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets())
 
 		// A frontend-only key is filtered out (SYNCED_KEYS) → no broadcast.
 		;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
 		h.cfg.fire("pinnedApiConfigs")
 		expect(api.applyConfig).not.toHaveBeenCalled()
+	})
+
+	// 2b ── Code-index config is pinned to search-only on the way out ───────────────
+	it("forces codebaseIndexSearchOnly on the pushed slice without touching controller state", async () => {
+		const indexConfig = { codebaseIndexEnabled: true, codebaseIndexQdrantUrl: "http://qdrant:6333" }
+		const h = withConfigSync({ codebaseIndexConfig: indexConfig })
+		const api = makeAgent()
+		await connectRemote(h, remoteDef, api)
+
+		const pushed = (api.applyConfig as ReturnType<typeof vi.fn>).mock.calls[0][0]
+		expect(pushed.codebaseIndexConfig).toMatchObject({
+			codebaseIndexEnabled: true,
+			codebaseIndexQdrantUrl: "http://qdrant:6333",
+			codebaseIndexSearchOnly: true,
+		})
+		// The rewrite is outbound-only: the controller stays a full indexer.
+		expect(indexConfig).not.toHaveProperty("codebaseIndexSearchOnly")
+	})
+
+	// 2c ── Rotating a synced secret re-pushes it ───────────────────────────────────
+	it("re-broadcasts with the new credential when a synced secret rotates", async () => {
+		const h = withConfigSync()
+		const api = makeAgent()
+		await connectRemote(h, remoteDef, api)
+		;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+
+		// A rotated code-index key must move the version, or the health-echo
+		// reconciliation would leave the node holding the stale credential forever.
+		h.cfg.setSecret("codeIndexQdrantApiKey", "rotated-key")
+		h.cfg.fire("codeIndexQdrantApiKey")
+
+		expect(api.applyConfig).toHaveBeenCalledTimes(1)
+		const [, version, secrets] = (api.applyConfig as ReturnType<typeof vi.fn>).mock.calls[0]
+		expect(secrets).toEqual({ codeIndexQdrantApiKey: "rotated-key" })
+		expect(version).toBe(h.cfg.version())
 	})
 
 	// 3 ── Never pushes to the Local executor; broadcast count == remote connections ─

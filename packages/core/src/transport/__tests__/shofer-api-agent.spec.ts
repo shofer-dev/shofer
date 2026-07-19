@@ -18,6 +18,7 @@ describe("ShoferApiAgent (§11)", () => {
 			cancelCurrentTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
 			applySyncedSettings: vi.fn(async () => {}),
+			applySyncedSecrets: vi.fn(async () => {}),
 			getCheckpointDiff: vi.fn(async () => [
 				{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } },
 			]),
@@ -69,13 +70,17 @@ describe("ShoferApiAgent (§11)", () => {
 		})
 	})
 
-	it("applyConfig applies the config and records the version when allowClientConfig is set (config_sync §Part A)", async () => {
+	it("applyConfig applies the config + secrets and records the version when allowClientConfig is set (config_sync §Part A)", async () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api, { allowClientConfig: true })
 		const config = { autoApprovalEnabled: true } as never
-		await agent.applyConfig(config, "v1")
+		const secrets = { codeIndexOpenAiKey: "sk-test" }
+		await agent.applyConfig(config, "v1", secrets)
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSettings).toHaveBeenCalledWith(
 			config,
+		)
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSecrets).toHaveBeenCalledWith(
+			secrets,
 		)
 		expect(agent.configVersion).toBe("v1")
 	})
@@ -83,8 +88,9 @@ describe("ShoferApiAgent (§11)", () => {
 	it("applyConfig ignores the controller push when it has a CLI override (default)", async () => {
 		const api = makeApi()
 		const agent = new ShoferApiAgent(api) // allowClientConfig defaults to false
-		await agent.applyConfig({ autoApprovalEnabled: true } as never, "v1")
+		await agent.applyConfig({ autoApprovalEnabled: true } as never, "v1", { codeIndexOpenAiKey: "sk-test" })
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSettings).not.toHaveBeenCalled()
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).applySyncedSecrets).not.toHaveBeenCalled()
 		expect(agent.configVersion).toBeUndefined()
 	})
 

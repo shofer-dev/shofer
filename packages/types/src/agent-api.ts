@@ -12,7 +12,7 @@
  */
 
 import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
-import type { SyncedSettings } from "./global-settings.js"
+import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { ProviderSettings } from "./provider-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
@@ -79,11 +79,13 @@ export interface AgentApi {
 	 */
 	respondToAsk(taskId: string, response: AskResponse): Promise<void>
 
-	/** Node-scoped settings the controller replicates to this executor (config_sync §4a).
+	/** Node-scoped settings + secrets the controller replicates to this executor (config_sync §4a).
 	 *  `version` is the controller-assigned, node-opaque token the node stores and echoes
-	 *  on /health so the controller detects drift. Ignored when the node has local CLI
-	 *  overrides (allowClientConfig === false), same rule as apiConfiguration. */
-	applyConfig(config: SyncedSettings, version: string): Promise<void>
+	 *  on /health so the controller detects drift. `secrets` is the allow-listed credential
+	 *  slice (`SYNCED_SECRET_KEYS`) the node needs to act on `config` — pass `{}` when there
+	 *  is nothing to replicate. Both are ignored when the node has local CLI overrides
+	 *  (allowClientConfig === false), same rule as apiConfiguration. */
+	applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
 	// Checkpoint diff/restore + the changed-files panel for a REMOTE (shadow) task:

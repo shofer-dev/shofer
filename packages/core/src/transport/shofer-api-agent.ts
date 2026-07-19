@@ -9,6 +9,7 @@ import type {
 	CheckpointRestoreOptions,
 	CreateTaskInput,
 	ServerEvent,
+	SyncedSecrets,
 	SyncedSettings,
 } from "@shofer/types"
 
@@ -75,10 +76,13 @@ export class ShoferApiAgent implements AgentApi {
 		return !!this.options.allowClientConfig
 	}
 
-	async applyConfig(config: SyncedSettings, version: string): Promise<void> {
+	async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
 		// Node CLI override wins — ignore controller pushes, same rule as apiConfiguration.
 		if (!this.options.allowClientConfig) return
 		await this.api.applySyncedSettings(config)
+		// Credentials land after the settings they belong to, so a node never briefly
+		// holds a store/embedder config it has no key for.
+		await this.api.applySyncedSecrets(secrets)
 		this.appliedConfigVersion = version // opaque; echoed on /health & /whoami so the controller sees convergence
 	}
 
