@@ -63,7 +63,14 @@ export abstract class OpenAICompatibleHandler extends BaseProvider implements Si
 		this.options = options
 		this.config = config
 
-		// Create the OpenAI-compatible provider using AI SDK
+		// Create the OpenAI-compatible provider using AI SDK.
+		// `includeUsage: true` is required so the AI SDK sends
+		// `stream_options: { include_usage: true }` on streaming requests —
+		// without it, OpenAI-compatible upstreams (Moonshot, DashScope, …) never
+		// emit a final usage chunk, so `result.usage` resolves empty and the
+		// TaskHeader shows zero tokens / zero cost. Raw-SDK providers
+		// (openai.ts, deepseek.ts, …) add this flag manually in their request
+		// body; the AI SDK path controls it via this config field instead.
 		this.provider = createOpenAICompatible({
 			name: config.providerName,
 			baseURL: config.baseURL,
@@ -72,6 +79,7 @@ export abstract class OpenAICompatibleHandler extends BaseProvider implements Si
 				...DEFAULT_HEADERS,
 				...(config.headers || {}),
 			},
+			includeUsage: true,
 		})
 	}
 

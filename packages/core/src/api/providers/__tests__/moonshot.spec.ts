@@ -1,7 +1,14 @@
 // Use vi.hoisted to define mock functions that can be referenced in hoisted vi.mock() calls
-const { mockStreamText, mockGenerateText } = vi.hoisted(() => ({
+const { mockStreamText, mockGenerateText, mockCreateOpenAICompatible } = vi.hoisted(() => ({
 	mockStreamText: vi.fn(),
 	mockGenerateText: vi.fn(),
+	mockCreateOpenAICompatible: vi.fn(() => {
+		// Return a function that returns a mock language model
+		return vi.fn(() => ({
+			modelId: "moonshot-chat",
+			provider: "moonshot",
+		}))
+	}),
 }))
 
 vi.mock("ai", async (importOriginal) => {
@@ -14,13 +21,7 @@ vi.mock("ai", async (importOriginal) => {
 })
 
 vi.mock("@ai-sdk/openai-compatible", () => ({
-	createOpenAICompatible: vi.fn(() => {
-		// Return a function that returns a mock language model
-		return vi.fn(() => ({
-			modelId: "moonshot-chat",
-			provider: "moonshot",
-		}))
-	}),
+	createOpenAICompatible: mockCreateOpenAICompatible,
 }))
 
 import type { Anthropic } from "@anthropic-ai/sdk"
@@ -74,6 +75,19 @@ describe("MoonshotHandler", () => {
 				moonshotBaseUrl: customBaseUrl,
 			})
 			expect(handlerWithCustomUrl).toBeInstanceOf(MoonshotHandler)
+		})
+
+		it("should pass includeUsage: true to createOpenAICompatible so usage chunks stream", () => {
+			// Without includeUsage, the AI SDK never sends stream_options.include_usage
+			// to the upstream, so Moonshot/DashScope never emit a final usage chunk and
+			// the TaskHeader shows zero tokens / zero cost. Construct a fresh handler
+			// here (after beforeEach's clearAllMocks) so the spy records this call.
+			new MoonshotHandler(mockOptions)
+			expect(mockCreateOpenAICompatible).toHaveBeenCalledWith(
+				expect.objectContaining({
+					includeUsage: true,
+				}),
+			)
 		})
 	})
 
