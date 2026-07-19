@@ -315,3 +315,59 @@ describe("mergeExtensionState", () => {
 	// true. The real protection is the live currentTask.shoferMessages
 	// reference with no await before serialization.
 })
+
+describe("optimistic mode switch guard (mode-switch race)", () => {
+	const ModeTestComponent = () => {
+		const { mode, setMode } = useExtensionState()
+		return (
+			<div>
+				<div data-testid="mode">{mode}</div>
+				<button data-testid="switch-mode" onClick={() => setMode("debug" as any)}>
+					Switch Mode
+				</button>
+			</div>
+		)
+	}
+
+	const renderMode = () =>
+		render(
+			<ExtensionStateContextProvider>
+				<ModeTestComponent />
+			</ExtensionStateContextProvider>,
+		)
+
+	it("preserves optimistic mode against a stale stateInit push while a task is focused", () => {
+		renderMode()
+		// Hydrate with a focused task in "code" mode.
+		act(() => postStateInit({ currentTaskId: "t1", currentTaskItem: { id: "t1" } as any, mode: "code" }))
+		expect(screen.getByTestId("mode").textContent).toBe("code")
+		// User picks "debug" via the ModeSelector → optimistic local update.
+		act(() => screen.getByTestId("switch-mode").click())
+		expect(screen.getByTestId("mode").textContent).toBe("debug")
+		// A stale host state push (carrying the old mode) arrives within the TTL
+		// window while the task is still focused. Before the fix this overwrote
+		// the optimistic "debug" back to "code".
+		act(() => postStateInit({ currentTaskId: "t1", currentTaskItem: { id: "t1" } as any, mode: "code" }))
+		expect(screen.getByTestId("mode").textContent).toBe("debug")
+	})
+
+	it("lets a host-side mode change win after the TTL expires", () => {
+		renderMode()
+		// Enable fake timers BEFORE the optimistic stamp so Date.now() is
+		// controlled throughout; the handler reads faked time when deciding
+		// whether the TTL has elapsed.
+		vi.useFakeTimers()
+		try {
+			act(() => postStateInit({ currentTaskId: "t1", currentTaskItem: { id: "t1" } as any, mode: "code" }))
+			act(() => screen.getByTestId("switch-mode").click())
+			expect(screen.getByTestId("mode").textContent).toBe("debug")
+			// Advance past the TTL so the optimistic ref is cleared.
+			act(() => vi.advanceTimersByTime(3000))
+			// Now a host push with a different mode (e.g. switch_mode tool) is honored.
+			act(() => postStateInit({ currentTaskId: "t1", currentTaskItem: { id: "t1" } as any, mode: "architect" }))
+			expect(screen.getByTestId("mode").textContent).toBe("architect")
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+})

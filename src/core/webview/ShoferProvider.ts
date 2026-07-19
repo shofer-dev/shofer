@@ -3117,6 +3117,14 @@ export class ShoferProvider
 		TelemetryService.instance.captureModeSwitch(sourceTask.taskId, newMode)
 		sourceTask.emit(ShoferEventName.TaskModeSwitched, sourceTask.taskId, newMode)
 
+		// Update `_taskMode` synchronously BEFORE any async work so that any
+		// state push the running task triggers during the await window below
+		// carries the new mode. Setting it only after the await left a window
+		// where getStateToPostToWebview() read the stale old mode and
+		// overwrote the webview's optimistic ModeSelector update. Mirrors the
+		// Abort-Ordering Invariant: the observable flag must flip first.
+		;(sourceTask as any)._taskMode = newMode
+
 		try {
 			const taskHistoryItem =
 				this.taskHistoryStore.get(sourceTask.taskId) ??
@@ -3125,8 +3133,6 @@ export class ShoferProvider
 			if (taskHistoryItem) {
 				await this.updateTaskHistory({ ...taskHistoryItem, mode: newMode })
 			}
-
-			;(sourceTask as any)._taskMode = newMode
 		} catch (error) {
 			this.log(
 				`Failed to persist mode switch for task ${sourceTask.taskId}: ${error instanceof Error ? error.message : String(error)}`,
@@ -3142,6 +3148,14 @@ export class ShoferProvider
 			TelemetryService.instance.captureModeSwitch(task.taskId, newMode)
 			task.emit(ShoferEventName.TaskModeSwitched, task.taskId, newMode)
 
+			// Update `_taskMode` synchronously BEFORE any async work so that any
+			// state push the running task triggers during the await window below
+			// carries the new mode. Setting it only after the await left a window
+			// where getStateToPostToWebview() read the stale old mode and
+			// overwrote the webview's optimistic ModeSelector update. Mirrors the
+			// Abort-Ordering Invariant: the observable flag must flip first.
+			;(task as any)._taskMode = newMode
+
 			try {
 				const taskHistoryItem =
 					this.taskHistoryStore.get(task.taskId) ??
@@ -3150,8 +3164,6 @@ export class ShoferProvider
 				if (taskHistoryItem) {
 					await this.updateTaskHistory({ ...taskHistoryItem, mode: newMode })
 				}
-
-				;(task as any)._taskMode = newMode
 			} catch (error) {
 				this.log(
 					`Failed to persist mode switch for task ${task.taskId}: ${error instanceof Error ? error.message : String(error)}`,

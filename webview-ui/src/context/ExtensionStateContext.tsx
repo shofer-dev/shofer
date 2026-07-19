@@ -352,6 +352,16 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	// webview-owned tier-1 draft from the global defaults; subsequent pushes that
 	// carry no focused task must NOT clobber the user's dropdown selection.
 	const hasHydratedRef = useRef(false)
+	// Tracks the last user-initiated mode switch (from the ModeSelector) so a
+	// stale host state push arriving during the async window before the host
+	// commits `_taskMode` cannot clobber the optimistic UI update. The host
+	// fix (handleUserModeSwitch sets `_taskMode` synchronously) closes the
+	// primary race, but this guard is a defense-in-depth backstop for any
+	// other state-push path that still carries a stale mode. Cleared after a
+	// short TTL so a genuine host-side mode change (e.g. switch_mode tool)
+	// eventually wins.
+	const optimisticModeRef = useRef<{ mode: Mode; ts: number } | null>(null)
+	const OPTIMISTIC_MODE_TTL_MS = 2000
 	const [showWelcome, setShowWelcome] = useState(false)
 	const [theme, setTheme] = useState<any>(undefined)
 	const [filePaths, setFilePaths] = useState<string[]>([])
@@ -379,7 +389,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	// Plugins snapshot pushed by the extension (undefined until the Plugins tab asks).
 	const [plugins, setPlugins] = useState<PluginsState | undefined>(undefined)
 	// Plugin UI contributions per region (design §6.8), pushed on launch + on toggle.
-	const [pluginUiContributions, setPluginUiContributions] = useState<PluginUiContributionsState | undefined>(undefined)
+	const [pluginUiContributions, setPluginUiContributions] = useState<PluginUiContributionsState | undefined>(
+		undefined,
+	)
 
 	const setListApiConfigMeta = useCallback(
 		(value: ProviderSettingsEntry[]) => setState((prevState) => ({ ...prevState, listApiConfigMeta: value })),
@@ -435,6 +447,24 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 						if (alreadyHydrated && !merged.currentTaskItem) {
 							merged.mode = prevState.mode
 							merged.currentApiConfigName = prevState.currentApiConfigName
+						} else if (
+							optimisticModeRef.current &&
+							Date.now() - optimisticModeRef.current.ts < OPTIMISTIC_MODE_TTL_MS &&
+							merged.mode !== optimisticModeRef.current.mode
+						) {
+							// Defense-in-depth: a focused task's running state push arrived
+							// with a stale mode within the optimistic window. Preserve the
+							// user's just-selected mode so the ModeSelector doesn't flicker
+							// back. The host fix (synchronous `_taskMode`) makes this rare,
+							// but this guard catches any remaining stale-push path.
+							merged.mode = optimisticModeRef.current.mode
+						} else if (
+							optimisticModeRef.current &&
+							Date.now() - optimisticModeRef.current.ts >= OPTIMISTIC_MODE_TTL_MS
+						) {
+							// TTL expired: clear the ref so a genuine later host-side mode
+							// change (e.g. switch_mode tool) is honored.
+							optimisticModeRef.current = null
 						}
 						// H24 flag-flicker fix: `hasMoreShoferMessages` is per-task windowing
 						// state owned by the targeted `taskStateUpdate` path: set true when a long
@@ -833,7 +863,12 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setCurrentApiConfigName: (value) =>
 				setState((prevState) => ({ ...prevState, currentApiConfigName: value })),
 			setListApiConfigMeta,
-			setMode: (value: Mode) => setState((prevState) => ({ ...prevState, mode: value })),
+			setMode: (value: Mode) => {
+				// Stamp the optimistic-mode ref so a stale host state push within
+				// the TTL window cannot clobber this user-initiated selection.
+				optimisticModeRef.current = { mode: value, ts: Date.now() }
+				setState((prevState) => ({ ...prevState, mode: value }))
+			},
 			setCustomModePrompts: (value) => setState((prevState) => ({ ...prevState, customModePrompts: value })),
 			setCustomSupportPrompts: (value) =>
 				setState((prevState) => ({ ...prevState, customSupportPrompts: value })),
