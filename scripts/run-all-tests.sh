@@ -24,8 +24,18 @@ WS="$(cd "$(dirname "$0")/.." && pwd)"
 VITEST_MAX_WORKERS="${VITEST_MAX_WORKERS:-50%}"
 VITEST_OPTS="--maxConcurrency=2 --maxWorkers=${VITEST_MAX_WORKERS}"
 
+# Retries are OFF by default: a suite that only passes on a second attempt is a flaky
+# suite, and silently re-running it converts a real defect into a green gate. This is
+# not hypothetical — `core` retried on every run, which is how a test with a 2.2x
+# timeout margin (live-memory-plugin.spec.ts, cold esbuild bundle vs vitest's 5s
+# default) survived in the tree until a starved run finally exceeded both attempts.
+# Set VITEST_RETRIES=1 to opt in on a genuinely contended machine; a run saved by a
+# retry is then reported as FLAKY rather than as a clean pass.
+VITEST_RETRIES="${VITEST_RETRIES:-0}"
+FLAKY=0
+
 run_suite() {
-    local label="$1" dir="$2" extra="${3:-}" max_retries="${4:-1}" ts0 ts1 elapsed rc attempt
+    local label="$1" dir="$2" extra="${3:-}" max_retries="${4:-$VITEST_RETRIES}" ts0 ts1 elapsed rc attempt
     local tmpfile="/tmp/shofer-suite-${label//\//-}.log"
     # Globals written for the caller: SUITE_TEST_COUNT (test count on success).
     SUITE_TEST_COUNT=0
@@ -40,26 +50,41 @@ run_suite() {
         ts1=$(date +%s)
         elapsed=$((ts1 - ts0))
         if [[ $rc -eq 0 ]]; then
-            local retry_note=""
-            [[ $attempt -gt 1 ]] && retry_note=" (retry ${attempt})"
+            # A pass that needed a retry is NOT a clean pass — name it, and keep the log
+            # so the intermittent failure is still diagnosable after the green run.
+            local status="OK"
+            if [[ $attempt -gt 1 ]]; then
+                status="FLAKY (passed on attempt ${attempt})"
+                # NOT ((FLAKY++)) — post-increment returns the OLD value, so it exits 1
+                # when FLAKY is 0 and `set -e` would abort the run on the first flaky suite.
+                FLAKY=$((FLAKY + 1))
+            fi
             # Extract total test count from the vitest summary line
             # (e.g. "Tests  172 passed (172)" → 172).
             local test_count
             test_count=$(sed -nE 's/^[[:space:]]*Tests[[:space:]]+.*\(([0-9]+)\).*/\1/p' "${tmpfile}" | tail -1)
             SUITE_TEST_COUNT="${test_count:-0}"
             if [[ -n "${test_count}" ]]; then
-                printf '%3ds  OK%s  (%s tests)\n' "${elapsed}" "${retry_note}" "${test_count}" >&2
+                printf '%3ds  %s  (%s tests)\n' "${elapsed}" "${status}" "${test_count}" >&2
             else
-                printf '%3ds  OK%s\n' "${elapsed}" "${retry_note}" >&2
+                printf '%3ds  %s\n' "${elapsed}" "${status}" >&2
             fi
-            rm -f "${tmpfile}"
+            if [[ $attempt -gt 1 ]]; then
+                printf '             ^ first attempt failed; log kept at %s\n' "${tmpfile}" >&2
+            else
+                rm -f "${tmpfile}"
+            fi
             return 0
         fi
         if [[ $attempt -le $max_retries ]]; then
             printf '%3ds  FAIL (retrying...)\n' "${elapsed}" >&2
         fi
     done
-    printf '%3ds  FAIL (exit %d, %d attempts)\n' "${elapsed}" "$rc" "$((max_retries + 1))" >&2
+    if [[ $max_retries -gt 0 ]]; then
+        printf '%3ds  FAIL (exit %d, %d attempts)\n' "${elapsed}" "$rc" "$((max_retries + 1))" >&2
+    else
+        printf '%3ds  FAIL (exit %d)\n' "${elapsed}" "$rc" >&2
+    fi
     # Dump the tail of vitest output so the developer can see what failed.
     echo "--- ${label} test output (last 60 lines) ---" >&2
     tail -60 "${tmpfile}" >&2 || true
@@ -76,10 +101,9 @@ total_start=$(date +%s)
 FAILURES=0
 TOTAL_TESTS=0
 set +e
-# src is flaky under load — allow one retry.
 # Each run_suite sets SUITE_TEST_COUNT on success; accumulate into TOTAL_TESTS.
 run_suite "types"       "packages/types"     || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
-run_suite "src"         "src"                "--exclude **/e2e/**" 1 || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
+run_suite "src"         "src"                "--exclude **/e2e/**" || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
 run_suite "cli"         "apps/cli"           || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
 run_suite "core"        "packages/core"      || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
 run_suite "telemetry"   "packages/telemetry" || ((FAILURES++));  TOTAL_TESTS=$((TOTAL_TESTS + SUITE_TEST_COUNT))
@@ -89,6 +113,10 @@ set -e
 total_end=$(date +%s)
 total_elapsed=$((total_end - total_start))
 printf '\n%-12s %3ds  (%d tests)\n' "TOTAL:" "${total_elapsed}" "${TOTAL_TESTS}" >&2
+
+if [[ $FLAKY -gt 0 ]]; then
+    printf '%d suite(s) FLAKY — passed only on retry. Fix the test; do not rely on the retry.\n' "$FLAKY" >&2
+fi
 
 if [[ $FAILURES -gt 0 ]]; then
     printf '%d suite(s) FAILED\n' "$FAILURES" >&2
