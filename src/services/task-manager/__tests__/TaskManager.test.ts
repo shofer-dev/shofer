@@ -94,3 +94,83 @@ describe("TaskManager.countActiveTasks", () => {
 		expect(taskManager.countActiveTasks()).toBe(0)
 	})
 })
+
+describe("TaskManager.onAborted terminal-state guard", () => {
+	let taskManager: TaskManager
+
+	/**
+	 * A minimal EventEmitter stand-in for Task that lets us drive the
+	 * `setupManagedTaskEventListeners` → `onAborted` path without
+	 * constructing a full Task instance. The event names must match
+	 * ShoferEventName.TaskAborted etc.
+	 */
+	function makeFakeTask(taskId: string) {
+		const { EventEmitter } = require("events")
+		const fake = new EventEmitter()
+		fake.taskId = taskId
+		fake.isBackgroundTask = false
+		fake.parentTaskId = undefined
+		fake.getPendingParentQuestion = () => undefined
+		return fake
+	}
+
+	function makeManagedTask(id: string, lifecycle: TaskState["lifecycle"]): ManagedTask {
+		return {
+			id,
+			name: `Task ${id}`,
+			taskId: id,
+			rootTaskId: "root-1",
+			workspace: "/tmp/test",
+			createdAt: Date.now(),
+			lastActiveAt: Date.now(),
+			state: { lifecycle, rating: undefined },
+			activeTimeMs: 0,
+			_runningSince: 0,
+		}
+	}
+
+	beforeEach(() => {
+		taskManager = new TaskManager({} as any)
+	})
+
+	it("does not downgrade a completed task to paused on user abort", () => {
+		const taskId = "t-completed"
+		const mt = makeManagedTask(taskId, "completed")
+		;(taskManager as any).managedTasks.set(taskId, mt)
+
+		const fakeTask = makeFakeTask(taskId)
+		;(taskManager as any).setupManagedTaskEventListeners(fakeTask)
+
+		// Emit TaskAborted with reason "user" — simulates a parent calling
+		// abortBackgroundChildren() on a child that already completed.
+		fakeTask.emit("taskAborted", { reason: "user" })
+
+		expect(taskManager.getTaskState(taskId)?.lifecycle).toBe("completed")
+	})
+
+	it("does not downgrade an errored task to paused on user abort", () => {
+		const taskId = "t-errored"
+		const mt = makeManagedTask(taskId, "error")
+		;(taskManager as any).managedTasks.set(taskId, mt)
+
+		const fakeTask = makeFakeTask(taskId)
+		;(taskManager as any).setupManagedTaskEventListeners(fakeTask)
+
+		fakeTask.emit("taskAborted", { reason: "user" })
+
+		expect(taskManager.getTaskState(taskId)?.lifecycle).toBe("error")
+	})
+
+	it("does downgrade a running task to paused on user abort", () => {
+		const taskId = "t-running"
+		const mt = makeManagedTask(taskId, "running")
+		;(taskManager as any).managedTasks.set(taskId, mt)
+
+		const fakeTask = makeFakeTask(taskId)
+		;(taskManager as any).setupManagedTaskEventListeners(fakeTask)
+
+		fakeTask.emit("taskAborted", { reason: "user" })
+
+		expect(taskManager.getTaskState(taskId)?.lifecycle).toBe("paused")
+	})
+})

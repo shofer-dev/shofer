@@ -414,7 +414,7 @@ When a background child calls `ask_followup_question`, the question is rendered 
 1. The child calls `task.ask("followup", …)` — the same mechanism used for user-facing questions. This renders the question with suggestion buttons in the child's chat UI, so the USER can answer interactively (by viewing the child task and clicking a suggestion or typing a response).
 2. The child stores the question metadata via `Task.setPendingParentQuestionInfo()` so `check_task_status` / `wait_for_task` can surface the question text and suggestions to the parent agent.
 3. The parent-side `TaskHandle.status` for this child flips to `"waiting_for_parent"`.
-4. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately. The `followup` ask type (`interactiveAsk`) also emits `TaskInteractive` → the TaskManager adds a `needs_input` notification so the user knows a background child has a question.
+4. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately. The `followup` ask type (`interactiveAsk`) also emits `TaskInteractive`, but the TaskManager **suppresses** the `needs_input` notification for routed followup questions (it checks `task.getPendingParentQuestion()` — when set, the question is directed at the parent agent, not the user, so no desktop notification is shown). The user can still see and answer the question interactively if they switch to the child task.
 5. The parent discovers the question via `check_task_status` (which surfaces the question text + suggestions) or `wait_for_task` (which now returns with the question in its summary).
 6. The PARENT answers via `answer_subtask_question`, which resolves the child's pending `task.ask("followup")` via `handleWebviewAskResponse("messageResponse", answer)`. The child resumes as if the user had answered.
 7. Alternatively, the USER answers by viewing the child task and clicking a suggestion button or typing a response — this resolves the `task.ask("followup")` through the normal webview ask-response path.
@@ -492,7 +492,7 @@ To prevent UI flickering, `Task.ts` uses a timeout before emitting state change 
 
 ### Parent completes before child
 
-If the parent calls `attempt_completion` while background children are running, all pending children are aborted automatically. Children cannot outlive their parent.
+If the parent calls `attempt_completion` while background children are running, all pending children are aborted automatically (via `Task.abortBackgroundChildren()`). Children cannot outlive their parent. The `TaskManager.onAborted` handler guards against downgrading a child that already reached a terminal state (`completed` / `error`) — a child that finished before the parent's abort keeps its terminal state instead of being overridden to `paused`.
 
 ### Parent aborted while child running
 
@@ -500,7 +500,7 @@ Children are aborted automatically (see Abort Propagation above).
 
 ### Child needs user input
 
-The child emits `TaskInteractive`, which `TaskManager` catches and translates into a notification. This covers both tool-approval asks and routed `ask_followup_question` questions (which use `task.ask("followup")`, an `interactiveAsk`). `check_task_status` returns `status: "waiting"` (for tool approvals) or `status: "waiting_for_parent"` (for routed questions). The parent must either switch focus to the child (to approve/reject or answer the question), answer via `answer_subtask_question`, or let it time out.
+The child emits `TaskInteractive`, which `TaskManager` catches. For **tool-approval asks**, this translates into a `needs_input` notification so the user knows the child needs attention. For **routed `ask_followup_question` questions** (which use `task.ask("followup")`, an `interactiveAsk`), the notification is **suppressed** — the question is directed at the parent agent (via `answer_subtask_question`), not the user, so no desktop notification is shown. The user can still see and answer the question interactively if they switch to the child task. `check_task_status` returns `status: "waiting"` (for tool approvals) or `status: "waiting_for_parent"` (for routed questions). The parent must either switch focus to the child (to approve/reject or answer the question), answer via `answer_subtask_question`, or let it time out.
 
 ### Orphaned children
 

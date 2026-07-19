@@ -615,6 +615,16 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 			if (taskId !== targetTaskId) return
 			this.setState(targetTaskId, TaskManager.makeState("waiting_input"))
 
+			// Suppress the needs_input notification for a background child's routed
+			// ask_followup_question — the question is directed at the parent agent
+			// (via answer_subtask_question), not at the user. The parent discovers
+			// it via check_task_status / wait_for_task. The user can still see and
+			// answer the question interactively if they switch to the child task,
+			// but they should not get a desktop notification for it.
+			if (task.isBackgroundTask && task.parentTaskId && task.getPendingParentQuestion()) {
+				return
+			}
+
 			if (this.focusedTaskId !== targetTaskId) {
 				this.addNotification({
 					targetTaskId,
@@ -661,9 +671,21 @@ export class TaskManager extends EventEmitter<TaskManagerEvents> {
 					// the abort here is just cleanup.
 					return
 				case "user":
-				case "abandoned":
+				case "abandoned": {
+					// Don't override an already-terminal state. When a parent
+					// task completes and calls abortBackgroundChildren(), it
+					// calls abortTask(false) on every child — including ones
+					// that already reached a terminal outcome (completed via
+					// attempt_completion, or error). A child that completed
+					// before the parent's abort must NOT be downgraded to
+					// "paused", or the UI shows a completed task as paused.
+					const currentState = this.getTaskState(targetTaskId)
+					if (currentState && isTerminalLifecycle(currentState.lifecycle)) {
+						return
+					}
 					this.setState(targetTaskId, TaskManager.makeState("paused"))
 					return
+				}
 			}
 		}
 
