@@ -398,25 +398,29 @@ Stop one or more background child tasks. Already-completed, errored, or cancelle
 
 ### `answer_subtask_question`
 
-Answer a question that a background child task asked via `ask_followup_question`. When a background child needs clarification, its question is routed to the parent instead of the user. Use this tool to provide the answer and unblock the child.
+Answer a question that a background child task asked via `ask_followup_question`. When a background child needs clarification, its question is rendered in the child's own chat UI (via `task.ask("followup")`) and can be answered by EITHER the parent agent (via this tool) OR the user (interactively, by viewing the child task and clicking a suggestion or typing a response). Use this tool to provide the parent's answer and unblock the child.
 
 ```typescript
 // Parameters
 { task_id: string, answer: string }
 ```
 
-**Implementation:** Resolves the child's pending parent question via the typed `Task.resolvePendingParentQuestion(answer)` accessor, allowing the child's `ask_followup_question` tool handler to continue. Flips the parent-side handle status from `"waiting_for_parent"` back to `"running"`.
+**Implementation:** Resolves the child's pending `task.ask("followup")` by feeding the parent's answer through `Task.handleWebviewAskResponse("messageResponse", answer)` — the same path the webview uses for user responses. This unblocks the child's `AskFollowupQuestionTool.execute()`. If the user already answered interactively (via the child's own followup UI), the ask is no longer pending and this is a no-op. Flips the parent-side handle status from `"waiting_for_parent"` back to `"running"`.
 
 ### `ask_followup_question` routing
 
-When a background child calls `ask_followup_question`, the question is automatically routed to the parent:
+When a background child calls `ask_followup_question`, the question is rendered in the child's own chat UI and can be answered by EITHER the parent agent OR the user (dual-channel):
 
-1. The child registers the question via `Task.setPendingParentQuestion()` which returns a promise the tool handler `await`s.
-2. The parent-side `TaskHandle.status` for this child flips to `"waiting_for_parent"`.
-3. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately.
-4. The parent discovers the question via `check_task_status` (which surfaces the question text + suggestions) or `wait_for_task` (which now returns with the question in its summary).
-5. The parent answers via `answer_subtask_question`, resolving the child's promise; the child resumes as if the user had answered.
-6. If the parent is aborted while the child is waiting, `Task.abortTask` calls `rejectPendingParentQuestion(new Error("task aborted"))` so the child's await unblocks cleanly with a tool error instead of hanging.
+1. The child calls `task.ask("followup", …)` — the same mechanism used for user-facing questions. This renders the question with suggestion buttons in the child's chat UI, so the USER can answer interactively (by viewing the child task and clicking a suggestion or typing a response).
+2. The child stores the question metadata via `Task.setPendingParentQuestionInfo()` so `check_task_status` / `wait_for_task` can surface the question text and suggestions to the parent agent.
+3. The parent-side `TaskHandle.status` for this child flips to `"waiting_for_parent"`.
+4. `TaskManager` emits a `managedTask:needs-parent-input` event so any parent `wait_for_task` currently blocked on this child wakes up immediately. The `followup` ask type (`interactiveAsk`) also emits `TaskInteractive` → the TaskManager adds a `needs_input` notification so the user knows a background child has a question.
+5. The parent discovers the question via `check_task_status` (which surfaces the question text + suggestions) or `wait_for_task` (which now returns with the question in its summary).
+6. The PARENT answers via `answer_subtask_question`, which resolves the child's pending `task.ask("followup")` via `handleWebviewAskResponse("messageResponse", answer)`. The child resumes as if the user had answered.
+7. Alternatively, the USER answers by viewing the child task and clicking a suggestion button or typing a response — this resolves the `task.ask("followup")` through the normal webview ask-response path.
+8. Whichever channel answers first resolves the ask; the other becomes a no-op (the ask is no longer pending).
+9. If the child is aborted while waiting, `Task.abortTask` calls `clearPendingParentQuestion()` to clear the metadata. The blocking `task.ask("followup")` unwinds via `AskIgnoredError` (the `pWaitFor` loop checks `this.abort`), so the child's tool handler surfaces a clean tool error instead of hanging.
+10. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for routed questions — the question must NOT be auto-answered with the first suggestion, since it is directed at the parent/user, not at an auto-approval policy.
 
 ---
 
@@ -440,18 +444,18 @@ If a background child aborts (error, user intervention), the parent is **not** a
 
 Background task orchestration tools are registered as always-approved in [`packages/core/src/auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts):
 
-| Tool                      | Reason                                                                                             |
-| ------------------------- | -------------------------------------------------------------------------------------------------- |
-| `check_task_status`       | Read-only query; no side effects                                                                   |
-| `wait_for_task`           | Blocking wait with timeout; no side effects on other tasks                                         |
-| `list_background_tasks`   | Read-only enumeration                                                                              |
-| `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks                               |
-| `answer_subtask_question` | Parent answering its own child's question; no external side effects                                |
-| `ask_followup_question`   | Child routing a question **up to its parent**; answered by another agent, not the user (see below) |
+| Tool                      | Reason                                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `check_task_status`       | Read-only query; no side effects                                                                                 |
+| `wait_for_task`           | Blocking wait with timeout; no side effects on other tasks                                                       |
+| `list_background_tasks`   | Read-only enumeration                                                                                            |
+| `cancel_tasks`            | Parent owns its children; stopping is non-destructive to other tasks                                             |
+| `answer_subtask_question` | Parent answering its own child's question; no external side effects                                              |
+| `ask_followup_question`   | Child asking a question rendered in its own chat UI; answered by EITHER the parent agent or the user (see below) |
 
 The `tool` string in the JSON payload uses camelCase (`checkTaskStatus`, `waitForTask`, `listBackgroundTasks`) and must match the `ShoferSayTool.tool` union and the `ChatRow` switch case.
 
-> **`ask_followup_question` is auto-approved only when directed at another task.** A background child's question routed to its parent arrives on the `tool` ask path and is unconditionally approved — no human is interrupted (see [`auto_approval.md`](auto_approval.md#inter-task-questions)). A question directed at the **user** instead flows through the `followup` ask category, gated by `alwaysAllowFollowupQuestions`. Same tool, different destination.
+> **`ask_followup_question` is auto-approved only when directed at another task.** A background child's question arrives on the `tool` ask path (for the ChatRow entry) and is unconditionally approved — the actual question is then rendered via `task.ask("followup")` in the child's chat UI, where BOTH the parent agent (via `answer_subtask_question`) and the user (interactively) can answer. The `followup` auto-approval (`alwaysAllowFollowupQuestions`) is suppressed for these routed questions so they are never auto-answered with the first suggestion. A question directed at the **user** from a foreground task instead flows through the `followup` ask category directly, gated by `alwaysAllowFollowupQuestions`. Same tool, different destination.
 
 ### ChatRow rendering
 
@@ -496,7 +500,7 @@ Children are aborted automatically (see Abort Propagation above).
 
 ### Child needs user input
 
-The child emits `TaskInteractive`, which `TaskManager` catches and translates into a notification. `check_task_status` returns `status: "waiting"`. The parent must either switch focus to the child (to approve/reject) or let it time out.
+The child emits `TaskInteractive`, which `TaskManager` catches and translates into a notification. This covers both tool-approval asks and routed `ask_followup_question` questions (which use `task.ask("followup")`, an `interactiveAsk`). `check_task_status` returns `status: "waiting"` (for tool approvals) or `status: "waiting_for_parent"` (for routed questions). The parent must either switch focus to the child (to approve/reject or answer the question), answer via `answer_subtask_question`, or let it time out.
 
 ### Orphaned children
 
@@ -554,7 +558,7 @@ Discovered during source-code verification. These are areas where the documentat
 
 3. **`TaskManager` events consumed by tools**: `wait_for_task` listens for `managedTask:completed`, `managedTask:error`, and `managedTask:needs-parent-input` events to implement its event-driven (non-polling) blocking. `check_task_status` consults `managedTasks` map for live state. Neither tool's event dependency is documented.
 
-4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:194) with fields `{ question, suggestions }`. The parent-question routing flow (steps 1–6 in §"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
+4. **`PendingParentQuestionInfo` interface**: Defined in [`@shofer/types/src/task.ts`](../packages/types/src/task.ts:282) with fields `{ question, suggestions }`. The question routing flow (§"`ask_followup_question` routing") uses this interface but it isn't formally introduced.
 
 5. **Auto-approval granularity for background tools**: The `check_task_status`, `wait_for_task`, and `list_background_tasks` tools are unconditionally auto-approved (read-only) in [`auto-approval/index.ts`](../packages/core/src/auto-approval/index.ts:207). `cancel_tasks` and `answer_subtask_question` are gated by `alwaysAllowSubtasks` ([`index.ts:200`](../packages/core/src/auto-approval/index.ts:200)). The doc could explain why these two tiers exist.
 

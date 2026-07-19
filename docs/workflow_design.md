@@ -608,7 +608,7 @@ async slangLoop():
      c. Wait (event-driven) for all ready agents via `waitForTasksEventDriven`:
         - `managedTask:completed` / `managedTask:error` → terminal
         - `managedTask:needs-parent-input` → relay child question to user
-          via `this.ask("followup", …)`, answer back via `resolvePendingParentQuestion`
+          via `this.ask("followup", …)`, answer back via `handleWebviewAskResponse`
      d. Collect attempt_completion results
      e. Route results to mailboxes (satisfy awaiting agents)
      f. Evaluate converge condition
@@ -981,7 +981,7 @@ This means earlier `stake` results are visible in the Task's message history as 
 
 ```ts
 if (provider && task.parentTaskId && task.isBackgroundTask) {
-	// route to parent: setPendingParentQuestion(…) + emit "managedTask:needs-parent-input"
+	// route to parent: setPendingParentQuestionInfo(…) + emit "managedTask:needs-parent-input"
 } else {
 	// task.ask("followup", …) → goes to the USER
 }
@@ -995,7 +995,7 @@ the WorkflowTask, so their questions route to the **executor** — not to the us
 
 The WorkflowTask makes **zero LLM calls** — it is a pure state machine. Without the
 relay, it never listened for `managedTask:needs-parent-input` and never called
-`resolvePendingParentQuestion`. An agent calling `ask_followup_question` would route
+`handleWebviewAskResponse`. An agent calling `ask_followup_question` would route
 its question to an executor that could never answer. The child's `await answerPromise`
 never settled; `waitForStakes` timed out.
 
@@ -1018,14 +1018,14 @@ Both tools are **kept exactly as-is**. The only addition is
 [`waitForTasksEventDriven`](../packages/core/src/workflow/wait-for-task-helper.ts):
 
 1. An agent calls `ask_followup_question`. The existing gate routes it to the
-   WorkflowTask: `setPendingParentQuestion(…)` registers the promise,
+   WorkflowTask: `setPendingParentQuestionInfo(…)` registers the promise,
    `emit("managedTask:needs-parent-input", childTaskId)` fires.
 2. The `waitForStakes` event loop catches the event and calls `relayChildQuestion`.
 3. `relayChildQuestion` calls `this.ask("followup", JSON.stringify({ question, suggest }))`
    on the WorkflowTask — the question renders in WorkflowView with suggestion buttons,
    identical to `escalate @Human` and input-parameter prompts.
 4. The user answers. `relayChildQuestion` calls
-   `childInstance.resolvePendingParentQuestion(answer)` — the child's `await answerPromise`
+   `childInstance.handleWebviewAskResponse(answer)` — the child's `await answerPromise`
    settles and the agent resumes its stake.
 
 All human interaction (input params, `escalate @Human`, mid-stake agent questions) is
@@ -1072,7 +1072,7 @@ The mechanism reuses Shofer's existing [`ask_followup_question` routing](../AGEN
 
 The agent Task has no awareness that it was "escalated." From its perspective, it simply receives the user's response as its next prompt when resumed. This is intentional: the Workflow Task owns the control flow, not the LLM.
 
-Additionally, if an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification mid-stake), the WorkflowTask **relays** the question to the user via `this.ask("followup", …)` and feeds the reply back via `resolvePendingParentQuestion` — see [§ Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). This is separate from `escalate @Human` — which is a static, flow-level operation handled in the advance phase.
+Additionally, if an **agent Task** itself calls `ask_followup_question` (e.g., the Developer needs clarification mid-stake), the WorkflowTask **relays** the question to the user via `this.ask("followup", …)` and feeds the reply back via `handleWebviewAskResponse` — see [§ Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). This is separate from `escalate @Human` — which is a static, flow-level operation handled in the advance phase.
 
 ### User Prompt During a Workflow
 
@@ -1160,15 +1160,15 @@ This is the same pattern as today's task resumption — the user controls when w
 
 The peer messaging design in [`task_messaging.md`](task_messaging.md) and this Workflow design are **fully compatible**:
 
-| `task_messaging.md` Concept                                                      | How It Maps to Workflows                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Same-root scope** (`rootTaskId`)                                               | The Workflow Task is the root. All agent Tasks share `rootTaskId = workflowTaskId`.                                                                                                                                                                                 |
-| **Background-task requirement**                                                  | All agent Tasks are background Tasks (`isBackground=true`). ✅ Satisfied.                                                                                                                                                                                           |
-| **`send_message_to_task` (async)**                                               | Agents can fire-and-forget notify each other via system-prompt injection or queue-drain.                                                                                                                                                                            |
-| **`send_message_to_task` (sync)**                                                | Agents can request-response with timeout. `attempt_completion` routes result to the initiator.                                                                                                                                                                      |
-| **`check_task_status` / `list_background_tasks` / `wait_for_task` (peer scope)** | Agents can inspect and wait on siblings — enforced by `knownPeers` (least-privilege; see [§ Peer Scope](#peer-scope--least-privilege--declared-peers)).                                                                                                             |
-| **`ask_followup_question` → parent routing**                                     | ✅ Retained — the WorkflowTask **relays** the routed question to the user via `this.ask` and settles it with `resolvePendingParentQuestion`. See [Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). |
-| **`cancel_tasks` (parent-only)**                                                 | Workflow Task owns the lifecycle — `abortBackgroundChildren()` cancels all agents.                                                                                                                                                                                  |
+| `task_messaging.md` Concept                                                      | How It Maps to Workflows                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Same-root scope** (`rootTaskId`)                                               | The Workflow Task is the root. All agent Tasks share `rootTaskId = workflowTaskId`.                                                                                                                                                                             |
+| **Background-task requirement**                                                  | All agent Tasks are background Tasks (`isBackground=true`). ✅ Satisfied.                                                                                                                                                                                       |
+| **`send_message_to_task` (async)**                                               | Agents can fire-and-forget notify each other via system-prompt injection or queue-drain.                                                                                                                                                                        |
+| **`send_message_to_task` (sync)**                                                | Agents can request-response with timeout. `attempt_completion` routes result to the initiator.                                                                                                                                                                  |
+| **`check_task_status` / `list_background_tasks` / `wait_for_task` (peer scope)** | Agents can inspect and wait on siblings — enforced by `knownPeers` (least-privilege; see [§ Peer Scope](#peer-scope--least-privilege--declared-peers)).                                                                                                         |
+| **`ask_followup_question` → parent routing**                                     | ✅ Retained — the WorkflowTask **relays** the routed question to the user via `this.ask` and settles it with `handleWebviewAskResponse`. See [Question Routing & the Executor](#question-routing--the-executor-ask_followup_question--answer_subtask_question). |
+| **`cancel_tasks` (parent-only)**                                                 | Workflow Task owns the lifecycle — `abortBackgroundChildren()` cancels all agents.                                                                                                                                                                              |
 
 **Key interaction:** The Workflow Task's `slangLoop()` uses `wait_for_task` and `queueMessage` programmatically — these are the same mechanisms that `send_message_to_task` and `check_task_status` expose to agent LLMs. There is no conflict. Agent-to-agent peer messaging (via `send_message_to_task`) happens **within** agent Tasks, independently of the Workflow's control loop. The Workflow only cares about `attempt_completion` results from its direct children.
 
