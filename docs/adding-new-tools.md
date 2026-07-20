@@ -302,7 +302,7 @@ recompiling** — it's the vehicle for capabilities that are optional, host-agno
 permission-gated (disabled by default). Plugins run identically in the VS Code extension host, the
 CLI, and a **headless server** (`shofer serve`), so their tools are available in headless mode too —
 which is exactly why the runner/event plugins (`shofer-plugins/temporal-runner`,
-`shofer-plugins/shofer-events`) use this path.
+`shofer-plugins/shofer-mesh`) use this path.
 
 A plugin has **two independent ways** to contribute tools. They use different transports; pick by
 where the tool logic already lives.
@@ -345,7 +345,7 @@ export default plugin
   [`presentAssistantMessage.ts`](../packages/core/src/assistant-message/presentAssistantMessage.ts)
   (`customToolRegistry.getDispatchable(name).execute(...)`).
 - **Use when**: the tool logic is TypeScript that runs in-process (introspection, calling a client
-  the plugin already holds, emitting on a bus). The `shofer-events` (`events`) and
+  the plugin already holds, emitting on a bus). The `shofer-mesh` (`events`) and
   `temporal-runner` (introspection) tools are live examples.
 - **Diagnostics**: the output channel logs `[plugin-tools] N contributed (…): <names>` per build — if
   an expected tool is missing, the plugin isn't loaded or its `registerTools` threw.
