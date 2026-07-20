@@ -116,11 +116,16 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// PER-MODE association — the global default lives in Settings → Providers.
 	const [pendingModeApiConfig, setPendingModeApiConfig] = useState<Record<string, string>>({})
 
-	// Use a local state to track the visually active mode
-	// This prevents flickering when switching modes rapidly by:
-	// 1. Updating the UI immediately when a mode is clicked
-	// 2. Not syncing with the backend mode state (which would cause flickering)
-	// 3. Still sending the mode change to the backend for persistence
+	// Staged per-mode tool-group edits (custom-mode slug → GroupEntry[]), edited
+	// via the "Tools" checkboxes. Save-gated: committed on Save via
+	// `commitBuffers` (→ `updateCustomMode`), dropped on Discard.
+	const [pendingModeGroups, setPendingModeGroups] = useState<Record<string, GroupEntry[]>>({})
+
+	// The mode currently being EDITED in this tab. Purely local selection: per
+	// the save-gating rule, nothing in Settings takes effect before Save, so
+	// picking a mode here must NOT switch the globally-active mode (that is the
+	// chat mode selector's job). Seeded from the active mode and re-synced when
+	// it changes elsewhere (e.g. in chat).
 	const [visualMode, setVisualMode] = useState(mode)
 
 	// Per-mode overrides for the four editable text fields. Keyed by mode slug.
@@ -231,6 +236,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	const modeOverridesRef = useRef(modeOverrides)
 	const globalCIOverrideRef = useRef(globalCIOverride)
 	const pendingModeApiConfigRef = useRef(pendingModeApiConfig)
+	const pendingModeGroupsRef = useRef(pendingModeGroups)
 	useEffect(() => {
 		modeOverridesRef.current = modeOverrides
 	}, [modeOverrides])
@@ -240,6 +246,9 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	useEffect(() => {
 		pendingModeApiConfigRef.current = pendingModeApiConfig
 	}, [pendingModeApiConfig])
+	useEffect(() => {
+		pendingModeGroupsRef.current = pendingModeGroups
+	}, [pendingModeGroups])
 
 	useImperativeHandle(
 		ref,
@@ -267,6 +276,12 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 						}
 						if (fields.customInstructions !== undefined) {
 							merged.customInstructions = fields.customInstructions || undefined
+						}
+						// Fold staged tool-group edits into the same post so the
+						// second loop below doesn't clobber this one's text fields.
+						const stagedGroups = pendingModeGroupsRef.current[slug]
+						if (stagedGroups !== undefined) {
+							merged.tools = stagedGroups
 						}
 						vscode.postMessage({ type: "updateCustomMode", slug, modeConfig: merged })
 					} else {
@@ -296,6 +311,17 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 				if (gci !== undefined) {
 					vscode.postMessage({ type: "customInstructions", text: gci })
 				}
+				// Staged tool-group edits for slugs NOT already persisted by the
+				// overrides loop above (which folds them into its own post).
+				for (const [slug, tools] of Object.entries(pendingModeGroupsRef.current)) {
+					const customMode = findCustomModeBySlug(slug, liveModes)
+					if (!customMode || overrides[slug]) continue
+					vscode.postMessage({
+						type: "updateCustomMode",
+						slug,
+						modeConfig: { ...customMode, tools, source: customMode.source || "global" },
+					})
+				}
 				// Per-mode API-config associations (PER MODE; not the global default).
 				for (const [slug, configId] of Object.entries(pendingModeApiConfigRef.current)) {
 					vscode.postMessage({ type: "setModeApiConfig", mode: slug, text: configId })
@@ -303,11 +329,13 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 				setModeOverrides({})
 				setGlobalCIOverride(undefined)
 				setPendingModeApiConfig({})
+				setPendingModeGroups({})
 			},
 			discardBuffers: () => {
 				setModeOverrides({})
 				setGlobalCIOverride(undefined)
 				setPendingModeApiConfig({})
+				setPendingModeGroups({})
 			},
 		}),
 		[],
@@ -366,34 +394,24 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		})
 	}, [])
 
-	const switchMode = useCallback((slug: string) => {
-		vscode.postMessage({
-			type: "mode",
-			text: slug,
-		})
-	}, [])
-
-	// Handle mode switching with explicit state initialization
+	// Select which mode this tab edits. Local-only: does NOT post a "mode"
+	// message — switching the active mode from Settings would be a settings
+	// change taking effect without Save.
 	const handleModeSwitch = useCallback(
 		(modeConfig: ModeConfig) => {
 			if (modeConfig.slug === visualMode) return // Prevent unnecessary updates
 
-			// Immediately update visual state for instant feedback
 			setVisualMode(modeConfig.slug)
-
-			// Then send the mode change message to the backend
-			switchMode(modeConfig.slug)
 
 			// Exit tools edit mode when switching modes
 			setIsToolsEditMode(false)
 		},
-		[visualMode, switchMode],
+		[visualMode],
 	)
 
 	// Refs to track latest state/functions for message handler (which has no dependencies)
 	const handleModeSwitchRef = useRef(handleModeSwitch)
 	const customModesRef = useRef(customModes)
-	const switchModeRef = useRef(switchMode)
 
 	// Update refs when dependencies change
 	useEffect(() => {
@@ -403,10 +421,6 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	useEffect(() => {
 		customModesRef.current = customModes
 	}, [customModes])
-
-	useEffect(() => {
-		switchModeRef.current = switchMode
-	}, [switchMode])
 
 	// Sync visualMode with backend mode changes to prevent desync
 	useEffect(() => {
@@ -618,9 +632,9 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		}
 
 		updateCustomMode(newModeSlug, newMode)
-		// Immediately select the newly created mode in the UI
+		// Immediately select the newly created mode for editing (local only —
+		// creating a mode must not switch the globally-active mode)
 		setVisualMode(newModeSlug)
-		switchMode(newModeSlug)
 		setIsCreateModeDialogOpen(false)
 		resetFormState()
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -659,31 +673,28 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		setIsCreateModeDialogOpen(true)
 	}, [generateSlug, isNameOrSlugTaken])
 
-	// Handler for group checkbox changes
+	// Handler for group checkbox changes. Save-gated: stages the new group list
+	// into `pendingModeGroups` (committed on Save via `commitBuffers`) instead of
+	// posting `updateCustomMode` immediately.
 	const handleGroupChange = useCallback(
 		(group: ToolGroup, isCustomMode: boolean, customMode: ModeConfig | undefined) =>
 			(e: Event | React.FormEvent<HTMLElement>) => {
-				if (!isCustomMode) return // Prevent changes to built-in modes
+				if (!isCustomMode || !customMode) return // Prevent changes to built-in modes
 				const target = (e as CustomEvent)?.detail?.target || (e.target as HTMLInputElement)
 				const checked = target.checked
-				const oldGroups = customMode?.tools || []
+				// Staged-first so consecutive toggles compound instead of each
+				// starting over from the live (unsaved) group list.
+				const oldGroups = pendingModeGroups[customMode.slug] ?? customMode.tools ?? []
 				let newGroups: GroupEntry[]
 				if (checked) {
 					newGroups = [...oldGroups, group]
 				} else {
 					newGroups = oldGroups.filter((g) => getGroupName(g) !== group)
 				}
-				if (customMode) {
-					const source = customMode.source || "global"
-
-					updateCustomMode(customMode.slug, {
-						...customMode,
-						tools: newGroups,
-						source,
-					})
-				}
+				setPendingModeGroups((prev) => ({ ...prev, [customMode.slug]: newGroups }))
+				onModesDirty?.()
 			},
-		[updateCustomMode],
+		[pendingModeGroups, onModesDirty],
 	)
 
 	// Handle clicks outside the config menu
@@ -737,7 +748,6 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 						} else {
 							// Fallback: slug not yet in state (race condition) - select default mode
 							setVisualMode(defaultModeSlug)
-							switchModeRef.current?.(defaultModeSlug)
 						}
 					}
 				} else {
@@ -768,7 +778,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 
 		window.addEventListener("message", handler)
 		return () => window.removeEventListener("message", handler)
-	}, [checkRulesDirectory, switchMode])
+	}, [checkRulesDirectory])
 
 	const handleAgentReset = (
 		modeSlug: string,
@@ -1270,6 +1280,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 									<Button
 										variant="ghost"
 										size="icon"
+										data-testid="edit-tools-button"
 										onClick={() => setIsToolsEditMode(!isToolsEditMode)}>
 										<span
 											className={`codicon codicon-${isToolsEditMode ? "check" : "edit"}`}></span>
@@ -1288,13 +1299,16 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 									const currentMode = getCurrentMode()
 									const isCustomMode = findModeBySlug(visualMode, customModes)
 									const customMode = isCustomMode
-									const isGroupEnabled = isCustomMode
-										? customMode?.tools?.some((g) => getGroupName(g) === group)
-										: currentMode?.tools?.some((g) => getGroupName(g) === group)
+									// Staged-first so unsaved checkbox toggles render.
+									const effectiveTools = customMode
+										? (pendingModeGroups[customMode.slug] ?? customMode.tools)
+										: currentMode?.tools
+									const isGroupEnabled = effectiveTools?.some((g) => getGroupName(g) === group)
 
 									return (
 										<VSCodeCheckbox
 											key={group}
+											data-testid={`tool-group-checkbox-${group}`}
 											checked={isGroupEnabled}
 											onChange={handleGroupChange(group, Boolean(isCustomMode), customMode)}
 											disabled={!isCustomMode}>
@@ -1303,8 +1317,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 												<div className="text-xs text-vscode-descriptionForeground mt-0.5">
 													{t("prompts:tools.allowedFiles")}{" "}
 													{(() => {
-														const currentMode = getCurrentMode()
-														const editGroup = currentMode?.tools?.find(
+														const editGroup = effectiveTools?.find(
 															(g) =>
 																Array.isArray(g) && g[0] === "write" && g[1]?.fileRegex,
 														)
@@ -1321,7 +1334,10 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							<div className="text-sm text-vscode-foreground mb-2 leading-relaxed">
 								{(() => {
 									const currentMode = getCurrentMode()
-									const enabledGroups = currentMode?.tools || []
+									// Staged-first so unsaved checkbox toggles render.
+									const enabledGroups = currentMode
+										? (pendingModeGroups[currentMode.slug] ?? currentMode.tools ?? [])
+										: []
 
 									// If there are no enabled groups, display translated "None"
 									if (enabledGroups.length === 0) {

@@ -84,7 +84,7 @@ import { ToolsSettings, type ToolsSettingsRef } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
-import { ShoferNodesSettings } from "./ShoferNodesSettings"
+import { ShoferNodesSettings, ShoferNodesSettingsRef } from "./ShoferNodesSettings"
 import { PluginsSettings, type PluginsSettingsRef } from "./PluginsSettings"
 import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
@@ -188,6 +188,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const modesViewRef = useRef<ModesViewRef>(null)
 	const toolsSettingsRef = useRef<ToolsSettingsRef>(null)
 	const pluginsSettingsRef = useRef<PluginsSettingsRef>(null)
+	const shoferNodesRef = useRef<ShoferNodesSettingsRef>(null)
 	const ragIndexerRef = useRef<RagIndexerSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
@@ -550,6 +551,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// Apply staged plugin config edits (Plugins tab) — persists + reloads each plugin.
 			pluginsSettingsRef.current?.commitConfigBuffers()
 
+			// Apply staged node-pool edits (Shofer Nodes tab): load-balancer policy
+			// and per-node enable/disable.
+			shoferNodesRef.current?.commitNodeBuffers()
+
 			// Flush code-index secret fields (API keys) that are managed
 			// inside CodeIndexConfigForm via its own atomic-save path.
 			ragIndexerRef.current?.saveCodeIndexSecrets()
@@ -586,6 +591,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 				modesViewRef.current?.discardBuffers()
 				toolsSettingsRef.current?.discardToolBuffers()
 				pluginsSettingsRef.current?.discardConfigBuffers()
+				shoferNodesRef.current?.discardNodeBuffers()
 				confirmDialogHandler.current?.() // Execute the pending action (e.g., tab switch)
 			}
 			// If confirm is false (Cancel), do nothing, dialog closes automatically
@@ -1071,7 +1077,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{renderTab === "mcp" && <McpView />}
 
 						{/* Shofer Nodes (remote agents) Section */}
-						{renderTab === "shoferNodes" && <ShoferNodesSettings />}
+						{renderTab === "shoferNodes" && (
+							<ShoferNodesSettings ref={shoferNodesRef} onNodesDirty={() => setChangeDetected(true)} />
+						)}
 						{renderTab === "plugins" && (
 							<PluginsSettings ref={pluginsSettingsRef} onConfigDirty={() => setChangeDetected(true)} />
 						)}

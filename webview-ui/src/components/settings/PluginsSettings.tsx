@@ -144,6 +144,12 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 	// edits (the full override object to persist); absent ⇒ show its persisted config.
 	const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({})
 
+	// Save-gated staged toggles (plugin name → staged value). Enable/disable and
+	// billed-AI consent are settings VALUES, so they must not apply on change;
+	// missing key ⇒ show the live value. Committed with the config drafts on Save.
+	const [pendingEnabled, setPendingEnabled] = useState<Record<string, boolean>>({})
+	const [pendingAiConsent, setPendingAiConsent] = useState<Record<string, boolean>>({})
+
 	// Ask the extension for the current plugin list whenever this panel mounts.
 	useEffect(() => {
 		post({ action: "list" })
@@ -158,11 +164,29 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 				for (const [name, config] of Object.entries(drafts)) {
 					post({ action: "setConfig", name, config })
 				}
+				for (const [name, enabled] of Object.entries(pendingEnabled)) {
+					const live = list.find((p) => p.name === name)
+					if (live && live.enabled !== enabled) {
+						post({ action: "setEnabled", name, enabled })
+					}
+				}
+				for (const [name, consented] of Object.entries(pendingAiConsent)) {
+					const live = list.find((p) => p.name === name)
+					if (live && !!live.aiConsented !== consented) {
+						post({ action: "setAiConsent", name, consented })
+					}
+				}
 				setDrafts({})
+				setPendingEnabled({})
+				setPendingAiConsent({})
 			},
-			discardConfigBuffers: () => setDrafts({}),
+			discardConfigBuffers: () => {
+				setDrafts({})
+				setPendingEnabled({})
+				setPendingAiConsent({})
+			},
 		}),
-		[drafts],
+		[drafts, pendingEnabled, pendingAiConsent, list],
 	)
 
 	// Seed a plugin's draft from its persisted config on first edit, then patch the field.
@@ -182,7 +206,9 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 		<div {...props}>
 			<SectionHeader>{t("settings:sections.plugins")}</SectionHeader>
 			<Section>
-				<div className="text-vscode-descriptionForeground text-sm mb-3">{t("settings:plugins.description")}</div>
+				<div className="text-vscode-descriptionForeground text-sm mb-3">
+					{t("settings:plugins.description")}
+				</div>
 
 				{list.length === 0 ? (
 					<div className="flex flex-col items-center gap-2 text-vscode-descriptionForeground text-sm py-8">
@@ -193,6 +219,9 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 					<div className="flex flex-col gap-2">
 						{list.map((plugin) => {
 							const summary = contributionSummary(plugin, t)
+							// Staged-first so unsaved toggles render.
+							const effectiveEnabled = pendingEnabled[plugin.name] ?? plugin.enabled
+							const effectiveAiConsented = pendingAiConsent[plugin.name] ?? !!plugin.aiConsented
 							return (
 								<div
 									key={plugin.name}
@@ -235,26 +264,26 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 													{t("settings:plugins.usesAi")}
 												</span>
 												<ToggleSwitch
-													checked={!!plugin.aiConsented}
-													disabled={!plugin.enabled}
-													onChange={() =>
-														post({
-															action: "setAiConsent",
-															name: plugin.name,
-															consented: !plugin.aiConsented,
-														})
-													}
+													checked={effectiveAiConsented}
+													disabled={!effectiveEnabled}
+													onChange={() => {
+														setPendingAiConsent((prev) => ({
+															...prev,
+															[plugin.name]: !effectiveAiConsented,
+														}))
+														onConfigDirty?.()
+													}}
 													size="small"
 													aria-label={t("settings:plugins.aiConsentAria", {
 														name: plugin.name,
 													})}
 												/>
 												<span className="text-xs text-vscode-descriptionForeground">
-													{plugin.aiConsented
+													{effectiveAiConsented
 														? t("settings:plugins.aiConsented")
 														: t("settings:plugins.aiNotConsented")}
 												</span>
-												{!plugin.aiConsented && (
+												{!effectiveAiConsented && (
 													<div className="w-full text-xs text-vscode-descriptionForeground">
 														{t("settings:plugins.aiConsentHint")}
 													</div>
@@ -273,21 +302,21 @@ export const PluginsSettings = forwardRef<PluginsSettingsRef, PluginsSettingsPro
 									</div>
 									<div className="flex items-center gap-2 shrink-0">
 										<span className="text-xs text-vscode-descriptionForeground">
-											{plugin.enabled
+											{effectiveEnabled
 												? plugin.disabledReason
 													? t("settings:plugins.inactive")
 													: t("settings:plugins.enabled")
 												: t("settings:plugins.disabled")}
 										</span>
 										<ToggleSwitch
-											checked={plugin.enabled}
-											onChange={() =>
-												post({
-													action: "setEnabled",
-													name: plugin.name,
-													enabled: !plugin.enabled,
-												})
-											}
+											checked={effectiveEnabled}
+											onChange={() => {
+												setPendingEnabled((prev) => ({
+													...prev,
+													[plugin.name]: !effectiveEnabled,
+												}))
+												onConfigDirty?.()
+											}}
 											size="medium"
 											aria-label={t("settings:plugins.toggleAria", { name: plugin.name })}
 										/>

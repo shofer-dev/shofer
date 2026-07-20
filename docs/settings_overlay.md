@@ -389,6 +389,19 @@ happens at task creation time:
 active mode slug → modeApiConfigs[slug] → profile ID → apiConfigs[profileName]
 ```
 
+The blob is the **single source of truth** for this mapping — there is no
+`globalState` copy. `ProviderSettingsManager.getModeConfigs()` reads it and
+`ShoferProvider.getStateToPostToWebview()` projects it to the webview read-only, so
+Settings → Modes and the chat API-config selector always show what
+`resolveModeApiConfigName()` will actually resolve for a new task or subtask. Writers
+are `setModeConfig()` (via `setModeApiConfig` on Save, `activateProviderProfile`, and
+the `handleUserModeSwitch` backfill); because they all write the one store, a profile
+activation can no longer drift the UI away from what task creation resolves. The
+headless host (`shofer serve`) reads the same blob through the vscode-shim's
+file-backed `SecretStorage`, and remote nodes never resolve it themselves — the
+controller resolves `resolveTaskApiConfiguration()` and ships the concrete
+`ProviderSettings` per task.
+
 ### Combined Flow
 
 ```
@@ -1328,9 +1341,23 @@ around a **staged-save (buffered) pattern**:
 - Some sub-views hold **their own buffers** that `cachedState` cannot reach and are
   committed/dropped imperatively on Save/Discard:
   [`ModesView`](../webview-ui/src/components/modes/ModesView.tsx) (`commitBuffers()` /
-  `discardBuffers()`) and
+  `discardBuffers()` — per-mode text overrides, tool groups, and API-config
+  associations),
+  [`ToolsSettings`](../webview-ui/src/components/settings/ToolsSettings.tsx)
+  (`commitToolBuffers()` / `discardToolBuffers()` — MCP per-tool enablement),
+  [`PluginsSettings`](../webview-ui/src/components/settings/PluginsSettings.tsx)
+  (`commitConfigBuffers()` / `discardConfigBuffers()` — plugin config, enable, and
+  billed-AI consent),
+  [`ShoferNodesSettings`](../webview-ui/src/components/settings/ShoferNodesSettings.tsx)
+  (`commitNodeBuffers()` / `discardNodeBuffers()` — load-balancer policy and per-node
+  enable/disable), and
   [`RagIndexerSettings`](../webview-ui/src/components/settings/RagIndexerSettings.tsx)
   (`saveCodeIndexSecrets()`).
+- **Nothing in Settings applies before Save.** Every control either writes
+  `cachedState` or stages into one of the buffers above; see the "Settings View
+  Pattern" rule in [`AGENTS.md`](../AGENTS.md) for the exemptions (action buttons,
+  structural list management, `updateVSCodeSetting`). In particular the Modes tab's
+  mode dropdown selects the mode being **edited** and does not switch the active mode.
 - The **API-profile editing model** deliberately splits two concepts:
   `editingConfigName` (which profile the Providers tab is editing) vs. the global
   default (`currentApiConfigName`). The default dropdown is itself buffered in

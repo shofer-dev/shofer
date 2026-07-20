@@ -1,6 +1,6 @@
 // npx vitest src/components/modes/__tests__/ModesView.import-switch.spec.tsx
 
-import { render, waitFor } from "@/utils/test-utils"
+import { render, screen, waitFor } from "@/utils/test-utils"
 import ModesView from "../ModesView"
 import { ExtensionStateContext } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
@@ -44,7 +44,7 @@ describe("ModesView Import Auto-Switch", () => {
 		vitest.clearAllMocks()
 	})
 
-	it("should auto-switch to imported mode when found in current state", async () => {
+	it("should auto-select imported mode for editing WITHOUT switching the active mode", async () => {
 		const importedModeSlug = "custom-test-mode"
 		const customModes = [
 			{
@@ -68,16 +68,16 @@ describe("ModesView Import Auto-Switch", () => {
 
 		window.dispatchEvent(new MessageEvent("message", importMessage))
 
-		// Wait for the mode switch message to be sent
+		// The imported mode becomes the LOCAL editing selection…
 		await waitFor(() => {
-			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "mode",
-				text: importedModeSlug,
-			})
+			expect(screen.getByTestId("mode-select-trigger")).toHaveTextContent("Custom Test Mode")
 		})
+		// …but the globally-active mode is untouched (save-gating rule: Settings
+		// must not switch the active mode).
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "mode" }))
 	})
 
-	it("should fallback to architect mode when imported slug not yet in state (race condition)", async () => {
+	it("should fallback to selecting the default mode when imported slug not yet in state (race condition)", async () => {
 		const importedModeSlug = "custom-new-mode"
 
 		// Render without the imported mode in customModes (simulating race condition)
@@ -94,13 +94,12 @@ describe("ModesView Import Auto-Switch", () => {
 
 		window.dispatchEvent(new MessageEvent("message", importMessage))
 
-		// Wait for the fallback to default mode (architect)
+		// The fallback selects the default mode locally for editing; no active-mode
+		// switch is posted.
 		await waitFor(() => {
-			expect(vscode.postMessage).toHaveBeenCalledWith({
-				type: "mode",
-				text: defaultModeSlug,
-			})
+			expect(screen.getByTestId(`${defaultModeSlug}-prompt-textarea`)).toBeInTheDocument()
 		})
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "mode" }))
 	})
 
 	it("should not switch modes on import failure", async () => {

@@ -74,7 +74,10 @@ describe("PromptsView", () => {
 		})
 	})
 
-	it("selects a mode from the dropdown and sends update message", async () => {
+	it("selects a mode from the dropdown WITHOUT switching the active mode", async () => {
+		// Save-gating rule: the Modes-tab dropdown picks which mode is being
+		// EDITED (local visualMode) — it must NOT post a "mode" message, which
+		// would switch the globally-active mode without Save.
 		renderPromptsView()
 		const selectTrigger = screen.getByTestId("mode-select-trigger")
 		fireEvent.click(selectTrigger)
@@ -83,10 +86,11 @@ describe("PromptsView", () => {
 		fireEvent.click(debugOption)
 
 		expect(mockExtensionState.setEnhancementApiConfigId).not.toHaveBeenCalled() // Ensure this is not called by mode switch
-		expect(vscode.postMessage).toHaveBeenCalledWith({
-			type: "mode",
-			text: "debug",
-		})
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "mode",
+			}),
+		)
 		await waitFor(() => {
 			expect(selectTrigger).toHaveAttribute("aria-expanded", "false")
 		})
@@ -118,6 +122,42 @@ describe("PromptsView", () => {
 			type: "updatePrompt",
 			promptMode: "code",
 			customPrompt: { roleDefinition: "New prompt value" },
+		})
+	})
+
+	it("stages tool-group checkbox edits and only persists on commitBuffers", async () => {
+		// Save-gating rule: toggling a tool-group checkbox must NOT post
+		// `updateCustomMode` immediately — the new group list is staged in
+		// `pendingModeGroups` and flushed on Save via commitBuffers().
+		const customMode = {
+			slug: "my-custom",
+			name: "My Custom Mode",
+			roleDefinition: "Custom role",
+			tools: ["read"],
+			source: "global",
+		}
+		const ref = createRef<ModesViewRef>()
+		render(
+			<ExtensionStateContext.Provider
+				value={{ ...mockExtensionState, mode: "my-custom", customModes: [customMode] } as any}>
+				<ModesView ref={ref} />
+			</ExtensionStateContext.Provider>,
+		)
+
+		// Enter tools edit mode and toggle the "browser" group on.
+		fireEvent.click(await waitFor(() => screen.getByTestId("edit-tools-button")))
+		fireEvent.click(await waitFor(() => screen.getByTestId("tool-group-checkbox-browser")))
+
+		// Toggling must NOT post — the edit is staged locally.
+		expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "updateCustomMode" }))
+
+		// Save (via the imperative handle) flushes the staged group list.
+		ref.current?.commitBuffers()
+
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "updateCustomMode",
+			slug: "my-custom",
+			modeConfig: expect.objectContaining({ tools: ["read", "browser"] }),
 		})
 	})
 
