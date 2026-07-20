@@ -124,9 +124,15 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// The mode currently being EDITED in this tab. Purely local selection: per
 	// the save-gating rule, nothing in Settings takes effect before Save, so
 	// picking a mode here must NOT switch the globally-active mode (that is the
-	// chat mode selector's job). Seeded from the active mode and re-synced when
-	// it changes elsewhere (e.g. in chat).
+	// chat mode selector's job).
 	const [visualMode, setVisualMode] = useState(mode)
+
+	// Whether the user has deliberately chosen which mode to edit. Until then the
+	// tab tracks the active mode (so opening Settings edits what you're using);
+	// once set, the selection is PINNED — an active-mode change from chat or the
+	// agent (`switch_mode`) must not yank the user onto a different mode's form
+	// mid-edit. Reset on unmount only (the state re-seeds on the next open).
+	const editTargetPinned = useRef(false)
 
 	// Per-mode overrides for the four editable text fields. Keyed by mode slug.
 	// Reads merge `modeOverrides[slug]` over the live extension-state chain, so
@@ -399,6 +405,10 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// change taking effect without Save.
 	const handleModeSwitch = useCallback(
 		(modeConfig: ModeConfig) => {
+			// Pin even on a no-op re-pick: choosing the mode you're already on is
+			// still a deliberate "edit this one".
+			editTargetPinned.current = true
+
 			if (modeConfig.slug === visualMode) return // Prevent unnecessary updates
 
 			setVisualMode(modeConfig.slug)
@@ -422,8 +432,10 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		customModesRef.current = customModes
 	}, [customModes])
 
-	// Sync visualMode with backend mode changes to prevent desync
+	// Track the active mode until the user picks an edit target of their own.
+	// After that the selection is pinned (see `editTargetPinned`).
 	useEffect(() => {
+		if (editTargetPinned.current) return
 		setVisualMode(mode)
 	}, [mode])
 
@@ -633,7 +645,9 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 
 		updateCustomMode(newModeSlug, newMode)
 		// Immediately select the newly created mode for editing (local only —
-		// creating a mode must not switch the globally-active mode)
+		// creating a mode must not switch the globally-active mode), and pin it
+		// so an active-mode change elsewhere can't navigate away from it.
+		editTargetPinned.current = true
 		setVisualMode(newModeSlug)
 		setIsCreateModeDialogOpen(false)
 		resetFormState()
@@ -747,6 +761,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							handleModeSwitchRef.current(importedMode)
 						} else {
 							// Fallback: slug not yet in state (race condition) - select default mode
+							editTargetPinned.current = true
 							setVisualMode(defaultModeSlug)
 						}
 					}

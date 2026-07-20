@@ -125,6 +125,38 @@ describe("PromptsView", () => {
 		})
 	})
 
+	it("tracks the active mode until the user picks an edit target, then pins it", async () => {
+		// Before any user selection the tab follows the active mode, so opening
+		// Settings edits what you're currently using…
+		const { rerender } = render(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState, mode: "code" } as any}>
+				<ModesView />
+			</ExtensionStateContext.Provider>,
+		)
+		expect(await waitFor(() => screen.getByTestId("code-prompt-textarea"))).toBeInTheDocument()
+
+		rerender(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState, mode: "architect" } as any}>
+				<ModesView />
+			</ExtensionStateContext.Provider>,
+		)
+		expect(await waitFor(() => screen.getByTestId("architect-prompt-textarea"))).toBeInTheDocument()
+
+		// …but once the user deliberately picks a mode to edit, an active-mode
+		// change from chat/the agent must not yank them off that form.
+		fireEvent.click(screen.getByTestId("mode-select-trigger"))
+		fireEvent.click(await waitFor(() => screen.getByTestId("mode-option-debug")))
+		expect(await waitFor(() => screen.getByTestId("debug-prompt-textarea"))).toBeInTheDocument()
+
+		rerender(
+			<ExtensionStateContext.Provider value={{ ...mockExtensionState, mode: "code" } as any}>
+				<ModesView />
+			</ExtensionStateContext.Provider>,
+		)
+		await waitFor(() => expect(screen.getByTestId("debug-prompt-textarea")).toBeInTheDocument())
+		expect(screen.queryByTestId("code-prompt-textarea")).not.toBeInTheDocument()
+	})
+
 	it("stages tool-group checkbox edits and only persists on commitBuffers", async () => {
 		// Save-gating rule: toggling a tool-group checkbox must NOT post
 		// `updateCustomMode` immediately — the new group list is staged in
