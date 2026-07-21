@@ -90,6 +90,37 @@ describe("ListBackgroundTasksTool", () => {
 		expect(result.tasks[0].status).toBe("completed")
 	})
 
+	it("children scope includes synchronous (non-background) children from history", async () => {
+		// A synchronous child (is_background: false) is never added to
+		// backgroundChildren, so without the persisted-history fallback it
+		// would be invisible. Matching on parentTaskId must surface it.
+		const task = buildTask()
+		task.backgroundChildren = new Map()
+		const historyEntries = [
+			{
+				id: "sync-child",
+				name: "Sync Child",
+				task: "compute 1+1",
+				rootTaskId: "root-1",
+				parentTaskId: "caller-1",
+				isBackground: false,
+				taskState: { lifecycle: "completed" },
+				createdAt: 150,
+				ts: 150,
+			},
+		]
+		;(task.providerRef.deref as any) = () => buildProvider([], historyEntries)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ scope: "children" }, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		expect(result.tasks).toHaveLength(1)
+		expect(result.tasks[0].task_id).toBe("sync-child")
+		expect(result.tasks[0].status).toBe("completed")
+	})
+
 	it("children scope deduplicates live and history entries", async () => {
 		const task = buildTask()
 		task.backgroundChildren = new Map([["child-1", { taskId: "child-1", status: "running", createdAt: 100 }]])
@@ -339,5 +370,118 @@ describe("ListBackgroundTasksTool", () => {
 		const result = JSON.parse(resultStr)
 		expect(result.tasks).toHaveLength(1)
 		expect(result.tasks[0].task_id).toBe("peer-1")
+	})
+
+	// ─── Root-task peer scoping (issue: leaking unrelated tasks) ────
+
+	it("root caller (no rootTaskId) excludes other root tasks from ManagedTasks", async () => {
+		// The caller is a root task (rootTaskId undefined). Other root tasks
+		// (also rootTaskId undefined) must NOT appear as peers — only tasks
+		// whose rootTaskId === caller.taskId qualify.
+		const managedPeers = [
+			{
+				id: "child-1",
+				name: "Own Child",
+				rootTaskId: "caller-1",
+				state: { lifecycle: "running" },
+				createdAt: 100,
+			},
+			{
+				id: "other-root",
+				name: "Unrelated Root",
+				rootTaskId: undefined,
+				state: { lifecycle: "idle" },
+				createdAt: 200,
+			},
+		]
+		const task = buildTask({
+			rootTaskId: undefined,
+			knownPeers: new Set(["child-1"]),
+		})
+		;(task.providerRef.deref as any) = () => buildProvider(managedPeers)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ scope: "peers" }, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		expect(result.tasks).toHaveLength(1)
+		expect(result.tasks[0].task_id).toBe("child-1")
+	})
+
+	it("root caller excludes other root tasks from TaskHistoryStore", async () => {
+		// Persisted history contains an unrelated root task (no rootTaskId) and
+		// the caller's own child. Only the child should appear.
+		const historyEntries = [
+			{
+				id: "child-1",
+				name: "Own Child",
+				task: "history",
+				rootTaskId: "caller-1",
+				taskState: { lifecycle: "idle" },
+				createdAt: 100,
+				ts: 100,
+			},
+			{
+				id: "stale-root",
+				name: "Stale Unrelated Root",
+				task: "old session",
+				rootTaskId: undefined,
+				taskState: { lifecycle: "idle" },
+				createdAt: 200,
+				ts: 200,
+			},
+		]
+		const task = buildTask({
+			rootTaskId: undefined,
+			knownPeers: new Set(["child-1"]),
+		})
+		;(task.providerRef.deref as any) = () => buildProvider([], historyEntries)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ scope: "peers" }, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		expect(result.tasks).toHaveLength(1)
+		expect(result.tasks[0].task_id).toBe("child-1")
+	})
+
+	it("root caller discovers all same-tree descendants regardless of knownPeers", async () => {
+		// A root caller has no rootTaskId and no meaningful peer-grant set, so
+		// the knownPeers gate is skipped for it. ALL descendants sharing its
+		// rootTaskId appear — including ones not in knownPeers (e.g. sync
+		// children, ungranted grandchildren).
+		const managedPeers = [
+			{
+				id: "child-1",
+				name: "Granted Child",
+				rootTaskId: "caller-1",
+				state: { lifecycle: "running" },
+				createdAt: 100,
+			},
+			{
+				id: "child-2",
+				name: "Ungranted Child",
+				rootTaskId: "caller-1",
+				state: { lifecycle: "running" },
+				createdAt: 200,
+			},
+		]
+		const task = buildTask({
+			rootTaskId: undefined,
+			knownPeers: new Set(["child-1"]),
+		})
+		;(task.providerRef.deref as any) = () => buildProvider(managedPeers)
+
+		const cbs = buildCallbacks()
+		await tool.execute({ scope: "peers" }, task, cbs)
+
+		const resultStr = cbs.pushToolResult.mock.calls[0][0]
+		const result = JSON.parse(resultStr)
+		const ids = result.tasks.map((t: any) => t.task_id)
+		expect(ids).toHaveLength(2)
+		expect(ids).toContain("child-1")
+		expect(ids).toContain("child-2")
 	})
 })

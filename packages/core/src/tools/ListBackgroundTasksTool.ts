@@ -46,6 +46,21 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			// ManagedTasks covers live + terminal tasks still in the in-memory
 			// registry.  TaskHistoryStore covers EVERY task ever persisted,
 			// including stopped/cancelled tasks removed from ManagedTasks.
+			//
+			// A "peer" is a task that shares the caller's root task tree. The
+			// candidate MUST carry a `rootTaskId` equal to the caller's
+			// `effectiveRootId`. Tasks without a `rootTaskId` (other root /
+			// top-level tasks from unrelated sessions) are NOT peers and must be
+			// excluded — otherwise a root caller sees every persisted task in the
+			// store as a "peer". This strict equality check replaces the previous
+			// truthy-short-circuit (`managed.rootTaskId && …`) which let
+			// rootless tasks slip through.
+			//
+			// The `knownPeers` gate is applied ONLY to non-root callers
+			// (`task.rootTaskId` truthy): a non-root task may only message its
+			// explicitly granted peers. A root caller has no `rootTaskId` and no
+			// meaningful peer grant set, so it discovers ALL descendants in its
+			// tree (every task whose `rootTaskId === root.taskId`).
 			const seen = new Set<string>()
 			tasks = []
 
@@ -54,7 +69,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			// 1. ManagedTasks (in-memory, authoritative for lifecycle)
 			for (const managed of provider.taskManager.getManagedTasks()) {
 				if (managed.id === task.taskId) continue
-				if (managed.rootTaskId && managed.rootTaskId !== effectiveRootId) continue
+				if (managed.rootTaskId !== effectiveRootId) continue
 				if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(managed.id))) continue
 
 				seen.add(managed.id)
@@ -71,7 +86,7 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 			for (const item of allHistory) {
 				if (item.id === task.taskId) continue
 				if (seen.has(item.id)) continue
-				if (item.rootTaskId && item.rootTaskId !== effectiveRootId) continue
+				if (item.rootTaskId !== effectiveRootId) continue
 				if (task.rootTaskId && (!task.knownPeers || !task.knownPeers.has(item.id))) continue
 
 				seen.add(item.id)
@@ -110,12 +125,17 @@ export class ListBackgroundTasksTool extends BaseTool<"list_background_tasks"> {
 				})
 			}
 
-			// 2. Persisted background children not in the live map
-			// (stopped/cancelled children removed from backgroundChildren)
+			// 2. Persisted children not in the live map.
+			// Includes BOTH background and synchronous (foreground) children:
+			// a synchronous child is never added to `backgroundChildren` (only
+			// `childTaskId` is set), so without this fallback it would be
+			// invisible to `list_background_tasks` even though it is a direct
+			// child of this task. Matching on `parentTaskId` is the authoritative
+			// parent-child relationship; the previous `isBackground` gate
+			// excluded synchronous children entirely.
 			const allHistory = provider.taskHistoryStore.getAll()
 			for (const item of allHistory) {
 				if (seen.has(item.id)) continue
-				if (!item.isBackground) continue
 				if (item.parentTaskId !== task.taskId) continue
 
 				seen.add(item.id)
