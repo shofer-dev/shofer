@@ -127,6 +127,22 @@ export class SendMessageToTaskTool extends BaseTool<"send_message_to_task"> {
 				try {
 					const { historyItem } = await provider.getTaskWithId(task_id)
 					await provider.createTaskWithHistoryItem(historyItem, { keepCurrentTask: true })
+					// createTaskWithHistoryItem pushes the task onto shoferStack but
+					// does NOT register it in TaskManager.activeTasks — so a
+					// subsequent getManagedTaskInstance(task_id) still returns null
+					// (the "not reachable after rehydration" failure). Register the
+					// freshly rehydrated instance explicitly, mirroring the pattern
+					// used by ShoferProvider.focusTask after its own rehydration
+					// path. registerBackgroundTask is used (not updateTaskInstance)
+					// because the task may not yet exist in managedTasks, and
+					// updateTaskInstance early-returns in that case.
+					const rehydrated = provider.taskManager.getManagedTaskInstance(task_id)
+					if (!rehydrated) {
+						const current = provider.getCurrentTask()
+						if (current && current.taskId === task_id) {
+							provider.taskManager.registerBackgroundTask(current)
+						}
+					}
 					targetState = provider.taskManager.getManagedTaskInstance(task_id)
 				} catch {
 					pushToolResult(formatResponse.toolError(`Task ${task_id} could not be rehydrated.`))

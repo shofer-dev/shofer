@@ -27,9 +27,11 @@ describe("SendMessageToTaskTool", () => {
 				getManagedTaskInstance: vi.fn(),
 				getManagedTask: vi.fn(),
 				getManagedTasks: vi.fn().mockReturnValue([]),
+				registerBackgroundTask: vi.fn(),
 			},
 			getTaskWithId: vi.fn(),
 			createTaskWithHistoryItem: vi.fn(),
+			getCurrentTask: vi.fn().mockReturnValue(undefined),
 			hasPendingSyncResolver: vi.fn().mockReturnValue(false),
 			registerPendingSyncResolver: vi.fn(),
 			clearPendingSyncResolver: vi.fn(),
@@ -369,6 +371,42 @@ describe("SendMessageToTaskTool", () => {
 		const cbs = buildCallbacks()
 		await tool.execute({ task_id: "peer-1", message: "hello", wait: true, timeout_sec: 5 }, task, cbs)
 		expect(provider.createTaskWithHistoryItem).toHaveBeenCalled()
+		expect(target.messageQueueService.addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
+		expect(cbs.pushToolResult).toHaveBeenCalledWith("rehydrated result")
+	})
+
+	it("sync: registers rehydrated task with TaskManager when createTaskWithHistoryItem does not", async () => {
+		// Regression: createTaskWithHistoryItem pushes the task onto shoferStack
+		// but does NOT register it in TaskManager.activeTasks. Without an
+		// explicit registerBackgroundTask call, getManagedTaskInstance returns
+		// null and the tool reports "not reachable after rehydration".
+		const task = buildTask()
+		const provider = task.providerRef.deref()
+		const target = buildTargetInstance({ taskStatus: "idle", abort: true })
+
+		// Simulate the real createTaskWithHistoryItem: it does NOT set the
+		// instance. getCurrentTask returns the rehydrated task (it's on the
+		// stack), and registerBackgroundTask makes getManagedTaskInstance
+		// resolve to it.
+		provider.taskManager.getManagedTaskInstance.mockReturnValue(null)
+		provider.getCurrentTask = vi.fn().mockReturnValue({ taskId: "peer-1", ...target })
+		provider.taskManager.registerBackgroundTask.mockImplementation(() => {
+			provider.taskManager.getManagedTaskInstance.mockReturnValue(target)
+		})
+		provider.createTaskWithHistoryItem.mockResolvedValue(undefined)
+		provider.taskManager.getManagedTask.mockReturnValue({ state: { lifecycle: "idle" } })
+		provider.getTaskWithId.mockResolvedValue({
+			historyItem: { rootTaskId: "root-1", taskState: { lifecycle: "idle" } },
+		})
+		provider.registerPendingSyncResolver.mockReturnValue(Promise.resolve("rehydrated result"))
+
+		const cbs = buildCallbacks()
+		await tool.execute({ task_id: "peer-1", message: "hello", wait: true, timeout_sec: 5 }, task, cbs)
+
+		expect(provider.createTaskWithHistoryItem).toHaveBeenCalled()
+		expect(provider.taskManager.registerBackgroundTask).toHaveBeenCalledWith(
+			expect.objectContaining({ taskId: "peer-1" }),
+		)
 		expect(target.messageQueueService.addMessage).toHaveBeenCalledWith(expect.stringContaining("PEER PROMPT"), [])
 		expect(cbs.pushToolResult).toHaveBeenCalledWith("rehydrated result")
 	})
