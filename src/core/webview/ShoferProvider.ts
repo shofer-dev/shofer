@@ -3139,6 +3139,13 @@ export class ShoferProvider
 			)
 			throw error
 		}
+
+		// Push the new mode to the webview so the ModeSelector reflects the
+		// agent-driven switch (switch_mode tool, run_slash_command, Task.ts
+		// internal calls). Without this, the UI keeps showing the last
+		// stateInit's mode until some unrelated event triggers the next push.
+		// Mirrors handleUserModeSwitch()'s trailing postInitState().
+		await this.postInitState()
 	}
 
 	public async handleUserModeSwitch(newMode: Mode) {
