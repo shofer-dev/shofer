@@ -370,7 +370,7 @@ export interface PluginAi<Handler = unknown> {
  * As with {@link PluginAi}, the plugin-facing surface stays in `@shofer/types`
  * (browser-safe) while the concrete task-injection lives host-side behind a seam (core's
  * `PluginAgentProvider`). Ungranted (but the host wired the seam) ⇒ a denying stub whose
- * {@link notify} throws + warns; no seam (headless) ⇒ `ctx.agent` is absent entirely.
+ * {@link notify} throws + warns; no seam wired (pure-core embedding, or the discovery-only `shofer plugin` CLI manager) ⇒ `ctx.agent` is absent — note `shofer serve` DOES wire the seam (same extension bundle, same ShoferProvider).
  */
 export interface PluginAgent {
 	/**
