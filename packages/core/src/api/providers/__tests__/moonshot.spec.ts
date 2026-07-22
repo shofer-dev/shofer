@@ -1,49 +1,45 @@
-// Use vi.hoisted to define mock functions that can be referenced in hoisted vi.mock() calls
-const { mockStreamText, mockGenerateText, mockCreateOpenAICompatible } = vi.hoisted(() => ({
-	mockStreamText: vi.fn(),
-	mockGenerateText: vi.fn(),
-	mockCreateOpenAICompatible: vi.fn(() => {
-		// Return a function that returns a mock language model
-		return vi.fn(() => ({
-			modelId: "moonshot-chat",
-			provider: "moonshot",
-		}))
-	}),
-}))
+// npx vitest run src/api/providers/__tests__/moonshot.spec.ts
+//
+// Tests for the MoonshotHandler after migration from the Vercel AI SDK path
+// (OpenAICompatibleHandler) to the raw OpenAI SDK path
+// (BaseOpenAiCompatibleProvider). The key behavioural assertions are:
+//
+//   - reasoning_content is preserved on assistant messages (the quota-burn fix)
+//   - temperature is forced to 1 for fixed-temperature Kimi models
+//   - tool schemas are normalized to the Moonshot-flavored JSON Schema subset
+//   - usage metrics (including cached_tokens) are correctly extracted
+//   - stream_options.include_usage is always sent
 
-vi.mock("ai", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("ai")>()
-	return {
-		...actual,
-		streamText: mockStreamText,
-		generateText: mockGenerateText,
-	}
-})
+import OpenAI from "openai"
+import { Anthropic } from "@anthropic-ai/sdk"
 
-vi.mock("@ai-sdk/openai-compatible", () => ({
-	createOpenAICompatible: mockCreateOpenAICompatible,
-}))
-
-import type { Anthropic } from "@anthropic-ai/sdk"
-
-import { moonshotDefaultModelId } from "@shofer/types"
+import { moonshotDefaultModelId, moonshotModels, type MoonshotModelId } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "../_deps.js"
 
 import { MoonshotHandler } from "../moonshot.js"
 
+vitest.mock("openai", () => {
+	const createMock = vitest.fn()
+	return {
+		default: vitest.fn(() => ({ chat: { completions: { create: createMock } } })),
+	}
+})
+
 describe("MoonshotHandler", () => {
 	let handler: MoonshotHandler
+	let mockCreate: any
 	let mockOptions: ApiHandlerOptions
 
 	beforeEach(() => {
+		vitest.clearAllMocks()
 		mockOptions = {
 			moonshotApiKey: "test-api-key",
-			apiModelId: "moonshot-chat",
+			apiModelId: "kimi-k2-0905-preview",
 			moonshotBaseUrl: "https://api.moonshot.ai/v1",
 		}
 		handler = new MoonshotHandler(mockOptions)
-		vi.clearAllMocks()
+		mockCreate = (OpenAI as unknown as any)().chat.completions.create
 	})
 
 	describe("constructor", () => {
@@ -65,29 +61,34 @@ describe("MoonshotHandler", () => {
 				...mockOptions,
 				moonshotBaseUrl: undefined,
 			})
-			expect(handlerWithoutBaseUrl).toBeInstanceOf(MoonshotHandler)
+			expect(OpenAI).toHaveBeenCalledWith(
+				expect.objectContaining({
+					baseURL: "https://api.moonshot.ai/v1",
+				}),
+			)
 		})
 
-		it("should use chinese base URL if provided", () => {
-			const customBaseUrl = "https://api.moonshot.cn/v1"
-			const handlerWithCustomUrl = new MoonshotHandler({
+		it("should use custom base URL when provided", () => {
+			const customBaseUrl = "https://api.kimi.com/coding/v1"
+			new MoonshotHandler({
 				...mockOptions,
 				moonshotBaseUrl: customBaseUrl,
 			})
-			expect(handlerWithCustomUrl).toBeInstanceOf(MoonshotHandler)
-		})
-
-		it("should pass includeUsage: true to createOpenAICompatible so usage chunks stream", () => {
-			// Without includeUsage, the AI SDK never sends stream_options.include_usage
-			// to the upstream, so Moonshot/DashScope never emit a final usage chunk and
-			// the TaskHeader shows zero tokens / zero cost. Construct a fresh handler
-			// here (after beforeEach's clearAllMocks) so the spy records this call.
-			new MoonshotHandler(mockOptions)
-			expect(mockCreateOpenAICompatible).toHaveBeenCalledWith(
+			expect(OpenAI).toHaveBeenCalledWith(
 				expect.objectContaining({
-					includeUsage: true,
+					baseURL: customBaseUrl,
 				}),
 			)
+		})
+
+		it("should pass the API key to the OpenAI client", () => {
+			new MoonshotHandler({ ...mockOptions, moonshotApiKey: "my-key" })
+			expect(OpenAI).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "my-key" }))
+		})
+
+		it("should use 'not-provided' as API key when none is specified", () => {
+			new MoonshotHandler({ ...mockOptions, moonshotApiKey: undefined })
+			expect(OpenAI).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "not-provided" }))
 		})
 	})
 
@@ -102,16 +103,17 @@ describe("MoonshotHandler", () => {
 			expect(model.info.supportsPromptCache).toBe(true)
 		})
 
-		it("should return provided model ID with default model info if model does not exist", () => {
+		it("should fall back to default model when an invalid model ID is provided", () => {
+			// BaseOpenAiCompatibleProvider.getModel() falls back to the default
+			// when the ID is not in the catalog (unlike the old AI SDK handler
+			// which returned the invalid ID as-is).
 			const handlerWithInvalidModel = new MoonshotHandler({
 				...mockOptions,
 				apiModelId: "invalid-model",
 			})
 			const model = handlerWithInvalidModel.getModel()
-			expect(model.id).toBe("invalid-model") // Returns provided ID
+			expect(model.id).toBe(moonshotDefaultModelId)
 			expect(model.info).toBeDefined()
-			// Should have the same base properties as default model
-			expect(model.info.contextWindow).toBe(handler.getModel().info.contextWindow)
 			expect(model.info.supportsPromptCache).toBe(true)
 		})
 
@@ -126,13 +128,7 @@ describe("MoonshotHandler", () => {
 			expect(model.info.supportsPromptCache).toBe(true)
 		})
 
-		it("should include model parameters from getModelParams", () => {
-			const model = handler.getModel()
-			expect(model).toHaveProperty("temperature")
-			expect(model).toHaveProperty("maxTokens")
-		})
-
-		it("forces temperature to 1 for fixed-temperature Kimi models (k3) even with a custom modelTemperature", () => {
+		it("forces temperature to 1 for fixed-temperature Kimi models (k3) even with a custom modelTemperature", async () => {
 			// The Kimi-for-Coding endpoint rejects any temperature != 1; a profile
 			// carrying temperature 0 would 400 the request otherwise.
 			const k3Handler = new MoonshotHandler({
@@ -140,149 +136,412 @@ describe("MoonshotHandler", () => {
 				apiModelId: "k3",
 				modelTemperature: 0,
 			})
-			expect(k3Handler.getModel().temperature).toBe(1)
-		})
-	})
 
-	describe("createMessage", () => {
-		const systemPrompt = "You are a helpful assistant."
-		const messages: Anthropic.Messages.MessageParam[] = [
-			{
-				role: "user",
-				content: [
-					{
-						type: "text" as const,
-						text: "Hello!",
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
 					},
-				],
-			},
-		]
-
-		it("should handle streaming responses", async () => {
-			// Mock the fullStream async generator
-			async function* mockFullStream() {
-				yield { type: "text-delta", text: "Test response" }
-			}
-
-			// Mock usage promise
-			const mockUsage = Promise.resolve({
-				inputTokens: 10,
-				outputTokens: 5,
-				details: { cachedInputTokens: undefined },
-				raw: { cached_tokens: 2 },
-			})
-
-			mockStreamText.mockReturnValue({
-				fullStream: mockFullStream(),
-				usage: mockUsage,
-			})
-
-			const stream = handler.createMessage(systemPrompt, messages)
-			const chunks: any[] = []
-			for await (const chunk of stream) {
-				chunks.push(chunk)
-			}
-
-			expect(chunks.length).toBeGreaterThan(0)
-			const textChunks = chunks.filter((chunk) => chunk.type === "text")
-			expect(textChunks).toHaveLength(1)
-			expect(textChunks[0].text).toBe("Test response")
-		})
-
-		it("should include usage information", async () => {
-			async function* mockFullStream() {
-				yield { type: "text-delta", text: "Test response" }
-			}
-
-			const mockUsage = Promise.resolve({
-				inputTokens: 10,
-				outputTokens: 5,
-				details: {},
-				raw: { cached_tokens: 2 },
-			})
-
-			mockStreamText.mockReturnValue({
-				fullStream: mockFullStream(),
-				usage: mockUsage,
-			})
-
-			const stream = handler.createMessage(systemPrompt, messages)
-			const chunks: any[] = []
-			for await (const chunk of stream) {
-				chunks.push(chunk)
-			}
-
-			const usageChunks = chunks.filter((chunk) => chunk.type === "usage")
-			expect(usageChunks.length).toBeGreaterThan(0)
-			expect(usageChunks[0].inputTokens).toBe(10)
-			expect(usageChunks[0].outputTokens).toBe(5)
-		})
-
-		it("should include cache metrics in usage information", async () => {
-			async function* mockFullStream() {
-				yield { type: "text-delta", text: "Test response" }
-			}
-
-			const mockUsage = Promise.resolve({
-				inputTokens: 10,
-				outputTokens: 5,
-				details: {},
-				raw: { cached_tokens: 2 },
-			})
-
-			mockStreamText.mockReturnValue({
-				fullStream: mockFullStream(),
-				usage: mockUsage,
-			})
-
-			const stream = handler.createMessage(systemPrompt, messages)
-			const chunks: any[] = []
-			for await (const chunk of stream) {
-				chunks.push(chunk)
-			}
-
-			const usageChunks = chunks.filter((chunk) => chunk.type === "usage")
-			expect(usageChunks.length).toBeGreaterThan(0)
-			expect(usageChunks[0].cacheWriteTokens).toBe(0)
-			expect(usageChunks[0].cacheReadTokens).toBe(2)
-		})
-	})
-
-	describe("completePrompt", () => {
-		it("should complete a prompt using generateText", async () => {
-			mockGenerateText.mockResolvedValue({
-				text: "Test completion",
-			})
-
-			const result = await handler.completePrompt("Test prompt")
-
-			expect(result).toBe("Test completion")
-			expect(mockGenerateText).toHaveBeenCalledWith(
-				expect.objectContaining({
-					prompt: "Test prompt",
 				}),
+			}))
+
+			const messageGenerator = k3Handler.createMessage("system prompt", [])
+			await messageGenerator.next()
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					model: "k3",
+					temperature: 1,
+				}),
+				undefined,
+			)
+		})
+
+		it("forces temperature to 1 for kimi-k2-thinking", async () => {
+			const thinkingHandler = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: "kimi-k2-thinking",
+				modelTemperature: 0.5,
+			})
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messageGenerator = thinkingHandler.createMessage("system prompt", [])
+			await messageGenerator.next()
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					temperature: 1,
+				}),
+				undefined,
 			)
 		})
 	})
 
+	describe("createMessage", () => {
+		it("should yield text content from stream", async () => {
+			const testContent = "Test response from Moonshot"
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: vitest
+						.fn()
+						.mockResolvedValueOnce({
+							done: false,
+							value: { choices: [{ delta: { content: testContent } }] },
+						})
+						.mockResolvedValueOnce({ done: true }),
+				}),
+			}))
+
+			const stream = handler.createMessage("system prompt", [])
+			const firstChunk = await stream.next()
+
+			expect(firstChunk.done).toBe(false)
+			expect(firstChunk.value).toEqual({ type: "text", text: testContent })
+		})
+
+		it("should yield reasoning content from stream", async () => {
+			const reasoningContent = "Thinking about the problem..."
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: vitest
+						.fn()
+						.mockResolvedValueOnce({
+							done: false,
+							value: { choices: [{ delta: { reasoning_content: reasoningContent } }] },
+						})
+						.mockResolvedValueOnce({ done: true }),
+				}),
+			}))
+
+			const stream = handler.createMessage("system prompt", [])
+			const firstChunk = await stream.next()
+
+			expect(firstChunk.done).toBe(false)
+			expect(firstChunk.value).toEqual({ type: "reasoning", text: reasoningContent })
+		})
+
+		it("should yield usage data from stream", async () => {
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: vitest
+						.fn()
+						.mockResolvedValueOnce({
+							done: false,
+							value: {
+								choices: [{ delta: {} }],
+								usage: { prompt_tokens: 10, completion_tokens: 20 },
+							},
+						})
+						.mockResolvedValueOnce({ done: true }),
+				}),
+			}))
+
+			const stream = handler.createMessage("system prompt", [])
+			const firstChunk = await stream.next()
+
+			expect(firstChunk.done).toBe(false)
+			expect(firstChunk.value).toMatchObject({ type: "usage", inputTokens: 10, outputTokens: 20 })
+		})
+
+		it("should include cache metrics from raw cached_tokens in usage", async () => {
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: vitest
+						.fn()
+						.mockResolvedValueOnce({
+							done: false,
+							value: {
+								choices: [{ delta: {} }],
+								usage: {
+									prompt_tokens: 100,
+									completion_tokens: 50,
+									// Moonshot puts cached_tokens at the top level
+									cached_tokens: 30,
+								},
+							},
+						})
+						.mockResolvedValueOnce({ done: true }),
+				}),
+			}))
+
+			const stream = handler.createMessage("system prompt", [])
+			const chunks: any[] = []
+			for await (const chunk of stream) {
+				chunks.push(chunk)
+			}
+
+			const usageChunks = chunks.filter((c) => c.type === "usage")
+			expect(usageChunks.length).toBeGreaterThan(0)
+			expect(usageChunks[0].cacheReadTokens).toBe(30)
+		})
+
+		it("should include cache metrics from prompt_tokens_details.cached_tokens in usage", async () => {
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					next: vitest
+						.fn()
+						.mockResolvedValueOnce({
+							done: false,
+							value: {
+								choices: [{ delta: {} }],
+								usage: {
+									prompt_tokens: 100,
+									completion_tokens: 50,
+									prompt_tokens_details: { cached_tokens: 25 },
+								},
+							},
+						})
+						.mockResolvedValueOnce({ done: true }),
+				}),
+			}))
+
+			const stream = handler.createMessage("system prompt", [])
+			const chunks: any[] = []
+			for await (const chunk of stream) {
+				chunks.push(chunk)
+			}
+
+			const usageChunks = chunks.filter((c) => c.type === "usage")
+			expect(usageChunks.length).toBeGreaterThan(0)
+			expect(usageChunks[0].cacheReadTokens).toBe(25)
+		})
+
+		it("should always send stream_options.include_usage", async () => {
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messageGenerator = handler.createMessage("system prompt", [])
+			await messageGenerator.next()
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					stream: true,
+					stream_options: { include_usage: true },
+				}),
+				undefined,
+			)
+		})
+
+		it("should pass correct model and max_tokens parameters", async () => {
+			const modelId: MoonshotModelId = "kimi-k2-0905-preview"
+			const modelInfo = moonshotModels[modelId]
+			const handlerWithModel = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: modelId,
+			})
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messageGenerator = handlerWithModel.createMessage("system prompt", [])
+			await messageGenerator.next()
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					model: modelId,
+					max_tokens: modelInfo.maxTokens,
+				}),
+				undefined,
+			)
+		})
+	})
+
+	describe("reasoning_content preservation", () => {
+		it("should preserve reasoning_content on assistant messages with tool calls", async () => {
+			// This is the core fix: reasoning stored as a {type:"reasoning"} content
+			// block must be converted to the top-level reasoning_content field that
+			// Moonshot expects, NOT dropped silently.
+			const handlerWithModel = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: "k3",
+			})
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "What is 2+2?" },
+				{
+					role: "assistant",
+					content: [
+						{ type: "reasoning", text: "I need to add 2 and 2." } as any,
+						{ type: "text", text: "Let me calculate that." },
+						{
+							type: "tool_use",
+							id: "call_abc",
+							name: "calculator",
+							input: { expression: "2+2" },
+						},
+					],
+				},
+				{
+					role: "user",
+					content: [{ type: "tool_result", tool_use_id: "call_abc", content: "4" }],
+				},
+			]
+
+			const messageGenerator = handlerWithModel.createMessage("system prompt", messages)
+			await messageGenerator.next()
+
+			const callArgs = mockCreate.mock.calls[0][0]
+			const assistantMessages = callArgs.messages.filter((m: any) => m.role === "assistant")
+
+			// The assistant message should have reasoning_content set
+			expect(assistantMessages.length).toBeGreaterThan(0)
+			expect(assistantMessages[0].reasoning_content).toBe("I need to add 2 and 2.")
+		})
+
+		it("should merge post-tool-result text into the last tool message", async () => {
+			// For thinking models, a user message after tool results causes the
+			// model to drop all prior reasoning_content. The converter should
+			// merge the text (e.g. environment_details) into the last tool message.
+			const handlerWithModel = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: "k3",
+			})
+
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messages: Anthropic.Messages.MessageParam[] = [
+				{ role: "user", content: "Read the file" },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "tool_use",
+							id: "call_xyz",
+							name: "read_file",
+							input: { path: "test.ts" },
+						},
+					],
+				},
+				{
+					role: "user",
+					content: [
+						{ type: "tool_result", tool_use_id: "call_xyz", content: "file contents here" },
+						{ type: "text", text: "[environment_details]\nCurrent time: 12:00" },
+					],
+				},
+			]
+
+			const messageGenerator = handlerWithModel.createMessage("system prompt", messages)
+			await messageGenerator.next()
+
+			const callArgs = mockCreate.mock.calls[0][0]
+			const toolMessages = callArgs.messages.filter((m: any) => m.role === "tool")
+
+			// The environment_details text should be merged into the tool message,
+			// not appear as a separate user message.
+			expect(toolMessages.length).toBe(1)
+			expect(toolMessages[0].content).toContain("file contents here")
+			expect(toolMessages[0].content).toContain("[environment_details]")
+
+			// There should be no user message after the tool message
+			const userMessages = callArgs.messages.filter((m: any) => m.role === "user")
+			expect(userMessages.length).toBe(1) // only the original "Read the file"
+		})
+	})
+
+	describe("tool schema normalization", () => {
+		it("should normalize nullable union types in tool parameters", async () => {
+			mockCreate.mockImplementationOnce(() => ({
+				[Symbol.asyncIterator]: () => ({
+					async next() {
+						return { done: true }
+					},
+				}),
+			}))
+
+			const messageGenerator = handler.createMessage("system prompt", [], {
+				taskId: "test-task",
+				tools: [
+					{
+						type: "function",
+						function: {
+							name: "test_tool",
+							description: "A test tool",
+							parameters: {
+								type: "object",
+								properties: {
+									path: { type: ["string", "null"] },
+								},
+								required: ["path"],
+							},
+						},
+					},
+				],
+			})
+			await messageGenerator.next()
+
+			const callArgs = mockCreate.mock.calls[0][0]
+			const tool = callArgs.tools[0]
+			// Array-typed type should be collapsed to single "string"
+			expect(tool.function.parameters.properties.path.type).toBe("string")
+		})
+	})
+
+	describe("completePrompt", () => {
+		it("should complete a prompt and return text", async () => {
+			const expectedResponse = "Test completion from Moonshot"
+			mockCreate.mockResolvedValueOnce({
+				choices: [{ message: { content: expectedResponse } }],
+			})
+
+			const result = await handler.completePrompt("Test prompt")
+			expect(result).toBe(expectedResponse)
+		})
+
+		it("should handle errors in completePrompt", async () => {
+			const errorMessage = "Moonshot API error"
+			mockCreate.mockRejectedValueOnce(new Error(errorMessage))
+			await expect(handler.completePrompt("test prompt")).rejects.toThrow()
+		})
+	})
+
 	describe("processUsageMetrics", () => {
-		it("should correctly process usage metrics including cache information", () => {
-			// We need to access the protected method, so we'll create a test subclass
+		it("should correctly process usage metrics including cache information from raw cached_tokens", () => {
 			class TestMoonshotHandler extends MoonshotHandler {
 				public testProcessUsageMetrics(usage: any) {
-					return this.processUsageMetrics(usage)
+					return this.processUsageMetrics(usage, this.getModel().info)
 				}
 			}
 
 			const testHandler = new TestMoonshotHandler(mockOptions)
 
 			const usage = {
-				inputTokens: 100,
-				outputTokens: 50,
-				details: {},
-				raw: {
-					cached_tokens: 20,
-				},
+				prompt_tokens: 100,
+				completion_tokens: 50,
+				cached_tokens: 20,
 			}
 
 			const result = testHandler.testProcessUsageMetrics(usage)
@@ -290,24 +549,21 @@ describe("MoonshotHandler", () => {
 			expect(result.type).toBe("usage")
 			expect(result.inputTokens).toBe(100)
 			expect(result.outputTokens).toBe(50)
-			expect(result.cacheWriteTokens).toBe(0)
 			expect(result.cacheReadTokens).toBe(20)
 		})
 
 		it("should handle missing cache metrics gracefully", () => {
 			class TestMoonshotHandler extends MoonshotHandler {
 				public testProcessUsageMetrics(usage: any) {
-					return this.processUsageMetrics(usage)
+					return this.processUsageMetrics(usage, this.getModel().info)
 				}
 			}
 
 			const testHandler = new TestMoonshotHandler(mockOptions)
 
 			const usage = {
-				inputTokens: 100,
-				outputTokens: 50,
-				details: {},
-				raw: {},
+				prompt_tokens: 100,
+				completion_tokens: 50,
 			}
 
 			const result = testHandler.testProcessUsageMetrics(usage)
@@ -315,185 +571,7 @@ describe("MoonshotHandler", () => {
 			expect(result.type).toBe("usage")
 			expect(result.inputTokens).toBe(100)
 			expect(result.outputTokens).toBe(50)
-			expect(result.cacheWriteTokens).toBe(0)
 			expect(result.cacheReadTokens).toBeUndefined()
-		})
-	})
-
-	describe("getMaxOutputTokens", () => {
-		it("should return maxTokens from model info", () => {
-			class TestMoonshotHandler extends MoonshotHandler {
-				public testGetMaxOutputTokens() {
-					return this.getMaxOutputTokens()
-				}
-			}
-
-			const testHandler = new TestMoonshotHandler(mockOptions)
-			const result = testHandler.testGetMaxOutputTokens()
-
-			// Default model maxTokens is 16384
-			expect(result).toBe(16384)
-		})
-
-		it("should use modelMaxTokens when provided", () => {
-			class TestMoonshotHandler extends MoonshotHandler {
-				public testGetMaxOutputTokens() {
-					return this.getMaxOutputTokens()
-				}
-			}
-
-			const customMaxTokens = 5000
-			const testHandler = new TestMoonshotHandler({
-				...mockOptions,
-				modelMaxTokens: customMaxTokens,
-			})
-
-			const result = testHandler.testGetMaxOutputTokens()
-			expect(result).toBe(customMaxTokens)
-		})
-
-		it("should fall back to modelInfo.maxTokens when modelMaxTokens is not provided", () => {
-			class TestMoonshotHandler extends MoonshotHandler {
-				public testGetMaxOutputTokens() {
-					return this.getMaxOutputTokens()
-				}
-			}
-
-			const testHandler = new TestMoonshotHandler(mockOptions)
-			const result = testHandler.testGetMaxOutputTokens()
-
-			// moonshot-chat has maxTokens of 16384
-			expect(result).toBe(16384)
-		})
-	})
-
-	describe("tool handling", () => {
-		const systemPrompt = "You are a helpful assistant."
-		const messages: Anthropic.Messages.MessageParam[] = [
-			{
-				role: "user",
-				content: [{ type: "text" as const, text: "Hello!" }],
-			},
-		]
-
-		it("should handle tool calls in streaming", async () => {
-			async function* mockFullStream() {
-				yield {
-					type: "tool-input-start",
-					id: "tool-call-1",
-					toolName: "read_file",
-				}
-				yield {
-					type: "tool-input-delta",
-					id: "tool-call-1",
-					delta: '{"path":"test.ts"}',
-				}
-				yield {
-					type: "tool-input-end",
-					id: "tool-call-1",
-				}
-			}
-
-			const mockUsage = Promise.resolve({
-				inputTokens: 10,
-				outputTokens: 5,
-				details: {},
-				raw: {},
-			})
-
-			mockStreamText.mockReturnValue({
-				fullStream: mockFullStream(),
-				usage: mockUsage,
-			})
-
-			const stream = handler.createMessage(systemPrompt, messages, {
-				taskId: "test-task",
-				tools: [
-					{
-						type: "function",
-						function: {
-							name: "read_file",
-							description: "Read a file",
-							parameters: {
-								type: "object",
-								properties: { path: { type: "string" } },
-								required: ["path"],
-							},
-						},
-					},
-				],
-			})
-
-			const chunks: any[] = []
-			for await (const chunk of stream) {
-				chunks.push(chunk)
-			}
-
-			const toolCallStartChunks = chunks.filter((c) => c.type === "tool_call_start")
-			const toolCallDeltaChunks = chunks.filter((c) => c.type === "tool_call_delta")
-			const toolCallEndChunks = chunks.filter((c) => c.type === "tool_call_end")
-
-			expect(toolCallStartChunks.length).toBe(1)
-			expect(toolCallStartChunks[0].id).toBe("tool-call-1")
-			expect(toolCallStartChunks[0].name).toBe("read_file")
-
-			expect(toolCallDeltaChunks.length).toBe(1)
-			expect(toolCallDeltaChunks[0].delta).toBe('{"path":"test.ts"}')
-
-			expect(toolCallEndChunks.length).toBe(1)
-			expect(toolCallEndChunks[0].id).toBe("tool-call-1")
-		})
-
-		it("should handle complete tool calls", async () => {
-			async function* mockFullStream() {
-				yield {
-					type: "tool-call",
-					toolCallId: "tool-call-1",
-					toolName: "read_file",
-					input: { path: "test.ts" },
-				}
-			}
-
-			const mockUsage = Promise.resolve({
-				inputTokens: 10,
-				outputTokens: 5,
-				details: {},
-				raw: {},
-			})
-
-			mockStreamText.mockReturnValue({
-				fullStream: mockFullStream(),
-				usage: mockUsage,
-			})
-
-			const stream = handler.createMessage(systemPrompt, messages, {
-				taskId: "test-task",
-				tools: [
-					{
-						type: "function",
-						function: {
-							name: "read_file",
-							description: "Read a file",
-							parameters: {
-								type: "object",
-								properties: { path: { type: "string" } },
-								required: ["path"],
-							},
-						},
-					},
-				],
-			})
-
-			const chunks: any[] = []
-			for await (const chunk of stream) {
-				chunks.push(chunk)
-			}
-
-			const toolCallChunks = chunks.filter((c) => c.type === "tool_call")
-			expect(toolCallChunks.length).toBe(1)
-			expect(toolCallChunks[0].id).toBe("tool-call-1")
-			expect(toolCallChunks[0].name).toBe("read_file")
-			expect(toolCallChunks[0].arguments).toBe('{"path":"test.ts"}')
 		})
 	})
 })

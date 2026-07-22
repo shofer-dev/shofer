@@ -1,0 +1,279 @@
+/**
+ * Moonshot / Kimi message format conversion.
+ *
+ * Moonshot's API uses the standard OpenAI Chat Completions wire format but
+ * requires `reasoning_content` as a **top-level field** on assistant messages
+ * (not `reasoning_details`, which is the OpenRouter/Gemini-3 convention).
+ * This mirrors the DeepSeek and Z.ai (GLM) interleaved-thinking contract:
+ *
+ * - `reasoning_content` must be echoed back on every assistant tool-call turn
+ *   so the model can continue its thinking chain. Omitting it forces the model
+ *   to re-derive all prior reasoning from scratch on every round-trip, which
+ *   burns quota and invalidates the server-side context cache.
+ * - A user message appearing after tool results causes the model to drop all
+ *   prior `reasoning_content`. To prevent this, text content that follows
+ *   tool results (e.g. Shofer's `environment_details`) is merged into the last
+ *   tool message instead of creating a separate user message.
+ *
+ * This is the TypeScript mirror of the Go `llm-router` service's
+ * `PrepareMoonshotRequest` (`llm-router/internal/services/moonshot.go`), which
+ * performs the same `reasoning_content` rehydration + placeholder injection
+ * when traffic transits the router. The native Shofer handler bypasses the
+ * router, so this transform is the only place reasoning is preserved on the
+ * direct path.
+ */
+
+import { Anthropic } from "@anthropic-ai/sdk"
+import OpenAI from "openai"
+
+type ContentPartText = OpenAI.Chat.ChatCompletionContentPartText
+type ContentPartImage = OpenAI.Chat.ChatCompletionContentPartImage
+type UserMessage = OpenAI.Chat.ChatCompletionUserMessageParam
+type AssistantMessage = OpenAI.Chat.ChatCompletionAssistantMessageParam
+type ToolMessage = OpenAI.Chat.ChatCompletionToolMessageParam
+type Message = OpenAI.Chat.ChatCompletionMessageParam
+type AnthropicMessage = Anthropic.Messages.MessageParam
+
+/**
+ * Extended assistant message type to support Moonshot's interleaved thinking.
+ * Moonshot's API returns `reasoning_content` alongside `content` and
+ * `tool_calls`, and requires it to be passed back in subsequent requests for
+ * preserved thinking.
+ */
+export type MoonshotAssistantMessage = AssistantMessage & {
+	reasoning_content?: string
+}
+
+/**
+ * Converts Anthropic-format messages to OpenAI format optimized for Moonshot's
+ * Kimi models.
+ *
+ * Key differences from the standard {@link convertToOpenAiMessages}:
+ * - Preserves `reasoning_content` on assistant messages (extracted from
+ *   `{type: "reasoning"}` content blocks that Shofer stores when
+ *   `preserveReasoning` is true).
+ * - Merges text content after tool results into the last tool message to avoid
+ *   creating a user message that would cause the model to drop all previous
+ *   reasoning_content.
+ *
+ * @param messages - Array of Anthropic message parameters
+ * @param options - Optional configuration
+ * @param options.mergeToolResultText - If true, merge text content after
+ *   tool_results into the last tool message instead of creating a separate
+ *   user message. Default: true (required for Moonshot thinking models).
+ * @returns Array of OpenAI messages with `reasoning_content` preserved
+ */
+export function convertToMoonshotFormat(
+	messages: AnthropicMessage[],
+	options?: { mergeToolResultText?: boolean },
+): Message[] {
+	const mergeToolResultText = options?.mergeToolResultText ?? true
+	const result: Message[] = []
+
+	for (const message of messages) {
+		// Check if the message already carries reasoning_content at the top
+		// level (set by a prior round-trip through the llm-router).
+		const messageWithReasoning = message as AnthropicMessage & { reasoning_content?: string }
+		const topLevelReasoning = messageWithReasoning.reasoning_content
+
+		if (message.role === "user") {
+			if (Array.isArray(message.content)) {
+				const textParts: string[] = []
+				const imageParts: ContentPartImage[] = []
+				const toolResults: { tool_use_id: string; content: string }[] = []
+
+				for (const part of message.content) {
+					if (part.type === "text") {
+						textParts.push(part.text)
+					} else if (part.type === "image") {
+						imageParts.push({
+							type: "image_url",
+							image_url: {
+								url: `data:${part.source.media_type};base64,${part.source.data}`,
+							},
+						})
+					} else if (part.type === "tool_result") {
+						let content: string
+						if (typeof part.content === "string") {
+							content = part.content
+						} else if (Array.isArray(part.content)) {
+							content =
+								part.content
+									?.map((c) => {
+										if (c.type === "text") return c.text
+										if (c.type === "image") return "(image)"
+										return ""
+									})
+									.join("\n") ?? ""
+						} else {
+							content = ""
+						}
+						toolResults.push({
+							tool_use_id: part.tool_use_id,
+							content,
+						})
+					}
+				}
+
+				// Add tool messages first (they must follow assistant tool_use)
+				for (const toolResult of toolResults) {
+					const toolMessage: ToolMessage = {
+						role: "tool",
+						tool_call_id: toolResult.tool_use_id,
+						content: toolResult.content,
+					}
+					result.push(toolMessage)
+				}
+
+				// Handle text/image content after tool results
+				if (textParts.length > 0 || imageParts.length > 0) {
+					// For Moonshot interleaved thinking: when mergeToolResultText is
+					// enabled and we have tool results followed by text, merge the text
+					// into the last tool message to avoid creating a user message that
+					// would cause reasoning_content to be dropped.
+					const shouldMergeIntoToolMessage =
+						mergeToolResultText && toolResults.length > 0 && imageParts.length === 0
+
+					if (shouldMergeIntoToolMessage) {
+						const lastToolMessage = result[result.length - 1] as ToolMessage
+						if (lastToolMessage?.role === "tool") {
+							const additionalText = textParts.join("\n")
+							lastToolMessage.content = `${lastToolMessage.content}\n\n${additionalText}`
+						}
+					} else {
+						// Standard behavior: add user message with text/image content
+						let content: UserMessage["content"]
+						if (imageParts.length > 0) {
+							const parts: (ContentPartText | ContentPartImage)[] = []
+							if (textParts.length > 0) {
+								parts.push({ type: "text", text: textParts.join("\n") })
+							}
+							parts.push(...imageParts)
+							content = parts
+						} else {
+							content = textParts.join("\n")
+						}
+
+						// Check if we can merge with the last message
+						const lastMessage = result[result.length - 1]
+						if (lastMessage?.role === "user") {
+							if (typeof lastMessage.content === "string" && typeof content === "string") {
+								lastMessage.content += `\n${content}`
+							} else {
+								const lastContent = Array.isArray(lastMessage.content)
+									? lastMessage.content
+									: [{ type: "text" as const, text: lastMessage.content || "" }]
+								const newContent = Array.isArray(content)
+									? content
+									: [{ type: "text" as const, text: content }]
+								lastMessage.content = [...lastContent, ...newContent] as UserMessage["content"]
+							}
+						} else {
+							result.push({ role: "user", content })
+						}
+					}
+				}
+			} else {
+				// Simple string content
+				const lastMessage = result[result.length - 1]
+				if (lastMessage?.role === "user") {
+					if (typeof lastMessage.content === "string") {
+						lastMessage.content += `\n${message.content}`
+					} else {
+						;(lastMessage.content as (ContentPartText | ContentPartImage)[]).push({
+							type: "text",
+							text: message.content,
+						})
+					}
+				} else {
+					result.push({ role: "user", content: message.content })
+				}
+			}
+		} else if (message.role === "assistant") {
+			if (Array.isArray(message.content)) {
+				const textParts: string[] = []
+				const toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[] = []
+				let extractedReasoning: string | undefined
+
+				for (const part of message.content) {
+					if (part.type === "text") {
+						textParts.push(part.text)
+					} else if (part.type === "tool_use") {
+						toolCalls.push({
+							id: part.id,
+							type: "function",
+							function: {
+								name: part.name,
+								arguments: JSON.stringify(part.input),
+							},
+						})
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					} else if ((part as any).type === "reasoning" && (part as any).text) {
+						// Extract reasoning from content blocks (Task stores it this way
+						// when preserveReasoning is true — see addToApiConversationHistory).
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						extractedReasoning = (part as any).text
+					}
+				}
+
+				// Prefer top-level reasoning_content if present (from a prior
+				// router round-trip); otherwise use the extracted block.
+				const finalReasoning = topLevelReasoning || extractedReasoning
+
+				const assistantMessage: MoonshotAssistantMessage = {
+					role: "assistant",
+					content: textParts.length > 0 ? textParts.join("\n") : null,
+					...(toolCalls.length > 0 && { tool_calls: toolCalls }),
+					// Preserve reasoning_content for Moonshot interleaved thinking
+					...(finalReasoning && { reasoning_content: finalReasoning }),
+				}
+
+				// Check if we can merge with the last message (only if no tool calls)
+				const lastMessage = result[result.length - 1]
+				if (
+					lastMessage?.role === "assistant" &&
+					!toolCalls.length &&
+					!(lastMessage as MoonshotAssistantMessage).tool_calls
+				) {
+					// Merge text content
+					if (typeof lastMessage.content === "string" && typeof assistantMessage.content === "string") {
+						lastMessage.content += `\n${assistantMessage.content}`
+					} else if (assistantMessage.content) {
+						const lastContent = lastMessage.content || ""
+						lastMessage.content = `${lastContent}\n${assistantMessage.content}`
+					}
+					// Preserve reasoning_content from the new message if present
+					if (finalReasoning) {
+						;(lastMessage as MoonshotAssistantMessage).reasoning_content = finalReasoning
+					}
+				} else {
+					result.push(assistantMessage)
+				}
+			} else {
+				// Simple string content
+				const lastMessage = result[result.length - 1]
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				if (lastMessage?.role === "assistant" && !(lastMessage as any).tool_calls) {
+					if (typeof lastMessage.content === "string") {
+						lastMessage.content += `\n${message.content}`
+					} else {
+						lastMessage.content = message.content
+					}
+					// Preserve reasoning_content from the new message if present
+					if (topLevelReasoning) {
+						;(lastMessage as MoonshotAssistantMessage).reasoning_content = topLevelReasoning
+					}
+				} else {
+					const assistantMessage: MoonshotAssistantMessage = {
+						role: "assistant",
+						content: message.content,
+						...(topLevelReasoning && { reasoning_content: topLevelReasoning }),
+					}
+					result.push(assistantMessage)
+				}
+			}
+		}
+	}
+
+	return result
+}
