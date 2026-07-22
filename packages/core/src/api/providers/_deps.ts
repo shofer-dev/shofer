@@ -25,6 +25,7 @@ export { convertToBedrockConverseMessages } from "../transform/bedrock-converse-
 export { convertToMistralMessages, normalizeMistralToolCallId } from "../transform/mistral-format.js"
 export { convertToR1Format } from "../transform/r1-format.js"
 export { convertToMoonshotFormat } from "../transform/moonshot-format.js"
+export { getMoonshotReasoning } from "../transform/reasoning.js"
 export { convertToResponsesApiInput } from "../transform/responses-api-input.js"
 export { createUsageNormalizer, processResponsesApiStream } from "../transform/responses-api-stream.js"
 export { convertToZAiFormat } from "../transform/zai-format.js"

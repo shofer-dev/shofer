@@ -184,6 +184,81 @@ describe("MoonshotHandler", () => {
 		})
 	})
 
+	describe("reasoning_effort", () => {
+		const emptyStream = () => ({
+			[Symbol.asyncIterator]: () => ({
+				async next() {
+					return { done: true }
+				},
+			}),
+		})
+
+		it("sends the catalog default 'high' for k3 when no effort is configured", async () => {
+			// Omitting reasoning_effort means the SERVER default "max" — maximum
+			// thinking effort on every agent-loop step — so an explicit value must
+			// always be sent for K3.
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3" })
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await k3Handler.createMessage("system prompt", []).next()
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({ model: "k3", reasoning_effort: "high" }),
+				undefined,
+			)
+		})
+
+		it("maps the 'xhigh' setting to Kimi's 'max'", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3", reasoningEffort: "xhigh" })
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await k3Handler.createMessage("system prompt", []).next()
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "max" }), undefined)
+		})
+
+		it("passes 'low' through unchanged", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3", reasoningEffort: "low" })
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await k3Handler.createMessage("system prompt", []).next()
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "low" }), undefined)
+		})
+
+		it("maps an off-ish 'disable' selection to 'low' (thinking cannot be disabled)", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3", reasoningEffort: "disable" })
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await k3Handler.createMessage("system prompt", []).next()
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "low" }), undefined)
+		})
+
+		it("sends reasoning_effort for the platform 'kimi-k3' id as well", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "kimi-k3" })
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await k3Handler.createMessage("system prompt", []).next()
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "high" }), undefined)
+		})
+
+		it("does not send reasoning_effort for models without the capability (kimi-k2-thinking)", async () => {
+			const thinkingHandler = new MoonshotHandler({
+				...mockOptions,
+				apiModelId: "kimi-k2-thinking",
+				reasoningEffort: "high",
+			})
+			mockCreate.mockImplementationOnce(emptyStream)
+
+			await thinkingHandler.createMessage("system prompt", []).next()
+
+			const params = mockCreate.mock.calls[0][0]
+			expect(params).not.toHaveProperty("reasoning_effort")
+		})
+	})
+
 	describe("createMessage", () => {
 		it("should yield text content from stream", async () => {
 			const testContent = "Test response from Moonshot"

@@ -8,6 +8,7 @@ import {
 	getOpenAiReasoning,
 	getRooReasoning,
 	getGeminiReasoning,
+	getMoonshotReasoning,
 	GetModelReasoningOptions,
 	OpenRouterReasoningParams,
 	AnthropicReasoningParams,
@@ -1266,6 +1267,50 @@ describe("reasoning.ts", () => {
 
 			const result = getRooReasoning(options)
 			expect(result).toEqual({ enabled: false })
+		})
+	})
+
+	describe("getMoonshotReasoning", () => {
+		const k3Model: ModelInfo = {
+			...baseModel,
+			supportsReasoningEffort: ["low", "high", "xhigh"],
+			requiredReasoningEffort: true,
+			reasoningEffort: "high",
+			preserveReasoning: true,
+		}
+
+		it("returns undefined when the model does not support reasoning effort", () => {
+			const result = getMoonshotReasoning({ ...baseOptions, model: baseModel })
+			expect(result).toBeUndefined()
+		})
+
+		it("falls back to the model's catalog default when no effort is selected", () => {
+			const result = getMoonshotReasoning({ ...baseOptions, model: k3Model, reasoningEffort: undefined })
+			expect(result).toEqual({ reasoning_effort: "high" })
+		})
+
+		it("maps xhigh to Kimi's 'max'", () => {
+			const result = getMoonshotReasoning({ ...baseOptions, model: k3Model, reasoningEffort: "xhigh" })
+			expect(result).toEqual({ reasoning_effort: "max" })
+		})
+
+		it("maps medium to 'high' (Kimi has no medium level)", () => {
+			const result = getMoonshotReasoning({ ...baseOptions, model: k3Model, reasoningEffort: "medium" })
+			expect(result).toEqual({ reasoning_effort: "high" })
+		})
+
+		it("maps off-ish selections (disable/none/minimal) to 'low' instead of omitting", () => {
+			// Omitting the field means the server default "max" — the opposite of
+			// what an off-ish selection intends — so the cheapest level is sent.
+			for (const effort of ["disable", "none", "minimal"] as const) {
+				const result = getMoonshotReasoning({ ...baseOptions, model: k3Model, reasoningEffort: effort })
+				expect(result).toEqual({ reasoning_effort: "low" })
+			}
+		})
+
+		it("passes low through unchanged", () => {
+			const result = getMoonshotReasoning({ ...baseOptions, model: k3Model, reasoningEffort: "low" })
+			expect(result).toEqual({ reasoning_effort: "low" })
 		})
 	})
 })

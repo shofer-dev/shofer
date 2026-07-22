@@ -85,6 +85,14 @@ export const moonshotModels = {
 		supportsTemperature: true,
 		defaultTemperature: 1.0,
 		preserveReasoning: true,
+		// K3 exposes a top-level `reasoning_effort` on Kimi's scale low/high/max
+		// (shofer's "xhigh" maps to Kimi "max"). Thinking is always on and cannot
+		// be disabled, hence requiredReasoningEffort. The catalog default is
+		// "high", NOT Kimi's server-side default "max": an unset request runs
+		// every agent-loop step at maximum thinking effort, which burns quota.
+		supportsReasoningEffort: ["low", "high", "xhigh"],
+		requiredReasoningEffort: true,
+		reasoningEffort: "high",
 		description:
 			"Kimi K3 (subscription) — Moonshot AI's agentic coding model, served via the Kimi-for-Coding subscription endpoint (api.kimi.com/coding/v1) with a Kimi subscription key. 1M-token context, always-on thinking, vision-capable. Membership-billed, so prices are 0.",
 	},
@@ -103,6 +111,10 @@ export const moonshotModels = {
 		supportsTemperature: true,
 		defaultTemperature: 1.0,
 		preserveReasoning: true,
+		// Same reasoning_effort contract as `k3` above.
+		supportsReasoningEffort: ["low", "high", "xhigh"],
+		requiredReasoningEffort: true,
+		reasoningEffort: "high",
 		description:
 			"Kimi K3 on the pay-as-you-go platform (api.moonshot.ai). 1M-token context, always-on thinking, vision-capable.",
 	},

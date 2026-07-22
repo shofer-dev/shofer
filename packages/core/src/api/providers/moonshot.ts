@@ -10,7 +10,7 @@ import {
 } from "@shofer/types"
 
 import { type ApiHandlerOptions, getModelMaxOutputTokens } from "./_deps.js"
-import { convertToMoonshotFormat } from "./_deps.js"
+import { convertToMoonshotFormat, getMoonshotReasoning } from "./_deps.js"
 
 import type { ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider.js"
@@ -95,6 +95,19 @@ export class MoonshotHandler extends BaseOpenAiCompatibleProvider<MoonshotModelI
 		// post-tool text into tool messages.
 		const convertedMessages = convertToMoonshotFormat(messages, { mergeToolResultText: true })
 
+		// K3 models take a top-level reasoning_effort ("low" | "high" | "max").
+		// Omitting it means the SERVER default "max" — maximum thinking effort on
+		// every agent-loop step — so for models that support it we always send an
+		// explicit value. Kimi recommends keeping it constant for the whole
+		// conversation to preserve prefix-cache hits, and it is resolved from
+		// per-profile settings + the model catalog, both stable within a task.
+		const reasoning = getMoonshotReasoning({
+			model: info,
+			reasoningBudget: undefined,
+			reasoningEffort: this.options.reasoningEffort,
+			settings: this.options,
+		})
+
 		const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
 			model,
 			max_tokens,
@@ -105,6 +118,11 @@ export class MoonshotHandler extends BaseOpenAiCompatibleProvider<MoonshotModelI
 			tools: this.convertToolsForOpenAI(metadata?.tools),
 			tool_choice: metadata?.tool_choice,
 			parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+			// Kimi's "max" is not in the OpenAI SDK's reasoning_effort union.
+			...(reasoning && {
+				reasoning_effort:
+					reasoning.reasoning_effort as OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"],
+			}),
 		}
 
 		return this.client.chat.completions.create(params, requestOptions)

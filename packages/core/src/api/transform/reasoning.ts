@@ -125,6 +125,49 @@ export const getOpenAiReasoning = ({
 	}
 }
 
+export type MoonshotReasoningParams = { reasoning_effort: "low" | "high" | "max" }
+
+/**
+ * Resolve the `reasoning_effort` to send to Moonshot / Kimi.
+ *
+ * Kimi K3 uses a tri-level scale — `"low" | "high" | "max"` — and thinking is
+ * always on: there is no way to disable it, and **omitting the field means the
+ * server default `"max"`**, i.e. maximum thinking effort on every request.
+ * That inversion is why this helper does NOT reuse `shouldUseReasoningEffort`
+ * (whose "off" semantics are "omit the field"): for a model with
+ * `requiredReasoningEffort`, an unset or "off-ish" selection must still send an
+ * explicit effort, mapped to the cheapest level rather than silently falling
+ * back to the most expensive one.
+ *
+ * Mapping from shofer's effort scale: disable/none/minimal/low → "low",
+ * medium/high → "high", xhigh → "max". Unset falls back to the model's catalog
+ * `reasoningEffort` (then "high").
+ */
+export const getMoonshotReasoning = ({
+	model,
+	reasoningEffort,
+}: GetModelReasoningOptions): MoonshotReasoningParams | undefined => {
+	if (!model.supportsReasoningEffort) {
+		return undefined
+	}
+
+	const selected = reasoningEffort ?? model.reasoningEffort
+
+	switch (selected) {
+		case "disable":
+		case "none":
+		case "minimal":
+		case "low":
+			return { reasoning_effort: "low" }
+		case "xhigh":
+			return { reasoning_effort: "max" }
+		case "medium":
+		case "high":
+		default:
+			return { reasoning_effort: "high" }
+	}
+}
+
 export const getGeminiReasoning = ({
 	model,
 	reasoningBudget,
