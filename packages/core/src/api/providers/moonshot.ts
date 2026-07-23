@@ -15,6 +15,7 @@ import { convertToMoonshotFormat, getMoonshotReasoning } from "./_deps.js"
 import type { ApiHandlerCreateMessageMetadata } from "../api-handler-types.js"
 import { BaseOpenAiCompatibleProvider } from "./base-openai-compatible-provider.js"
 import { normalizeMoonshotToolSchema } from "./moonshot-schema.js"
+import { handleOpenAIError } from "./utils/openai-error-handler.js"
 
 /**
  * Moonshot (Kimi) provider handler using the raw OpenAI SDK.
@@ -57,20 +58,24 @@ export class MoonshotHandler extends BaseOpenAiCompatibleProvider<MoonshotModelI
 	}
 
 	/**
-	 * Override `createStream` to use Moonshot-specific message conversion that
-	 * preserves `reasoning_content` on assistant messages and merges post-tool
-	 * text into the last tool message (critical for thinking models).
+	 * Request parameters shared by the streaming and single-shot paths: the
+	 * resolved model id, the output-token cap, the pinned temperature for
+	 * fixed-temperature Kimi models, and an explicit `reasoning_effort`.
 	 *
-	 * Also forces temperature to 1 for Kimi K2.x/K3 models, which reject any
-	 * other value with `400 invalid temperature: only 1 is allowed for this
-	 * model`.
+	 * - Temperature: the thinking / coding Kimi models (kimi-k2-thinking,
+	 *   kimi-k2.5, k3, kimi-k3) fix temperature at 1 and reject anything else
+	 *   with `400 invalid temperature: only 1 is allowed for this model`. These
+	 *   models ignore the sampling temperature anyway, so force 1 for any model
+	 *   whose catalog default is 1, regardless of profile.
+	 * - Reasoning: K3 models take a top-level reasoning_effort
+	 *   ("low" | "high" | "max"). Omitting it means the SERVER default "max" —
+	 *   maximum thinking effort on every request — so for models that support
+	 *   it we always send an explicit value. Kimi recommends keeping it
+	 *   constant for the whole conversation to preserve prefix-cache hits, and
+	 *   it is resolved from per-profile settings + the model catalog, both
+	 *   stable within a task.
 	 */
-	protected override createStream(
-		systemPrompt: string,
-		messages: Anthropic.Messages.MessageParam[],
-		metadata?: ApiHandlerCreateMessageMetadata,
-		requestOptions?: OpenAI.RequestOptions,
-	) {
+	private baseRequestParams() {
 		const { id: model, info } = this.getModel()
 
 		const max_tokens =
@@ -81,26 +86,11 @@ export class MoonshotHandler extends BaseOpenAiCompatibleProvider<MoonshotModelI
 				format: "openai",
 			}) ?? undefined
 
-		// The thinking / coding Kimi models (kimi-k2-thinking, kimi-k2.5, k3,
-		// kimi-k3) fix temperature at 1 and reject anything else with
-		// `400 invalid temperature: only 1 is allowed for this model`. These
-		// models ignore the sampling temperature anyway, so force 1 for any
-		// model whose catalog default is 1, regardless of profile.
 		const temperature =
 			(info as { defaultTemperature?: number }).defaultTemperature === 1
 				? 1
 				: (this.options.modelTemperature ?? info.defaultTemperature ?? this.defaultTemperature)
 
-		// Use Moonshot format to preserve reasoning_content and merge
-		// post-tool text into tool messages.
-		const convertedMessages = convertToMoonshotFormat(messages, { mergeToolResultText: true })
-
-		// K3 models take a top-level reasoning_effort ("low" | "high" | "max").
-		// Omitting it means the SERVER default "max" — maximum thinking effort on
-		// every agent-loop step — so for models that support it we always send an
-		// explicit value. Kimi recommends keeping it constant for the whole
-		// conversation to preserve prefix-cache hits, and it is resolved from
-		// per-profile settings + the model catalog, both stable within a task.
 		const reasoning = getMoonshotReasoning({
 			model: info,
 			reasoningBudget: undefined,
@@ -108,24 +98,65 @@ export class MoonshotHandler extends BaseOpenAiCompatibleProvider<MoonshotModelI
 			settings: this.options,
 		})
 
-		const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+		return {
 			model,
 			max_tokens,
 			temperature,
-			messages: [{ role: "system", content: systemPrompt }, ...convertedMessages],
-			stream: true,
-			stream_options: { include_usage: true },
-			tools: this.convertToolsForOpenAI(metadata?.tools),
-			tool_choice: metadata?.tool_choice,
-			parallel_tool_calls: metadata?.parallelToolCalls ?? true,
 			// Kimi's "max" is not in the OpenAI SDK's reasoning_effort union.
 			...(reasoning && {
 				reasoning_effort:
 					reasoning.reasoning_effort as OpenAI.Chat.ChatCompletionCreateParams["reasoning_effort"],
 			}),
 		}
+	}
+
+	/**
+	 * Override `createStream` to use Moonshot-specific message conversion that
+	 * preserves `reasoning_content` on assistant messages and merges post-tool
+	 * text into the last tool message (critical for thinking models).
+	 */
+	protected override createStream(
+		systemPrompt: string,
+		messages: Anthropic.Messages.MessageParam[],
+		metadata?: ApiHandlerCreateMessageMetadata,
+		requestOptions?: OpenAI.RequestOptions,
+	) {
+		// Use Moonshot format to preserve reasoning_content and merge
+		// post-tool text into tool messages.
+		const convertedMessages = convertToMoonshotFormat(messages, { mergeToolResultText: true })
+
+		const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+			...this.baseRequestParams(),
+			messages: [{ role: "system", content: systemPrompt }, ...convertedMessages],
+			stream: true,
+			stream_options: { include_usage: true },
+			tools: this.convertToolsForOpenAI(metadata?.tools),
+			tool_choice: metadata?.tool_choice,
+			parallel_tool_calls: metadata?.parallelToolCalls ?? true,
+		}
 
 		return this.client.chat.completions.create(params, requestOptions)
+	}
+
+	/**
+	 * Override the single-shot path (used by e.g. "Enhance prompt") with the
+	 * same parameter resolution as the streaming path. The base implementation
+	 * sends only `{model, messages}`, which on Kimi K3 means the server-default
+	 * `reasoning_effort: "max"` — maximum thinking effort and quota burn for a
+	 * one-shot utility call — and no output-token cap.
+	 */
+	override async completePrompt(prompt: string): Promise<string> {
+		const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
+			...this.baseRequestParams(),
+			messages: [{ role: "user", content: prompt }],
+		}
+
+		try {
+			const response = await this.client.chat.completions.create(params)
+			return response.choices?.[0]?.message.content || ""
+		} catch (error) {
+			throw handleOpenAIError(error, this.providerName)
+		}
 	}
 
 	/**

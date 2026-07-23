@@ -259,6 +259,72 @@ describe("MoonshotHandler", () => {
 		})
 	})
 
+	describe("completePrompt", () => {
+		// The single-shot path (used by e.g. "Enhance prompt") must resolve the
+		// same request parameters as the streaming path — the base-class
+		// implementation sends only {model, messages}, which on K3 means the
+		// server-default reasoning_effort "max" and no output-token cap.
+		const completionResponse = (content: string) => ({
+			choices: [{ message: { content } }],
+		})
+
+		it("sends an explicit reasoning_effort for k3 (never the server default 'max')", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3" })
+			mockCreate.mockResolvedValueOnce(completionResponse("enhanced"))
+
+			const result = await k3Handler.completePrompt("test prompt")
+
+			expect(result).toBe("enhanced")
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					model: "k3",
+					reasoning_effort: "high",
+					messages: [{ role: "user", content: "test prompt" }],
+				}),
+			)
+			const params = mockCreate.mock.calls[0][0]
+			expect(params).not.toHaveProperty("stream")
+		})
+
+		it("maps a configured 'xhigh' to Kimi's 'max' on the single-shot path too", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3", reasoningEffort: "xhigh" })
+			mockCreate.mockResolvedValueOnce(completionResponse("ok"))
+
+			await k3Handler.completePrompt("test prompt")
+
+			expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ reasoning_effort: "max" }))
+		})
+
+		it("pins temperature to 1 and caps max_tokens for fixed-temperature models", async () => {
+			const k3Handler = new MoonshotHandler({ ...mockOptions, apiModelId: "k3", modelTemperature: 0 })
+			mockCreate.mockResolvedValueOnce(completionResponse("ok"))
+
+			await k3Handler.completePrompt("test prompt")
+
+			expect(mockCreate).toHaveBeenCalledWith(
+				expect.objectContaining({
+					temperature: 1,
+					max_tokens: moonshotModels.k3.maxTokens,
+				}),
+			)
+		})
+
+		it("does not send reasoning_effort for models without the capability", async () => {
+			mockCreate.mockResolvedValueOnce(completionResponse("ok"))
+
+			await handler.completePrompt("test prompt")
+
+			const params = mockCreate.mock.calls[0][0]
+			expect(params).not.toHaveProperty("reasoning_effort")
+		})
+
+		it("returns an empty string when the response has no content", async () => {
+			mockCreate.mockResolvedValueOnce({ choices: [{ message: { content: null } }] })
+
+			expect(await handler.completePrompt("test prompt")).toBe("")
+		})
+	})
+
 	describe("createMessage", () => {
 		it("should yield text content from stream", async () => {
 			const testContent = "Test response from Moonshot"
