@@ -31,7 +31,7 @@ export const PROVIDER_SERVICE_CONFIG: Partial<Record<ProviderName, ProviderServi
 	anthropic: { serviceName: "Anthropic", serviceUrl: "https://console.anthropic.com" },
 	bedrock: { serviceName: "Amazon Bedrock", serviceUrl: "https://aws.amazon.com/bedrock" },
 	deepseek: { serviceName: "DeepSeek", serviceUrl: "https://platform.deepseek.com" },
-	moonshot: { serviceName: "Moonshot", serviceUrl: "https://platform.moonshot.cn" },
+	moonshot: { serviceName: "Moonshot", serviceUrl: "https://platform.moonshot.ai" },
 	dashscope: { serviceName: "DashScope (Qwen)", serviceUrl: "https://modelstudio.console.alibabacloud.com" },
 	gemini: { serviceName: "Google Gemini", serviceUrl: "https://ai.google.dev" },
 	mistral: { serviceName: "Mistral", serviceUrl: "https://console.mistral.ai" },
