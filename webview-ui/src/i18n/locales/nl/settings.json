@@ -411,6 +411,8 @@
 		"codestralBaseUrlDesc": "Stel een alternatieve URL in voor het Codestral-model.",
 		"xaiApiKey": "xAI API-sleutel",
 		"getXaiApiKey": "xAI API-sleutel ophalen",
+		"xiaomiApiKey": "Xiaomi MiMo API-sleutel",
+		"getXiaomiApiKey": "Xiaomi MiMo API-sleutel ophalen",
 		"litellmApiKey": "LiteLLM API-sleutel",
 		"litellmBaseUrl": "LiteLLM basis-URL",
 		"awsCredentials": "AWS-inloggegevens",

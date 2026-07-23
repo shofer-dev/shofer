@@ -411,6 +411,8 @@
 		"codestralBaseUrlDesc": "Codestral modeli için alternatif URL ayarlayın.",
 		"xaiApiKey": "xAI API Anahtarı",
 		"getXaiApiKey": "xAI API Anahtarı Al",
+		"xiaomiApiKey": "Xiaomi MiMo API Anahtarı",
+		"getXiaomiApiKey": "Xiaomi MiMo API Anahtarı Al",
 		"litellmApiKey": "LiteLLM API Anahtarı",
 		"litellmBaseUrl": "LiteLLM Temel URL",
 		"awsCredentials": "AWS Kimlik Bilgileri",

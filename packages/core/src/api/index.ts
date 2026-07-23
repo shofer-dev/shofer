@@ -24,6 +24,7 @@ import {
 	UnboundHandler,
 	FakeAIHandler,
 	XAIHandler,
+	XiaomiHandler,
 	LiteLLMHandler,
 	QwenCodeHandler,
 	SambaNovaHandler,
@@ -110,6 +111,8 @@ export function buildApiHandler(
 				return new FakeAIHandler(options)
 			case "xai":
 				return new XAIHandler(options)
+			case "xiaomi":
+				return new XiaomiHandler(options)
 			case "litellm":
 				return new LiteLLMHandler(options)
 			case "sambanova":

@@ -593,6 +593,7 @@ export const SECRET_STATE_KEYS = [
 	"requestyApiKey",
 	"unboundApiKey",
 	"xaiApiKey",
+	"xiaomiApiKey",
 	"litellmApiKey",
 	"codeIndexOpenAiKey",
 	"codeIndexQdrantApiKey",

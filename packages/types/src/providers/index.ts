@@ -23,6 +23,7 @@ export * from "./unbound.js"
 export * from "./vertex.js"
 export * from "./vscode-llm.js"
 export * from "./xai.js"
+export * from "./xiaomi.js"
 export * from "./vercel-ai-gateway.js"
 export * from "./zai.js"
 export * from "./minimax.js"
@@ -48,6 +49,7 @@ import { unboundDefaultModelId } from "./unbound.js"
 import { vertexDefaultModelId } from "./vertex.js"
 import { vscodeLlmDefaultModelId } from "./vscode-llm.js"
 import { xaiDefaultModelId } from "./xai.js"
+import { xiaomiDefaultModelId } from "./xiaomi.js"
 import { vercelAiGatewayDefaultModelId } from "./vercel-ai-gateway.js"
 import { internationalZAiDefaultModelId, mainlandZAiDefaultModelId } from "./zai.js"
 import { minimaxDefaultModelId } from "./minimax.js"
@@ -73,6 +75,8 @@ export function getProviderDefaultModelId(
 			return litellmDefaultModelId
 		case "xai":
 			return xaiDefaultModelId
+		case "xiaomi":
+			return xiaomiDefaultModelId
 		case "baseten":
 			return basetenDefaultModelId
 		case "bedrock":

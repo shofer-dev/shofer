@@ -411,6 +411,8 @@
 		"codestralBaseUrlDesc": "为 Codestral 模型设置替代 URL。",
 		"xaiApiKey": "xAI API 密钥",
 		"getXaiApiKey": "获取 xAI API 密钥",
+		"xiaomiApiKey": "Xiaomi MiMo API 密钥",
+		"getXiaomiApiKey": "获取 Xiaomi MiMo API 密钥",
 		"litellmApiKey": "LiteLLM API 密钥",
 		"litellmBaseUrl": "LiteLLM 基础 URL",
 		"awsCredentials": "AWS 凭证",

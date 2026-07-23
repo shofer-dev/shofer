@@ -411,6 +411,8 @@
 		"codestralBaseUrlDesc": "Đặt URL thay thế cho mô hình Codestral.",
 		"xaiApiKey": "Khóa API xAI",
 		"getXaiApiKey": "Lấy khóa API xAI",
+		"xiaomiApiKey": "Khóa API Xiaomi MiMo",
+		"getXiaomiApiKey": "Lấy khóa API Xiaomi MiMo",
 		"litellmApiKey": "Khóa API LiteLLM",
 		"litellmBaseUrl": "URL cơ sở LiteLLM",
 		"awsCredentials": "Thông tin xác thực AWS",

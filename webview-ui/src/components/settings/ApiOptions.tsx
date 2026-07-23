@@ -23,6 +23,7 @@ import {
 	dashScopeDefaultModelId,
 	mistralDefaultModelId,
 	xaiDefaultModelId,
+	xiaomiDefaultModelId,
 	basetenDefaultModelId,
 	bedrockDefaultModelId,
 	vertexDefaultModelId,
@@ -93,6 +94,7 @@ import {
 	Vertex,
 	VSCodeLM,
 	XAI,
+	Xiaomi,
 	ZAi,
 	Fireworks,
 	VercelAiGateway,
@@ -353,6 +355,7 @@ const ApiOptions = ({
 				minimax: { field: "apiModelId", default: minimaxDefaultModelId },
 				mistral: { field: "apiModelId", default: mistralDefaultModelId },
 				xai: { field: "apiModelId", default: xaiDefaultModelId },
+				xiaomi: { field: "apiModelId", default: xiaomiDefaultModelId },
 				baseten: { field: "apiModelId", default: basetenDefaultModelId },
 				bedrock: { field: "apiModelId", default: bedrockDefaultModelId },
 				vertex: { field: "apiModelId", default: vertexDefaultModelId },
@@ -688,6 +691,13 @@ const ApiOptions = ({
 
 					{selectedProvider === "sambanova" && (
 						<SambaNova
+							apiConfiguration={apiConfiguration}
+							setApiConfigurationField={setApiConfigurationField}
+						/>
+					)}
+
+					{selectedProvider === "xiaomi" && (
+						<Xiaomi
 							apiConfiguration={apiConfiguration}
 							setApiConfigurationField={setApiConfigurationField}
 						/>

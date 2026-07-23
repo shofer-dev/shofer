@@ -17,6 +17,7 @@ import {
 	openAiNativeModels,
 	vertexModels,
 	xaiModels,
+	xiaomiModels,
 	vscodeLlmModels,
 	vscodeLlmDefaultModelId,
 	openAiCodexModels,
@@ -187,6 +188,11 @@ function getSelectedModel({
 			const id = apiConfiguration.apiModelId ?? defaultModelId
 			const info = xaiModels[id as keyof typeof xaiModels]
 			return info ? { id, info } : { id, info: undefined }
+		}
+		case "xiaomi": {
+			const id = apiConfiguration.apiModelId ?? defaultModelId
+			const info = xiaomiModels[id as keyof typeof xiaomiModels]
+			return { id, info }
 		}
 		case "baseten": {
 			const id = apiConfiguration.apiModelId ?? defaultModelId

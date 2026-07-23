@@ -19,6 +19,7 @@ import {
 	vertexModels,
 	vscodeLlmModels,
 	xaiModels,
+	xiaomiModels,
 	internationalZAiModels,
 	minimaxModels,
 } from "./providers/index.js"
@@ -128,6 +129,7 @@ export const providerNames = [
 	"sambanova",
 	"vertex",
 	"xai",
+	"xiaomi",
 	"zai",
 ] as const
 
@@ -380,6 +382,13 @@ const xaiSchema = apiModelIdProviderModelSchema.extend({
 	xaiApiKey: z.string().optional(),
 })
 
+const xiaomiSchema = apiModelIdProviderModelSchema.extend({
+	// Free-form so a custom/proxy host can be entered manually. Defaults to the
+	// global endpoint https://api.xiaomimimo.com/v1 in the handler when unset.
+	xiaomiBaseUrl: z.string().optional(),
+	xiaomiApiKey: z.string().optional(),
+})
+
 const litellmSchema = baseProviderSettingsSchema.extend({
 	litellmBaseUrl: z.string().optional(),
 	litellmApiKey: z.string().optional(),
@@ -455,6 +464,7 @@ export const providerSettingsSchemaDiscriminated = z.discriminatedUnion("apiProv
 	fakeAiSchema.merge(z.object({ apiProvider: z.literal("fake-ai") })),
 	mockSchema.merge(z.object({ apiProvider: z.literal("mock") })),
 	xaiSchema.merge(z.object({ apiProvider: z.literal("xai") })),
+	xiaomiSchema.merge(z.object({ apiProvider: z.literal("xiaomi") })),
 	basetenSchema.merge(z.object({ apiProvider: z.literal("baseten") })),
 	litellmSchema.merge(z.object({ apiProvider: z.literal("litellm") })),
 	sambaNovaSchema.merge(z.object({ apiProvider: z.literal("sambanova") })),
@@ -492,6 +502,7 @@ export const providerSettingsSchema = z.object({
 	...fakeAiSchema.shape,
 	...mockSchema.shape,
 	...xaiSchema.shape,
+	...xiaomiSchema.shape,
 	...basetenSchema.shape,
 	...litellmSchema.shape,
 	...sambaNovaSchema.shape,
@@ -570,6 +581,7 @@ export const modelIdKeysByProvider: Record<TypicalProvider, ModelIdKey> = {
 	requesty: "requestyModelId",
 	unbound: "unboundModelId",
 	xai: "apiModelId",
+	xiaomi: "apiModelId",
 	baseten: "apiModelId",
 	litellm: "litellmModelId",
 	sambanova: "apiModelId",
@@ -688,6 +700,7 @@ export const MODELS_BY_PROVIDER: Record<
 		models: Object.keys(vscodeLlmModels),
 	},
 	xai: { id: "xai", label: "xAI (Grok)", models: Object.keys(xaiModels) },
+	xiaomi: { id: "xiaomi", label: "Xiaomi (MiMo)", models: Object.keys(xiaomiModels) },
 	zai: { id: "zai", label: "Z.ai", models: Object.keys(internationalZAiModels) },
 	baseten: { id: "baseten", label: "Baseten", models: Object.keys(basetenModels) },
 

@@ -411,6 +411,8 @@
 		"codestralBaseUrlDesc": "Imposta un URL opzionale per i modelli Codestral.",
 		"xaiApiKey": "Chiave API xAI",
 		"getXaiApiKey": "Ottieni chiave API xAI",
+		"xiaomiApiKey": "Chiave API Xiaomi MiMo",
+		"getXiaomiApiKey": "Ottieni chiave API Xiaomi MiMo",
 		"litellmApiKey": "Chiave API LiteLLM",
 		"litellmBaseUrl": "URL base LiteLLM",
 		"awsCredentials": "Credenziali AWS",

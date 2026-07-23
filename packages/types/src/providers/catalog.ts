@@ -18,6 +18,7 @@ import { sambaNovaModels, sambaNovaDefaultModelId } from "./sambanova.js"
 import { vertexModels, vertexDefaultModelId } from "./vertex.js"
 import { vscodeLlmModels, vscodeLlmDefaultModelId } from "./vscode-llm.js"
 import { xaiModels, xaiDefaultModelId } from "./xai.js"
+import { xiaomiModels, xiaomiDefaultModelId } from "./xiaomi.js"
 import { internationalZAiModels, internationalZAiDefaultModelId } from "./zai.js"
 
 /**
@@ -64,6 +65,7 @@ export const STATIC_MODEL_CATALOG = {
 	xai: { models: xaiModels, defaultModelId: xaiDefaultModelId },
 	// z.ai ships separate international/mainland catalogs; the international set is
 	// the catalog default (mainland is selected at the provider layer via isChina).
+	xiaomi: { models: xiaomiModels, defaultModelId: xiaomiDefaultModelId },
 	zai: { models: internationalZAiModels, defaultModelId: internationalZAiDefaultModelId },
 } as const satisfies Partial<Record<ProviderName, CatalogEntry>>
 
