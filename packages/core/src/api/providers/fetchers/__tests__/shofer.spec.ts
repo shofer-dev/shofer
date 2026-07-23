@@ -8,16 +8,16 @@ import { getShoferModels, DEFAULT_SHOFER_BASE_URL } from "../shofer.js"
 
 const mockedAxios = axios as typeof axios & { get: Mock }
 
-/** A minimal llm-router /v1/models model entry (prices are USD PER 1K TOKENS, as strings). */
+/** A minimal llm-router /v1/models model entry (prices are USD PER 1M TOKENS, as strings). */
 const glm = {
 	id: "zhipu/glm-5.1",
 	name: "GLM 5.1",
 	description: "Zhipu flagship",
 	pricing: {
-		prompt: "0.005", // $0.005/1K → $5/1M
-		completion: "0.03", // $0.03/1K → $30/1M
-		input_cache_read: "0.0005", // $0.0005/1K → $0.5/1M
-		input_cache_write: "0.006",
+		prompt: "5", // $5/1M
+		completion: "30", // $30/1M
+		input_cache_read: "0.5", // $0.50/1M
+		input_cache_write: "6",
 		discount: 0.5,
 	},
 	context_length: 200_000,
@@ -48,14 +48,13 @@ describe("getShoferModels", () => {
 		})
 	})
 
-	it("converts per-1K pricing to per-1M and maps capabilities/context", async () => {
+	it("parses per-1M pricing as-is and maps capabilities/context", async () => {
 		mockedAxios.get.mockResolvedValue({ data: { data: [glm] } })
 
 		const models = await getShoferModels()
 		const info = models["zhipu/glm-5.1"]
 
 		expect(info).toBeDefined()
-		// per-1K → per-1M (×1000)
 		expect(info!.inputPrice).toBe(5)
 		expect(info!.outputPrice).toBe(30)
 		expect(info!.cacheReadsPrice).toBe(0.5)

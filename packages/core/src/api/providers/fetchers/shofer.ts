@@ -3,12 +3,13 @@
  *
  * Fetches `{baseUrl}/models` from a running llm-router and maps its catalog into
  * Shofer {@link ModelInfo}. The response is OpenRouter-*shaped* but NOT identical:
- * llm-router prices in **USD per 1,000 tokens** (as strings), whereas OpenRouter's
- * `/models` prices per token. Reusing the OpenRouter fetcher here would mis-scale
- * every price by 1000×, so we parse + convert explicitly (per-1K → per-1M, the
- * ModelInfo convention). Per-request *actual* cost still arrives out-of-band via
- * `usage.cost` on the chat stream (handled by the OpenRouter-based ShoferHandler);
- * these prices drive the pre-request estimate + the model picker.
+ * llm-router prices in **USD per 1,000,000 tokens** (as strings) — already the
+ * ModelInfo convention — whereas OpenRouter's `/models` prices per token. Reusing
+ * the OpenRouter fetcher here would mis-scale every price by 1,000,000×, so we
+ * parse explicitly (no scaling). Per-request *actual* cost still arrives
+ * out-of-band via `usage.cost` on the chat stream (handled by the
+ * OpenRouter-based ShoferHandler); these prices drive the pre-request estimate +
+ * the model picker.
  */
 
 import axios from "axios"
@@ -63,11 +64,11 @@ const shoferModelsResponseSchema = z.object({
 	data: z.array(shoferModelSchema),
 })
 
-/** USD-per-1K-tokens string → USD-per-1M number (ModelInfo convention). */
+/** USD-per-1M-tokens string → number (already the ModelInfo convention). */
 function perMillion(price: string | undefined): number | undefined {
 	if (price == null) return undefined
 	const n = parseFloat(price)
-	return Number.isFinite(n) ? n * 1000 : undefined
+	return Number.isFinite(n) ? n : undefined
 }
 
 /**
