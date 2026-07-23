@@ -9,6 +9,30 @@ export type DeepSeekModelId = keyof typeof deepSeekModels
 export const deepSeekDefaultModelId: DeepSeekModelId = "deepseek-chat"
 
 export const deepSeekModels = {
+	"deepseek-v4-pro": {
+		maxTokens: 384_000, // API cap per the V4 docs
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		preserveReasoning: true, // thinking mode (default-on) requires reasoning_content echoed back
+		inputPrice: 0.435, // $0.435 per million tokens (cache miss)
+		outputPrice: 0.87, // $0.87 per million tokens
+		cacheWritesPrice: 0.435, // $0.435 per million tokens (cache miss)
+		cacheReadsPrice: 0.003625, // $0.003625 per million tokens (cache hit)
+		description: `DeepSeek-V4-Pro: 1.6T total / 49B active params with 1M context — world-class reasoning and agentic coding, with dual thinking / non-thinking modes (thinking enabled by default).`,
+	},
+	"deepseek-v4-flash": {
+		maxTokens: 384_000, // API cap per the V4 docs
+		contextWindow: 1_000_000,
+		supportsImages: false,
+		supportsPromptCache: true,
+		preserveReasoning: true, // thinking mode (default-on) requires reasoning_content echoed back
+		inputPrice: 0.14, // $0.14 per million tokens (cache miss)
+		outputPrice: 0.28, // $0.28 per million tokens
+		cacheWritesPrice: 0.14, // $0.14 per million tokens (cache miss)
+		cacheReadsPrice: 0.0028, // $0.0028 per million tokens (cache hit)
+		description: `DeepSeek-V4-Flash: 284B total / 13B active params with 1M context — fast and cost-effective with reasoning capability close to V4-Pro.`,
+	},
 	"deepseek-chat": {
 		maxTokens: 8192, // 8K max output
 		contextWindow: 128_000,

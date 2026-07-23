@@ -66,6 +66,44 @@ export const moonshotModels = {
 		description:
 			"Kimi K2.5 is the latest generation of Moonshot AI's Kimi series, featuring improved reasoning capabilities and enhanced performance across diverse tasks.",
 	},
+	"kimi-k2.6": {
+		maxTokens: 32_000,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: false, // no cache pricing published for K2.6
+		inputPrice: 0.66, // $0.66 per million tokens
+		outputPrice: 3.41, // $3.41 per million tokens
+		supportsTemperature: true,
+		defaultTemperature: 1.0,
+		description:
+			"Kimi K2.6 is Moonshot AI's multimodal Kimi model with vision support, improving on K2.5 across reasoning, coding, and agentic tasks.",
+	},
+	"kimi-k2.7-code": {
+		maxTokens: 32_000,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.95, // $0.95 per million tokens (cache miss)
+		outputPrice: 4.0, // $4.00 per million tokens
+		cacheReadsPrice: 0.19, // $0.19 per million tokens (cache hit)
+		supportsTemperature: true,
+		defaultTemperature: 1.0,
+		description:
+			"Kimi K2.7 Code is Moonshot AI's agentic coding model with a 256K context window and vision support.",
+	},
+	"kimi-k2.7-code-highspeed": {
+		maxTokens: 32_000,
+		contextWindow: 262_144,
+		supportsImages: true,
+		supportsPromptCache: true,
+		inputPrice: 0.95, // $0.95 per million tokens (cache miss)
+		outputPrice: 4.0, // $4.00 per million tokens
+		cacheReadsPrice: 0.19, // $0.19 per million tokens (cache hit)
+		supportsTemperature: true,
+		defaultTemperature: 1.0,
+		description:
+			"Kimi K2.7 Code Highspeed is the faster-output variant of K2.7 Code, with the same 256K context window and vision support.",
+	},
 	// K3 is only served by the Kimi-for-Coding subscription plane
 	// (base URL https://api.kimi.com/coding/v1, model id `k3`), NOT the global
 	// platform api.moonshot.ai. Point moonshotBaseUrl at the coding endpoint and

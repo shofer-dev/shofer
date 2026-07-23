@@ -106,6 +106,20 @@ export const geminiModels = {
 		outputPrice: 3.0,
 		cacheReadsPrice: 0.05,
 	},
+	"gemini-3.1-flash-lite-preview": {
+		maxTokens: 65_536,
+		contextWindow: 1_048_576,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["minimal", "low", "medium", "high"],
+		reasoningEffort: "medium",
+
+		supportsTemperature: true,
+		defaultTemperature: 1,
+		inputPrice: 0.25,
+		outputPrice: 1.5,
+		cacheReadsPrice: 0.025,
+	},
 	// 2.5 Pro models
 	"gemini-2.5-pro": {
 		maxTokens: 64_000,

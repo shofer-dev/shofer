@@ -24,6 +24,36 @@ export const openAiNativeModels = {
 		description:
 			"GPT-5.1 Codex Max: Our most intelligent coding model optimized for long-horizon, agentic coding tasks",
 	},
+	"gpt-5.5": {
+		maxTokens: 128000,
+		contextWindow: 1_000_000,
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsReasoningEffort: ["none", "low", "medium", "high", "xhigh"],
+		reasoningEffort: "medium",
+		inputPrice: 5.0,
+		outputPrice: 30.0,
+		cacheReadsPrice: 0.5,
+		supportsVerbosity: true,
+		supportsTemperature: false,
+		description:
+			"GPT-5.5: OpenAI's flagship model — a new class of intelligence for coding and professional work, with adjustable reasoning effort",
+	},
+	"gpt-5.5-pro": {
+		maxTokens: 128000,
+		contextWindow: 1_000_000,
+		includedTools: ["apply_patch"],
+		excludedTools: ["apply_diff", "write_to_file"],
+		supportsImages: true,
+		supportsPromptCache: false, // no cache pricing published for 5.5 Pro
+		inputPrice: 30.0,
+		outputPrice: 180.0,
+		supportsTemperature: false,
+		description:
+			"GPT-5.5 Pro: OpenAI's deepest-reasoning model in the GPT-5.5 family for the hardest professional and research workloads",
+	},
 	"gpt-5.4": {
 		maxTokens: 128000,
 		contextWindow: 1_050_000,

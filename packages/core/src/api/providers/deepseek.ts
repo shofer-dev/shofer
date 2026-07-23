@@ -6,6 +6,7 @@ import {
 	deepSeekDefaultModelId,
 	DEEP_SEEK_DEFAULT_TEMPERATURE,
 	OPENAI_AZURE_AI_INFERENCE_PATH,
+	type ModelInfo,
 } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "./_deps.js"
@@ -57,8 +58,10 @@ export class DeepSeekHandler extends OpenAiHandler {
 		const modelId = this.options.apiModelId ?? deepSeekDefaultModelId
 		const { info: modelInfo } = this.getModel()
 
-		// Check if this is a thinking-enabled model (deepseek-reasoner)
-		const isThinkingModel = modelId.includes("deepseek-reasoner")
+		// Thinking-enabled models: deepseek-reasoner, and the V4 family where
+		// thinking is on by default upstream. The catalog's preserveReasoning
+		// flag marks exactly these (reasoning_content must be echoed back).
+		const isThinkingModel = (modelInfo as ModelInfo).preserveReasoning === true
 
 		// Convert messages to R1 format (merges consecutive same-role messages)
 		// This is required for DeepSeek which does not support successive messages with the same role
