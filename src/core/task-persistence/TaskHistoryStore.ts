@@ -152,6 +152,27 @@ export class TaskHistoryStore {
 	}
 
 	/**
+	 * Get a single history item by task ID, falling back to a direct disk
+	 * read on a cache miss.
+	 *
+	 * The miss path exists for SHARED task stores — executor replicas
+	 * mounting one volume (RWX): a task created or last saved by another
+	 * instance after this one loaded its index is on disk but not in this
+	 * cache, fs watchers do not fire for another host's writes on network
+	 * filesystems, and periodic reconciliation is too slow for a request
+	 * already in flight. `invalidate` reads the per-task file and repairs
+	 * the cache either way, so a genuine miss stays a miss.
+	 */
+	async getOrLoad(taskId: string): Promise<HistoryItem | undefined> {
+		const cached = this.cache.get(taskId)
+		if (cached) {
+			return cached
+		}
+		await this.invalidate(taskId)
+		return this.cache.get(taskId)
+	}
+
+	/**
 	 * Get all history items, sorted by timestamp descending (newest first).
 	 *
 	 * The sort is memoized in {@link _sortedCache} and invalidated on mutation,

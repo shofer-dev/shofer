@@ -3822,8 +3822,13 @@ export class ShoferProvider
 		uiMessagesFilePath: string
 		apiConversationHistory: Anthropic.MessageParam[]
 	}> {
+		// getOrLoad rather than get: on a shared task store (executor replicas
+		// mounting one volume) the addressed task may have been written by
+		// another replica after this process loaded its index — the miss falls
+		// back to reading the per-task file from disk.
 		const historyItem =
-			this.taskHistoryStore.get(id) ?? (this.getGlobalState("taskHistory") ?? []).find((item) => item.id === id)
+			(await this.taskHistoryStore.getOrLoad(id)) ??
+			(this.getGlobalState("taskHistory") ?? []).find((item) => item.id === id)
 
 		if (!historyItem) {
 			throw new Error("Task not found")

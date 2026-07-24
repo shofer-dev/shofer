@@ -76,6 +76,26 @@ describe("TaskHistoryStore cross-instance safety", () => {
 		expect(storeB.getAll()).toHaveLength(2)
 	})
 
+	it("getOrLoad in instance B finds a task created by instance A without reconciliation", async () => {
+		await storeA.initialize()
+		await storeB.initialize()
+
+		// Instance A creates a task after B has loaded its index — the shared
+		// task-store scenario (executor replicas on one volume) where B is
+		// asked to resume a task it has never seen.
+		await storeA.upsert(makeHistoryItem({ id: "shared-task", task: "Created by A" }))
+
+		// A plain cache read misses; the disk-fallback read must not.
+		expect(storeB.get("shared-task")).toBeUndefined()
+		const loaded = await storeB.getOrLoad("shared-task")
+		expect(loaded).toBeDefined()
+		expect(loaded!.task).toBe("Created by A")
+
+		// The fallback repaired the cache, and a genuine miss stays a miss.
+		expect(storeB.get("shared-task")).toBeDefined()
+		expect(await storeB.getOrLoad("no-such-task")).toBeUndefined()
+	})
+
 	it("reconciliation in instance B detects a task created by instance A", async () => {
 		await storeA.initialize()
 		await storeB.initialize()
