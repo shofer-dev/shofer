@@ -106,9 +106,13 @@ export class ShoferApiAgent implements AgentApi {
 	}
 
 	async sendMessage(taskId: string, message: string): Promise<void> {
-		// Make the addressed task current, then send (ShoferAPI is current-task-centric).
+		// Ensure the addressed task has a live instance (rehydrates from the task
+		// store after an executor restart; no-op when it is already live), then
+		// deliver task-addressed — never current-task-centric, which both raced
+		// concurrent tasks and, in headless hosts, routed into a webview invoke
+		// that nothing consumes.
 		await this.api.resumeTask(taskId).catch(() => {})
-		await this.api.sendMessage(message)
+		await this.api.sendMessage(message, undefined, taskId)
 	}
 
 	async cancelTask(taskId: string): Promise<void> {

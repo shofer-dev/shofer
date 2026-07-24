@@ -61,11 +61,17 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 */
 	cancelCurrentTask(): Promise<void>
 	/**
-	 * Sends a message to the current task.
+	 * Sends a message to the current task — or, when `taskId` is given, directly
+	 * to that managed task instance. The task-addressed form is the transport
+	 * (AgentApi) delivery path: it must reach the task's own ask/message channel
+	 * and never route through the webview, because in headless hosts the mock
+	 * webview reports itself launched and an `invoke: sendMessage` posted to it
+	 * is silently dropped (nothing consumes invokes in `shofer serve`).
 	 * @param message Optional message to send.
 	 * @param images Optional array of image data URIs (e.g., "data:image/webp;base64,...").
+	 * @param taskId Optional id of the task to deliver to (defaults to the current task).
 	 */
-	sendMessage(message?: string, images?: string[]): Promise<void>
+	sendMessage(message?: string, images?: string[], taskId?: string): Promise<void>
 	/**
 	 * Answers an outstanding `ask` (interactive tool approval / follow-up) on a task.
 	 * Resolves the managed task by id (or the current task when omitted) and drives

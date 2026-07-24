@@ -378,6 +378,21 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 	}
 
 	public async resumeTask(taskId: string): Promise<void> {
+		// A live instance needs no rehydration — and must not get one: when the
+		// addressed task IS the current task, createTaskWithHistoryItem's
+		// isRehydratingCurrentTask path skips the live-instance guard and rebuilds
+		// the instance, aborting the live one (including any turn in flight). For
+		// API callers "resume" means "make this task addressable", which a live
+		// instance already is. managedTasks only holds backgrounded instances, so
+		// also check the current (foreground) task by id.
+		const currentTask = this.sidebarProvider.getCurrentTask()
+		const live =
+			this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
+			(currentTask?.taskId === taskId ? currentTask : undefined)
+		if (live && !live.abandoned && !live.abort) {
+			return
+		}
+
 		await vscode.commands.executeCommand(`${Package.name}.SidebarProvider.focus`)
 		await this.waitForWebviewLaunch(5_000)
 
@@ -416,7 +431,30 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		await this.sidebarProvider.cancelTask()
 	}
 
-	public async sendMessage(text?: string, images?: string[]) {
+	public async sendMessage(text?: string, images?: string[], taskId?: string) {
+		// Task-addressed delivery (the AgentApi transport path): resolve the managed
+		// instance and hand the message straight to its ask/message channel. This
+		// MUST NOT route through the webview: in the CLI host the mock webview
+		// reports viewLaunched=true, and an `invoke: sendMessage` posted to it is
+		// dropped (serve mode has no consumer for invokes), silently losing every
+		// follow-up message. Direct delivery also removes the current-task race —
+		// concurrent tasks on one executor no longer steal each other's messages.
+		if (taskId) {
+			// managedTasks only holds BACKGROUNDED instances (registerBackgroundTask);
+			// the foreground task lives on the stack, so fall back to the current
+			// task when — and only when — its id matches the addressed one.
+			const current = this.sidebarProvider.getCurrentTask()
+			const task =
+				this.sidebarProvider.taskManager.getManagedTaskInstance(taskId) ??
+				(current?.taskId === taskId ? current : undefined)
+			if (!task || task.abandoned || task.abort) {
+				this.log(`[API#sendMessage] no live task instance for ${taskId}; message dropped`)
+				return
+			}
+			await task.submitUserMessage(text ?? "", images)
+			return
+		}
+
 		const currentTask = this.sidebarProvider.getCurrentTask()
 
 		// In headless/sandbox flows the webview may not be launched, so routing
