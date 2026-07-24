@@ -86,6 +86,7 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		setMode,
 		alwaysAllowModeSwitch,
 		customModes,
+		disableBuiltInModes,
 		soundEnabled,
 		soundVolume,
 		messageQueue = [],
@@ -1893,21 +1894,23 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 
 	// Function to handle mode switching
 	const switchToNextMode = useCallback(() => {
-		const allModes = getAllModes(customModes)
+		const allModes = getAllModes(customModes, { disableBuiltIn: disableBuiltInModes })
+		if (allModes.length === 0) return // governance may leave no modes if a bundle provides none
 		const currentModeIndex = allModes.findIndex((m) => m.slug === mode)
 		const nextModeIndex = (currentModeIndex + 1) % allModes.length
 		// Update local state and notify extension to sync mode change
 		switchToMode(allModes[nextModeIndex].slug)
-	}, [mode, customModes, switchToMode])
+	}, [mode, customModes, disableBuiltInModes, switchToMode])
 
 	// Function to handle switching to previous mode
 	const switchToPreviousMode = useCallback(() => {
-		const allModes = getAllModes(customModes)
+		const allModes = getAllModes(customModes, { disableBuiltIn: disableBuiltInModes })
+		if (allModes.length === 0) return // governance may leave no modes if a bundle provides none
 		const currentModeIndex = allModes.findIndex((m) => m.slug === mode)
 		const previousModeIndex = (currentModeIndex - 1 + allModes.length) % allModes.length
 		// Update local state and notify extension to sync mode change
 		switchToMode(allModes[previousModeIndex].slug)
-	}, [mode, customModes, switchToMode])
+	}, [mode, customModes, disableBuiltInModes, switchToMode])
 
 	// Mode switching keyboard handler. Scroll-intent keyboard detection
 	// (PageUp, Home, ArrowUp) is handled by useScrollLifecycle.

@@ -295,6 +295,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		hasOpenedModeSelector: false, // Default to false (not opened yet)
 		autoApprovalEnabled: false,
 		customModes: [],
+		disableBuiltInModes: false,
+		disableBuiltInWorkflows: false,
 		maxOpenTabsContext: 20,
 		maxWorkspaceFiles: 200,
 		cwd: "",

@@ -48,7 +48,7 @@ export const ModeSelector = ({
 	const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 	const lastNotifiedInvalidModeRef = React.useRef<string | null>(null)
 	const portalContainer = useShoferPortal("shofer-portal")
-	const { hasOpenedModeSelector, setHasOpenedModeSelector } = useExtensionState()
+	const { hasOpenedModeSelector, setHasOpenedModeSelector, disableBuiltInModes } = useExtensionState()
 	const { t } = useAppTranslation()
 
 	const trackModeSelectorOpened = React.useCallback(() => {
@@ -64,13 +64,13 @@ export const ModeSelector = ({
 
 	// Get all modes including custom modes and merge custom prompt descriptions.
 	const modes = React.useMemo(() => {
-		const allModes = getAllModes(customModes)
+		const allModes = getAllModes(customModes, { disableBuiltIn: disableBuiltInModes })
 
 		return allModes.map((mode) => ({
 			...mode,
 			description: customModePrompts?.[mode.slug]?.description ?? mode.description,
 		}))
-	}, [customModes, customModePrompts])
+	}, [customModes, customModePrompts, disableBuiltInModes])
 
 	// Find the selected mode, falling back to default if current mode doesn't exist (e.g., after workspace switch)
 	const selectedMode = React.useMemo(() => {

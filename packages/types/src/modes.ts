@@ -1,4 +1,10 @@
-import { type GroupEntry, type ModeConfig, type CustomModePrompts, type PromptComponent, DEFAULT_MODES } from "./mode.js"
+import {
+	type GroupEntry,
+	type ModeConfig,
+	type CustomModePrompts,
+	type PromptComponent,
+	DEFAULT_MODES,
+} from "./mode.js"
 import { type ToolGroup, TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tool.js"
 
 export type Mode = string
@@ -103,14 +109,24 @@ export function getModeConfig(slug: string, customModes?: ModeConfig[]): ModeCon
 	return mode
 }
 
-// Get all available modes, with custom modes overriding built-in modes
-export function getAllModes(customModes?: ModeConfig[]): ModeConfig[] {
+// Get all available modes, with custom modes overriding built-in modes.
+//
+// `opts.disableBuiltIn` (org governance — sourced host-side from the
+// `SHOFER_DISABLE_BUILTIN_MODES` env var; see `@shofer/core`'s
+// `builtInModesDisabled()`) suppresses the six built-in modes so that ONLY the
+// supplied `customModes` (user/project/bundle-provided) remain. This function
+// stays PURE: the flag is passed in, never read from env here, so it is safe in
+// the webview bundle. When the flag is set and `customModes` is empty the result
+// is an empty array — the built-ins are NOT silently re-added.
+export function getAllModes(customModes?: ModeConfig[], opts?: { disableBuiltIn?: boolean }): ModeConfig[] {
+	const builtIn = opts?.disableBuiltIn ? [] : [...modes]
+
 	if (!customModes?.length) {
-		return [...modes]
+		return builtIn
 	}
 
-	// Start with built-in modes
-	const allModes = [...modes]
+	// Start from the (possibly empty) built-in set
+	const allModes = [...builtIn]
 
 	// Process custom modes
 	customModes.forEach((customMode) => {

@@ -75,7 +75,7 @@ export const CreateSkillDialog: React.FC<CreateSkillDialogProps> = ({
 	hasWorkspace,
 }) => {
 	const { t } = useAppTranslation()
-	const { customModes } = useExtensionState()
+	const { customModes, disableBuiltInModes } = useExtensionState()
 
 	const [name, setName] = useState("")
 	const [description, setDescription] = useState("")
@@ -89,8 +89,11 @@ export const CreateSkillDialog: React.FC<CreateSkillDialogProps> = ({
 
 	// Get available modes for the checkboxes (built-in + custom modes)
 	const availableModes = useMemo(() => {
-		return getAllModes(customModes).map((m) => ({ slug: m.slug, name: m.name }))
-	}, [customModes])
+		return getAllModes(customModes, { disableBuiltIn: disableBuiltInModes }).map((m) => ({
+			slug: m.slug,
+			name: m.name,
+		}))
+	}, [customModes, disableBuiltInModes])
 
 	const resetForm = useCallback(() => {
 		setName("")

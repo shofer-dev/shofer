@@ -129,6 +129,30 @@ analysis (`validateSlangAST`). Returns a `SlangValidationResult` with:
 This is called by the Slang editor provider and the `listWorkflows` handler
 to surface diagnostics before execution.
 
+### 3.2 Org Governance: Suppressing the Built-in Workflows
+
+An organization can remove the two built-in `.slang` workflows entirely so that
+ONLY global/project (bundle-provided) workflows remain — letting a config bundle
+fully define the available workflow set. This is controlled by the
+**`SHOFER_DISABLE_BUILTIN_WORKFLOWS`** environment variable (truthy =
+`1`/`true`/`yes`/`on`), delivered on the executor / code-server pod (the SaaS
+`resource-manager` sets it, the same channel as `SHOFER_GLOBAL_DIR`). It is
+**not** a persisted user setting: it never appears in `globalSettingsSchema` or
+the Settings UI and cannot be toggled from the webview.
+
+- The single reader is `builtInWorkflowsDisabled()` in
+  [`packages/core/src/config/governance.ts`](../packages/core/src/config/governance.ts),
+  re-exported from `@shofer/core`.
+- When the flag is truthy, `discoverWorkflows()` **skips the built-in layer**
+  (`dist/media/workflows/`) and returns only the global + project workflows;
+  higher-priority layers are unaffected.
+- **Seeding:** `loadBuiltInWorkflows()`
+  ([`src/core/workflow/WorkflowTask.ts`](../src/core/workflow/WorkflowTask.ts),
+  re-exported from `src/core/workflow/index.ts`) loads ONLY the shipped built-in
+  `.slang` sources as a `Map<flow name → source>`, **independent** of the flag, so
+  a platform tool can copy them into a bundle even where they are otherwise
+  suppressed.
+
 ---
 
 ## 4. Workflow Launch: `createWorkflow` IPC Handler

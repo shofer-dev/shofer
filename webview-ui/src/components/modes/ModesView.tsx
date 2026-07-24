@@ -108,6 +108,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		mode,
 		customInstructions,
 		customModes,
+		disableBuiltInModes,
 	} = useExtensionState()
 
 	// Staged per-mode API-config associations (mode slug → config id), edited via
@@ -348,7 +349,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	)
 
 	// Build modes fresh each render so search reflects inline rename updates immediately
-	const modes = getAllModes(customModes)
+	const modes = getAllModes(customModes, { disableBuiltIn: disableBuiltInModes })
 
 	const [isDialogOpen, setIsDialogOpen] = useState(false)
 	const [selectedPromptContent, setSelectedPromptContent] = useState("")
@@ -422,6 +423,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// Refs to track latest state/functions for message handler (which has no dependencies)
 	const handleModeSwitchRef = useRef(handleModeSwitch)
 	const customModesRef = useRef(customModes)
+	const disableBuiltInModesRef = useRef(disableBuiltInModes)
 
 	// Update refs when dependencies change
 	useEffect(() => {
@@ -431,6 +433,10 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	useEffect(() => {
 		customModesRef.current = customModes
 	}, [customModes])
+
+	useEffect(() => {
+		disableBuiltInModesRef.current = disableBuiltInModes
+	}, [disableBuiltInModes])
 
 	// Track the active mode until the user picks an edit target of their own.
 	// After that the selection is pinned (see `editTargetPinned`).
@@ -755,7 +761,9 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 					const { slug } = message as ImportModeResult
 					if (slug) {
 						// Try switching using the freshest mode list available
-						const all = getAllModes(customModesRef.current)
+						const all = getAllModes(customModesRef.current, {
+							disableBuiltIn: disableBuiltInModesRef.current,
+						})
 						const importedMode = all.find((m) => m.slug === slug)
 						if (importedMode) {
 							handleModeSwitchRef.current(importedMode)

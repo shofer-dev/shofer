@@ -8,7 +8,7 @@ import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDir
 import { directoryExists, fileExists } from "@shofer/core"
 import { getSharedPluginManager } from "@shofer/core"
 import { SkillMetadata, SkillContent, qualifiedSkillName } from "@shofer/types"
-import { modes, getAllModes } from "@shofer/core"
+import { modes, getAllModes, builtInModesDisabled } from "@shofer/core"
 import {
 	validateSkillName as validateSkillNameShared,
 	SkillNameValidationError,
@@ -700,7 +700,9 @@ Add your skill instructions here.
 	 */
 	private async getAvailableModes(): Promise<string[]> {
 		const provider = this.providerRef.deref()
-		const builtInModeSlugs = modes.map((m) => m.slug)
+		// Org governance: when built-in modes are suppressed the fallback slug set
+		// is empty too — never re-introduce the built-ins through an error path.
+		const builtInModeSlugs = builtInModesDisabled() ? [] : modes.map((m) => m.slug)
 
 		if (!provider) {
 			return builtInModeSlugs
@@ -708,7 +710,7 @@ Add your skill instructions here.
 
 		try {
 			const customModes = await provider.customModesManager.getCustomModes()
-			const allModes = getAllModes(customModes)
+			const allModes = getAllModes(customModes, { disableBuiltIn: builtInModesDisabled() })
 			return allModes.map((m) => m.slug)
 		} catch {
 			return builtInModeSlugs

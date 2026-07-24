@@ -59,6 +59,7 @@ import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
+import { builtInModesDisabled, builtInWorkflowsDisabled } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
@@ -4797,6 +4798,10 @@ export class ShoferProvider
 			// (owner directive #4). Private plugin modes stay switch-able by their
 			// qualified slug (getCustomModes still returns them for resolution).
 			customModes: (customModes ?? []).filter((m) => !m.private),
+			// Org governance (read-only): forward the built-in-suppression env flags
+			// to the webview, which cannot read process.env itself.
+			disableBuiltInModes: builtInModesDisabled(),
+			disableBuiltInWorkflows: builtInWorkflowsDisabled(),
 			experiments: experiments ?? experimentDefault,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
 			maxOpenTabsContext: maxOpenTabsContext ?? 20,

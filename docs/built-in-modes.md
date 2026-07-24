@@ -234,6 +234,38 @@ field of the built-in mode. There is no partial merging of `tools` or
 Custom modes with new slugs (not matching any built-in mode) are appended after
 the built-in modes in `getAllModes()`.
 
+### 10.1 Org Governance: Suppressing the Built-in Modes
+
+An organization can remove the six built-in modes entirely so that ONLY
+user/project/bundle-provided modes remain — letting a config bundle fully define
+the available mode set. This is controlled by the **`SHOFER_DISABLE_BUILTIN_MODES`**
+environment variable (truthy = `1`/`true`/`yes`/`on`), delivered on the executor /
+code-server pod (the SaaS `resource-manager` sets it, the same channel as
+`SHOFER_GLOBAL_DIR`). It is **not** a persisted user setting: it never appears in
+`globalSettingsSchema` or the Settings UI and cannot be toggled from the webview.
+
+- The single reader is `builtInModesDisabled()` in
+  [`packages/core/src/config/governance.ts`](../packages/core/src/config/governance.ts),
+  re-exported from `@shofer/core`.
+- `getAllModes(customModes, { disableBuiltIn })` in
+  [`packages/types/src/modes.ts`](../packages/types/src/modes.ts) stays **pure** —
+  it takes the flag as an argument (so it is safe in the webview bundle, which
+  cannot read `process.env`). When `disableBuiltIn` is `true` the merge starts
+  from `[]` instead of `[...modes]`; with no custom modes it returns `[]` and the
+  built-ins are **not** silently re-added.
+- Host-side callers pass `builtInModesDisabled()`: the system-prompt MODES section
+  (`getModesSection` → `getAllModesWithPrompts` in
+  [`packages/core/src/prompts/sections/modes.ts`](../packages/core/src/prompts/sections/modes.ts))
+  and `SkillsManager.getAvailableModes()`.
+- The webview cannot read env, so the host forwards the computed boolean on
+  `ExtensionState.disableBuiltInModes`
+  ([`packages/types/src/vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts),
+  populated in `ShoferProvider`); every webview `getAllModes` caller threads it
+  through from `useExtensionState()`.
+- **Seeding:** the built-in definitions remain reachable as data via the exported
+  `modes` (`DEFAULT_MODES`) array from `@shofer/types` / `@shofer/core`, so a
+  platform tool can serialize them into a bundle regardless of the flag.
+
 ---
 
 ## 11. Mode Details
