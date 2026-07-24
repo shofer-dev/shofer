@@ -217,8 +217,8 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		this.options = options
 		// Mark this process as CLI runtime so extension code can apply
 		// CLI-specific behavior without affecting VS Code desktop usage.
-		this.previousCliRuntimeEnv = process.env.ROO_CLI_RUNTIME
-		process.env.ROO_CLI_RUNTIME = "1"
+		this.previousCliRuntimeEnv = process.env.SHOFER_CLI_RUNTIME
+		process.env.SHOFER_CLI_RUNTIME = "1"
 
 		// Enable file-based debug logging only when --debug is passed.
 		if (options.debug) {
@@ -899,9 +899,9 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 
 		// Restore previous CLI runtime marker for process hygiene in tests.
 		if (this.previousCliRuntimeEnv === undefined) {
-			delete process.env.ROO_CLI_RUNTIME
+			delete process.env.SHOFER_CLI_RUNTIME
 		} else {
-			process.env.ROO_CLI_RUNTIME = this.previousCliRuntimeEnv
+			process.env.SHOFER_CLI_RUNTIME = this.previousCliRuntimeEnv
 		}
 	}
 }
