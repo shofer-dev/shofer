@@ -4846,7 +4846,7 @@ export class ShoferProvider
 					return false
 				}
 			})(),
-			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
+			debug: this.contextProxy.getValue("debug") ?? false,
 			// Seeded from the focused workflow task (if any); thereafter refreshed
 			// as deltas via postConfigUpdate from WorkflowTask.notifySlangEditor().
 			workflowVizHtml: _wfVizSnap?.html,

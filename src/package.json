@@ -550,11 +550,6 @@
 					"maximum": 200,
 					"description": "%settings.codeIndex.embeddingBatchSize.description%"
 				},
-				"shofer.debug": {
-					"type": "boolean",
-					"default": false,
-					"description": "%settings.debug.description%"
-				},
 				"shofer.debugProxy.enabled": {
 					"type": "boolean",
 					"default": false,
