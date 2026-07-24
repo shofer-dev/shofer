@@ -286,6 +286,26 @@ from `package.json` `contributes.configuration.properties`.
 > rework `saveCodeIndexSettings` + `applySyncedSecrets` + `config-manager`. Both are larger
 > than the plan below and security-relevant; **scope that decision before touching the
 > read/write routing.** The naive full-blob approach is not safely implementable.
+>
+> **DEEPER blocker (verified 2026-07-24, second investigation) — the real prerequisite.**
+> Even the correct 25-LLM-key partition is unsafe as long as the codebase keeps **two
+> independently-mutable notions of "active profile"**: `getState()`/`buildApiHandler` read
+> the live `apiConfiguration` from the **`ContextProxy` cache** (`getProviderSettings()`),
+> and the proxy's `currentApiConfigName` is written **separately** from the blob's
+> (`upsertProviderProfile(activate=true)` and `setDefaultApiConfiguration` deliberately let
+> them diverge — see `ShoferProvider.ts:3454-3481,3648-3651`, reachable from
+> `SettingsView.tsx onUpsertConfig`). Sourcing profile secrets from the blob's _active
+> profile_ then yields, in the divergent state: writes landing in the **wrong** profile, and
+> on restart a **mismatched credential** (profile A's provider/model with profile B's key).
+> So Part B's true prerequisite is **unifying the proxy-vs-blob active-profile SoT** (the
+> in-code TODOs at `ShoferProvider.ts:3454-3458` and `importExport.ts:173-175` — the same
+> "collapse ProviderSettings into one backend" that Part D1 gestures at). Until the live
+> `apiConfiguration` comes from a single active-profile SoT, secrets cannot key off the blob
+> without desyncing from the non-secret half. Also: `ContextProxy.initialize()` runs
+> _before_ any `ProviderSettingsManager` exists (`extension.ts:233` vs `ShoferProvider`
+> ctor), so a naive in-proxy PSM would be a **second instance** with an unserialized
+> per-instance `_lock` → concurrent blob writes. **Do Part B only after the active-profile
+> unification.**
 
 API keys are stored in TWO places:
 
