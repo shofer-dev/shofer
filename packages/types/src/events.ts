@@ -36,6 +36,7 @@ export enum ShoferEventName {
 	// Task Execution
 	Message = "message",
 	TaskModeSwitched = "taskModeSwitched",
+	TaskTitleChanged = "taskTitleChanged",
 	TaskAskResponded = "taskAskResponded",
 	TaskUserMessage = "taskUserMessage",
 	QueuedMessagesUpdated = "queuedMessagesUpdated",
@@ -117,6 +118,7 @@ export const shoferEventsSchema = z.object({
 		}),
 	]),
 	[ShoferEventName.TaskModeSwitched]: z.tuple([z.string(), z.string()]),
+	[ShoferEventName.TaskTitleChanged]: z.tuple([z.string(), z.string()]),
 	[ShoferEventName.TaskAskResponded]: z.tuple([z.string()]),
 	[ShoferEventName.TaskUserMessage]: z.tuple([z.string()]),
 	[ShoferEventName.QueuedMessagesUpdated]: z.tuple([z.string(), z.array(queuedMessageSchema)]),
@@ -244,6 +246,11 @@ export const taskEventSchema = z.discriminatedUnion("eventName", [
 	z.object({
 		eventName: z.literal(ShoferEventName.TaskModeSwitched),
 		payload: shoferEventsSchema.shape[ShoferEventName.TaskModeSwitched],
+		taskId: z.number().optional(),
+	}),
+	z.object({
+		eventName: z.literal(ShoferEventName.TaskTitleChanged),
+		payload: shoferEventsSchema.shape[ShoferEventName.TaskTitleChanged],
 		taskId: z.number().optional(),
 	}),
 	z.object({

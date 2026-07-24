@@ -337,6 +337,7 @@ export type TaskEvents = {
 	// Task Execution
 	[ShoferEventName.Message]: [{ action: "created" | "updated"; message: ShoferMessage }]
 	[ShoferEventName.TaskModeSwitched]: [taskId: string, mode: string]
+	[ShoferEventName.TaskTitleChanged]: [taskId: string, title: string]
 	[ShoferEventName.TaskAskResponded]: []
 	[ShoferEventName.TaskUserMessage]: [taskId: string]
 	[ShoferEventName.QueuedMessagesUpdated]: [taskId: string, messages: QueuedMessage[]]

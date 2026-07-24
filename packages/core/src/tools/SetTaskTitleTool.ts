@@ -6,7 +6,7 @@
  * shows in the chat UI for visibility.
  */
 
-import { type ToolUse } from "@shofer/types"
+import { ShoferEventName, type ToolUse } from "@shofer/types"
 import { Task } from "../task/Task.js"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
@@ -85,6 +85,13 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 
 				// Also update managed task name if this is a managed task
 				provider.renameManagedTask(task.taskId, cleanTitle)
+
+				// Surface the new title to any controller driving this task over the
+				// AgentApi (a headless `shofer serve` node — the persisted name lives
+				// in the executor's task store otherwise, invisible to the caller).
+				// The API bridges this task event onto its own emitter, which the
+				// transport forwards (mirrors TaskModeSwitched).
+				task.emit(ShoferEventName.TaskTitleChanged, task.taskId, cleanTitle)
 			} catch (error) {
 				task.recordToolError("set_task_title")
 				task.didToolFailInCurrentTurn = true

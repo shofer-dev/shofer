@@ -696,6 +696,10 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 				}
 			})
 
+			task.on(ShoferEventName.TaskTitleChanged, (taskId, title) => {
+				this.emit(ShoferEventName.TaskTitleChanged, taskId, title)
+			})
+
 			task.on(ShoferEventName.TaskModeSwitched, (taskId, mode) => {
 				this.emit(ShoferEventName.TaskModeSwitched, taskId, mode)
 			})
