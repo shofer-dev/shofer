@@ -32,6 +32,7 @@ describe("SetTaskTitleTool — parent-locked titles", () => {
 			consecutiveMistakeCount: 0,
 			recordToolError: vi.fn(),
 			didToolFailInCurrentTurn: false,
+			emit: vi.fn(),
 			sayAndCreateMissingParamError: vi.fn().mockResolvedValue("missing param"),
 			providerRef: { deref: () => providerObj },
 			...overrides,
@@ -63,6 +64,24 @@ describe("SetTaskTitleTool — parent-locked titles", () => {
 		expect(task.consecutiveMistakeCount).toBe(0)
 	})
 
+	it("refuses to rename a task whose title was set by the user", async () => {
+		const userTitledProvider = buildProvider({
+			getTaskWithId: vi
+				.fn()
+				.mockResolvedValue({ historyItem: { id: "task-1", name: "user title", titleSource: "user" } }),
+		})
+		const task = buildTask({ providerRef: { deref: () => userTitledProvider } })
+		const cbs = buildCallbacks()
+
+		await tool.execute({ title: "Agent override" }, task, cbs)
+
+		expect(cbs.pushToolResult).toHaveBeenCalledWith(
+			expect.stringContaining("set by the user and cannot be changed"),
+		)
+		expect(userTitledProvider.updateTaskHistory).not.toHaveBeenCalled()
+		expect(userTitledProvider.renameManagedTask).not.toHaveBeenCalled()
+	})
+
 	it("renames normally when the title is not locked", async () => {
 		const task = buildTask({ nameLocked: false })
 		const provider = task.providerRef.deref()
@@ -70,8 +89,10 @@ describe("SetTaskTitleTool — parent-locked titles", () => {
 
 		await tool.execute({ title: "My new title" }, task, cbs)
 
-		expect(provider.updateTaskHistory).toHaveBeenCalledWith(expect.objectContaining({ name: "My new title" }))
-		expect(provider.renameManagedTask).toHaveBeenCalledWith("task-1", "My new title")
+		expect(provider.updateTaskHistory).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "My new title", titleSource: "agent" }),
+		)
+		expect(provider.renameManagedTask).toHaveBeenCalledWith("task-1", "My new title", "agent")
 		expect(cbs.pushToolResult).toHaveBeenCalledWith(expect.stringContaining('Task title set to: "My new title"'))
 	})
 })

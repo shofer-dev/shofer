@@ -6443,13 +6443,15 @@ export class ShoferProvider
 	/**
 	 * Rename a managed task.
 	 */
-	public renameManagedTask(taskId: string, name: string): void {
+	public renameManagedTask(taskId: string, name: string, source: "user" | "agent" = "user"): void {
 		this.taskManager.renameManagedTask(taskId, name)
 
-		// Persist the rename
+		// Persist the rename, recording who set it. A webview/user rename defaults
+		// to 'user' (sticky against set_task_title); the agent's set_task_title
+		// passes 'agent'.
 		this.getTaskWithId(taskId)
 			.then(({ historyItem }) => {
-				this.updateTaskHistory({ ...historyItem, name })
+				this.updateTaskHistory({ ...historyItem, name, titleSource: source })
 			})
 			.catch((error) => {
 				this.log(`Failed to persist task rename: ${error}`)

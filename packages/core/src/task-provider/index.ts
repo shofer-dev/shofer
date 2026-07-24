@@ -120,8 +120,12 @@ export interface TaskProviderLike<TTask = TaskLike> {
 	getSkillsManager(): unknown
 	/** Resolve a filesystem path to a webview-safe URI string (for image tools). */
 	convertToWebviewUri(filePath: string): string
-	/** Rename a managed task in the provider's task history. */
-	renameManagedTask(taskId: string, name: string): void
+	/**
+	 * Rename a managed task in the provider's task history. `source` records who
+	 * set the title ('user' rename vs the agent's set_task_title) so a human
+	 * rename is not overwritten by the agent — see HistoryItem.titleSource.
+	 */
+	renameManagedTask(taskId: string, name: string, source?: "user" | "agent"): void
 	/**
 	 * Schedule a debounced "changed files" refresh for the given task's
 	 * FileChangesPanel. Optional: headless hosts have no such panel.

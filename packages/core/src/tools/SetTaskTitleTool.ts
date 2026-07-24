@@ -81,10 +81,24 @@ export class SetTaskTitleTool extends BaseTool<"set_task_title"> {
 			// Get the current task's history item and update its name
 			try {
 				const { historyItem } = await provider.getTaskWithId(task.taskId)
-				await provider.updateTaskHistory({ ...historyItem, name: cleanTitle })
+
+				// Never overwrite a deliberate human rename (titleSource 'user') —
+				// the parallel of L2's title_source guard. Not a usage mistake, so
+				// the consecutive-mistake counter is left untouched (as with
+				// nameLocked above).
+				if (historyItem.titleSource === "user") {
+					task.recordToolError("set_task_title")
+					task.didToolFailInCurrentTurn = true
+					pushToolResult(
+						"Error: This task's title was set by the user and cannot be changed with set_task_title.",
+					)
+					return
+				}
+
+				await provider.updateTaskHistory({ ...historyItem, name: cleanTitle, titleSource: "agent" })
 
 				// Also update managed task name if this is a managed task
-				provider.renameManagedTask(task.taskId, cleanTitle)
+				provider.renameManagedTask(task.taskId, cleanTitle, "agent")
 
 				// Surface the new title to any controller driving this task over the
 				// AgentApi (a headless `shofer serve` node — the persisted name lives

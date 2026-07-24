@@ -117,6 +117,15 @@ export const historyItemSchema = z.object({
 	 * is re-applied on rehydration.
 	 */
 	nameLocked: z.boolean().optional(),
+	/**
+	 * Who last set `name`: 'default' (untitled — the agent may name it), 'agent'
+	 * (`set_task_title`, kept current as the goal shifts), or 'user' (a
+	 * deliberate human rename). When 'user', `set_task_title` refuses to
+	 * overwrite it — the parallel of L2's tasks.title_source. `nameLocked`
+	 * (parent-set) is a separate, stronger lock; this tracks the *source* so a
+	 * user rename is sticky without being parent-locked.
+	 */
+	titleSource: z.enum(["default", "user", "agent"]).optional(),
 	lastActiveTs: z.number().optional(), // Track when last switched to
 	/**
 	 * Current execution state — both lifecycle and (when completed) rating.
