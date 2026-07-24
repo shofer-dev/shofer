@@ -105,7 +105,13 @@ describe("ShoferApiAgent (§11)", () => {
 		const agent = new ShoferApiAgent(api)
 		await agent.sendMessage("t1", "go")
 		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).resumeTask).toHaveBeenCalledWith("t1")
-		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).sendMessage).toHaveBeenCalledWith("go")
+		// Delivery is task-addressed — (text, images, taskId) — never current-task-centric,
+		// which raced concurrent tasks and dropped messages on headless hosts.
+		expect((api as unknown as Record<string, ReturnType<typeof vi.fn>>).sendMessage).toHaveBeenCalledWith(
+			"go",
+			undefined,
+			"t1",
+		)
 	})
 
 	it("cancelTask cancels the current task", async () => {
