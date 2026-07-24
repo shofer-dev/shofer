@@ -443,11 +443,38 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
 - The Settings webview gains a **scope selector** (global/user/project) and persists to that
   scope's file, honoring the save-gating rules (AGENTS.md "Settings & configuration").
 
+> **Status (E4 — DONE, write-through only; scope selector SKIPPED).** `ContextProxy.setValue`
+> now mirrors a globalSettings write (not secrets, not provider-only keys, not the
+> `taskHistory` pass-through blob) into the **user** scope's `~/.shofer/settings.json` via
+> `writeScopeSetting` in [`layeredSettingsLoader.ts`](../src/core/config/layeredSettingsLoader.ts),
+> then refreshes the E3 overlay so `getValue` reflects it. The write is atomic (temp +
+> rename), key-order-stable, and serialized per file (an in-process lock) so a bulk
+> `setValues` cannot lose keys to a read-modify-write race. It is **strictly opt-in**: the
+> mirror only fires when `~/.shofer/settings.json` already exists (materialized by an
+> E5 import or a future migration seed), so a deployment that has not adopted file-backed
+> settings keeps byte-for-byte the old `globalState`-only behavior and no file is created
+> under a user's home unbidden. A key locked by the global scope's `locked.json` is **not**
+> persisted — the read overlay already makes the global value final, so a shadowed user
+> entry would only mislead (`writeScopeSetting` returns `locked: true` and skips it). The
+> **scope selector UI is not built** (would be a large webview change): writes always target
+> the user scope for now; project-scope writes remain future work.
+
 ### E5. Export/import = zip/unzip `.shofer/`
 
 - Replace `exportSettings`/`importSettingsFromPath` in
   [`importExport.ts`](../src/core/config/importExport.ts) with zip of a scope's `.shofer/`
   and unzip into a scope root. Secrets stay out of the zip (Part B); applied out of band.
+
+> **Status (E5 — DONE).** `exportScopeArchive`/`importScopeArchive`/`listScopeArchiveEntries`
+> in [`scope-archive.ts`](../packages/core/src/config/scope-archive.ts) archive a scope's
+> `.shofer/` tree to a gzipped tar (`tar`, the archiver `@shofer/core` already vendors) and
+> unpack it into a scope root; host wrappers `exportScopeSettingsArchive` /
+> `importScopeSettingsArchive` in [`importExport.ts`](../src/core/config/importExport.ts)
+> default to the user scope. Secrets are out of the archive **by construction** — provider
+> keys live in `SecretStorage` (outside `.shofer/`) and `settings.json` references profiles
+> by name only. The JSON `exportSettings`/`importSettingsFromPath` path is now
+> **superseded** by the archive path but kept in place because existing commands still call
+> it (its removal is a later sweep, once callers move to the archive wrappers).
 
 ### E6. Subsume `autoImportSettingsPath`
 

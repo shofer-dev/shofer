@@ -26,7 +26,14 @@ import { TelemetryService } from "@shofer/telemetry"
 import { configLog as logger, getWorkspacePath, type LayeredSettings } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 
-import { loadLayeredOverlay, resolveScopeRoots } from "./layeredSettingsLoader"
+import {
+	loadLayeredOverlay,
+	loadLockedManifest,
+	resolveScopeRoots,
+	scopeSettingsFileExists,
+	writeScopeSetting,
+	type ScopeRoots,
+} from "./layeredSettingsLoader"
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -140,26 +147,75 @@ export class ContextProxy {
 	 */
 	public async refreshLayeredOverlay(): Promise<void> {
 		try {
-			let workspaceFolder: string | undefined
-			try {
-				workspaceFolder = getWorkspacePath() || undefined
-			} catch {
-				workspaceFolder = undefined
-			}
-
-			const roots = resolveScopeRoots({
-				globalStorageFsPath: this.originalContext.globalStorageUri?.fsPath,
-				homeDir: os.homedir(),
-				workspaceFolder,
-			})
-
-			this.layeredOverlay = await loadLayeredOverlay(roots)
+			this.layeredOverlay = await loadLayeredOverlay(this.resolveScopeRoots())
 		} catch (error) {
 			logger.error(
 				`Error loading layered .shofer settings overlay: ${error instanceof Error ? error.message : String(error)}`,
 			)
 			this.layeredOverlay = {}
 		}
+	}
+
+	/**
+	 * Resolve the three `.shofer/` scope roots from the host's base paths. Shared
+	 * by the read overlay ({@link refreshLayeredOverlay}) and the write-through
+	 * ({@link writeThroughToUserScope}) so both agree on where each scope lives.
+	 */
+	private resolveScopeRoots(): ScopeRoots {
+		let workspaceFolder: string | undefined
+		try {
+			workspaceFolder = getWorkspacePath() || undefined
+		} catch {
+			workspaceFolder = undefined
+		}
+
+		return resolveScopeRoots({
+			globalStorageFsPath: this.originalContext.globalStorageUri?.fsPath,
+			homeDir: os.homedir(),
+			workspaceFolder,
+		})
+	}
+
+	/**
+	 * Part E4 write-through: mirror a globalSettings write into the **user**
+	 * scope's `~/.shofer/settings.json` so the file layer is authoritative on the
+	 * next read, then refresh the overlay so `getValue` reflects it immediately.
+	 *
+	 * Gated on the user file already existing ({@link scopeSettingsFileExists}):
+	 * the layered file path is strictly opt-in, so a deployment that has not
+	 * materialized `~/.shofer/settings.json` (every current install, and every
+	 * unit test that does not isolate `$HOME`) keeps pure `globalState` behavior
+	 * and this method is a no-op. A key locked by the global scope's `locked.json`
+	 * is not persisted (the read overlay makes global win anyway).
+	 */
+	private async writeThroughToUserScope<K extends ShoferSettingsKey>(
+		key: K,
+		value: ShoferSettings[K],
+	): Promise<void> {
+		const roots = this.resolveScopeRoots()
+		if (!roots.user || !(await scopeSettingsFileExists(roots.user))) {
+			return
+		}
+
+		const manifest = await loadLockedManifest(roots.global)
+		const result = await writeScopeSetting(roots.user, key as string, value, manifest)
+		if (result.persisted) {
+			await this.refreshLayeredOverlay()
+		}
+	}
+
+	/**
+	 * A globalSettings key eligible for user-scope write-through: a non-secret key
+	 * that lives in `globalSettingsSchema` (so a subsequent read parses it) and is
+	 * not a large pass-through blob (`taskHistory`) that has no business in a
+	 * hand-editable settings file.
+	 */
+	private isWriteThroughKey(key: ShoferSettingsKey): boolean {
+		return (
+			!isSecretStateKey(key) &&
+			!isPassThroughStateKey(key) &&
+			(GLOBAL_SETTINGS_KEYS as readonly string[]).includes(key as string)
+		)
 	}
 
 	/**
@@ -564,15 +620,26 @@ export class ContextProxy {
 	 * ShoferSettings
 	 */
 
-	// TODO(Part E4): setValue still writes to globalState/secrets, not to a
-	// scope's `.shofer/settings.json`. Once the Settings UI grows a scope
-	// selector, writes go to the user/project file and a write against a
-	// global-locked key must be refused. Until then this is a pure read-side
-	// overlay (getValue) and writes remain globalState-backed.
+	// Part E4: secrets and provider profiles are untouched here — secrets still go
+	// to `SecretStorage`, provider-only keys still to `globalState`. For a
+	// globalSettings key we keep the `globalState` write (the hot cache) AND, when
+	// the user scope has opted into file-backed settings, mirror it into
+	// `~/.shofer/settings.json` so the layered file layer becomes authoritative on
+	// the next read. A global-locked key is not mirrored (the overlay makes the
+	// global value win regardless). The scope selector in the Settings UI (writing
+	// to user vs project) remains future work — see todos/config-cleanup.md.
 	public async setValue<K extends ShoferSettingsKey>(key: K, value: ShoferSettings[K]) {
-		return isSecretStateKey(key)
-			? this.storeSecret(key as SecretStateKey, value as string)
-			: this.updateGlobalState(key as GlobalStateKey, value)
+		if (isSecretStateKey(key)) {
+			return this.storeSecret(key as SecretStateKey, value as string)
+		}
+
+		const result = this.updateGlobalState(key as GlobalStateKey, value)
+
+		if (this.isWriteThroughKey(key)) {
+			await this.writeThroughToUserScope(key, value)
+		}
+
+		return result
 	}
 
 	public getValue<K extends ShoferSettingsKey>(key: K): ShoferSettings[K] {

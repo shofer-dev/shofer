@@ -1,4 +1,4 @@
-import { safeWriteJson } from "@shofer/core"
+import { safeWriteJson, exportScopeArchive, importScopeArchive } from "@shofer/core"
 import os from "os"
 import * as path from "path"
 import fs from "fs/promises"
@@ -289,6 +289,46 @@ export const exportSettings = async ({ providerSettingsManager, contextProxy }: 
 		configLog.error("Failed to export settings:", e)
 		// Don't re-throw - the UI will handle showing error messages
 	}
+}
+
+/**
+ * The default (user) scope's `.shofer/` root — `~/.shofer`, the writable
+ * per-user scope. Kept in sync with `resolveScopeRoots` in
+ * {@link file://./layeredSettingsLoader.ts}.
+ */
+function defaultUserScopeRoot(): string {
+	return path.join(os.homedir(), ".shofer")
+}
+
+/**
+ * Part E5 — export = archive a scope's `.shofer/` tree.
+ *
+ * Zips (gzipped tar) the chosen scope's `.shofer/` directory into `destPath`,
+ * defaulting to the writable **user** scope (`~/.shofer`). Secrets are **not** in
+ * the archive: provider keys live in `SecretStorage` (outside `.shofer/`) and
+ * `settings.json` references profiles by name only — see
+ * {@link file://../../../packages/core/src/config/scope-archive.ts}.
+ *
+ * This supersedes the JSON {@link exportSettings} path (which hand-assembles
+ * `{ providerProfiles, globalSettings }` and embeds secret material). The JSON
+ * variants are kept for now because existing commands still call them.
+ */
+export async function exportScopeSettingsArchive(destPath: string, scopeRoot: string = defaultUserScopeRoot()) {
+	const dirname = path.dirname(destPath)
+	await fs.mkdir(dirname, { recursive: true })
+	await exportScopeArchive(scopeRoot, destPath)
+}
+
+/**
+ * Part E5 — import = unpack a scope archive into a scope root.
+ *
+ * Extracts an archive produced by {@link exportScopeSettingsArchive} into the
+ * chosen scope's `.shofer/` directory (default: the user scope). Any secrets are
+ * applied out of band, never from the archive. Supersedes
+ * {@link importSettingsFromPath}.
+ */
+export async function importScopeSettingsArchive(archivePath: string, scopeRoot: string = defaultUserScopeRoot()) {
+	await importScopeArchive(archivePath, scopeRoot)
 }
 
 /**
