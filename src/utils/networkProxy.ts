@@ -12,6 +12,7 @@
 
 import * as vscode from "vscode"
 import { Package } from "@shofer/core"
+import { getHost } from "@shofer/types"
 import { utilLog } from "@shofer/core"
 
 /**
@@ -198,11 +199,11 @@ export function getProxyConfig(): ProxyConfig {
 		}
 	}
 
-	const config = vscode.workspace.getConfiguration(Package.name)
-	const enabled = Boolean(config.get<unknown>("debugProxy.enabled"))
-	const rawServerUrl = config.get<unknown>("debugProxy.serverUrl")
+	const cfg = getHost().config
+	const enabled = Boolean(cfg.get<unknown>("shofer", "debugProxy.enabled", undefined))
+	const rawServerUrl = cfg.get<unknown>("shofer", "debugProxy.serverUrl", undefined)
 	const serverUrl = typeof rawServerUrl === "string" && rawServerUrl.trim() ? rawServerUrl.trim() : defaultServerUrl
-	const tlsInsecure = Boolean(config.get<unknown>("debugProxy.tlsInsecure"))
+	const tlsInsecure = Boolean(cfg.get<unknown>("shofer", "debugProxy.tlsInsecure", undefined))
 
 	// Debug mode only.
 	const isDebugMode = extensionContext.extensionMode === vscode.ExtensionMode.Development

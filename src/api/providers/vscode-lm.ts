@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import OpenAI from "openai"
 import { v7 as uuidv7 } from "uuid"
 
-import { type ModelInfo, openAiModelInfoSaneDefaults } from "@shofer/types"
+import { getHost, type ModelInfo, openAiModelInfoSaneDefaults } from "@shofer/types"
 
 import type { ApiHandlerOptions } from "@shofer/core"
 import { SELECTOR_SEPARATOR, stringifyVsCodeLmModelSelector } from "../../shared/vsCodeSelectorUtils"
@@ -83,7 +83,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 	private static isLlmProviderIntegrationEnabled(): boolean {
 		if (VsCodeLmHandler._llmProviderIntegrationEnabled === undefined) {
 			VsCodeLmHandler._llmProviderIntegrationEnabled =
-				vscode.workspace.getConfiguration("shofer").get<boolean>("enableLlmProviderIntegration", false) ?? false
+				getHost().config.get<boolean>("shofer", "enableLlmProviderIntegration", false) ?? false
 		}
 		return VsCodeLmHandler._llmProviderIntegrationEnabled
 	}

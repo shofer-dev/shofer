@@ -38,6 +38,8 @@ import type {
 import { DIFF_VIEW_URI_SCHEME } from "@shofer/types"
 
 import { ensureSettingsDirectoryExists } from "../utils/globalContext"
+import { ContextProxy } from "../core/config/ContextProxy"
+import type { ShoferSettings } from "@shofer/types"
 
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
 import { Terminal } from "../integrations/terminal/Terminal"
@@ -108,8 +110,43 @@ class NodeFileSystem implements HostFileSystem {
 	}
 }
 
+// Settings migrated from `shofer.*` VS Code config into ContextProxy/globalState —
+// the single source of truth (todos/config-cleanup.md Part A). This seam is how
+// @shofer/core reads config, so rerouting HERE migrates every core consumer at once
+// without core importing ContextProxy (Core Self-Sufficiency Rule). Maps the VS Code
+// config key → globalSettings key (identical except the dotted `debugProxy.*`, which
+// flatten). The package.json `contributes.configuration` rows are removed per key.
+const MIGRATED_SHOFER_CONFIG_KEYS: Record<string, keyof ShoferSettings> = {
+	apiRequestTimeout: "apiRequestTimeout",
+	maximumIndexedFilesForFileSearch: "maximumIndexedFilesForFileSearch",
+	newTaskRequireTodos: "newTaskRequireTodos",
+	enableCodeActions: "enableCodeActions",
+	enableLlmProviderIntegration: "enableLlmProviderIntegration",
+	debug: "debug",
+	vsCodeLmModelSelector: "vsCodeLmModelSelector",
+	"debugProxy.enabled": "debugProxyEnabled",
+	"debugProxy.serverUrl": "debugProxyServerUrl",
+	"debugProxy.tlsInsecure": "debugProxyTlsInsecure",
+}
+
 class VsCodeConfig implements HostConfig {
 	get<T>(section: string, key: string, defaultValue: T): T {
+		// Migrated shofer settings resolve from ContextProxy/globalState. Fall back to
+		// VS Code config when ContextProxy is not yet initialized (early activation,
+		// bare-host tests) or the key is unset there.
+		if (section === "shofer") {
+			const gKey = MIGRATED_SHOFER_CONFIG_KEYS[key]
+			if (gKey) {
+				try {
+					const value = ContextProxy.instance.getValue(gKey)
+					if (value !== undefined) {
+						return value as T
+					}
+				} catch {
+					// ContextProxy not initialized — fall through to VS Code config.
+				}
+			}
+		}
 		return vscode.workspace.getConfiguration(section).get<T>(key, defaultValue)
 	}
 }

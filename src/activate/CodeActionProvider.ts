@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import { CodeActionName, CodeActionId } from "@shofer/types"
-import { Package } from "@shofer/core"
+import { getHost } from "@shofer/types"
 
 import { getCodeActionCommand } from "@shofer/core"
 import { EditorUtils } from "../integrations/editor/EditorUtils"
@@ -38,7 +38,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
 		context: vscode.CodeActionContext,
 	): vscode.ProviderResult<(vscode.CodeAction | vscode.Command)[]> {
 		try {
-			if (!vscode.workspace.getConfiguration(Package.name).get<boolean>("enableCodeActions", true)) {
+			if (!getHost().config.get<boolean>("shofer", "enableCodeActions", true)) {
 				return []
 			}
 
