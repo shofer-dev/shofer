@@ -261,6 +261,31 @@ from `package.json` `contributes.configuration.properties`.
 
 ## Part B: Remove individual SecretStorage keys — eliminate blob duplication
 
+> ✅ **DONE (`1a72eef12`).** The earlier "⛔ BLOCKED" notes below were a **misdiagnosis**:
+> the proxy-vs-blob "divergence" they treated as a bug to unify is the **by-design
+> distinction between the name-only DEFAULT profile and the per-Task, in-memory CURRENT
+> profile** (see AGENTS.md "Default profile vs. current profile"). With that understood,
+> Part B was implemented WITHOUT changing the default semantics:
+>
+> - `PROFILE_SECRET_KEYS` = `SECRET_STATE_KEYS` − `SYNCED_SECRET_KEYS` − `openRouterImageApiKey`
+>   (the 25 LLM keys). Those are **no longer persisted as individual `SecretStorage`
+>   entries** — the profiles blob is their sole persisted store. The **8 global keys** (7
+>   code-index `SYNCED_SECRET_KEYS` + `openRouterImageApiKey`) **stay individual** (they are
+>   not per-profile).
+> - `getSecret` stays sync; `secretCache` holds the **current** profile's secrets, sourced
+>   from that profile in the blob (threaded via the single PSM, attached post-construction —
+>   no second PSM instance). A one-time migration prunes stale individual entries; import
+>   writes profile keys to the blob only.
+> - Restart identity: neither the default name nor the blob's `currentApiConfigName`
+>   reliably identifies the _live_ profile (two divergence flows exist), so an internal
+>   raw-`globalState` marker `liveApiConfigProfileName` (outside `globalSettingsSchema`,
+>   consistent with the ContextProxy exemption) records the live profile at the single
+>   load choke point and is read on restart to source that exact profile's secrets.
+> - **458 tests green** (incl. a test proving `setDefaultApiConfiguration` stays name-only
+>   and does not mutate live `apiConfiguration`, across a reload).
+>
+> The plan text below is retained for historical context; it is superseded by the above.
+
 > ⛔ **BLOCKED — needs a prerequisite design decision (verified 2026-07-24).** The plan
 > below assumes every secret lives in the active provider profile. It does **not** for
 > **8 of 32 keys**, so routing them through the blob would lose or misroute credentials:
@@ -497,6 +522,36 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
 - "Load on start" = read the global `.shofer/` unpacked at the RO root. Keep only a thin
   bootstrap resolving the global root from `SHOFER_GLOBAL_DIR` (default = the extension
   global-storage `.shofer/`), per D2. The SaaS sets it to the RO ConfigMap mount.
+
+---
+
+## Part F (proposed): plugins as `.shofer/` declarations — "declare, don't vendor"
+
+Extends the `.shofer/` model to plugins. **Plugin _code_ is already `.shofer/`-hosted**
+(`PLUGINS.md` discovery: global `~/.shofer/plugins/<name>/`, project
+`<ws>/.shofer/plugins/<name>/`; bundled plugins ship in the extension). **Plugin _config_
+(`pluginConfigs`) is already routed through `.shofer/settings.json`** via Part E (it's a
+`globalSettings` key). The gap is a **declaration** of _which_ plugins, _where from_, and
+_which version_ — there is no plugin lockfile today (a plugin is just an installed dir with
+its own `plugin.json`).
+
+Add a declarative manifest — `.shofer/plugins.json` (or a `plugins` block in `settings.json`)
+— per plugin: **`{ name, source, version, config }`** where `source` is a path today and a
+**marketplace ref later** (`marketplace:<id>@<ver>`, URL, or local path). A resolver
+installs the binary from `source@version` into a **cache/install dir** (e.g.
+`globalStorage/plugins/<name>@<version>/`) — the **bytes are NOT committed to `.shofer/`**;
+only the declaration is. So `.shofer/` stays text-only, reproducible, and zip/overlay-able.
+
+**Governance payoff (reuses the locked-vs-default engine):** the RO **global** `.shofer/`
+can declare _and lock_ the plugin set + versions + config (`locked.json`:
+`plugins/<name>`); binaries fetch from an org-controlled marketplace/source; a user/project
+may only _add_ unlocked plugins, never override the mandated ones. "These plugins, these
+versions, this config — non-negotiable."
+
+Scope: new `.shofer/plugins.json` schema (Zod, versioned) + a resolver/installer (cache dir,
+source→version fetch; marketplace source type is a later add) + wire the loader to read the
+declaration and the co-located config. Config already flows via Part E; per-plugin
+`config.json` co-location inside the plugin dir is an optional refinement.
 
 ---
 
