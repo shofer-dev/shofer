@@ -86,6 +86,9 @@ import { getTheme } from "../../integrations/theme/getTheme"
 import WorkspaceTracker from "../../integrations/workspace/WorkspaceTracker"
 
 import { McpHub } from "@shofer/core"
+import { resolveScopeRoots } from "../config/layeredSettingsLoader"
+import { loadPluginDeclarations, computePluginDeclarationWiring } from "../config/pluginDeclarationLoader"
+import type { PluginDir } from "@shofer/core"
 import {
 	PluginManager,
 	createNodePluginFs,
@@ -2151,7 +2154,7 @@ export class ShoferProvider
 		const stateKey = "shofer.plugins.enabledPlugins"
 		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
 		const cwd = this.cwd
-		const pluginDirs = [
+		const pluginDirs: PluginDir[] = [
 			// First-party bundled plugins shipped inside the extension (design §7 —
 			// bundled scope). Copied by esbuild into `<extensionPath>/dist/plugins`
 			// (mirroring the tree-sitter-wasm copy). Scanned first ⇒ lowest precedence,
@@ -2161,6 +2164,48 @@ export class ShoferProvider
 			{ dir: path.join(getGlobalShoferDirectory(), "plugins"), scope: "global" as const },
 			...(cwd ? [{ dir: path.join(cwd, ".shofer", "plugins"), scope: "project" as const }] : []),
 		]
+
+		// Part F — `.shofer/plugins.json` declarations. Read the three scopes' plugin
+		// declarations (+ the global scope's lock manifest), merge, resolve each declared
+		// `source@version` into the content-addressed plugin cache, and fold the results
+		// into discovery: append each resolved cache dir (so the manager discovers it),
+		// seed its declared config, and enable it. Purely additive — with no plugins.json
+		// anywhere this resolves nothing and behavior is byte-for-byte as before. Isolated
+		// in try/catch so a declaration failure never blocks manager construction.
+		try {
+			const roots = resolveScopeRoots({
+				globalStorageFsPath: this.contextProxy.globalStorageUri.fsPath,
+				homeDir: os.homedir(),
+				workspaceFolder: cwd,
+			})
+			// Distinct from the per-plugin STORAGE dir (`<globalStorage>/plugins`) — this
+			// holds the resolver's materialized `<name>@<version>` plugin trees.
+			const cacheBaseDir = path.join(this.contextProxy.globalStorageUri.fsPath, "plugins-cache")
+			const { resolved, manifest, errors } = await loadPluginDeclarations(roots, cacheBaseDir)
+			for (const message of errors) {
+				this.log(`[plugins] declaration resolve error: ${message}`)
+			}
+			if (resolved.length > 0) {
+				const existingConfigs =
+					(this.contextProxy.getValue("pluginConfigs") as
+						| Record<string, Record<string, unknown>>
+						| undefined) ?? {}
+				const existingEnabled = this.context.globalState.get<string[]>(stateKey) ?? []
+				const wiring = computePluginDeclarationWiring(resolved, manifest, existingConfigs, existingEnabled)
+				pluginDirs.push(...wiring.pluginDirs)
+				// Persist BEFORE constructing the manager so `discover()` reads the enabled
+				// set and `getPluginConfigs()` reads the seeded config on this same build.
+				if (wiring.pluginConfigsChanged) {
+					await this.contextProxy.setValue("pluginConfigs", wiring.pluginConfigs)
+				}
+				if (wiring.enabledChanged) {
+					await this.context.globalState.update(stateKey, wiring.enabledPlugins)
+				}
+			}
+		} catch (error) {
+			this.log(`[plugins] failed to load .shofer/plugins.json declarations: ${String(error)}`)
+		}
+
 		const manager = new PluginManager({
 			fs: createNodePluginFs(),
 			pluginDirs,
