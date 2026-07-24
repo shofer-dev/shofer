@@ -1,6 +1,8 @@
 import type { Mock } from "vitest"
 import * as vscode from "vscode"
 
+import { createInMemoryHost, setHost, type InMemoryConfig } from "@shofer/types"
+
 import { EditorUtils } from "../../integrations/editor/EditorUtils"
 
 import { CodeActionProvider, TITLES } from "../CodeActionProvider"
@@ -46,8 +48,16 @@ describe("CodeActionProvider", () => {
 	let mockDocument: any
 	let mockRange: any
 	let mockContext: any
+	// enableCodeActions is read from the host config seam (getHost().config),
+	// not vscode.workspace.getConfiguration.
+	let hostConfig: InMemoryConfig
 
 	beforeEach(() => {
+		// Fresh host per test: unset keys fall back to the provider's defaults.
+		const host = createInMemoryHost()
+		hostConfig = host.config as InMemoryConfig
+		setHost(host)
+
 		provider = new CodeActionProvider()
 
 		mockDocument = {
@@ -100,29 +110,17 @@ describe("CodeActionProvider", () => {
 		})
 
 		it("should return empty array when enableCodeActions is disabled", () => {
-			// Mock the configuration to return false for enableCodeActions
-			const mockGet = vi.fn().mockReturnValue(false)
-			const mockGetConfiguration = vi.fn().mockReturnValue({
-				get: mockGet,
-			})
-			;(vscode.workspace.getConfiguration as Mock).mockReturnValue(mockGetConfiguration())
+			hostConfig.set("shofer", "enableCodeActions", false)
 
 			const actions = provider.provideCodeActions(mockDocument, mockRange, mockContext)
 
 			expect(actions).toEqual([])
-			expect(vscode.workspace.getConfiguration).toHaveBeenCalledWith("shofer")
-			expect(mockGet).toHaveBeenCalledWith("enableCodeActions", true)
 		})
 
 		it("should handle errors gracefully", () => {
 			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
-			// Reset the workspace mock to return true for enableCodeActions
-			const mockGet = vi.fn().mockReturnValue(true)
-			const mockGetConfiguration = vi.fn().mockReturnValue({
-				get: mockGet,
-			})
-			;(vscode.workspace.getConfiguration as Mock).mockReturnValue(mockGetConfiguration())
+			// enableCodeActions is unset on the fresh host, so it defaults to true.
 			;(EditorUtils.getEffectiveRange as Mock).mockImplementation(() => {
 				throw new Error("Test error")
 			})

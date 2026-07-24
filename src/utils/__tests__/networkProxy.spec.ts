@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import { createInMemoryHost, setHost, type InMemoryConfig } from "@shofer/types"
 import { initializeNetworkProxy, getProxyConfig, isProxyEnabled, isDebugMode } from "../networkProxy"
 
 // Mock global-agent
@@ -22,6 +23,9 @@ vi.mock("vscode", () => ({
 describe("networkProxy", () => {
 	let mockOutputChannel: vscode.OutputChannel
 	let mockConfig: { get: ReturnType<typeof vi.fn> }
+	// The settings themselves live on the host config seam (getHost().config),
+	// not vscode.workspace.getConfiguration — networkProxy reads them there.
+	let hostConfig: InMemoryConfig
 
 	// Helper to create mock context with configurable extensionMode
 	function createMockContext(mode: vscode.ExtensionMode = vscode.ExtensionMode.Production): vscode.ExtensionContext {
@@ -77,6 +81,11 @@ describe("networkProxy", () => {
 			mockConfig as unknown as vscode.WorkspaceConfiguration,
 		)
 
+		// Fresh host per test so config set by one test cannot leak into the next.
+		const host = createInMemoryHost()
+		hostConfig = host.config as InMemoryConfig
+		setHost(host)
+
 		mockOutputChannel = {
 			appendLine: vi.fn(),
 			append: vi.fn(),
@@ -91,11 +100,8 @@ describe("networkProxy", () => {
 
 	describe("initializeNetworkProxy", () => {
 		it("should initialize without proxy when debugProxy.enabled is false", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return false
-				if (key === "debugProxy.serverUrl") return "http://127.0.0.1:8888"
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", false)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://127.0.0.1:8888")
 			const context = createMockContext()
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -105,11 +111,8 @@ describe("networkProxy", () => {
 		})
 
 		it("should configure proxy environment variables when debugProxy.enabled is true", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
 			// Proxy is only applied in debug mode.
 			const context = createMockContext(vscode.ExtensionMode.Development)
 
@@ -120,12 +123,9 @@ describe("networkProxy", () => {
 		})
 
 		it("should not modify TLS settings in debug mode by default", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				if (key === "debugProxy.tlsInsecure") return false
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
+			hostConfig.set("shofer", "debugProxy.tlsInsecure", false)
 			const context = createMockContext(vscode.ExtensionMode.Development)
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -134,12 +134,9 @@ describe("networkProxy", () => {
 		})
 
 		it("should disable TLS verification when tlsInsecure is enabled (debug mode only)", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				if (key === "debugProxy.tlsInsecure") return true
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
+			hostConfig.set("shofer", "debugProxy.tlsInsecure", true)
 			const context = createMockContext(vscode.ExtensionMode.Development)
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -166,11 +163,8 @@ describe("networkProxy", () => {
 		})
 
 		it("should not throw in non-debug mode if proxy deps are not installed", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
 			const context = createMockContext(vscode.ExtensionMode.Production)
 
 			expect(() => {
@@ -192,12 +186,9 @@ describe("networkProxy", () => {
 		})
 
 		it("should return correct config after initialization", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://proxy.example.com:3128"
-				if (key === "debugProxy.tlsInsecure") return true
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://proxy.example.com:3128")
+			hostConfig.set("shofer", "debugProxy.tlsInsecure", true)
 			const context = createMockContext(vscode.ExtensionMode.Production)
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -210,10 +201,7 @@ describe("networkProxy", () => {
 		})
 
 		it("should trim whitespace from server URL", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.serverUrl") return "  http://proxy.example.com:3128  "
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.serverUrl", "  http://proxy.example.com:3128  ")
 			const context = createMockContext()
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -223,10 +211,7 @@ describe("networkProxy", () => {
 		})
 
 		it("should return default URL for empty server URL", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.serverUrl") return "   "
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.serverUrl", "   ")
 			const context = createMockContext()
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -238,10 +223,7 @@ describe("networkProxy", () => {
 
 	describe("isProxyEnabled", () => {
 		it("should return false when proxy is not enabled", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return false
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", false)
 			const context = createMockContext()
 
 			void initializeNetworkProxy(context, mockOutputChannel)
@@ -250,11 +232,8 @@ describe("networkProxy", () => {
 		})
 
 		it("should return true when proxy is enabled in debug mode", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
 			// Proxy is only applied in debug mode.
 			const context = createMockContext(vscode.ExtensionMode.Development)
 
@@ -292,12 +271,9 @@ describe("networkProxy", () => {
 
 	describe("security", () => {
 		it("should not disable TLS verification unless tlsInsecure is enabled", () => {
-			mockConfig.get.mockImplementation((key: string) => {
-				if (key === "debugProxy.enabled") return true
-				if (key === "debugProxy.serverUrl") return "http://localhost:8080"
-				if (key === "debugProxy.tlsInsecure") return false
-				return ""
-			})
+			hostConfig.set("shofer", "debugProxy.enabled", true)
+			hostConfig.set("shofer", "debugProxy.serverUrl", "http://localhost:8080")
+			hostConfig.set("shofer", "debugProxy.tlsInsecure", false)
 			const context = createMockContext(vscode.ExtensionMode.Development)
 
 			void initializeNetworkProxy(context, mockOutputChannel)
