@@ -1,3 +1,5 @@
+import * as os from "os"
+
 import type * as vscode from "vscode"
 import { ZodError } from "zod"
 
@@ -21,8 +23,10 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { configLog as logger } from "@shofer/core"
+import { configLog as logger, getWorkspacePath, type LayeredSettings } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
+
+import { loadLayeredOverlay, resolveScopeRoots } from "./layeredSettingsLoader"
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -44,6 +48,13 @@ export class ContextProxy {
 	private stateCache: GlobalState
 	private secretCache: SecretState
 	private _isInitialized = false
+
+	// Part E3: additive, read-only layered `.shofer/settings.json` overlay merged
+	// across the global/user/project scopes (see layeredSettingsLoader). A key
+	// present here wins over `globalState` in getValue; an empty overlay (the
+	// case whenever no `.shofer/settings.json` exists at any scope) leaves every
+	// read as pure `globalState` fallback, preserving current behavior exactly.
+	private layeredOverlay: LayeredSettings = {}
 
 	// H8: EventEmitter so consumers can subscribe to settings changes
 	// without polling.  Fires with the changed key whenever a global-state
@@ -107,7 +118,48 @@ export class ContextProxy {
 		// Migration: Clear old default condensing prompt so users get the improved v2 default
 		await this.migrateOldDefaultCondensingPrompt()
 
+		// Part E3: build the read-only layered `.shofer/settings.json` overlay.
+		// Additive — a failure or a total absence of files leaves it empty, so
+		// every getValue stays a pure globalState read.
+		await this.refreshLayeredOverlay()
+
 		this._isInitialized = true
+	}
+
+	/**
+	 * (Re)load the layered `.shofer/settings.json` overlay from disk (Part E3).
+	 *
+	 * Resolves the three scope roots from the host's base paths (env
+	 * `SHOFER_GLOBAL_DIR` / extension global-storage for global, `~/.shofer` for
+	 * user, the open workspace for project), reads + merges them, and caches the
+	 * effective overlay. Fails closed: any error leaves the overlay empty (or,
+	 * on a later refresh, unchanged is preferable but an empty overlay still only
+	 * degrades to the pre-overlay globalState fallback — never to wrong data).
+	 *
+	 * This never writes to disk; writes still flow to `globalState`/`setValue`.
+	 */
+	public async refreshLayeredOverlay(): Promise<void> {
+		try {
+			let workspaceFolder: string | undefined
+			try {
+				workspaceFolder = getWorkspacePath() || undefined
+			} catch {
+				workspaceFolder = undefined
+			}
+
+			const roots = resolveScopeRoots({
+				globalStorageFsPath: this.originalContext.globalStorageUri?.fsPath,
+				homeDir: os.homedir(),
+				workspaceFolder,
+			})
+
+			this.layeredOverlay = await loadLayeredOverlay(roots)
+		} catch (error) {
+			logger.error(
+				`Error loading layered .shofer settings overlay: ${error instanceof Error ? error.message : String(error)}`,
+			)
+			this.layeredOverlay = {}
+		}
 	}
 
 	/**
@@ -512,6 +564,11 @@ export class ContextProxy {
 	 * ShoferSettings
 	 */
 
+	// TODO(Part E4): setValue still writes to globalState/secrets, not to a
+	// scope's `.shofer/settings.json`. Once the Settings UI grows a scope
+	// selector, writes go to the user/project file and a write against a
+	// global-locked key must be refused. Until then this is a pure read-side
+	// overlay (getValue) and writes remain globalState-backed.
 	public async setValue<K extends ShoferSettingsKey>(key: K, value: ShoferSettings[K]) {
 		return isSecretStateKey(key)
 			? this.storeSecret(key as SecretStateKey, value as string)
@@ -519,9 +576,19 @@ export class ContextProxy {
 	}
 
 	public getValue<K extends ShoferSettingsKey>(key: K): ShoferSettings[K] {
-		return isSecretStateKey(key)
-			? (this.getSecret(key as SecretStateKey) as ShoferSettings[K])
-			: (this.getGlobalState(key as GlobalStateKey) as ShoferSettings[K])
+		if (isSecretStateKey(key)) {
+			return this.getSecret(key as SecretStateKey) as ShoferSettings[K]
+		}
+
+		// Part E3: an unlocked/locked key resolved by the layered `.shofer/`
+		// overlay wins over globalState. The overlay is empty whenever no
+		// `.shofer/settings.json` exists, so this branch is inert in every
+		// current deployment and the read falls through to globalState unchanged.
+		if (Object.prototype.hasOwnProperty.call(this.layeredOverlay, key)) {
+			return this.layeredOverlay[key as keyof LayeredSettings] as ShoferSettings[K]
+		}
+
+		return this.getGlobalState(key as GlobalStateKey) as ShoferSettings[K]
 	}
 
 	public getValues(): ShoferSettings {
