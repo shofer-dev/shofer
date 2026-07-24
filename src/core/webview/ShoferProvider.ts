@@ -4422,7 +4422,7 @@ export class ShoferProvider
 	 * with proper validation and deduplication
 	 */
 	private mergeAllowedCommands(globalStateCommands?: string[]): string[] {
-		return this.mergeCommandLists("allowedCommands", "allowed", globalStateCommands)
+		return this.mergeCommandLists("allowed", globalStateCommands)
 	}
 
 	/**
@@ -4430,7 +4430,7 @@ export class ShoferProvider
 	 * with proper validation and deduplication
 	 */
 	private mergeDeniedCommands(globalStateCommands?: string[]): string[] {
-		return this.mergeCommandLists("deniedCommands", "denied", globalStateCommands)
+		return this.mergeCommandLists("denied", globalStateCommands)
 	}
 
 	/**
@@ -4442,30 +4442,15 @@ export class ShoferProvider
 	 * @param globalStateCommands - Commands from global state
 	 * @returns Merged and deduplicated command list
 	 */
-	private mergeCommandLists(
-		configKey: "allowedCommands" | "deniedCommands",
-		commandType: "allowed" | "denied",
-		globalStateCommands?: string[],
-	): string[] {
+	private mergeCommandLists(commandType: "allowed" | "denied", globalStateCommands?: string[]): string[] {
 		try {
-			// Validate and sanitize global state commands
+			// globalState (ContextProxy) is now the single source of truth for command
+			// lists — the VS Code config side was removed with the config migration
+			// (todos/config-cleanup.md Part A/D). Validate, sanitize, dedupe.
 			const validGlobalCommands = Array.isArray(globalStateCommands)
 				? globalStateCommands.filter((cmd) => typeof cmd === "string" && cmd.trim().length > 0)
 				: []
-
-			// Get workspace configuration commands
-			const workspaceCommands = vscode.workspace.getConfiguration(Package.name).get<string[]>(configKey) || []
-
-			// Validate and sanitize workspace commands
-			const validWorkspaceCommands = Array.isArray(workspaceCommands)
-				? workspaceCommands.filter((cmd) => typeof cmd === "string" && cmd.trim().length > 0)
-				: []
-
-			// Combine and deduplicate commands
-			// Global state takes precedence over workspace configuration
-			const mergedCommands = [...new Set([...validGlobalCommands, ...validWorkspaceCommands])]
-
-			return mergedCommands
+			return [...new Set(validGlobalCommands)]
 		} catch (error) {
 			webviewLog.error(`Error merging ${commandType} commands:`, error)
 			// Return empty array as fallback to prevent crashes
