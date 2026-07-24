@@ -12,13 +12,18 @@ exception**. The payoff:
   user's `/home`** (e.g. a ConfigMap mounted at `/etc/shofer/`), so the workspace/agent
   **cannot tamper with org policy** — the tamper-proofing is what makes `global`-wins
   enforcement real, not advisory.
-- **Global / user / project overlay stays**, merged at runtime, but **global wins on
-  conflict** (`global` > `user` > `project`). Global is the **organizational policy**
-  injected by the config-manager; a user or project may **add** config it does not set, but
-  must **not override** it. ⚠️ **This inverts Shofer's current precedence** ("project
-  overrides global" — `.shofer/shofermodes` > `custom_modes.yaml`, and project rules over
-  global). The inversion is the point: policy is enforced top-down, not overridden
-  bottom-up.
+- **Global / user / project overlay stays**, merged at runtime with a **per-key
+  locked-vs-default** rule. The global layer marks each key — or **named entity** (a mode
+  by slug e.g. `Code`, a provider/api-configuration by name e.g. `default`, an MCP server,
+  a slash command) — as **locked** or not:
+    - **Locked** → the global value is **immutable org policy**; user/project cannot override
+      or remove it. ⚠️ For these keys this **inverts** Shofer's current "project overrides
+      global".
+    - **Unlocked** → the global value is a **default**; user then project override it
+      (more-specific wins — Shofer's current direction).
+    - A user/project may always **add** entries the global layer does not define.
+      So enforcement is top-down only where the org explicitly locks; everything else stays an
+      overridable default.
 
 This subsumes the earlier, narrower goal (reduce backends 4→2 with `globalState` as the
 settings SoT). That backend reduction is now **Phase 1 pre-work** (Parts A–D below): it
@@ -52,6 +57,7 @@ Everything non-secret becomes a file under `.shofer/`, at each of three scopes:
 ```
 .shofer/
 ├── settings.json        # the ~96 globalSettings keys (was globalState)   ← NEW home
+├── locked.json          # (global scope only) keys/entities the org locks  ← NEW
 ├── shofermodes          # custom modes (YAML)                              (exists)
 ├── mcp.json             # MCP servers                                       (exists)
 ├── commands/            # slash commands (*.md)                             (exists)
@@ -62,29 +68,34 @@ Everything non-secret becomes a file under `.shofer/`, at each of three scopes:
 
 Scopes and their roots:
 
-| Scope       | Root                                                                                                                 | Writable by the workspace? | Who writes it                         |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
-| **global**  | a **read-only path outside `/home`** — SaaS: ConfigMap mount (e.g. `/etc/shofer/`); standalone default: `~/.shofer/` | **no** (RO mount)          | host/integration (config-manager)     |
-| **user**    | a per-user `.shofer/` distinct from global (open Q1)                                                                 | yes                        | the user                              |
-| **project** | `<workspace>/.shofer/`                                                                                               | yes                        | committed to the repo, shared via git |
+| Scope       | Root                                                                                                                                                                                    | Writable by the workspace? | Who writes it                         |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| **global**  | a **read-only path outside `/home`** — SaaS: ConfigMap mount (e.g. `/etc/shofer/`); standalone default: the extension global-storage `.shofer/` (where `custom_modes.yaml` lives today) | **no** (RO mount)          | host/integration (config-manager)     |
+| **user**    | **`~/.shofer/`** (writable per-user)                                                                                                                                                    | yes                        | the user                              |
+| **project** | `<workspace>/.shofer/`                                                                                                                                                                  | yes                        | committed to the repo, shared via git |
 
-The global root is **configurable** (env, see E6) precisely so the SaaS can point it at a
-RO out-of-`/home` mount while a standalone FOSS install keeps a writable `~/.shofer/`. The
-RO-outside-home property is a **hard requirement** for the org-policy model: a global layer
-the workspace could edit would make `global`-wins meaningless.
+> **Semantic remap.** What Shofer calls "global" today (`~/.shofer/`) becomes the **user**
+> scope; a new **org-global** layer (RO, outside `/home`) sits above it. The global root is
+> **configurable** (`SHOFER_GLOBAL_DIR`, see E6) so SaaS points it at a RO out-of-`/home`
+> mount while a standalone FOSS install uses the extension global-storage dir (kept distinct
+> from `~/.shofer/`). The RO-outside-`/home` property is a **hard requirement** for locked
+> policy: a global layer the workspace could edit would make locking meaningless.
 
-**Effective config = deep-merge(project, user, global)** with **`global` winning
-key-by-key** (org policy on top). This means the existing mode/rules precedence engine must
-be **reversed** (today it lets project/`.shofer` win) and then reused everywhere — one
-merge, one precedence, direction `global > user > project`. A user/project can only
-contribute keys/modes/rules the global layer leaves unset.
+**Effective config** is a per-key/per-entity deep-merge across the three scopes:
 
-> **Refinement (open Q5):** a blanket "global always wins" makes user/project layers unable
-> to override _anything_ global defines. Most policy systems want a mix: some global keys
-> are **hard-locked** (never overridable — the org policies this feature exists to enforce)
-> and others are **defaults** (overridable by user/project). Decide whether v1 is blanket
-> global-wins or carries a per-key locked-vs-default distinction (e.g. a `locked: [...]`
-> list, or a `@locked` marker) so users keep personalization for non-policy settings.
+- **Locked** key/entity (global marks it): the **global** value wins and is final —
+  user/project contributions to that key/entity are dropped.
+- **Unlocked** key/entity: the normal **more-specific-wins** merge applies
+  (`project` > `user` > `global`), global as the default. This is Shofer's existing
+  mode/rules precedence, reused unchanged for the unlocked case.
+
+**Locking mechanism.** The global scope declares what it locks in a manifest —
+`.shofer/locked.json` listing locked paths and named entities, e.g.
+`["autoApprovalEnabled", "modes/Code", "providers/default", "mcp/<server>"]`. **Only the
+global (RO) scope's manifest is honored**; a `locked.json` under user/project is ignored
+(they can neither lock against each other nor unlock policy). The merge engine consults it
+per key/entity and routes to the locked or default branch above — one merge, one manifest,
+applied uniformly to settings, modes, rules, mcp, and commands.
 
 ### The secrets exception
 
@@ -327,16 +338,18 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
   Persistence Rule — keep it Zod-first, `safeParse` on read, versioned per the Versioned
   Snapshot Rule).
 - Resolve three scope roots: `global` (a **configurable, read-only, out-of-`/home`** path —
-  env `SHOFER_GLOBAL_DIR`, default `~/.shofer/` for standalone; a ConfigMap mount in SaaS),
-  `user` (open Q1), `project` (`<workspace>/.shofer/`). Treat the global root as immutable:
-  never write to it from `setValue`/the Settings UI (writes go to `user`/`project`).
+  env `SHOFER_GLOBAL_DIR`, default = the extension global-storage `.shofer/` for standalone;
+  a ConfigMap mount in SaaS), `user` (`~/.shofer/`), `project` (`<workspace>/.shofer/`).
+  Treat the global root as immutable: never write to it from `setValue`/the Settings UI
+  (writes go to `user`/`project`); honor `locked.json` only from the global scope.
 
-### E2. Layered read + merge (with the inverted precedence)
+### E2. Layered read + merge (locked-vs-default)
 
-- Read `settings.json` (and `shofermodes`, `rules/`, `mcp.json`, …) from all three scopes;
-  deep-merge with **`global` winning** (`global > user > project`). Build/repurpose ONE
-  precedence engine and route modes, rules, settings, and mcp through it — reversing the
-  current project-wins order (see the ⚠️ note above and open Q5 for locked-vs-default).
+- Read `settings.json` (and `shofermodes`, `rules/`, `mcp.json`, …) from all three scopes,
+  plus the global scope's `locked.json`. Build/repurpose ONE precedence engine and route
+  modes, rules, settings, and mcp through it, applying the **per-key/per-entity**
+  locked-vs-default rule: locked → global value final; unlocked → `project > user > global`
+  (the current more-specific-wins direction). See the merge rule + `locked.json` above.
 
 ### E3. Back `ContextProxy` with the files
 
@@ -359,28 +372,28 @@ This is the new end-state (Phase 2), done after A–D have unified everything in
 ### E6. Subsume `autoImportSettingsPath`
 
 - "Load on start" = read the global `.shofer/` unpacked at the RO root. Keep only a thin
-  bootstrap resolving the global root from `SHOFER_GLOBAL_DIR` (default `~/.shofer/`), per
-  D2. The SaaS sets it to the RO ConfigMap mount.
+  bootstrap resolving the global root from `SHOFER_GLOBAL_DIR` (default = the extension
+  global-storage `.shofer/`), per D2. The SaaS sets it to the RO ConfigMap mount.
 
 ---
 
-## Open questions
+## Decisions
 
-1. **`user` scope location** — global is the RO out-of-`/home` root and project is
-   `<ws>/.shofer/`. Where does the writable **user** layer live (a per-OS-user `~/.shofer/`?
-   a distinct dir?), and is it even needed in the single-user-per-workspace SaaS deployment
-   or only for shared/multi-user hosts? (If the SaaS workspace is single-user, `user` and
-   `project` may collapse to one writable layer.)
-2. **Format** for `settings.json` — JSON (matches globalSettings) vs YAML (matches
-   `shofermodes`). Suggest JSON for settings, keep YAML for modes.
-3. **Migration** from `globalState` → files — one-time seed on activation (D5-style) or a
-   clean break (No-Backward-Compat rule). A one-time read-and-write-out avoids "my settings
-   vanished".
-4. **Secrets in a SaaS workspace** — confirm the workspace holds **no** provider secret and
-   relies on `docs/authnz_arch.md` §11.4/§15 (built; enforcing waypoint still to be
-   hardened) rather than a mounted key.
-5. **Locked vs default** — is v1 blanket `global`-wins, or per-key locked-vs-default so users
-   keep personalization for non-policy settings? (See the ⚠️ Refinement note above.)
+1. **`user` scope = `~/.shofer/`** (writable per-user). The new RO org-global layer sits
+   above it; project is `<ws>/.shofer/`. (In a single-user SaaS workspace `user` and
+   `project` are both writable and near-equivalent, but the three-layer model stands.)
+2. **Format = JSON** for `settings.json` and `locked.json`; modes stay YAML (`shofermodes`),
+   commands/rules/skills stay markdown.
+3. **Migration = one-time seed** on activation: read existing `globalState` (plus the
+   Part-A-migrated vscode-config keys) and write them to the writable `user`
+   `~/.shofer/settings.json` if absent, then treat files as SoT. Avoids "my settings
+   vanished"; not a repeated sync.
+4. **Secrets** stay in `SecretStorage` (Part B). A SaaS workspace holds **no** provider
+   secret; access is gated by `docs/authnz_arch.md` §11.4/§15 (built; enforcing waypoint
+   still to be hardened). Bundles/zips reference profiles by name only.
+5. **Per-key locked-vs-default** (not blanket global-wins) — the merge rule + `locked.json`
+   above. Locking is per key **and per named entity** (a mode slug like `Code`, a
+   provider-config name like `default`, an mcp server, a command).
 
 ---
 
