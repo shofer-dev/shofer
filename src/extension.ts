@@ -223,12 +223,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Initialize OpenAI Codex OAuth manager for ChatGPT subscription-based access.
 	openAiCodexOAuthManager.initialize(context, (message) => outputChannel.appendLine(message))
 
-	// Get default commands from configuration.
-	const defaultCommands = vscode.workspace.getConfiguration(Package.name).get<string[]>("allowedCommands") || []
-
-	// Initialize global state if not already set.
+	// Seed the default auto-approve allowlist into globalState (the single source of
+	// truth) on first run. The default moved here from the removed
+	// `shofer.allowedCommands` VS Code config default (config-cleanup.md Part A/D3).
 	if (!context.globalState.get("allowedCommands")) {
-		context.globalState.update("allowedCommands", defaultCommands)
+		context.globalState.update("allowedCommands", ["git log", "git diff", "git show"])
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)

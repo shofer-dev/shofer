@@ -455,26 +455,6 @@
 		"configuration": {
 			"title": "%configuration.title%",
 			"properties": {
-				"shofer.allowedCommands": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					},
-					"default": [
-						"git log",
-						"git diff",
-						"git show"
-					],
-					"description": "%commands.allowedCommands.description%"
-				},
-				"shofer.deniedCommands": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					},
-					"default": [],
-					"description": "%commands.deniedCommands.description%"
-				},
 				"shofer.commandExecutionTimeout": {
 					"type": "number",
 					"default": 0,
