@@ -156,11 +156,19 @@ from `package.json` `contributes.configuration.properties`.
 >   `vsCodeLmModelSelector`), since removing the vscode registration while the seam still
 >   reads vscode config would strip their Settings-UI/schema without giving them a home.
 >
-> **Status:** (a) schema keys added for all 9 migrating keys + classified in
-> `SETTING_SYNC_SCOPE` (commit `8fa1e95ba`); `debug` fully migrated host-side (commit
-> `106f99a8b`). Remaining: the `getHost().config` seam reroute (core keys), the host-side
-> `enableCodeActions`/`enableLlmProviderIntegration` repoints, the `allowedCommands`/
-> `deniedCommands` dual-write removal, and the `package.json`/UI steps.
+> **Status (Part A — DONE for 9 keys; built + tested + deploying):**
+>
+> - Schema keys added + classified in `SETTING_SYNC_SCOPE` (`8fa1e95ba`).
+> - `debug` migrated host-side (`106f99a8b`).
+> - **Config seam rerouted** (`VsCodeConfig.get` → `ContextProxy` for the migrated keys)
+>     - host-side `enableCodeActions`/`enableLlmProviderIntegration`/`debugProxy.*` repointed
+>       through the seam + **9 `package.json` rows removed** (`83ad86f7f`). tsgo + eslint green;
+>       `pnpm bundle` green; 44/44 config/host vitest green. Shofer bumped `2.13.3`; code-server
+>     - shofer-executor image tags bumped and building for deploy.
+> - **Part C is complete**: the `devmand*` keys were already gone; `newTaskRequireTodos`
+>   was removed in the `83ad86f7f` package.json cleanup.
+> - **Remaining Part A:** `allowedCommands`/`deniedCommands` dual-write removal (D3/D4) and
+>   per-key Settings-UI rows. Then Parts B, D, E.
 
 ### A1. `allowedCommands` — Dual-write cleanup
 
