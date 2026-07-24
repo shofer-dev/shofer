@@ -118,6 +118,18 @@ export const globalSettingsSchema = z.object({
 	commandExecutionTimeout: z.number().optional(),
 	commandTimeoutAllowlist: z.array(z.string()).optional(),
 	preventCompletionWithOpenTodos: z.boolean().optional(),
+	// Migrated from `shofer.*` VS Code config into ContextProxy/globalState — the
+	// single source of truth (todos/config-cleanup.md Part A). The `package.json`
+	// `contributes.configuration` rows are removed as each consumer is repointed.
+	newTaskRequireTodos: z.boolean().optional(),
+	enableCodeActions: z.boolean().optional(),
+	maximumIndexedFilesForFileSearch: z.number().optional(),
+	apiRequestTimeout: z.number().optional(),
+	vsCodeLmModelSelector: z.object({ vendor: z.string().optional(), family: z.string().optional() }).optional(),
+	debug: z.boolean().optional(),
+	debugProxyEnabled: z.boolean().optional(),
+	debugProxyServerUrl: z.string().optional(),
+	debugProxyTlsInsecure: z.boolean().optional(),
 	allowedMaxRequests: z.number().nullish(),
 	allowedMaxCost: z.number().nullish(),
 	autoCondenseContext: z.boolean().optional(),
@@ -396,6 +408,16 @@ export const SETTING_SYNC_SCOPE = {
 	commandExecutionTimeout: "node",
 	commandTimeoutAllowlist: "node",
 	preventCompletionWithOpenTodos: "node",
+	// Migrated from `shofer.*` VS Code config (config-cleanup.md Part A).
+	newTaskRequireTodos: "node", // gates the new_task tool on the executor
+	apiRequestTimeout: "node", // API timeout where the executor makes LLM calls
+	vsCodeLmModelSelector: "node", // selects the vscode-lm model the agent uses
+	maximumIndexedFilesForFileSearch: "node", // file-search runs on the node
+	debugProxyEnabled: "node", // MITM proxy for the executor's outgoing API requests
+	debugProxyServerUrl: "node",
+	debugProxyTlsInsecure: "node",
+	enableCodeActions: "frontend", // host editor Quick Fix UI, not agent behavior
+	debug: "frontend", // webview debug buttons only
 
 	// ── Behavioral limits & context management ──
 	allowedMaxRequests: "node",
