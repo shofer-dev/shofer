@@ -195,6 +195,7 @@ describe("ShoferProvider flicker-free cancel", () => {
 			getValue: vi.fn().mockReturnValue(undefined),
 			setValue: vi.fn().mockResolvedValue(undefined),
 			getProviderSettings: vi.fn().mockReturnValue(mockApiConfig),
+			attachProviderSettingsManager: vi.fn().mockResolvedValue(undefined),
 			onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
 			extensionUri: mockContext.extensionUri,
 			globalStorageUri: mockContext.globalStorageUri,

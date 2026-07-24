@@ -207,26 +207,44 @@ describe("ContextProxy", () => {
 	})
 
 	describe("storeSecret", () => {
-		it("should store secret directly in original context", async () => {
-			await proxy.storeSecret("apiKey", "new-secret")
+		it("should store a cross-profile secret directly in original context", async () => {
+			// codeIndexQdrantApiKey is a global/cross-profile secret (SYNCED_SECRET_KEYS):
+			// it keeps its own individual SecretStorage entry.
+			await proxy.storeSecret("codeIndexQdrantApiKey", "new-secret")
 
 			// Should have called original context
-			expect(mockSecrets.store).toHaveBeenCalledWith("apiKey", "new-secret")
+			expect(mockSecrets.store).toHaveBeenCalledWith("codeIndexQdrantApiKey", "new-secret")
 
 			// Should have stored the value in cache
-			const storedValue = await proxy.getSecret("apiKey")
+			const storedValue = await proxy.getSecret("codeIndexQdrantApiKey")
 			expect(storedValue).toBe("new-secret")
 		})
 
-		it("should handle undefined value for secret deletion", async () => {
-			await proxy.storeSecret("apiKey", undefined)
+		it("should handle undefined value for a cross-profile secret deletion", async () => {
+			await proxy.storeSecret("codeIndexQdrantApiKey", undefined)
 
 			// Should have called delete on original context
-			expect(mockSecrets.delete).toHaveBeenCalledWith("apiKey")
+			expect(mockSecrets.delete).toHaveBeenCalledWith("codeIndexQdrantApiKey")
 
 			// Should have stored undefined in cache
-			const storedValue = await proxy.getSecret("apiKey")
+			const storedValue = await proxy.getSecret("codeIndexQdrantApiKey")
 			expect(storedValue).toBeUndefined()
+		})
+
+		it("should NOT persist a per-profile LLM secret to individual SecretStorage (Part B)", async () => {
+			// apiKey is a PROFILE_SECRET_KEY: its sole persisted store is the profiles
+			// blob. storeSecret must update secretCache but never touch individual
+			// SecretStorage (neither store nor delete).
+			mockSecrets.store.mockClear()
+			mockSecrets.delete.mockClear()
+
+			await proxy.storeSecret("apiKey", "profile-secret")
+			expect(mockSecrets.store).not.toHaveBeenCalled()
+			expect(proxy.getSecret("apiKey")).toBe("profile-secret")
+
+			await proxy.storeSecret("apiKey", undefined)
+			expect(mockSecrets.delete).not.toHaveBeenCalled()
+			expect(proxy.getSecret("apiKey")).toBeUndefined()
 		})
 	})
 
@@ -402,8 +420,12 @@ describe("ContextProxy", () => {
 				expect(mockGlobalState.update).toHaveBeenCalledWith(key, undefined)
 			}
 
-			// Total calls should include initial setup + reset operations
-			const expectedUpdateCalls = 2 + GLOBAL_STATE_KEYS.length
+			// resetAllState also clears the live-profile marker (Part B).
+			expect(mockGlobalState.update).toHaveBeenCalledWith("liveApiConfigProfileName", undefined)
+
+			// Total calls should include initial setup + reset operations (+1 for the
+			// live-profile marker clear).
+			const expectedUpdateCalls = 2 + GLOBAL_STATE_KEYS.length + 1
 			expect(mockGlobalState.update).toHaveBeenCalledTimes(expectedUpdateCalls)
 		})
 

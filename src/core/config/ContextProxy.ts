@@ -9,6 +9,7 @@ import {
 	SECRET_STATE_KEYS,
 	GLOBAL_STATE_KEYS,
 	GLOBAL_SECRET_KEYS,
+	PROFILE_SECRET_KEYS,
 	type ProviderSettings,
 	type GlobalSettings,
 	type SecretState,
@@ -17,6 +18,7 @@ import {
 	providerSettingsSchema,
 	globalSettingsSchema,
 	isSecretStateKey,
+	isProfileSecretKey,
 	isProviderName,
 	isRetiredProvider,
 	TypedEmitter,
@@ -34,6 +36,7 @@ import {
 	writeScopeSetting,
 	type ScopeRoots,
 } from "./layeredSettingsLoader"
+import type { ProviderSettingsManager } from "./ProviderSettingsManager"
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -42,6 +45,23 @@ type ShoferSettingsKey = keyof ShoferSettings
 const PASS_THROUGH_STATE_KEYS = ["taskHistory"]
 
 export const isPassThroughStateKey = (key: string) => PASS_THROUGH_STATE_KEYS.includes(key)
+
+/**
+ * Part B: the raw `globalState` marker recording the NAME of the provider profile
+ * whose settings are currently loaded into the live `apiConfiguration`.
+ *
+ * This is deliberately distinct from the persisted `currentApiConfigName` (the
+ * name-only *default* profile, which `setDefaultApiConfiguration` changes WITHOUT
+ * touching the live config) and from the blob's own `currentApiConfigName` (updated
+ * only by `activateProfile`, not by `upsertProviderProfile`). Neither reliably
+ * identifies the live profile — each can be shown, by construction, to diverge from
+ * it — so per-profile secrets are keyed off this dedicated marker on restart. It is
+ * internal bookkeeping, not part of the settings contract, so it lives outside
+ * `globalSettingsSchema`/`GLOBAL_STATE_KEYS` (read/written via raw `globalState`, an
+ * access `ContextProxy` itself is exempted to make — see the No Ad-Hoc VS Code Config
+ * Reads Rule).
+ */
+const LIVE_API_CONFIG_PROFILE_KEY = "liveApiConfigProfileName"
 
 const globalSettingsExportSchema = globalSettingsSchema.omit({
 	taskHistory: true,
@@ -55,6 +75,14 @@ export class ContextProxy {
 	private stateCache: GlobalState
 	private secretCache: SecretState
 	private _isInitialized = false
+
+	// Part B: the SINGLE ProviderSettingsManager instance, threaded post-construction
+	// (ContextProxy.initialize runs before any PSM exists). It is the persisted source
+	// of truth for the per-profile LLM secrets in PROFILE_SECRET_KEYS; secretCache holds
+	// only the current profile's copy in memory, sourced from this on restart. Never
+	// construct a second PSM here — its per-instance write lock would let two writers
+	// race the profiles blob.
+	private providerSettingsManager?: ProviderSettingsManager
 
 	// Part E3: additive, read-only layered `.shofer/settings.json` overlay merged
 	// across the global/user/project scopes (see layeredSettingsLoader). A key
@@ -131,6 +159,88 @@ export class ContextProxy {
 		await this.refreshLayeredOverlay()
 
 		this._isInitialized = true
+	}
+
+	/**
+	 * Part B: thread the SINGLE {@link ProviderSettingsManager} into the proxy after
+	 * both have been constructed (init runs before any PSM exists — see the field
+	 * doc). Once attached, the current profile's per-profile LLM secrets
+	 * (`PROFILE_SECRET_KEYS`) are sourced from the profiles blob rather than from
+	 * individual `SecretStorage` entries, and the now-redundant individual entries are
+	 * pruned once (a one-time de-dup migration). Idempotent and fail-soft: any error
+	 * leaves `secretCache` on whatever it loaded at {@link initialize} time.
+	 */
+	public async attachProviderSettingsManager(providerSettingsManager: ProviderSettingsManager): Promise<void> {
+		this.providerSettingsManager = providerSettingsManager
+		await this.loadCurrentProfileSecretsFromBlob()
+	}
+
+	/**
+	 * Resolve the live profile and load its `PROFILE_SECRET_KEYS` from the profiles
+	 * blob into `secretCache`, then prune the stale individual `SecretStorage` entries.
+	 *
+	 * The live profile is identified by the {@link LIVE_API_CONFIG_PROFILE_KEY} marker
+	 * (written on every {@link setProviderSettings} that loads a profile) so a restart
+	 * never pairs profile A's non-secret settings (restored from `globalState`) with
+	 * profile B's key. On the very first boot after this change the marker is absent;
+	 * fall back to the persisted `currentApiConfigName` and seed the marker so
+	 * subsequent boots use the authoritative value.
+	 */
+	private async loadCurrentProfileSecretsFromBlob(): Promise<void> {
+		const psm = this.providerSettingsManager
+		if (!psm) {
+			return
+		}
+
+		const marker = this.originalContext.globalState.get<string>(LIVE_API_CONFIG_PROFILE_KEY)
+		const liveName = marker ?? (this.getGlobalState("currentApiConfigName") as string | undefined)
+		if (!liveName) {
+			return
+		}
+
+		try {
+			const profile = (await psm.getProfile({ name: liveName })) as Record<string, unknown>
+			for (const key of PROFILE_SECRET_KEYS) {
+				this.secretCache[key] = profile[key] as string | undefined
+			}
+
+			if (!marker) {
+				await this.originalContext.globalState.update(LIVE_API_CONFIG_PROFILE_KEY, liveName)
+			}
+
+			// One-time de-dup migration: the blob is now the sole persisted store for
+			// these keys, so drop any individual SecretStorage copies. Safe because the
+			// values were just confirmed loadable from the blob; a subsequent write is
+			// what re-establishes them if a profile is edited.
+			await this.pruneProfileSecretStorageEntries()
+		} catch (error) {
+			logger.error(
+				`Error loading current profile "${liveName}" secrets from blob: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			)
+		}
+	}
+
+	/**
+	 * Delete the individual `SecretStorage` entries for `PROFILE_SECRET_KEYS`. These are
+	 * the denormalized copies that Part B removes; the profiles blob is their sole
+	 * persisted store. Fail-soft per key.
+	 */
+	private async pruneProfileSecretStorageEntries(): Promise<void> {
+		await Promise.all(
+			PROFILE_SECRET_KEYS.map(async (key) => {
+				try {
+					await this.originalContext.secrets.delete(key)
+				} catch (error) {
+					logger.error(
+						`Error pruning stale individual secret ${key}: ${
+							error instanceof Error ? error.message : String(error)
+						}`,
+					)
+				}
+			}),
+		)
 	}
 
 	/**
@@ -472,6 +582,16 @@ export class ContextProxy {
 		// Update cache.
 		this.secretCache[key] = value
 
+		// Part B: a per-profile LLM secret's sole persisted store is the profiles blob
+		// (written by ProviderSettingsManager). Do NOT mirror it into an individual
+		// SecretStorage entry — secretCache is its in-memory holder for the current
+		// profile only. The eight cross-profile secrets (SYNCED_SECRET_KEYS +
+		// openRouterImageApiKey) keep their individual entries below.
+		if (isProfileSecretKey(key)) {
+			this._onDidChangeEmitter.fire({ key })
+			return Promise.resolve()
+		}
+
 		// Write directly to context.
 		const result =
 			value === undefined
@@ -486,8 +606,17 @@ export class ContextProxy {
 	 * This is useful when you need to ensure the cache has the latest values
 	 */
 	async refreshSecrets(): Promise<void> {
-		const promises = [
-			...SECRET_STATE_KEYS.map(async (key) => {
+		// Part B: only the eight cross-profile secrets keep individual SecretStorage
+		// entries — reload those from storage. The per-profile LLM secrets
+		// (PROFILE_SECRET_KEYS) live in the profiles blob, so re-reading individual
+		// entries would clobber the cached current-profile values with `undefined`;
+		// reload them from the blob instead.
+		const individualSecretKeys = [
+			...SECRET_STATE_KEYS.filter((key) => !isProfileSecretKey(key)),
+			...GLOBAL_SECRET_KEYS,
+		]
+		await Promise.all(
+			individualSecretKeys.map(async (key) => {
 				try {
 					this.secretCache[key] = await this.originalContext.secrets.get(key)
 				} catch (error) {
@@ -496,17 +625,8 @@ export class ContextProxy {
 					)
 				}
 			}),
-			...GLOBAL_SECRET_KEYS.map(async (key) => {
-				try {
-					this.secretCache[key] = await this.originalContext.secrets.get(key)
-				} catch (error) {
-					logger.error(
-						`Error refreshing global secret ${key}: ${error instanceof Error ? error.message : String(error)}`,
-					)
-				}
-			}),
-		]
-		await Promise.all(promises)
+		)
+		await this.loadCurrentProfileSecretsFromBlob()
 	}
 
 	private getAllSecretState(): SecretState {
@@ -592,7 +712,18 @@ export class ContextProxy {
 		return sanitizedValues
 	}
 
-	public async setProviderSettings(values: ProviderSettings) {
+	/**
+	 * Load a provider profile's settings into the live `apiConfiguration`.
+	 *
+	 * When `profileName` is given the call represents loading a named profile as the
+	 * *current* profile: it records the {@link LIVE_API_CONFIG_PROFILE_KEY} marker (so a
+	 * restart can re-source this profile's secrets from the blob) and clears any stale
+	 * per-profile secrets left in `secretCache` from a previously-active profile that
+	 * `values` does not re-specify. Callers that only patch the live config (e.g. tests,
+	 * OAuth token merges) omit `profileName` and neither the marker nor the secret-clear
+	 * fires.
+	 */
+	public async setProviderSettings(values: ProviderSettings, profileName?: string) {
 		// Explicitly clear out any old API configuration values before that
 		// might not be present in the new configuration.
 		// If a value is not present in the new configuration, then it is assumed
@@ -608,12 +739,29 @@ export class ContextProxy {
 			}
 		}
 
+		// On a named-profile load, clear any per-profile secret still cached from the
+		// previously-active profile so switching A→B never leaves A's key behind when
+		// B's profile simply omits that key. Gated on `profileName` so ad-hoc patches
+		// don't wipe the live secrets.
+		const clearedProfileSecrets =
+			profileName !== undefined
+				? PROFILE_SECRET_KEYS.filter((key) => this.secretCache[key] !== undefined).reduce(
+						(acc, key) => ({ ...acc, [key]: undefined }),
+						{} as ProviderSettings,
+					)
+				: {}
+
 		await this.setValues({
 			...PROVIDER_SETTINGS_KEYS.filter((key) => !isSecretStateKey(key))
 				.filter((key) => !!this.stateCache[key])
 				.reduce((acc, key) => ({ ...acc, [key]: undefined }), {} as ProviderSettings),
+			...clearedProfileSecrets,
 			...values,
 		})
+
+		if (profileName !== undefined) {
+			await this.originalContext.globalState.update(LIVE_API_CONFIG_PROFILE_KEY, profileName)
+		}
 	}
 
 	/**
@@ -704,11 +852,15 @@ export class ContextProxy {
 
 		await Promise.all([
 			...GLOBAL_STATE_KEYS.map((key) => this.originalContext.globalState.update(key, undefined)),
+			this.originalContext.globalState.update(LIVE_API_CONFIG_PROFILE_KEY, undefined),
 			...SECRET_STATE_KEYS.map((key) => this.originalContext.secrets.delete(key)),
 			...GLOBAL_SECRET_KEYS.map((key) => this.originalContext.secrets.delete(key)),
 		])
 
 		await this.initialize()
+		// Re-source the current profile's secrets from the blob after the reset
+		// wiped the caches (no-op until a PSM has been attached).
+		await this.loadCurrentProfileSecretsFromBlob()
 	}
 
 	private static _instance: ContextProxy | null = null

@@ -170,11 +170,12 @@ export async function importSettingsFromPath(
 		const currentProvider = providerProfiles.apiConfigs[currentProviderName]
 		contextProxy.setValue("currentApiConfigName", currentProviderName)
 
-		// TODO: It seems like we don't need to have the provider settings in
-		// the proxy; we can just use providerSettingsManager as the source of
-		// truth.
+		// The profile keys land in the profiles blob via
+		// `providerSettingsManager.import(providerProfiles)` above; this call loads the
+		// current profile into the live `apiConfiguration` and records it as the live
+		// profile so a later restart re-sources its secrets from the blob (Part B).
 		if (currentProvider) {
-			contextProxy.setProviderSettings(currentProvider)
+			contextProxy.setProviderSettings(currentProvider, currentProviderName)
 		}
 
 		contextProxy.setValue("listApiConfigMeta", await providerSettingsManager.listConfig())

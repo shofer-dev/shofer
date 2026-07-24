@@ -452,6 +452,19 @@ export class ShoferProvider
 
 		this.providerSettingsManager = new ProviderSettingsManager(this.context)
 
+		// Part B: hand the SINGLE PSM to ContextProxy so it can source the current
+		// profile's per-profile LLM secrets from the profiles blob (ContextProxy.
+		// initialize ran before any PSM existed). Fire-and-forget — the load is a
+		// single blob read that completes well before the webview resolves and the
+		// first getState() runs; failures are logged, not fatal.
+		void this.contextProxy
+			.attachProviderSettingsManager(this.providerSettingsManager)
+			.catch((e) =>
+				this.log(
+					`Failed to attach ProviderSettingsManager to ContextProxy: ${e instanceof Error ? e.message : String(e)}`,
+				),
+			)
+
 		this.customModesManager = new CustomModesManager(this.context, async () => {
 			const modes = await this.customModesManager.getCustomModes()
 			this.postConfigUpdate("customModes", modes)
@@ -3477,7 +3490,7 @@ export class ShoferProvider
 				await Promise.all([
 					this.updateGlobalState("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
 					this.providerSettingsManager.setModeConfig(mode, id),
-					this.contextProxy.setProviderSettings(providerSettings),
+					this.contextProxy.setProviderSettings(providerSettings, name),
 				])
 
 				// Mirror the per-mode mapping into the custom-mode YAML so the two stay 1:1.
@@ -3498,7 +3511,7 @@ export class ShoferProvider
 				// handlers so edits take effect immediately without re-selection.
 				const { currentApiConfigName } = await this.getState()
 				if (currentApiConfigName === name) {
-					await this.contextProxy.setProviderSettings(providerSettings)
+					await this.contextProxy.setProviderSettings(providerSettings, name)
 					this.updateTaskApiHandlerIfNeeded(providerSettings, { forceRebuild: true, profileName: name })
 				}
 			}
@@ -3579,7 +3592,7 @@ export class ShoferProvider
 		// See `upsertProviderProfile` for a description of what this is doing.
 		const updates: Promise<any>[] = [
 			this.contextProxy.setValue("listApiConfigMeta", await this.providerSettingsManager.listConfig()),
-			this.contextProxy.setProviderSettings(providerSettings),
+			this.contextProxy.setProviderSettings(providerSettings, name),
 		]
 		// Only change the global default when explicitly requested.
 		// The chat dropdown (loadApiConfigurationById) should NOT change it.

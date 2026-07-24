@@ -689,6 +689,34 @@ export function pickSyncedSecrets(secrets: Partial<Record<string, string | undef
 }
 
 /**
+ * Provider-profile secret keys — the per-profile LLM credentials whose sole
+ * persisted store is the provider-profiles blob (`shofer_config_api_config`,
+ * managed by `ProviderSettingsManager`). This is exactly the LLM half of
+ * `SECRET_STATE_KEYS`: every provider API key, minus the seven cross-profile
+ * code-index credentials (`SYNCED_SECRET_KEYS`).
+ *
+ * These keys are NOT written to individual `SecretStorage` entries. `ContextProxy`'s
+ * `secretCache` holds only the *current* profile's copy in memory, sourced from the
+ * blob on activation (the profile object carries the values) and on restart (loaded
+ * from the blob for the live-profile marker). Contrast the eight secrets that DO keep
+ * their own `SecretStorage` entries: the seven `SYNCED_SECRET_KEYS` (global,
+ * controller→node replicated, written by the code-index save path directly, never via
+ * a profile) plus `openRouterImageApiKey` (a GlobalSettings secret absent from
+ * `providerSettingsSchema`, so it cannot live in a profile).
+ */
+export const PROFILE_SECRET_KEYS = SECRET_STATE_KEYS.filter(
+	(key): key is Exclude<ProviderSecretKey, (typeof SYNCED_SECRET_KEYS)[number]> =>
+		!(SYNCED_SECRET_KEYS as readonly string[]).includes(key),
+)
+
+/** A per-profile LLM credential whose source of truth is the profiles blob. */
+export type ProfileSecretKey = (typeof PROFILE_SECRET_KEYS)[number]
+
+/** True for a per-profile LLM credential whose SoT is the profiles blob (see `PROFILE_SECRET_KEYS`). */
+export const isProfileSecretKey = (key: string): key is ProfileSecretKey =>
+	(PROFILE_SECRET_KEYS as readonly string[]).includes(key)
+
+/**
  * GlobalState
  */
 
