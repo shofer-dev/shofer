@@ -9,12 +9,120 @@ that must be read before `ContextProxy` exists remain as `shofer.*` VS Code
 `settings.json` entries: `shofer.customStoragePath`, `shofer.autoImportSettingsPath`
 (plus `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist` /
 `shofer.preventCompletionWithOpenTodos` / `shofer.codeIndex.embeddingBatchSize` /
-`shofer.nodes.loadBalancer`, pending migration). The end state is a single
-file-based source of truth under `.shofer/` — see
-[`../todos/config-cleanup.md`](../todos/config-cleanup.md).
+`shofer.nodes.loadBalancer`, pending migration). Non-secret configuration has a
+single file-based source of truth under `.shofer/` — see
+[Layered `.shofer/` configuration](#layered-shofer-configuration) below.
 
 The sections below describe each setting's meaning; where a setting was migrated
 off VS Code config, set it via the Settings panel rather than `settings.json`.
+
+---
+
+## Layered `.shofer/` configuration
+
+Every non-secret Shofer configuration item lives in a file under a `.shofer/`
+directory, resolved across **three scopes** and merged at runtime. Secrets are the
+sole exception: provider API keys stay in VS Code `SecretStorage`, and
+`settings.json` references a provider profile **by name/id only**, never by key
+value (see [`settings_overlay.md`](settings_overlay.md) §1 and
+[`shofer_special_files.md`](shofer_special_files.md)).
+
+### The three scopes
+
+| Scope       | Root                                                                                                                                             | Writable by the workspace? | Who writes it                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------- |
+| **global**  | a **read-only path outside `/home`** — `SHOFER_GLOBAL_DIR` if set (SaaS: a ConfigMap mount, e.g. `/etc/shofer/`), else `<globalStorage>/.shofer` | **no** (RO)                | a host/integration (config-manager)   |
+| **user**    | `~/.shofer/`                                                                                                                                     | yes                        | the user                              |
+| **project** | `<workspace>/.shofer/`                                                                                                                           | yes                        | committed to the repo, shared via git |
+
+The roots are resolved by `resolveScopeRoots` in
+[`layeredSettingsLoader.ts`](../src/core/config/layeredSettingsLoader.ts). The
+global root being **read-only and outside `/home`** is a hard requirement: it is
+what makes org-policy locking (below) enforceable rather than advisory — a global
+layer the workspace could edit would make locking meaningless.
+
+Each scope's `.shofer/` holds the same file set:
+
+```
+.shofer/
+├── settings.json        # the globalSettings keys (JSON)
+├── locked.json          # (global scope only) org-policy lock manifest
+├── plugins.json         # plugin declarations (see PLUGINS.md)
+├── mcp.json             # MCP servers
+├── shofermodes          # custom modes (YAML)
+├── commands/            # slash commands (*.md)
+└── rules/  rules-<mode>/ # rules / custom instructions
+```
+
+### Merge order — per-key locked-vs-default
+
+The effective config is a per-key / per-named-entity merge across the three
+scopes, computed by the pure engine `mergeLayeredConfig` in
+[`layered-config.ts`](../packages/core/src/config/layered-config.ts):
+
+- **Unlocked** key/entity → normal **more-specific-wins**: `project > user > global`,
+  with global as the default. Plain objects deep-merge per leaf; scalars and arrays
+  are replaced wholesale. This is Shofer's existing mode/rules precedence.
+- **Locked** key/entity (the global scope marks it — below) → the **global** value
+  **wins and is final**; user/project contributions to that key/entity are dropped.
+  For locked keys this **inverts** the usual "project overrides global": org policy
+  cannot be overridden downstream.
+- A user/project may always **add** keys/entities the global layer does not define;
+  locking a key global never set is inert and falls back to the unlocked merge.
+
+`globalState` remains the runtime cache: `ContextProxy` loads the merged overlay on
+top of it, and a `setValue` for a globalSettings key mirrors the write into the
+**user** scope's `~/.shofer/settings.json` (via `writeScopeSetting`). That
+write-through is opt-in — it fires only once a `~/.shofer/settings.json` exists
+(materialized by an import/unzip), so a deployment that has not adopted file-backed
+settings keeps the old `globalState`-only behavior. A key the global scope locks is
+never persisted downstream (the write is skipped).
+
+### `locked.json` — the org-policy lock manifest
+
+`locked.json` lives in the **global scope only** (a user/project `locked.json` is
+never read). Its schema (`lockedManifestSchema` in
+[`layered-config.ts`](../packages/core/src/config/layered-config.ts)) is a versioned,
+fail-closed list of locked paths and named entities:
+
+```json
+{
+	"version": 1,
+	"locked": ["autoApprovalEnabled", "modes/Code", "providers/default", "plugins/git-guard"]
+}
+```
+
+Each `locked` entry is one of:
+
+- a bare settings key (`"autoApprovalEnabled"`) — locks that top-level key;
+- a collection namespace (`"modes"`, `"providers"`, `"plugins"`) — locks the whole
+  collection; or
+- a `"<namespace>/<id>"` entry (`"modes/Code"`, `"providers/default"`,
+  `"plugins/git-guard"`) — locks a single named entity, leaving its siblings on the
+  unlocked merge.
+
+Named-entity collections known to the settings engine are `modes` (→ `customModes`,
+keyed by `slug`) and `providers` (→ `listApiConfigMeta`, keyed by `name`); `plugins`
+is governed by the same manifest for `.shofer/plugins.json` (see
+[`PLUGINS.md`](../PLUGINS.md)). A corrupt or version-mismatched manifest is
+discarded as "nothing locked" rather than throwing.
+
+### Export / import = a scope's `.shofer/` as a `.tar.gz`
+
+Because everything non-secret is a file under `.shofer/`, export is simply
+"archive the scope's `.shofer/` tree" and import is "unpack it into a scope root".
+`exportScopeArchive` / `importScopeArchive` / `listScopeArchiveEntries` in
+[`scope-archive.ts`](../packages/core/src/config/scope-archive.ts) produce and
+consume a single **gzipped tar** (`.tar.gz`); the host wrappers
+`exportScopeSettingsArchive` / `importScopeSettingsArchive` in
+[`importExport.ts`](../src/core/config/importExport.ts) default to the user scope.
+
+Secrets are out of the archive **by construction** — they live in `SecretStorage`,
+outside `.shofer/`, and `settings.json` references profiles by name only — which is
+exactly what makes a `.shofer/` bundle safe to hand around. A host/integration
+provisions org policy by unpacking a bundle into the **global** (RO) location; the
+workspace's own user/project `.shofer/` still override anything the global scope
+does not lock.
 
 ## Command Execution
 

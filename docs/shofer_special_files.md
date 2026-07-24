@@ -135,6 +135,8 @@ VS Code workspace files are write-protected.
 ```
 <workspace>/
 └── .shofer/
+    ├── settings.json         # globalSettings keys (JSON) — layered config
+    ├── plugins.json          # Plugin declarations (see PLUGINS.md)
     ├── rules/                # Mode-agnostic rules
     ├── rules-<mode>/         # Mode-specific rules (e.g. rules-code/)
     ├── commands/             # Slash commands
@@ -143,6 +145,15 @@ VS Code workspace files are write-protected.
     ├── mcp.json              # Project MCP server configuration
     └── custom-instructions.md # Additional custom instructions
 ```
+
+> **Three scopes.** The `.shofer/` file set is resolved across three scopes and
+> merged at runtime — **global** (read-only, outside `/home`; `SHOFER_GLOBAL_DIR`
+> or `<globalStorage>/.shofer`) > **user** (`~/.shofer/`) > **project**
+> (`<workspace>/.shofer/`). For an unlocked key/entity the more-specific scope
+> wins; for a key/entity the global scope **locks** (via `locked.json`, below) the
+> global value wins and is final. See
+> [`configuration.md`](configuration.md#layered-shofer-configuration) for the full
+> merge semantics.
 
 Everything under `.shofer/` is **write-protected**. The LLM must get explicit
 approval to modify any file in this directory tree.
@@ -257,6 +268,55 @@ Mode-specific skills take precedence over generic skills with the same name.
 
 ---
 
+### `.shofer/settings.json` — Layered Settings
+
+| Property            | Details                                    |
+| ------------------- | ------------------------------------------ |
+| **Format**          | JSON (the `globalSettingsSchema` keys)     |
+| **Scope**           | All three scopes (global / user / project) |
+| **Write-protected** | Yes (inside `.shofer/`)                    |
+
+The file home for the non-secret `globalSettings` keys. Read Schema-First /
+fail-closed (invalid content ⇒ empty layer) and merged across scopes per the
+locked-vs-default rule. Never holds secrets — a provider profile is referenced by
+name/id only. `ContextProxy` write-through mirrors a settings change into the
+**user** scope's `~/.shofer/settings.json`. See
+[`configuration.md`](configuration.md#layered-shofer-configuration).
+
+---
+
+### `.shofer/locked.json` — Org-Policy Lock Manifest
+
+| Property            | Details                                      |
+| ------------------- | -------------------------------------------- |
+| **Format**          | JSON (`{ version: 1, locked: string[] }`)    |
+| **Scope**           | **Global scope only** (user/project ignored) |
+| **Write-protected** | Yes                                          |
+
+Declares which settings keys and named entities the org **locks**: a locked path's
+global value wins per-key over user/project and cannot be overridden or removed.
+Entries are bare keys (`"autoApprovalEnabled"`), collection namespaces (`"modes"`),
+or `"<namespace>/<id>"` entities (`"modes/Code"`, `"providers/default"`,
+`"plugins/<name>"`). Only the global (read-only) scope's manifest is honored. See
+[`configuration.md`](configuration.md#lockedjson--the-org-policy-lock-manifest).
+
+---
+
+### `.shofer/plugins.json` — Plugin Declarations
+
+| Property            | Details                                               |
+| ------------------- | ----------------------------------------------------- |
+| **Format**          | JSON (`{ version: 1, plugins: Record<name, entry> }`) |
+| **Scope**           | All three scopes (merged, governed by `locked.json`)  |
+| **Write-protected** | Yes                                                   |
+
+Declares **which** plugins a scope wants, **from where**, and at **which version**
+("declare, don't vendor" — only the declaration is committed, not the plugin
+bytes). Merged across scopes and resolved into a content-addressed cache, then
+folded into plugin discovery. See [`PLUGINS.md`](../PLUGINS.md#plugin-declarations-shoferpluginsjson).
+
+---
+
 ### `.shofer/mcp.json` — Project MCP Configuration
 
 | Property            | Details                               |
@@ -351,6 +411,13 @@ The global configuration directory at `~/.shofer/` (Linux/macOS) or
 
 Global paths are loaded **before** project paths, so project-level
 configuration can override global settings.
+
+> **In the layered-config model, `~/.shofer/` is the `user` scope.** A separate
+> **org-global** scope (read-only, outside `/home` — `SHOFER_GLOBAL_DIR` or
+> `<globalStorage>/.shofer`) sits _above_ it and is the sole authority for
+> `locked.json`. So the precedence is org-global (locked keys win) then
+> `~/.shofer/` (user) then `<workspace>/.shofer/` (project). See
+> [`configuration.md`](configuration.md#layered-shofer-configuration).
 
 ---
 

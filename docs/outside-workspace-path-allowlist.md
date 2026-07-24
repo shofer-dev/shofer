@@ -260,12 +260,12 @@ above and the settings architecture rejects it on two further counts:
   **never reach the executor that actually evaluates the approval**. The portable
   `globalSettingsSchema` is what crosses front-ends (via export/import / `importConfiguration`).
 - **It is not the runtime source of truth, and is legacy debt being removed.**
-  `checkAutoApproval` reads globalState via `provider.getState()`; VS Code config is only a
-  startup seed. `allowedCommands` / `deniedCommands` are today dual-written to globalState
-  _and_ VS Code config, and [`settings_overlay.md` §14l](settings_overlay.md) flags exactly
-  this as debt to delete (config-cleanup Part A1–A2). [§15](settings_overlay.md) says only
-  `customStoragePath` / `autoImportSettingsPath` should remain in VS Code config (read before
-  `ContextProxy` initializes). Adding two new keys there would copy the anti-pattern.
+  `checkAutoApproval` reads globalState via `provider.getState()`. `allowedCommands` /
+  `deniedCommands` are single-sourced in globalState (their former VS Code-config
+  dual-write was removed — [`settings_overlay.md` §14l](settings_overlay.md)), and
+  [§15](settings_overlay.md) leaves only `customStoragePath` / `autoImportSettingsPath` in
+  VS Code config (read before `ContextProxy` initializes). Adding two new keys there would
+  copy the anti-pattern.
 
 So the design uses **globalState/`globalSettingsSchema` as the store** and the **portable
 import channel** (auto-import file / `ShoferAPI.importConfiguration`) as the

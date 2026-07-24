@@ -112,21 +112,21 @@ tools use (Node built-ins external, deps bundled).
 The manifest is validated **fail-closed**: every level is `.strict()`, so an unknown key is a hard
 error and the plugin is skipped with a warning. Fields:
 
-| Field                    | Type                | Notes                                                                                         |
-| ------------------------ | ------------------- | --------------------------------------------------------------------------------------------- |
-| `name`                   | string **required** | Unique id. Must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`. Used for ordering, dedupe, namespacing. |
-| `version`                | string **required** | Free-form version string.                                                                     |
-| `shoferPluginApiVersion` | string              | The plugin-API semver you target (current host API: `1.0.0`). Incompatible ⇒ refused at load. |
-| `description`            | string              | Shown in the Plugins UI and `plugin list`.                                                    |
-| `author`                 | string              |                                                                                               |
-| `homepage`               | string              |                                                                                               |
-| `license`                | string              |                                                                                               |
-| `shoferVersion`          | string              | Minimum Shofer version (semver range). Not yet enforced.                                      |
-| `main`                   | string \| null      | Code entry, relative to the plugin dir. Absent/`null` ⇒ purely declarative.                   |
-| `permissions`            | object              | The security contract. See below.                                                             |
+| Field                    | Type                | Notes                                                                                                                            |
+| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                   | string **required** | Unique id. Must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`. Used for ordering, dedupe, namespacing.                                    |
+| `version`                | string **required** | Free-form version string.                                                                                                        |
+| `shoferPluginApiVersion` | string              | The plugin-API semver you target (current host API: `1.0.0`). Incompatible ⇒ refused at load.                                    |
+| `description`            | string              | Shown in the Plugins UI and `plugin list`.                                                                                       |
+| `author`                 | string              |                                                                                                                                  |
+| `homepage`               | string              |                                                                                                                                  |
+| `license`                | string              |                                                                                                                                  |
+| `shoferVersion`          | string              | Minimum Shofer version (semver range). Not yet enforced.                                                                         |
+| `main`                   | string \| null      | Code entry, relative to the plugin dir. Absent/`null` ⇒ purely declarative.                                                      |
+| `permissions`            | object              | The security contract. See below.                                                                                                |
 | `contributes`            | object              | Declarative modes/skills/commands/mcpServers/rules, plus `ui` bundles. See [§4](#4-extension-points), [§6](#6-ui-contributions). |
-| `dependencies`           | string[]            | Other plugins that must be installed. (Discovery records unmet deps; not fully enforced yet.) |
-| `config`                 | object              | JSON-Schema-ish description of user settings. See below.                                      |
+| `dependencies`           | string[]            | Other plugins that must be installed. (Discovery records unmet deps; not fully enforced yet.)                                    |
+| `config`                 | object              | JSON-Schema-ish description of user settings. See below.                                                                         |
 
 ### `permissions`
 
@@ -219,10 +219,10 @@ Plugin-contributed **modes**, **commands**, and **skills** are addressed under a
 another plugin's item — collisions are impossible **by construction** (there is no
 "last-installed-wins" tie-break between plugins). How the qualification surfaces differs slightly:
 
-| Contribution | Addressed as              | On-disk / authored name                                                                                                                                                                                              |
-| ------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **modes**    | `<plugin-name>:<slug>`    | The emitted mode `slug` **is** the qualified form; the authored slug in your manifest stays natural (no `:`). Attribution is carried on `source: "plugin"` + `pluginName`.                                            |
-| **commands** | `<plugin-name>:<command>` | The command is registered and invoked under the namespaced name; the bare name is never resolvable on its own.                                                                                                       |
+| Contribution | Addressed as              | On-disk / authored name                                                                                                                                                                                                |
+| ------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **modes**    | `<plugin-name>:<slug>`    | The emitted mode `slug` **is** the qualified form; the authored slug in your manifest stays natural (no `:`). Attribution is carried on `source: "plugin"` + `pluginName`.                                             |
+| **commands** | `<plugin-name>:<command>` | The command is registered and invoked under the namespaced name; the bare name is never resolvable on its own.                                                                                                         |
 | **skills**   | `<plugin-name>:<name>`    | Namespaced purely at the **resolution/addressing** layer — the on-disk directory name and the `SKILL.md` frontmatter `name` stay spec-compliant (no `:`). The model lists and invokes the skill by its qualified name. |
 
 The only residual collision is a single plugin declaring the same slug/name twice — a manifest bug,
@@ -273,18 +273,18 @@ warning — it can never stall or crash the agent loop, and its would-be mutatio
 Every hook receives a `PluginContext`. Which fields are populated depends on the host and the
 plugin's grants:
 
-| Field                  | Availability                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `workspacePath`        | Active workspace path, if any.                                                 |
-| `mode`                 | Current mode slug.                                                             |
-| `taskId`               | Id of the task the hook runs for, if applicable.                               |
-| `cwd`                  | Current working directory.                                                     |
-| `config`               | This plugin's validated, default-merged settings.                              |
-| `host`                 | The restricted host surface (below). Present when the host wired its bridge.   |
-| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam. |
+| Field                  | Availability                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `workspacePath`        | Active workspace path, if any.                                                                                  |
+| `mode`                 | Current mode slug.                                                                                              |
+| `taskId`               | Id of the task the hook runs for, if applicable.                                                                |
+| `cwd`                  | Current working directory.                                                                                      |
+| `config`               | This plugin's validated, default-merged settings.                                                               |
+| `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                    |
+| `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                  |
 | `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`. |
-| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.     |
-| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.     |
+| `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                      |
+| `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                      |
 
 ### `ctx.host` — the restricted host surface
 
@@ -299,28 +299,29 @@ missing API.
 - **`host.notifier`** — `info`/`warn`/`error`. **Always available** (surfacing messages is safe).
   Pops a user-facing toast; use it sparingly for things the user must see.
 - **`host.log`** — `debug`/`info`/`warn`/`error`. **Always available** (logging is safe). Writes to
-  the plugin's **own Log category `Plugin:<name>`** (Settings → Logging), *not* a user toast. Each
+  the plugin's **own Log category `Plugin:<name>`** (Settings → Logging), _not_ a user toast. Each
   loaded plugin automatically gets its category, so a user can view and filter one plugin's output
   independently. Prefer this over `console.*` for anything diagnostic.
 
-  ```ts
-  ctx.host?.log.info("reindexed", { files: 12 })
-  // shows in Settings → Logging under the "Plugin:my-plugin" category
-  ```
+    ```ts
+    ctx.host?.log.info("reindexed", { files: 12 })
+    // shows in Settings → Logging under the "Plugin:my-plugin" category
+    ```
+
 - **`host.env`** — read-only host/environment metadata. Always available.
 - **`host.watch(pattern, onChange)`** — watch a glob for create/change/delete, **scoped to
   `permissions.filesystem`** (watches `pattern` under each granted root). The callback receives the
   event **`{ path, type }`** — `path` is the absolute path of the changed file (always inside a
-  granted root) and `type` is `"create" | "change" | "delete"` — so you can act on *which* file
+  granted root) and `type` is `"create" | "change" | "delete"` — so you can act on _which_ file
   changed, not just that something did. Ungranted ⇒ deny + no-op disposable. Dispose to stop (the
   manager also disposes it on plugin disable). Present only when the host wired a watcher.
 
-  ```ts
-  ctx.host.watch("**/*.json", (event) => {
-  	// event.path e.g. "/abs/ws/ci-config/status.json", event.type "change"
-  	reindex(event.path)
-  })
-  ```
+    ```ts
+    ctx.host.watch("**/*.json", (event) => {
+    	// event.path e.g. "/abs/ws/ci-config/status.json", event.type "change"
+    	reindex(event.path)
+    })
+    ```
 
 ### Phase-6 host capabilities
 
@@ -330,7 +331,7 @@ missing API.
   uses (the host's default profile when `profileRef` is omitted). The plugin never sees raw API keys.
 - `embed(texts, profileRef?)` → `Promise<number[][]>` — one embedding vector per input text.
 - `hasConsent()` → `boolean` — **read-only** consent check: `true` when calls will actually run,
-  `false` on the denying stub. Because `ctx.ai` is *present* in both the live and unconsented cases,
+  `false` on the denying stub. Because `ctx.ai` is _present_ in both the live and unconsented cases,
   use this to word prompt/UI copy for the consent state **without** making a billed call to find out.
   It cannot grant consent — only the user can.
 
@@ -412,7 +413,7 @@ with `contributes.ui`:
   refused (fail-closed). `contributes.ui[].region` must be one of those granted regions.
 - `entry` is the built ESM module, **relative to your plugin root** (e.g. `ui/toolbar.js`). The
   extension serves it as a local `vscode-webview://` resource (its dir is added to the webview's
-  `localResourceRoots`) and the webview **dynamic-imports** it. A granted region *without* a
+  `localResourceRoots`) and the webview **dynamic-imports** it. A granted region _without_ a
   `contributes.ui` entry falls back to a first-party/co-bundled component (unchanged behavior).
 
 **The build contract — externalize React.** Your bundle must **not** bundle its own React: the host
@@ -437,11 +438,7 @@ import { useEffect, useState } from "react"
 export default function Toolbar({ api }) {
 	const [reply, setReply] = useState("")
 	useEffect(() => api.onMessage((m) => setReply(String(m))), [api])
-	return (
-		<button onClick={() => api.postMessage({ deploy: api.context.task?.taskId })}>
-			Deploy {reply}
-		</button>
-	)
+	return <button onClick={() => api.postMessage({ deploy: api.context.task?.taskId })}>Deploy {reply}</button>
 }
 ```
 
@@ -526,7 +523,7 @@ action, and the "uses AI (billed)" badge + consent affordance, plus **two instal
 > (plus the `settings-tab` UI region), but the install affordances + AI-consent controls live in the
 > Marketplace Plugins tab.
 
-> **Direct-URL install is supported; a remote *registry* is not.** There is no
+> **Direct-URL install is supported; a remote _registry_ is not.** There is no
 > `shofer plugin search` / `install name@version` / hosted directory — install is a local archive,
 > a local directory, or a **direct** archive URL. Registry lookup + a trust/signing chain stay
 > deferred.
@@ -542,6 +539,87 @@ same host-agnostic core helper:
 - **Validated + hardened** — the fetched bytes are unpacked through the same `.shofer-plugin`
   pipeline: a valid `plugin.json` at the archive root is required, and unpacking rejects absolute
   paths, `..` segments, and symlink/hardlink entries (zip-slip hardened).
+
+---
+
+## Plugin declarations (`.shofer/plugins.json`)
+
+The discovery directories in [§1](#discovery-directories) and the CLI/Marketplace
+installs in [§8](#8-packaging--install) cover a plugin whose **code is already
+present** as an installed directory. A `.shofer/plugins.json` **declaration** covers
+the complementary need — stating **which** plugins a scope wants, **from where**,
+and at **which version** — without committing the plugin bytes. "Declare, don't
+vendor": only the declaration lives in `.shofer/`, so the tree stays text-only,
+reproducible, and zip/overlay-able. Plugin _config_ already flows through
+`.shofer/settings.json` (`pluginConfigs`); the declaration adds the missing
+source/version/enablement lockfile.
+
+### The declaration file
+
+`.shofer/plugins.json` is validated fail-closed (`pluginDeclarationSchema` in
+[`plugin-declaration.ts`](packages/core/src/plugins/plugin-declaration.ts)):
+
+```json
+{
+	"version": 1,
+	"plugins": {
+		"git-guard": { "source": "./plugins/git-guard", "version": "1.0.0", "enabled": true },
+		"acme-ci": {
+			"source": "/opt/plugins/acme-ci.shofer-plugin",
+			"version": "2.1.0",
+			"config": { "baseUrl": "https://ci.acme.example" }
+		}
+	}
+}
+```
+
+Each entry is `{ source, version, config?, enabled? }`:
+
+- **`source`** — a local **directory** path or a local **`.shofer-plugin`** archive
+  path resolve today. A `marketplace:<id>@<ver>` ref or an `http(s)` URL is reserved
+  for a later pass — the resolver raises a `PluginResolveError` ("marketplace/remote
+  sources not yet supported") for those, isolated per-declaration so it never blocks
+  discovery of the physically-present plugins.
+- **`version`** — the version the resolver materializes under.
+- **`config`** — the user's config overrides, merged with the manifest's `config`
+  defaults (see [§3](#config)).
+- **`enabled`** — defaults to `true`.
+
+### Merge across scopes and governance
+
+The three scopes' declarations are cross-merged per plugin **name** by
+`mergePluginDeclarations`, under the **same** `locked.json` engine as the rest of
+the layered config (see
+[`configuration.md`](docs/configuration.md#layered-shofer-configuration)):
+
+- **Unlocked** (or global does not declare it) → more-specific wins:
+  `project ?? user ?? global`. A user/project may always **add** plugins the global
+  scope did not declare.
+- **Locked** (`plugins/<name>` in the global scope's `locked.json`) → the **global**
+  scope's entry wins and is final; user/project entries for that name are dropped,
+  and the plugin is force-enabled with its declared config authoritative per key.
+  This is the governance payoff: a read-only org-global `.shofer/` can mandate
+  "these plugins, these versions, this config — non-negotiable", while users still
+  add their own unlocked plugins.
+
+### Resolution and wiring
+
+`resolvePluginDeclaration` materializes each declared `source@version` into a
+content-addressed cache dir `<globalStorage>/plugins-cache/<name>@<version>/` — a
+directory source is copied, a `.shofer-plugin` archive is unpacked, and an
+already-materialized dir is reused idempotently. The materialized `plugin.json` is
+validated against the manifest schema and its `name` checked against the declaration
+key; a mismatch skips that one plugin with a warning.
+
+The host loader ([`pluginDeclarationLoader.ts`](src/core/config/pluginDeclarationLoader.ts))
+then folds the resolved plugins into `PluginManager` discovery: each cache dir is
+appended to the scan list (alongside the bundled, global `~/.shofer/plugins/`, and
+project `<ws>/.shofer/plugins/` dirs), its declared config seeds `pluginConfigs`
+(the user's stored values win per key for an unlocked plugin; the declaration wins
+per key for a locked one), and an `enabled !== false` (or locked) plugin is enabled.
+The path is **purely additive** — with no `plugins.json` anywhere it resolves
+nothing and discovery is unchanged. A declared plugin still passes through the same
+enable/permission/AI-consent gates as any other ([§7](#7-permissions--consent)).
 
 ---
 
@@ -639,15 +717,15 @@ them in one plugin. Read its source; it is the canonical worked example.
 Its `plugin.json` grants `tools`, `systemPrompt`, `lifecycle`, `events`, `ai`, and
 `filesystem: ["."]`, and each capability maps to a public extension point:
 
-| What it does                                       | Extension point                                                       |
-| -------------------------------------------------- | --------------------------------------------------------------------- |
-| The `ask_live_memory` tool                         | `registerTools`                                                       |
-| A memory section appended to the prompt            | `transformSystemPrompt` (gated on `ctx.ai?.hasConsent()`, not a bare `!!ctx.ai`) |
-| Answering / summarizing from memory                | **`ctx.ai.buildHandler`** (never sees keys) + the billed-calls consent |
-| Persisting observations + Q&A across restarts      | **`ctx.storage`** (its own traversal-blocked dir)                     |
-| Observing external edits                           | **`ctx.host.watch(glob, cb)`** — uses the path-carrying `cb(event: { path, type })` to record *which* file changed |
-| Observing Shofer's own file activity               | `lifecycle.afterToolCall` (+ `beforeTaskStart` / `afterTaskComplete`, `onEvent`) |
-| Periodic background compaction of the memory log   | **`ctx.registerService`** (a supervised `{ name, start, stop }` service) |
+| What it does                                     | Extension point                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| The `ask_live_memory` tool                       | `registerTools`                                                                                                    |
+| A memory section appended to the prompt          | `transformSystemPrompt` (gated on `ctx.ai?.hasConsent()`, not a bare `!!ctx.ai`)                                   |
+| Answering / summarizing from memory              | **`ctx.ai.buildHandler`** (never sees keys) + the billed-calls consent                                             |
+| Persisting observations + Q&A across restarts    | **`ctx.storage`** (its own traversal-blocked dir)                                                                  |
+| Observing external edits                         | **`ctx.host.watch(glob, cb)`** — uses the path-carrying `cb(event: { path, type })` to record _which_ file changed |
+| Observing Shofer's own file activity             | `lifecycle.afterToolCall` (+ `beforeTaskStart` / `afterTaskComplete`, `onEvent`)                                   |
+| Periodic background compaction of the memory log | **`ctx.registerService`** (a supervised `{ name, start, stop }` service)                                           |
 
 Key files: `plugins/live-memory/main.ts` (the `ShoferPlugin`), `memory-store.ts` (the `ctx.storage`
 wrapper), `memory-llm.ts` (the `ctx.ai` calls), `system-section.ts` (the prompt section), and

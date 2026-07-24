@@ -2,9 +2,12 @@
 
 ## Overview
 
-Shofer stores configuration across **four backends**, with a planned
-consolidation to reduce complexity (see [`todos/config-cleanup.md`](../../todos/config-cleanup.md)).
-This document explains all storage layers, how they merge at runtime, and
+Shofer stores configuration across several backends — VS Code `globalState`,
+`SecretStorage`, and files. Non-secret configuration has a single file-based source
+of truth under a layered `.shofer/` tree (global > user > project, with per-key
+org-policy locking); `globalState` serves as its runtime cache. See
+[`configuration.md`](configuration.md#layered-shofer-configuration) for the layered
+model. This document explains all storage layers, how they merge at runtime, and
 the import/export mechanics.
 
 ---
@@ -19,10 +22,10 @@ the import/export mechanics.
 | **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                           | Per-extension (machine-wide) | —             | Single file; no overlay                                |
 | **Global Settings**      | VS Code `globalState` (SQLite-backed)                                     | Per-extension (machine-wide) | ~96           | Flat key-value; no overlay                             |
 
-> **Planned simplification:** 14 of the 18 VS Code config keys are portable to
-> `globalState` (the other 4 are dead code or bootstrapping-only). The 31 individual
-> `SecretStorage` API keys duplicate the profiles blob and can be eliminated. See
-> [`todos/config-cleanup.md`](../../todos/config-cleanup.md) for the full plan.
+> **Layered `.shofer/` model.** Non-secret settings resolve through a three-scope
+> `.shofer/` overlay (global > user > project) with per-key org-policy locking, and
+> the profiles blob is the sole persisted store for provider secrets. See
+> [`configuration.md`](configuration.md#layered-shofer-configuration).
 
 ---
 
@@ -1258,9 +1261,16 @@ for the same data — they are different capability tiers. Simple key-value
 settings already live in `package.json` (the 18 that fit). Everything else
 lives in the webview because it _must_.
 
-### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob
+### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob — ✅ resolved
 
-API keys are stored in **two places** in `SecretStorage`:
+The per-profile LLM API keys are no longer stored as individual `SecretStorage`
+entries: the profiles blob (`shofer_config_api_config`) is their sole persisted
+store, and the current profile's secrets are sourced from it. The 8 cross-profile
+global secrets (the 7 code-index `SYNCED_SECRET_KEYS` + `openRouterImageApiKey`)
+remain individual entries. The historical duplication is described below for
+context.
+
+API keys were previously stored in **two places** in `SecretStorage`:
 
 1. **Profiles blob** (`shofer_config_api_config`) — a single JSON blob containing
    ALL profiles with their full data, including API keys (e.g.,
@@ -1283,39 +1293,30 @@ Acknowledged as debt at [`importExport.ts:172-174`](../src/core/config/importExp
 > "It seems like we don't need to have the provider settings in the proxy;
 > we can just use providerSettingsManager as the source of truth."
 
-These can be eliminated by routing ContextProxy secret reads/writes through
-`ProviderSettingsManager` instead of individual SecretStorage entries. See
-[`todos/config-cleanup.md`](../../todos/config-cleanup.md) Part B.
+This was resolved by routing the current profile's secret reads through the blob
+rather than individual SecretStorage entries. See
+[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md) Part B.
 
-### 14l. `allowedCommands` and `deniedCommands` Are Dual-Written
+### 14l. `allowedCommands` and `deniedCommands` Are Dual-Written — ✅ resolved
 
-These are written to BOTH `globalState` AND vscode config on every change
-([`webviewMessageHandler.ts:749`](../src/core/webview/webviewMessageHandler.ts:749) and
-[`ShoferProvider.ts:3613`](../src/core/webview/ShoferProvider.ts:3613)). At
-initialization, `extension.ts:135` seeds `globalState` from vscode config. The
-vscode config path should be removed — these settings already have Settings UI
-rows in the Shofer webview and are stored in `globalState`. See
-[`todos/config-cleanup.md`](../../todos/config-cleanup.md) Part A1–A2.
+These are now single-sourced in `globalState` (with their Settings UI rows in the
+Auto-Approve tab); the vscode-config dual-write and its init-seed were removed. See
+[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md) Part A1–A2.
 
 ---
 
-## 15. Planned Simplification
+## 15. Consolidated Configuration Model
 
-A comprehensive cleanup plan exists at
-[`todos/config-cleanup.md`](../../todos/config-cleanup.md). Summary:
-
-| Step  | What                                                    | Impact                                                                      |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **A** | Port 14 VS Code config keys to `globalState`            | Removes `package.json` dependency for 14 settings; adds Settings UI rows    |
-| **B** | Eliminate 31 individual SecretStorage keys              | SecretStorage reduced to single `shofer_config_api_config` blob             |
-| **C** | Remove 2 dead config keys                               | `devmandExecutionTimeout` and `devmandTimeoutAllowlist` have zero consumers |
-| **D** | Collapse `ProviderSettings` into `globalSettingsSchema` | Flattens schema split; all stored in `globalState`                          |
-
-After cleanup, the backend count drops from 5 (vscode config + globalState +
-SecretStorage-individual + SecretStorage-blob + files) to 3 (globalState +
-SecretStorage-blob + files). Only `customStoragePath` and `autoImportSettingsPath`
-must remain in vscode config due to bootstrapping timing (read before
-ContextProxy initializes).
+Non-secret configuration is consolidated into the layered file-based `.shofer/`
+model — three scopes (global > user > project) merged with per-key org-policy
+locking, exported/imported as a `.tar.gz` of a scope's `.shofer/` tree. See
+[`configuration.md`](configuration.md#layered-shofer-configuration) for the full
+design. `globalState` is the runtime cache for those settings; the profiles blob
+(`shofer_config_api_config`) is the sole persisted store for provider secrets. Only
+the bootstrap keys `customStoragePath` and `autoImportSettingsPath` remain in vscode
+config, because they are read before `ContextProxy` initializes. The historical
+consolidation plan is archived at
+[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md).
 
 ---
 
