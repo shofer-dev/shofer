@@ -1,20 +1,120 @@
-# Shofer Configuration Backend Cleanup
+# Shofer Configuration Cleanup & Consolidation
 
-**Goal:** Reduce the number of config storage backends from 4 to 2 (plus file-based configs)
-and eliminate duplication between the profiles blob and individual SecretStorage keys.
+**Goal:** Collapse Shofer's several configuration source-of-truth (SoT) backends into a
+single **file-based** model that always lives under **`.shofer/`**, with **secrets the only
+exception**. The payoff:
 
-Current backends (too many):
+- **Export = zip `.shofer/`.** Import = unzip into a scope. No bespoke JSON export schema.
+- **Injection = unpack a `.shofer/` tree into the global scope.** A host/integration (e.g.
+  the SaaS "config-manager") only drops a `.shofer/` directory in the global location — it
+  needs to understand nothing about individual keys or storage backends. In a SaaS /
+  untrusted-workspace deployment that global location is a **read-only path outside the
+  user's `/home`** (e.g. a ConfigMap mounted at `/etc/shofer/`), so the workspace/agent
+  **cannot tamper with org policy** — the tamper-proofing is what makes `global`-wins
+  enforcement real, not advisory.
+- **Global / user / project overlay stays**, merged at runtime, but **global wins on
+  conflict** (`global` > `user` > `project`). Global is the **organizational policy**
+  injected by the config-manager; a user or project may **add** config it does not set, but
+  must **not override** it. ⚠️ **This inverts Shofer's current precedence** ("project
+  overrides global" — `.shofer/shofermodes` > `custom_modes.yaml`, and project rules over
+  global). The inversion is the point: policy is enforced top-down, not overridden
+  bottom-up.
 
-1. `package.json` `contributes.configuration.properties` — VS Code Settings editor (18 keys)
-2. `globalState` (SQLite) — ContextProxy (~126 keys)
-3. `SecretStorage` individual keys — 31 API key entries
-4. `SecretStorage` profiles blob — `shofer_config_api_config` (duplicates #3)
+This subsumes the earlier, narrower goal (reduce backends 4→2 with `globalState` as the
+settings SoT). That backend reduction is now **Phase 1 pre-work** (Parts A–D below): it
+shrinks and unifies the surface into `globalSettingsSchema`, after which **Phase 2 / Part E**
+moves that unified surface off `globalState` and onto layered `.shofer/` files —
+`globalState` degrades from a source of truth to a runtime cache.
 
-Target backends (simplified):
+## Current state — the SoTs to consolidate
 
-1. `globalState` (SQLite) — all runtime settings via ContextProxy
-2. `SecretStorage` profiles blob — sole source of truth for API keys + profiles
-3. (unchanged) `.shofermodes`, `custom_modes.yaml`, `mcp_settings.json` — file-based configs
+Verified against [`docs/settings_overlay.md`](../docs/settings_overlay.md) and
+[`ContextProxy`](../src/core/config/ContextProxy.ts):
+
+| Config                                       | Today's SoT                                                                                 | Notes                               |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------- |
+| **Global settings** (~96 keys)               | VS Code `globalState` (SQLite `state.vscdb`) via `ContextProxy`                             | flat KV, no overlay                 |
+| **VS Code config** (18 keys)                 | `package.json` `contributes.configuration` (`arkware.*`)                                    | mostly dead/dual-written — Part A/C |
+| **Provider profiles + API keys**             | `SecretStorage` (profiles blob `shofer_config_api_config` **+** 31 individual keys)         | **SECRET** — Part B                 |
+| **Custom modes**                             | `.shofer/shofermodes` (project YAML) > `custom_modes.yaml` (global-storage YAML) > built-in | already partly file-based           |
+| **MCP servers**                              | `.shofer/mcp.json` (project) / global mcp settings                                          | already file-based                  |
+| **Slash commands / skills / rules / ignore** | `.shofer/commands`, `.shofer/skills`, `.shofer/rules[-mode]`, `.shofer/shoferignore`        | already file-based                  |
+
+The fragmentation is the problem: three storage mechanisms (globalState, SecretStorage,
+files) plus two overlay systems (modes have a 4-layer merge; globalSettings have none), so
+"what is my effective config and where does it live" has no single answer, and export
+(`importExport.ts`) hand-assembles `{ providerProfiles, globalSettings }` from two of them.
+
+## Target — the canonical `.shofer/` layout
+
+Everything non-secret becomes a file under `.shofer/`, at each of three scopes:
+
+```
+.shofer/
+├── settings.json        # the ~96 globalSettings keys (was globalState)   ← NEW home
+├── shofermodes          # custom modes (YAML)                              (exists)
+├── mcp.json             # MCP servers                                       (exists)
+├── commands/            # slash commands (*.md)                             (exists)
+├── skills/  skills-<mode>/   # skills                                       (exists)
+├── rules/   rules-<mode>/    # rules / custom instructions                  (exists)
+└── shoferignore         # tool access control                              (exists)
+```
+
+Scopes and their roots:
+
+| Scope       | Root                                                                                                                 | Writable by the workspace? | Who writes it                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| **global**  | a **read-only path outside `/home`** — SaaS: ConfigMap mount (e.g. `/etc/shofer/`); standalone default: `~/.shofer/` | **no** (RO mount)          | host/integration (config-manager)     |
+| **user**    | a per-user `.shofer/` distinct from global (open Q1)                                                                 | yes                        | the user                              |
+| **project** | `<workspace>/.shofer/`                                                                                               | yes                        | committed to the repo, shared via git |
+
+The global root is **configurable** (env, see E6) precisely so the SaaS can point it at a
+RO out-of-`/home` mount while a standalone FOSS install keeps a writable `~/.shofer/`. The
+RO-outside-home property is a **hard requirement** for the org-policy model: a global layer
+the workspace could edit would make `global`-wins meaningless.
+
+**Effective config = deep-merge(project, user, global)** with **`global` winning
+key-by-key** (org policy on top). This means the existing mode/rules precedence engine must
+be **reversed** (today it lets project/`.shofer` win) and then reused everywhere — one
+merge, one precedence, direction `global > user > project`. A user/project can only
+contribute keys/modes/rules the global layer leaves unset.
+
+> **Refinement (open Q5):** a blanket "global always wins" makes user/project layers unable
+> to override _anything_ global defines. Most policy systems want a mix: some global keys
+> are **hard-locked** (never overridable — the org policies this feature exists to enforce)
+> and others are **defaults** (overridable by user/project). Decide whether v1 is blanket
+> global-wins or carries a per-key locked-vs-default distinction (e.g. a `locked: [...]`
+> list, or a `@locked` marker) so users keep personalization for non-policy settings.
+
+### The secrets exception
+
+API keys / provider profiles do **not** become files — they stay in `SecretStorage`
+(Part B keeps the profiles blob as their sole SoT). In a SaaS / untrusted-workspace
+deployment the workspace holds **no** provider secret at all; access is gated by the
+attestation edge (`arkware.ai` `docs/authnz_arch.md` §11.4/§15). `.shofer/settings.json`
+may reference a profile **by name/id**, never by key value — which is exactly what keeps
+"export = zip `.shofer/`" safe to hand around. Core stays FOSS-agnostic: it only knows
+"secrets live in `SecretStorage`, not in files"; the SaaS authnz is an integration concern,
+not core's (Core Self-Sufficiency Rule).
+
+## Export / import become trivial (Part E consequence)
+
+- **Export**: zip the chosen scope's `.shofer/` (default: merged/global view). Replaces
+  `exportSettings` in [`importExport.ts`](../src/core/config/importExport.ts).
+- **Import**: unzip into a scope root. Replaces `importSettingsFromPath` +
+  `providerSettingsManager.import` + `contextProxy.setValues`. Secrets, if any, applied
+  out of band, never from the zip.
+- **`autoImportSettingsPath`** is subsumed: "load on start" becomes "read the global
+  `.shofer/` that was unpacked there" (keep a thin bootstrap pointing at the global root;
+  see D2).
+
+## SaaS integration (why this is being asked for now)
+
+`arkware.ai` user-console is adding **Shofer config bundles** associated with workspaces
+(parent-repo feature). With this refactor a bundle **is** a zipped `.shofer/` tree, and
+resource-manager's injection is "unpack it into the workspace's global `.shofer/`"
+(a ConfigMap-mounted directory) — no per-key ConfigMap, no schema knowledge. User/project
+`.shofer/` still override. Core remains standalone and never learns the SaaS exists.
 
 ---
 
@@ -216,14 +316,86 @@ API keys are stored in TWO places:
 
 ---
 
+## Part E: Move the settings SoT from `globalState` to layered `.shofer/` files
+
+This is the new end-state (Phase 2), done after A–D have unified everything into
+`globalSettingsSchema`.
+
+### E1. Define the on-disk shape and scopes
+
+- `globalSettingsSchema` becomes the schema for **`.shofer/settings.json`** (Schema-First
+  Persistence Rule — keep it Zod-first, `safeParse` on read, versioned per the Versioned
+  Snapshot Rule).
+- Resolve three scope roots: `global` (a **configurable, read-only, out-of-`/home`** path —
+  env `SHOFER_GLOBAL_DIR`, default `~/.shofer/` for standalone; a ConfigMap mount in SaaS),
+  `user` (open Q1), `project` (`<workspace>/.shofer/`). Treat the global root as immutable:
+  never write to it from `setValue`/the Settings UI (writes go to `user`/`project`).
+
+### E2. Layered read + merge (with the inverted precedence)
+
+- Read `settings.json` (and `shofermodes`, `rules/`, `mcp.json`, …) from all three scopes;
+  deep-merge with **`global` winning** (`global > user > project`). Build/repurpose ONE
+  precedence engine and route modes, rules, settings, and mcp through it — reversing the
+  current project-wins order (see the ⚠️ note above and open Q5 for locked-vs-default).
+
+### E3. Back `ContextProxy` with the files
+
+- `ContextProxy.getValue`/`setValue` for global-settings keys read/write the appropriate
+  scope's `.shofer/settings.json` instead of `globalState`; `globalState` becomes a hot
+  cache rehydrated from files. Add file watchers (like `.shofermodes`) to reload + refresh
+  the webview on change.
+
+### E4. Settings UI writes to a scope
+
+- The Settings webview gains a **scope selector** (global/user/project) and persists to that
+  scope's file, honoring the save-gating rules (AGENTS.md "Settings & configuration").
+
+### E5. Export/import = zip/unzip `.shofer/`
+
+- Replace `exportSettings`/`importSettingsFromPath` in
+  [`importExport.ts`](../src/core/config/importExport.ts) with zip of a scope's `.shofer/`
+  and unzip into a scope root. Secrets stay out of the zip (Part B); applied out of band.
+
+### E6. Subsume `autoImportSettingsPath`
+
+- "Load on start" = read the global `.shofer/` unpacked at the RO root. Keep only a thin
+  bootstrap resolving the global root from `SHOFER_GLOBAL_DIR` (default `~/.shofer/`), per
+  D2. The SaaS sets it to the RO ConfigMap mount.
+
+---
+
+## Open questions
+
+1. **`user` scope location** — global is the RO out-of-`/home` root and project is
+   `<ws>/.shofer/`. Where does the writable **user** layer live (a per-OS-user `~/.shofer/`?
+   a distinct dir?), and is it even needed in the single-user-per-workspace SaaS deployment
+   or only for shared/multi-user hosts? (If the SaaS workspace is single-user, `user` and
+   `project` may collapse to one writable layer.)
+2. **Format** for `settings.json` — JSON (matches globalSettings) vs YAML (matches
+   `shofermodes`). Suggest JSON for settings, keep YAML for modes.
+3. **Migration** from `globalState` → files — one-time seed on activation (D5-style) or a
+   clean break (No-Backward-Compat rule). A one-time read-and-write-out avoids "my settings
+   vanished".
+4. **Secrets in a SaaS workspace** — confirm the workspace holds **no** provider secret and
+   relies on `docs/authnz_arch.md` §11.4/§15 (built; enforcing waypoint still to be
+   hardened) rather than a mounted key.
+5. **Locked vs default** — is v1 blanket `global`-wins, or per-key locked-vs-default so users
+   keep personalization for non-policy settings? (See the ⚠️ Refinement note above.)
+
+---
+
 ## Migration order (recommended)
 
 1. **Part C first** (dead code removal) — zero risk, immediate cleanup.
 2. **Part A** (port 14 settings) — one setting at a time, each with its own Settings UI row.
    Start with A1/A2 (already dual-written, easiest). End with A4/A7 (need schema additions).
-3. **Part B** (remove individual keys) — last, after all reads go through ContextProxy.
-   Requires the A migration to be complete so all secret reads use the new routing.
-4. **Part D** (simplifications) — sweep after A+B are done.
+3. **Part B** (remove individual keys) — after all reads go through ContextProxy. Requires
+   the A migration complete so all secret reads use the new routing.
+4. **Part D** (simplifications) — sweep after A+B are done. Everything is now unified in
+   `globalSettingsSchema` with `globalState` as the single settings backend.
+5. **Part E** (move to `.shofer/` files) — the Phase-2 end-state: repoint the unified
+   surface off `globalState` onto layered files, invert precedence, zip/unzip export.
+   Depends on A–D having collapsed the surface to one schema first.
 
 ---
 
