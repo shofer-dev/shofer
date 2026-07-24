@@ -261,6 +261,32 @@ from `package.json` `contributes.configuration.properties`.
 
 ## Part B: Remove individual SecretStorage keys — eliminate blob duplication
 
+> ⛔ **BLOCKED — needs a prerequisite design decision (verified 2026-07-24).** The plan
+> below assumes every secret lives in the active provider profile. It does **not** for
+> **8 of 32 keys**, so routing them through the blob would lose or misroute credentials:
+>
+> - **`openRouterImageApiKey`** (the sole `GLOBAL_SECRET_KEYS` entry) is **not in
+>   `providerSettingsSchema`** — a GlobalSettings-only secret. `ProviderSettingsManager`'s
+>   schema parse would strip it; it cannot live in a profile without a schema change (B4
+>   already flags this).
+> - The **7 code-index secrets** (`codeIndexOpenAiKey`, `codeIndexQdrantApiKey`,
+>   `codebaseIndex{OpenAiCompatible,Gemini,Mistral,VercelAiGateway,OpenRouter}ApiKey` —
+>   exactly `SYNCED_SECRET_KEYS`) are written/read as **global, cross-profile** creds:
+>   `saveCodeIndexSettings` (`webviewMessageHandler.ts`) and controller→node
+>   `ShoferAPI.applySyncedSecrets` (`api.ts`) call `storeSecret` directly (never the active
+>   profile), and they are versioned globally (`computeConfigVersion`). Routing their reads
+>   to `activeProfile[key]` returns `undefined` → **silent RAG/Qdrant credential loss**;
+>   routing writes into the profile breaks the `SYNCED_SECRET_KEYS` global-replication
+>   contract.
+>
+> A correct Part B must first give these **global secrets a home** — either (a) keep them
+> on individual `SecretStorage` (so Part B only de-dupes the LLM-profile keys, and
+> `SECRET_STATE_KEYS`/`GLOBAL_SECRET_KEYS`/`secretCache` must **stay** for the ~8 global
+> keys), or (b) model code-index credentials as a dedicated non-LLM profile in the blob and
+> rework `saveCodeIndexSettings` + `applySyncedSecrets` + `config-manager`. Both are larger
+> than the plan below and security-relevant; **scope that decision before touching the
+> read/write routing.** The naive full-blob approach is not safely implementable.
+
 API keys are stored in TWO places:
 
 1. **Profiles blob** (`shofer_config_api_config`) — full profile data including keys,

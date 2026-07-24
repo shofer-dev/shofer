@@ -1,7 +1,20 @@
 # Shofer Configuration Reference
 
-Complete reference for all `shofer.*` VS Code settings. These are
-configured in `settings.json` (user, workspace, or folder scope).
+Reference for Shofer's runtime settings. **Most settings now live in
+`ContextProxy`/`globalState` (the `globalSettingsSchema` keys), not in
+`settings.json`** — they are edited through the Shofer **Settings** panel and read
+via `ContextProxy.getValue` (or, from `@shofer/core`, the `getHost().config` seam,
+which resolves them from `globalState`). Only a small set of **bootstrap** keys
+that must be read before `ContextProxy` exists remain as `shofer.*` VS Code
+`settings.json` entries: `shofer.customStoragePath`, `shofer.autoImportSettingsPath`
+(plus `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist` /
+`shofer.preventCompletionWithOpenTodos` / `shofer.codeIndex.embeddingBatchSize` /
+`shofer.nodes.loadBalancer`, pending migration). The end state is a single
+file-based source of truth under `.shofer/` — see
+[`../todos/config-cleanup.md`](../todos/config-cleanup.md).
+
+The sections below describe each setting's meaning; where a setting was migrated
+off VS Code config, set it via the Settings panel rather than `settings.json`.
 
 ## Command Execution
 
