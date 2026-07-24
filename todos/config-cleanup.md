@@ -306,6 +306,22 @@ from `package.json` `contributes.configuration.properties`.
 > ctor), so a naive in-proxy PSM would be a **second instance** with an unserialized
 > per-instance `_lock` → concurrent blob writes. **Do Part B only after the active-profile
 > unification.**
+>
+> **DEFINITIVE blocker (third investigation, 2026-07-24) — needs a USER product decision;
+> an AGENTS.md rule locks the current behavior.** The unification requires
+> `setDefaultApiConfiguration(name)` to **load** `name`'s settings into the live
+> `apiConfiguration` (become an _activation_). That is explicitly forbidden by the Shofer
+> **AGENTS.md "Settings & configuration"** rule — _"Making a profile the default is
+> save-gated through `pendingDefaultConfigName` → `setDefaultApiConfiguration` on Save"_ as a
+> **name-only declaration, distinguished from activation** — and by the `SettingsView` Save
+> flow (`SettingsView.tsx:517-539,602-621`), which deliberately supports editing profile A
+> while defaulting B in one Save (live config = A, default-name = B) with bespoke
+> race-handling premised on `setDefault` being a name-only delta. So the real prerequisite is
+> a **product decision: does Providers → "Default Configuration" stay a name-only declaration,
+> or become an immediate activation that mutates live `apiConfiguration`?** Only if it becomes
+> activation does `setDefaultApiConfiguration` collapse into `activateProviderProfile`,
+> unblocking the unification → then Part B. Per CLAUDE.md, changing this rule-locked behavior
+> must be **confirmed with the user first**. **Part B is blocked on that decision, not effort.**
 
 API keys are stored in TWO places:
 
