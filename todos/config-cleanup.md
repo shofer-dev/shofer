@@ -131,10 +131,36 @@ resource-manager's injection is "unpack it into the workspace's global `.shofer/
 
 ## Part A: Port 14 VS Code config settings to globalState/ContextProxy
 
-Each requires: (a) add key to `globalSettingsSchema` if missing, (b) update consumer from
-`vscode.workspace.getConfiguration("shofer").get("key")` to `ContextProxy.getValue("key")`,
-(c) add Settings UI row in the Shofer webview, (d) remove from `package.json`
-`contributes.configuration.properties`.
+Each requires: (a) add key to `globalSettingsSchema` if missing, (b) repoint the consumer
+(see the mechanism note below), (c) add Settings UI row in the Shofer webview, (d) remove
+from `package.json` `contributes.configuration.properties`.
+
+> ⚠️ **Mechanism correction (verified against source 2026-07-24).** The item bodies below
+> say "read from `getConfiguration("shofer")`", but the live consumers read through **two**
+> paths, and the fix differs by path — the naive "swap to `ContextProxy.getValue`" is
+> **wrong for core**:
+>
+> - **Host-side consumers** (`src/**`, e.g. `ShoferProvider`, `CodeActionProvider`,
+>   `vscode-lm.ts`) may read `ContextProxy` directly. `ShoferProvider.debug` was migrated
+>   this way (done).
+> - **`@shofer/core` consumers** (`packages/core/**`, e.g. `timeout-config.ts` →
+>   `apiRequestTimeout`, `file-search.ts` → `maximumIndexedFilesForFileSearch`,
+>   `NewTaskTool.ts`/`Task.ts`/`generateSystemPrompt.ts` → `newTaskRequireTodos`) read via
+>   the **host seam** `getHost().config.get(Package.name, "key", default)` and **MUST NOT**
+>   import `ContextProxy` (Core Self-Sufficiency Rule). The correct migration is to reroute
+>   the **host's `config` seam implementation** (`HostProvider.config`) to read from
+>   `ContextProxy`/globalState, so every core consumer moves in one change without crossing
+>   the boundary — not to touch each core call site. This is a prerequisite for dropping the
+>   `package.json` rows of the core-consumed keys (`apiRequestTimeout`,
+>   `maximumIndexedFilesForFileSearch`, `newTaskRequireTodos`, `debugProxy.*`,
+>   `vsCodeLmModelSelector`), since removing the vscode registration while the seam still
+>   reads vscode config would strip their Settings-UI/schema without giving them a home.
+>
+> **Status:** (a) schema keys added for all 9 migrating keys + classified in
+> `SETTING_SYNC_SCOPE` (commit `8fa1e95ba`); `debug` fully migrated host-side (commit
+> `106f99a8b`). Remaining: the `getHost().config` seam reroute (core keys), the host-side
+> `enableCodeActions`/`enableLlmProviderIntegration` repoints, the `allowedCommands`/
+> `deniedCommands` dual-write removal, and the `package.json`/UI steps.
 
 ### A1. `allowedCommands` — Dual-write cleanup
 
