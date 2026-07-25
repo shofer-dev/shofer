@@ -29,6 +29,32 @@ Shofer uses a single unified ToolGroup system as the **single source of truth** 
 
 ## Where Each Tool Gets Its Group
 
+Three origins, three resolution paths, one shared `ToolGroup` vocabulary:
+
+```mermaid
+flowchart TD
+    NAT["Shofer native tool"] --> NG["TOOL_GROUPS<br/>packages/types/src/tool.ts<br/>the canonical declaration"]
+
+    EXT["external LM tool<br/>from a companion extension"] --> EF["filterPrivateToolsForMode<br/>reads the extension's toolGroups config"]
+    EXT --> EA["getToolGroupForSayTool<br/>infers from the tool-name prefix:<br/>browser_ to browser, ide_ to execute"]
+
+    MCPT["MCP server tool"] --> M1{"toolGroups override<br/>in mcp.json?"}
+    M1 -->|yes| GROUP
+    M1 -->|no| M2{"group field in the<br/>server's tool definition?"}
+    M2 -->|yes| GROUP
+    M2 -->|no| M3["default: uncategorized"]
+    M3 --> GROUP
+
+    NG --> GROUP["the tool's ToolGroup"]
+    EF --> GROUP
+    EA --> GROUP
+
+    GROUP --> USE1["mode filtering"]
+    GROUP --> USE2["auto-approval classification"]
+
+    EF -.->|"these two paths are independent<br/>and MUST agree"| EA
+```
+
 ### 1. Shofer Native Tools — Declared in Code
 
 Each native tool is assigned to a group in [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) in `packages/types/src/tool.ts`. This is the canonical source for all built-in tools.
@@ -119,6 +145,25 @@ When a mode requests tools, each tool's group is checked against the mode's allo
 | code-search   | `read`, `execute`, `browser`, `mcp`, `questions`                                               |
 | web-search    | `browser`, `questions`, `mcp`                                                                  |
 | reviewer      | `read`, `execute`, `browser`, `mcp`, `subtasks`, `questions`                                   |
+
+Worked through for a mode declaring `tools: ["read", "mcp"]`:
+
+```mermaid
+flowchart TD
+    MODE["mode with tools: read, mcp"]
+
+    MODE --> RD["read group<br/>native read tools + MCP tools<br/>explicitly classified read"]
+    MODE --> GW["mcp gateway<br/>use_mcp_tool, access_mcp_resource"]
+    GW -->|"the gateway implies visibility<br/>for the uncategorized group"| UN["ungrouped MCP tools<br/>default uncategorized"]
+
+    AAT["ALWAYS_AVAILABLE_TOOLS"] -->|"bypasses mode filtering entirely"| VIS
+    RD --> VIS["visible to the model in this mode"]
+    UN --> VIS
+
+    OUT["MCP or native tools classified<br/>write, execute or browser"] -.->|"group absent from the mode"| NOPE["not visible"]
+
+    UN -->|"visibility is not approval —<br/>still gated by alwaysAllowUncategorized"| APP["auto-approval decides separately"]
+```
 
 ### Always-available tools
 

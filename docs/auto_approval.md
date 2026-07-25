@@ -26,6 +26,60 @@ The possible decisions are:
 | `ask`     | User is prompted for approval.                             |
 | `timeout` | Auto-approve after a countdown (follow-up questions only). |
 
+```mermaid
+flowchart TD
+    IN["checkAutoApproval(ask, text, state)"] --> NB{"isAutoApprovableAsk(ask)?<br/>today only command_output"}
+    NB -->|yes| APPROVE["approve"]
+    NB -->|no| MASTER{"autoApprovalEnabled?"}
+    MASTER -->|no| ASK["ask"]
+    MASTER -->|yes| K{"which ask kind?"}
+
+    K -->|followup| FU["alwaysAllowFollowupQuestions<br/>+ followupAutoApproveTimeoutMs"]
+    K -->|use_mcp_server| MCP["alwaysAllowMcp,<br/>then the per-group GROUP_GATE"]
+    K -->|command| CMD["alwaysAllowExecute,<br/>then allowedCommands / deniedCommands"]
+    K -->|tool| TOOL["unconditional lists,<br/>then per-group and hardcoded branches"]
+    K -->|"anything else"| ASK
+
+    FU --> TIMEOUT["timeout"]
+    FU --> ASK
+    MCP --> APPROVE
+    MCP --> ASK
+    CMD --> APPROVE
+    CMD --> DENYD["deny"]
+    CMD --> ASK
+    TOOL --> APPROVE
+    TOOL --> ASK
+```
+
+### The ask-level fast path, and why idle asks are excluded
+
+Step 1 above is not a convenience: `isAutoApprovableAsk` short-circuits
+`Task.ask()` **synchronously**, without entering `pWaitFor` — so it never drains
+the message queue and never handles a `messageResponse`. `ShoferAsk` is
+partitioned across four *state* categorizers, and the auto-approvable set is an
+**orthogonal policy predicate** layered on top of that partition, not a fifth
+member of it:
+
+```mermaid
+flowchart TD
+    subgraph PART["the partition — every ShoferAsk belongs to exactly one"]
+        direction LR
+        IDLE["isIdleAsk<br/>completion_result, api_req_failed,<br/>resume_completed_task, mistake_limit_reached,<br/>auto_approval_max_req_reached"]
+        RES["isResumableAsk<br/>resume_task"]
+        INT["isInteractiveAsk<br/>followup, command, tool,<br/>use_mcp_server, budget_limit"]
+        RUN["isAgentRunningAsk<br/>command_output"]
+    end
+
+    AAA["isAutoApprovableAsk<br/>command_output"]
+    AAA -->|"invariant, asserted by message.test.ts"| RUN
+    AAA -.->|"MUST NOT overlap — the fast path<br/>would strand queued messages and feedback"| IDLE
+```
+
+An auto-approvable ask **implies** an agent-running ask; an idle ask (one that
+ends a turn) must never be auto-approvable. The two sets happen to share the same
+single member today, but they encode different policies and must stay separate
+declarations.
+
 ---
 
 ## Auto-Approval Categories (Toggles)
@@ -225,6 +279,28 @@ When enabled, each command is first parsed into sub-commands (split by `&&`, `||
 | `["git"]`                | `[]`           | `npm install`        | `ask_user` (no match)             |
 | `[]` (empty)             | `[]`           | `anything`           | `ask_user` (nothing matches)      |
 
+```mermaid
+flowchart TD
+    C["execute_command ask"] --> G{"alwaysAllowExecute?"}
+    G -->|no| ASK["ask the user"]
+    G -->|yes| DANG{"dangerous substitution<br/>pattern present?"}
+    DANG -->|"yes — never auto-approved,<br/>even with allowedCommands = *"| ASK
+    DANG -->|no| SPLIT["split into sub-commands<br/>on && || ; pipe & and newlines"]
+    SPLIT --> EACH["per sub-command:<br/>longest prefix match wins"]
+    EACH -->|"allowlist match only"| SA["auto_approve"]
+    EACH -->|"denylist match only"| SD["auto_deny"]
+    EACH -->|"both match"| SL["longer prefix wins"]
+    EACH -->|"neither matches"| SU["ask_user"]
+    SA --> AGG
+    SD --> AGG
+    SL --> AGG
+    SU --> AGG
+    AGG{"aggregate the chain"}
+    AGG -->|"any sub-command denied"| DENY["auto_deny"]
+    AGG -->|"all sub-commands approved"| APP["auto_approve"]
+    AGG -->|otherwise| ASK
+```
+
 **Decision logic per sub-command:**
 
 - If only an allowlist match → `auto_approve`
@@ -272,6 +348,27 @@ maps it to the toggle that must **also** be enabled:
 | `subtasks`      | `alwaysAllowSubtasks`                             |
 | `questions`     | `alwaysAllowFollowupQuestions`                    |
 | `uncategorized` | `alwaysAllowUncategorized`                        |
+
+```mermaid
+flowchart TD
+    IN["ask: use_mcp_server"] --> M{"alwaysAllowMcp?"}
+    M -->|no| ASK["ask"]
+    M -->|yes| T{"payload type"}
+
+    T -->|access_mcp_resource| OK["approve — no per-group stage"]
+    T -->|"use_mcp_tool (incl. async)"| RES["getMcpToolGroup()<br/>auto-approval/mcp.ts"]
+
+    RES --> R1["1. user override — toolGroups in mcp.json"]
+    R1 --> R2["2. server-declared group field"]
+    R2 --> R3["3. default: uncategorized"]
+    R3 --> GG["isGroupAutoApproved(group, ...)<br/>GROUP_GATE, applyModifiers false"]
+    GG -->|"the group's toggle is on"| OK
+    GG -->|"the group's toggle is off"| ASK
+```
+
+The `mcp` gateway grants **visibility**, not auto-execution: an ungrouped MCP
+tool resolves to `uncategorized` and therefore still needs
+`alwaysAllowUncategorized` on top of `alwaysAllowMcp`.
 
 > **One source of truth (§4).** `GROUP_GATE` is the single per-group gating table,
 > evaluated via `isGroupAutoApproved()` by **both** the MCP path (above) and the

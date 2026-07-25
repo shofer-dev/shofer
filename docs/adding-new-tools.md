@@ -36,6 +36,60 @@ Shofer supports four tool integration patterns. Choose the one that fits your us
 | 10  | Auto-approval registration                                      | If tool is auto-approved |
 | 11  | i18n strings (`chat.json`)                                      | If tool shows UI         |
 
+The same eleven steps as a touch-point map — four concerns, plus the three
+plumbing points that are not numbered steps but are just as load-bearing
+(`toolParamNames`, `TOOL_DISPLAY_NAMES`, and the `write`-group fileRegex
+contracts):
+
+```mermaid
+flowchart TD
+    NEW["new native tool 'my_tool'"]
+
+    subgraph CONTRACT["contract — what the model sees, what reaches the handler"]
+        direction TB
+        S1["1. schema via defineNativeTool<br/>prompts/tools/native-tools/ + its index.ts"]
+        S2["2. toolNames — packages/types/src/tool.ts"]
+        S6["6. NativeToolArgs — src/shared/tools.ts"]
+        TPN["toolParamNames — src/shared/tools.ts<br/>parser whitelist: an unlisted param is silently dropped"]
+    end
+
+    subgraph GROUPING["grouping — drives mode filtering and the tools UI"]
+        direction TB
+        S3["3. TOOL_GROUPS, or ALWAYS_AVAILABLE_TOOLS<br/>to bypass mode filtering"]
+        DN["TOOL_DISPLAY_NAMES"]
+        WR["write group only — validateToolUse.ts:<br/>WRITE_MUTATOR_TOOLS, MUTATION_GATING_PARAMS,<br/>getMutatedPaths()"]
+    end
+
+    subgraph RUNTIME["runtime path"]
+        direction TB
+        S7["7. NativeToolCallParser — BOTH switches:<br/>createPartialToolUse() and parseToolCall()"]
+        S5["5. router case + toolDescription()<br/>presentAssistantMessage.ts"]
+        S4["4. handler — BaseTool subclass<br/>packages/core/src/tools/"]
+    end
+
+    subgraph SURFACE["UI and approval — conditional"]
+        direction TB
+        S8["8. ShoferSayTool.tool — camelCase"]
+        S9["9. ChatRow case"]
+        S11["11. i18n — locales/en/chat.json"]
+        S10["10. auto-approval registration"]
+    end
+
+    NEW --> S1
+    S1 --> S2 --> S6 --> TPN
+    NEW --> S3
+    S3 --> DN
+    S3 --> WR
+    NEW --> S7
+    S7 -->|"nativeArgs"| S5 --> S4
+    S4 -->|"askToolApproval — always, even for silent tools"| S8
+    S8 --> S9
+    S8 --> S11
+    S8 --> S10
+
+    S7 -.->|"omit either switch: nativeArgs is undefined,<br/>the dispatcher rejects the call with<br/>'missing nativeArgs' and execute() never runs"| BOOM["generic Provider Error,<br/>no handler logs"]
+```
+
 ---
 
 ## Step 1: Tool Schema
@@ -262,6 +316,27 @@ Auto-approval decisions happen in `checkAutoApproval()` in [`packages/core/src/a
 | `"use_mcp_server"` | `use_mcp_tool`, `access_mcp_resource`, `call_mcp_tool_async` | `JSON.parse(text).type` must be `"use_mcp_tool"` or `"access_mcp_resource"`; gated by `alwaysAllowMcp` (plus `alwaysAllowUncategorized` for tools not in a configured MCP server group).                                                                                                                                                                                                             |
 | `"followup"`       | `ask_followup_question`                                      | Gated by `alwaysAllowFollowupQuestions` + `followupAutoApproveTimeoutMs`.                                                                                                                                                                                                                                                                                                                            |
 
+A tool's name exists in **two spellings**, and the `ask:"tool"` path crosses
+between them. The handler constructs the camelCase `ShoferSayTool.tool`;
+`TOOL_GROUPS` is keyed by the snake_case `ToolName`; `SAY_TOOL_TO_NATIVE_NAME`
+is the only bridge:
+
+```mermaid
+flowchart TD
+    H["handler builds ShoferSayTool<br/>{ tool: 'myTool' } — camelCase"] --> CA["checkAutoApproval()<br/>auto-approval/index.ts"]
+    CA --> BR{"which branch matches<br/>the camelCase name?"}
+
+    BR -->|"read, write, execute, browser — group-driven"| MAP["SAY_TOOL_TO_NATIVE_NAME<br/>auto-approval/tools.ts<br/>'myTool' to 'my_tool'"]
+    MAP --> TG["TOOL_GROUPS<br/>packages/types/src/tool.ts<br/>'my_tool' to its ToolGroup"]
+    TG --> TOG["the group's alwaysAllow* toggle"]
+
+    BR -->|"subtasks, mode, MCP-status — hardcoded"| HL["a hardcoded camelCase allowlist<br/>inside checkAutoApproval()"]
+    HL --> TOG
+
+    MAP -.->|"missing entry: the group falls through<br/>to prefix inference, likely uncategorized"| FALL["decision: ask,<br/>even with the toggle on"]
+    HL -.->|"name absent from the allowlist"| FALL
+```
+
 **Decision matrix for a new tool:**
 
 - **`read` / `write` / `execute` / `browser` group, `ask:"tool"`** — no auto-approval code changes needed beyond Step 3. Make sure the camelCase → snake_case entry exists in `SAY_TOOL_TO_NATIVE_NAME` in [`tools.ts`](../packages/core/src/auto-approval/tools.ts) so `getToolGroupForSayTool` can resolve the group.
@@ -377,6 +452,26 @@ sse, streamable-http) that a plugin ships.
 - **Full transport/config/auto-approval reference**: [`mcp.md`](mcp.md).
 
 ### Choosing between A and B
+
+```mermaid
+flowchart TD
+    PL["Shofer plugin"]
+
+    PL -->|"permissions.tools"| A["A — registerTools(ctx)<br/>defineCustomTool definitions"]
+    A --> COL["pluginRegistry.collectTools()<br/>build-tools.ts"]
+    COL --> REG["customToolRegistry.register(def, 'plugin')"]
+    REG --> DISP["in-process dispatch in the core Task loop<br/>customToolRegistry.getDispatchable(name).execute(...)<br/>presentAssistantMessage.ts"]
+
+    PL -->|"permissions: mcpServers"| B["B — contributes.mcpServers<br/>in plugin.json"]
+    B --> HUB["McpHub.getContributedMcpServers()<br/>merged with user-configured servers"]
+    HUB --> MCPP["standard MCP path:<br/>use_mcp_tool / access_mcp_resource"]
+
+    DISP --> MODEL["the model calls the tool"]
+    MCPP --> MODEL
+```
+
+Both paths work identically in the VS Code host, the CLI, and headless
+`shofer serve` — B additionally requires its server process to be reachable.
 
 | Question                         | A — `registerTools`         | B — `mcpServers`                 |
 | -------------------------------- | --------------------------- | -------------------------------- |

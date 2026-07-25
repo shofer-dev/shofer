@@ -19,12 +19,15 @@ updates in place via the existing partial-message mechanism and disappears when
 
 ## Data flow
 
-```
-llm-provider                  vscode-lm.ts            stream.ts            Task.ts              ChatRow.tsx
-─────────────                 ────────────            ─────────             ───────              ───────────
-emit structured marker  →     detect \x00 prefix  →   yield                post partial    →    inline row with
-(\x00tool_preparing\x00       via regex, yield        tool_preparing       webview message       spinner + bytes
- toolName\x00bytes\x00)       tool_preparing chunk     chunk type          say(…,partial=true)
+```mermaid
+flowchart LR
+    LP["llm-provider<br/>emit structured marker<br/>NUL tool_preparing NUL toolName NUL bytes NUL"]
+    VL["vscode-lm.ts<br/>detect the NUL-delimited prefix via regex,<br/>yield a tool_preparing chunk"]
+    ST["stream.ts<br/>ApiStreamToolPreparingChunk<br/>in the chunk union"]
+    TK["Task.ts<br/>say('tool_preparing', ..., partial=true)<br/>posts the partial webview message"]
+    CR["ChatRow.tsx<br/>inline row with spinner,<br/>tool name and byte count"]
+
+    LP --> VL --> ST --> TK --> CR
 ```
 
 All markers for the same tool index pass through the same `say(…, partial=true)`

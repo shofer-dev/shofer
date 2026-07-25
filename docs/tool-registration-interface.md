@@ -6,6 +6,33 @@ Shofer discovers extension-provided tools through a **private command channel**
 instead of `vscode.lm.tools` (which is GitHub Copilot's interface). This keeps
 extension tools invisible to Copilot while remaining fully available to Shofer.
 
+The contract has two halves — **discovery** (once per tool-list build) and
+**invocation** (per tool call). Both hops are plain VS Code commands, so the
+provider extension never touches `vscode.lm`:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Shofer
+    participant CFG as VS Code config
+    participant P as provider extension
+    participant R as private tool registry
+
+    Note over S,R: discovery — build-tools.ts
+    S->>CFG: read privateToolProviders
+    CFG-->>S: providerId to getDefinitionsCommand + invokeToolCommand
+    S->>P: executeCommand(getDefinitionsCommand)
+    P-->>S: ToolDefinition[] with name, description, inputSchema, optional group
+    S->>S: resolvePrivateToolGroup() per tool
+    S->>R: record name to invokeToolCommand
+
+    Note over S,R: invocation — presentAssistantMessage.ts
+    S->>R: isPrivateLmTool(name)
+    R-->>S: getPrivateToolInvokeCommand(name)
+    S->>P: executeCommand(invokeToolCommand, name, input)
+    P-->>S: ToolResult with content and optional is_error
+```
+
 ## Provider Registration
 
 An extension registers as a tool provider by adding an entry to the VS Code

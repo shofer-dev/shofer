@@ -16,42 +16,46 @@
 
 Every tool call goes through this pipeline. Failures at any stage short-circuit the call:
 
+```mermaid
+flowchart TD
+    LLM["LLM emits a tool_use block"] --> A
+
+    A["Stage A — structural validation"]
+    A --> A1["A1 missing tool_use.id<br/>XML tool calls unsupported"]
+    A --> A2["A2 missing nativeArgs<br/>streaming truncation or malformed JSON"]
+    A --> A3["A3 valid JSON, required fields missing<br/>vscode-lm XML leak into string values"]
+    A --> B
+
+    B["Stage B — semantic validation<br/>validateToolUse"]
+    B --> B1["B1 unknown tool name"]
+    B --> B2["B2 tool disabled by user"]
+    B --> B3["B3 tool not allowed in current mode"]
+    B --> B4["B4 file restriction error<br/>write-group regex mismatch"]
+    B --> C
+
+    C["Stage C — repetition check<br/>ToolRepetitionDetector"]
+    C --> C1["C1 identical consecutive calls<br/>exceeding the limit"]
+    C --> D
+
+    D["Stage D — approval gate<br/>askApproval"]
+    D --> D1["D1 user rejects, or provides<br/>feedback instead of approving"]
+    D --> E
+
+    E["Stage E — tool execution<br/>tool handler"]
+    E --> E1["E1 missing required parameter"]
+    E --> E2["E2 runtime error in the handler"]
+    E --> E3["E3 protected file or .shoferignore block"]
+    E --> E4["tool-specific business-logic error"]
+    E --> F
+
+    F["Stage F — escalation, after the tool returns<br/>consecutiveMistakeCount >= consecutiveMistakeLimit<br/>task asks the user for guidance"]
+
+    classDef fail stroke-dasharray: 4 3
+    class A1,A2,A3,B1,B2,B3,B4,C1,D1,E1,E2,E3,E4 fail
 ```
-[LLM emits tool_use block]
-    │
-    ▼
-Stage A — Structural validation
-    ├─ Missing tool_use.id (XML tool calls unsupported)
-    ├─ Missing nativeArgs (streaming truncation / malformed JSON)
-    └─ Valid JSON but required fields missing (vscode-lm XML leak into string values)
-    │
-    ▼
-Stage B — Semantic validation (validateToolUse)
-    ├─ Unknown tool name
-    ├─ Tool disabled by user
-    ├─ Tool not allowed in current mode
-    └─ File restriction error (write group regex mismatch)
-    │
-    ▼
-Stage C — Repetition check (ToolRepetitionDetector)
-    └─ Identical consecutive tool calls exceeding limit
-    │
-    ▼
-Stage D — Approval gate (askApproval)
-    ├─ User rejects ("No" button)
-    └─ User provides feedback instead of approving
-    │
-    ▼
-Stage E — Tool execution (tool handler)
-    ├─ Missing required parameter
-    ├─ Runtime error in handler
-    ├─ Protected file / .shoferignore block
-    └─ Tool-specific business-logic error
-    │
-    ▼
-Stage F — Escalation (after tool returns)
-    └─ consecutiveMistakeCount ≥ consecutiveMistakeLimit → task asks user for guidance
-```
+
+Each dashed leaf is a failure that **short-circuits the call** at that stage; the
+solid spine is the path a successful call takes.
 
 ---
 

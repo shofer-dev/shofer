@@ -8,6 +8,37 @@ Complete reference for all native tools available in Shofer, their mode availabi
 > derived (schema-as-contract). A golden-snapshot test locks each tool's schema.
 > See [`adding-new-tools.md`](adding-new-tools.md) for the full procedure.
 
+## How a native tool call is dispatched
+
+Every tool in this reference travels the same path. Nothing below is per-tool:
+the only tool-specific pieces are the parser case that builds `nativeArgs`, the
+router case, and the handler itself.
+
+```mermaid
+flowchart TD
+    STREAM["provider stream — tool_use blocks"] --> P["NativeToolCallParser"]
+    P -->|"partial args — createPartialToolUse()"| HP["tool.handlePartial()<br/>streams a live ChatRow"]
+    P -->|"complete args — parseToolCall()"| NA{"nativeArgs built?"}
+    NA -->|no| REJ["dispatcher rejects:<br/>'missing nativeArgs'<br/>see tool-call-failures.md A2"]
+    NA -->|yes| VAL["validateToolUse()<br/>name, user-disabled, mode, fileRegex"]
+    VAL --> REP["toolRepetitionDetector.check()"]
+    REP --> ROUTE["router — switch on block.name<br/>presentAssistantMessage.ts"]
+    ROUTE -->|"file-mutating tools"| CP["checkpointSaveAndMark()"]
+    CP --> H
+    ROUTE --> H["tool.handle(task, block, callbacks)<br/>BaseTool subclass"]
+    H --> EX["execute(params, task, callbacks)"]
+    EX --> AP["this.askToolApproval(...)<br/>renders the ChatRow, then checkAutoApproval()"]
+    AP -->|approve| WORK["the tool does its work"]
+    AP -->|"ask, and the user rejects"| DEN["toolDenied — later tools in the turn are skipped"]
+    WORK --> RES["pushToolResult() — exactly one tool_result"]
+    DEN --> RES
+```
+
+Mode filtering is **not** in this path: it happens upstream, when the tool list
+is built (see [§Mode × Tool Availability](#mode--tool-availability) and
+[`tool_access.md`](tool_access.md)). A handler never inspects the current mode —
+by the time `execute()` runs, the filter has already authorized the call.
+
 ## Mode Availability
 
 The six built-in modes (`DEFAULT_MODES` in [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)). See [`built-in-modes.md`](built-in-modes.md) for the authoritative source.
@@ -440,6 +471,29 @@ Pauses agent execution for the given number of seconds. Useful for polling exter
 | `set_task_title`          | 🟣 AW  | –     |        ✅        |   ✅   | Set descriptive title for the task                                                                                     |
 | `give_feedback`           | 🟣 AW  | –     |        ✅        |   ✅   | Send feedback to the Shofer.Dev developers                                                                             |
 
+The subtask tools form one control plane around a background child. The parent
+holds every lever; the child never talks to the user directly:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as user
+    participant P as parent task
+    participant C as background child
+
+    P->>C: new_task with is_background=true
+    C-->>P: task_id returned immediately, parent does not block
+    P->>P: list_background_tasks — children, or peers under the same root
+    C->>P: ask_followup_question routed UP to the parent
+    Note over U,C: a background child's question never reaches the user
+    P->>C: answer_subtask_question unblocks the child
+    P->>C: send_message_to_task — async notification, or sync PEER PROMPT
+    P->>P: check_task_status — mode, status, pending question, result
+    C-->>P: attempt_completion result on terminal state
+    P->>P: wait_for_task blocks until all, or any, complete
+    P->>C: cancel_tasks stops work that is no longer needed
+```
+
 ### `ask_followup_question`
 
 Ask the user a question to gather information needed to proceed. Provides **two
@@ -839,6 +893,21 @@ as always-available), availability follows one mechanical rule:
 > **A tool is available in a mode iff** the mode's `tools` include the tool's
 > **group**, **or** the tool is in `ALWAYS_AVAILABLE_TOOLS`. Feature-gated tools
 > (🔒) are additionally removed when their gate is off.
+
+```mermaid
+flowchart TD
+    IN["tool T, mode M"] --> AAT{"T in ALWAYS_AVAILABLE_TOOLS?"}
+    AAT -->|yes| GATE
+    AAT -->|no| GRP{"T's group in M's 'tools'?"}
+    GRP -->|no| NO["not available in M"]
+    GRP -->|yes| FR{"write group carrying a fileRegex?<br/>architect restricts it to .md"}
+    FR -->|no| GATE
+    FR -->|yes| RX["available, but the target path is checked<br/>against the regex at execution time"]
+    RX --> GATE
+    GATE{"feature-gated tool<br/>whose gate is off?"}
+    GATE -->|yes| NO
+    GATE -->|no| YES["available"]
+```
 
 To read off availability for any tool:
 

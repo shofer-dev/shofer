@@ -71,6 +71,24 @@ union of the two allow sources. The check order in code is:
 So for the ultimate decision, allow sources combine with **OR** semantics
 (union), and the deny-list combines with **AND-NOT** semantics (set difference).
 
+```mermaid
+flowchart TD
+    IN["tool t, mode m"] --> AAT{"t in<br/>ALWAYS_AVAILABLE_TOOLS?"}
+    AAT -->|yes| ALLOW["allowed"]
+    AAT -->|no| DENY{"t in tools_denied?"}
+    DENY -->|"yes — the veto always wins"| NO["not allowed"]
+    DENY -->|no| TA{"t in tools_allowed?"}
+    TA -->|yes| ALLOW
+    TA -->|no| GRP{"t in an allowed group<br/>from 'tools'?"}
+    GRP -->|"yes, subject to per-group scoping<br/>and options such as fileRegex"| ALLOW
+    GRP -->|no| NO
+```
+
+> The `ALWAYS_AVAILABLE_TOOLS` fast-path shown first is **not** part of the
+> four-step order written above — it precedes all of it in
+> `isToolAllowedForMode()`. See
+> [§Decision rule omits `ALWAYS_AVAILABLE_TOOLS` fast-path](#decision-rule-omits-always_available_tools-fast-path).
+
 ## Field-by-field reference
 
 ### `tools`
@@ -195,6 +213,30 @@ Result: `read_file` is allowed, `execute_command` is denied. Even though
 short-circuits.
 
 ## Where this is enforced
+
+Two distinct moments: **materialization** decides what the model is ever shown,
+**runtime enforcement** re-checks the call the model actually made.
+
+```mermaid
+flowchart TD
+    subgraph MAT["materialization — what the model sees"]
+        direction TB
+        M1["mode to groups to tools<br/>gated by the validateToolUse rule"]
+        M2["per-model preferences<br/>applyModelToolCustomization"]
+        M3["feature gates — FEATURE_GATED_TOOLS<br/>plus user-disabled tools"]
+        CTA["computeToolAccess()<br/>prompts/tools/filter-tools-for-mode.ts"]
+        M1 --> CTA
+        M2 --> CTA
+        M3 --> CTA
+    end
+
+    CTA -->|"the system prompt's tool list"| LLM["model emits a tool call"]
+    LLM --> VTU["validateToolUse()<br/>tools/validateToolUse.ts<br/>the decision rule above"]
+    VTU -->|allowed| EXEC["tool handler executes"]
+    VTU -->|"not allowed"| ERR["error tool_result —<br/>see tool-call-failures.md B2, B3, B4"]
+
+    SCH["modeConfigSchema — packages/types/src/mode.ts<br/>schemas/shofermodes.json"] -.->|"validates the mode config itself"| M1
+```
 
 - **Runtime enforcement (per tool call):**
   [`packages/core/src/tools/validateToolUse.ts`](../packages/core/src/tools/validateToolUse.ts)

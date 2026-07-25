@@ -42,17 +42,25 @@ A model reaches Shofer through one of three providers. Each has a different
 **source of truth (SoT)** for tool preferences and a different transport that
 carries them into `ModelInfo`.
 
-```
-                         ModelInfo.includedTools / excludedTools
-                                        ▲
-        ┌───────────────────────────────┼───────────────────────────────┐
-        │                               │                               │
- (a) shofer provider            (b) direct upstream            (c) vscode-llm provider
-   (llm-router /v1/models)     (anthropic/openai/openrouter…)   (VS Code LM API)
-        │                               │                               │
-   llm-router catalog          curated provider ModelInfo         llm-local-router catalog
- internal/types/             packages/types/src/providers/*.ts   src/model-registry.ts
-   model_registry.go          + utils/router-tool-preferences.ts   (+ side-channel)
+```mermaid
+flowchart BT
+    ASOT["llm-router catalog<br/>internal/types/model_registry.go<br/>resolveModelToolPrefs in internal/handlers/models.go"]
+    BSOT["curated provider ModelInfo<br/>packages/types/src/providers/*.ts<br/>+ utils/router-tool-preferences.ts"]
+    CSOT["llm-local-router catalog<br/>src/model-registry.ts<br/>resolveModelToolPrefs in src/llm-client.ts"]
+
+    A["(a) shofer provider<br/>llm-router /v1/models"]
+    B["(b) direct upstream<br/>anthropic, openai, openrouter, ..."]
+    C["(c) vscode-llm provider<br/>VS Code LM API"]
+
+    MI["ModelInfo.includedTools / excludedTools"]
+
+    ASOT -->|"included_tools / excluded_tools on each model"| A
+    BSOT -->|"literal in the ModelInfo"| B
+    CSOT -->|"llmLocalRouter.getModelCapabilities side-channel"| C
+
+    A -->|"parseOpenRouterModel"| MI
+    B --> MI
+    C -->|"refreshShoferCapabilities, then getModel"| MI
 ```
 
 ### (a) `shofer` provider → `llm-router`
