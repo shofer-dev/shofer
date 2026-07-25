@@ -168,43 +168,18 @@ When the model supports images, the system prompt includes guidance about image 
 
 ## Image Sending Flow
 
-```
-User pastes/drops/picks image
-        │
-        ▼
-ChatTextArea.handlePaste / handleDrop
-  - Filters by MIME type (png/jpeg/webp)
-  - Checks shouldDisableImages
-  - FileReader.readAsDataURL()
-        │
-        ▼
-setSelectedImages(dataUrls)
-  - Capped at MAX_IMAGES_PER_MESSAGE
-  - Thumbnails render below textarea
-        │
-        ▼
-User clicks Send
-        │
-        ▼
-handleSendMessage(text, selectedImages)
-  - Images array sent via vscode.postMessage
-        │
-        ▼
-Extension host: processUserContentMentions
-  - Images included in message content blocks
-  - Image mentions resolved alongside @-mentions
-        │
-        ▼
-Task.addMessage(role: "user", content: [...text, ...image_blocks])
-  - Stored in apiConversationHistory
-        │
-        ▼
-Provider API handler
-  - Transforms image blocks to provider format
-  - maybeRemoveImageBlocks if model lacks vision support
-        │
-        ▼
-Upstream AI provider
+```mermaid
+flowchart TD
+    U["User pastes, drops, or picks an image"]
+    H["ChatTextArea.handlePaste / handleDrop<br/>filter by MIME — png, jpeg, webp<br/>check shouldDisableImages<br/>FileReader.readAsDataURL()"]
+    S["setSelectedImages(dataUrls)<br/>capped at MAX_IMAGES_PER_MESSAGE<br/>thumbnails render below the textarea"]
+    SD["User clicks Send<br/>handleSendMessage(text, selectedImages)<br/>images posted via vscode.postMessage"]
+    PM["Extension host — processUserContentMentions<br/>image mentions resolved alongside @-mentions"]
+    HIST["text and image content blocks<br/>stored in apiConversationHistory"]
+    PR["Provider API handler<br/>transform image blocks to the provider format<br/>maybeRemoveImageBlocks when the model lacks vision"]
+    UP["Upstream AI provider"]
+
+    U --> H --> S --> SD --> PM --> HIST --> PR --> UP
 ```
 
 ## Image Size Limits
@@ -247,43 +222,23 @@ SVG and BMP lack standard Anthropic image MIME types, so the tool falls back to 
 
 ### Execution Flow
 
-```
-Model calls view_image(filePath)
-        │
-        ▼
-ViewImageTool.execute(params, task, callbacks)
-  - Guard: filePath missing → sayAndCreateMissingParamError
-  - Guard: unsupported extension → error string
-  - path.resolve(task.cwd, filePath)
-  - isPathOutsideWorkspace check
-        │
-        ▼
-askApproval("tool", completeMessage)
-  - Gated by alwaysAllowReadOnly auto-approval toggle
-  - Renders file path in chat as a tool row
-        │
-        ▼
-fs.readFile(absolutePath) → Buffer
-imageBuffer.toString("base64")
-getImageMimeType(ext)
-        │
-        ▼
-┌─ MIME type known (png/jpg/gif/webp):
-│  pushToolResult([textBlock, imageBlock])
-│  ImageBlockParam { type: "image", source: { type: "base64", media_type, data } }
-│
-└─ MIME type unknown (svg/bmp):
-   pushToolResult("Image file: <path>\nBase64 data: data:image/<ext>;base64,<data>")
-        │
-        ▼
-Image block enters apiConversationHistory
-        │
-        ▼
-Next API request: provider transform converts Anthropic image block
-to provider-specific format (same transformations as user images, §Provider-Specific Transformations)
-        │
-        ▼
-Upstream AI provider visually analyzes the image
+```mermaid
+flowchart TD
+    M["Model calls view_image(filePath)"]
+    EX["ViewImageTool.execute(params, task, callbacks)<br/>guard: missing filePath — sayAndCreateMissingParamError<br/>guard: unsupported extension — error string<br/>path.resolve(task.cwd, filePath)<br/>isPathOutsideWorkspace check"]
+    AP["askApproval('tool', completeMessage)<br/>gated by the alwaysAllowReadOnly toggle<br/>renders the file path as a tool row in chat"]
+    RD["fs.readFile → Buffer<br/>imageBuffer.toString('base64')<br/>getImageMimeType(ext)"]
+    Q{"MIME type known"}
+    KNOWN["pushToolResult with text block + image block<br/>ImageBlockParam: type image,<br/>source base64, media_type, data"]
+    UNK["pushToolResult with text only —<br/>'Image file: path' + a data: URI string"]
+    HIST["block enters apiConversationHistory"]
+    TR["next API request: the provider transform converts the<br/>Anthropic image block to the provider format<br/>(same as user images)"]
+    UP["Upstream AI provider inspects the image"]
+
+    M --> EX --> AP --> RD --> Q
+    Q -->|"png, jpg, gif, webp"| KNOWN --> HIST
+    Q -->|"svg, bmp"| UNK --> HIST
+    HIST --> TR --> UP
 ```
 
 ### Streaming (`handlePartial`)
@@ -354,12 +309,12 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
   `generate_image`. The tool is documented under the **Feature-Gated Tools** section of
   [`native_tools.md`](native_tools.md#feature-gated-tools) (line 530). Corrected.
 
-- **Flow diagram simplifications** — The "Image Sending Flow" diagram mentions
-  `Task.addMessage(role: "user", content: [...])` and `possiblyRemoveImageBlocks` as
-  distinct steps. The actual implementation routes through
-  [`messageQueueService.addMessage()`](../packages/core/src/message-queue/MessageQueueService.ts:36)
-  and the provider-specific transform modules. The diagram is conceptually correct but uses
-  simplified function names that don't correspond to exact source identifiers.
+- **Flow diagram simplifications** — The "Image Sending Flow" diagram shows the host-side
+  assembly as one step. There is no single call that does it: content reaches
+  `apiConversationHistory` via the ask-response path, the queue drain
+  ([`messageQueueService.addMessage()`](../packages/core/src/message-queue/MessageQueueService.ts:36)),
+  or task start, and the provider conversion is spread across the per-provider transform
+  modules. The diagram is conceptually correct but coarser than the code.
 
 - **Missing coverage** — The doc describes three image input methods (paste, drag-drop, file picker)
   but does not cover image `@`-mention resolution (the `@`-mention flow that resolves file paths

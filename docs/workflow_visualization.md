@@ -39,48 +39,30 @@ On the **initial** open (standalone editor), the full HTML shell is built once. 
 
 ### Component Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  VS Code Extension Host                                              │
-│                                                                      │
-│  SlangEditorProvider (standalone .slang editor)                      │
-│  ├── parseSlang → validate → buildCsp → generate HTML                │
-│  └── onDidChangeTextDocument → postMessage(payload)                  │
-│                                                                      │
-│  WorkflowTask (WorkflowView embedding)                               │
-│  ├── buildWorkflowVizMeta(slangSource) → WorkflowVizMeta             │
-│  ├── buildWorkflowVizHtml(source, flowState, runState) → srcdoc HTML │
-│  └── notifySlangEditor()                                            │
-│      ├── workflowVizMeta      → postConfigUpdate (once)              │
-│      ├── workflowVizHtml       → postConfigUpdate (once)             │
-│      └── workflowVizRunState   → postConfigUpdate (per round/step)   │
-└──────────────────────────────────────────────────────────────────────┘
-                        │                          │
-                        ▼                          ▼
-┌───────────────────────────────┐  ┌──────────────────────────────────┐
-│  Standalone .slang Editor     │  │  WorkflowView (React chat UI)     │
-│  (custom editor tab)          │  │                                   │
-│                               │  │  ┌─ TaskHeader ─────────────────┐ │
-│  Payload: { type:"render",    │  │  │  workflowVizMeta rendered     │ │
-│    flow, diags }              │  │  │  natively (icon, title,       │ │
-│  (no context → full render)   │  │  │  description, params,         │ │
-│                               │  │  │  converge, budgets)           │ │
-│  ┌───────────────────────────┐│  │  └──────────────────────────────┘ │
-│  │ flow-header               ││  │                                   │
-│  │ .view-selector-tabs       ││  │  ┌─ React tab bar ──────────────┐ │
-│  │ graph-hint                ││  │  │  Events|Tree|Topo|Seq|State  │ │
-│  │ runtime-banner            ││  │  │  → postMessage(switchView)   │ │
-│  │ .zoom-controls            ││  │  └──────────────────────────────┘ │
-│  │ <svg> diagram             ││  │                                   │
-│  └───────────────────────────┘│  │  ┌─ SlangViz <iframe srcdoc> ───┐ │
-│                               │  │  │  Payload: { type:"render",    │ │
-│                               │  │  │    context:"workflowView",     │ │
-│                               │  │  │    flow, diags, runState }     │ │
-│                               │  │  │  SVG + zoom controls only     │ │
-│                               │  │  │  Theme CSS injected from      │ │
-│                               │  │  │  parent document               │ │
-│                               │  │  └───────────────────────────────┘ │
-└───────────────────────────────┘  └──────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph HOST["VS Code extension host"]
+        SEP["SlangEditorProvider<br/>parseSlang, validate, buildCsp, generate HTML<br/>onDidChangeTextDocument — postMessage(payload)"]
+        WT["WorkflowTask<br/>buildWorkflowVizMeta(slangSource)<br/>buildWorkflowVizHtml(source, flowState, runState)<br/>notifySlangEditor()"]
+    end
+
+    subgraph SA["Standalone .slang editor — custom editor tab"]
+        SAP["payload: type render, flow, diags<br/>no context — full render"]
+        SAB["flow-header, .view-selector-tabs, graph-hint,<br/>runtime-banner, .zoom-controls, svg diagram"]
+        SAP --> SAB
+    end
+
+    subgraph WVW["WorkflowView — React chat UI"]
+        TH["TaskHeader<br/>workflowVizMeta rendered natively:<br/>icon, title, description, params,<br/>converge, budgets"]
+        TABS["React tab bar<br/>Events, Tree, Sequence, State"]
+        IFR["SlangViz iframe srcdoc<br/>payload: type render, context workflowView,<br/>flow, diags, runState<br/>SVG + zoom controls only<br/>theme CSS injected from the parent document"]
+        TABS -->|"postMessage switchView"| IFR
+    end
+
+    SEP --> SAP
+    WT -->|"workflowVizMeta — postConfigUpdate, once"| TH
+    WT -->|"workflowVizHtml — postConfigUpdate, once"| IFR
+    WT -->|"workflowVizRunState — postConfigUpdate, per round/step"| IFR
 ```
 
 ---
@@ -95,6 +77,25 @@ On the **initial** open (standalone editor), the full HTML shell is built once. 
 | **WorkflowView** | `context === "workflowView"` | Native in TaskHeader | Native in React (postMessage `switchView`)         | —                  | —                  |
 
 ### View Switching
+
+```mermaid
+flowchart TD
+    subgraph S["Standalone .slang editor"]
+        TB["tab-btn click, data-view"] --> SW1["switchView(viewName)"]
+        SW1 --> CV1["_currentView = viewName"] --> RR1["safeRender(null)"]
+    end
+
+    subgraph W["WorkflowView"]
+        RT["React tab bar — workflowTab state"]
+        NAT["Events and Tree render natively in React<br/>message feed, TaskTreeView"]
+        SVZ["SlangViz postMessage switchView<br/>State sends view = swimlane"]
+        ML["slang-render.js message listener"]
+        CV2["_currentView = view, re-render<br/>no srcdoc rebuild — zoom and pan preserved"]
+
+        RT -->|"Events, Tree"| NAT
+        RT -->|"Sequence, State"| SVZ --> ML --> CV2
+    end
+```
 
 - **Standalone editor**: Tab buttons are `.tab-btn[data-view]` elements wired by JS event listeners. Clicking invokes `switchView(viewName)` → `_currentView = viewName` → `safeRender(null)`.
 - **WorkflowView**: The React tab bar in [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx) manages `workflowTab` state. Its tabs are **`[ Events ] [ Tree ] [ Sequence ] [ State ]`** — the message feed is labelled "Events" (not "Chat"), "Swimlane" is labelled "State", and a "Tree" tab embeds the task-hierarchy [`TaskTreeView`](../webview-ui/src/components/chat/TaskTreeView.tsx) rooted at the workflow task (see [`task_visualization.md`](task_visualization.md)). **There is no Topology tab here** — the per-round topology is rendered inline in the Events feed as a Mermaid snapshot under each round headline (see [Inline topology in Events](#inline-topology-in-events-workflowview)); the full interactive Topology view remains in the standalone `.slang` editor. The two remaining slang views (Sequence/State) drive the iframe: on tab change, [`SlangViz`](../webview-ui/src/components/chat/SlangViz.tsx) sends `postMessage({type:"switchView", view})` (the `view` key is still `swimlane` for the "State" tab); the render engine's `"message"` listener sets `_currentView` and re-renders — **no srcdoc rebuild**, preserving zoom and pan state. The Events/Tree tabs render natively in React, not the iframe.
@@ -173,6 +174,24 @@ Per-agent flowchart showing internal control structure.
 ## Runtime-Aware Rendering
 
 When a workflow is executing (or has completed), the `runState` field in the payload carries serialized `FlowState` data including each agent's `{ status, opIndex, sendingTo, waitingFor }` and the `mailboxHistory` array. All three views use this data:
+
+```mermaid
+flowchart LR
+    INT["slang-interpreter.ts<br/>sets waitingFor when an agent blocks on await"]
+    DS["WorkflowTask.dispatchStakes()<br/>sets sendingTo; cleared once routed or on error"]
+    ST["AgentState: status, opIndex, sendingTo, waitingFor<br/>FlowState.mailboxHistory"]
+    RS["runState<br/>postConfigUpdate workflowVizRunState<br/>postMessage runtimeState to the iframe"]
+    TOP["Topology: status(opIndex) badges,<br/>edge-runtime-active pulse"]
+    SEQ["Sequence: events from mailboxHistory,<br/>dashed pending sends"]
+    SWL["Swimlane: arrow marker at opIndex,<br/>lane header status badge"]
+
+    INT --> ST
+    DS --> ST
+    ST --> RS
+    RS --> TOP
+    RS --> SEQ
+    RS --> SWL
+```
 
 ### Topology
 

@@ -75,47 +75,43 @@ entire VS Code window (guaranteed to work but disruptive).
 
 ## 2. Architecture
 
+```mermaid
+flowchart TD
+    subgraph WV["Webview — React"]
+        CG["installWebviewCrashGuard IIFE, pre-React<br/>window error listener<br/>unhandledrejection listener<br/>message listener for ping<br/>window.__shoferHeartbeat counters"]
+        EB["ErrorBoundary — React<br/>componentDidCatch"]
+    end
+
+    subgraph HOST["Extension host — Node.js"]
+        WMH["webviewMessageHandler"]
+        RP["_recordPong<br/>RTT ring buffer"]
+        FE["_onFatalError"]
+        WL["_onWebviewLaunched"]
+        HB["Heartbeat timer, every 5s<br/>set _pingSentTs, post ping<br/>silentFor &gt; LIVENESS_TIMEOUT_MS"]
+        RW["_resetWebview(trigger)"]
+        RF["Refresh Webview — overflow@3<br/>html = '', focus, assign html,<br/>reloadWebviewAction"]
+        RLW["Reload Window — overflow@4<br/>modal confirm,<br/>workbench.action.reloadWindow"]
+
+        WMH -->|pong| RP
+        WMH -->|fatal_error| FE
+        WMH -->|webviewDidLaunch| WL
+        WL -->|_startHeartbeat| HB
+        FE --> RW
+        HB -->|"dump RTT history"| RW
+    end
+
+    CG -->|"fatal_error — uncaught error"| WMH
+    CG -->|"fatal_error — unhandled rejection"| WMH
+    CG -->|pong| WMH
+    EB -->|fatal_error| WMH
+    HB -->|ping| CG
+    RW --> WV
+    RF --> WV
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    WEBVIEW (React)                          │
-│                                                             │
-│  ┌─ installWebviewCrashGuard (IIFE, pre-React) ──────────┐ │
-│  │ • window.onerror            → fatal_error             │ │
-│  │ • window.onunhandledrejection → fatal_error           │ │
-│  │ • window.onmessage({ping})  → pong + RTT logging      │ │
-│  │ • window.__shoferHeartbeat  (diagnostic counters)     │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                                                             │
-│  ┌─ ErrorBoundary (React) ───────────────────────────────┐ │
-│  │ • componentDidCatch()       → fatal_error             │ │
-│  └───────────────────────────────────────────────────────┘ │
-└──────────────────────┬──────────────────────────────────────┘
-                       │ postMessage
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│                EXTENSION HOST (Node.js)                     │
-│                                                             │
-│  webviewMessageHandler:                                     │
-│  ┌─ "pong"         → _recordPong() (RTT ring buffer)       │
-│  │─ "fatal_error"  → _onFatalError() → _resetWebview()     │
-│  │─ "webviewDidLaunch" → _onWebviewLaunched()              │
-│  │                         → _startHeartbeat()              │
-│  └─────────────────────────────────────────────────────────┘│
-│                                                             │
-│  Heartbeat timer (every 5s):                                │
-│  ┌─ set _pingSentTs → postMessage({type:"ping"})           │
-│  │─ if (Date.now() - _lastPongTs > 30_000ms)               │
-│  │    → dump RTT history → _resetWebview("heartbeat_timeout")│
-│  └─────────────────────────────────────────────────────────┘│
-│                                                             │
-│  Manual recovery (overflow ⋯ menu):                         │
-│  ┌─ Refresh Webview  (overflow@3)                          │
-│  │  → html="" + focus + html assign + reloadWebviewAction   │
-│  │─ Reload Window    (overflow@4)   ← NUCLEAR OPTION       │
-│  │  → confirmation dialog → workbench.action.reloadWindow   │
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
+
+The two manual entries live in the toolbar overflow menu: **Refresh Webview**
+rebuilds the frame in place, **Reload Window** is the nuclear option that
+restarts the whole VS Code window behind a confirmation dialog.
 
 ---
 
@@ -563,14 +559,14 @@ public async refreshWebview(): Promise<void> {
 The heartbeat timer starts **exactly once per webview lifecycle**, when the
 webview's JS signals it is ready:
 
-```
-resolveWebviewView()
-    → webview.html = "…"
-    → [bundle loads in browser]
-    → webview sends { type: "webviewDidLaunch" }
-    → webviewMessageHandler case "webviewDidLaunch"
-    → provider._onWebviewLaunched()
-    → _startHeartbeat()
+```mermaid
+flowchart LR
+    A["resolveWebviewView()"] --> B["webview.html = …"]
+    B --> C["bundle loads in the browser"]
+    C --> D["webview sends webviewDidLaunch"]
+    D --> E["webviewMessageHandler<br/>case webviewDidLaunch"]
+    E --> F["provider._onWebviewLaunched()"]
+    F --> G["_startHeartbeat()"]
 ```
 
 It MUST NOT start earlier — pings sent during bundle load would count as
@@ -708,6 +704,20 @@ Inspectable at runtime via VS Code's webview DevTools (`Help → Toggle Develope
 
 When the webview is frozen, blank, or stuck, the user follows this ladder:
 
+```mermaid
+flowchart TD
+    S["Webview frozen, blank, or stuck"]
+    R1["Step 1 — Refresh Webview (overflow@3)<br/>html = '', build html, focus panel,<br/>assign html, reloadWebviewAction"]
+    Q{"Renderer revived"}
+    OK["Done"]
+    R2["Step 2 — Reload Window (overflow@4)<br/>modal confirmation, then<br/>workbench.action.reloadWindow"]
+    W["Window restarted — always works.<br/>Unsaved editor changes lost,<br/>running tasks terminated."]
+
+    S --> R1 --> Q
+    Q -->|"yes — React tree broken or IPC degraded"| OK
+    Q -->|"no — iframe wedged at the workbench level,<br/>renderer process dead"| R2 --> W
+```
+
 ### Step 1: Refresh Webview (`overflow@3`)
 
 What it does: `webview.html = ""` → build new HTML → focus panel → assign HTML → `reloadWebviewAction`.
@@ -826,6 +836,32 @@ address it. They are listed in implementation order: (1) and (2) must land
 together because (2) depends on (1); (3) and (4) are independent
 follow-ups, each strictly more powerful (and more expensive) than the
 previous step.
+
+The proposed ladder — **none of this is implemented**; it is the sketch the
+sub-sections below describe:
+
+```mermaid
+flowchart TD
+    A1["_doRefreshOnce — reapplyOptions false<br/>(today's refreshWebview body)"]
+    W1{"_waitForNextPong 5s"}
+    A2["_doRefreshOnce — reapplyOptions true<br/>reassign webview.options first"]
+    W2{"_waitForNextPong 5s"}
+    ESC["_refreshEscalate<br/>WebviewPanel: dispose + recreate<br/>WebviewView: visibility toggle"]
+    W3{"_waitForNextPong 10s"}
+    P["Non-modal prompt:<br/>Reload Window / Dismiss"]
+    OK["Return — renderer alive"]
+
+    A1 --> W1
+    W1 -->|pong| OK
+    W1 -->|timeout| A2 --> W2
+    W2 -->|pong| OK
+    W2 -->|timeout| ESC --> W3
+    W3 -->|pong| OK
+    W3 -->|timeout| P
+
+    classDef deferred stroke-dasharray: 4 3
+    class A1,W1,A2,W2,ESC,W3,P deferred
+```
 
 ### 15.1 Liveness Verification Primitive (`_waitForNextPong`)
 

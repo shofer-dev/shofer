@@ -188,6 +188,29 @@ Extension ──▶ Webview
 
 Both components call `vscode.postMessage({ type: "requestCommands" })` / `vscode.postMessage({ type: "requestSkills" })` on mount to ensure data freshness.
 
+Insertion is a full round-trip through the central handler — the button never
+writes the textarea directly:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as CommandsButton / SkillsButton
+    participant WMH as webviewMessageHandler
+    participant SMH as skillsMessageHandler
+    participant ESC as ExtensionStateContext
+    participant TA as ChatTextArea
+
+    B->>WMH: requestCommands / requestSkills<br/>(on mount, and on popover open for SkillsButton)
+    WMH->>SMH: handleRequestSkills
+    SMH-->>ESC: skills — SkillMetadata[] + loadedSkills
+    WMH-->>ESC: commands — Command[]
+    ESC-->>B: state.commands, state.skills, state.customModes
+    B->>WMH: insertTextIntoTextarea — slash command with its<br/>argument hint, or "Use the ... skill"
+    WMH-->>TA: insertTextIntoTextarea
+    TA->>TA: append to the input, popover closes
+    Note over TA: Nothing is auto-executed — the user clicks Send.
+```
+
 #### Layout Integration
 
 In [`ChatTextArea.tsx`](extensions/shofer/webview-ui/src/components/chat/ChatTextArea.tsx:1391-1392):

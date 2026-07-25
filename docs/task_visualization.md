@@ -9,6 +9,30 @@ This document describes four visualizations for a Shofer Task and its subtask tr
 
 The Trace and Stats share a common data model: offsets from a per-task `timelineOriginMs` recorded on each `api_req_finished` message. The Tree and Sequence draw on task identity (`taskId`/`parentTaskId`/`rootTaskId`) and inter-task interaction events.
 
+```mermaid
+flowchart LR
+    TASK["Task.ts<br/>emitApiReqFinished<br/>emitTaskInteraction"]
+    PAM["presentAssistantMessage.ts<br/>ToolSpan at the pushToolResult chokepoint<br/>maybeRecordTaskInteraction"]
+    UIM[("ui_messages.json<br/>say api_req_finished<br/>say task_interaction")]
+    HIST["ExtensionState.taskHistory<br/>HistoryItem: parentTaskId, rootTaskId,<br/>taskState, activeTimeMs, tokens, cost"]
+    SP["ShoferProvider.getTaskInteractions(rootTaskId)<br/>readTaskMessages over every task under the root"]
+    MSGS["shoferMessages in the webview"]
+
+    TREE["TaskTreeView"]
+    SEQ["TaskSequenceView"]
+    TRACE["TaskTraceView"]
+    STATS["TaskStatsView"]
+
+    PAM --> TASK --> UIM
+    UIM --> MSGS
+    UIM --> SP
+    HIST --> TREE
+    HIST -->|activeTimeMs| STATS
+    SP -->|"taskInteractions response"| SEQ
+    MSGS -->|"say == api_req_finished"| TRACE
+    MSGS -->|"say == api_req_finished"| STATS
+```
+
 ## Tab Bar Layout
 
 ```
@@ -317,6 +341,28 @@ Extracted from tool invocations in `presentAssistantMessage` (`maybeRecordTaskIn
 - **Single read path**: `TaskTraceView` filters `say === "api_req_finished"` from the same `shoferMessages` array that powers `ChatView`. No separate file, no separate load logic.
 
 ## Instrumentation Points in `Task.ts`
+
+One request's span, from origin capture to the single idempotent emit:
+
+```mermaid
+flowchart TD
+    C["constructor — timelineOriginMs = performance.now()"]
+    RS["request start, per iteration<br/>clear _pendingToolSpans, _pendingTtfbMs, _pendingGenStartMs<br/>_pendingApiReqNeedsEmit = true<br/>_pendingRequestStartOffset"]
+    SC["stream loop — _markStreamProgress(isReasoning)<br/>first chunk sets ttfbMs<br/>first non-reasoning chunk sets genStartOffsetMs"]
+    TS["presentAssistantMessage — pushToolResult chokepoint<br/>append ToolSpan: toolName, offsets, isError,<br/>spawnedTaskId, waitsForTask"]
+    W["await pWaitFor(userMessageContentReady)"]
+    N1["emitApiReqFinished('completed')"]
+    AB["abortTask(reason)<br/>user cancel, error, or attempt_completion"]
+    N2["flush: 'completed' when didExecuteAttemptCompletion,<br/>else 'cancelled'"]
+    G{"_pendingApiReqNeedsEmit set"}
+    NO["no-op — another path already emitted"]
+    EM["say('api_req_finished', payload)<br/>clear the flag, advance _currentRequestIndex"]
+
+    C --> RS --> SC --> TS --> W --> N1 --> G
+    AB --> N2 --> G
+    G -->|no| NO
+    G -->|yes| EM
+```
 
 ### 1. Constructor — timeline origin
 

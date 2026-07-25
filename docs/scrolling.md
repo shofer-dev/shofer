@@ -26,18 +26,14 @@ To close this race, `useScrollLifecycle` synchronizes `scrollPhaseRef`, `isAtBot
 
 All scroll state lives in `useScrollLifecycle`. It is a three-phase state machine:
 
-```
-HYDRATING_PINNED_TO_BOTTOM
-        |
-        | isAtBottom confirmed (or retry budget exhausted)
-        ↓
- ANCHORED_FOLLOWING  ←──────────────────────────────────────────┐
-        |                                                        │
-        | user scrolls up (wheel / drag / keyboard / row expand) │
-        ↓                                                        │
- USER_BROWSING_HISTORY                                           │
-        |                                                        │
-        | user clicks scroll-to-bottom button ───────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> HYDRATING_PINNED_TO_BOTTOM
+    HYDRATING_PINNED_TO_BOTTOM --> ANCHORED_FOLLOWING: isAtBottom confirmed, or the retry budget is exhausted
+    ANCHORED_FOLLOWING --> USER_BROWSING_HISTORY: user scrolls up — wheel, drag, keyboard, row expand
+    USER_BROWSING_HISTORY --> ANCHORED_FOLLOWING: scroll-to-bottom button, or naturally reaching the bottom
+    ANCHORED_FOLLOWING --> HYDRATING_PINNED_TO_BOTTOM: taskTs changes
+    USER_BROWSING_HISTORY --> HYDRATING_PINNED_TO_BOTTOM: taskTs changes
 ```
 
 ### `HYDRATING_PINNED_TO_BOTTOM`

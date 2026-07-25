@@ -13,7 +13,64 @@ Shofer uses VS Code's [`WebviewViewProvider`](https://code.visualstudio.com/api/
 
 The extension host is the **source of truth** for all state. The webview is a **pure renderer** — it has no autonomous data fetching or persistence. Every piece of data the UI displays arrives via `postMessage` from the host.
 
+```mermaid
+flowchart LR
+    subgraph HOST["Extension host — Node.js"]
+        SP["ShoferProvider<br/>resolveWebviewView<br/>postMessageToWebview<br/>postStateToWebview"]
+        WMH["webviewMessageHandler.ts<br/>the single dispatch point"]
+        SP -->|setWebviewMessageListener| WMH
+    end
+
+    subgraph WV["Webview UI — browser iframe"]
+        IDX["index.tsx<br/>crash guard + pong responder"]
+        APP["App.tsx<br/>posts webviewDidLaunch"]
+        ESC["ExtensionStateContext.tsx<br/>handleMessage"]
+        BR["utils/vscode.ts<br/>acquireVsCodeApi singleton"]
+        IDX --> APP --> ESC
+        APP --> BR
+    end
+
+    BR -->|"WebviewMessage"| WMH
+    SP -->|"ExtensionMessage"| ESC
+
+    classDef sot fill:#1d4ed8,stroke:#1e3a8a,color:#fff
+    class SP sot
+```
+
+Both directions are typed unions declared in
+[`packages/types/src/message.ts`](packages/types/src/message.ts): every
+webview → host message is a `WebviewMessage` variant dispatched from the
+central `webviewMessageHandler`, and every host → webview message is an
+`ExtensionMessage` variant. Components do not post ad-hoc shapes and do not
+branch on `message.type` themselves.
+
 ## Lifecycle
+
+Registration through hydration, end to end:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant VS as VS Code
+    participant SP as ShoferProvider
+    participant IF as Webview iframe
+    participant APP as App.tsx
+    participant ESC as ExtensionStateContext
+
+    VS->>SP: registerWebviewViewProvider (extension.ts)
+    VS->>SP: resolveWebviewView(webviewView)
+    SP->>SP: idempotency guard, enableScripts,<br/>localResourceRoots
+    SP->>SP: getHtmlContent / getHMRHtmlContent
+    SP->>IF: view.webview.html = html
+    SP->>SP: setWebviewMessageListener
+    IF->>IF: crash guard + pong responder (index.tsx)
+    IF->>APP: mount React inside ErrorBoundary
+    APP->>SP: webviewDidLaunch
+    SP->>SP: _onWebviewLaunched — start heartbeat<br/>(experiment only)
+    SP->>ESC: state — full snapshot
+    ESC->>ESC: mergeExtensionState, didHydrateState = true
+    Note over APP,ESC: App renders null until didHydrateState is true.
+```
 
 ### 1. Registration
 
@@ -169,6 +226,32 @@ Shofer has a liveness monitoring infrastructure, but it is **gated behind the `W
 | Fatal error handler | [`ShoferProvider._onFatalError()`](src/core/webview/ShoferProvider.ts:906)   | Receives `fatal_error` → logs + optionally resets webview       | Experiment only |
 | Webview reset       | [`ShoferProvider._resetWebview()`](src/core/webview/ShoferProvider.ts:1018)  | Re-assigns `webview.html` to force reload                       | Experiment only |
 | Manual refresh      | [`ShoferProvider.refreshWebview()`](src/core/webview/ShoferProvider.ts:939)  | User-triggered forceful reload via VS Code command              | Experiment only |
+
+Dashed nodes are the experiment-gated half; the two `fatal_error` producers run
+unconditionally but only reach a handler when the experiment is on.
+
+```mermaid
+flowchart TD
+    CG["index.tsx crash guard<br/>window.onerror, unhandledrejection"]
+    EB["ErrorBoundary.tsx<br/>React render crash"]
+    HB["ShoferProvider._startHeartbeat<br/>ping every 5s, pong within 30s"]
+    PONG["index.tsx pong responder<br/>raw message listener, survives React crashes"]
+    FE["ShoferProvider._onFatalError"]
+    RW["ShoferProvider._resetWebview<br/>re-assign webview.html"]
+    MR["ShoferProvider.refreshWebview<br/>user-triggered VS Code command<br/>clear html, focus, reloadWebviewAction"]
+
+    CG -->|fatal_error| FE
+    EB -->|fatal_error| FE
+    HB -->|ping| PONG
+    PONG -->|pong| HB
+    HB -->|"no pong past the liveness window"| RW
+    FE -->|"log, then reset unconditionally"| RW
+    MR -.->|"independent, more aggressive path"| IF["reloaded renderer"]
+    RW --> IF
+
+    classDef exp stroke-dasharray: 4 3
+    class HB,FE,RW,MR exp
+```
 
 ### Why the Heartbeat is Deferred
 

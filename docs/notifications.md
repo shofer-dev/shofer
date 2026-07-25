@@ -24,45 +24,24 @@ Async peer messages (`wait=false`) use a **dedicated FIFO queue** ([`peerNotific
 
 ## Data Flow
 
-```
-Sender Task                              Recipient Task
-───────────                              ──────────────
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Sender task
+    participant T as SendMessageToTaskTool.execute — async branch
+    participant Q as Recipient peerNotificationQueue
+    participant R as Recipient agent loop
 
-send_message_to_task
-  (wait=false)
-      │
-      ▼
-SendMessageToTaskTool.execute()
-  async branch (line 247)
-      │
-      ├─ Validation: rootTaskId, knownPeers, etc.
-      ├─ Approval: askApproval("tool", …)
-      │
-      ▼
-targetState.peerNotificationQueue.push({
-  senderTaskId, senderTitle, message, timestamp
-})                                      ──────────────►  peerNotificationQueue[]
-                                                               │
-                                                               │  (queue sits; no wake-up)
-                                                               │
-                                                    ┌──────────▼──────────┐
-                                                    │  Next agent loop     │
-                                                    │  iteration starts    │
-                                                    └──────────┬──────────┘
-                                                               │
-                                                    getSystemPrompt()
-                                                      (line 5457)
-                                                               │
-                                                    ┌──────────▼──────────┐
-                                                    │ peerNotificationQueue│
-                                                    │ drained & injected   │
-                                                    │ as "PEER MESSAGE"    │
-                                                    │ blocks (line 5588)   │
-                                                    └──────────┬──────────┘
-                                                               │
-                                                               ▼
-                                                    Queue cleared
-                                                    (line 5627)
+    S->>T: send_message_to_task with wait=false
+    T->>T: validate rootTaskId, knownPeers
+    T->>T: askApproval "tool"
+    T->>Q: push senderTaskId, senderTitle, message, timestamp
+    Note over Q: The queue just sits — there is no wake-up.
+    R->>R: next loop iteration — attemptApiRequest
+    R->>Q: getSystemPrompt with injectPeerNotifications true
+    Q-->>R: drained, injected as PEER MESSAGE blocks
+    R->>R: say peer_message chat row + telemetry
+    R->>Q: queue cleared
 ```
 
 ---
@@ -162,14 +141,14 @@ defaults to `false`; only `attemptApiRequest` passes `true`:
 
 The draining call site is `attemptApiRequest` — it runs on every iteration of the agent loop:
 
-```
-initiateTaskLoop
-  → recursivelyMakeShoferRequests
-    → attemptApiRequest
-      → getSystemPrompt()          ← notifications injected here
-      → API call to model
-      → tool execution
-      → next iteration (loop back)
+```mermaid
+flowchart TD
+    A["initiateTaskLoop"] --> B["recursivelyMakeShoferRequests"]
+    B --> C["attemptApiRequest"]
+    C --> D["getSystemPrompt — notifications injected here"]
+    D --> E["API call to the model"]
+    E --> F["tool execution"]
+    F --> C
 ```
 
 A notification pushed mid-loop (while the recipient is processing a tool) gets picked up cleanly on the **next** `attemptApiRequest` call — the recipient sees it as a system-prompt annotation before it processes its next request.

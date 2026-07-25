@@ -81,6 +81,31 @@ identical in content to today; no message is lost or reordered.
 
 ## Implementation
 
+The H2 round-trip, as it was built (this is the **reverted** design — the live
+one is the one-shot expand described in `performance_optimizations.md`):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as Task — full array in memory
+    participant SP as ShoferProvider
+    participant WMH as webviewMessageHandler
+    participant ESC as ExtensionStateContext
+    participant CV as ChatView / Virtuoso
+
+    T->>SP: getStateToPostToWebview — history preloaded
+    SP->>ESC: state — last DEFAULT_WINDOW_LIMIT (100),<br/>hasMoreMessages, oldestLoadedTs, tokenUsage
+    ESC->>CV: shoferMessages window
+    CV->>CV: render "Load older messages…" sentinel<br/>while hasMoreMessages
+    CV->>WMH: loadOlderMessages — beforeTs = oldestLoadedTs, limit<br/>(guarded by loadingOlderRef)
+    WMH->>SP: loadOlderMessages(beforeTs, limit)
+    SP->>SP: slice task.shoferMessages older than beforeTs
+    SP->>ESC: olderMessagesLoaded — olderMessages,<br/>olderHasMore, olderOldestTs
+    ESC->>ESC: prepend, dedupe by ts,<br/>stamp lastPrependedCount
+    ESC->>CV: grown array
+    CV->>CV: firstItemIndex = H2_PREPEND_BASE - prependedCount<br/>keeps the viewport anchored
+```
+
 ### IPC protocol
 
 New typed variants in [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts):

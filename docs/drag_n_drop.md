@@ -63,28 +63,36 @@ it to see the hint text.
 
 ## Architecture
 
-```
- ┌────────────────────────────────┐
- │   VSCode Explorer (drag)       │
- └──────────────┬─────────────────┘
-                │ text/uri-list
-                ▼
- ┌────────────────────────────────┐    extension host
- │ ContextDropZoneProvider        │
- │   .handleDrop()                │
- │   • parses URIs                │
- │   • makes paths workspace-rel  │
- │   • posts addContextFiles      │
- └──────────────┬─────────────────┘
-                │ postMessageToWebview
-                ▼
- ┌────────────────────────────────┐    webview
- │ ChatView                        │
- │   case "addContextFiles":       │
- │     setDroppedContextFiles(...) │
- │   • renders removable tags      │
- │   • prepends @mentions on Send  │
- └────────────────────────────────┘
+```mermaid
+flowchart TD
+    OSD["OS file-manager drag"]
+    EXP["VS Code Explorer / editor-tab drag<br/>text/uri-list"]
+
+    subgraph HOST["Extension host"]
+        CDZ["ContextDropZoneProvider.handleDrop<br/>TreeDragAndDropController"]
+        CMD["Explorer command<br/>shofer.addFilesToContext"]
+        AUC["addUrisToContext<br/>parse URIs, best-effort stat() isFile,<br/>workspace-relative via provider.cwd,<br/>status-bar message"]
+        CDZ --> AUC
+        CMD --> AUC
+    end
+
+    subgraph WV["Webview"]
+        ROOT["ChatView.handleWebviewDrop — iframe root<br/>swallowed by the Desktop overlay;<br/>fires on code-server / VS Code Web"]
+        TA["ChatTextArea container onDrop<br/>the only webview path that fires on Desktop"]
+        PARSE["droppedContextFiles.ts<br/>extractUriPayload, parseDroppedUris"]
+        STATE["ChatView droppedContextFiles state<br/>removable tags, scoped per task"]
+        SEND["Send — prepend @/path mentions, clear the tags"]
+        ROOT --> PARSE
+        TA -->|onContextFilesDropped| PARSE
+        PARSE --> STATE --> SEND
+    end
+
+    OSD -.->|"never delivered to a custom tree"| CDZ
+    OSD -->|"drop into the Explorer first"| EXP
+    EXP --> CDZ
+    EXP --> ROOT
+    EXP --> TA
+    AUC -->|"postMessageToWebview addContextFiles"| STATE
 ```
 
 ### Components
@@ -247,10 +255,6 @@ fixing the Desktop experience:
    least log the payload for diagnosis.
 
 ## Documentation gaps (lower priority)
-
-- **Architecture diagram is incomplete**: it shows only the native TreeView →
-  ChatView path. The ChatTextArea and webview-root handlers, and the shared
-  `droppedContextFiles.ts` module, are not represented.
 
 - **No test coverage for the native path**: the `ChatTextArea` handler has tests in
   [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)
