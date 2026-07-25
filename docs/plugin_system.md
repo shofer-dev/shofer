@@ -1070,7 +1070,8 @@ interface PluginAgentControl {
 			unattended?: boolean
 			// What the task is pre-authorized to do (granted ⇒ auto-approve; miss ⇒ auto-deny).
 			// Expressed in Shofer's existing auto-approval vocabulary so checkAutoApproval()
-			// consumes it unchanged. See saas.md §5.6 "Runner-task approval".
+			// consumes it unchanged. See the arkware.ai SaaS design doc, §5.6
+			// "Runner-task approval" — it lives in that integrator's repo, not here.
 			approvalPolicy?: ApprovalPolicy
 		},
 	): Promise<TaskHandle>
@@ -1127,7 +1128,8 @@ interface TaskResult {
     and route to **escalation** — an async human path (ticket / mesh event) or a Temporal **Workflow
     Update/signal** the agent issues via a plugin tool (the runner already holds a Temporal client), which
     blocks a coordination workflow on a human decision without parking the runner. Full model +
-    escalation flows: [`saas.md` §5.6 "Runner-task approval"](./saas.md#56-agentic-pipelines--orchestration).
+    escalation flows: the arkware.ai SaaS design doc, §5.6 "Runner-task approval" — that doc lives in
+    the integrator's repo, not here, since Shofer core assumes nothing about a specific deployment.
 
 ### 14.3 Non-HTTP network egress (`permissions.network`)
 
