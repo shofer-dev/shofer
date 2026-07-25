@@ -6,52 +6,31 @@ When Shofer makes MCP `tools/call` requests, it injects a `taskId` into the MCP 
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                          VS Code Extension Host                                │
-│                                                                                │
-│  UseMcpToolTool.ts                  McpHub.ts                                  │
-│  ─────────────────                  ─────────                                  │
-│                                                                                │
-│  task.taskId ──────► callTool(serverName, toolName, args, source, taskId)
-│  (UUID v7)                         │                                           │
-│                                    ▼                                           │
-│                          MCP "tools/call" request                              │
-│                          {                                                     │
-│                            method: "tools/call",                               │
-│                            params: {                                           │
-│                              name: "...",                                      │
-│                              arguments: {...},                                 │
-│                              _meta: {                                          │
-│                                "vscode.taskId": "<taskId>"             │
-│                              }                                                 │
-│                            }                                                   │
-│                          }                                                     │
-│                                    │                                           │
-└────────────────────────────────────┼───────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                            mcp-server                                           │
-│  ──────────────                                                                 │
-│                                                                                │
-│  1. Extracts taskId from params._meta["vscode.taskId"]         │
-│  2. Validates it is present (returns 400 if missing)                           │
-│  3. Passes it to tools-backend as "task_id"                            │
-│                                    │                                           │
-└────────────────────────────────────┼───────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                          tools-backend                                          │
-│  ────────────────                                                               │
-│                                                                                │
-│  Receives task_id in request body for:                                 │
-│  - Structured logging                                                          │
-│  - Prometheus metrics labels                                                   │
-│  - OpenTelemetry trace attributes                                              │
-│                                                                                │
-└────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph HOST["VS Code Extension Host"]
+        direction TB
+        T["UseMcpToolTool.ts<br/>task.taskId — UUID v7"]
+        H["McpHub.ts<br/>callTool(serverName, toolName, args, source, taskId)"]
+        REQ["MCP 'tools/call' request<br/>params.name<br/>params.arguments<br/>params._meta['vscode.taskId']"]
+        T --> H --> REQ
+    end
+
+    subgraph MCPS["mcp-server"]
+        direction TB
+        M1["extract taskId from<br/>params._meta['vscode.taskId']"]
+        M2["validate present — 400 if missing"]
+        M3["pass to tools-backend as 'task_id'"]
+        M1 --> M2 --> M3
+    end
+
+    subgraph TB_["tools-backend"]
+        direction TB
+        B["receives task_id in the request body:<br/>structured logging<br/>Prometheus metric labels<br/>OpenTelemetry trace attributes"]
+    end
+
+    REQ --> M1
+    M3 --> B
 ```
 
 ## Design Rationale

@@ -228,43 +228,19 @@ This is useful for diagnosing what data was actually transmitted to the provider
 
 ### Data Flow
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Webview (TaskActions.tsx)              │
-│  exportCurrentTask / exportCurrentTaskJson                │
-└─────────────────────┬───────────────────────────────────┘
-                      │ postMessage
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│              webviewMessageHandler.ts                     │
-│  routes → provider.exportTaskWithId(id)                   │
-│         → provider.exportTaskWithIdJson(id)               │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│                  ShoferProvider.ts                        │
-│  getTaskWithId(id) → { historyItem,                      │
-│    apiConversationHistory, uiMessagesFilePath }           │
-│                                                          │
-│  exportTaskWithId():                                      │
-│    downloadTask(ts, apiConversationHistory, defaultUri)   │
-│                                                          │
-│  exportTaskWithIdJson():                                  │
-│    reads ui_messages.jsonl via readTaskMessages()         │
-│    buildJsonTrace(...)                                    │
-│    downloadJsonTask(ts, trace, defaultUri)                │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────┐
-│  export-markdown.ts          export-json.ts               │
-│  formatContentBlockToMd()    buildJsonTrace()             │
-│  downloadTask()              getJsonExportFileName()      │
-│                              downloadJsonTask()           │
-│                              estimateTokens()             │
-│                              estimateMessageTokens()      │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    WV["Webview — TaskActions.tsx<br/>exportCurrentTask / exportCurrentTaskJson"]
+    WMH["webviewMessageHandler.ts<br/>routes to provider.exportTaskWithId(id)<br/>and provider.exportTaskWithIdJson(id)"]
+    SP["ShoferProvider.ts<br/>getTaskWithId(id) returns historyItem,<br/>apiConversationHistory, uiMessagesFilePath"]
+    MDP["exportTaskWithId()<br/>downloadTask(ts, apiConversationHistory, defaultUri)"]
+    JSONP["exportTaskWithIdJson()<br/>reads ui_messages.jsonl via readTaskMessages()<br/>buildJsonTrace(...)<br/>downloadJsonTask(ts, trace, defaultUri)"]
+    MD["export-markdown.ts<br/>formatContentBlockToMd()<br/>downloadTask()"]
+    JS["export-json.ts<br/>buildJsonTrace()<br/>getJsonExportFileName()<br/>downloadJsonTask()<br/>estimateTokens()<br/>estimateMessageTokens()"]
+
+    WV -->|postMessage| WMH --> SP
+    SP --> MDP --> MD
+    SP --> JSONP --> JS
 ```
 
 The JSON exporter resolves the default save filename before calling `downloadJsonTask()` (via `getTaskFileName()`), and reads `ui_messages.jsonl` through the JSONL reader `readTaskMessages()` wrapped in a `try/catch` that falls back to an empty `uiMessages` array — a defensive guard against missing or unreadable data. (There is no separate `fs.stat()` pre-check; the reader returns `[]` when the file is absent.)
@@ -288,6 +264,47 @@ All three source files live under `{globalStorageUri}/tasks/{taskId}/`:
 | `api_conversation_history.jsonl` | `Task.addToApiConversationHistory()` → `appendApiMessage()` (append-only JSONL; compacted via `saveApiConversationHistory()`)          | `Anthropic.Messages.MessageParam[]` — full message history with tool_use, tool_result, reasoning, thinking, thoughtSignature blocks |
 | `ui_messages.jsonl`              | `Task.addToShoferMessages()` / `updateShoferMessage()` → `appendTaskMessage()` (append-only JSONL; compacted via `saveTaskMessages()`) | `ShoferMessage[]` — UI-level messages including `api_req_started` entries with per-call metadata                                    |
 
+Assembly of the JSON trace, with the guards that keep a partial export alive
+rather than losing the whole thing (dashed = fallback path):
+
+```mermaid
+flowchart TB
+    subgraph DISK["{globalStorageUri}/tasks/{taskId}/"]
+        direction TB
+        F1["history_item.json<br/>HistoryItem — TaskHistoryStore"]
+        F2["api_conversation_history.jsonl<br/>MessageParam[]"]
+        F3["ui_messages.jsonl<br/>ShoferMessage[] incl. api_req_started"]
+    end
+
+    GET["getTaskWithId(id)<br/>called without skipApiHistory,<br/>so the full history is returned"]
+    RA["readApiMessages()<br/>append-only log deduped by ts"]
+    RT["readTaskMessages()<br/>inside a try/catch"]
+    EMPTY["uiMessages = []<br/>partial export survives"]
+
+    BUILD["buildJsonTrace(...)<br/>JsonExportTrace"]
+    NAME["getTaskFileName() + resolveDefaultSaveUri()"]
+    DL["downloadJsonTask(ts, trace, defaultUri)"]
+    WORK["stringifyJsonToFile()<br/>workerpool worker — stringify + write"]
+    INPROC["in-process write"]
+    SIZE{"bytes &gt; LARGE_EXPORT_BYTES<br/>5 MB?"}
+    OPEN["auto-open in a preview tab"]
+    MSG["information message:<br/>Open / Reveal in File Explorer"]
+
+    F1 --> GET
+    F2 --> RA --> GET
+    F3 --> RT
+    RT -->|"read ok"| BUILD
+    RT -.->|"missing or unreadable"| EMPTY
+    EMPTY -.-> BUILD
+    GET --> BUILD
+    BUILD --> NAME --> DL --> WORK
+    WORK -.->|"worker unavailable or errors"| INPROC
+    WORK --> SIZE
+    INPROC --> SIZE
+    SIZE -->|"no"| OPEN
+    SIZE -->|"yes"| MSG
+```
+
 The exporters receive these via [`ShoferProvider.getTaskWithId()`](../src/core/webview/ShoferProvider.ts), which constructs the task-directory file paths using constants from [`GlobalFileNames`](../src/shared/globalFileNames.ts) and reads `api_conversation_history.jsonl` via `readApiMessages()` (the append-only log is deduped by `ts` on read). Note the `skipApiHistory` option exists for cold task-switch but the export paths call `getTaskWithId(id)` **without** it, so they always receive the full `apiConversationHistory`. The JSON export additionally reads `ui_messages.jsonl` via `readTaskMessages()`. Export path resolution and last-path persistence is handled by [`resolveDefaultSaveUri` / `saveLastExportPath`](../src/utils/export.ts).
 
 ### Call Partitioning
@@ -301,9 +318,42 @@ The exporters receive these via [`ShoferProvider.getTaskWithId()`](../src/core/w
 
 **Error-Only Calls:** API calls that never received an assistant response (connection failures, rate limits, empty streams) are handled by a post-loop `while` block that catches any unmatched `api_req_started` entries. These get call entries with `messages: []`, `toolCalls: []` but still carry their error, wire request, and metadata.
 
+```mermaid
+flowchart TB
+    START["walk apiConversationHistory sequentially"]
+    MSG{"assistant message?"}
+    ACC["accumulate into the current call<br/>from currentCallStart"]
+    CLOSE["close the call<br/>collect currentCallStart..assistant"]
+    MATCH["match the api_req_started entry<br/>at the same callIndex"]
+    CALL["JsonExportCall<br/>messages, toolCalls, reasoning, metadata"]
+    END{"more messages?"}
+    POST["post-loop while block:<br/>unmatched api_req_started entries"]
+    ERRC["error-only JsonExportCall<br/>messages: [] · toolCalls: []<br/>keeps error, wireRequest, metadata"]
+    TRACE["JsonExportTrace.calls"]
+
+    START --> MSG
+    MSG -->|"no"| ACC --> END
+    MSG -->|"yes"| CLOSE --> MATCH --> CALL --> END
+    END -->|"yes"| MSG
+    END -->|"no"| POST --> ERRC
+    CALL --> TRACE
+    ERRC --> TRACE
+```
+
 ### How Per-Call Metadata Is Captured
 
 The JSON exporter reads per-call metadata from `api_req_started` ShoferMessages (`ShoferApiReqInfo` written in [`Task.ts`](../packages/core/src/task/Task.ts)), parsed as `UiApiReqStartedPayload`. The three representations — `ShoferApiReqInfo` (write), `UiApiReqStartedPayload` (read/parse), `JsonExportCall` (export output) — must stay in lock-step; adding a field to one without the others silently drops that field from exports.
+
+```mermaid
+flowchart LR
+    W["ShoferApiReqInfo — write<br/>Task.ts emits api_req_started"]
+    SW["snapshotWireRequest()<br/>snapshotApiReqError()<br/>merge into the last api_req_started"]
+    P["ui_messages.jsonl<br/>persisted ShoferMessage"]
+    R["UiApiReqStartedPayload — read/parse<br/>export-json.ts"]
+    O["JsonExportCall — output<br/>a field missing here is silently dropped"]
+
+    W --> SW --> P --> R --> O
+```
 
 **Token Estimation Trigger:** The char/4 fallback in [`estimateTokens()`](../src/integrations/misc/export-json.ts:140) fires when `calls.every(c => c.inputTokens === 0 && c.outputTokens === 0)` — i.e., whenever ALL calls have zero tokens, regardless of cause (all error-only calls, or a provider that emits usage but the capture failed).
 

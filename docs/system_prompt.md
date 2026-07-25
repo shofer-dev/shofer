@@ -18,6 +18,42 @@ ${getObjectiveSection()}                   ← Task workflow instructions
 ${addCustomInstructions()}                 ← Mode-specific + user rules (gated by include_mode_rules, include_user_rules, include_agents_md)
 ```
 
+The same order as a pipeline — `generatePrompt` concatenates the sections
+top-to-bottom; the dashed inputs are the gates that can drop or alter a section:
+
+```mermaid
+flowchart TB
+    GP["generatePrompt<br/>packages/core/src/prompts/system.ts"]
+
+    S1["roleDefinition<br/>mode persona"]
+    S2["markdownFormattingSection()"]
+    S3["getSharedToolUseSection()"]
+    S4["getToolUseGuidelinesSection()"]
+    S5["getCapabilitiesSection(cwd, mcpHub?)"]
+    S6["getModesSection(context)"]
+    S7["getSkillsSection(skillsManager, currentMode)"]
+    S8["getRulesSection(cwd, settings?)"]
+    S9["getSystemInfoSection(cwd, submoduleInfos?)"]
+    S10["getObjectiveSection()"]
+    S11["addCustomInstructions(...)"]
+
+    OUT["assembled system prompt"]
+
+    GP --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9 --> S10 --> S11 --> OUT
+
+    G5["mode has the mcp group<br/>AND MCP servers configured"]
+    G7["include_skills"]
+    G8["settings.isStealthModel<br/>adds vendor-confidentiality rules"]
+    G9["include_system_info"]
+    G11["include_mode_rules<br/>include_user_rules<br/>include_agents_md"]
+
+    G5 -.-> S5
+    G7 -.-> S7
+    G8 -.-> S8
+    G9 -.-> S9
+    G11 -.-> S11
+```
+
 ## Section Details
 
 ### 1. `roleDefinition` (Mode Persona)

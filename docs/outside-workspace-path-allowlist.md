@@ -89,6 +89,18 @@ The superset rule, expressed as the effective trust set per operation:
 | **read** (`read` group)   | `allowedWritePaths` **∪** `allowedReadPaths` |
 | **write** (`write` group) | `allowedWritePaths` only                     |
 
+```mermaid
+flowchart LR
+    RP["allowedReadPaths<br/>subtrees trusted for READ"]
+    WP["allowedWritePaths<br/>subtrees trusted for READ+WRITE"]
+    RO["read-group op<br/>matched against allowedWritePaths<br/>plus allowedReadPaths"]
+    WO["write-group op<br/>matched against allowedWritePaths only"]
+
+    RP --> RO
+    WP --> RO
+    WP --> WO
+```
+
 So marking a directory readwrite covers reads there for free; a read grant never enables
 writes. Proposed helper (new `auto-approval/paths.ts`, mirroring
 [`commands.ts`](../packages/core/src/auto-approval/commands.ts)):
@@ -123,6 +135,40 @@ Single insertion point, in the native-tool branch of `checkAutoApproval`
 4. outside + path allowlist hit → approve         ← NEW
 5. otherwise                    → ask             (unchanged)
 ```
+
+The same precedence as a decision tree — the allowlist is the one new branch,
+and the protected-file gate still runs after it:
+
+```mermaid
+flowchart TB
+    IN["native-tool ask in checkAutoApproval"]
+    G1{"base group toggle on?<br/>alwaysAllowReadOnly / alwaysAllowWrite"}
+    G2{"isOutsideWorkspace?"}
+    G3{"blanket outside toggle on?<br/>alwaysAllowReadOnlyOutsideWorkspace<br/>alwaysAllowWriteOutsideWorkspace"}
+    G4{"isPathAutoApproved(ctx.absolutePath, group,<br/>allowedReadPaths, allowedWritePaths)?"}
+    PROT{"isProtected and its<br/>protectedToggle off?"}
+    ASK["ask the user"]
+    OK["auto-approve"]
+
+    STATE["trust set = persisted allowedReadPaths / allowedWritePaths<br/>plus task-scoped trustedReadPaths / trustedWritePaths<br/>merged by Task.withTaskTrust"]
+
+    IN --> G1
+    G1 -->|"no — step 1"| ASK
+    G1 -->|"yes"| G2
+    G2 -->|"no — step 2, inside"| PROT
+    G2 -->|"yes"| G3
+    G3 -->|"yes — step 3"| PROT
+    G3 -->|"no"| G4
+    G4 -->|"yes — step 4, NEW"| PROT
+    G4 -->|"no — step 5"| ASK
+    PROT -->|"yes"| ASK
+    PROT -->|"no"| OK
+
+    STATE -.-> G4
+```
+
+The MCP path passes `applyModifiers: false`, so neither the outside-workspace
+nor the protected modifier is evaluated there at all.
 
 Concretely, step 4 slots in where the outside-workspace modifier currently returns "not
 approved". Cleanest is to fold it into `isGroupAutoApproved`
@@ -228,6 +274,30 @@ approves. Because `contextProxy` is the `NodeRegistry` `configSource`, the `setV
 lists (read paths / read+write paths) next to the command lists, writing the same
 `allowedReadPaths`/`allowedWritePaths` via `updateSettings` → globalState. So the three surfaces
 are: **`Trust path` = this task; `Trust path (always)` = forever, inline; Settings = forever, curated.**
+
+```mermaid
+flowchart TB
+    ASKQ["tool ask flagged isOutsideWorkspace<br/>with an absolutePath"]
+    BTN["ChatView buttons:<br/>Save · Trust path (…) · Trust path (…, always) · Deny"]
+    ACC["access auto-determined by the operation:<br/>write tool — isWriteTool / WRITE_GROUP_TOOLS — trusts read+write<br/>read tool trusts read<br/>target is always the file's parent directory"]
+
+    MSG["trustOutsideWorkspacePath message<br/>outsideWorkspacePath · outsideWorkspaceAccess · outsideWorkspacePersist"]
+
+    TASKT["persist: false<br/>task.trustOutsideWorkspacePath(dir, access)<br/>Task.trustedReadPaths / trustedWritePaths<br/>in-memory, snapshot-inherited by subtasks"]
+    PERM["persist: true<br/>contextProxy.setValue appends (deduped),<br/>then postInitState()"]
+    SET["Settings — AutoApproveSettings.tsx<br/>two curated lists via updateSettings"]
+    STORE["globalState<br/>allowedReadPaths / allowedWritePaths"]
+    SYNC["onDidChange drives the config-sync<br/>broadcast to remote nodes"]
+    APPR["approve the ask<br/>handleWebviewAskResponse('yesButtonClicked', …)"]
+
+    ASKQ --> BTN --> MSG
+    ACC -.-> BTN
+    MSG --> TASKT --> APPR
+    MSG --> PERM --> APPR
+    PERM --> STORE
+    SET --> STORE
+    STORE --> SYNC
+```
 
 > **Implementation gotcha (fixed).** `checkAutoApproval` reads the allowlist from the object
 > `provider.getState()` returns, which is **curated** — it copies specific keys, not the whole
@@ -381,6 +451,39 @@ Because this feature only _adds fields_ to the portable auto-approval state, it 
 one hard requirement of its own: the fields must live in the serializable
 `globalSettingsSchema` state (so config-sync can ship them), and **not** in VS Code
 `settings.json`, which is front-end-only and would strand every non-VS-Code executor.
+
+The whole picture — every writer feeds one portable store, and the store is what
+each executor's `provider.getState()` serves to the gate (dashed = deferred):
+
+```mermaid
+flowchart TB
+    SETUI["Settings — AutoApproveSettings.tsx<br/>updateSettings"]
+    INLINE["inline 'Trust path (always)'<br/>outsideWorkspacePersist: true"]
+    AUTO["auto-import<br/>shofer.autoImportSettingsPath to<br/>importSettingsFromPath() to ContextProxy.setValues()<br/>startup-only, no watcher"]
+    PROJ["'.shofer/allowed-paths.json'<br/>per-workspace, live reload — DEFERRED, not in v1"]
+
+    STORE["controller globalState — globalSettingsSchema<br/>allowedReadPaths / allowedWritePaths<br/>the source of truth"]
+
+    VS["VS Code host — controller is the executor<br/>reads globalState directly"]
+    CLI["CLI / headless<br/>vscode-shim; pre-seeded via<br/>ShoferAPI.importConfiguration or auto-import"]
+    NODE["remote 'shofer serve' node<br/>config-sync pushes the node-scoped slice<br/>on connect and on change<br/>SETTING_SYNC_SCOPE = node"]
+
+    STATE["provider.getState() on that executor — a curated copy;<br/>the keys must also be in getStateToPostToWebview()"]
+    GATE["checkAutoApproval in @shofer/core"]
+
+    SETUI --> STORE
+    INLINE --> STORE
+    AUTO --> STORE
+    PROJ -.-> STORE
+
+    STORE --> VS
+    STORE --> CLI
+    STORE --> NODE
+    VS --> STATE
+    CLI --> STATE
+    NODE --> STATE
+    STATE --> GATE
+```
 
 ### 8e. Precedence
 

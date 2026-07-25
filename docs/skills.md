@@ -6,17 +6,15 @@ Shofer implements a **lazy-loading skill system** — only skill metadata (name,
 
 ## Architecture
 
-```
-┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│ SkillsManager│────▶│ System Prompt    │────▶│ Model evaluates │────▶│ skills   │
-│ .discover()  │     │ <available_skills>│     │ skill check     │     │ native tool  │
-└──────────────┘     └──────────────────┘     └─────────────────┘     └──────┬───────┘
-                                                                             │
-                                                                     ┌───────▼───────┐
-                                                                     │ Task.          │
-                                                                     │ loadedSkills   │
-                                                                     │ Map<name,path> │
-                                                                     └───────────────┘
+```mermaid
+flowchart LR
+    SM["SkillsManager<br/>discoverSkills()"]
+    SP["system prompt<br/>&lt;available_skills&gt;<br/>metadata only"]
+    MODEL["model evaluates<br/>the skill check"]
+    TOOL["'skills'<br/>native tool"]
+    LOADED["Task.loadedSkills<br/>Map&lt;name, path&gt;"]
+
+    SM --> SP --> MODEL --> TOOL --> LOADED
 ```
 
 ## Skill Discovery
@@ -76,6 +74,39 @@ Implemented in [`SkillsManager.ts`](src/services/skills/SkillsManager.ts):
 4. Validates name matches directory, description length, name format
 5. File watchers auto-refresh on `SKILL.md` changes
 
+The four locations feed one scan, and precedence is applied when two skills
+share a name:
+
+```mermaid
+flowchart TB
+    D1["~/.agents/skills/<br/>global shared — lowest priority"]
+    D2["{project}/.agents/skills/<br/>project shared"]
+    D3["~/.shofer/skills/<br/>global Shofer-specific"]
+    D4["{project}/.shofer/skills/<br/>project Shofer-specific — highest"]
+    DM["plus skills-{mode}/ in each location<br/>skills-code, skills-architect, ..."]
+
+    SCAN["scanSkillsDirectory()<br/>iterate subdirs, follow symlinks"]
+    META["loadSkillMetadata()<br/>gray-matter frontmatter parse"]
+    VAL{"name matches directory<br/>name format<br/>description length"}
+    DROP["skill skipped"]
+    POOL["discovered skill metadata"]
+
+    FOR["getSkillsForMode(mode)<br/>filters by mode, applies override resolution"]
+    PREC["on a name collision:<br/>1. project &gt; global<br/>2. mode-specific &gt; generic<br/>3. first discovered wins"]
+
+    D1 --> SCAN
+    D2 --> SCAN
+    D3 --> SCAN
+    D4 --> SCAN
+    DM --> SCAN
+
+    SCAN --> META --> VAL
+    VAL -->|"fails"| DROP
+    VAL -->|"passes"| POOL
+    POOL --> FOR
+    PREC -.-> FOR
+```
+
 ## System Prompt Inclusion
 
 ### What's Included by Default
@@ -126,6 +157,25 @@ The `skills` native tool loads skill instructions into context:
 4. Asks for user approval
 5. Records `task.loadedSkills.set(skillName, skillContent.path)`
 6. Returns formatted instructions:
+
+```mermaid
+flowchart TB
+    IN["'skills' call<br/>skill, args?"]
+    V{"skill parameter valid?"}
+    ERR["parameter error"]
+    L{"already in<br/>task.loadedSkills?"}
+    NOOP["returns 'Skill X is already loaded (no-op).'<br/>no file re-read, no approval"]
+    RES["resolveSkillContentForMode()"]
+    APP["askApproval('tool', ...)"]
+    REC["loadedSkills.set(name, path)"]
+    OUT["formatted instructions<br/>name, description, args, source<br/>+ SKILL.md body"]
+
+    IN --> V
+    V -->|"no"| ERR
+    V -->|"yes"| L
+    L -->|"yes"| NOOP
+    L -->|"no"| RES --> APP --> REC --> OUT
+```
 
 ```
 Skill: my-skill
@@ -195,27 +245,23 @@ The [`SkillsButton`](webview-ui/src/components/chat/SkillsButton.tsx) in the cha
 
 ### Extension State Flow
 
-```
-Extension                                Webview
-─────────                                ───────
-SkillsManager.discoverSkills()
-    │
-    ▼
-handleRequestSkills()
-    │
-    ├── skills: SkillMetadata[]
-    ├── loadedSkills: Record<string,string>  ──▶  ExtensionStateContext
-    │                                              │
-    │                                     ┌────────▼──────────┐
-    │                                     │ skills[]           │
-    │                                     │ loadedSkills{}     │
-    │                                     └───────────────────┘
-    │                                              │
-    │                                     ┌────────▼──────────┐
-    │                                     │ SkillsButton       │
-    │                                     │ - loaded list      │
-    │                                     │ - grouped unloaded │
-    │                                     └───────────────────┘
+```mermaid
+flowchart TB
+    subgraph EXT["Extension"]
+        direction TB
+        DISC["SkillsManager.discoverSkills()"]
+        HRS["handleRequestSkills()"]
+        DISC --> HRS
+    end
+
+    subgraph WV["Webview"]
+        direction TB
+        ESC["ExtensionStateContext<br/>skills[]<br/>loadedSkills{}"]
+        BTN["SkillsButton<br/>loaded list<br/>grouped unloaded"]
+        ESC --> BTN
+    end
+
+    HRS -->|"skills: SkillMetadata[]<br/>loadedSkills: Record&lt;string, string&gt;"| ESC
 ```
 
 ## Override Resolution

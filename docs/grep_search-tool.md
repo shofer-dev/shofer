@@ -71,6 +71,36 @@ if (contextAfter > 0) args.push("-A", String(contextAfter))
 args.push(directoryPath)
 ```
 
+## Query Pipeline
+
+End-to-end, from the model's tool call to the formatted text block. Note the
+**dual `.shofer/shoferignore` exclusion**: ripgrep's native `--ignore-file` plus
+an `execute()` post-filter that acts as a safety net.
+
+```mermaid
+flowchart TB
+    CALL["grep_search call<br/>path, query + optional params"]
+    VAL{"path and query<br/>present and non-empty?"}
+    ERR["sayAndCreateMissingParamError()"]
+
+    ARGS["buildRipgrepArgs()<br/>--json --no-messages --no-require-git<br/>-e / -F -e · -i · -w · -g / -g ! · -B / -A<br/>--ignore-file when shoferignore is loaded"]
+    RG["spawn rg as a child process<br/>structured --json output"]
+    POST["post-filter against .shofer/shoferignore<br/>safety net behind --ignore-file"]
+    CAP{"hits &gt; maxResults?"}
+    TRUNC["'Showing first M of more results.'"]
+    HEAD["'Found N results.'"]
+    NONE["'No results found for: &lt;query&gt;'"]
+    FMT["formatResults()<br/>## per file · '&gt;' match lines<br/>context lines · '----' between blocks"]
+
+    CALL --> VAL
+    VAL -->|"no"| ERR
+    VAL -->|"yes"| ARGS --> RG --> POST
+    POST -->|"no hits"| NONE
+    POST -->|"hits"| CAP
+    CAP -->|"yes"| TRUNC --> FMT
+    CAP -->|"no"| HEAD --> FMT
+```
+
 ## Output Format
 
 Results are returned as structured text, organized by file:

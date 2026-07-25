@@ -10,16 +10,27 @@
 
 ## Architecture
 
-```
-GitIndexManager (per workspace, sibling to CodeIndexManager)
- ├── CodeIndexConfigManager     — REUSED: same embedder/Qdrant settings
- ├── GitHistoryStateManager     — progress events (Standby|Indexing|Indexed|Error|Stopping)
- ├── GitCacheManager            — SHA-256 per-commit content hash cache (globalStorage)
- ├── CodeIndexServiceFactory    — REUSED: creates IEmbedder + QdrantVectorStore (dedicated collection)
- ├── GitHistoryOrchestrator     — drives indexing (extract → embed → upsert)
- │    ├── GitLogExtractor       — runs `git log --format=...` for structured output
- │    └── GitWatcher            — polls for new commits via setInterval (git log --since=<lastCommitDate>); implemented (Phase 2)
- └── GitSearchService           — embeds query → cosine search against git Qdrant collection
+```mermaid
+flowchart TB
+    GIM["GitIndexManager<br/>per workspace, sibling to CodeIndexManager"]
+
+    CFG["CodeIndexConfigManager<br/>REUSED — same embedder/Qdrant settings"]
+    ST["GitHistoryStateManager<br/>progress events<br/>Standby · Indexing · Indexed · Error · Stopping"]
+    CACHE["GitCacheManager<br/>SHA-256 per-commit content hash cache<br/>globalStorage"]
+    FAC["CodeIndexServiceFactory<br/>REUSED — creates IEmbedder + QdrantVectorStore<br/>dedicated collection"]
+    ORCH["GitHistoryOrchestrator<br/>drives indexing: extract to embed to upsert"]
+    EXT["GitLogExtractor<br/>runs 'git log --format=...' for structured output"]
+    WATCH["GitWatcher<br/>setInterval poll: 'git log --since=&lt;lastCommitDate&gt;'<br/>implemented — Phase 2"]
+    SEARCH["GitSearchService<br/>embeds query, cosine search<br/>against the git Qdrant collection"]
+
+    GIM --> CFG
+    GIM --> ST
+    GIM --> CACHE
+    GIM --> FAC
+    GIM --> ORCH
+    GIM --> SEARCH
+    ORCH --> EXT
+    ORCH --> WATCH
 ```
 
 ### Relationship to existing Code Index
@@ -96,28 +107,32 @@ Each commit message chunk is stored as one Qdrant point:
 
 ### Indexing Pipeline (Phase 1)
 
-```
-GitIndexManager.startIndexing()
-  → GitHistoryOrchestrator.startIndexing()
-    → GitLogExtractor.extractCommits()
-      `git log --format=%H|||%h|||%an <%ae>|||%aI|||%s|||%b|||ENDCOMMIT --encoding=UTF-8`
-      → stream parse → GitCommitBlock[]
-  → filter by maxHistoryDays (config, default 365)
-  → GitCacheManager check: skip commits whose hash is unchanged
-  → batch commits (BATCH_SEGMENT_THRESHOLD at a time)
-  → embedder.createEmbeddings(batchContentTexts)
-  → QdrantVectorStore.upsertPoints(points) → git-specific collection
-  → start GitWatcher for incremental updates
+```mermaid
+flowchart TB
+    A["GitIndexManager.startIndexing()"]
+    B["GitHistoryOrchestrator.startIndexing()"]
+    C["GitLogExtractor.extractCommits()<br/>git log --format=%H|||%h|||%an &lt;%ae&gt;|||%aI|||%s|||%b|||ENDCOMMIT<br/>--encoding=UTF-8"]
+    D["stream parse to GitCommitBlock[]"]
+    E["filter by maxHistoryDays<br/>config, default 365"]
+    F["GitCacheManager check<br/>skip commits whose hash is unchanged"]
+    G["batch commits<br/>BATCH_SEGMENT_THRESHOLD at a time"]
+    H["embedder.createEmbeddings(batchContentTexts)"]
+    I["QdrantVectorStore.upsertPoints(points)<br/>git-specific collection"]
+    J["start GitWatcher for incremental updates"]
+
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
 ```
 
 ### Search Pipeline
 
-```
-User query
-  → embedder.createEmbeddings([query]) → query vector
-  → vectorStore.search(vector, minScore, maxResults)
-      (searches GIT collection, NOT code collection)
-  → return results [{commit_hash, short_hash, author, author_date, subject, body, score}]
+```mermaid
+flowchart TB
+    Q["user query"]
+    E["embedder.createEmbeddings([query])<br/>query vector"]
+    S["vectorStore.search(vector, minScore, maxResults)<br/>searches the GIT collection, not the code collection"]
+    R["results: commit_hash, short_hash, author,<br/>author_date, subject, body, score"]
+
+    Q --> E --> S --> R
 ```
 
 ---
@@ -367,16 +382,15 @@ _These items were identified during verification of this document against the li
 
 ## State Machine
 
-```
-Standby ──startIndexing()──→ Indexing ──extract complete──→ Indexed
-   ↑                            │                               │
-   │                     stopIndexing()                   new commits
-   │                            │                               │
-   └──────────────────────── Stopping                   Incremental
-                                │                               │
-                           (aborted)                         Indexing
-                                                               │
-        Error ←─── any failure ────────────────────────────────┘
-          │
-          └──recoverFromError()──→ Standby (clean slate)
+```mermaid
+stateDiagram-v2
+    state "Incremental indexing" as Incremental
+
+    Standby --> Indexing: startIndexing()
+    Indexing --> Indexed: extract complete
+    Indexing --> Stopping: stopIndexing()
+    Stopping --> Standby: aborted
+    Indexed --> Incremental: new commits
+    Incremental --> Error: any failure
+    Error --> Standby: "recoverFromError() — clean slate"
 ```
