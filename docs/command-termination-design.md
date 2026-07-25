@@ -170,6 +170,32 @@ rather than racing a `psTree` snapshot. The `pidUpdatePromise` guard ensures the
 PID is resolved before terminating (the execa process initially reports the
 wrapper shell PID, then updates to the child command's PID).
 
+```mermaid
+flowchart TD
+    A["ExecaTerminalProcess.abort()<br/>aborted = true"]
+    W{"pidUpdatePromise<br/>in progress?"}
+    WA["await the PID update<br/>then performKill()"]
+    K["performKill()"]
+    S["subprocess.kill('SIGTERM')<br/>the execa wrapper"]
+    T["terminateProcessTree(pid)"]
+
+    subgraph ESC["terminateProcessTree — SIGTERM to grace to SIGKILL"]
+        direction TB
+        D["getDescendants(pid) via ps-tree<br/>pids = descendants + root, de-duped"]
+        T1["SIGTERM every pid"]
+        G["await delay(graceMs) — default 250ms"]
+        P["probe each pid with signal 0"]
+        T2["SIGKILL the survivors"]
+        D --> T1 --> G --> P --> T2
+    end
+
+    A --> W
+    W -->|yes| WA --> K
+    W -->|no| K
+    K --> S
+    K --> T --> D
+```
+
 ### 4.3 Global Stop Button (Task-Level Abort)
 
 When the user clicks the global **Stop** button, the flow is:
@@ -216,6 +242,32 @@ is set — a flag raised by `handleTerminalOperation("abort")` and cleared when 
 next command starts or completes. The user-timeout path aborts the process
 directly (not via `handleTerminalOperation`), so it keeps its own `"timeout"`
 status.
+
+```mermaid
+stateDiagram-v2
+    [*] --> started: onShellExecutionStarted
+    started --> output: onLine
+    output --> output: onLine
+
+    started --> exited: onShellExecutionComplete
+    output --> exited: onShellExecutionComplete
+
+    started --> terminated: onShellExecutionComplete with userTerminatedCommand set
+    output --> terminated: onShellExecutionComplete with userTerminatedCommand set
+
+    started --> timeout: user timeout path in executeCommandInTerminal
+    output --> timeout: user timeout path in executeCommandInTerminal
+
+    [*] --> fallback: ShellIntegrationError caught in ExecuteCommandTool.execute()
+    fallback --> started: retried on the execa backend
+
+    exited --> [*]
+    terminated --> [*]
+    timeout --> [*]
+```
+
+The OctagonX button is rendered only while the status is `"started"`; `"exited"`
+shows the exit dot and `"terminated"` shows the red "Killed" badge (§5).
 
 ---
 

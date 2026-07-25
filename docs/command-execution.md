@@ -12,33 +12,38 @@ How `execute_command` and `read_command_output` work together — from invocatio
 
 ## 1. Architecture Overview
 
-```
-LLM calls execute_command(command, cwd?, timeout?)
-        │
-        ▼
-┌─────────────────────────────────────────────────────┐
-│  ExecuteCommandTool.execute()                       │
-│  ├─ Validate command (non-empty, .shofer/shoferignore)     │
-│  ├─ Ask user approval ("command" ask)               │
-│  ├─ Resolve working directory                       │
-│  └─ executeCommandInTerminal(task, options)         │
-│       │                                             │
-│       ├─ OutputInterceptor (head/tail buffer)       │
-│       ├─ TerminalRegistry.getOrCreateTerminal()     │
-│       ├─ terminal.runCommand(command, callbacks)    │
-│       ├─ Dual-timeout race                          │
-│       └─ Format response (inline or persisted)      │
-└─────────────────────────────────────────────────────┘
-        │
-        ▼
-  Tool result to LLM
-  ├─ Output fits preview → inline output + exit code
-  └─ Output exceeds preview → preview + artifact_id
-                                │
-                                ▼
-                    LLM calls read_command_output(
-                      artifact_id, search?, offset?, limit?
-                    )
+```mermaid
+flowchart TD
+    L["LLM calls execute_command<br/>command, cwd?, timeout?"]
+
+    subgraph TOOL["ExecuteCommandTool.execute()"]
+        direction TB
+        V["Validate command<br/>non-empty, .shofer/shoferignore"]
+        A["Ask user approval — 'command' ask"]
+        C["Resolve working directory"]
+        V --> A --> C
+    end
+
+    subgraph EXEC["executeCommandInTerminal(task, options)"]
+        direction TB
+        OI["OutputInterceptor — head/tail buffer"]
+        TR["TerminalRegistry.getOrCreateTerminal()"]
+        RC["terminal.runCommand(command, callbacks)"]
+        RACE["Dual-timeout race"]
+        FMT["Format response — inline or persisted"]
+        OI --> TR --> RC --> RACE --> FMT
+    end
+
+    D{"Output fits preview?"}
+    INL["Inline output + exit code"]
+    PER["Preview + artifact_id"]
+    R["LLM calls read_command_output<br/>artifact_id, search?, offset?, limit?"]
+
+    L --> V
+    C --> OI
+    FMT --> D
+    D -->|yes| INL
+    D -->|no| PER --> R
 ```
 
 ---
@@ -73,6 +78,23 @@ Preview budget (per terminalOutputPreviewSize setting)
 ```
 
 The preview size is controlled by the user setting `terminalOutputPreviewSize` (`"small"`, `"medium"` [default], or `"large"`) with byte thresholds defined in [`TERMINAL_PREVIEW_BYTES`](../packages/types/src/terminal.ts).
+
+```mermaid
+flowchart TD
+    S["Command output stream"]
+    OI["OutputInterceptor<br/>head 50% + tail 50% of the<br/>TERMINAL_PREVIEW_BYTES budget"]
+    D{"Output exceeds<br/>preview budget?"}
+    IN["Inline: full output + exit code"]
+    SP["OutputInterceptor.spillToDisk()<br/>full lossless output to<br/>command-output/cmd-EXECUTIONID.txt"]
+    TN["Truncated response:<br/>head + omitted-bytes marker + tail<br/>plus the Artifact ID"]
+    RCO["read_command_output"]
+    CU["OutputInterceptor.cleanup()<br/>on Task.dispose()"]
+
+    S --> OI --> D
+    D -->|no| IN
+    D -->|yes| SP --> TN --> RCO
+    SP --> CU
+```
 
 ### 3.2 When Output Fits in Preview
 
@@ -149,6 +171,36 @@ await Promise.race(racers)
 ```
 
 Both timers are cleaned up in the `finally` block regardless of which won the race.
+Alongside the two timers, the race also carries the process itself and a listener
+on `task.abortSignal`, so the global Stop button (§5.3) can unwind a
+never-terminating command instead of leaving the `await` hanging:
+
+```mermaid
+flowchart TD
+    R["await Promise.race(racers)<br/>in executeCommandInTerminal"]
+
+    P["process — command exits naturally"]
+    AB["task.abortSignal 'abort' listener<br/>rejects with 'Task aborted'"]
+    AG["agentTimeout &gt; 0<br/>soft timer"]
+    UT["commandExecutionTimeout &gt; 0<br/>hard timer"]
+
+    AGA["runInBackground = true<br/>process.continue()<br/>task.supersedePendingAsk()<br/>command keeps running"]
+    UTA["isUserTimedOut = true<br/>task.terminalProcess?.abort()<br/>reject"]
+    UTR["status 'timeout' to webview<br/>didToolFailInCurrentTurn = true<br/>tool result: terminated after Ns"]
+    ABR["tool result:<br/>'Command execution was aborted by the user.'"]
+
+    FIN["finally:<br/>clearTimeout on both timers<br/>remove the abort listener<br/>task.terminalProcess = undefined"]
+
+    R --> P
+    R --> AB --> ABR
+    R --> AG --> AGA
+    R --> UT --> UTA --> UTR
+
+    P --> FIN
+    ABR --> FIN
+    AGA --> FIN
+    UTR --> FIN
+```
 
 ---
 
@@ -510,6 +562,21 @@ The terminal provider is chosen based on the `terminalShellIntegrationDisabled` 
 | Worktree task on **macOS/Windows** | User's setting   | Advisory warning in approval     | Per backend                            |
 
 If the VS Code terminal throws a [`ShellIntegrationError`](../packages/core/src/tools/ExecuteCommandTool.ts:25), the tool automatically retries with execa (without requiring the user to change settings).
+
+```mermaid
+flowchart TD
+    Q1{"Worktree task on Linux?"}
+    Q2{"terminalShellIntegrationDisabled"}
+    EXS["Execa — forced<br/>shofer-sandbox wrapper is outermost<br/>SIGKILL + psTree"]
+    VS["VS Code Terminal<br/>shell integration via sendText<br/>SIGINT via Ctrl+C"]
+    EX["Execa<br/>subprocess via execa<br/>SIGKILL + psTree"]
+
+    Q1 -->|yes| EXS
+    Q1 -->|"no — macOS/Windows worktree<br/>gets an advisory warning only"| Q2
+    Q2 -->|"false (default)"| VS
+    Q2 -->|true| EX
+    VS -.->|"ShellIntegrationError — retry with<br/>terminalShellIntegrationDisabled: true"| EX
+```
 
 ### 7.1 Worktree Shell Sandboxing (Linux)
 

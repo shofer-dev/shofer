@@ -100,33 +100,22 @@ path), the registry's `revision` is folded into `Task._buildToolsCacheKey`
 rebuilds when an async-loaded plugin registers — otherwise a late-registering
 plugin tool would be absent from the catalog the model sees.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    Shofer Host (extension / CLI / server)      │
-│                                                               │
-│  ┌─ PluginManager ─────────────────────────────────────────┐ │
-│  │  • Discovers plugins (bundled + global + project)       │ │
-│  │  • Reads & validates plugin.json manifests             │ │
-│  │  • Enforces permissions, consent, dependencies         │ │
-│  │  • Loads plugin code (esbuild transpile for .ts)       │ │
-│  │  • Registers into PluginRegistry / UI / Mode registries │ │
-│  │  • Manages lifecycle (enable/disable/uninstall/reload)  │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                          │                                     │
-│          ┌───────────────┼───────────────┐                    │
-│          ▼               ▼               ▼                    │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐          │
-│  │ PluginRegistry│ │ UI Registry  │ │ Mode/Skill/  │          │
-│  │ (tools,      │ │ (webview     │ │ Command      │          │
-│  │  prompt,     │ │  regions,    │ │ contributions│          │
-│  │  hooks,      │ │  panels)     │ │ )            │          │
-│  │  events)     │ │              │ │              │          │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘          │
-│         ▼                ▼                ▼                   │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │              Shofer Core (Task, Tools, Prompts)          │ │
-│  └──────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph HOST["Shofer host — extension / CLI / server"]
+        direction TB
+        PM["PluginManager<br/>discovers bundled + global + project<br/>validates plugin.json<br/>enforces permissions, consent, dependencies<br/>loads code — esbuild transpile for .ts<br/>enable / disable / reload / uninstall"]
+        PR["PluginRegistry<br/>collectTools<br/>applySystemPromptTransforms<br/>applyLifecycleHook, dispatchEvent<br/>revision"]
+        UIR["UI registry — ui-registry.ts<br/>webview regions, PluginPanelManager"]
+        CON["Mode / skill / command / rule<br/>and MCP-config contributions"]
+        CORE["Shofer core — Task, tools, prompts"]
+        PM --> PR
+        PM --> UIR
+        PM --> CON
+        PR --> CORE
+        UIR --> CORE
+        CON --> CORE
+    end
 ```
 
 ### Directory layout
@@ -263,6 +252,23 @@ Because plugins register asynchronously, the registry's `revision`
 ([§3](#3-architecture-overview)) is part of `Task._buildToolsCacheKey`, forcing the
 tool catalog to rebuild when a late plugin registers (else a plugin tool such as
 `ask_live_memory` would be missing from the catalog).
+
+The path from a plugin's `registerTools` to a model-issued call:
+
+```mermaid
+flowchart LR
+    P["plugin.registerTools(ctx)<br/>CustomToolDefinition[]"]
+    CT["pluginRegistry.collectTools()"]
+    REG["customToolRegistry.register(def, 'plugin')<br/>source: plugin, plus pluginName"]
+    BT["build-tools.ts<br/>getAllSerialized → the catalog the model sees"]
+    CK["Task._buildToolsCacheKey<br/>folds in pluginRegistry.revision"]
+    V["validateToolUse<br/>isDispatchable(id, experimentOn)"]
+    D["presentAssistantMessage<br/>getDispatchable(id, experimentOn) → execute"]
+
+    P --> CT --> REG --> BT
+    CK -->|"a late register bumps revision — rebuild"| BT
+    BT --> V --> D
+```
 
 ### 5.2 System Prompt Transform (`transformSystemPrompt`)
 
@@ -542,6 +548,40 @@ error isolation — a hook that throws or exceeds its budget is skipped with a
 shown+logged warning and its would-be mutation dropped, so it can never stall or
 crash the agent loop.
 
+Where each hook point sits in one turn — the reducer wrappers on `PluginRegistry`
+are the only entry points, and the two task-lifecycle observers are invoked
+without awaiting so a plugin never delays task start or completion:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as Task
+    participant PAM as presentAssistantMessage
+    participant PR as PluginRegistry
+    participant PL as Plugins, in registration order
+    participant TL as Tool handler
+
+    T-)PR: notifyBeforeTaskStart(context)
+    PR->>PL: beforeTaskStart — observer only
+    PAM->>PR: applyBeforeToolCall(name, args, ctx)
+    PR->>PL: beforeToolCall — modifiedArgs thread through
+    alt a plugin returns allow false
+        PR-->>PAM: allow false plus reason — the tool is short-circuited
+    else allowed
+        PR-->>PAM: allow true, modifiedArgs when something changed
+        PAM->>TL: execute with the threaded args
+        TL->>T: askToolApproval — Task.ask
+        T->>PR: applyBeforeAsk(askType, text, ctx)
+        PR->>PL: beforeAsk — approve / deny / ask, and an optional text edit
+        TL-->>PAM: result string
+        PAM->>PR: applyAfterToolCall(name, args, result, ctx)
+        PR->>PL: afterToolCall — a returned string replaces the result
+    end
+    T-)PR: notifyAfterTaskComplete(context)
+    PR->>PL: afterTaskComplete — observer only
+    Note over PR,PL: every hook runs under a 500 ms per-hook timeout<br/>with per-plugin error isolation
+```
+
 ### 5.10 Events (`onEvent`)
 
 Every telemetry event is forwarded to plugin `onEvent` observers. The
@@ -635,14 +675,62 @@ the host is unchanged.
     result) needed by workflow/runner plugins, see the proposed
     [§14](#14-proposed-agent-control-api-for-workflow--runner-plugins).
 
+The four delivery modes and their no-target fallbacks:
+
+```mermaid
+flowchart TD
+    N["ctx.agent.notify(message, opts)"]
+    G{"permissions.agent granted?"}
+    STUB["denying stub — seam wired but ungranted<br/>absent entirely when there is no seam"]
+    M{"opts.mode"}
+    NO["notify — default<br/>peerNotificationQueue, drained into the<br/>system prompt on the next real request"]
+    Q["queue — MessageQueueService<br/>drained on the next turn"]
+    I["interrupt — enqueue, then<br/>cancelAndProcessQueuedMessages"]
+    S["spawn — a new task seeded<br/>with the message"]
+    DROP["dropped"]
+
+    N --> G
+    G -->|no| STUB
+    G -->|yes| M
+    M --> NO
+    M --> Q
+    M --> I
+    M --> S
+    NO -->|"task loop not running"| DROP
+    Q -->|"no task to steer"| S
+    I -->|"no task to steer"| S
+```
+
 ---
 
 ## 6. Plugin Lifecycle
 
-```
-Discovery → Manifest Validation → Permission/Consent Check → Load Code → Register → Initialize → Active
-                                                                                        │
-                                                              Disable / Reload / Uninstall ←──┘
+```mermaid
+stateDiagram-v2
+    [*] --> discovered
+    discovered --> validated: pluginManifestSchema.safeParse
+    discovered --> [*]: invalid manifest, skipped with a logged warning
+    validated --> gated: enable toggle is the consent to run at all
+    gated --> blocked: resolveDependencies — closure not all enabled and present
+    blocked --> gated: the unmet dependency is enabled
+    gated --> loaded: main transpiled or imported
+    gated --> registered: declarative-only plugin, no main
+    loaded --> registered: pluginRegistry.register(plugin, context)
+    registered --> active: initialize, then services start
+    active --> gated: reloadPlugin — config or AI consent changed
+    active --> disabled: disable
+    disabled --> gated: enable
+    active --> [*]: uninstall — the plugin dir is deleted
+
+    note right of blocked
+        the toggle stays on but nothing registers;
+        disabledReason names the unmet dependency
+    end note
+
+    note right of disabled
+        tools, modes, skills and commands disappear,
+        UI unmounts, MCP servers disconnect, services stop
+    end note
 ```
 
 ### Discovery

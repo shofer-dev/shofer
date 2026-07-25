@@ -21,6 +21,21 @@ touches the k3s-deployed code-server / Shofer** (or a local-Docker code-server) 
 see [L2 — code-server E2E harness](#l2--code-server-e2e-harness) at the end of
 this doc.
 
+```mermaid
+flowchart TD
+    L0["L0 — unit<br/>vitest, in-process"]
+    L1["L1 — CLI harness<br/>CLI ExtensionHost, no code-server, no browser"]
+    L2["L2 — code-server E2E<br/>Python/pytest + Playwright, separate package"]
+    HERM["hermetic by default"]
+    K3S["the only layer that reaches<br/>the deployed code-server"]
+
+    L0 -->|"what a unit test cannot cover"| L1
+    L1 -->|"what L1 structurally cannot cover:<br/>the web runtime and the React webview"| L2
+    L0 -.- HERM
+    L1 -.- HERM
+    L2 -.- K3S
+```
+
 ---
 
 ## L1 — CLI harness

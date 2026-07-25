@@ -12,18 +12,49 @@ See [Startup Reconciliation Cascade](#startup-reconciliation-cascade) for the fu
 
 ## Architecture
 
-```
-CodeIndexManager (singleton per workspace)
- ├── CodeIndexConfigManager       — reads/writes settings & secrets
- ├── CodeIndexStateManager        — UI progress events
- │                                   (IndexingState: Standby|Indexing|Indexed|Error|Stopping)
- ├── CacheManager                 — per-file cache (v3: hash + mtimeMs + size + segmentHashes, stored in VS Code globalStorage, NOT on Qdrant PVC)
- ├── CodeIndexServiceFactory      — creates embedder, vector-store, scanner, parser, file-watcher
- ├── CodeIndexOrchestrator        — drives the indexing workflow (scan → watch)
- │    ├── DirectoryScanner        — walks files, parses, batches embeddings, upserts to Qdrant
- │    │    └── CodeParser         — tree-sitter based AST parsing → CodeBlock[]
- │    └── FileWatcher             — VS Code `FileSystemWatcher` (`vscode.workspace.createFileSystemWatcher`) for incremental re-indexing
- └── CodeIndexSearchService       — embeds query → cosine search against Qdrant
+`CodeIndexManager` is the singleton per workspace; it composes the config manager
+(settings and secrets, plus the `isSearchOnly` / `indexKey` getters), the state
+manager (`IndexingState` progress events), the cache manager (the v3 per-file
+cache, in VS Code globalStorage — **not** on the Qdrant PVC), the service factory,
+the orchestrator that drives scan-then-watch, and the search service.
+
+```mermaid
+flowchart TB
+    subgraph MGR["CodeIndexManager — singleton per workspace"]
+        direction TB
+        CFG["CodeIndexConfigManager<br/>settings and secrets<br/>isSearchOnly, indexKey"]
+        SF["CodeIndexServiceFactory"]
+        ORCH["CodeIndexOrchestrator<br/>scan, then watch"]
+        SCAN["DirectoryScanner"]
+        PARSE["CodeParser — tree-sitter AST to CodeBlock[]"]
+        FW["FileWatcher — vscode FileSystemWatcher"]
+        SEARCH["CodeIndexSearchService"]
+        CACHE["CacheManager<br/>hash, mtimeMs, size, segmentHashes"]
+        ST["CodeIndexStateManager<br/>IndexingState progress events"]
+        CFG --> SF --> ORCH
+        ORCH --> SCAN
+        ORCH --> FW
+        SCAN --> PARSE
+        ORCH -->|progress| ST
+    end
+
+    FS[("workspace files")]
+    EMB["IEmbedder — one of 8 providers"]
+    QD[("Qdrant collection<br/>named from the index key")]
+    CF[("globalStorage cache file")]
+
+    FS -->|"listFiles, stat, readFile"| SCAN
+    FS -->|change events| FW
+    SCAN -->|"CodeBlock batches"| EMB
+    FW -->|"new or changed segments only"| EMB
+    EMB -->|vectors| QD
+    SCAN -->|"upsertPoints, ids are uuidv5 of segmentHash"| QD
+    FW -->|"deletePointsByIds — stale segments"| QD
+    SCAN --> CACHE
+    FW --> CACHE
+    CACHE -->|"persist and reload"| CF
+    SEARCH -->|"embed the query"| EMB
+    SEARCH -->|"cosine search"| QD
 ```
 
 ### Key Source Files
@@ -376,6 +407,36 @@ The startup reconciliation pipeline is organised as five layers, each more selec
 | **4. Tree-sitter parse**    | Files that failed layer 3                   | AST parsing → `CodeBlock[]`, each with a deterministic `segmentHash`.                                                                                                                                                                                                                                      | CPU: tree-sitter parse                                                                        | none (always available)                                                                                  |
 | **5. Per-segment dedup**    | CodeBlock[] from layer 4                    | Compare each block's `segmentHash` against the cache's `segmentHashes[]` for that file. Matching blocks skip the embedding API call entirely — the point already exists in Qdrant (deterministic `uuidv5` from `segmentHash`). Stale segments (in cache but not in current parse) are deleted from Qdrant. | Only for blocks with new/changed content: embed + upsert. Everything else: cache update only. | none (always available)                                                                                  |
 
+```mermaid
+flowchart TD
+    START["startIndexing — the collection already holds data"]
+    L1{"git repo and a lastIndexedCommit<br/>in the Qdrant metadata point?"}
+    DIFF["Layer 1 — git-aware narrowing<br/>diffSince plus dirty changes plus submodule diffs<br/>scanSpecificFiles and deleteSpecificFiles,<br/>then markIndexingComplete — no directory walk"]
+    WALK["Layer A fallback — full directory walk<br/>listFiles filtered by extension, .gitignore, .shofer/shoferignore"]
+    L2{"Layer 2 — cached mtimeMs and size match?"}
+    SKIP2["skip — no readFile, no hash"]
+    L3{"Layer 3 — SHA-256 of the content matches the cache?"}
+    SKIP3["refresh mtimeMs and size in the cache, then skip"]
+    L4["Layer 4 — tree-sitter parse to CodeBlock[]<br/>each block carries a segmentHash"]
+    L5{"Layer 5 — segmentHash already in<br/>the cache's segmentHashes for the file?"}
+    REUSE["reused — no embedding call, the point<br/>is already in Qdrant"]
+    EMBED["embed and upsert"]
+    STALE["cached hash absent from the new parse<br/>delete the point by its uuidv5 id"]
+
+    START --> L1
+    L1 -->|yes| DIFF
+    L1 -->|"no git, missing commit, diffSince throws,<br/>or a new submodule"| WALK
+    DIFF --> L2
+    WALK --> L2
+    L2 -->|yes| SKIP2
+    L2 -->|"no, or the cache is missing<br/>or version-mismatched"| L3
+    L3 -->|yes| SKIP3
+    L3 -->|no| L4 --> L5
+    L5 -->|yes| REUSE
+    L5 -->|no| EMBED
+    L4 --> STALE
+```
+
 **Runtime layer** (file watcher, not startup): When a file is saved, the file watcher applies layers 3–5 per-file: SHA-256 → if changed, parse → per-segment dedup against cache → embed only new/changed blocks.
 
 **Example: branch switch with shared worktree index (50k-file repo, 10 files changed)**
@@ -533,6 +594,29 @@ In the [Shofer Nodes](v3_architecture.md#distributed-execution-horizontal-scalin
 
 **The model: the controller is the sole indexer; nodes are search-only readers.**
 
+```mermaid
+flowchart LR
+    subgraph CTRL["Controller — the VS Code front-end"]
+        direction TB
+        CO["CodeIndexManager — full indexer<br/>scanner plus file watcher plus search"]
+        CK["resolvedIndexKey"]
+    end
+    subgraph NODE["Shofer Node — shofer serve, one of N"]
+        direction TB
+        NO["CodeIndexManager<br/>codebaseIndexSearchOnly true<br/>initialize stops the watcher at step 7<br/>startIndexing returns early"]
+        NS["CodeIndexSearchService — rag_search answers<br/>systemStatus stays Standby"]
+        NO --> NS
+    end
+    WS[("shared workspace filesystem")]
+    QD[("one Qdrant collection<br/>named from the index key")]
+
+    WS --> CO
+    WS --> NO
+    CO -->|"the only writer — scan, embed, upsert"| QD
+    NS -->|"query only"| QD
+    CK -->|"published as codebaseIndexKey on the synced slice<br/>plus the embedder and Qdrant secrets"| NO
+```
+
 ### Why it is race-free
 
 The controller shares the workspace filesystem, so its scanner and file-watcher already observe **every** change — including edits a remote node's task makes. A second indexer would therefore add nothing: it would re-embed content the controller is already embedding (duplicated API cost) while racing it as a concurrent writer into the same collection. Making the controller the only writer removes the race by construction rather than by locking.
@@ -602,18 +686,18 @@ Failed embedding batches inside the scanner retry up to 3 times with a 500 ms in
 
 ## State Machine
 
-```
-Standby ──startIndexing()──→ Indexing ──scan complete──→ Indexed
-   ↑                           │                          │
-   │                    stopIndexing()              file changes
-   │                           │                          │
-   └─────────────────────── Stopping              Incremental scan
-                                │                          │
-                           (aborted)                    Indexing
-                                                        │
-         Error ←─── any failure ─────────────────────────┘
-           │
-           └──recoverFromError()──→ Standby (clean slate)
+```mermaid
+stateDiagram-v2
+    [*] --> Standby
+    Standby --> Indexing: startIndexing
+    Indexing --> Indexed: scan complete
+    Indexed --> Indexing: file changes, incremental scan
+    Indexing --> Stopping: stopIndexing
+    Indexed --> Stopping: stopIndexing
+    Stopping --> Standby: aborted
+    Indexing --> Error: any failure
+    Indexed --> Error: any failure
+    Error --> Standby: recoverFromError, a clean slate
 ```
 
 ---
@@ -637,10 +721,6 @@ Discovered during the 2026-05-20 review that verified every file path, line numb
 ### Constants
 
 - **The constants table (§Key Constants) presents a flattened list** — in the source, constants are grouped by consumer: `/**Parser */`, `/**Search */`, `/**File Watcher */`, `/**Directory Scanner */`, `/**OpenAI Embedder */`, `/**Gemini Embedder */`. The doc table loses this grouping, making it unclear which subsystem owns each constant.
-
-### Architecture Diagram
-
-- **The architecture diagram (§Architecture) is prose-only** — the text-based tree is good for hierarchy but doesn't show data flow arcs (embedding API calls, Qdrant gRPC/HTTP, file-system reads). A Mermaid or ASCII-art dataflow diagram would help readers understand the embedding round-trips.
 
 ### Search Ranking Quality
 

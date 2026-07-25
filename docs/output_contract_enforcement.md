@@ -61,6 +61,35 @@ layers with no compile-time link. Baking workflow contract fields into
 The post-hoc validator is therefore the _only_ thing enforcing the contract
 today, and it is provider-agnostic (works for mock and every real provider).
 
+```mermaid
+flowchart TD
+    P["buildStakePrompt() emits the<br/>'OUTPUT CONTRACT:' block"]
+    A["agent task runs and calls attempt_completion"]
+    C["collectStakeResults()"]
+    S0{"stake declares output:?"}
+    OK0["no contract — free-form prose accepted"]
+    S1["Step 1 — tryParseJson(result)"]
+    Q1{"a JSON object<br/>could be extracted?"}
+    S2["Step 2 — result must be a JSON object<br/>carrying every declared field"]
+    Q2{"object and<br/>no missing fields?"}
+    S3["Step 3 — state.retryCount++"]
+    Q3{"retryCount &gt; maxRetries?<br/>op.retries, else the agent default,<br/>else MAX_RETRIES = 3"}
+    ERR["sayProgress the failure<br/>state.status = 'error'"]
+    RETRY["sayProgress the retry<br/>resumeAgentTask(name, retryPrompt, outputSchema)<br/>opIndex is NOT advanced"]
+    S4["Step 4 — retryCount = 0, state.output = result,<br/>route to the mailbox, advance opIndex"]
+
+    P --> A --> C --> S0
+    S0 -->|no| OK0 --> S4
+    S0 -->|yes| S1 --> Q1
+    Q1 -->|no| S3
+    Q1 -->|yes| S2 --> Q2
+    Q2 -->|no| S3
+    Q2 -->|yes| S4
+    S3 --> Q3
+    Q3 -->|yes| ERR
+    Q3 -->|no| RETRY --> A
+```
+
 ---
 
 ## 3. Available levers
@@ -281,6 +310,35 @@ Gemini, and natively-enforcing Anthropic). This is precisely why the post-hoc
 validator must remain the universal floor: it is the only mechanism that holds on
 the semantic-mode upstreams, which include the one in the failing tests.
 
+```mermaid
+flowchart TD
+    T["metadata.tools carrying the synthesized contract schema"]
+    BH["buildApiHandler() provider switch"]
+
+    O["OpenAI-compatible — convertToolsForOpenAI()<br/>schema kept, strict kept"]
+    AN["Anthropic-native — convertOpenAIToolsToAnthropic()<br/>schema to input_schema, strict dropped"]
+    BR["Bedrock — schema to toolSpec.inputSchema.json<br/>no strict concept"]
+    GE["Gemini — schema to parametersJsonSchema<br/>own adherence flag"]
+    RE["Responses API — schema kept, strict varies"]
+
+    R["llm-router — strict is a passthrough bool,<br/>request POSTed with tools intact"]
+
+    HARD["Hard: constrained or guided decode<br/>OpenAI/Azure, Gemini, self-hosted vLLM/SGLang"]
+    SOFT["Soft: semantic only — strong hint, no barrier<br/>Anthropic, DeepSeek Cloud (the ds upstream)"]
+    V["post-hoc validator — the universal floor"]
+
+    T --> BH
+    BH --> O --> R
+    BH --> AN --> R
+    BH --> BR --> R
+    BH --> GE --> R
+    BH --> RE --> R
+    R --> HARD
+    R --> SOFT
+    HARD --> V
+    SOFT --> V
+```
+
 ---
 
 ## 5. Failure-mode → lever matrix
@@ -350,6 +408,48 @@ implemented across 10 files. The contract schema nests under the `result`
 parameter (the LLM produces `{ result: {<contract>}, rating, feedback }`),
 preserving the `rating`/`feedback` fields from the base tool by spreading
 them from the original `attempt_completion` definition.
+
+```mermaid
+flowchart TD
+    O["stake output: — the OutputSchema / OutputField AST<br/>slang-ast.ts"]
+    CJ["contractToJsonSchema(o)<br/>flat scalars, all required,<br/>additionalProperties: false"]
+    SP["WorkflowTask.spawnAgentTask()<br/>passes completionSchema on CreateTaskOptions"]
+    TK["Task.completionSchema"]
+    BT["BuildToolsOptions.completionSchema<br/>build-tools.ts"]
+    GN["getNativeTools({ completionSchema })"]
+    AC["applyCompletionSchema()<br/>nests the contract under the result parameter,<br/>keeps rating and feedback"]
+    W["per-request tool schema on the wire"]
+    ACT["AttemptCompletionTool — result widened to<br/>string or Record&lt;string, unknown&gt;;<br/>objects JSON-stringified for display/storage"]
+    V["collectStakeResults() post-hoc validator"]
+
+    O --> CJ --> SP --> TK --> BT --> GN --> AC --> W
+    W --> ACT --> V
+```
+
+Lever 2 (`tool_choice` forcing) and Lever 3 (`response_format`) were **not**
+adopted — see §6 and §3 respectively. Dashed = designed but deliberately not
+built:
+
+```mermaid
+flowchart LR
+    F1["(a) wrong shape — result is prose,<br/>not the contract object"]
+    F2["(b) wrong action — the model never<br/>calls attempt_completion"]
+
+    L1["Lever 1 — per-task attempt_completion<br/>schema swap (shipped)"]
+    PH["post-hoc validator (shipped)<br/>the universal floor"]
+    L2["Lever 2 — tool_choice forcing<br/>not adopted"]
+    L3["Lever 3 — response_format<br/>not plumbed, wrong shape"]
+
+    F1 --> L1
+    F1 --> PH
+    F2 -.-> L2
+
+    L3 -.-x F1
+    L3 -.-x F2
+
+    style L2 stroke-dasharray: 5 5
+    style L3 stroke-dasharray: 5 5
+```
 
 ### Key files added/changed
 

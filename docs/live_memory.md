@@ -282,6 +282,38 @@ When dequeued (QuestionQueue invokes the processor with an AbortSignal):
   → Return QuestionResult { answer, usage, costSnapshot, evictedTokens } to caller
 ```
 
+The same pipeline as a graph — note the three `enforceLimit()` points and that an
+abort/timeout unwinds without discarding what the window already holds:
+
+```mermaid
+flowchart TD
+    ENQ["QuestionQueue.enqueue<br/>bounded FIFO, per-entry AbortSignal<br/>one timeout spans queue wait plus LLM work"]
+    BUSY["state Busy — the processor takes one question"]
+    DRAIN["drain recentlyModifiedFiles"]
+    LOAD["upsert each contextFile into ContextWindow<br/>enforceLimit — point 1, pre-loop"]
+    BUILD["_buildSystemPrompt — stable prefix<br/>_buildQuestionHints — volatile suffix<br/>_buildBaseConversation(question, hints)"]
+    AB{"signal.aborted?"}
+    THROW["throw AbortError — partial reads and<br/>partial answer stay in the window"]
+    CAP{"iterations = MAX_AGENT_ITERATIONS, 25?"}
+    CAPMSG["answer with the could-not-finish message"]
+    CHAT["chatWithTools — drains ApiStream,<br/>accumulating text and usage chunks"]
+    TC{"any tool calls?"}
+    EXEC["execute the read-only tools<br/>append tool_use and tool_result turns"]
+    ENF2["enforceLimit — point 2, per iteration<br/>splice(0, baseLength, freshBase) refreshes<br/>the base from the trimmed window"]
+    FIN["append the user and assistant turns<br/>enforceLimit — point 3, post-append"]
+    SAVE["accumulate evicted tokens into costTracking<br/>persist the snapshot, state back to Ready"]
+    OUT["QuestionResult — answer, tokensUsed,<br/>contextUsage, costSnapshot, contextFiles"]
+
+    ENQ --> BUSY --> DRAIN --> LOAD --> BUILD --> AB
+    AB -->|yes| THROW
+    AB -->|no| CAP
+    CAP -->|yes| CAPMSG --> FIN
+    CAP -->|no| CHAT --> TC
+    TC -->|no| FIN
+    TC -->|yes| EXEC --> ENF2 --> AB
+    FIN --> SAVE --> OUT
+```
+
 ### 5. File Change Handling (`file-watcher.ts`)
 
 The live memory stays aware of file modifications through **two complementary mechanisms**:
@@ -339,6 +371,27 @@ Question dequeued from queue
 > system markers); `_buildQuestionHints()` produces the volatile suffix that
 > rides on the question. (Earlier revisions placed these hints in the system
 > prompt — a self-inconsistency with the cache-preservation goal, now fixed.)
+
+```mermaid
+flowchart LR
+    subgraph OBS["between questions"]
+        direction TB
+        E["a task tool edits a file"]
+        N["notifyFileModified(path)<br/>paths under .shofer/ are skipped"]
+        S["recentlyModifiedFiles set<br/>nothing is evicted — the window is untouched"]
+        E --> N --> S
+    end
+    subgraph REQ["the next request"]
+        direction TB
+        SYS["_buildSystemPrompt — cache-stable prefix<br/>directory tree, file-context manifest,<br/>folded system markers"]
+        HINT["_buildQuestionHints — volatile<br/>recently-modified note, soft-limit hints"]
+        Q["trailing question turn"]
+        W["request to the memory LLM"]
+        SYS --> W
+        HINT --> Q --> W
+    end
+    S -->|"drained once, then cleared"| HINT
+```
 
 This approach:
 

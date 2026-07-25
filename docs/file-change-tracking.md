@@ -162,6 +162,33 @@ export async function acceptAll(task: Task): Promise<void>
 
 The backend is always `"working"` — there is no git dependency.
 
+```mermaid
+flowchart TD
+    C["FileContextTracker.getFilesEditedByRoo(taskId)<br/>candidates — this task's shofer_edited files"]
+    RD["read the original + final snapshots<br/>and getBaseContent(relPath)"]
+    Q0{"final snapshot<br/>present?"}
+    FB["fall back to the live disk content<br/>for that one file only"]
+    Q1{"base absent<br/>and final absent?"}
+    Q2{"base text equals<br/>final text?"}
+    Q3{"live file matches base?<br/>the only disk read for visibility"}
+    DROP["drop the candidate"]
+    DIFF["computeUnifiedDiffStats(base, final)<br/>insertions / deletions"]
+    ST["deriveState(original, finalExists)<br/>added, deleted or modified"]
+    E["push a ChangedFileEntry — source 'working'"]
+    F["filter out entries with<br/>0 insertions and 0 deletions"]
+    OUT["ChangedFilesPayload<br/>backend: 'working'"]
+
+    C --> RD --> Q0
+    Q0 -->|no| FB --> Q1
+    Q0 -->|yes| Q1
+    Q1 -->|yes| DROP
+    Q1 -->|no| Q2
+    Q2 -->|yes| DROP
+    Q2 -->|no| Q3
+    Q3 -->|yes| DROP
+    Q3 -->|no| DIFF --> ST --> E --> F --> OUT
+```
+
 ### Original- and final-content capture
 
 `FileContextTracker` keeps two per-task snapshots per path:
@@ -194,6 +221,28 @@ Both `captureOriginal` (before first edit, idempotent) and `captureFinal`
 (after every write, powers Redo/Accept) are needed for full panel support —
 diff, revert, redo, accept. A tool that only calls `trackFileContext("shofer_edited")`
 without `captureOriginal` will appear in the panel but diff won't work.
+
+```mermaid
+flowchart TD
+    T["Tool is about to mutate a workspace file"]
+    CO["fileContextTracker.captureOriginal(relPath, content)<br/>idempotent — first Shofer edit only"]
+    B["write base/relPath + originals/sha1.json"]
+    M["mutate the file"]
+    TR["fileContextTracker.trackFileContext(relPath, 'shofer_edited')"]
+    CF["captureFinal(relPath) — best-effort, not awaited<br/>writes final/relPath + finals/sha1.json"]
+    SC["provider.scheduleChangedFilesUpdate(taskId)"]
+    U["changedFiles/update pushed to the webview<br/>debounced ~500ms"]
+    PANEL["FileChangesPanel"]
+
+    T --> CO --> B --> M --> TR
+    TR --> CF
+    TR --> SC
+    CF --> U
+    SC --> U --> PANEL
+```
+
+Both branches out of `trackFileContext` fire only when the record source is
+`"shofer_edited"`, and neither may propagate an error back to the calling tool.
 
 ### Fully tracked (both `captureOriginal` + `trackFileContext("shofer_edited")`)
 
@@ -293,6 +342,49 @@ current workspace state as the new accepted baseline.
 
 **Active-task guard.** Revert/redo are blocked with a toast when
 `task.isStreaming` is true: the user must pause or cancel the task first.
+
+```mermaid
+flowchart TD
+    G{"task.isStreaming?"}
+    TOAST["blocked with a toast<br/>chat:fileChanges.blockedTaskRunning"]
+
+    subgraph REV["Revert — changedFiles/revert"]
+        direction TB
+        R1["read current disk content"]
+        R2{"differs from the last<br/>captured final?"}
+        R3["modal warning —<br/>proceed only on confirmation"]
+        R4["restoreFile: write base back to disk,<br/>or unlink when the snapshot says absent"]
+        R5["final is NOT recaptured —<br/>Redo can still re-apply it"]
+        R1 --> R2
+        R2 -->|yes| R3 --> R4
+        R2 -->|no| R4
+        R4 --> R5
+    end
+
+    subgraph RED["Redo"]
+        direction TB
+        D1["re-apply the captured final content<br/>deterministic, no patch replay"]
+    end
+
+    subgraph ACC["Accept — changedFiles/accept"]
+        direction TB
+        A1["readDiskText(task.cwd, relPath)"]
+        A2["overwriteOriginalBase — promote disk content<br/>to base/ and update the originals hash"]
+        A3["removeFinalSnapshot —<br/>the file leaves the panel"]
+        A1 --> A2 --> A3
+    end
+
+    NG["Accept needs no active-task gate —<br/>it only rewrites tracking metadata"]
+    P["pushChangedFilesUpdate —<br/>changedFiles/update to the webview"]
+
+    G -->|yes| TOAST
+    G -->|no| R1
+    G -->|no| D1
+    NG --> A1
+    R5 --> P
+    D1 --> P
+    A3 --> P
+```
 
 ### Accept-all & Revert-all
 

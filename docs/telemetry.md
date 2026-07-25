@@ -39,19 +39,23 @@
 
 Shofer uses a **multi-client telemetry architecture** with a singleton [`TelemetryService`](packages/telemetry/src/TelemetryService.ts:24) that acts as a multiplexer, fanning out all events to one or more registered [`TelemetryClient`](packages/types/src/telemetry.ts:275) implementations. The system is split across two packages and two runtime environments:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Extension Host (Node.js)                                │
-│                                                          │
-│  TelemetryService (singleton)                            │
-│  ├── PostHogTelemetryClient  ──► posthog-node  ──► ph.shofer.dev │
-│                                                          │
-├─────────────────────────────────────────────────────────┤
-│  Webview UI (Browser)                                    │
-│                                                          │
-│  TelemetryClient (singleton)                             │
-│  └── posthog-js  ───────────► ph.shofer.dev             │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph HOST["extension host — Node.js"]
+        TS["TelemetryService — singleton multiplexer"]
+        PH["PostHogTelemetryClient<br/>posthog-node"]
+        OT["OtelTelemetryClient<br/>@opentelemetry/api spans"]
+    end
+    subgraph WEB["webview UI — browser"]
+        WC["TelemetryClient — singleton<br/>posthog-js"]
+    end
+    PHH["PostHog host — ph.shofer.dev"]
+    OTLP["OTLP backend — operator-configured"]
+
+    TS --> PH --> PHH
+    WC --> PHH
+    TS -.->|"registered by the host only if the operator opts into OTel"| OT
+    OT -.->|"no-op until an OTel SDK is registered"| OTLP
 ```
 
 | Component                                                                       | Runtime                  | Library              | Endpoint                   |
@@ -468,21 +472,44 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 
 ### Event Flow
 
-```
-Caller (e.g., Task.ts, Provider code)
-  │
-  ├── TelemetryService.instance.captureEvent(name, props)
-  │     ├── PostHogTelemetryClient.capture()
-  │     │     ├── isTelemetryEnabled()? → check VSCode telemetry level + user opt-in
-  │     │     ├── isEventCapturable(event)? → check exclusion list
-  │     │     ├── getEventProperties() → enrich with provider properties
-  │     │     └── posthog.capture(distinctId, event, properties)
-  └── TelemetryService.instance.captureException(error, props)
-        └── PostHogTelemetryClient.captureException()
-              ├── isTelemetryEnabled()?
-              ├── shouldReportApiErrorToTelemetry()? → filter 402/429
-              ├── Auto-extract properties from ApiProviderError or ConsecutiveMistakeError
-              └── posthog.captureException(error, distinctId, properties)
+Event observers registered through `onEvent` (the plugin registry, §10) are
+fanned out *before* the opt-in gate — plugins see agent events even when
+telemetry is off — while everything downstream of `isReady` is gated.
+
+```mermaid
+flowchart TD
+    CALL["caller — Task.ts, provider code, …"]
+    CE["TelemetryService.instance.captureEvent(name, props)"]
+    CX["TelemetryService.instance.captureException(error, props)"]
+    OBS["eventObservers fan-out<br/>runs regardless of the opt-in"]
+    R1{"isReady<br/>TELEMETRY_ENABLED and at least one client"}
+    R2{"isReady"}
+    PCAP["PostHogTelemetryClient.capture()"]
+    PEX["PostHogTelemetryClient.captureException()"]
+    ENAB{"isTelemetryEnabled()<br/>VS Code telemetry level and user opt-in"}
+    SUB{"isEventCapturable(event)<br/>excludes TASK_MESSAGE and LLM_COMPLETION"}
+    PROPS["getEventProperties()<br/>merge provider properties,<br/>drop git properties"]
+    SEND["posthog.capture(distinctId, event, properties)"]
+    FILT{"shouldReportApiErrorToTelemetry()<br/>drops 402, 429 and rate-limit messages"}
+    EXTR["extract ApiProviderError or<br/>ConsecutiveMistakeError properties"]
+    SENDX["posthog.captureException(error, distinctId, properties)"]
+    DROP["dropped"]
+
+    CALL --> CE
+    CALL --> CX
+    CE --> OBS
+    CE --> R1
+    CX --> R2
+    R1 -->|no| DROP
+    R2 -->|no| DROP
+    R1 -->|yes| PCAP --> ENAB
+    R2 -->|yes| PEX --> FILT
+    ENAB -->|no| DROP
+    ENAB -->|yes| SUB
+    SUB -->|no| DROP
+    SUB -->|yes| PROPS --> SEND
+    FILT -->|no| DROP
+    FILT -->|yes| EXTR --> SENDX
 ```
 
 ---
@@ -642,15 +669,43 @@ The following error types are **intentionally not reported** to telemetry to avo
 
 ## Opt-Out Mechanism
 
+Nothing is ever sent unless **both** gates are open: the `TELEMETRY_ENABLED`
+build/env flag (without it `register()` no-ops, so no client is ever added and
+`isReady` stays false) and the user's own opt-in, itself subordinate to VS
+Code's global telemetry level.
+
+```mermaid
+flowchart TD
+    BF{"TELEMETRY_ENABLED"}
+    NOCL["register() no-ops<br/>no client, isReady false,<br/>every capture is a no-op"]
+    LVL{"VS Code telemetry.telemetryLevel is all?"}
+    SET{"telemetrySetting"}
+    OFF["telemetryEnabled = false — posthog optOut()"]
+    ON["telemetryEnabled = true — posthog optIn()"]
+
+    BF -->|"not true"| NOCL
+    BF -->|true| LVL
+    LVL -->|no| OFF
+    LVL -->|yes| SET
+    SET -->|"unset or disabled"| OFF
+    SET -->|enabled| ON
+```
+
 ### Three-State Model
 
 Telemetry uses a three-state setting:
 
-```
-unset ──► enabled  (user clicks "Accept" on telemetry banner)
-unset ──► disabled (user explicitly opts out)
-enabled ──► disabled (user changes setting)
-disabled ──► enabled (user re-enables)
+```mermaid
+stateDiagram-v2
+    [*] --> unset
+    unset --> enabled: user accepts the telemetry banner
+    unset --> disabled: user explicitly opts out
+    enabled --> disabled: user changes the setting
+    disabled --> enabled: user re-enables
+
+    note right of unset
+        treated as disabled until explicitly set
+    end note
 ```
 
 ### User Controls

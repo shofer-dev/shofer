@@ -28,20 +28,15 @@ Shofer computes the **total cost** for a task by aggregating token usage and pri
 
 ### Data Flow
 
-```
-Provider API response
-        │
-        ▼
-Stream chunks ("usage" type)
-        │  inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, totalCost
-        ▼
-updateApiReqMsg() ──► stamps api_req_started message text (JSON)
-        │
-        ▼
-consolidateTokenUsage() ──► sums all api_req_started + condense_context messages
-        │
-        ▼
-TaskHeader (total cost display)
+```mermaid
+flowchart TD
+    RESP["Provider API response"]
+    CHUNK["stream chunks — usage type<br/>inputTokens, outputTokens,<br/>cacheWriteTokens, cacheReadTokens, totalCost"]
+    UPD["updateApiReqMsg()<br/>stamps the api_req_started message text as JSON"]
+    CONS["consolidateTokenUsage()<br/>sums every api_req_started<br/>and condense_context message"]
+    HDR["TaskHeader — total cost display"]
+
+    RESP --> CHUNK --> UPD --> CONS --> HDR
 ```
 
 ### Key Files
@@ -341,15 +336,30 @@ return { ...modelInfo, ...overrides } // custom values overwrite auto-discovered
 
 **Priority across all three paths:**
 
-```
-customPricing (manual, Path 3)
-    └── overrides ModelInfo returned by getModel()
-            └── Path 1 (static per-token pricing) uses that ModelInfo
-            └── Path 2 (usage.cost from llm-router) wins over Path 1
-                    but does NOT bypass customPricing —
-                    customPricing affects ModelInfo only; if Path 2
-                    delivers totalCost directly, customPricing has no
-                    effect on that value.
+`customPricing` (Path 3) overrides the `ModelInfo` returned by
+`getModel()`, which is what Path 1 prices against. Path 2 wins over
+Path 1, but it does not "bypass" Path 3: `customPricing` affects
+`ModelInfo` only, so when Path 2 delivers `totalCost` directly the
+custom prices have no effect on that value.
+
+```mermaid
+flowchart TD
+    CP["Path 3 — customPricing<br/>per-provider-profile override"]
+    GM["getModel() wrapped by buildApiHandler<br/>applyCustomPricing(info, customPricing)"]
+    P1["Path 1 — static per-token pricing<br/>calculateApiCostAnthropic / calculateApiCostOpenAI"]
+    P2["Path 2 — usage.cost stamped by llm-router<br/>arrives as the chunk's totalCost"]
+    PICK{"totalCost present<br/>in the usage chunk?"}
+    USE2["chunk value wins"]
+    USE1["locally computed costResult.totalCost"]
+    COST["cost field on api_req_started"]
+
+    CP --> GM --> P1 --> PICK
+    P2 --> PICK
+    PICK -->|yes| USE2
+    PICK -->|no| USE1
+    USE2 --> COST
+    USE1 --> COST
+    CP -.->|"no effect once Path 2 supplies totalCost"| USE2
 ```
 
 In practice: if `customPricing` is set and Path 2 is active (the
@@ -572,6 +582,35 @@ Two chokepoints inside the streaming loop in
 [`Task.ts`](../packages/core/src/task/Task.ts), both `await`ed so the abort
 flag is observed before the next chunk is yielded — otherwise we'd
 keep burning tokens past the cap for the remainder of the stream.
+A third chokepoint sits in `NewTaskTool`, before a child is
+constructed.
+
+```mermaid
+flowchart TD
+    START["API request starts"]
+    SNAP["snapshotPriorAggregateForCostLimit()<br/>resolveCostLimit() walks parentTask to the root<br/>_priorAggregateUsd = aggregateTaskCostsRecursive(root)"]
+    STREAM["streaming loop"]
+    SRC["currentRequestCostUsd =<br/>chunk.totalCost, else estimateRequestCostUsd(...)"]
+    IN{"checkInFlightCostLimit<br/>_priorAggregateUsd + currentRequestCostUsd >= maxUsd?"}
+    DRAIN["drainStreamInBackgroundToFindAllUsage"]
+    POST{"checkCostLimit(requestIndex)<br/>aggregateTaskCostsRecursive(root) >= maxUsd?"}
+    ENF["enforceCostLimit(root, limit, spent)"]
+    NEXT["keep streaming"]
+
+    START --> SNAP --> STREAM
+    STREAM -->|"each usage chunk"| SRC --> IN
+    IN -->|no| NEXT --> STREAM
+    IN -->|yes| ENF
+    STREAM -->|"request finished"| DRAIN --> POST
+    POST -->|no| NEXT
+    POST -->|yes| ENF
+
+    NT["new_task — NewTaskTool"]
+    NTC{"aggregated.totalCost >= maxUsd?"}
+    NTC -->|yes| TE["refuse with a tool error"]
+    NTC -->|no| SPAWN["construct the child task"]
+    NT --> NTC
+```
 
 **1. In-stream gate** (`checkInFlightCostLimit(currentRequestCostUsd)`),
 fired on every `usage` chunk during the main streaming loop:
@@ -644,6 +683,28 @@ or after stream drain. Behaves identically:
       `await this.abortTask(false)` and root if different.
     - `kill` → cancel in-flight request,
       `await this.abortTask(true)` and root if different.
+
+```mermaid
+flowchart TD
+    ENF["enforceCostLimit(root, limit, spent)"]
+    TEL["TelemetryService.captureBudgetExceeded<br/>TelemetryEventName.BUDGET_EXCEEDED"]
+    ACT{"limit.action"}
+    PAUSE["askUserForBudgetDecision(root, limit, spent)<br/>ask: budget_limit"]
+    AB["cancel in-flight request<br/>abortTask(false)"]
+    KI["cancel in-flight request<br/>abortTask(true) — abandoned"]
+    YES["Continue without limit<br/>root._costLimitBypassed = true"]
+    NO["Abort task<br/>root.abortTask(false)"]
+    NEW["free-text positive USD amount<br/>replaces maxUsd, persisted to history"]
+
+    ENF --> TEL --> ACT
+    ACT -->|pause| PAUSE
+    ACT -->|abort| AB
+    ACT -->|kill| KI
+    PAUSE -->|"yes button"| YES
+    PAUSE -->|"no button"| NO
+    PAUSE -->|"text reply"| NEW
+    PAUSE -.->|"non-numeric text"| YES
+```
 
 Both `abort` and `kill` call the same `abortTask()` method, differing
 only in the `isAbandoned` boolean parameter. `kill` sets

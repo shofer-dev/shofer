@@ -33,6 +33,32 @@ A singleton [`McpHub`](../src/services/mcp/McpHub.ts) manages all connections. T
 > (not MCP at all). See [`adding-new-tools.md` § Plugin-Contributed Tools](adding-new-tools.md#plugin-contributed-tools)
 > and [`plugin_system.md`](plugin_system.md).
 
+From config file to a tool the model can call:
+
+```mermaid
+flowchart TB
+    P[".shofer/mcp.json — project scope"]
+    G["VS Code settings — global scope"]
+    PL["plugin contributes.mcpServers<br/>via getContributedMcpServers"]
+    HUB["McpHub — one singleton, owned by McpServerManager<br/>project wins over global on a name clash"]
+    INJ["injectVariables — env and workspaceFolder<br/>references expanded before connecting"]
+    subgraph CONN["connectToServer — one client per enabled server"]
+        direction TB
+        S1["stdio — child process over stdin and stdout"]
+        S2["sse — ReconnectingEventSource"]
+        S3["streamable-http — HTTP streaming"]
+    end
+    DISC["on connect: tools/list and resources/list<br/>fetchToolsList annotates enabledForPrompt and group"]
+    NAME["getMcpServerTools plus buildMcpToolName<br/>mcp--server--tool, sanitized, capped at 64 chars, deduplicated"]
+    FILT["filterMcpToolsForMode — both layers must pass<br/>1. the mode declares the mcp group<br/>2. the tool's resolved group is in the mode"]
+    CAT["build-tools.ts — the catalog the model sees"]
+
+    P --> HUB
+    G --> HUB
+    PL --> HUB
+    HUB --> INJ --> CONN --> DISC --> NAME --> FILT --> CAT
+```
+
 ---
 
 ## Configuration
@@ -199,40 +225,28 @@ MCP tool `inputSchema` is normalized by [`normalizeToolSchema()`](../src/utils/j
 
 ## Execution Flow
 
-```
-LLM calls:  mcp--arkware--web_search
-                │
-                ▼
-NativeToolCallParser                   ← recognizes "mcp--" / "mcp__" prefix
-  └─ Parses server + tool name via parseMcpToolName()
-                │
-                ▼
-presentAssistantMessage.ts:135         ← "mcp_tool_use" case
-  └─ Creates synthetic ToolUse<"use_mcp_tool"> block
-     preserving the original tool name for API history
-                │
-                ▼
-UseMcpToolTool.execute()               ← validates params, server, tool
-  ├─ validateParams()                  ← server_name + tool_name required
-  ├─ validateMcpToolExists()           ← checks server existence, tool name,
-  │                                      disabled status (fuzzy matching)
-  └─ task.ask("use_mcp_server", ...)   ← user approval prompt
-                │
-                ▼
-McpHub.callTool(                       ← line 1820
-  serverName, toolName,
-  arguments, source,
-  taskId,                      ← injected into _meta for tracing
-  abortSignal                          ← from Task for cancellation
-)
-  └─ connection.client.request({
-       method: "tools/call",
-       params: { name, arguments, _meta }
-     }, CallToolResultSchema, { timeout })
-                │
-                ▼
-processMcpToolContent()               ← handles text, resource, image types
-  └─ task.say("mcp_server_response", ...)
+```mermaid
+sequenceDiagram
+    autonumber
+    participant M as Model
+    participant NP as NativeToolCallParser
+    participant PAM as presentAssistantMessage
+    participant T as UseMcpToolTool
+    participant H as McpHub
+    participant S as MCP server
+
+    M->>NP: calls mcp--arkware--web_search
+    NP->>NP: recognizes the mcp-- or mcp__ prefix,<br/>splits server and tool via parseMcpToolName
+    NP->>PAM: an mcp_tool_use block
+    PAM->>T: synthetic use_mcp_tool ToolUse —<br/>the original name is kept for API history
+    T->>T: validateParams — server_name and tool_name required
+    T->>T: validateMcpToolExists — server, tool name (fuzzy),<br/>and disabled status
+    T->>T: ask use_mcp_server — user approval, or auto-approval
+    T->>H: callTool with serverName, toolName, arguments,<br/>source, taskId and the task's abortSignal
+    H->>S: tools/call with arguments and _meta,<br/>under the server's timeout
+    S-->>H: content — text, resource or image
+    H-->>T: result
+    T->>T: processMcpToolContent, then say mcp_server_response
 ```
 
 ### Key Details
