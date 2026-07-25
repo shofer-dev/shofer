@@ -134,6 +134,26 @@ outside the workspace, so not mirrored) and **loopback/controller-hosted** HTTP 
 remote node can't reach — and both are out of config-sync's scope; revisit with remote-MCP
 support. These calls are pinned by the `SETTING_SYNC_SCOPE` classification tests.
 
+Both allow-lists, and where a key that is *not* on them goes instead:
+
+```mermaid
+flowchart TD
+    KEYS["GLOBAL_SETTINGS_KEYS<br/>every globalSettingsSchema key"]
+    SCOPE{"SETTING_SYNC_SCOPE[key]<br/>exhaustive — satisfies Record"}
+    NODE["node — SYNCED_SETTINGS_KEYS<br/>type SyncedSettings"]
+    FE["frontend — controller only<br/>pinnedApiConfigs, dismissedUpsells, taskHistory"]
+    PT["perTask — rides CreateTaskInput.apiConfiguration<br/>apiProvider, apiModelId, ..."]
+    SEC["SYNCED_SECRET_KEYS — type SyncedSecrets<br/>code-index RAG credentials only"]
+    WIRE["applyConfig(config, version, secrets)"]
+
+    KEYS --> SCOPE
+    SCOPE --> NODE
+    SCOPE --> FE
+    SCOPE --> PT
+    NODE --> WIRE
+    SEC --> WIRE
+```
+
 **Excluded** (per [the table above](#3-what-is-synced-and-what-is-not)): per-task provider
 config (`apiConfiguration`) and front-end-only UI state (`pinnedApiConfigs`,
 `dismissedUpsells`, `lastShownAnnouncementId`, task history) that has no executor effect.
@@ -253,23 +273,27 @@ resolves `apiConfiguration` before `pool.createTaskOn(owner, { apiConfiguration 
 
 ### 4d. Flow
 
-```
-Controller (authoritative globalState)
-  │  settings change / node connects
-  ▼
-NodeRegistry.resolveSyncedSettings()  ── slice = Pick<GlobalSettings, auto-approval keys>
-  │  for each connected NodeConnection:
-  ▼
-conn.api.applyConfig(slice, desiredVersion)  ──POST /api/v1/config──▶  ShoferApiAgent.applyConfig
-                                                                │ allowClientConfig?
-                                                                ▼
-                                                   ContextProxy.setValues(slice)  (node globalState)
-                                                   appliedConfigVersion = version
-                                                                │
-                                                                ▼
-                                              checkAutoApproval reads it via provider.getState()
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Controller — NodeRegistry
+    participant N as Node — ShoferApiAgent
+    participant P as ContextProxy on the node
+    participant A as checkAutoApproval
 
-     ◀── GET /health { loadavg, cpus, configVersion } ── every ~15s ──  (controller reconciles: §6)
+    Note over C: a settings change, or a node connects / reconnects
+    C->>C: currentSyncedSlice + currentSyncedSecrets
+    C->>C: computeConfigVersion of config and secrets = desiredVersion
+    C->>N: POST /api/v1/config — applyConfig with config, version, secrets
+    alt allowClientConfig is false
+        N-->>C: ignored — the node is self-administered
+    else managed replica
+        N->>P: applySyncedSettings then applySyncedSecrets
+        N->>N: appliedConfigVersion = version
+    end
+    C->>N: GET /health, every ~15s
+    N-->>C: loadavg, cpus, configVersion
+    A->>P: provider.getState reads the applied slice
 ```
 
 ## 5. Semantics
@@ -326,6 +350,23 @@ connect-time read). Expose it as `conn.configVersion`.
 | `disconnected`            | no         | no (already excluded)                                   |
 | **`connected` but stale** | yes        | **no** — new: excluded until it echoes `desiredVersion` |
 | `connected` and current   | yes        | yes                                                     |
+
+```mermaid
+stateDiagram-v2
+    [*] --> disconnected
+    disconnected --> stale: connect or reconnect handshake
+    stale --> current: echoes the desired version
+    current --> stale: desiredVersion moves — a setting or a secret changed
+    stale --> stale: health-ping mismatch, re-send applyConfig
+    current --> disconnected: connection lost
+    stale --> disconnected: connection lost
+
+    note right of stale
+        connected but out of sync: excluded from
+        ExecutorPool assignment, still health-pinged.
+        In-flight tasks keep running.
+    end note
+```
 
 **Pool eligibility gains one clause.** Today the `ExecutorPool` admits a node when
 `status === "connected" && !!conn.api` ([`NodeRegistry.ts:726`](../src/core/nodes/NodeRegistry.ts)).

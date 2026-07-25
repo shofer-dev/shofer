@@ -22,6 +22,22 @@ Shofer searches for rules and instructions in this order (project overrides glob
 
 The `.agents/` directory (Agent Skills standard) is also discovered at both levels.
 
+```mermaid
+flowchart LR
+    G["global — ~/.shofer/<br/>rules/, rules-mode/, commands/,<br/>skills/, custom-instructions.md"]
+    P["project — workspace .shofer/"]
+    S["subfolders — subdir .shofer/, alphabetical<br/>when shofer.enableSubfolderRules is on"]
+    AG["AGENTS.md / AGENT.md<br/>flag: shofer.useAgentRules"]
+    AGD["~/.agents/skills/ — Agent Skills standard"]
+    SP["system prompt<br/>read at task start and on mode switch"]
+
+    G -->|"loaded first"| SP
+    P -->|"overrides global"| SP
+    S -->|"loaded last"| SP
+    AG --> SP
+    AGD -->|"lower priority than .shofer/skills/"| SP
+```
+
 ---
 
 ## Workspace Root Files
@@ -477,6 +493,22 @@ import on extension startup.
 
 These files cannot be modified by the LLM without explicit user approval
 (even when auto-approve is enabled):
+
+```mermaid
+flowchart TD
+    T["a tool targets a workspace path"]
+    IG{"ShoferIgnoreController.validateAccess<br/>.shofer/shoferignore"}
+    BLOCK["blocked — read results omit the file;<br/>write / execute tools return an error"]
+    PR{"ShoferProtectedController.isWriteProtected<br/>PROTECTED_PATTERNS"}
+    ASK["ask — the SHIELD_SYMBOL marks the target.<br/>Auto-approval needs alwaysAllowWrite AND<br/>alwaysAllowWriteProtected"]
+    AUTO["ordinary auto-approval — checkAutoApproval"]
+
+    T --> IG
+    IG -->|"denied"| BLOCK
+    IG -->|"allowed"| PR
+    PR -->|"protected"| ASK
+    PR -->|"not protected"| AUTO
+```
 
 | Pattern                | Examples                                                        |
 | ---------------------- | --------------------------------------------------------------- |

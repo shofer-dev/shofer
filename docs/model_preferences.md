@@ -151,6 +151,24 @@ The filtering pipeline in [`packages/core/src/prompts/tools/filter-tools-for-mod
 5. **Feature gates** — Remove `rag_search` (no index), `generate_image` (experiment off), etc.
 6. **Alias renames** — Rename canonical tools to aliases for API consistency
 
+```mermaid
+flowchart TD
+    G["1. mode groups — the mode's allowed tool groups"]
+    A["2. plus ALWAYS_AVAILABLE_TOOLS"]
+    P["3. permission checks — isToolAllowedForMode()"]
+    M["4. model customization<br/>excludedTools removes;<br/>includedTools adds, if the group allows it"]
+    F["5. feature gates — rag_search without an index,<br/>generate_image with the experiment off, ..."]
+    R["6. alias renames — TOOL_ALIASES<br/>write_to_file becomes write_file,<br/>edit becomes search_and_replace"]
+    O["tool catalog sent to the model"]
+
+    G --> A
+    A --> P
+    P --> M
+    M --> F
+    F --> R
+    R --> O
+```
+
 ---
 
 ## Legacy/Custom Edit Tools

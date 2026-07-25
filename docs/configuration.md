@@ -70,6 +70,27 @@ scopes, computed by the pure engine `mergeLayeredConfig` in
 - A user/project may always **add** keys/entities the global layer does not define;
   locking a key global never set is inert and falls back to the unlocked merge.
 
+```mermaid
+flowchart TD
+    G["global scope — read-only, outside /home<br/>SHOFER_GLOBAL_DIR, else globalStorage/.shofer"]
+    U["user scope — ~/.shofer/"]
+    P["project scope — workspace .shofer/"]
+    LOCK["locked.json — global scope only<br/>lockedManifestSchema"]
+    M{"mergeLayeredConfig<br/>per key / per named entity"}
+    UNL["unlocked: project &gt; user &gt; global<br/>objects deep-merge per leaf;<br/>scalars and arrays replace wholesale"]
+    LK["locked: the global value wins and is final<br/>user/project contributions are dropped"]
+    EFF["effective config"]
+
+    G --> M
+    U --> M
+    P --> M
+    LOCK -->|"marks keys and named entities"| M
+    M -->|"key not locked"| UNL
+    M -->|"key locked"| LK
+    UNL --> EFF
+    LK --> EFF
+```
+
 `globalState` remains the runtime cache: `ContextProxy` loads the merged overlay on
 top of it, and a `setValue` for a globalSettings key mirrors the write into the
 **user** scope's `~/.shofer/settings.json` (via `writeScopeSetting`). That
@@ -77,6 +98,20 @@ write-through is opt-in — it fires only once a `~/.shofer/settings.json` exist
 (materialized by an import/unzip), so a deployment that has not adopted file-backed
 settings keeps the old `globalState`-only behavior. A key the global scope locks is
 never persisted downstream (the write is skipped).
+
+```mermaid
+flowchart LR
+    MERGED["merged overlay<br/>mergeLayeredConfig"]
+    GSTATE[("globalState — runtime cache")]
+    CP["ContextProxy"]
+    SET["setValue(key, value)"]
+    USER[("~/.shofer/settings.json — user scope")]
+
+    MERGED -->|"loaded on top of"| GSTATE
+    GSTATE --> CP
+    SET --> CP
+    CP -.->|"writeScopeSetting — only once the file exists,<br/>skipped for keys the global scope locks"| USER
+```
 
 ### `locked.json` — the org-policy lock manifest
 

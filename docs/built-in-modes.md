@@ -28,24 +28,31 @@ access is resolved, and how custom modes override built-in modes at runtime.
 The SoT chain for built-in modes is a clean, linear pipeline with well-defined
 override semantics at each stage:
 
-```
-DEFAULT_MODES (packages/types/src/mode.ts:199)
-    │
-    └── modes = DEFAULT_MODES (src/shared/modes.ts:90)
-            │
-            ├── tools[] → TOOL_GROUPS → allowedTools
-            │     (src/shared/tools.ts → packages/types/src/tool.ts:175)
-            │
-            └── getModeBySlug(slug, customModes)
-                    │
-                    ├── custom mode found? → use it
-                    └── else → modes.find(slug) || modes[0]
-                            │
-                            ├── filterNativeToolsForMode()
-                            │   (removes feature-gated tools, applies model customization)
-                            │
-                            └── getFullModeDetails()
-                                (merges prompt overrides + file-loaded rules)
+```mermaid
+flowchart TD
+    DM["DEFAULT_MODES<br/>packages/types/src/mode.ts"]
+    MODES["modes = DEFAULT_MODES<br/>src/shared/modes.ts"]
+    GM{"getModeBySlug(slug, customModes)"}
+    CUSTOM["custom mode wins by slug"]
+    BUILT["else modes.find(slug), else modes[0] — code"]
+    TOOLS["getToolsForMode()<br/>tools[] via TOOL_GROUPS, plus tools_allowed,<br/>minus tools_denied, plus ALWAYS_AVAILABLE_TOOLS"]
+    FILTER["filterNativeToolsForMode()<br/>feature gates, model customization,<br/>disabledTools, alias renames"]
+    FULL["getFullModeDetails()<br/>customModePrompts overrides + file-loaded rules"]
+    OUT["tool catalog + system prompt sent to the LLM"]
+    VAL["validateToolUse() — execution-time re-check"]
+
+    DM --> MODES
+    MODES --> GM
+    GM -->|"found"| CUSTOM
+    GM -->|"not found"| BUILT
+    CUSTOM --> TOOLS
+    BUILT --> TOOLS
+    CUSTOM --> FULL
+    BUILT --> FULL
+    TOOLS --> FILTER
+    FILTER --> OUT
+    FULL --> OUT
+    OUT -.->|"the model calls a tool"| VAL
 ```
 
 ## 2. Primary Definition: `DEFAULT_MODES`

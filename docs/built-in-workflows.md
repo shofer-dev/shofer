@@ -29,24 +29,26 @@ discovered alongside user and project workflows, and how they are launched.
 The SoT chain for built-in workflows is a linear pipeline from `.slang` source
 files through discovery, validation, and task creation:
 
-```
-.slang files  (src/media/workflows/*.slang   ← built-in, lowest priority)
-              (~/.shofer/workflows/*.slang   ← global, medium priority)
-              (.shofer/workflows/*.slang     ← project, highest priority)
-    │
-    └── discoverWorkflows(workspacePath)
-        │  (packages/core/src/workflow/WorkflowTask.ts:1340)
-        │
-        ├── loadFromDir(builtinDir)   → built-in workflows
-        ├── loadFromDir(globalDir)    → global user workflows
-        └── loadFromDir(projectDir)   → project workflows
-            │
-            ▼
-        Map<string, string>  (flow name → slang source)
-            │
-            ├── "listWorkflows" IPC   → parsed metadata → LauncherView cards
-            │
-            └── "createWorkflow" IPC  → createWorkflowTask() → WorkflowTask
+```mermaid
+flowchart TD
+    B["built-in .slang — src/media/workflows/<br/>shipped as dist/media/workflows/, lowest priority"]
+    G["global .slang — ~/.shofer/workflows/"]
+    P["project .slang — .shofer/workflows/<br/>highest priority"]
+    D["discoverWorkflows(workspacePath)<br/>loadFromDir per layer; a later layer<br/>overwrites an earlier one by name"]
+    M["Map of flow name to slang source"]
+    L["listWorkflows IPC<br/>parseSlang, ast.flows[0]"]
+    C["createWorkflow IPC<br/>createWorkflowTask()"]
+    UI["LauncherView cards<br/>name, title, description, icon, agents, params"]
+    WT["WorkflowTask pushed on the stack and started"]
+
+    B -.->|"layer skipped when<br/>SHOFER_DISABLE_BUILTIN_WORKFLOWS is truthy"| D
+    G --> D
+    P --> D
+    D --> M
+    M --> L
+    L --> UI
+    M --> C
+    C --> WT
 ```
 
 Workflows are **orthogonal to modes**. The Workflow Task has no mode — its

@@ -119,16 +119,32 @@ on Linux). These include:
 merges `SecretStorage` (API keys) and `globalState` (non-secret settings) into a unified
 `ShoferSettings` object at [`getValues()`](../src/core/config/ContextProxy.ts:515):
 
-```
-SecretStorage (apiKey, openRouterApiKey, ...)
-    +
-globalState (apiProvider, apiModelId, baseUrl, ...)
-    =
-ShoferSettings (unified view for runtime)
+```mermaid
+flowchart LR
+    BLOB[("SecretStorage<br/>shofer_config_api_config<br/>profiles blob")]
+    SEC[("SecretStorage<br/>global secret keys<br/>codebase-index keys, openRouterImageApiKey")]
+    GS[("globalState<br/>apiProvider, apiModelId, base URLs, ...")]
+
+    subgraph CP["ContextProxy — one cache, one event stream"]
+        direction TB
+        SC["secretCache"]
+        ST["stateCache"]
+    end
+
+    OUT["ShoferSettings<br/>getValues() — unified runtime view"]
+
+    BLOB -->|"setProviderSettings(profile)"| SC
+    SEC --> SC
+    GS --> ST
+    SC --> OUT
+    ST --> OUT
 ```
 
 The `ContextProxy` maintains an in-memory cache (`stateCache` + `secretCache`) for
-fast access and lazily syncs with the backing stores.
+fast access and lazily syncs with the backing stores. Every extension read of a
+setting or secret goes through it (the "Typed Settings Rule" in
+[`AGENTS.md`](../AGENTS.md)), so it — not any single backing store — is the
+runtime source of truth the rest of the extension sees.
 
 > **Important:** VS Code `SecretStorage` delegates to the OS-level credential store
 > (libsecret/GNOME Keyring on Linux, Keychain on macOS, Credential Manager on Windows).
@@ -405,16 +421,58 @@ file-backed `SecretStorage`, and remote nodes never resolve it themselves — th
 controller resolves `resolveTaskApiConfiguration()` and ships the concrete
 `ProviderSettings` per task.
 
+#### Three concepts that are routinely conflated
+
+The **default profile**, the **current profile**, and the **mode → API
+configuration link** are three separate things. Two are persisted in the profiles
+blob; the third is per-Task and lives only in memory. The divergence between the
+blob's default name and `ContextProxy`'s live `apiConfiguration` is by design —
+see the "Settings View Pattern" rule in [`AGENTS.md`](../AGENTS.md).
+
+```mermaid
+flowchart TD
+    subgraph PERSIST["Persisted — profiles blob 'shofer_config_api_config' (SecretStorage)"]
+        direction TB
+        DEF["1. Default profile — NAME ONLY<br/>currentApiConfigName<br/>Settings, Providers tab"]
+        LINK["3. Mode to API Configuration link<br/>modeApiConfigs[slug] = profile id<br/>Settings, Modes tab"]
+        CFG["apiConfigs[name]<br/>every profile's settings + secrets"]
+    end
+
+    START{{"new Task<br/>resolveTaskApiConfiguration()"}}
+    CUR["2. Current profile — per-Task, IN MEMORY<br/>ContextProxy live apiConfiguration<br/>per-task override rides on CreateTaskInput.apiConfiguration"]
+
+    LINK -->|"resolveModeApiConfigName(mode) — first choice"| START
+    DEF -->|"fallback when the mode links no profile"| START
+    START -->|"load the named profile"| CFG
+    CFG --> CUR
+
+    classDef inmem stroke-dasharray: 4 3
+    class CUR inmem
+```
+
+Changing the default profile is name-only: it must never touch a live
+`apiConfiguration` (hence `setDefaultApiConfiguration` writes only the name).
+
 ### Combined Flow
 
-```
-.shofer/shofermodes ─────┐
-               ├── Stage 1 merge ──→ customModes[] ──┐
-global storage ┘                                      │
-                                                      ├── Stage 2 overlay ──→ final ModeConfig[]
-built-in modes ───────────────────────────────────────┘
+```mermaid
+flowchart LR
+    PROJ["'.shofer/shofermodes' (workspace)<br/>source: project"]
+    GLOB["custom_modes.yaml (global storage)<br/>source: global"]
+    BUILT["DEFAULT_MODES<br/>packages/types/src/mode.ts"]
+    S1["Stage 1 — CustomModesManager.getCustomModes()<br/>a global mode is kept only if its slug<br/>is not already a project mode"]
+    CM["customModes[]"]
+    S2["Stage 2 — getAllModes(customModes)<br/>same slug overrides, new slug appends"]
+    FINAL["final ModeConfig[]"]
+    MAC["modeApiConfigs — resolved separately<br/>at task creation, from the profiles blob"]
 
-API profile assignments (modeApiConfigs) ──→ resolved at task creation (SecretStorage)
+    PROJ --> S1
+    GLOB --> S1
+    S1 --> CM
+    CM --> S2
+    BUILT --> S2
+    S2 --> FINAL
+    MAC -.->|"per-mode API profile, not a mode definition"| FINAL
 ```
 
 ### Conflict Resolution (Same Slug)
@@ -862,25 +920,23 @@ Import (Settings → About → `Import` button) calls
 [`importSettingsWithFeedback()`](../src/core/config/importExport.ts:299) and reads a
 `shofer-code-settings.json` file, applying both sections:
 
-```
-shofer-code-settings.json
-        │
-   ┌────┴────┐
-   ▼         ▼
-providerProfiles   globalSettings
-   │                │
-   ▼                ▼
-ProviderSettings   ContextProxy
-Manager.import()   .setValues()
-   │                │
-   ▼                ▼
-SecretStorage      globalState
-(profiles blob)    (all non-secret settings)
-   +
-SecretStorage
-(individual keys:
- apiKey, openRouterApiKey,
- geminiApiKey, etc.)
+```mermaid
+flowchart TD
+    F["shofer-code-settings.json"]
+    PP["providerProfiles"]
+    GSJ["globalSettings"]
+    PSM["ProviderSettingsManager.import()"]
+    CPX["ContextProxy.setValues()<br/>routes each key by kind"]
+    BLOB[("SecretStorage<br/>profiles blob")]
+    GST[("globalState<br/>non-secret settings")]
+    KEYS[("SecretStorage<br/>global secret keys")]
+
+    F --> PP
+    F --> GSJ
+    PP --> PSM --> BLOB
+    GSJ --> CPX
+    CPX --> GST
+    CPX --> KEYS
 ```
 
 Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.ts:76) which:
@@ -1365,6 +1421,34 @@ around a **staged-save (buffered) pattern**:
   `pendingDefaultConfigName` and only persisted on Save, with a `savingDefault` ref +
   re-sync `useEffect` suppressing a new→old→new flicker during the host round-trip
   (`SettingsView.tsx:158-170`, `559-567`).
+The staged-save flow, end to end — nothing reaches the host until Save:
+
+```mermaid
+flowchart TD
+    IN["a control in Settings<br/>onChange / onValueChange / onClick"]
+    CS["cachedState<br/>setCachedStateField / setApiConfigurationField"]
+    PB["dedicated pending buffers<br/>pendingDefaultConfigName · ModesView · ToolsSettings<br/>PluginsSettings · ShoferNodesSettings · RagIndexerSettings"]
+    DIRTY{"isChangeDetected — the Save button enables"}
+    SAVE["Save — handleSubmit()"]
+    HOST["updateSettings · upsertApiConfiguration ·<br/>setDefaultApiConfiguration ·<br/>commitBuffers() / commitToolBuffers() /<br/>commitConfigBuffers() / commitNodeBuffers() /<br/>saveCodeIndexSecrets()"]
+    DISC["Discard — checkUnsaveChanges() dialog"]
+    REV["setCachedState(extensionState)<br/>discardBuffers() / discardToolBuffers() /<br/>discardConfigBuffers() / discardNodeBuffers()"]
+    PROXY[("ContextProxy — source of truth")]
+
+    IN -->|"field lives in cachedState"| CS
+    IN -->|"field does not live in cachedState"| PB
+    CS --> DIRTY
+    PB -->|"onDirty / setChangeDetected(true)"| DIRTY
+    DIRTY --> SAVE
+    DIRTY --> DISC
+    SAVE --> HOST --> PROXY
+    DISC --> REV
+    PROXY -.->|"ExtensionStateContext re-seeds the buffer"| CS
+```
+
+An `onChange` that posts a value straight to the host is the bug this shape
+exists to prevent: it persists without Save and never lights the Save button.
+
 - **Search indexing:** to make every setting searchable, on mount the view cycles
   `indexingTabIndex` through all `sectionNames`, mounting each tab once (rendered at
   `opacity-0`) so each setting self-registers, then returns to the initial tab
