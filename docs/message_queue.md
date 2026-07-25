@@ -29,29 +29,14 @@ It covers three tightly coupled subsystems:
 
 ## Components and responsibilities
 
-```
-┌──────────────────────────┐  postMessage(askResponse|queueMessage)
-│  Webview (ChatView.tsx)  │ ──────────────────────────────────────┐
-│  - taskDraftsRef         │                                       │
-│  - per-task input state  │                                       │
-└──────────────────────────┘                                       ▼
-                                              ┌────────────────────────────────┐
-                                              │  Task (packages/core/src/task/Task.ts)  │
-                                              │  - messageQueueService         │
-                                              │  - handleWebviewAskResponse()  │
-                                              │  - processQueuedMessages()     │
-                                              │  - cancelAndProcess…Messages() │
-                                              │  - _softCancelForQueued…       │
-                                              └────────────────────────────────┘
-                                                              │ owns
-                                                              ▼
-                                              ┌────────────────────────────────┐
-                                              │  MessageQueueService           │
-                                              │  - addMessage()  (push)        │
-                                              │  - prependMessage() (unshift)  │
-                                              │  - dequeueMessage() (shift)    │
-                                              │  - emit("stateChanged")        │
-                                              └────────────────────────────────┘
+```mermaid
+flowchart TD
+    CV["Webview — ChatView.tsx<br/>taskDraftsRef<br/>per-task input state"]
+    T["Task — packages/core/src/task/Task.ts<br/>messageQueueService<br/>handleWebviewAskResponse()<br/>processQueuedMessages()<br/>cancelAndProcessQueuedMessages()<br/>_softCancelForQueuedMessage"]
+    Q["MessageQueueService<br/>addMessage() — push<br/>prependMessage() — unshift<br/>dequeueMessage() — shift<br/>emit('stateChanged')"]
+
+    CV -->|"postMessage: askResponse or queueMessage"| T
+    T -->|owns| Q
 ```
 
 The `MessageQueueService` instance is **owned by the Task** (one queue per
@@ -81,6 +66,39 @@ existing well-tested path with no host-side fallback in the loop.
 
 This rule is enforced as a convention in [AGENTS.md](../AGENTS.md)
 ("Webview Send-Path Rule").
+
+As implemented in `handleSendMessage`, the busy/queue branch is evaluated first
+and is itself gated on `isRespondingToAsk` — a user answering a real ask always
+reaches `askResponse`, even when the queue is non-empty:
+
+```mermaid
+flowchart TD
+    S["handleSendMessage(text, images)"]
+    E{"text or images present"}
+    RP{"active provider retired"}
+    W["show the retired-provider warning"]
+    A{"isRespondingToAsk<br/>shoferAskRef.current set and not 'command_output'"}
+    B{"sendingDisabled or isStreaming<br/>or messageQueue.length > 0<br/>or ask == 'command_output'"}
+    HS{"messagesRef.current.length == 0"}
+    AK{"shoferAskRef.current set"}
+    QM["postMessage queueMessage"]
+    NT["postMessage newTask<br/>text, images, worktreeDir, mode, ..."]
+    AR["postMessage askResponse<br/>askResponse messageResponse<br/>only for the listed interactive ask types"]
+
+    S --> E
+    E -->|no| Z["no-op"]
+    E -->|yes| RP
+    RP -->|yes| W
+    RP -->|no| A
+    A -->|no| B
+    A -->|yes| HS
+    B -->|yes| QM
+    B -->|no| HS
+    HS -->|"yes — home screen"| NT
+    HS -->|no| AK
+    AK -->|yes| AR
+    AK -->|"no — ongoing task, no ask awaiting"| QM
+```
 
 ## FIFO ordering
 
@@ -219,26 +237,28 @@ await this.abortTask() // normal hard-abort path
 
 ### End-to-end Send Now sequence
 
-```
-ChatView                Task                       MessageQueueService
-   │ click Send Now      │                                   │
-   ├──────────cancelAndProcessQueuedMessages()──────────────▶│
-   │                     │                                   │
-   │                     │ dequeueMessage() ─────────────────▶
-   │                     │◀──────── { text, images } ────────┤
-   │                     │                                   │
-   │                     │ _softCancelForQueuedMessage = true│
-   │                     │ trigger abort (signal API stream) │
-   │                     │ pWaitFor in ask() resolves on     │
-   │                     │   this.abort                      │
-   │                     │ ask() throws AskIgnoredError      │
-   │                     │ stream catch sees soft-cancel,    │
-   │                     │   `break`s instead of dispose     │
-   │                     │ _softCancelForQueuedMessage = false│
-   │                     │                                   │
-   │                     │ say("user_feedback", text, images)│
-   │                     │ recursivelyMakeShoferRequests([... │
-   │                     │       { type:"text", text } ...]) │
+Simplified — the real
+[`cancelAndProcessQueuedMessages`](../packages/core/src/task/Task.ts) also runs
+the abort-controller plumbing listed in
+[Gaps](#gaps-issues--improvement-areas) item 7.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CV as ChatView
+    participant T as Task
+    participant Q as MessageQueueService
+
+    CV->>T: click Send Now — cancelAndProcessQueuedMessages()
+    T->>Q: dequeueMessage()
+    Q-->>T: { text, images }
+    T->>T: _softCancelForQueuedMessage = true
+    T->>T: trigger abort — signal the API stream
+    Note over T: pWaitFor in ask() resolves on this.abort,<br/>ask() throws AskIgnoredError
+    Note over T: stream catch sees the soft-cancel and breaks<br/>instead of abortTask() / dispose()
+    T->>T: _softCancelForQueuedMessage = false
+    T->>T: say("user_feedback", text, images)
+    T->>T: recursivelyMakeShoferRequests([{ type "text", text }])
 ```
 
 ## Per-Task input drafts (`ChatView`)

@@ -22,6 +22,39 @@ impossible to express, e.g., "this task is currently `running` but its previous
 attempt completed with a `well` rating", and forced every consumer to do
 `startsWith("completed")` checks. The two-axis model removes that ambiguity.
 
+### The lifecycle axis
+
+Every lifecycle transition is driven by a `Task` event (translated by
+`setupManagedTaskEventListeners` in
+[`TaskManager.ts`](../src/services/task-manager/TaskManager.ts)) or by an
+explicit `TaskManager` execution-control call. The `rating` axis is not a state
+here — it rides along on `TaskCompleted` and is stored beside `completed`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle: createTask initialState
+    idle --> running: TaskStarted, TaskActive
+    running --> waiting_input: TaskInteractive
+    waiting_input --> running: TaskActive
+    running --> waiting: setState waiting by wait_for_task or wait_for_mcp_call
+    waiting --> running: TaskActive
+    running --> idle: TaskIdle
+    running --> completed: TaskCompleted, carries rating
+    running --> error: TaskError
+    running --> paused: TaskAborted reason user or abandoned
+    running --> paused: pauseManagedTask
+    paused --> running: startManagedTask
+
+    note right of completed
+        Terminal lifecycles: completed, error, paused
+        isTerminalLifecycle in history.ts
+        Transient: running, waiting_input, waiting
+    end note
+```
+
+`TaskManager.isActive` counts `running` and `waiting` as active work; `idle`,
+`waiting_input`, `paused` and the terminal lifecycles are not active.
+
 ## State Resolution
 
 The icon for a task row in the Task Selector — and for the in-chat title dot —
@@ -41,6 +74,32 @@ The runtime overlay always wins: if a live `ManagedTask` exists for the task,
 it owns the displayed state. Persisted state is only consulted when no live
 instance exists (e.g. immediately after a restart, or for tasks whose
 instance has already been disposed).
+
+The resolved `TaskState` then feeds `resolveStateVisual`, which is the only
+place lifecycle and rating are turned into pixels:
+
+```mermaid
+flowchart TD
+    R{"runtime?.state<br/>live ManagedTask"}
+    P{"item.taskState<br/>persisted HistoryItem"}
+    D["{ lifecycle: 'idle' }"]
+    S["TaskState"]
+    V["resolveStateVisual(state)"]
+    L["LIFECYCLE_VISUAL[lifecycle]<br/>dot, icon, borderColor"]
+    O["RATING_VISUAL[rating]<br/>overlay"]
+    UI["span class='codicon ...'"]
+
+    R -->|present| S
+    R -->|absent| P
+    P -->|present| S
+    P -->|absent| D
+    D --> S
+    S --> V
+    V --> L
+    V -->|"lifecycle == completed and rating set"| O
+    L --> UI
+    O --> UI
+```
 
 ## Visual Mapping
 
@@ -105,6 +164,31 @@ managed-task map being authoritative) require restoration to have run first.
    values can never be true after a restart, since no live `Task` instance
    exists.
 3. Sets a private `restored` flag.
+
+```mermaid
+flowchart TD
+    H["restoreManagedTasks(history)"]
+    E["for each HistoryItem"]
+    S{"item.taskState"}
+    T{"lifecycle transient?<br/>running, waiting_input, waiting"}
+    K{"isTerminalLifecycle(lifecycle)<br/>or idle"}
+    I["IDLE_TASK_STATE"]
+    Keep["preserve state<br/>incl. completed + rating"]
+    M["seed managedTasks"]
+    F["set the restored flag"]
+    A["assertRestored() gate<br/>registerBackgroundTask, ..."]
+
+    H --> E --> S
+    S -->|undefined| I
+    S -->|present| T
+    T -->|yes| I
+    T -->|no| K
+    K -->|yes| Keep
+    K -->|no| I
+    I --> M
+    Keep --> M
+    M --> F --> A
+```
 
 `assertRestored()` is invoked at the top of any method that depends on the
 restoration having completed; it throws if the flag isn't set, eliminating

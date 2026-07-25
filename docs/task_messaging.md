@@ -218,6 +218,60 @@ The async/sync flag is a **sender-side** property (does the sender block?). The 
 
 > **Wake mechanism:** For any non-busy recipient, do **not** rely on system-prompt injection (which only lands on a turn that may never happen). Enqueue through the recipient's existing `MessageQueueService` — the same machinery user messages use (see [`message_queue.md`](message_queue.md)) — so delivery triggers the well-tested queue-drain → wake/resume → new-turn path. A `completed`/`paused` peer is resumed; an `idle` peer starts a fresh turn.
 
+The whole path a `send_message_to_task` call takes through
+[`SendMessageToTaskTool.execute`](../packages/core/src/tools/SendMessageToTaskTool.ts) —
+scope validation, deliverability, the busy gate, then the delivery form:
+
+```mermaid
+flowchart TD
+    S["send_message_to_task(task_id, message, wait)"]
+    V1{"task_id == caller.taskId"}
+    V2{"target shares the caller's root<br/>rootTaskId ?? taskId"}
+    V3{"caller.rootTaskId set"}
+    V4{"task_id in caller.knownPeers"}
+    L{"resolveTargetLifecycle()"}
+    RH["rehydrate: createTaskWithHistoryItem<br/>keepCurrentTask true"]
+    B{"lifecycle vs mode"}
+    AP["askApproval('tool', ...)"]
+    M{"wait == true"}
+    SR{"hasPendingSyncResolver(task_id)"}
+    FBS["Form B: PEER PROMPT<br/>+ registerPendingSyncResolver<br/>sender blocks"]
+    AR{"lifecycle == running"}
+    FA["Form A: peerNotificationQueue.push()"]
+    FBA["Form B: PEER MESSAGE<br/>+ wake if target.abort"]
+    X["reject — formatResponse.toolError"]
+
+    S --> V1
+    V1 -->|yes| X
+    V1 -->|no| V2
+    V2 -->|no| X
+    V2 -->|yes| V3
+    V3 -->|"no — caller is the root task"| L
+    V3 -->|yes| V4
+    V4 -->|no| X
+    V4 -->|yes| L
+    L -->|"error, or not reachable"| X
+    L -->|reachable| RH
+    RH --> B
+    B -->|"waiting_input or waiting"| X
+    B -->|"running + sync"| X
+    B -->|"running + async"| AP
+    B -->|"idle, completed, paused"| AP
+    AP --> M
+    M -->|"yes — sync"| SR
+    SR -->|occupied| X
+    SR -->|free| FBS
+    M -->|"no — async"| AR
+    AR -->|yes| FA
+    AR -->|no| FBA
+```
+
+The busy gate is mode-asymmetric: **sync** rejects every busy lifecycle
+(`running`, `waiting_input`, `waiting`), because answering a sync prompt means
+calling `attempt_completion`, which would terminate the recipient's in-flight
+work; **async** rejects only `waiting_input` / `waiting` (no clean injection
+point) and delivers Form A to a `running` recipient.
+
 ### Sync mode (`wait = true`)
 
 Sync adds **sender-side blocking** on top of the same recipient delivery model. The sender blocks until the recipient explicitly responds or the timeout expires. The recipient always receives an explicit annotated user-turn (the `running` row's sync form, or the non-busy row — both are user-turns), so a sync request is never delivered as a silently-deferrable notification.
@@ -261,6 +315,33 @@ Sync adds **sender-side blocking** on top of the same recipient delivery model. 
     ```
     Error: No response from task <task_id> within <timeout_sec> seconds.
     ```
+
+The full sync exchange, including the retraction path:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant I as Initiator task
+    participant P as ShoferProvider
+    participant Q as Recipient MessageQueueService
+    participant R as Recipient task
+
+    I->>Q: addMessage(PEER PROMPT) — capture QueuedMessage.id
+    I->>P: registerPendingSyncResolver(recipientTaskId, initiatorTaskId)
+    I->>R: cancelAndProcessQueuedMessages() if target.abort
+    R->>Q: Task.ask() drains the prompt as a user-turn
+
+    alt Recipient answers in time
+        R->>P: attempt_completion — resolvePendingSyncForRecipient()
+        P-->>I: resolve(completionResult), entry deleted
+        Note over R: attempt_completion is terminal —<br/>answering completes the recipient
+        Note over I: pushToolResult(syncResult)
+    else Timeout or sender abort
+        I->>Q: removeMessage(id) — no-op if already consumed
+        I->>P: clearPendingSyncResolver(task_id)
+        Note over I: "No response from task <id> (timed out)"
+    end
+```
 
 #### Why timeout discards the message
 
@@ -337,6 +418,26 @@ The "dynamically added" union member is mutated in the [`NewTaskTool`](../packag
 
 For each id in `peer_task_ids`, `NewTaskTool` also writes the **reverse edge** — it adds the new child's `taskId` to that peer's `knownPeers` (on the live `Task` instance, immediately and race-free) and persists it onto the peer's `HistoryItem.peerIds` (so it survives a restart). The reverse-edge persist targets the _peer's_ history row, which already exists because the peer was spawned before the child, so it persists cleanly. (The child's own forward edge is no longer written here — it is seeded via `initialKnownPeers` and self-persisted by the child; see [Implementation](#implementation) above.)
 
+```mermaid
+flowchart LR
+    R["root task<br/>omnipotent within its tree"]
+    P["parent"]
+    A["Alpha<br/>spawned first"]
+    B["Beta<br/>new_task peer_task_ids=[Alpha]"]
+    G["Gamma<br/>no grant"]
+
+    P <--> A
+    P <--> B
+    P <--> G
+    A <-->|"explicit grant, mirrored onto Alpha.knownPeers"| B
+    A -.->|"no edge — symmetry is not transitivity"| G
+    R -.->|"implicit reach, not mirrored"| G
+```
+
+Solid edges are `knownPeers` membership on both ends. The root's reach is
+one-way: a task the root messages can only reply if it independently holds the
+root in its own `knownPeers`.
+
 Rationale and limits:
 
 - **Why:** a spawn-time grant can only name an already-existing task, so it is unavoidably expressed one-directionally (the later sibling references the earlier). Mirroring turns that single grant into a usable two-way conversation channel.
@@ -392,17 +493,27 @@ Form B never touches the system prompt — it is enqueued as a user-turn via `me
 > condensation would be injected into the summary prompt (seen only by the
 > summarizer) and cleared — lost to the recipient agent. See [`notifications.md`](notifications.md#when-notifications-are-drained).
 
-```
-System prompt construction (existing)
-  → ... base system prompt ...
-  → Subtask constraints (only if parentTaskId is set)
-  → Form A: peer async notifications for a BUSY recipient
-    (independent of parentTaskId; one block per message, cleared after injection)
-  → [End of system prompt]
+```mermaid
+flowchart TD
+    subgraph FormA["Form A — system prompt construction"]
+        SP["getSystemPrompt()"]
+        Base["base system prompt"]
+        Sub["subtask constraints<br/>only if parentTaskId is set"]
+        G{"injectPeerNotifications"}
+        Peer["peer async notifications for a BUSY recipient<br/>one block per message, cleared after injection<br/>independent of parentTaskId"]
+        End["end of system prompt"]
 
-Message queue (Form B) — reuses the queueMessage/Task.ask() path
-  → messageQueueService.addMessage(annotated PEER PROMPT user-turn)
-  → Task.ask() drain wakes/resumes the task and feeds it to the LLM
+        SP --> Base --> Sub --> G
+        G -->|"true — attemptApiRequest only"| Peer --> End
+        G -->|"false — summarizer prompts"| End
+    end
+
+    subgraph FormB["Form B — the queueMessage / Task.ask() path"]
+        Add["messageQueueService.addMessage()<br/>annotated PEER PROMPT or PEER MESSAGE user-turn"]
+        Drain["Task.ask() drain wakes or resumes the task<br/>and feeds it to the LLM"]
+
+        Add --> Drain
+    end
 ```
 
 ---

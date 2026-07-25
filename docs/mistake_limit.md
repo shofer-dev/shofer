@@ -21,6 +21,45 @@ The `ask("mistake_limit_reached")` case in [`ChatRowContent`](webview-ui/src/com
 
 ## Mechanisms (categorized by what increments the counter)
 
+Four of the five mechanisms feed the shared `consecutiveMistakeCount` and are
+gated by the loop guard; mechanism 2 keeps its own counter and raises the same
+ask without ever consulting that guard:
+
+```mermaid
+flowchart TD
+    M1["1. post-stream no-tool-use guard<br/>second consecutive no-tool-use turn"]
+    M3["3. mode / tool-validation failure<br/>per blocked tool call"]
+    M4["4. tool parameter validation errors"]
+    M5["5. presentAssistantMessage dispatch errors"]
+    OK["successful tool execution<br/>handler sets count = 0"]
+    CNT(["consecutiveMistakeCount"])
+    G{"top of recursivelyMakeShoferRequests<br/>consecutiveMistakeLimit > 0<br/>and count >= consecutiveMistakeLimit"}
+    ASK["ask('mistake_limit_reached')<br/>common:errors.mistake_limit_guidance"]
+    FB["tooManyMistakes(text) into the next turn<br/>+ say('user_feedback')"]
+    RST["consecutiveMistakeCount = 0"]
+    CONT["send the next API request"]
+    M2["2. ToolRepetitionDetector<br/>own consecutiveIdenticalToolCallCount"]
+    ASK2["allowExecution false —<br/>ask('mistake_limit_reached') raised directly<br/>from presentAssistantMessage"]
+    EX["experiment: disableMistakeLimitChecks"]
+
+    M1 --> CNT
+    M3 --> CNT
+    M4 --> CNT
+    M5 --> CNT
+    OK --> CNT
+    CNT --> G
+    G -->|no| CONT
+    G -->|yes| ASK
+    ASK -->|messageResponse| FB
+    ASK -->|other| RST
+    FB --> RST
+    RST --> CONT
+    M2 --> ASK2
+    EX -.->|"guard skipped, counter still increments"| G
+    EX -.->|"detector skipped entirely"| M2
+    EX -.->|"increment suppressed"| M3
+```
+
 ### 1. Post-stream no-tool-use guard
 
 **File:** [`Task.ts:5314-5322`](packages/core/src/task/Task.ts:5314)

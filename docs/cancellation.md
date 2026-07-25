@@ -17,43 +17,20 @@ to run until their server-side timeout expires.
 
 ## Components and responsibilities
 
-```
-┌───────────────────────┐   postMessage(cancelTask)
-│  Webview (ChatView)   │ ─────────────────────────────┐
-└───────────────────────┘                              ▼
-                                          ┌───────────────────────────┐
-                                          │  Task (packages/core/src/task)     │
-                                          │  - _taskAbortController   │
-                                          │  - get abortSignal()      │
-                                          │  - abortTask()            │
-                                          │  - cancelAndProcess…()    │
-                                          └───────────────────────────┘
-                                                       │ task.abortSignal
-                                                       ▼
-                                          ┌───────────────────────────┐
-                                          │  McpHub                   │
-                                          │  callTool(..., signal)    │
-                                          │  readResource(..., signal)│
-                                          └───────────────────────────┘
-                                                       │ RequestOptions.signal
-                                                       ▼
-                                          ┌───────────────────────────┐
-                                          │  MCP TS SDK Client        │
-                                          │  → JSON-RPC over HTTP     │
-                                          │  → notifications/cancelled│
-                                          └───────────────────────────┘
-                                                       │
-                                                       ▼
-                                          ┌───────────────────────────┐
-                                          │  mcp-server (Go)          │
-                                          │  in-flight registry       │
-                                          │  cancels child context    │
-                                          └───────────────────────────┘
-                                                       │ ctx.Done()
-                                                       ▼
-                                          ┌───────────────────────────┐
-                                          │  tools-backend            │
-                                          └───────────────────────────┘
+```mermaid
+flowchart TD
+    W["Webview — ChatView"]
+    T["Task — packages/core/src/task<br/>_taskAbortController<br/>get abortSignal()<br/>abortTask()<br/>cancelAndProcessQueuedMessages()"]
+    M["McpHub<br/>callTool(..., signal)<br/>readResource(..., signal)"]
+    C["MCP TS SDK Client<br/>JSON-RPC over HTTP<br/>notifications/cancelled"]
+    S["mcp-server (Go)<br/>in-flight registry<br/>cancels the child context"]
+    B["tools-backend"]
+
+    W -->|"postMessage(cancelTask)"| T
+    T -->|task.abortSignal| M
+    M -->|RequestOptions.signal| C
+    C --> S
+    S -->|"ctx.Done()"| B
 ```
 
 ### 1. Webview — [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)
@@ -100,6 +77,43 @@ Two paths fire it:
   was in flight. The controller is aborted to cancel the in-flight work, then
   **replaced with a fresh `AbortController`** before the loop is restarted, so
   subsequent tool calls get a live signal.
+
+The two paths share the signal but **must never be conflated** (AGENTS.md,
+"Dual Cancellation-Path Rule"): one destroys the Task, the other keeps it and
+restarts it.
+
+```mermaid
+flowchart TB
+    subgraph HARD["abortTask(isAbandoned) — destructive tear-down"]
+        direction TB
+        H1["Stop, budget kill, or stream failure"]
+        H2["abortBackgroundChildren()<br/>abort in-flight mcpAsyncCalls"]
+        H3["this.abort = true"]
+        H4["_taskAbortController.abort()"]
+        H5["abort terminal processes<br/>emit TaskAborted { reason }"]
+        H6["dispose() — the instance is gone"]
+        H1 --> H2 --> H3 --> H4 --> H5 --> H6
+    end
+
+    subgraph SOFT["cancelAndProcessQueuedMessages() — soft-cancel for Send Now"]
+        direction TB
+        S1["Send Now on a queued message"]
+        S2["dequeueMessage() first — hold the message"]
+        S3["_softCancelForQueuedMessage = true"]
+        S4["currentRequestAbortController.abort()"]
+        S5["this.abort = true, _taskAbortController.abort()"]
+        S6["await _taskLoopPromise — the old loop exits<br/>the stream catch breaks instead of abortTask()"]
+        S7["_cleanupOrphanedToolUses(), reset ask state<br/>emit TaskActive, await waitForPendingPersist"]
+        S8["_softCancelForQueuedMessage = false, abort = false<br/>REPLACE _taskAbortController"]
+        S9["say('user_feedback', ...) then _runTaskLoop(queued)<br/>same instance, same conversation"]
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
+    end
+```
+
+The ordering in the left column is an invariant: `this.abort = true` is set
+**before** `_taskAbortController.abort()` so synchronous observers see the
+boolean first. In the right column the flag is what stops the streaming catch
+block from taking the left column's path.
 
 The signal is exposed to tool implementations via `task.abortSignal`.
 
@@ -198,6 +212,27 @@ harmless no-op because `cleanup` has removed the entry.
    `tools-backend`, which returns immediately.
 8. The Task's tool wrapper observes the rejected promise and unwinds; the loop
    exits at the next abort checkpoint.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant CV as ChatView
+    participant T as Task
+    participant H as McpHub / MCP SDK
+    participant S as mcp-server
+    participant B as tools-backend
+
+    U->>CV: click Stop
+    CV->>T: postMessage(cancelTask)
+    T->>T: abortTask() — abort = true, then _taskAbortController.abort()
+    T-->>H: abortSignal fires on the in-flight callTool
+    H-->>T: request() promise rejects with AbortError
+    H->>S: notifications/cancelled — original JSON-RPC id
+    S->>S: cancelInFlight(sessionId, requestId)
+    S-->>B: ctx.Done() — the upstream HTTP call returns at once
+    Note over T: the tool wrapper unwinds,<br/>the loop exits at the next abort checkpoint
+```
 
 ## Gaps and Known Issues
 

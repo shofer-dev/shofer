@@ -86,6 +86,36 @@ Two conditions are checked; either fires condensation:
 
 The safety net is hardcoded via [`TOKEN_BUFFER_PERCENTAGE = 0.1`](extensions/shofer/packages/core/src/context-management/index.ts:27) — meaning condensation **will always trigger by ~90% utilization** even if the user-configured percentage threshold is set higher (e.g., 100%). The percentage threshold is user-configurable between [`MIN_CONDENSE_THRESHOLD (5%)`](extensions/shofer/packages/core/src/condense/index.ts:112) and [`MAX_CONDENSE_THRESHOLD (100%)`](extensions/shofer/packages/core/src/condense/index.ts:113). Each API profile can also override the global threshold via [`profileThresholds`](extensions/shofer/packages/core/src/context-management/index.ts:229).
 
+The whole decision, including the fallback, lives in one function:
+
+```mermaid
+flowchart TD
+    E["manageContext(...)"]
+    T1["prevContextTokens = totalTokens + lastMessageTokens<br/>allowedTokens = contextWindow * (1 - TOKEN_BUFFER_PERCENTAGE) - reservedTokens"]
+    TH["resolve effectiveThreshold<br/>profileThresholds[currentProfileId]<br/>-1 or out-of-range inherits autoCondenseContextPercent"]
+    A{"autoCondenseContext"}
+    C{"contextPercent >= effectiveThreshold<br/>or prevContextTokens > allowedTokens"}
+    S["summarizeConversation(isAutomaticTrigger: true)"]
+    OK{"result.error"}
+    R1["return the condensed result"]
+    F{"prevContextTokens > allowedTokens"}
+    TR["truncateConversation(messages, 0.5, taskId)<br/>recount newContextTokensAfterTruncation"]
+    R2["return the truncated result<br/>carrying the condense error"]
+    R3["return unchanged"]
+
+    E --> T1 --> TH --> A
+    A -->|no| F
+    A -->|yes| C
+    C -->|no| F
+    C -->|yes| S
+    S --> OK
+    OK -->|none| R1
+    OK -->|"error set"| F
+    F -->|yes| TR
+    TR --> R2
+    F -->|no| R3
+```
+
 ### Invocation Points
 
 [`manageContext()`](extensions/shofer/packages/core/src/context-management/index.ts:256) is called in three places:
@@ -162,6 +192,31 @@ Message data fields ([`packages/types/src/message.ts`](extensions/shofer/package
 - **Fresh start model**: When a summary exists, returns only messages from the summary onwards
 - Filters out messages tagged with [`condenseParent`](extensions/shofer/packages/core/src/task-persistence/apiMessages.ts:31) (replaced by summary) or [`truncationParent`](extensions/shofer/packages/core/src/task-persistence/apiMessages.ts:36) (hidden by truncation)
 - Removes orphan tool_result blocks that reference tool_use IDs from condensed-away messages (orphan cleanup)
+
+Both reduction paths are tag-based, so the stored history stays complete and a
+rewind can restore it:
+
+```mermaid
+flowchart LR
+    H["apiConversationHistory<br/>complete — nothing is deleted"]
+    CP["prior messages tagged condenseParent"]
+    SM["summary message, role 'user'<br/>fresh-start model"]
+    TP["older messages tagged truncationParent<br/>+ a truncation marker message"]
+    G["getEffectiveApiHistory()"]
+    API["the subset actually sent to the API"]
+    RW["rewind or delete of a<br/>summary / truncation marker"]
+    CU["cleanupAfterTruncation()"]
+
+    H -->|condensation| CP
+    CP --> SM
+    H -->|sliding window truncation| TP
+    CP --> G
+    SM --> G
+    TP --> G
+    G -->|"from the summary onwards, orphan tool_result blocks dropped"| API
+    RW --> CU
+    CU -->|"clears orphaned condenseParent / truncationParent"| H
+```
 
 ## Source References
 
