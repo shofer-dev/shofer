@@ -46,6 +46,28 @@ explicitly exempts `mock` from the API-key requirement in
 
 The mock provider has four control levels, evaluated in descending priority:
 
+```mermaid
+flowchart TD
+    CM["MockHandler.createMessage(messages)"]
+    P["prompt = last user message"]
+    L1{"MOCK_TOOL_NAME set?"}
+    T1["Level 1 — streamToolCall(MOCK_TOOL_NAME, MOCK_TOOL_ARGS)<br/>no attempt_completion; the tool result feeds the next call"]
+    PIN{"scenario already pinned?"}
+    FIND["findScenario(prompt) — case-insensitive substring<br/>pinned for the lifetime of the task"]
+    L2{"turnCursor < scenario.turns.length?"}
+    T2["Level 2 — emitTurn(turns[turnCursor++])<br/>reasoning / text / tool / response"]
+    L34["Level 3 — MOCK_RESPONSE, else<br/>Level 4 — matched built-in scenario response, else OK"]
+    T3["emitCompletion(text) → attempt_completion"]
+
+    CM --> P --> L1
+    L1 -->|yes| T1
+    L1 -->|no| PIN
+    PIN -->|no| FIND --> L2
+    PIN -->|yes| L2
+    L2 -->|yes| T2
+    L2 -->|no| L34 --> T3
+```
+
 #### Level 1 — `MOCK_TOOL_NAME` + `MOCK_TOOL_ARGS`
 
 Force a specific tool call on every agent turn. The mock does **not** emit an
@@ -253,6 +275,20 @@ The mock provider emits the same streaming chunk types as real providers:
 - `tool_call_end`
 - `usage` (fake token counts + $0 cost)
 
+```mermaid
+flowchart TD
+    subgraph EMIT["MockHandler.streamToolCall() + emitCompletion()"]
+        A["tool_call_partial — id + name"]
+        B["tool_call_partial ×N — argument fragments, 24 bytes each"]
+        C["tool_call_end — id"]
+        D["usage — fake token counts, $0 cost"]
+        A --> B --> C --> D
+    end
+    P["NativeToolCallParser"]
+    L["agent loop"]
+    EMIT --> P --> L
+```
+
 This means `NativeToolCallParser` and the agent loop consume mock output
 identically to real provider output. The older `tool_call_start`/`tool_call_delta`
 chunks are **not** read by the agent loop and are not emitted by the mock.
@@ -338,6 +374,23 @@ plain JSON survives). To handle this, `FakeAIHandler` maintains a module-scoped
    `id` and attaches a `removeFromCache` callback.
 3. On subsequent rehydrations, the handler looks up the **original** live object
    by `id` rather than using the serialized shell.
+
+```mermaid
+sequenceDiagram
+    participant C as caller
+    participant CFG as "provider settings — VS Code global state"
+    participant H as FakeAIHandler
+    participant MAP as "fakeAiMap — module-scoped Map"
+
+    C->>CFG: "{ apiProvider: fake-ai, fakeAi: live object with id }"
+    CFG->>H: first construction
+    H->>MAP: "set(id, object) and attach removeFromCache()"
+    Note over CFG: persisted — only plain JSON survives, methods are lost
+    CFG->>H: later rehydration — shell with the same id
+    H->>MAP: "get(id)"
+    MAP-->>H: the original live FakeAI
+    H->>H: "delegate createMessage / getModel / countTokens / completePrompt"
+```
 
 ### 2.3 Usage
 

@@ -50,70 +50,52 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 
 ## Architecture
 
+Everything below is gated on `MARKETPLACE_ENABLED`: with the flag `false` the tab
+is never rendered and no message in this diagram is ever sent.
+
+```mermaid
+flowchart TD
+    subgraph WEB["webview — React"]
+        APP["App.tsx — marketplace tab"]
+        MV["MarketplaceView — MCP/Modes sub-tabs"]
+        MLV["MarketplaceListView"]
+        CARD["MarketplaceItemCard"]
+        MODAL["MarketplaceInstallModal"]
+        FOOT["IssueFooter"]
+        SM["MarketplaceViewStateManager<br/>useStateManager"]
+    end
+    subgraph HOST["extension host — Node.js"]
+        RP["ShoferProvider.fetchMarketplaceData()"]
+        WMH["webviewMessageHandler"]
+        MM["MarketplaceManager"]
+        RCL["RemoteConfigLoader<br/>5-min cache, 3 retries, exp. backoff"]
+        SI["SimpleInstaller"]
+        CMM["CustomModesManager"]
+    end
+    API["Shofer API<br/>GET /api/marketplace/modes<br/>GET /api/marketplace/mcps — YAML"]
+    FILES["config files<br/>.shofer/shofermodes, .shofer/mcp.json<br/>custom-modes.yaml, mcp-settings.json"]
+
+    APP --> MV --> MLV
+    MLV --> CARD --> MODAL
+    MLV --> FOOT
+    MV --- SM
+    MLV --- SM
+    SM -->|"fetchMarketplaceData, filterMarketplaceItems,<br/>installMarketplaceItem, removeInstalledMarketplaceItem"| WMH
+    WMH --> MM
+    RP --> MM
+    MM -->|"getMarketplaceItems()"| RCL --> API
+    MM -->|"installMarketplaceItem() / removeInstalledMarketplaceItem()"| SI
+    SI -->|"installMode() / removeMode()"| CMM
+    SI -->|"installMcp() / removeMcp()"| FILES
+    CMM --> FILES
+    MM -->|"getInstallationMetadata() reads"| FILES
+    MM --> RP
+    RP -->|"marketplaceData"| SM
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Webview (React)                       │
-│                                                          │
-│  App.tsx ──► MarketplaceView ──► MarketplaceListView    │
-│                  │                    │                  │
-│                  │    MarketplaceItemCard                │
-│                  │    MarketplaceInstallModal            │
-│                  │    IssueFooter                        │
-│                  │                    │                  │
-│          MarketplaceViewStateManager (state machine)    │
-│          useStateManager (React binding)                 │
-└──────────────────────┬──────────────────────────────────┘
-                       │  vscode.postMessage("fetchMarketplaceData")
-                       │  vscode.postMessage("installMarketplaceItem")
-                       │  vscode.postMessage("removeInstalledMarketplaceItem")
-                       │  vscode.postMessage("filterMarketplaceItems")
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│               Extension Host (Node.js)                   │
-│                                                          │
-│  ShoferProvider.ts                                       │
-│    ├── fetchMarketplaceData()                            │
-│    └── webviewMessageHandler.ts                          │
-│          ├── "fetchMarketplaceData"                      │
-│          ├── "filterMarketplaceItems"                    │
-│          ├── "installMarketplaceItem"                    │
-│          ├── "installMarketplaceItemWithParameters"      │
-│          └── "removeInstalledMarketplaceItem"            │
-│                                                          │
-│  MarketplaceManager                                      │
-│    ├── getMarketplaceItems()  ─► RemoteConfigLoader     │
-│    ├── installMarketplaceItem() ─► SimpleInstaller       │
-│    ├── removeInstalledMarketplaceItem()                  │
-│    ├── getInstallationMetadata() (reads config files)    │
-│    └── filterItems()                                     │
-│                                                          │
-│  RemoteConfigLoader                                      │
-│    ├── loadAllItems() ─► GET /api/marketplace/modes     │
-│    │                 ─► GET /api/marketplace/mcps       │
-│    └── 5-min in-memory cache, 3 retries, exp. backoff   │
-│                                                          │
-│  SimpleInstaller                                         │
-│    ├── installMode() ─► CustomModesManager              │
-│    │                 ─► writes .shofer/shofermodes / global     │
-│    ├── installMcp()  ─► writes .shofer/mcp.json / global │
-│    ├── removeMode()  ─► CustomModesManager.delete()     │
-│    └── removeMcp()   ─► updates mcp.json                │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────┐
-│                    Shofer API                             │
-│                                                          │
-│  GET /api/marketplace/modes  ─► YAML response            │
-│  GET /api/marketplace/mcps   ─► YAML response            │
-│                                                          │
-│  NOTE: Cloud/org integration previously provided         │
-│  organization-specific MCP catalogs via a CloudService   │
-│  but has been removed in the current codebase. The       │
-│  orgSettings variable in MarketplaceManager remains      │
-│  undefined.                                              │
-└─────────────────────────────────────────────────────────┘
-```
+
+Cloud/org integration previously provided organization-specific MCP catalogs via a
+`CloudService`, but has been removed in the current codebase — the `orgSettings`
+variable in `MarketplaceManager` remains `undefined`.
 
 ---
 
@@ -176,53 +158,71 @@ The marketplace was introduced in **v3.21.0** (June 2025). When enabled, it appe
 
 ### 1. Opening the Marketplace
 
+```mermaid
+sequenceDiagram
+    actor U as user
+    participant APP as "App.tsx"
+    participant MV as MarketplaceView
+    participant RP as ShoferProvider
+    participant MM as MarketplaceManager
+    participant RCL as RemoteConfigLoader
+    participant API as "Shofer API"
+    participant SM as MarketplaceViewStateManager
+
+    U->>APP: clicks Marketplace (MCP view / Mode selector / Settings)
+    APP->>MV: tab === "marketplace" — mounts
+    MV->>RP: "fetchMarketplaceData"
+    RP->>MM: "getMarketplaceItems()"
+    MM->>RCL: "loadAllItems()"
+    RCL->>API: "GET /api/marketplace/modes"
+    API-->>RCL: YAML → modeMarketplaceResponse Zod parse
+    RCL->>API: "GET /api/marketplace/mcps"
+    API-->>RCL: YAML → mcpMarketplaceResponse Zod parse
+    RCL-->>MM: MarketplaceItem[]
+    MM-->>RP: "{ organizationMcps: [], marketplaceItems, errors }"
+    RP->>MM: "getInstallationMetadata()"
+    MM-->>RP: "{ project: { id → type }, global: { id → type } }"
+    RP->>SM: "marketplaceData"
+    SM->>SM: "handleMessage updates state"
 ```
-User clicks "Marketplace" button (MCP view / Mode selector / Settings)
-  → App.tsx sets tab === "marketplace"
-  → MarketplaceView mounts
-  → Sends "fetchMarketplaceData" message to extension host
-  → ShoferProvider.fetchMarketplaceData() calls MarketplaceManager
-  → MarketplaceManager.getMarketplaceItems():
-      1. RemoteConfigLoader.loadAllItems() fetches from API:
-         GET /api/marketplace/modes → YAML → modeMarketplaceResponse Zod parse
-         GET /api/marketplace/mcps  → YAML → mcpMarketplaceResponse Zod parse
-      2. Returns { organizationMcps: [], marketplaceItems, errors }
-      (Note: Cloud org settings integration has been removed; all items come from the public API.)
-  → MarketplaceManager.getInstallationMetadata():
-     1. Reads project .shofer/shofermodes and .shofer/mcp.json
-     2. Reads global custom-modes.yaml and mcp-settings.json
-     3. Returns { project: { [id]: { type } }, global: { [id]: { type } } }
-  → Sends "marketplaceData" message to webview
-  → MarketplaceViewStateManager.handleMessage("marketplaceData") updates state
-```
+
+`getInstallationMetadata()` reads the project `.shofer/shofermodes` and
+`.shofer/mcp.json` plus the global `custom-modes.yaml` and `mcp-settings.json`.
+Cloud org-settings integration has been removed; all items come from the public API.
 
 ### 2. Installing an Item
 
-```
-User clicks "Install" on a card
-  → MarketplaceInstallModal opens
-  → User selects scope (project/global) and fills parameters
-  → User clicks "Install"
-  → Sends "installMarketplaceItem" message with:
-     { mpItem: MarketplaceItem, mpInstallOptions: { target, parameters } }
-  → webviewMessageHandler routes to marketplaceManager.installMarketplaceItem()
-  → MarketplaceManager:
-     1. Shows info toast "Installing item: ..."
-     2. SimpleInstaller.installItem(item, { target, parameters })
-        For modes:
-          - Parses item.content as YAML
-          - Calls CustomModesManager.importModeWithRules()
-          - Writes to .shofer/shofermodes (project) or custom-modes.yaml (global)
-        For MCPs:
-          - Handles single or multi-method content
-          - Replaces {{paramName}} placeholders in config
-          - Writes to .shofer/mcp.json (project) or mcp-settings.json (global)
-     3. Shows success toast
-     4. Captures telemetry (MARKETPLACE_ITEM_INSTALLED)
-     5. Opens the modified config file at the inserted line
-  → Sends "marketplaceInstallResult" to webview (success)
-  → Webview shows post-install screen with "Go to MCP/Modes" action
-  → Extension refreshes state via postStateToWebview()
+```mermaid
+sequenceDiagram
+    actor U as user
+    participant CARD as MarketplaceItemCard
+    participant MODAL as MarketplaceInstallModal
+    participant WMH as webviewMessageHandler
+    participant MM as MarketplaceManager
+    participant SI as SimpleInstaller
+    participant CMM as CustomModesManager
+    participant FS as "config files"
+
+    U->>CARD: clicks Install
+    CARD->>MODAL: opens
+    U->>MODAL: picks scope (project/global), fills parameters
+    MODAL->>WMH: "installMarketplaceItem { mpItem, mpInstallOptions }"
+    WMH->>MM: "installMarketplaceItem()"
+    MM->>MM: info toast "Installing item…"
+    MM->>SI: "installItem(item, { target, parameters })"
+    alt item.type === "mode"
+        SI->>CMM: "importModeWithRules(yaml, target)"
+        CMM->>FS: ".shofer/shofermodes or custom-modes.yaml"
+    else item.type === "mcp"
+        SI->>SI: pick installation method, substitute {{key}} placeholders
+        SI->>FS: ".shofer/mcp.json or mcp-settings.json"
+    end
+    SI-->>MM: "{ filePath, line? }"
+    MM->>MM: success toast + MARKETPLACE_ITEM_INSTALLED telemetry
+    MM->>FS: open the modified file at the inserted line
+    WMH-->>MODAL: "marketplaceInstallResult { success, slug }"
+    MODAL->>U: post-install screen — "Go to MCP/Modes"
+    WMH-->>CARD: "postStateToWebview()"
 ```
 
 ### 3. Removing an Item

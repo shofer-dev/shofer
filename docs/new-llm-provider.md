@@ -6,11 +6,19 @@ This document describes the **complete** set of changes needed to add a new upst
 
 ## Architecture Overview
 
-```
-User → Settings UI (webview) → ProviderSettings (Zod schema)
-     → buildApiHandler() dispatch → Handler class (packages/core/src/api/providers/)
-     → upstream API                     (most common — direct HTTPS)
-     → llm-router (Go proxy) → upstream (proxy-based providers only)
+```mermaid
+flowchart LR
+    U["user"]
+    UI["Settings UI — webview"]
+    PS["ProviderSettings — Zod schema"]
+    BAH["buildApiHandler() dispatch"]
+    H["Handler class<br/>packages/core/src/api/providers/"]
+    UP["upstream API<br/>most common — direct HTTPS"]
+    LR["llm-router — Go proxy<br/>proxy-based providers only"]
+
+    U --> UI --> PS --> BAH --> H
+    H --> UP
+    H --> LR --> UP
 ```
 
 Providers that talk directly to the upstream API (no proxy) skip the llm-router layer. Providers that go through llm-router require additional model registration in the Go backend.
@@ -20,6 +28,59 @@ Providers that talk directly to the upstream API (no proxy) skip the llm-router 
 ## How to Use This Guide
 
 Each step below is **mandatory** unless marked "(if applicable)." Steps are numbered 1–34. The DeepSeek provider at [`packages/core/src/api/providers/deepseek.ts`](../packages/core/src/api/providers/deepseek.ts) is the canonical reference implementation.
+
+The touch-points that must change **together** — a provider that is missing any
+one of them either fails to type-check or silently never appears in the UI:
+
+```mermaid
+flowchart TD
+    subgraph L1["Layer 1 — model definitions (steps 1-2)"]
+        A1["packages/types/src/providers/{name}.ts<br/>{name}Models, {name}DefaultModelId"]
+        A2["providers/index.ts<br/>re-export + getProviderDefaultModelId() case"]
+    end
+    subgraph L2["Layer 2 — provider schema (steps 3-13)"]
+        B1["provider-settings.ts<br/>providerNames, {name}Schema"]
+        B2["providerSettingsSchemaDiscriminated<br/>providerSettingsSchema spread"]
+        B3["modelIdKeysByProvider<br/>MODELS_BY_PROVIDER"]
+        B4["if applicable: dynamicProviders / localProviders,<br/>ANTHROPIC_STYLE_PROVIDERS, getApiProtocol()"]
+    end
+    subgraph L3["Layer 3 — API handler (steps 14-18)"]
+        C1["api/providers/{name}.ts — {Name}Handler"]
+        C2["api/providers/index.ts — export"]
+        C3["api/index.ts — buildApiHandler() case"]
+        C4["dynamic/local only: fetchers/{name}.ts + modelCache.ts"]
+    end
+    subgraph L4["Layer 4 — webview UI (steps 19-30)"]
+        D1["settings/providers/{Name}.tsx"]
+        D2["settings/providers/index.ts — export"]
+        D3["ApiOptions.tsx<br/>import, PROVIDER_MODEL_CONFIG, render block"]
+        D4["providerModelConfig.ts<br/>PROVIDER_SERVICE_CONFIG, PROVIDER_DEFAULT_MODEL_IDS"]
+        D5["constants.ts<br/>MODELS_BY_PROVIDER, PROVIDERS dropdown"]
+    end
+    subgraph L5["Layer 5 — i18n (steps 31-32)"]
+        E1["locales/*/settings.json — 18 files<br/>{name}ApiKey, get{Name}ApiKey"]
+    end
+    subgraph L6["Layer 6 — llm-router (step 33, proxied only)"]
+        F1["llm-router/ — Go backend"]
+    end
+    subgraph L7["Layer 7 — tests (step 34)"]
+        G1["api/providers/__tests__/{name}.spec.ts"]
+    end
+
+    A1 --> A2
+    A1 --> B1
+    B1 --> B2 --> B3
+    B1 --> B4
+    B1 --> C1
+    C1 --> C2 --> C3
+    C1 -.-> C4
+    C1 --> D1
+    D1 --> D2 --> D3 --> D4
+    A1 --> D5 --> D3
+    D1 --> E1
+    C3 -.-> F1
+    C1 --> G1
+```
 
 ---
 

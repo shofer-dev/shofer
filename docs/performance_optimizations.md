@@ -4,6 +4,26 @@ How Shofer keeps the extension host responsive during long agent sessions. The
 dominant costs are message persistence, host↔webview IPC, and per-chunk work on
 the streaming hot path; each is bounded as described below.
 
+```mermaid
+flowchart TD
+    MUT["message added or mutated on the streaming path"]
+    APPEND["appendTaskMessage / appendApiMessage<br/>one INSERT OR REPLACE per mutation"]
+    DB["shofer-messages.db — node:sqlite<br/>keyed by (task_id, kind, ts)"]
+    SAVE["debounced saveShoferMessages — 250 ms trailing<br/>_refreshTaskMetadata only, O(1) token accounting"]
+    META["task HistoryItem — metadata only"]
+    GATE{"focused task?"}
+    SKIP["no webview push — still persisted, survives a restart"]
+    DELTA["shoferMessageAppended / messageUpdated<br/>per-message delta, O(1) in message size"]
+    INC["incrementalMessageProcessing<br/>cached prefix at findSafeSplitIndex<br/>+ re-consolidated bounded tail"]
+    CV["ChatView"]
+
+    MUT --> APPEND --> DB
+    MUT --> SAVE --> META
+    MUT --> GATE
+    GATE -->|no| SKIP
+    GATE -->|yes| DELTA --> INC --> CV
+```
+
 ## Message persistence — SQLite, one row per message
 
 Task messages (the `api` conversation history and the `ui` message stream) are

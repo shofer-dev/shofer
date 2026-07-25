@@ -35,6 +35,30 @@ Two consequences of the OTel model:
   SDK invokes the callback at export time, so values are never stale and no
   event-loop-waking timer is needed.
 
+```mermaid
+flowchart TD
+    subgraph CORE["@shofer/core — always in the code path"]
+        CS["call sites<br/>BaseTool.execute(), McpHub,<br/>Task.ts next to captureLlmCompletion,<br/>time() in utils/perf.ts"]
+        REG["metrics/registry.ts<br/>incCounter / observeHistogram / setGauge /<br/>registerObservableGauge — one instrument per name"]
+        API["@opentelemetry/api — global MeterProvider"]
+    end
+    subgraph HOST["host — operator choice"]
+        SDK["OpenTelemetry SDK + metric reader<br/>Views configure histogram buckets"]
+        RT["runtime instrumentation<br/>CPU, event-loop lag, heap, GC"]
+    end
+    NOOP["no-op — zero overhead, safe to leave instrumented"]
+    OTLP["OTLP exporter"]
+    PROM["exporter-prometheus — serves /metrics"]
+
+    CS --> REG --> API
+    API -.->|"no SDK registered"| NOOP
+    API --> SDK
+    RT --> SDK
+    SDK -.->|"polls observable-gauge callbacks at export time"| REG
+    SDK --> OTLP
+    SDK --> PROM
+```
+
 Process/runtime series (CPU, event-loop lag, heap, GC) come from the host's OTel
 runtime instrumentation (e.g. `@opentelemetry/instrumentation-runtime-node`), not
 a bundled collector.

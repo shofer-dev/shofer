@@ -24,30 +24,41 @@ category filter settings in **Settings → Logging**.
 
 ## Architecture
 
-```
- Settings → Logging (LoggingSettings.tsx)
-      │
-      │  user changes logLevel / logCategories
-      ▼
- webviewMessageHandler.ts
-      │
-      │  setLogLevel(level)  /  setLogCategories([...])
-      ▼
- logging/index.ts  ──────────────────────────────────┐
-      │                                                │
-      │  bootstrapLogging(outputChannel)                │
-      ▼                                                │
- CompactTransport (singleton)                         │
-      │                                                │
-      │  write() ── auto-discover ctx ── level filter ── category filter ── Output Channel
-      │                                                │
-      │  write() ── auto-discover ctx ───────── file (optional JSON-lines)
-      │                                                │
-      │  getKnownCategories() ──► ShoferProvider ──► webview (logCategoriesKnown)
-      │                                                │
-      ▲                                                │
- CompactLogger (root) ── child({ ctx }) ──► subsystem loggers  ◄── provider.log() / provider.debug()
-                                               (subsystems.ts)           (via webviewLog)
+```mermaid
+flowchart TD
+    LS["Settings → Logging<br/>LoggingSettings.tsx"]
+    WMH["webviewMessageHandler"]
+    IDX["logging/index.ts<br/>bootstrapLogging(outputChannel)"]
+    ROOT["CompactLogger — root"]
+    SUBS["subsystem loggers<br/>subsystems.ts"]
+    PROV["provider.log() / provider.debug()"]
+    CT["CompactTransport — singleton"]
+    DISC["auto-discover ctx"]
+    LVL{"level filter"}
+    CAT{"category filter"}
+    OC["Output Channel"]
+    RING["ring buffer"]
+    TASKBUF["per-task buffers<br/>captureForTask()"]
+    FILE["file — optional JSON-lines"]
+    KNOWN["getKnownCategories()"]
+    WEBV["webview — logCategoriesKnown"]
+    DROP["dropped"]
+
+    LS -->|"user changes logLevel / logCategories"| WMH
+    WMH -->|"setLogLevel() / setLogCategories()"| IDX
+    IDX --> CT
+    ROOT -->|"child({ ctx }) — registerCategory(ctx)"| SUBS
+    PROV -->|"webviewLog"| SUBS
+    SUBS -->|"write(entry)"| CT
+    CT --> DISC --> LVL
+    LVL -->|below level| DROP
+    LVL -->|pass| CAT
+    CAT -->|"ctx not whitelisted"| DROP
+    CAT -->|pass| OC
+    CAT --> RING
+    CAT --> TASKBUF
+    CAT --> FILE
+    CT --> KNOWN -->|"ShoferProvider state"| WEBV
 ```
 
 **Note:** [`ShoferProvider.log()`](../src/core/webview/ShoferProvider.ts) and
@@ -181,6 +192,32 @@ installed around each task's run loop:
 | Snapshot (host)  | `getTaskLogs(taskId)` returns the buffered lines; `webviewMessageHandler` answers `requestTaskLogs` with a `taskLogs` snapshot.                                                                                                                                                                                                                                                                                                                                                                                            |
 | Live stream      | `ShoferProvider` registers a transport listener (`addTaskLogListener`) and streams new lines for the task the Logs tab is **watching** (set via `requestTaskLogs`). Lines are coalesced and flushed every 100 ms as a `taskLogAppended` batch (`taskLogLines[]`) so high-frequency debug logging cannot flood the IPC channel.                                                                                                                                                                                             |
 | Render (webview) | [`TaskLogsView`](../webview-ui/src/components/chat/TaskLogsView.tsx) requests a snapshot on mount and appends live batches; on unmount it clears the host-side watch so streaming stops.                                                                                                                                                                                                                                                                                                                                   |
+
+```mermaid
+flowchart TD
+    LOOP["Task._runTaskLoop / WorkflowTask.slangLoop<br/>runWithLogTaskContext({ taskId, rootTaskId }, …)"]
+    ALS["AsyncLocalStorage — propagates across<br/>awaits, promise chains, timers"]
+    SITE["deep call sites — API providers, MCP, git<br/>no task reference of their own"]
+    CT["CompactTransport.write()"]
+    FILT{"level + category filters"}
+    DROP["dropped — not in Output Channel, not in Logs tab"]
+    CAP["captureForTask() — reads getLogTaskContext()"]
+    RING["per-task ring<br/>2000 lines/task, LRU-capped at 64 tasks"]
+    SNAP["getTaskLogs(taskId)"]
+    LIVE["addTaskLogListener"]
+    PROV["ShoferProvider — coalesce, flush every 100 ms"]
+    VIEW["TaskLogsView"]
+
+    LOOP --> ALS
+    ALS -.->|"ambient context"| SITE
+    SITE --> CT --> FILT
+    FILT -->|no| DROP
+    FILT -->|yes| CAP --> RING
+    RING --> SNAP
+    RING --> LIVE --> PROV
+    SNAP -->|"requestTaskLogs → taskLogs"| VIEW
+    PROV -->|"taskLogAppended — taskLogLines[]"| VIEW
+```
 
 Because capture sits **after** the level + category filters, the Logs tab
 honours Settings → Logging exactly: a category unchecked there (or a line below

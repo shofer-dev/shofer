@@ -94,7 +94,10 @@ The sections below describe cloud features from the upstream codebase. **None of
 > thin `OpenRouterHandler` subclass targeting a **locally-running llm-router**. See
 > the rewritten §"Shofer Router Provider" for the actual implementation.
 
-Content below is preserved for reference:
+Content below is preserved for reference. It is deliberately **not** diagrammed:
+none of those components exist, and a picture of them would read as a description
+of live architecture. The only diagram in this document is in §"Shofer Router
+Provider", which covers code that does exist.
 
 ### Authentication
 
@@ -356,6 +359,25 @@ identically to OpenRouter except for three deliberate differences:
 - **Shofer-prefixed options:** reads `shoferBaseUrl` / `shoferApiKey` (falling back to
   `openRouter*` fields, then `http://localhost:30081/v1` / `"shofer"`) and `apiModelId`
   for the model, so the shofer provider's config does not collide with OpenRouter's.
+
+```mermaid
+flowchart TD
+    T["Task — metadata.taskId, per-task UUID v7"]
+    BAH["buildApiHandler()"]
+    OPT["options: shoferBaseUrl / shoferApiKey<br/>falling back to the openRouter fields"]
+    SH["ShoferHandler extends OpenRouterHandler"]
+    GM{"model configured?"}
+    ERR["throw — the Shofer provider has no default model"]
+    PATCH["patched OpenAI client — every<br/>/v1/chat/completions body carries task_id"]
+    ROUTER["locally-running llm-router"]
+
+    BAH --> SH
+    OPT --> SH
+    T --> SH
+    SH --> GM
+    GM -->|no| ERR
+    GM -->|yes| PATCH --> ROUTER
+```
 
 There is no session-token auth, no `X-Shofer-*` headers, no cloud image generation, and
 no proxy model-loading in the actual implementation. To add a brand-new provider, see
