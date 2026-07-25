@@ -104,39 +104,21 @@ Shofer runs **entirely** on the VS Code Extension Host main thread. The agent
 loop, LLM streaming, tool execution, state serialization, and webview bridging
 all compete for the same event loop.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  Extension Host (Main Thread)                 │
-│                                                              │
-│  ┌─────────────┐  ┌──────────────────┐  ┌────────────────┐  │
-│  │ ShoferProvider│  │  Task (Agent)    │  │ CodeIndexMgr   │  │
-│  │  (5187 LOC)  │  │  (7040 LOC)      │  │  GitIndexMgr    │  │
-│  │              │  │                  │  │  Search         │  │
-│  │ • Webview    │  │ • recursivelyMake │  │  Glob           │  │
-│  │   lifecycle  │  │   ShoferRequests │  │  MCP            │  │
-│  │ • State      │  │ • LLM streaming  │  │  Skills         │  │
-│  │   management │  │ • Tool dispatch  │  │  Marketplace    │  │
-│  │ • postMessage│  │ • ask() system   │  │  TaskManager    │  │
-│  │              │  │ • save/load      │  │  Checkpoints    │  │
-│  └──────┬───────┘  └────────┬─────────┘  └────────────────┘  │
-│         │                   │                                 │
-│         ↓                   ↓                                 │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │              vscode.* API Surface                     │    │
-│  │  workspace.fs  window.createTerminal  commands        │    │
-│  │  window.activeTextEditor  workspace.findFiles         │    │
-│  └──────────────────────────────────────────────────────┘    │
-└──────────────────────────────────────────────────────────────┘
-         │
-         │  postMessage (JSON serialization per push)
-         ↓
-┌──────────────────┐
-│  Webview iframe  │
-│  (React app)     │
-│                  │
-│  window.addEvent │
-│  Listener("msg") │
-└──────────────────┘
+```mermaid
+flowchart TB
+    subgraph EH["Extension Host — main thread (everything runs here today)"]
+        direction TB
+        SP["ShoferProvider<br/>webview lifecycle · state management · postMessage"]
+        TASK["Task (agent)<br/>recursivelyMakeShoferRequests · LLM streaming<br/>tool dispatch · ask() · save/load"]
+        SVC["CodeIndexManager · GitIndexManager · Search · Glob<br/>MCP · Skills · Marketplace · TaskManager · Checkpoints"]
+        VSCAPI["vscode.* API surface<br/>workspace.fs · window.createTerminal · commands<br/>window.activeTextEditor · workspace.findFiles"]
+        SP --> VSCAPI
+        TASK --> VSCAPI
+    end
+
+    WV["Webview iframe — React app<br/>window.addEventListener('message')"]
+
+    EH -->|"postMessage — JSON serialization on every push"| WV
 ```
 
 ### 2.2 Existing Off-Main-Thread Work
@@ -219,117 +201,62 @@ their destination:
 
 ### 3.2 Architecture Diagram
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                   Extension Host (Main Thread)                    │
-│                   "The Hands" — Real vscode.* only                │
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────┐      │
-│  │ ShoferProvider (thin):                                  │      │
-│  │  • resolveWebviewView → spawn Server Worker, inject port│      │
-│  │  • Spawn/terminate Agent Workers                       │      │
-│  │  • Handle parentPort messages from Agent Workers:       │      │
-│  │    - createTerminal, showTextDocument, applyEdit        │      │
-│  │    - executeCommand, findFiles                          │      │
-│  │  • CodeIndexManager (index orchestration only)          │      │
-│  │  • McpServerManager (server lifecycle only)             │      │
-│  │  • TaskManager (worker tracking)                        │      │
-│  │  • FileSystemWatcher (code-index triggers)              │      │
-│  └────────────────────────────────────────────────────────┘      │
-│         │                                                         │
-│         │ parentPort (minimal: only for real vscode API calls)    │
-│         │                                                         │
-└─────────┼─────────────────────────────────────────────────────────┘
-          │
-          │  Port number (one-time, injected into webview HTML)
-          │
-          ▼
-┌──────────────────────────────────────────────────────────────┐
-│           Server Worker (worker_thread)                       │
-│           "The Bridge" — WebSocket + MessageChannel router    │
-│                                                              │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ ws.Server on ws://localhost:<dynamic-port>            │   │
-│  │                                                       │   │
-│  │ Responsibilities:                                      │   │
-│  │  1. Accept WebSocket from Webview                      │   │
-│  │  2. Route: WebSocket ↔ Agent Worker MessageChannel      │   │
-│  │  3. Route: Agent Worker parentPort ↔ Main Thread        │   │
-│  │     (only for vscode API calls: terminal, editor, etc.) │   │
-│  │  4. Broadcast shared state changes (skills, MCP list,   │   │
-│  │     settings) to all Agent Workers                      │   │
-│  │  5. SkillsManager instance (single source of truth)     │   │
-│  └───────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
-          │                              │
-          │  MessageChannel port1        │  MessageChannel port2
-          ▼                              ▼
-┌──────────────────────────┐  ┌──────────────────────────┐
-│  Agent Worker 1          │  │  Agent Worker 2          │
-│  "Headless Shofer"       │  │  "Headless Shofer"       │
-│                          │  │                          │
-│  const vscode = require( │  │  const vscode = require( │
-│    "vscode"  // → shim   │  │    "vscode"  // → shim   │
-│  )                       │  │  )                       │
-│  require("./dist/        │  │  require("./dist/        │
-│    extension.js")        │  │    extension.js")        │
-│  activate(vscode.context)│  │  activate(vscode.context)│
-│                          │  │                          │
-│  ┌────────────────────┐  │  │  ┌────────────────────┐  │
-│  │ Extension Bundle   │  │  │  │ Extension Bundle   │  │
-│  │ • Task             │  │  │  │ • Task             │  │
-│  │ • ShoferProvider   │  │  │  │ • ShoferProvider   │  │
-│  │ • McpHub           │  │  │  │ • McpHub           │  │
-│  │ • CodeIndexManager │  │  │  │ • CodeIndexManager │  │
-│  │ • ApiHandler       │  │  │  │ • ApiHandler       │  │
-│  │ • All tools        │  │  │  │ • All tools        │  │
-│  └────────────────────┘  │  │  └────────────────────┘  │
-│                          │  │                          │
-│  File I/O: direct fs.*   │  │  File I/O: direct fs.*   │
-│  Terminal: → parentPort  │  │  Terminal: → parentPort  │
-│      → Main Thread       │  │      → Main Thread       │
-│  UI: → serverPort        │  │  UI: → serverPort        │
-│      → Server Worker     │  │      → Server Worker     │
-│      → WebSocket         │  │      → WebSocket         │
-│      → Webview           │  │      → Webview           │
-└──────────────────────────┘  └──────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph MAIN["Main Extension Host — 'the Hands', real vscode.* only"]
+        direction TB
+        SP["ShoferProvider (thin)<br/>resolveWebviewView → spawn the Server Worker, inject the port<br/>spawn/terminate Agent Workers<br/>serve parentPort calls: createTerminal · showTextDocument<br/>applyEdit · executeCommand · findFiles"]
+        OWN["single-runtime singletons, §3.7<br/>McpHub · CodeIndexManager · authoritative ContextProxy<br/>TelemetryService · metrics registry · FileSystemWatcher<br/>McpServerManager · TaskManager (worker tracking)"]
+    end
 
-┌──────────────────┐
-│  Webview iframe  │
-│  (React app)     │
-│                  │
-│  new WebSocket(  │  ← Direct connection to Server Worker
-│    `ws://local   │    (bypasses Main Thread entirely)
-│     host:<port>` │
-│  )               │
-└──────────────────┘
+    subgraph SW["Server Worker — 'the Bridge', a worker_thread"]
+        WSS["ws.Server on 127.0.0.1, dynamic port<br/>route WebSocket to Agent Worker MessageChannel<br/>broadcast shared state (skills, MCP list, settings)<br/>SkillsManager — single source of truth"]
+    end
+
+    subgraph AW1["Agent Worker 1 — 'headless shofer', a worker_thread"]
+        B1["the extension bundle, unchanged<br/>Task · ShoferProvider · ApiHandler · all tools<br/>file I/O direct fs.*"]
+    end
+    subgraph AW2["Agent Worker 2 — 'headless shofer', a worker_thread"]
+        B2["the extension bundle, unchanged"]
+    end
+
+    WV["Webview iframe — React app<br/>WebSocket straight to the Server Worker"]
+
+    SP -.->|"spawns; hands the port to the webview HTML"| SW
+    SP -.->|"spawns one per active task"| AW1
+    SP -.->|"spawns"| AW2
+    B1 -.->|"MessageChannel — UI traffic"| WSS
+    B2 -.->|"MessageChannel — UI traffic"| WSS
+    WSS -.->|"WebSocket, bypassing the main thread"| WV
+    B1 -.->|"parentPort — real vscode.* calls + RPC to the owned singletons"| SP
+    B2 -.->|"parentPort"| SP
 ```
 
-> **Diagram caveat:** the per-worker boxes above list `McpHub` and
-> `CodeIndexManager` for illustration only. Per §3.7 these are **owned by a
+> **Every edge above is dashed on purpose:** none of it carries production
+> traffic today (see the status banner — Phase 0–1 built the pieces, nothing is
+> wired). **Ownership caveat:** `McpHub` and `CodeIndexManager` are **owned by a
 > single runtime** (the main thread) and reached via RPC — they are **not**
 > duplicated inside every Agent Worker. The §3.7 Ownership Table is
-> authoritative wherever it disagrees with this diagram.
+> authoritative wherever anything here disagrees with it.
 
 ### 3.3 Data Flow: Streaming LLM Tokens (Desired)
 
-```
-Agent Worker (extension bundle, running unchanged):
-  Task.say("assistant_message", text)
-    → mockWebview.postMessage({ type: "state", state: { shoferMessages: [...] } })
-    → IExtensionHost.emit("extensionWebviewMessage", message)
-    → serverPort.postMessage(message)           [MessageChannel, structured clone]
+```mermaid
+sequenceDiagram
+    autonumber
+    participant AW as Agent Worker (extension bundle, unchanged)
+    participant SW as Server Worker
+    participant WV as Webview
 
-Server Worker:
-  serverPort.on("message", (msg) => {
-    ws.send(JSON.stringify(msg))               [WebSocket, to Webview]
-  })
-
-Webview:
-  ws.onmessage = (event) => {
-    dispatch(JSON.parse(event.data))            [React state update]
-  }
+    AW->>AW: Task.say("assistant_message", text) → mockWebview.postMessage(...)
+    AW->>SW: IExtensionHost.emit("extensionWebviewMessage") → serverPort.postMessage<br/>(MessageChannel, structured clone)
+    SW->>WV: ws.send(JSON.stringify(msg))
+    WV->>WV: dispatch(JSON.parse(event.data)) — React state update
+    WV->>SW: user input, over the same WebSocket
+    SW->>AW: MessageChannel → the "webviewMessage" event
 ```
+
+The main thread does not appear in that diagram — that is the point.
 
 **Main Thread for token streaming: 0% involvement, zero serialization.** This
 0% applies _only_ to LLM token streaming and other pure-data updates. A
@@ -489,6 +416,30 @@ any "runs unchanged" row elsewhere is subject to it.
 functional** — all tools, all modes, all existing tests passing. Phases are
 ordered so that infrastructure is built and verified **before** any traffic
 moves onto it.
+
+```mermaid
+flowchart LR
+    P0["Phase 0 — vscode-shim augmentation<br/>IpcPort · IpcDemuxer · optional IPC forwarding"]
+    P1["Phase 1 — Server Worker + WorkerExtensionHost<br/>+ Agent Worker bootstrap, all dormant"]
+    GATE{"hard security gate<br/>bind 127.0.0.1 · per-session token<br/>strict Origin allow-list"}
+    P2["Phase 2 — first Agent Worker<br/>exactly one task on the worker path"]
+    P3["Phase 3 — incremental messaging<br/>replaces the full postStateToWebview pushes"]
+    P4["Phase 4 — multi-agent concurrency<br/>pool sized by shofer.experimental.agentWorkerPoolSize"]
+
+    P0 --> P1
+    P1 -.-> GATE
+    GATE -.-> P2
+    P2 -.-> P3
+    P3 -.-> P4
+
+    classDef done fill:#166534,stroke:#14532d,color:#fff
+    classDef planned stroke-dasharray: 4 3
+    class P0,P1 done
+    class GATE,P2,P3,P4 planned
+```
+
+Solid = built and tested. Dashed = design, not shipped behavior — no production
+traffic has crossed the gate.
 
 ### Phase 0: vscode-shim Augmentation (no traffic moved) ✅ DONE
 

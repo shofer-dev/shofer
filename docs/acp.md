@@ -11,6 +11,22 @@ session/mode/model/permission/event surface onto ACP's method set.
 - **Entrypoint:** `shofer acp` (stdio) → `transport/run-acp-agent.ts`
 - **Surface it adapts:** [`agentapi.md`](./agentapi.md) — read that first.
 
+```mermaid
+flowchart LR
+    ED["ACP editor — Zed, …<br/>spawns 'shofer acp' as a subprocess"]
+    RPC["JsonRpcPeer<br/>transport/acp-connection.ts"]
+    SRV["AcpAgentServer<br/>transport/acp-agent-server.ts"]
+    MAP["acp-mapping.ts — pure, unit-tested<br/>ACP_METHOD_MAP · toAcpSessionUpdate<br/>toAcpPermissionOutcome · shoferModeToAcpSessionMode"]
+    API["AgentApi — shofer's own, richer surface"]
+    CORE["core agent"]
+
+    ED -->|"newline-delimited JSON-RPC 2.0 over stdio"| RPC
+    RPC --> SRV
+    SRV --- MAP
+    SRV --> API
+    API --> CORE
+```
+
 ## What ACP actually is
 
 ACP is a **full RPC protocol**, not just a payload format:
@@ -63,6 +79,36 @@ The live `AcpAgentServer` handles: `initialize`, `session/new`, `session/prompt`
 advertises `agentCapabilities: { loadSession: false, promptCapabilities: { image: false }
 }`. The remaining rows (auth, `loadSession`/`listSessions`, `setSessionModel`,
 `requestPermission`) are the deferred surface — see [Status](#status--deferred).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant E as ACP client (editor)
+    participant S as AcpAgentServer
+    participant A as AgentApi
+
+    E->>S: initialize
+    S-->>E: ACP_PROTOCOL_VERSION 1 + agentCapabilities
+    E->>S: session/new
+    S-->>E: sessionId — no task yet, it is created lazily
+    opt client picks a mode
+        E->>S: session/set_mode (shoferModeToAcpSessionMode)
+    end
+    E->>S: session/prompt
+    alt first prompt of the session
+        S->>A: createTask({ prompt, mode })
+    else later prompts
+        S->>A: sendMessage(taskId, text)
+    end
+    loop until the turn resolves
+        A-->>S: shofer stream event
+        S-->>E: session/update — agent_message_chunk, agent_thought_chunk,<br/>tool_call, tool_call_update, or passthrough
+    end
+    A-->>S: TaskCompleted / TaskAborted / TaskError
+    S-->>E: the prompt turn resolves
+    E-)S: session/cancel (notification)
+    S->>A: cancelTask(taskId)
+```
 
 ## Event mapping
 

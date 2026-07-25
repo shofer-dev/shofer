@@ -22,6 +22,25 @@ _transport_ that binds to it:
 | **HTTP/SSE**   | `createHttpServer(api)` + `ShoferHttpClient implements AgentApi` (`transport/http-{server,client}.ts`) | A **1:1 projection of the full surface** (see [routes](#httpsse-binding)). Powers **Shofer Nodes** — remote headless executors (`shofer serve`) driven by a controller (`ShoferHttpClient`). |
 | **ACP**        | `AcpAgentServer` over `AgentApi` (`transport/acp-*.ts`)                                                | A **lossy adapter** onto the external [Agent Client Protocol](./acp.md) so ACP editors (Zed, …) can drive shofer. Narrower than `AgentApi` — see [acp.md](./acp.md).                         |
 
+```mermaid
+flowchart LR
+    VS["VS Code extension"]
+    CTRLR["remote controller<br/>ShoferHttpClient implements AgentApi"]
+    ED["ACP editor — Zed, …"]
+
+    HS["createHttpServer(api)<br/>full 1:1 projection of the surface"]
+    ACP["AcpAgentServer<br/>lossy adapter onto ACP"]
+    IMPL["an AgentApi implementation<br/>ShoferApiAgent in 'shofer serve'"]
+    CORE["core agent<br/>loop · tools · MCP · checkpoints · changed-files"]
+
+    VS -->|"in-process"| IMPL
+    CTRLR -->|"HTTP + SSE, bearer auth + version handshake"| HS
+    ED -->|"JSON-RPC 2.0 over stdio"| ACP
+    HS --> IMPL
+    ACP --> IMPL
+    IMPL --> CORE
+```
+
 Because `ShoferHttpClient` _implements_ `AgentApi`, client and server can't drift: the same
 interface is the wire contract.
 
@@ -131,6 +150,31 @@ node MUST answer brokered asks, or the task blocks: approvals with
 `--interactive` only decides whether _approvals arise at all_ (auto-approve vs
 surface); `followup` questions are brokered in either mode.
 
+One task's round trip over the HTTP/SSE binding, ask brokering included:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Controller (ShoferHttpClient)
+    participant N as Node (shofer serve)
+    participant T as Task on the node
+
+    C->>N: GET /api/v1/whoami — liveness + auth + version
+    C->>N: POST /api/v1/task {prompt, mode, taskId?, apiConfiguration?} → createTask()
+    N-->>C: { taskId }
+    C->>N: GET /api/v1/task/:id/event — SSE, subscribe() filtered to this task
+    N->>T: run the agent loop
+    T-->>N: ServerEvent: assistant text, reasoning, tool_use/tool_result, usage
+    N-->>C: the same events, verbatim over SSE
+    T-->>N: ServerEvent: ask (tool approval or followup)
+    N-->>C: SSE: ask
+    Note over N,T: A served node has no local stdin user, so it never<br/>resolves interactive asks locally — it leaves them outstanding.
+    C->>N: POST /api/v1/task/:id/ask AskResponse → respondToAsk()
+    N->>T: resolve the outstanding ask — the loop continues
+    T-->>N: task lifecycle: completed / aborted
+    N-->>C: SSE: lifecycle event
+```
+
 ## User-identity enforcement (proposed)
 
 The `--token` node bearer is **machine trust** — it authenticates the _controller_ (e.g.
@@ -150,6 +194,30 @@ end-user identity — the node token is **kept**, this layers on top:
   user is not the task's owner (recorded at `createTask`). This is **launch-time,
   integrator-owned**: no in-session user or agent can disable it (same principle as provider
   pinning).
+
+```mermaid
+flowchart LR
+    CTRL["Controller<br/>authenticates the end user"]
+    ZT["ztunnel — mTLS + SPIFFE<br/>identifies the caller workload"]
+    WP["waypoint — RequestAuthentication<br/>verifies the forwarded user JWT"]
+    NODE["Node — 'shofer serve' --require-user-auth"]
+    OWNER{"injected user ==<br/>the task's owner,<br/>recorded at createTask?"}
+    OK["serve the AgentApi call"]
+    NO["block"]
+
+    CTRL -.->|"node bearer token (machine trust)<br/>+ the caller's validated JWT"| ZT
+    ZT -.-> WP
+    WP -.->|"injects the identity downstream as a header<br/>e.g. X-User-ID"| NODE
+    NODE -.-> OWNER
+    OWNER -.->|yes| OK
+    OWNER -.->|no| NO
+
+    classDef proposed stroke-dasharray: 4 3
+    class ZT,WP,NODE,OWNER,OK,NO proposed
+```
+
+Everything dashed above is _proposed_. What exists today is the `--token` node
+bearer, which this layers on top of and does not replace.
 
 Full model + rationale: [`docs/authnz_arch.md`](../../../docs/authnz_arch.md) §11.2.
 

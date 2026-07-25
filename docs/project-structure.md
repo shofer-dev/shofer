@@ -188,21 +188,16 @@ React context providing global state:
 
 ## Communication Flow
 
-```
-Extension (Node.js)              Webview (React)
-─────────────────────────────────────────────────
-ShoferProvider                    ExtensionStateContext
-     │                                  │
-     │  postMessageToWebview()          │
-     │  ───────────────────────────►    │
-     │  {type: "state", ...}            │
-     │  {type: "parallelTasksUpdated"}  │
-     │  {type: "taskNotification"}      │
-     │                                  │
-     │  ◄───────────────────────────    │
-     │  vscode.postMessage()            │
-     │  {type: "focusParallelTask"}     │
-     │  {type: "createParallelTask"}    │
+```mermaid
+sequenceDiagram
+    participant P as ShoferProvider (extension, Node.js)
+    participant W as ExtensionStateContext (webview, React)
+
+    P->>W: postMessageToWebview() — {type: "state", ...}
+    P->>W: {type: "parallelTasksUpdated"}
+    P->>W: {type: "taskNotification"}
+    W->>P: vscode.postMessage() — {type: "focusParallelTask"}
+    W->>P: {type: "createParallelTask"}
 ```
 
 ## Event Flow for Parallel Tasks

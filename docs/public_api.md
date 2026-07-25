@@ -205,6 +205,23 @@ Most events are emitted on individual `Task` instances rather than the top-level
 API. To receive per-task events, listen for `taskCreated` and then bind to the
 created task:
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Consumer
+    participant API as ShoferAPI (EventEmitter)
+
+    C->>API: startNewTask({ text, configuration })
+    API-->>C: taskCreated(taskId)
+    Note over C,API: Task-level events are re-emitted on the API and carry<br/>the taskId — bind here, not to a Task instance.
+    API-->>C: taskStarted(taskId)
+    loop while the task runs
+        API-->>C: message({ taskId, action, message })
+        API-->>C: taskActive / taskInteractive / taskTokenUsageUpdated
+    end
+    API-->>C: taskCompleted(taskId, tokenUsage, toolUsage, { rating, isSubtask })
+```
+
 ```typescript
 shoferApi.on("taskCreated", (taskId) => {
 	// The task instance is accessible internally but not re-emitted
@@ -248,6 +265,24 @@ acquire the same API via `vscode.extensions.getExtension('shoferdev.shofer').exp
 The ShoferAPI is the **single unified interface** for programmatically controlling
 Shofer — regardless of whether the consumer is a headless CLI process, a companion
 VSCode extension, or an external IPC client.
+
+```mermaid
+flowchart LR
+    CLI["headless CLI — apps/cli<br/>ExtensionHost.activate() → host.api"]
+    COMP["companion VS Code extension<br/>getExtension('shoferdev.shofer').exports"]
+    ORCH["arkware-orchestrator<br/>the reference consumer"]
+
+    API["<b>ShoferAPI</b><br/>interface: packages/types/src/api.ts<br/>implementation: src/extension/api.ts"]
+
+    SURF["task lifecycle · history &amp; export · configuration<br/>provider profiles · workflows · output logs"]
+    EV["EventEmitter — ShoferEventName events"]
+
+    CLI --> API
+    COMP --> API
+    ORCH --> API
+    API --> SURF
+    API --> EV
+```
 
 ### CLI Log Access
 

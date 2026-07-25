@@ -37,6 +37,22 @@ how tests use it.
   with its `vscode`-backed bridge; the headless CLI (`apps/cli`) and the HTTP/ACP
   transports register their own. Core code just calls `getHost().fs.readFile(…)`.
 
+```mermaid
+flowchart TD
+    CORE["@shofer/core — packages/core/src<br/>never imports vscode"]
+    GH["getHost() / setHost()<br/>packages/types/src/host-registry.ts"]
+    HB["HostBridge — packages/types/src/host.ts<br/>fs · editor · terminals · notifier · lsp · workspace<br/>watcher · config · env · external · state<br/>createDiffView(cwd, task)"]
+    VSC["VS Code bridge<br/>src/host/host-bridge.ts"]
+    CLI["headless CLI (apps/cli)<br/>+ the HTTP / ACP transports"]
+    MEM["createInMemoryHost<br/>packages/types/src/host-memory.ts"]
+
+    CORE -->|"getHost().fs.readFile(...)"| GH
+    GH -->|"returns the active bridge"| HB
+    VSC -->|"setHost(...) once at activation"| GH
+    CLI -->|"setHost(...) at startup"| GH
+    MEM -.->|"the default — active until someone calls setHost()"| GH
+```
+
 The two implementations of the interface are the **Category I / Category II**
 split: Category I = the interfaces in `@shofer/types`; Category II = a concrete
 adapter (the VS Code one in `src/`, the in-memory one in `@shofer/types`).
@@ -102,5 +118,25 @@ Because Category I is DTO-based, a `HostBridge` can be split across a wire.
 **executors** (a local in-process agent, or remote ones), each running the core
 against its own local host while proxying UI-bound calls back to the controller.
 With a single executor it is behaviourally identical to driving the core directly.
+
+```mermaid
+flowchart LR
+    FE["front-end (controller)<br/>its real HostBridge adapter"]
+    POOL["ExecutorPool — itself an AgentApi<br/>packages/types/src/executor-pool.ts"]
+
+    subgraph EX["Executor — core + createSplitHost bridge"]
+        direction TB
+        CORE["@shofer/core"]
+        LOCAL["served locally:<br/>fs · watching · config · env"]
+        PROXY["proxied over HostRpcChannel:<br/>notifications · lsp · workspace commands"]
+        CORE --> LOCAL
+        CORE --> PROXY
+    end
+
+    FE --> POOL
+    POOL -->|"AgentApi"| CORE
+    PROXY -->|"dispatchHostCall on the controller"| FE
+```
+
 See [`v3_architecture.md`](v3_architecture.md) for the full distributed-execution
 model.

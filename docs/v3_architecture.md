@@ -125,34 +125,33 @@ documents the minimum a Category II adapter must provide and backs tests.
 
 ### The picture
 
-```
-        ┌──────────────────────────────────────────────┐
-        │              Portable agent core              │
-        │  Task loop · tools · prompts · model dispatch │
-        │  context mgmt · ignore rules · assistant-msg  │
-        │            (zero platform imports)            │
-        └───────────────────────┬──────────────────────┘
-                                │ depends only on
-                                ▼
-        ┌──────────────────────────────────────────────┐
-        │   Category I — Host APIs  (@shofer/types)     │
-        │  Notifier · HostFileSystem · HostConfig ·     │
-        │  HostEnv · HostLsp · HostWorkspace ·          │
-        │  HostWatcher · HostExternal · HostEditor ·    │
-        │  HostState · createDiffView ·                 │
-        │  MessagePersistencePort                       │
-        │  + resolvers (storage/cache/token-counter)    │
-        │  + registries (native-api/code-index/         │
-        │    git-index/live-memory/skills)              │
-        │      getHost() / setHost() registry           │
-        └───────────────────────▲──────────────────────┘
-                                │ implemented by (one per front-end)
-        ┌───────────────────────┴──────────────────────┐
-        │      Category II — Front-end adapters         │
-        │  VS Code (host-bridge.ts + integrations/* +   │
-        │  vscode-lm provider)  ·  CLI  ·  headless /   │
-        │  ACP server                                   │
-        └──────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    CORE["<b>Portable agent core</b> — @shofer/core<br/>Task loop · tools · prompts · model dispatch<br/>context mgmt · ignore rules · assistant-message<br/>zero platform imports"]
+
+    subgraph CAT1["<b>Category I</b> — Host APIs (@shofer/types)"]
+        direction TB
+        CAPS["Notifier · HostFileSystem · HostConfig · HostEnv<br/>HostLsp · HostWorkspace · HostWatcher · HostExternal<br/>HostEditor · HostState · createDiffView<br/>MessagePersistencePort"]
+        SEAMS["resolvers: storage · cache-dir · token-counter · custom-storage<br/>registries: native-api-handler · code-index<br/>git-index · live-memory · skills"]
+        REG["getHost() / setHost() registry"]
+    end
+
+    subgraph CAT2["<b>Category II</b> — Front-end adapters (one per front-end)"]
+        direction LR
+        VSC["VS Code extension<br/>host-bridge.ts · integrations/*<br/>vscode-lm · openai-codex"]
+        CLI["CLI — apps/cli"]
+        HEADLESS["headless server<br/>ACP backend"]
+    end
+
+    MEM["createInMemoryHost<br/>default host + test backing"]
+
+    CORE -->|"depends only on"| CAPS
+    CAPS --- REG
+    SEAMS --- REG
+    VSC -->|"setHost(...)"| REG
+    CLI -->|"setHost(...)"| REG
+    HEADLESS -->|"setHost(...)"| REG
+    MEM -.->|"active until a front-end calls setHost()"| REG
 ```
 
 The core points _down_ at Category I; front-ends point _up_, implementing it. The
@@ -253,6 +252,37 @@ from the user's UI. The vocabulary:
   distributed machinery is dormant until a node is added (backward-compatible by
   construction).
 
+The shipped topology — the controller drives every executor through one
+`AgentApi`, and every executor sees the same workspace filesystem:
+
+```mermaid
+flowchart LR
+    subgraph CTRL["Controller — the VS Code front-end"]
+        direction TB
+        UI["webview UI<br/>per-view task focus"]
+        NR["NodeRegistry<br/>node defs + SecretStorage tokens<br/>connect/auth/version handshake · status"]
+        POOL["ExecutorPool implements AgentApi<br/>root-task assignment · per-task routing<br/>merged event feed tagged by executorId"]
+        LOCAL["Local executor<br/>in-process core"]
+        UI --> NR
+        NR --> POOL
+        POOL --> LOCAL
+    end
+
+    N1["Remote node — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
+    N2["Remote node — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
+    FS[("shared workspace filesystem")]
+
+    POOL -->|"ShoferHttpClient implements AgentApi"| N1
+    POOL -->|"ShoferHttpClient implements AgentApi"| N2
+    POOL -->|"applyConfig: settings slice + allow-listed secrets"| N1
+    LOCAL --- FS
+    N1 --- FS
+    N2 --- FS
+```
+
+With zero remote nodes registered the pool holds only the Local executor, and
+behaviour is identical to driving the core directly.
+
 ### Two seams — and why Category I pays off here
 
 Distributing execution uses two boundaries that the v3 split already defines:
@@ -305,6 +335,25 @@ Distributing execution uses two boundaries that the v3 split already defines:
     remote `Message` deltas arrive, and gates restore/revert on "no other active task
     in this worktree" (shared-workspace safety — an executor `git clean -fd`/`reset
     --hard` must not race a local task's writes).
+
+The three channels, and which of them the shipped node model actually uses:
+
+```mermaid
+flowchart LR
+    CTRL["<b>Controller</b><br/>real Category II host adapter<br/>+ the user's UI"]
+    EXEC["<b>Executor</b><br/>@shofer/core + its host adapter"]
+    LOC["served executor-locally<br/>fs · findFiles · watcher · config · env<br/>command execution"]
+
+    CTRL -->|"1 · session transport (AgentApi control plane)<br/>createTask · sendMessage · cancelTask<br/>respondToAsk · subscribe — version-locked"| EXEC
+    CTRL -->|"3 · reverse data channel (typed AgentApi methods)<br/>getCheckpointDiff · restoreCheckpoint<br/>getTaskChangedFiles · revert/accept changed files"| EXEC
+    EXEC -.->|"2 · host-callback channel over Category I (createSplitHost)<br/>notifier · lsp · workspace · private-tool commands<br/>substrate — NOT used by the shipped node model"| CTRL
+    EXEC --> LOC
+```
+
+Channels 1 and 3 are shipped. Channel 2 — an executor borrowing the
+_controller's_ host over RPC — remains available substrate (`host-rpc.ts` +
+`serveSession`/`connectSession`); the shipped node model instead assumes a shared
+workspace filesystem and serves that whole slice executor-locally.
 
 ### Routing and invariants
 

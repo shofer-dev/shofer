@@ -4,6 +4,27 @@ Shofer (the main extension) and Shofer Router (the VSCode LM provider)
 communicate through two side-channel mechanisms that operate outside the
 standard VSCode Language Model API stream.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant SH as Shofer (vscode-lm.ts)
+    participant RT as Shofer Router (llm-local-router)
+
+    Note over SH,RT: Client initialization — VSCode commands
+    SH->>RT: llmLocalRouter.getModelPricing(modelId)
+    RT-->>SH: inputPrice, outputPrice, cache prices → shoferPricing
+    SH->>RT: llmLocalRouter.getModelCapabilities(modelId)
+    RT-->>SH: imageInput, toolCalling, promptCache → shoferCapabilities
+
+    Note over SH,RT: Response stream — in-stream markers as ThinkingPart
+    RT-->>SH: tool_preparing marker — toolName + byteCount (per chunk)
+    RT-->>SH: response_metadata marker — JSON (once, at stream end)
+
+    Note over SH,RT: Stream completion — VSCode command
+    SH->>RT: llmLocalRouter.getRequestCost(taskId)
+    RT-->>SH: cumulative USD cost for the conversation
+```
+
 ## 1. VSCode Commands (Well-Known Command Names)
 
 Shofer queries Shofer Router through `vscode.commands.executeCommand()`.
@@ -84,21 +105,20 @@ All markers follow this pattern:
 
 ### Marker Lifecycle
 
-```
-┌─────────────────┐         stream         ┌─────────────────┐
-│  Shofer Router   │ ──── markers ────────→ │     Shofer       │
-│  (LLM Provider)  │     as ThinkingPart     │  (vscode-lm.ts)  │
-└─────────────────┘                         └─────────────────┘
-                                                      │
-                                          ┌───────────▼───────────┐
-                                          │ Regex match on \\x00   │
-                                          │ delimiters             │
-                                          ├───────────────────────┤
-                                          │ tool_preparing → yield │
-                                          │ response_metadata     │
-                                          │   → consumed silently │
-                                          │ reasoning → yield     │
-                                          └───────────────────────┘
+```mermaid
+flowchart LR
+    RT["Shofer Router — LLM provider<br/>language-model-provider.ts"]
+    SH["Shofer<br/>vscode-lm.ts"]
+    M{"regex match on the<br/>null-byte delimiters"}
+    T["tool_preparing<br/>yield { type, toolName, byteCount }"]
+    R["response_metadata<br/>consumed silently — never user-visible"]
+    Y["reasoning<br/>yield"]
+
+    RT -->|"markers, as LanguageModelThinkingPart"| SH
+    SH --> M
+    M --> T
+    M --> R
+    M --> Y
 ```
 
 ---

@@ -22,13 +22,16 @@ A **HistoryItem** ([`@shofer/types/src/history.ts`](../packages/types/src/histor
 
 The **TaskManager** ([`extensions/shofer/src/services/task-manager/TaskManager.ts`](../src/services/task-manager/TaskManager.ts)) is a runtime-only service that tracks all live `Task` instances and provides a metadata overlay (`ManagedTask`) for the UI. It is the single source of truth for task lifecycle state and notifications.
 
-```
-HistoryItem (disk / sidebar)
-    ↕ load/save (name field synced)
-ManagedTask (TaskManager, in-memory)   ← title & runtime state live here
-    ↑ registered by
-Task (active instance)
-    └─ backgroundChildren: Map<taskId, TaskHandle>  ← lightweight lifecycle tracking
+```mermaid
+flowchart TD
+    HI[("HistoryItem — disk / sidebar<br/>history_item.json")]
+    MT["ManagedTask — TaskManager, in-memory<br/>title &amp; runtime state live here"]
+    T["Task — the active in-process instance"]
+    BC["backgroundChildren<br/>Map&lt;taskId, TaskHandle&gt;<br/>lightweight lifecycle tracking"]
+
+    HI <-->|"load / save — the name field is synced"| MT
+    T -->|"registered by"| MT
+    T --> BC
 ```
 
 ### ManagedTask
@@ -80,29 +83,18 @@ See [`task_states.md`](task_states.md) for the full state model including comple
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                          TaskManager                             │
-├─────────────────────────────────────────────────────────────────┤
-│  focusedTaskId: "task-1"                                        │
-│                                                                  │
-│  activeTasks:                                                    │
-│    "task-1" → Task (focused, running)     ←── UI connected      │
-│    "task-2" → Task (background, running)  ←── auto-approve      │
-│    "task-3" → Task (background, waiting)  ←── needs input       │
-│                                                                  │
-│  notifications:                                                  │
-│    [{ taskId: "task-3", type: "needs_input", ... }]             │
-└─────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     ShoferProvider (webview)                      │
-├─────────────────────────────────────────────────────────────────┤
-│  Shows focused task's messages                                  │
-│  Task selector shows all tasks + state indicators               │
-│  Notification badge for tasks needing input                     │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph TM["TaskManager"]
+        direction TB
+        F["focusedTaskId — 'task-1'"]
+        A["activeTasks<br/>task-1 → Task, focused and running — UI connected<br/>task-2 → Task, background and running — auto-approve<br/>task-3 → Task, background and waiting — needs input"]
+        N["notifications<br/>taskId 'task-3', type 'needs_input', …"]
+    end
+
+    SP["ShoferProvider (webview)<br/>renders the focused task's messages<br/>task selector: every task + its state indicator<br/>notification badge for tasks needing input"]
+
+    TM --> SP
 ```
 
 ### Stack vs. activeTasks
@@ -245,15 +237,20 @@ The [`new_task`](native_tools.md#new_task) tool creates a child task in a chosen
 
 The parent **blocks** until the child completes. The child result is returned as the tool's output, and the parent resumes where it left off.
 
-```
-Parent calls new_task(mode="code", message="Fix bug in foo.ts")
-  → Parent enters "waiting" status
-  → Child created, focused in stack
-  → Child runs its tool loop
-  → Child calls attempt_completion
-  → resumeBlockingParent() restores parent
-  → Parent receives child result as tool_result
-  → Parent continues
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Parent task
+    participant C as Child task
+
+    P->>P: new_task(mode "code", message "Fix bug in foo.ts")
+    Note over P: the parent enters the "waiting" lifecycle
+    P->>C: child created, focused in the stack
+    C->>C: runs its own tool loop
+    C->>C: attempt_completion
+    C-->>P: resumeBlockingParent() restores the parent
+    Note over P: the child's result arrives as the tool_result
+    P->>P: continues where it left off
 ```
 
 **Constraint:** Must be called **alone** in a turn — no other tools in the same message. The model instruction: "CRITICAL: This tool MUST be called alone. Do NOT call this tool alongside other tools in the same message turn."
@@ -262,19 +259,24 @@ Parent calls new_task(mode="code", message="Fix bug in foo.ts")
 
 The child starts immediately and runs **concurrently**. The parent receives the child's `task_id` in the tool result and continues **without blocking**.
 
-```
-Parent calls new_task(is_background=true, mode="code", message="Analyze file1.ts")
-  → Child created, registered in TaskManager, started in background
-  → Parent receives: "Child task started: <task_id>\nStatus: starting"
-  → Parent continues its own tool loop immediately
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Parent task
+    participant C1 as Background child 1
+    participant C2 as Background child 2
 
-Parent calls new_task(is_background=true, mode="code", message="Analyze file2.ts")
-  → Second child started in background
-  → Parent continues
-
-Parent calls wait_for_task(task_ids=["<id1>", "<id2>"])
-  → Blocks until both children complete
-  → Returns results from both
+    P->>C1: new_task(is_background=true, mode "code", message "Analyze file1.ts")
+    Note over C1: created, registered in TaskManager, started in the background
+    C1-->>P: tool result — task_id + status "starting"
+    Note over P: the parent stays "running" and continues its own loop at once
+    P->>C2: new_task(is_background=true, mode "code", message "Analyze file2.ts")
+    C2-->>P: tool result — task_id + status "starting"
+    P->>P: wait_for_task over both task_ids
+    Note over P: the parent enters the "waiting" lifecycle —<br/>event-driven, it does not poll
+    C1-->>P: managedTask:completed
+    C2-->>P: managedTask:completed
+    P->>P: results from both children returned
 ```
 
 #### Key differences from synchronous mode

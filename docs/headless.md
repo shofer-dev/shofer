@@ -24,26 +24,19 @@ VSCode.
 > `vscode`-free — the gating milestone for the HTTP API/SDK (§10) and ACP (§11).
 > See [`host-boundary.md`](host-boundary.md) for the seam mechanics.
 
-```
-┌─────────────────┐
-│   CLI Entry     │
-│   (index.ts)    │  commander argument parsing
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  ExtensionHost  │  ─ creates vscode-shim mock
-│  (extension-    │  ─ writes on-disk vscode-mock.js
-│   host.ts)      │  ─ hooks Module._resolveFilename
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌───────┐  ┌──────────┐
-│vscode │  │Extension │  ─ require("./dist/extension.js")
-│-shim  │  │ Bundle   │  ─ activate(vscode.context)
-└───────┘  └──────────┘
+```mermaid
+flowchart TD
+    CLI["CLI entry — apps/cli/src/index.ts<br/>commander argument parsing"]
+    EH["ExtensionHost — agent/extension-host.ts<br/>creates the vscode-shim mock<br/>writes an on-disk vscode-mock.js<br/>hooks Module._resolveFilename"]
+    SHIM["@shofer/vscode-shim<br/>fs · state · secrets · webview bridge · commands"]
+    BUNDLE["extension bundle<br/>require('./dist/extension.js')<br/>activate(vscode.context)"]
+    API["ShoferAPI — the control plane<br/>reached as host.api"]
+
+    CLI --> EH
+    EH --> SHIM
+    EH --> BUNDLE
+    BUNDLE -->|"require('vscode') resolves to the shim"| SHIM
+    BUNDLE -->|"activate() returns"| API
 ```
 
 The `vscode-shim` layer provides:
@@ -166,6 +159,34 @@ Defined in [`packages/types/src/cli.ts`](../packages/types/src/cli.ts):
 | `thinking`    | Reasoning/thinking content                         |
 | `error`       | Runtime errors                                     |
 | `result`      | Final result with success, content, cost, events   |
+
+One prompt's round trip over the stdin stream:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Driving process
+    participant CLI as CLI (stdin-stream + ExtensionHost)
+    participant API as ShoferAPI
+
+    P->>CLI: start — requestId, prompt, taskId?
+    CLI-->>P: control ack
+    CLI->>API: startNewTask(...)
+    loop until the task ends
+        API-->>CLI: events — message, taskStarted, taskTokenUsageUpdated, …
+        CLI-->>P: stream-json — assistant, thinking, tool_use, tool_result, queue
+    end
+    opt the driving process intervenes
+        P->>CLI: message — follow-up prompt
+        CLI->>API: sendMessage(text, images)
+        P->>CLI: cancel
+        CLI->>API: cancelCurrentTask()
+    end
+    API-->>CLI: taskCompleted
+    CLI-->>P: stream-json result — success, content, cost, events
+    CLI-->>P: control done
+    P->>CLI: shutdown — graceful exit
+```
 
 ## CLI Options
 
