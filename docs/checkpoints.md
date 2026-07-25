@@ -73,25 +73,40 @@ Shofer never commits into the user's own git repository. Instead it maintains a 
 
 `getCheckpointService(task)` is called at the start of every task loop iteration (from `initiateTaskLoop` in `Task.ts`). It is lazy and idempotent:
 
-```
-getCheckpointService(task)
-  → task.enableCheckpoints? No → return undefined
-  → task.checkpointService already set? → return it
-  → workspaceDir available? No → disable, return undefined
-  → globalStorageDir available? No → disable, return undefined
-  → task.checkpointServiceInitializing?
-      → pWaitFor(task.checkpointService?.isInitialized, timeout=checkpointTimeout)
-      → timeout → sendCheckpointInitWarn(INIT_TIMEOUT), disable, return undefined
-      → resolved → return task.checkpointService
-  → create RepoPerTaskCheckpointService
-  → task.checkpointServiceInitializing = true
-  → checkGitInstallation(task, service)
-      → git not installed → showWarningMessage, disable, return
-      → service.on("initialize") → clears checkpointServiceInitializing
-      → service.on("checkpoint") → posts currentCheckpointUpdated to webview, task.say("checkpoint_saved")
-      → service.initShadowGit()
-  → task.checkpointService = service
-  → return service
+```mermaid
+flowchart TD
+    A["getCheckpointService(task)"]
+    B{"task.enableCheckpoints?"}
+    C{"task.checkpointService<br/>already set?"}
+    D{"workspaceDir available?"}
+    E{"globalStorageDir available?"}
+    F{"task.checkpointServiceInitializing?"}
+    W["pWaitFor task.checkpointService?.isInitialized<br/>timeout = checkpointTimeout"]
+    WT["sendCheckpointInitWarn INIT_TIMEOUT"]
+    G["create RepoPerTaskCheckpointService<br/>task.checkpointServiceInitializing = true"]
+    H{"checkGitInstallation —<br/>git installed?"}
+    I["showWarningMessage"]
+    J["service.on initialize — clears checkpointServiceInitializing<br/>service.on checkpoint — posts currentCheckpointUpdated,<br/>task.say checkpoint_saved"]
+    K["service.initShadowGit()"]
+    L["task.checkpointService = service<br/>return service"]
+    R["return the existing service"]
+    OFF["disable checkpoints<br/>return undefined"]
+
+    A --> B
+    B -->|no| OFF
+    B -->|yes| C
+    C -->|yes| R
+    C -->|no| D
+    D -->|no| OFF
+    D -->|yes| E
+    E -->|no| OFF
+    E -->|yes| F
+    F -->|yes| W
+    W -->|timeout| WT --> OFF
+    W -->|resolved| R
+    F -->|no| G --> H
+    H -->|no| I --> OFF
+    H -->|yes| J --> K --> L
 ```
 
 The `pWaitFor` guard handles the race where a tool calls `getCheckpointService` a second time before the first `initShadowGit` has emitted `"initialize"`.
@@ -154,6 +169,25 @@ Internally: `git add . --ignore-errors` → `git commit -m "Task: <taskId>, Time
 
 The `suppressMessage` flag lets callers suppress the `checkpoint_saved` chat bubble (used for automatic pre-tool checkpoints that would otherwise flood the chat).
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant PM as presentAssistantMessage.ts
+    participant T as Task
+    participant CS as RepoPerTaskCheckpointService
+    participant WV as Webview
+
+    Note over PM,CS: Pre-tool path — blocking
+    PM->>T: checkpointSaveAndMark: await task.checkpointSave(true)<br/>guarded by currentStreamingDidCheckpoint
+    T->>CS: saveCheckpoint: git add . --ignore-errors,<br/>then git commit
+    CS-->>T: emit "checkpoint" — fromHash, toHash, suppressMessage
+    T->>WV: currentCheckpointUpdated + say checkpoint_saved
+    T-->>PM: resolved — the file-mutating tool now runs<br/>against the already-staged pre-mutation state
+
+    Note over T,CS: User-message path — fire-and-forget
+    T->>CS: void this.checkpointSave(true, true)<br/>force so allowEmpty records an anchor —<br/>suppressMessage hides the chat row
+```
+
 ---
 
 ## Restoring Checkpoints
@@ -164,6 +198,20 @@ The `suppressMessage` flag lets callers suppress the `checkpoint_saved` chat bub
 2. Posts `currentCheckpointUpdated` to the webview.
 3. If `mode === "restore"`: collects token/cost metrics from messages that will be deleted, calls `task.messageManager.rewindToTimestamp(ts)` to truncate chat history, then posts an `api_req_deleted` message.
 4. Calls `provider.cancelTask()` to restart the task loop against the rewound history.
+
+```mermaid
+flowchart TD
+    A["checkpointRestore — ts, commitHash, mode, operation"]
+    B["service.restoreCheckpoint(commitHash)<br/>git clean -f -d -f, then git reset --hard hash"]
+    C["post currentCheckpointUpdated to the webview"]
+    D{"mode === restore?"}
+    E["collect token/cost metrics from the messages<br/>about to be deleted;<br/>task.messageManager.rewindToTimestamp(ts) truncates<br/>chat history; post an api_req_deleted message"]
+    F["provider.cancelTask() — restart the task loop<br/>against the rewound history"]
+
+    A --> B --> C --> D
+    D -->|yes| E --> F
+    D -->|no| F
+```
 
 The `operation` field (`"delete"` or `"edit"`) controls whether the target message itself is included in the rewind via `rewindToTimestamp`'s `includeTargetMessage` option.
 

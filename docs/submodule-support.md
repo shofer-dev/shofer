@@ -22,17 +22,23 @@ Shofer implements checkpoints via a **shadow git repository**
 2. The shadow git's `core.worktree` is set to the user's actual workspace directory
 3. When checkpointing, `git add .` stages all workspace files into the shadow repo, then commits
 
-```
-┌─────────────────────────────────┐     ┌──────────────────────────────────┐
-│  User Workspace                 │     │  Shadow Git Repo                 │
-│  /home/user/project/            │     │  ~/.shofer-code/checkpoints/        │
-│  ├── src/                       │     │  task-123/.git/                  │
-│  ├── .git/           ◄──────────│──── │  core.worktree = workspace dir   │
-│  └── extensions/                │     │                                  │
-│      └── submodule/             │     │  git add .  → stages workspace   │
-│          ├── .git  (submodule)  │     │  git commit → checkpoint saved   │
-│          └── code.ts            │     └──────────────────────────────────┘
-└─────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph WS["User workspace"]
+        direction TB
+        SRC["src/"]
+        GITD[".git/"]
+        SUB["extensions/submodule/<br/>.git (a submodule pointer file)<br/>code.ts"]
+    end
+
+    subgraph SH["Shadow git repo — per-task checkpoints directory,<br/>outside the workspace"]
+        direction TB
+        CW["core.worktree = the workspace directory"]
+        OPS["git add . stages the workspace files<br/>git commit saves the checkpoint"]
+    end
+
+    CW -->|"points at"| WS
+    OPS -->|"stages and commits"| WS
 ```
 
 ## Why Nested Git Repositories Break Checkpoints
@@ -153,6 +159,22 @@ submodule isolation without changing path resolution.
 
 When `deleteBranch` temporarily unsets `core.worktree`, git falls back to CWD (the shadow
 directory) rather than the workspace — keeping `git clean -f -d` safe.
+
+```mermaid
+flowchart TD
+    A["the shadow git runs git add . over the workspace"]
+    B{"GIT_DIR pointed at the<br/>shadow repo's .git?"}
+    C["git's filesystem walk discovers the nested .git and treats<br/>its parent directory as a submodule"]
+    D["only a gitlink is recorded — mode 160000 SHA reference.<br/>Nested files are not tracked by content, so a restore would<br/>not recover them: a silently incomplete checkpoint"]
+    E["git treats the shadow repo as the ONLY repository —<br/>no submodule discovery during the walk"]
+    F["source files inside the nested repo are staged directly,<br/>as regular files"]
+    G["GIT_WORK_TREE is deliberately NOT set: core.worktree keeps<br/>path resolution correct, and when deleteBranch temporarily<br/>unsets it git falls back to the CWD (the shadow dir),<br/>keeping git clean -f -d safe"]
+
+    A --> B
+    B -->|"no — the historical failure"| C --> D
+    B -->|"yes — the implemented fix"| E --> F
+    E --> G
+```
 
 ### Changes
 

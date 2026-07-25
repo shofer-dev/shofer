@@ -129,6 +129,44 @@ The [`ExecuteCommandTool.ts`](extensions/shofer/packages/core/src/tools/ExecuteC
 2. If true: forces the execa backend, prepends the sandbox wrapper to the command
 3. If false: uses the normal VS Code terminal backend (unchanged)
 
+End to end, from the tool call to the restricted process:
+
+```mermaid
+flowchart TD
+    EX["execute_command — ExecuteCommandTool"]
+    Q{"isEmbeddedWorktreeTask(task)?"}
+    NORM["normal VS Code terminal backend, unchanged"]
+    PLAT{"platform"}
+    WARN["macOS / Windows: VS Code terminal +<br/>getWorktreeCommandWarning() advisory banner —<br/>no kernel sandbox available"]
+    FORCE["Linux: pass terminalShellIntegrationDisabled: true so the<br/>backend is execa — TerminalRegistry.getOrCreateTerminal<br/>workingDir, taskId, execa"]
+    PREFIX["getWorktreeSandboxPrefix() bakes the wrapper into<br/>effectiveCommand via shellQuote&#40;&#41;:<br/>wrapper worktree -- /bin/sh -c cmd"]
+    RUN["ExecaTerminalProcess.run() — the wrapper is the outermost<br/>process, so the shell and every subprocess it spawns<br/>inherit the restriction"]
+
+    subgraph W["shofer-sandbox wrapper — sandbox/main.go"]
+        direction TB
+        G["resolveWorktreeGitPaths&#40;&#41; — read the worktree .git file's<br/>gitdir pointer, then the commondir pointer, to whitelist<br/>the worktree git metadata plus objects/ and refs/"]
+        LK{"kernel supports<br/>Landlock 5.13+?"}
+        LR["ABI-negotiated Landlock ruleset — writes allowed under the<br/>worktree, the git metadata dirs, /tmp and the /dev/null node;<br/>then self-restrict"]
+        BW{"bwrap available?"}
+        BB["bind-mount the worktree + git metadata + /tmp + /dev/null<br/>as writable over a read-only root"]
+        ERR["exit with an error"]
+        EXEC["exec the target command"]
+        G --> LK
+        LK -->|yes| LR --> EXEC
+        LK -->|no| BW
+        BW -->|yes| BB --> EXEC
+        BW -->|no| ERR
+    end
+
+    EX --> Q
+    Q -->|no| NORM
+    Q -->|yes| PLAT
+    PLAT --> WARN
+    PLAT --> FORCE --> PREFIX --> RUN --> G
+```
+
+Reads stay unrestricted throughout — only writes are confined.
+
 ### Files Changed (as implemented)
 
 | File                                            | Change                                                                                                                                            | Status |
@@ -160,6 +198,20 @@ The handler already enumerates every affected file: the loop at
 `workspaceEdit.entries()` and collects `affectedRelPaths`/`affectedDisplayPaths` **before** the edit
 is applied at [`RenameSymbolTool.ts:155`](extensions/shofer/packages/core/src/tools/RenameSymbolTool.ts:155)
 (`vscode.workspace.applyEdit`). The validation slots in cleanly between those two points.
+
+```mermaid
+flowchart TD
+    A["RenameSymbolTool.execute — validateWorktreePath<br/>on the source filePath"]
+    B["vscode.executeDocumentRenameProvider —<br/>operates on the entire workspace"]
+    C["iterate workspaceEdit.entries&#40;&#41; and collect<br/>affectedRelPaths / affectedDisplayPaths"]
+    D{"every affected path inside the worktree?<br/>validateWorktreePath per entry, on the entry Uri's fsPath"}
+    E["block the whole rename — Option A, strict.<br/>Nothing has been applied yet, so the abort is clean"]
+    F["captureOriginal, then vscode.workspace.applyEdit"]
+
+    A --> B --> C --> D
+    D -->|no| E
+    D -->|yes| F
+```
 
 Approach: after building `affectedRelPaths` (before `captureOriginal` / `applyEdit`), run each path
 through [`validateWorktreePath()`](extensions/shofer/src/utils/worktreePathGuard.ts:62). If any edit

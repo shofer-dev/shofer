@@ -376,50 +376,38 @@ flow "implement-feature" (feature: "string") {
 
 The Workflow **is** a Shofer [`Task`](../packages/core/src/task/Task.ts) — but its **loop is slang-driven, not LLM-driven**. It is a task for convenience: it reuses `backgroundChildren`, `HistoryItem` persistence, `TaskManager` lifecycle, `TaskSelector` hierarchy, `abortTask()`, and cost tracking. But it has no mode, no system prompt, and makes zero LLM API calls.
 
+```mermaid
+flowchart TD
+    subgraph WT["Workflow Task — mode string is the flow name"]
+        direction TB
+        STORE["Extends Task. Stores:<br/>.slang source · FlowState"]
+        L1["1. Identify ready agents<br/>dependency resolution"]
+        L2["2. Dispatch ready agents in PARALLEL<br/>new_task is_background=true, mode: agent"]
+        L3["3. Wait for results<br/>wait_for_task(task_ids)"]
+        L4["4. Route results to mailboxes<br/>evaluate converge"]
+        L5["5. Check budget, checkpoint, repeat"]
+        STORE -->|"slangLoop() replaces recursivelyMakeShoferRequests()"| L1
+        L1 --> L2 --> L3 --> L4 --> L5
+        L5 --> L1
+    end
+
+    WT -->|backgroundChildren| AR["Architect Task<br/>architect mode"]
+    WT -->|backgroundChildren| DV["Developer Task<br/>code mode"]
+    WT -->|backgroundChildren| RV["Reviewer Task<br/>reviewer mode"]
+    WT -->|backgroundChildren| CB["Codebase Task<br/>search mode"]
+    WT -->|backgroundChildren| IN["Internet Task<br/>browser mode"]
 ```
-┌──────────────────────────────────────────────────────────────┐
-│              Workflow Task                                     │
-│              (mode: "implement-feature" — the flow name)       │
-│                                                               │
-│  Extends Task. Stores:                                        │
-│   - .slang source (flow specification)                        │
-│   - FlowState (current state-machine position)                │
-│                                                               │
-│  Main loop: slangLoop() ← REPLACES recursivelyMakeShoferReq() │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │ 1. Identify ready agents (dependency resolution)     │    │
-│  │ 2. Dispatch ready agents in PARALLEL                 │    │
-│  │    → via new_task(is_background=true, mode: <agent>) │    │
-│  │ 3. Wait for results → wait_for_task(task_ids)        │    │
-│  │ 4. Route results to mailboxes, evaluate converge      │    │
-│  │ 5. Check budget, checkpoint, repeat                   │    │
-│  └──────────────────────────────────────────────────────┘    │
-│                                                               │
-│  Reuses existing Task infra (no new service):                 │
-│   - backgroundChildren map → tracks spawned agents            │
-│   - HistoryItem → persists .slang + FlowState                 │
-│   - TaskManager → lifecycle & state                           │
-│   - TaskSelector → tree hierarchy for user inspection         │
-│   - abortTask() → cancels all agents via abortBkgChildren()   │
-│   - Cost tracking → aggregates descendant agent costs         │
-│                                                               │
-│  Does NOT use:                                                │
-│   - LlmLoop / recursivelyMakeShoferRequests()                 │
-│   - this.api.createMessage()                                  │
-│   - System prompt / mode roleDefinition                       │
-│   - ask/say for user chat (escalate @Human is the exception)  │
-└──────────────────────────────────────────────────────────────┘
-             │          backgroundChildren
-             │   ┌──────────┼──────────┬──────────┬──────────┐
-             ▼   ▼          ▼          ▼          ▼          ▼
-        ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-        │Architect │ │Developer │ │ Reviewer │ │ Codebase │ │ Internet  │
-        │  Task    │ │  Task    │ │  Task    │ │  Task    │ │  Task    │
-        │(bg task) │ │(bg task) │ │(bg task) │ │(bg task) │ │(bg task) │
-        │orchestr. │ │ code mode│ │reviewer  │ │search    │ │browser   │
-        │  mode    │ │          │ │  mode    │ │  mode    │ │  mode    │
-        └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
-```
+
+Every agent box above is a **background** Task. The Workflow Task reuses existing
+Task infrastructure and adds no new service: the `backgroundChildren` map tracks
+spawned agents, `HistoryItem` persists the `.slang` source + `FlowState`,
+`TaskManager` owns lifecycle & state, `TaskSelector` renders the tree for user
+inspection, `abortTask()` cancels every agent via `abortBackgroundChildren()`, and
+cost tracking aggregates descendant agent costs.
+
+It does **not** use `recursivelyMakeShoferRequests()`, `this.api.createMessage()`,
+a system prompt / mode `roleDefinition`, or `ask`/`say` for user chat —
+`escalate @Human` is the single exception.
 
 ### Why This Is Elegant
 
@@ -485,22 +473,24 @@ The Workflow **is** a Shofer [`Task`](../packages/core/src/task/Task.ts) — but
 
 A **round** is one pass through the Workflow Task's `slangLoop()`:
 
-```
-Round N:
-  1. Workflow identifies ready agents (current op is `stake`/`commit`,
-     no unsatisfied `await`)
-  2. Workflow dispatches ready agents in PARALLEL:
-     - Each agent gets prompted via programmatic queueMessage (resuming
-       its Task if dormant, creating if first stake)
-     - Workflow calls wait_for_task(all agent IDs, wait: "all")
-  3. Each agent runs its Task loop independently (LLM + tools)
-  4. Each agent calls attempt_completion(result)
-  5. Workflow captures results, routes to target mailboxes,
-     evaluates commit status, checks converge
-  6. If converge satisfied → Workflow Task calls attempt_completion
-  7. If budget exceeded → cancel_tasks all agents, Workflow completes
-     with budget_exceeded
-  8. Otherwise → Round N+1
+```mermaid
+flowchart TD
+    R1["Identify ready agents<br/>current op is stake or commit,<br/>no unsatisfied await"]
+    R2["Dispatch ready agents in PARALLEL<br/>prompt via programmatic queueMessage —<br/>resume if dormant, create if first stake"]
+    R3["wait_for_task(all agent IDs, wait: all)"]
+    R4["Each agent runs its Task loop<br/>independently — LLM + tools"]
+    R5["Each agent calls attempt_completion(result)"]
+    R6["Capture results, route to target mailboxes,<br/>evaluate commit status"]
+    C{"converge<br/>satisfied?"}
+    B{"budget<br/>exceeded?"}
+    DONE["Workflow Task calls attempt_completion"]
+    BUDGET["cancel_tasks all agents<br/>complete with budget_exceeded"]
+
+    R1 --> R2 --> R3 --> R4 --> R5 --> R6 --> C
+    C -->|yes| DONE
+    C -->|no| B
+    B -->|yes| BUDGET
+    B -->|"no — Round N+1"| R1
 ```
 
 ### Stake Routing (Detailed)
@@ -512,6 +502,22 @@ When the Workflow processes `stake func(args) -> @B` for Agent A:
 3. **Capture:** Agent A runs its tool loop, calls `attempt_completion(result)`.
 4. **Route:** Workflow stores the result in Agent B's mailbox slot.
 5. **Unblock:** If Agent B was blocked on `await <- @A`, Agent B is now ready — its next prompt includes "Here is the output from @A: <result>."
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant WF as Workflow Task — slangLoop
+    participant A as Agent A Task
+    participant MB as Agent B mailbox slot in FlowState
+    participant B as Agent B Task
+
+    WF->>A: messageQueueService.addMessage(prompt)<br/>func(args) + current bindings + output schema
+    WF->>WF: wait_for_task(AgentA.taskId) — slangLoop blocks
+    A->>A: runs its tool loop
+    A-->>WF: attempt_completion(result)
+    WF->>MB: store the result
+    MB-->>B: unblocks await from @A —<br/>next prompt carries @A's output
+```
 
 ### Welcome View Redesign
 
@@ -875,20 +881,19 @@ If an **agent Task** itself calls `ask_followup_question` (e.g., the Developer n
 
 ### Agent lifecycle
 
-```
-Agent created → Task spawned (idle)
-  ↓
-First stake → Task receives first prompt → Task runs (running)
-  ↓
-Task calls attempt_completion → slang loop captures result
-  ↓
-Next operation is await → Task is dormant, slang loop waits for mailbox delivery
-  ↓
-Mailbox delivery via queueMessage → Task wakes/resumes → Task runs (running)
-  ↓
-... repeat until commit ...
-  ↓
-Agent committed → Task completed
+```mermaid
+flowchart TD
+    A["Agent created — Task spawned (idle)"]
+    B["First stake — Task receives its first prompt<br/>Task runs (running)"]
+    C["Task calls attempt_completion<br/>slang loop captures the result"]
+    D["Next operation is await — Task is dormant,<br/>slang loop waits for mailbox delivery"]
+    E["Mailbox delivery via queueMessage<br/>Task wakes/resumes (running)"]
+    F["Agent committed — Task completed"]
+
+    A --> B --> C
+    C --> D --> E
+    E -->|"repeat"| C
+    C -->|"commit"| F
 ```
 
 ---
@@ -1027,6 +1032,22 @@ Both tools are **kept exactly as-is**. The only addition is
 4. The user answers. `relayChildQuestion` calls
    `childInstance.handleWebviewAskResponse(answer)` — the child's `await answerPromise`
    settles and the agent resumes its stake.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CH as Agent Task — background child
+    participant WF as WorkflowTask.waitForStakes
+    participant U as User — WorkflowView
+
+    CH->>CH: ask_followup_question — the gate sees<br/>parentTaskId + isBackgroundTask
+    CH->>WF: setPendingParentQuestionInfo registers the promise,<br/>emit managedTask:needs-parent-input
+    WF->>WF: waitForTasksEventDriven onNeedsParentInput<br/>calls relayChildQuestion
+    WF->>U: this.ask followup — question + suggest,<br/>rendered with suggestion buttons
+    U-->>WF: answer
+    WF->>CH: childInstance.handleWebviewAskResponse(answer)
+    CH->>CH: answerPromise settles — the agent resumes its stake
+```
 
 All human interaction (input params, `escalate @Human`, mid-stake agent questions) is
 centralized in WorkflowView. The child cannot distinguish this from a normal parent-LLM

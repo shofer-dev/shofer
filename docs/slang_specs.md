@@ -17,6 +17,29 @@ Where the two differ, this document wins.
 > - Round-based orchestrator: [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)
 > - Worked examples: [`.shofer/workflows/`](../../../.shofer/workflows/) (`hello-world.slang`, `test-slang-basics.slang`)
 
+How those pieces chain from source text to a running flow:
+
+```mermaid
+flowchart TD
+    SRC[".slang source"]
+    LEX["slang-lexer.ts<br/>tokenize"]
+    PAR["slang-parser-upstream.ts<br/>parser with error recovery"]
+    AST["typed AST — slang-ast.ts<br/>FlowDecl · AgentDecl · StakeOp · AwaitOp"]
+    API["slang-parser.ts<br/>parseSlang / validateSlangAST"]
+    RES["slang-resolver.ts — analyzeFlow<br/>dependency graph, deadlock detection,<br/>diagnostics (none block execution)"]
+    COMP["slang-interpreter.ts — compileAgentProgram<br/>one flat instruction list per agent"]
+    ADV["advanceAgent<br/>guarded by MAX_CONTROL_FLOW_STEPS = 10_000"]
+    WT["WorkflowTask.ts<br/>round-based orchestrator"]
+    ST["slang-types.ts<br/>FlowState · AgentState · FlowStatus"]
+
+    SRC --> LEX --> PAR --> AST
+    AST --> API
+    API --> RES
+    AST --> COMP --> ADV
+    ADV --> WT
+    WT <--> ST
+```
+
 ## Table of Contents
 
 1. [File Structure](#file-structure)
@@ -246,6 +269,7 @@ flow "report" (format: "string", sections: "string", verbosity: "number", notes:
     ...
   }
 }
+```
 
 ### Using `param description` Instead of Initial `escalate`
 
@@ -257,7 +281,6 @@ guiding the user to fill it in before the flow starts.
 
 See [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang) for the canonical example.
 
-```
 
 ---
 
@@ -709,6 +732,27 @@ On validation failure (max 3 retries):
   comparison, the agent gets the initial attempt plus 3 re-prompts, and is marked
   `error` on the 4th consecutive failure (`retryCount === 4`).
 
+```mermaid
+flowchart TD
+    D["Dispatch — WorkflowTask injects the OUTPUT CONTRACT<br/>directive into the agent prompt"]
+    R["Read completionResultSummary from the agent's HistoryItem<br/>populated from attempt_completion's result parameter"]
+    P{"1. JSON parse<br/>string results are JSON.parse-d"}
+    S{"2. Schema check against<br/>the output: field list"}
+    OK["retryCount resets to 0<br/>parsed object becomes agentState.output<br/>result routed to the recipients via the mailbox"]
+    F["retryCount incremented<br/>agent re-prompted with the original dispatch<br/>plus the validation error — opIndex NOT advanced"]
+    G{"retryCount > retry budget?<br/>per-stake retries(N), else agent retry:,<br/>else MAX_RETRIES = 3"}
+    E["agent status = error"]
+
+    D --> R --> P
+    P -->|"parse failure"| F
+    P -->|ok| S
+    S -->|"missing fields"| F
+    S -->|ok| OK
+    F --> G
+    G -->|yes| E
+    G -->|no| D
+```
+
 On success:
 
 - `retryCount` resets to 0.
@@ -759,6 +803,49 @@ loop. Per round:
    wait for `attempt_completion`, route the result to recipient mailboxes, and add
    the agent's token usage to the running total.
 6. **Re-check converge** and **persist a checkpoint** to the `HistoryItem`.
+
+```mermaid
+flowchart TD
+    TOP{"budget check at the top of the round<br/>rounds · tokens · time — 0 means unlimited"}
+    BE["flow ends: budget_exceeded"]
+    ADV["1. Advance every non-running, non-terminal agent<br/>through its non-blocking instructions"]
+    ERRQ{"an agent raised error?"}
+    ERRT["flow ends: error<br/>remaining agent subtree aborted"]
+    CONV{"2. converge condition truthy?"}
+    OKD["flow ends: converged"]
+    DL{"3. no agent can progress and<br/>none staked or escalated?"}
+    DLT["flow ends: deadlock"]
+    ESC["4. Handle escalations synchronously —<br/>ask the user, deliver the reply as mail from Human"]
+    DIS["5. Dispatch stakes — spawn the agent Task on the first<br/>stake, otherwise resume it; wait for attempt_completion;<br/>route the result to recipient mailboxes; add token usage"]
+    CP["6. Re-check converge, persist a checkpoint<br/>to the HistoryItem"]
+
+    TOP -->|"within budget"| ADV
+    TOP -->|exceeded| BE
+    ADV --> ERRQ
+    ERRQ -->|yes| ERRT
+    ERRQ -->|no| CONV
+    CONV -->|yes| OKD
+    CONV -->|no| DL
+    DL -->|yes| DLT
+    DL -->|no| ESC --> DIS --> CP
+    CP -->|converged| OKD
+    CP -->|"otherwise — next round"| TOP
+```
+
+Step 1 is where the pure VM runs. `advanceAgent` executes an agent's
+non-blocking instructions back-to-back and stops at the first thing that needs
+the outside world:
+
+```mermaid
+flowchart LR
+    RUN["advanceAgent — run non-blocking instructions:<br/>let · set · log · jumps · branches · satisfied awaits<br/>bounded by MAX_CONTROL_FLOW_STEPS = 10_000 per advance"]
+    RUN --> S["blocks on a stake"]
+    RUN --> A["blocks on an unsatisfied await"]
+    RUN --> E["blocks on an escalate"]
+    RUN --> C["commits — terminal"]
+    RUN --> X["raises an error —<br/>terminates the whole flow"]
+    RUN --> D["ends — no instructions left"]
+```
 
 > **No implicit per-stake timeout.** A running agent is assumed to be making
 > progress, even if it takes a long time, so the interpreter **waits** for it

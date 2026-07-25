@@ -8,22 +8,13 @@ Manually-created worktrees outside the workspace (e.g. `git worktree add ../foo`
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Webview UI (React)                                               │
-│  WorktreesView · Create/Delete Modals                              │
-│  WorktreeIndicator                                                 │
-│  TaskHeader · TaskSelector (worktree badge)                        │
-├──────────────────────────────────────────────────────────────────┤
-│  VSCode Bridge (handlers.ts)                                      │
-│  handleListWorktrees · handleCreateWorktree                        │
-│  handleDeleteWorktree · handleGetWorktreeDefaults                  │
-│  handleGetWorktreeStatus                                           │
-├──────────────────────────────────────────────────────────────────┤
-│  Platform-Agnostic Core (@shofer/core)                          │
-│  WorktreeService · WorktreeIncludeService                          │
-│  (no VSCode dependencies — pure git CLI wrappers)                  │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    UI["<b>Webview UI (React)</b><br/>WorktreesView · Create/Delete Modals<br/>WorktreeIndicator<br/>TaskHeader · TaskSelector (worktree badge)"]
+    BR["<b>VSCode Bridge — handlers.ts</b><br/>handleListWorktrees · handleCreateWorktree<br/>handleDeleteWorktree · handleGetWorktreeDefaults<br/>handleGetWorktreeStatus"]
+    CORE["<b>Platform-Agnostic Core — @shofer/core</b><br/>WorktreeService · WorktreeIncludeService<br/>no VSCode dependencies — pure git CLI wrappers"]
+
+    UI --> BR --> CORE
 ```
 
 ### 1. Core Services (`packages/core/src/worktree/`)
@@ -85,6 +76,27 @@ When a task runs inside an embedded worktree (`task.cwd` points into `.shofer/wo
 
 **Implementation:** [`validateWorktreePath()`](../src/utils/worktreePathGuard.ts) resolves the target against `task.cwd` and verifies it stays within the worktree directory. It detects `..` traversal, absolute paths pointing outside, and any symlinks that resolve elsewhere. For non-worktree tasks, the guard is a no-op.
 
+```mermaid
+flowchart TD
+    T["Task whose cwd is<br/>workspace/.shofer/worktrees/name/"]
+    TOOL["mutating native tool — write_to_file · apply_diff ·<br/>create_directory · file rm/mv · insert_edit · sed ·<br/>rename_symbol · create_new_workspace"]
+    V{"validateWorktreePath&#40;&#41; resolves the target<br/>against task.cwd — does it stay inside<br/>the worktree directory?"}
+    BLOCK["blocked with an error — catches .. traversal,<br/>absolute paths pointing outside,<br/>and symlinks that resolve elsewhere"]
+    OK["tool proceeds"]
+    EC["execute_command"]
+    LIN["Linux: shofer-sandbox wrapper —<br/>Landlock write-only sandbox (kernel 5.13+),<br/>else bubblewrap. Writes restricted to the worktree,<br/>/tmp and /dev/null; reads unrestricted"]
+    OTHER["macOS / Windows: no kernel sandbox —<br/>the approval prompt shows a warning instead"]
+
+    T --> TOOL --> V
+    V -->|no| BLOCK
+    V -->|yes| OK
+    T --> EC
+    EC --> LIN
+    EC --> OTHER
+```
+
+For non-worktree tasks the guard is a no-op.
+
 **`execute_command` sandboxing:** On Linux, shell commands in worktree-scoped tasks are automatically sandboxed using the `shofer-sandbox` wrapper binary, compiled from Go source at build time ([`../src/sandbox/main.go`](../src/sandbox/main.go)). The wrapper applies a Landlock write-only sandbox (kernel 5.13+) or falls back to bubblewrap, restricting writes to the worktree directory, `/tmp`, and `/dev/null`. Reads remain unrestricted. On macOS/Windows, no kernel sandbox is available — the approval prompt displays a ⚠️ warning instead.
 
 ### 3b. Auto-Create Worktree on Send
@@ -95,6 +107,29 @@ New ad-hoc tasks default to running in a freshly created worktree, with no extra
 2. **Host creation** ([`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts), `newTask` case) — when `message.autoCreateWorktree && !worktreeDir`, the handler calls `handleGetWorktreeDefaults` for the unified `shofer-<suffix>` name, then `handleCreateWorktree` with `createNewBranch: true` and `baseBranch: undefined` (branches from HEAD).
 3. **Scoping** — on success, the created `worktree.path` becomes the `worktreeDir` passed to `createManagedTask`, so the task runs scoped to the new worktree.
 4. **Hard-failure abort** — if creation (or its required submodule init, see §"Submodule Auto-Initialization") fails, the handler does **not** start a task on the workspace root. It resets the UI (`newChat`) and surfaces `vscode.window.showErrorMessage` with the failure message, then returns.
+
+```mermaid
+flowchart TD
+    S["ChatView.handleSendMessage on send"]
+    D{"pendingWorktreeDir === null<br/>AND NOT worktreeExplicitOptOut?"}
+    NO["autoCreateWorktree = false —<br/>run in the picked worktree, or on the current branch"]
+    YES["autoCreateWorktree = true, sent in the newTask IPC message"]
+    H{"host newTask case:<br/>message.autoCreateWorktree AND no worktreeDir?"}
+    G["handleGetWorktreeDefaults —<br/>one shofer-suffix name for branch, directory and label"]
+    C["handleCreateWorktree with createNewBranch: true<br/>and baseBranch: undefined — branches from HEAD"]
+    SUB["submodule init, when required"]
+    OKN["worktree.path becomes the worktreeDir<br/>passed to createManagedTask"]
+    FAIL["hard-failure abort — no task on the workspace root:<br/>reset the UI (newChat) and showErrorMessage, then return"]
+
+    S --> D
+    D -->|no| NO
+    D -->|yes| YES --> H
+    H -->|no| NO
+    H -->|yes| G --> C --> SUB
+    SUB -->|success| OKN
+    C -->|failure| FAIL
+    SUB -->|failure| FAIL
+```
 
 This guarantees a single, unambiguous trigger: an explicit worktree pick or an explicit "Current branch" opt-out both suppress auto-create, so the user never ends up with a second, unintended worktree.
 
