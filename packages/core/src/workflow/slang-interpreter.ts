@@ -486,7 +486,13 @@ export function routeOutput(
 	mailbox: MailboxEntry[],
 	agents: Map<string, AgentState>,
 	from: string,
-	op: StakeOp,
+	/**
+	 * Anything that routes a result. Typed as the recipients it needs rather than
+	 * as `StakeOp`, because `stake` and `call` route IDENTICALLY — narrowing this
+	 * to one of them would force the other to cast, which is the same coupling
+	 * written less honestly.
+	 */
+	op: Pick<StakeOp, "recipients" | "call">,
 	value: unknown,
 ): void {
 	for (const recipient of op.recipients) {
