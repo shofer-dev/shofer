@@ -164,6 +164,24 @@ export interface LifecycleHooks {
 	 * task doesn't leak it. Fire-and-forget observer; errors are isolated.
 	 */
 	onTaskDeleted?(info: TaskDeletedInfo, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called when the user sends a message into a running task (a reply, a follow-up,
+	 * an interruption) — the moments the *user* thinks of as steps, which the tool-call
+	 * hooks cannot see.
+	 *
+	 * Fire-and-forget observer: it must never make the user wait to be heard.
+	 */
+	onUserMessage?(info: UserMessageInfo, context: PluginContext): void | Promise<void>
+}
+
+/** What a {@link LifecycleHooks.onUserMessage} hook is being told (design §5.9). */
+export interface UserMessageInfo {
+	readonly taskId: string
+	/** The message text, when there was any (a message may be images only). */
+	readonly text?: string
+	/** How many images the message carried. */
+	readonly imageCount?: number
 }
 
 /** What a {@link LifecycleHooks.onTimelineRewind} hook is being told (design §5.9). */
@@ -1312,6 +1330,16 @@ export interface PluginUIApi {
 	postMessage(message: unknown): void
 	/** Subscribe to messages addressed to this plugin. Returns an unsubscribe fn. */
 	onMessage(listener: (message: unknown) => void): () => void
+	/**
+	 * Call this plugin's `handleRequest` and await the result — the request/response
+	 * counterpart to {@link postMessage}, for the common case where the component
+	 * needs an answer to render.
+	 *
+	 * Routed to the plugin instance on the **task's own host**, so it works unchanged
+	 * when the focused task runs on a remote executor. Rejects when the plugin
+	 * throws, is not enabled there, or implements no `handleRequest`.
+	 */
+	request(method: string, params?: unknown, opts?: { mutates?: boolean }): Promise<unknown>
 	/** Read-only context (region, task, config, theme). */
 	readonly context: PluginUIContext
 }
@@ -1350,4 +1378,74 @@ export interface PluginUiContributionsState {
 export interface PluginUiMessageEnvelope {
 	pluginName: string
 	message: unknown
+}
+
+/**
+ * Request/response over the (otherwise fire-and-forget) plugin-UI channel — the
+ * transport behind {@link PluginUIApi.request}.
+ *
+ * A plugin UI component usually needs an *answer* ("give me this diff", "list my
+ * markers"), and correlating that by hand in every plugin is exactly the kind of
+ * boilerplate the API should absorb. It rides the existing scoped envelope rather
+ * than a new message type, so it inherits the same namespacing guarantees.
+ *
+ * The host resolves it against the plugin running on the task's own host — including
+ * a REMOTE executor when the focused task is a shadow — so a plugin-owned feature
+ * behaves identically for local and remote tasks.
+ */
+export interface PluginUiRequestEnvelope {
+	__pluginRequest: {
+		/** Correlation id, unique per UI mount. */
+		id: string
+		/**
+		 * Plugin-defined method name, dispatched to `ShoferPlugin.handleRequest`.
+		 *
+		 * A method prefixed {@link PLUGIN_LOCAL_REQUEST_PREFIX} is always answered on
+		 * **this** host, even when the focused task runs on a remote executor — for the
+		 * things only this host can do, like opening an editor. Everything else goes to
+		 * the host that owns the task, because that is where its per-task state lives.
+		 */
+		method: string
+		params?: unknown
+		/**
+		 * Whether this request changes state (rather than reading it). The host refuses
+		 * to route a mutating request to a remote executor while a local task is running,
+		 * since both would be acting on the same shared workspace.
+		 */
+		mutates?: boolean
+	}
+}
+
+/** Methods with this prefix are always answered on the host the UI is running on. */
+export const PLUGIN_LOCAL_REQUEST_PREFIX = "local:"
+
+/**
+ * Result convention: a plugin that **rewound its task's conversation** while handling
+ * a request says so, letting the host resync a remote task's shadow (whose message
+ * list is now stale). Plugins that never rewind can ignore it.
+ */
+export interface PluginRewoundResult {
+	rewound?: boolean
+}
+
+/** The reply to a {@link PluginUiRequestEnvelope}, on the same scoped channel. */
+export interface PluginUiResponseEnvelope {
+	__pluginResponse: {
+		id: string
+		result?: unknown
+		/** Present when the plugin (or the routing) failed; `result` is then absent. */
+		error?: string
+	}
+}
+
+/** Type guard for a {@link PluginUiRequestEnvelope} arriving from a plugin's UI. */
+export function isPluginUiRequest(message: unknown): message is PluginUiRequestEnvelope {
+	const req = (message as PluginUiRequestEnvelope | undefined)?.__pluginRequest
+	return !!req && typeof req.id === "string" && typeof req.method === "string"
+}
+
+/** Type guard for a {@link PluginUiResponseEnvelope} arriving from the host. */
+export function isPluginUiResponse(message: unknown): message is PluginUiResponseEnvelope {
+	const res = (message as PluginUiResponseEnvelope | undefined)?.__pluginResponse
+	return !!res && typeof res.id === "string"
 }

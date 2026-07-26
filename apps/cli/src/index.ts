@@ -13,6 +13,7 @@ import {
 	serve,
 	pluginInstall,
 	pluginList,
+	pluginPack,
 	pluginRemove,
 } from "@/commands/index.js"
 
@@ -252,6 +253,13 @@ pluginCommand
 	.option("--json", "Output as JSON", false)
 	.action(async (options: { json?: boolean }) => {
 		await runPluginAction(() => pluginList({ json: options.json }))
+	})
+
+pluginCommand
+	.command("pack <dir> [out]")
+	.description("Pack a plugin directory into a distributable .shofer-plugin archive")
+	.action(async (dir: string, outFile?: string) => {
+		await runPluginAction(() => pluginPack(dir, outFile))
 	})
 
 pluginCommand

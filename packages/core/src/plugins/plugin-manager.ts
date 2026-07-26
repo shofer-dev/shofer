@@ -958,7 +958,20 @@ export class PluginManager {
 						beforeAsk: rawLifecycle.beforeAsk
 							? (askType, payload, ctx) => rawLifecycle.beforeAsk!(askType, payload, merge(ctx))
 							: undefined,
+						onTimelineRewind: rawLifecycle.onTimelineRewind
+							? (info, ctx) => rawLifecycle.onTimelineRewind!(info, merge(ctx))
+							: undefined,
+						onTaskDeleted: rawLifecycle.onTaskDeleted
+							? (info, ctx) => rawLifecycle.onTaskDeleted!(info, merge(ctx))
+							: undefined,
+						onUserMessage: rawLifecycle.onUserMessage
+							? (info, ctx) => rawLifecycle.onUserMessage!(info, merge(ctx))
+							: undefined,
 					}
+				: undefined,
+			// Forward the request/response entry (design §5.12) with this plugin's context.
+			handleRequest: raw.handleRequest
+				? (method, params, ctx) => raw.handleRequest!(method, params, merge(ctx))
 				: undefined,
 		}
 	}

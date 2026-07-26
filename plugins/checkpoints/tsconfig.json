@@ -1,0 +1,14 @@
+{
+	"//": "Standalone tsconfig for the Checkpoints plugin. The plugin ships a pre-bundled `main.js` (see build-ui.mjs), so its TypeScript sits OUTSIDE every extension/package tsc root. This config exists so a developer/CI can typecheck the plugin against the public @shofer/types surface in isolation: `npx tsgo -p plugins/checkpoints`.",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"],
+			"simple-git": ["../../packages/core/node_modules/simple-git"]
+		}
+	},
+	"include": ["src/*.ts"],
+	"exclude": ["node_modules", "__tests__", "ui", "vitest.config.ts"]
+}

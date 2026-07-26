@@ -10,6 +10,7 @@
  * settings tab) unchanged.
  */
 
+import * as nodeFs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
 
@@ -19,6 +20,7 @@ import {
 	installPlugin,
 	installPluginFromUrl,
 	isPluginUrl,
+	packPluginToFile,
 	type DiscoveredPlugin,
 } from "@shofer/core/cli"
 import { VSCodeMockPaths } from "@shofer/vscode-shim"
@@ -172,6 +174,31 @@ export async function pluginList(options: PluginCommandOptions = {}): Promise<vo
 		if (e.enabled && e.disabledReason) line += `\n    ⚠ ${e.disabledReason}`
 		log(line)
 	}
+}
+
+/**
+ * `shofer plugin pack <dir> [out]` — pack an unpacked plugin directory into a single
+ * distributable `.shofer-plugin` archive (a gzip tarball of the directory's contents,
+ * manifest at the root).
+ *
+ * This is what makes a plugin a *file* you can hand to someone, drop into a release,
+ * or serve from a URL — the same artifact `plugin install` accepts. The manifest is
+ * validated first, so an unpackable plugin fails here rather than on the installing
+ * machine.
+ */
+export async function pluginPack(dir: string, outFile?: string, options: PluginCommandOptions = {}): Promise<void> {
+	const log = out(options)
+	const source = path.resolve(dir)
+	const manifest = JSON.parse(await nodeFs.readFile(path.join(source, "plugin.json"), "utf-8")) as {
+		name?: string
+		version?: string
+	}
+	const target = outFile
+		? path.resolve(outFile)
+		: path.resolve(`${manifest.name ?? path.basename(source)}-${manifest.version ?? "0.0.0"}.shofer-plugin`)
+
+	const packed = await packPluginToFile(source, target)
+	log(`Packed "${packed.name}" v${packed.version} → ${packed.path}`)
 }
 
 /**

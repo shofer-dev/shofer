@@ -26,7 +26,13 @@ import * as HostReactDomClient from "react-dom/client"
 import * as HostJsxRuntime from "react/jsx-runtime"
 import * as HostJsxDevRuntime from "react/jsx-dev-runtime"
 
-import type { PluginUIApi, PluginUIContext, PluginUiRegion, PluginUiTaskSummary } from "@shofer/types"
+import {
+	isPluginUiResponse,
+	type PluginUIApi,
+	type PluginUIContext,
+	type PluginUiRegion,
+	type PluginUiTaskSummary,
+} from "@shofer/types"
 
 // ---------------------------------------------------------------------------
 // Shared-React boundary for the dynamically-imported plugin UI bundle (design §6.8).
@@ -69,7 +75,12 @@ class PluginErrorBoundary extends Component<{ pluginName: string; children: Reac
 	render(): ReactNode {
 		if (this.state.crashed) {
 			return (
-				<div style={{ padding: 16, color: "var(--vscode-errorForeground)", fontFamily: "var(--vscode-font-family)" }}>
+				<div
+					style={{
+						padding: 16,
+						color: "var(--vscode-errorForeground)",
+						fontFamily: "var(--vscode-font-family)",
+					}}>
 					This plugin panel failed to render.
 				</div>
 			)
@@ -99,15 +110,41 @@ function buildApi(config: PluginPanelConfig): PluginUIApi {
 					| { type?: string; pluginUiMessage?: { pluginName?: string; message?: unknown } }
 					| undefined
 				if (data?.type === "pluginUiMessage" && data.pluginUiMessage?.pluginName === pluginName) {
+					// Request/response traffic belongs to `request()`, not to observers.
+					if (isPluginUiResponse(data.pluginUiMessage.message)) return
 					listener(data.pluginUiMessage.message)
 				}
 			}
 			window.addEventListener("message", handler)
 			return () => window.removeEventListener("message", handler)
 		},
+		request(method: string, params?: unknown): Promise<unknown> {
+			const id = `${pluginName}:panel:${nextPanelRequestId++}`
+			return new Promise((resolve, reject) => {
+				const handler = (event: MessageEvent) => {
+					const data = event.data as
+						| { type?: string; pluginUiMessage?: { pluginName?: string; message?: unknown } }
+						| undefined
+					if (data?.type !== "pluginUiMessage" || data.pluginUiMessage?.pluginName !== pluginName) return
+					const message = data.pluginUiMessage.message
+					if (!isPluginUiResponse(message) || message.__pluginResponse.id !== id) return
+					window.removeEventListener("message", handler)
+					if (message.__pluginResponse.error) reject(new Error(message.__pluginResponse.error))
+					else resolve(message.__pluginResponse.result)
+				}
+				window.addEventListener("message", handler)
+				vscodeApi.postMessage({
+					type: "pluginUiMessage",
+					pluginUiMessage: { pluginName, message: { __pluginRequest: { id, method, params } } },
+				})
+			})
+		},
 		context,
 	}
 }
+
+/** Monotonic correlation ids for this panel's {@link PluginUIApi.request} calls. */
+let nextPanelRequestId = 0
 
 async function boot(): Promise<void> {
 	const root = document.getElementById("root")

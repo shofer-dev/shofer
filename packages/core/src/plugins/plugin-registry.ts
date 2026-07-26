@@ -9,6 +9,7 @@ import type {
 	TaskDeletedInfo,
 	TaskLifecycleContext,
 	TimelineRewindInfo,
+	UserMessageInfo,
 } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
@@ -432,6 +433,21 @@ export class PluginRegistry {
 				await hook(info, ctx)
 			},
 			{ taskId: info.taskId, workspacePath: info.workspacePath, ...context },
+		)
+	}
+
+	/**
+	 * Tell permitted plugins the user sent a message into a running task (design §6.9).
+	 * Observer-only; callers invoke it **without awaiting** so a plugin never delays
+	 * the user's message reaching the agent.
+	 */
+	async notifyUserMessage(info: UserMessageInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onUserMessage",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, ...context },
 		)
 	}
 

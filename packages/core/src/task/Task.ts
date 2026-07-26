@@ -3108,6 +3108,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Suppress the checkpoint_saved chat row for this checkpoint to keep the timeline clean.
 		if (askResponse === "messageResponse") {
 			void this.checkpointSave(true, true)
+
+			// Tell plugins the user just spoke (design §6.9). Not awaited: a plugin must
+			// never sit between the user pressing send and the agent hearing it.
+			void pluginRegistry
+				.notifyUserMessage(
+					{ taskId: this.taskId, text, imageCount: images?.length },
+					{ cwd: this.cwd, mode: this._taskMode, turn: this.turnCount },
+				)
+				.catch(() => {})
 		}
 
 		// Mark the last follow-up question as answered

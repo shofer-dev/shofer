@@ -8,7 +8,7 @@ import delay from "delay"
 import axios from "axios"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
-import { getHost } from "@shofer/types"
+import { getHost, isPluginUiRequest, PLUGIN_LOCAL_REQUEST_PREFIX } from "@shofer/types"
 
 import {
 	type TaskProviderLike,
@@ -110,6 +110,7 @@ import type {
 	PluginMarker,
 	PluginTaskHandle,
 	PluginTaskResult,
+	PluginRewoundResult,
 	PluginEvent,
 	ShoferApiReqInfo,
 } from "@shofer/types"
@@ -2936,7 +2937,61 @@ export class ShoferProvider
 	 * receiver fires. Delivery is error-isolated inside the registry.
 	 */
 	public async handlePluginUiMessage(envelope: PluginUiMessageEnvelope): Promise<void> {
+		// A request expects an answer, so it goes to `handleRequest` (awaited, errors
+		// reported back) rather than the fire-and-forget `onUiMessage` observer.
+		if (isPluginUiRequest(envelope.message)) {
+			await this.resolvePluginUiRequest(envelope.pluginName, envelope.message.__pluginRequest)
+			return
+		}
 		await pluginRegistry.dispatchUiMessage(envelope.pluginName, envelope.message)
+	}
+
+	/**
+	 * Resolve a plugin UI request against the plugin instance on the **focused task's
+	 * own host** and post the result back over the plugin's scoped channel.
+	 *
+	 * When the focused task is a remote shadow, its per-task plugin state lives on the
+	 * owning executor, so the call is routed there over the control plane
+	 * (`AgentApi.pluginRequest`); otherwise it is answered in-process. This is what
+	 * makes a plugin-owned feature behave identically for local and remote tasks
+	 * without the plugin — or its UI — knowing which it is.
+	 */
+	private async resolvePluginUiRequest(
+		pluginName: string,
+		request: { id: string; method: string; params?: unknown; mutates?: boolean },
+	): Promise<void> {
+		const respond = (payload: { result?: unknown; error?: string }) =>
+			this.postPluginUiMessage(pluginName, { __pluginResponse: { id: request.id, ...payload } })
+
+		try {
+			// A `local:` method is for something only this host can do (open an editor,
+			// show a viewer); routing it to a headless executor would silently do nothing.
+			const isLocalOnly = request.method.startsWith(PLUGIN_LOCAL_REQUEST_PREFIX)
+			const shadowId = isLocalOnly ? undefined : this.nodeRegistry?.getFocusedShadow(this)?.taskId
+
+			if (shadowId && request.mutates && this.taskManager.getActiveManagedTasks().length > 0) {
+				// The executor and this host share the workspace; letting a remote mutation
+				// (e.g. a hard reset) run under a live local task would corrupt both.
+				throw new Error(t("common:fileChanges.blockedTaskRunning"))
+			}
+
+			const result = shadowId
+				? await this.nodeRegistry!.pluginRequest(shadowId, pluginName, request.method, request.params)
+				: await pluginRegistry.request(pluginName, request.method, request.params, {
+						taskId: this.getCurrentTask()?.taskId,
+						cwd: this.getCurrentTask()?.cwd ?? this.cwd,
+					})
+
+			// The remote task's conversation moved under us; rebuild the shadow so this
+			// host renders what the executor now actually has.
+			if (shadowId && (result as PluginRewoundResult | undefined)?.rewound) {
+				await this.nodeRegistry!.rebuildShadow(shadowId)
+			}
+
+			await respond({ result })
+		} catch (error) {
+			await respond({ error: error instanceof Error ? error.message : String(error) })
+		}
 	}
 
 	/**

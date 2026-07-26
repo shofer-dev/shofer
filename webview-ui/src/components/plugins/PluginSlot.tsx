@@ -12,7 +12,7 @@ import type {
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 
 import { PluginUIComponent, resolvePluginComponent } from "./pluginComponentResolver"
-import { postPluginUiMessage, subscribePluginUiMessages } from "./pluginUiChannel"
+import { postPluginUiMessage, requestPluginUi, subscribePluginUiMessages } from "./pluginUiChannel"
 
 /**
  * PluginSlot (design §6.8, §12; Phase 4 step 4.4).
@@ -81,6 +81,8 @@ function usePluginUiApi(
 	return useMemo<PluginUIApi>(
 		() => ({
 			postMessage: (outgoing: unknown) => postPluginUiMessage(pluginName, outgoing),
+			request: (method: string, params?: unknown, opts?: { mutates?: boolean }) =>
+				requestPluginUi(pluginName, method, params, opts),
 			onMessage: (listener: (message: unknown) => void) => {
 				listenersRef.current.add(listener)
 				return () => listenersRef.current.delete(listener)
