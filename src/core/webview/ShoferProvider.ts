@@ -2348,6 +2348,39 @@ export class ShoferProvider
 	 * current task. With no task to steer, it falls back to spawning so a proactive notify is
 	 * never silently dropped.
 	 */
+	/**
+	 * Continue an existing agent session for a plugin `spawn` that carries a
+	 * `sessionId`, delivering `prompt` as the next message.
+	 *
+	 * This is what makes an output-contract re-prompt a CONTINUATION rather than
+	 * a cold retry: the model still holds everything it derived on the first
+	 * attempt, so it can fix the specific thing that failed instead of redoing
+	 * the work and reproducing the same mistake.
+	 *
+	 * THROWS when the session is unknown. A silent fall-back to a fresh task
+	 * would be the worst outcome available: the caller believes it is refining an
+	 * answer, the model has no idea what is being referred to, and the "feedback"
+	 * arrives as an opening message with no context. Failing here is loud, and
+	 * the caller can decide to start over deliberately.
+	 */
+	private async resumePluginSession(sessionId: string, prompt: string): Promise<Task> {
+		const live = this.shoferStack.find((t) => t.taskId === sessionId)
+		if (live) {
+			// The warm path, and the one a contract re-prompt actually takes: the
+			// task is still on the stack, so the message queue delivers into the
+			// running loop's next drain.
+			live.messageQueueService.addMessage(prompt)
+			return live
+		}
+
+		// Cold: the session finished (a completed stake being re-asked). Rehydrate
+		// from history so the conversation is intact, then deliver the prompt.
+		const { historyItem } = await this.getTaskWithId(sessionId)
+		const task = await this.createTaskWithHistoryItem(historyItem)
+		task.messageQueueService.addMessage(prompt)
+		return task
+	}
+
 	private buildPluginAgentProvider(): PluginAgentProvider {
 		return {
 			notify: async (message: string, opts): Promise<void> => {
@@ -2394,7 +2427,18 @@ export class ShoferProvider
 			// §14: awaitable, cancellable job control. Starts a task and returns a handle whose
 			// result() settles on the task's completion/abort, with task-scoped events + cancel.
 			spawn: async (prompt, opts): Promise<PluginTaskHandle> => {
-				const task = await this.createTask(prompt, opts?.images)
+				// `completionSchema` reshapes the task's `attempt_completion` tool so a
+				// provider with constrained decoding enforces the caller's output
+				// contract at decode time. `mode` picks the tool set the task starts
+				// with. Both must be threaded here: a plugin passing them into a host
+				// that dropped them would see a task that ignores its contract and
+				// reports success, which is the failure the contract exists to catch.
+				const task = opts?.sessionId
+					? await this.resumePluginSession(opts.sessionId, prompt)
+					: await this.createTask(prompt, opts?.images, undefined, {
+							...(opts?.completionSchema ? { completionSchema: opts.completionSchema } : {}),
+							...(opts?.mode ? { initialMode: opts.mode } : {}),
+						})
 				const taskId = task.taskId
 				const metadata = opts?.metadata
 				let settle: ((r: PluginTaskResult) => void) | undefined

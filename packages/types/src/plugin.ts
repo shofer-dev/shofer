@@ -401,6 +401,31 @@ export interface PluginAgentSpawnOptions {
 	mode?: string
 	/** Opaque metadata echoed back on {@link PluginTaskResult.metadata}; the host never interprets it. */
 	metadata?: Record<string, unknown>
+	/**
+	 * A JSON Schema the task's final result must conform to.
+	 *
+	 * Unlike {@link metadata}, this is NOT opaque: the host threads it into the
+	 * task's `attempt_completion` schema, so a provider with constrained decoding
+	 * enforces the contract AT DECODE TIME rather than the caller checking a
+	 * free-form answer afterwards — a post-hoc check costs a whole extra turn
+	 * every time the model drifts, and drift is what makes it worth constraining.
+	 *
+	 * It reshapes the completion TOOL rather than being sent as a provider
+	 * `response_format`, which is what lets an agentic task keep its other tools:
+	 * a `response_format` constrains the whole turn, so it cannot coexist with an
+	 * agent that still needs to read files before it can answer.
+	 */
+	completionSchema?: Record<string, unknown>
+	/**
+	 * Continue an existing agent session instead of starting a cold one.
+	 *
+	 * This is what makes a contract RE-prompt a continuation: when a result fails
+	 * its schema or its semantic predicate, the caller re-asks the same session
+	 * with the specific error, and the model still has everything it derived the
+	 * first time. Starting fresh would re-do that work and quite likely reproduce
+	 * the same mistake.
+	 */
+	sessionId?: string
 }
 
 /**
