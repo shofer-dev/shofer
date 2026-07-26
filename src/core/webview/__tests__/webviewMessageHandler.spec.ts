@@ -807,7 +807,7 @@ describe("webviewMessageHandler - message dialog preferences", () => {
 			expect(mockShoferProvider.postMessageToWebview).toHaveBeenCalledWith({
 				type: "showDeleteMessageDialog",
 				messageTs: 123456789,
-				hasCheckpoint: false,
+				hasRestorableState: false,
 			})
 		})
 	})
@@ -829,7 +829,7 @@ describe("webviewMessageHandler - message dialog preferences", () => {
 				type: "showEditMessageDialog",
 				messageTs: 123456789,
 				text: "edited content",
-				hasCheckpoint: false,
+				hasRestorableState: false,
 				images: undefined,
 			})
 		})

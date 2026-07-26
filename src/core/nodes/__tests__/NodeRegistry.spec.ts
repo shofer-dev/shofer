@@ -483,17 +483,14 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.registry.isShadow(taskId!)).toBe(true)
 		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-		await h.registry.getCheckpointDiff(taskId!, { commitHash: "c1", mode: "checkpoint" })
-		expect(rec.getCheckpointDiff).toHaveBeenCalledWith("r1-task-1", { commitHash: "c1", mode: "checkpoint" })
-
 		await h.registry.getTaskChangedFiles(taskId!)
 		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
 
 		await h.registry.getChangedFileDiff(taskId!, "src/a.ts")
 		expect(rec.getChangedFileDiff).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
 
-		await h.registry.restoreCheckpoint(taskId!, { ts: 1, commitHash: "c1", mode: "restore" })
-		expect(rec.restoreCheckpoint).toHaveBeenCalledWith("r1-task-1", { ts: 1, commitHash: "c1", mode: "restore" })
+		await h.registry.pluginRequest(taskId!, "checkpoints", "restore", { hash: "c1" })
+		expect(rec.pluginRequest).toHaveBeenCalledWith("r1-task-1", "checkpoints", "restore", { hash: "c1" })
 
 		await h.registry.revertChangedFile(taskId!, "src/a.ts")
 		expect(rec.revertChangedFile).toHaveBeenCalledWith("r1-task-1", "src/a.ts")

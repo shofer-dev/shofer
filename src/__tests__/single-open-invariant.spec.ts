@@ -49,8 +49,6 @@ describe("Single-open-task invariant", () => {
 			getState: vi.fn().mockResolvedValue({
 				apiConfiguration: { apiProvider: "anthropic", consecutiveMistakeLimit: 0 },
 				organizationAllowList: "*",
-				enableCheckpoints: true,
-				checkpointTimeout: 60,
 				cloudUserInfo: null,
 			}),
 			removeShoferFromStack,
@@ -95,8 +93,6 @@ describe("Single-open-task invariant", () => {
 			},
 			getState: vi.fn().mockResolvedValue({
 				apiConfiguration: { apiProvider: "anthropic", consecutiveMistakeLimit: 0 },
-				enableCheckpoints: true,
-				checkpointTimeout: 60,
 				experiments: {},
 				cloudUserInfo: null,
 				taskSyncEnabled: false,

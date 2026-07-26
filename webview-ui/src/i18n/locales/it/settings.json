@@ -31,7 +31,6 @@
 		"mcp": "Server MCP",
 		"worktrees": "Worktrees",
 		"autoApprove": "Auto-approvazione",
-		"checkpoints": "Punti di controllo",
 		"notifications": "Notifiche",
 		"contextManagement": "Contesto",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Predefinito: claude",
 			"maxTokensLabel": "Token di output massimi",
 			"maxTokensDescription": "Numero massimo di token di output per le risposte di Claude Code. Il valore predefinito è 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Timeout inizializzazione checkpoint (secondi)",
-			"description": "Tempo massimo di attesa per l'inizializzazione del servizio checkpoint. Predefinito: 15 secondi. Intervallo: 10-60 secondi."
-		},
-		"enable": {
-			"label": "Abilita punti di controllo automatici",
-			"description": "Quando abilitato, Shofer creerà automaticamente punti di controllo durante l'esecuzione dei compiti, facilitando la revisione delle modifiche o il ritorno a stati precedenti. <0>Scopri di più</0>"
 		}
 	},
 	"notifications": {

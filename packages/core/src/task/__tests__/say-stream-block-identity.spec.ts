@@ -3,7 +3,6 @@
 // which pulls in WorkflowTask (which extends Task — circular).
 vi.mock("../../../extension", () => ({}))
 
-
 import type { ShoferMessage } from "@shofer/types"
 
 vi.mock("../../logging/subsystems.js", async (importOriginal) => ({
@@ -77,7 +76,7 @@ describe("Task.say streamed-text block identity", () => {
 		const blockId = "block-1"
 
 		// Streaming phase: partial text bubble created with a stable id.
-		await say(ctx, "text", "Hello", undefined, true, undefined, undefined, { streamBlockId: blockId })
+		await say(ctx, "text", "Hello", undefined, true, undefined, { streamBlockId: blockId })
 
 		expect(textMessages(ctx)).toHaveLength(1)
 		expect(textMessages(ctx)[0]!.partial).toBe(true)
@@ -88,7 +87,7 @@ describe("Task.say streamed-text block identity", () => {
 		await say(ctx, "tool_result", JSON.stringify({ tool: "read_file", output: "…" }))
 
 		// Finalization phase for the SAME block id.
-		await say(ctx, "text", "Hello", undefined, false, undefined, undefined, { streamBlockId: blockId })
+		await say(ctx, "text", "Hello", undefined, false, undefined, { streamBlockId: blockId })
 
 		// Exactly one text bubble, finalized in place (no duplicate, not stranded).
 		const texts = textMessages(ctx)
@@ -103,10 +102,10 @@ describe("Task.say streamed-text block identity", () => {
 		const ctx = makeSayContext()
 		const blockId = "block-2"
 
-		await say(ctx, "text", "Hi", undefined, true, undefined, undefined, { streamBlockId: blockId })
-		await say(ctx, "text", "Hi there", undefined, false, undefined, undefined, { streamBlockId: blockId })
+		await say(ctx, "text", "Hi", undefined, true, undefined, { streamBlockId: blockId })
+		await say(ctx, "text", "Hi there", undefined, false, undefined, { streamBlockId: blockId })
 		// Re-delivered finalization (e.g. stream-end after a mid-stream finalize).
-		await say(ctx, "text", "Hi there", undefined, false, undefined, undefined, { streamBlockId: blockId })
+		await say(ctx, "text", "Hi there", undefined, false, undefined, { streamBlockId: blockId })
 
 		const texts = textMessages(ctx)
 		expect(texts).toHaveLength(1)
@@ -117,10 +116,10 @@ describe("Task.say streamed-text block identity", () => {
 	it("keeps distinct block ids as separate messages", async () => {
 		const ctx = makeSayContext()
 
-		await say(ctx, "text", "first", undefined, true, undefined, undefined, { streamBlockId: "a" })
-		await say(ctx, "text", "first", undefined, false, undefined, undefined, { streamBlockId: "a" })
-		await say(ctx, "text", "second", undefined, true, undefined, undefined, { streamBlockId: "b" })
-		await say(ctx, "text", "second", undefined, false, undefined, undefined, { streamBlockId: "b" })
+		await say(ctx, "text", "first", undefined, true, undefined, { streamBlockId: "a" })
+		await say(ctx, "text", "first", undefined, false, undefined, { streamBlockId: "a" })
+		await say(ctx, "text", "second", undefined, true, undefined, { streamBlockId: "b" })
+		await say(ctx, "text", "second", undefined, false, undefined, { streamBlockId: "b" })
 
 		const texts = textMessages(ctx)
 		expect(texts).toHaveLength(2)

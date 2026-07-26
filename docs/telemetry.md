@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-      <!-- /TOC -->
+    <!-- /TOC -->
 
 ---
 
@@ -121,9 +121,6 @@ The service provides typed convenience methods for every event type. Each method
 | [`captureLlmCompletion`](packages/telemetry/src/TelemetryService.ts:112)            | `LLM_COMPLETION`             | `taskId`, `{inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, cost?}` |
 | [`captureModeSwitch`](packages/telemetry/src/TelemetryService.ts:125)               | `MODE_SWITCH`                | `taskId`, `newMode`                                                               |
 | [`captureToolUsage`](packages/telemetry/src/TelemetryService.ts:129)                | `TOOL_USED`                  | `taskId`, `tool`                                                                  |
-| [`captureCheckpointCreated`](packages/telemetry/src/TelemetryService.ts:133)        | `CHECKPOINT_CREATED`         | `taskId`                                                                          |
-| [`captureCheckpointDiffed`](packages/telemetry/src/TelemetryService.ts:137)         | `CHECKPOINT_DIFFED`          | `taskId`                                                                          |
-| [`captureCheckpointRestored`](packages/telemetry/src/TelemetryService.ts:141)       | `CHECKPOINT_RESTORED`        | `taskId`                                                                          |
 | [`captureContextCondensed`](packages/telemetry/src/TelemetryService.ts:145)         | `CONTEXT_CONDENSED`          | `taskId`, `isAutomaticTrigger`, `usedCustomPrompt?`                               |
 | [`captureSlidingWindowTruncation`](packages/telemetry/src/TelemetryService.ts:153)  | `SLIDING_WINDOW_TRUNCATION`  | `taskId`                                                                          |
 | [`captureCodeActionUsed`](packages/telemetry/src/TelemetryService.ts:157)           | `CODE_ACTION_USED`           | `actionType`                                                                      |
@@ -266,11 +263,6 @@ enum TelemetryEventName {
 	MODE_SWITCH = "Mode Switched",
 	MODE_SELECTOR_OPENED = "Mode Selector Opened",
 	TOOL_USED = "Tool Used",
-
-	// Checkpoints
-	CHECKPOINT_CREATED = "Checkpoint Created",
-	CHECKPOINT_RESTORED = "Checkpoint Restored",
-	CHECKPOINT_DIFFED = "Checkpoint Diffed",
 
 	// UI / Settings
 	TAB_SHOWN = "Tab Shown",
@@ -473,7 +465,7 @@ telemetryClient.updateTelemetryState(telemetrySetting, telemetryKey, machineId)
 ### Event Flow
 
 Event observers registered through `onEvent` (the plugin registry, §10) are
-fanned out *before* the opt-in gate — plugins see agent events even when
+fanned out _before_ the opt-in gate — plugins see agent events even when
 telemetry is off — while everything downstream of `isReady` is gated.
 
 ```mermaid
@@ -746,7 +738,6 @@ if (!wasPreviouslyOptedIn && isOptedIn) {
 | [`core/task/Task.ts`](packages/core/src/task/Task.ts)                                                                 | Emits task lifecycle events, tool usage, LLM completions, budget exceeded, consecutive mistakes, tool result ID validation errors |
 | [`core/condense/index.ts`](packages/core/src/condense/index.ts)                                                       | Emits `CONTEXT_CONDENSED` with automatic trigger and custom prompt flags                                                          |
 | [`core/context-management/index.ts`](packages/core/src/context-management/index.ts)                                   | Emits `SLIDING_WINDOW_TRUNCATION`                                                                                                 |
-| [`core/checkpoints/index.ts`](packages/core/src/checkpoints/index.ts)                                                 | Emits `CHECKPOINT_CREATED`, `CHECKPOINT_DIFFED`, `CHECKPOINT_RESTORED`                                                            |
 | [`core/config/importExport.ts`](src/core/config/importExport.ts)                                                      | Emits telemetry for settings export/import                                                                                        |
 | [`core/config/ProviderSettingsManager.ts`](src/core/config/ProviderSettingsManager.ts)                                | Tracks provider settings changes                                                                                                  |
 | [`core/webview/messageEnhancer.ts`](src/core/webview/messageEnhancer.ts)                                              | Emits `PROMPT_ENHANCED`                                                                                                           |

@@ -38,7 +38,6 @@ import WarningRow from "./WarningRow"
 import McpResourceRow from "../mcp/McpResourceRow"
 
 import { Mention } from "./Mention"
-import { CheckpointSaved } from "./checkpoints/CheckpointSaved"
 import { PluginSlot } from "../plugins/PluginSlot"
 import { FollowUpSuggest } from "./FollowUpSuggest"
 import { WorkflowParamForm } from "./WorkflowParamForm"
@@ -192,7 +191,6 @@ interface ChatRowProps {
 	isFollowUpAnswered?: boolean
 	isFollowUpAutoApprovalPaused?: boolean
 	editable?: boolean
-	hasCheckpoint?: boolean
 	isSearchHighlighted?: boolean
 }
 
@@ -265,8 +263,7 @@ export const ChatRowContent = ({
 }: ChatRowContentProps) => {
 	const { t, i18n } = useTranslation()
 
-	const { mcpServers, currentCheckpoint, mode, apiConfiguration, shoferMessages, currentTaskItem } =
-		useExtensionState()
+	const { mcpServers, mode, apiConfiguration, shoferMessages, currentTaskItem } = useExtensionState()
 	const { info: model } = useSelectedModel(apiConfiguration)
 	const [isEditing, setIsEditing] = useState(false)
 	const [editedContent, setEditedContent] = useState("")
@@ -1811,15 +1808,6 @@ export const ChatRowContent = ({
 					)
 				case "shell_integration_warning":
 					return <CommandExecutionError />
-				case "checkpoint_saved":
-					return (
-						<CheckpointSaved
-							ts={message.ts!}
-							commitHash={message.text!}
-							currentHash={currentCheckpoint}
-							checkpoint={message.checkpoint}
-						/>
-					)
 				case "plugin_marker": {
 					// A plugin's own timeline row: the host renders no chrome and no
 					// fallback text — the owning plugin's `chat-message-addon` component

@@ -1,10 +1,10 @@
-// npx vitest run src/components/chat/__tests__/CheckpointRestoreDialog.spec.tsx
+// npx vitest run src/components/chat/__tests__/MessageRewindDialog.spec.tsx
 
 import React from "react"
 import { render, screen, fireEvent } from "@/utils/test-utils"
 import { vi } from "vitest"
 
-import { CheckpointRestoreDialog } from "../CheckpointRestoreDialog"
+import { MessageRewindDialog } from "../MessageRewindDialog"
 
 // Mock the translation context
 vi.mock("@src/i18n/TranslationContext", () => ({
@@ -27,13 +27,13 @@ vi.mock("@src/i18n/TranslationContext", () => ({
 	}),
 }))
 
-describe("CheckpointRestoreDialog", () => {
+describe("MessageRewindDialog", () => {
 	const defaultProps = {
 		open: true,
 		onOpenChange: vi.fn(),
 		onConfirm: vi.fn(),
 		type: "edit" as const,
-		hasCheckpoint: false,
+		hasRestorableState: false,
 	}
 
 	beforeEach(() => {
@@ -42,7 +42,7 @@ describe("CheckpointRestoreDialog", () => {
 
 	describe("Basic Rendering", () => {
 		it("renders edit dialog without checkpoint", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} />)
+			render(<MessageRewindDialog {...defaultProps} />)
 
 			expect(screen.getByText("Edit Message")).toBeInTheDocument()
 			expect(
@@ -56,7 +56,7 @@ describe("CheckpointRestoreDialog", () => {
 		})
 
 		it("renders delete dialog without checkpoint", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="delete" />)
+			render(<MessageRewindDialog {...defaultProps} type="delete" />)
 
 			expect(screen.getByText("Delete Message")).toBeInTheDocument()
 			expect(
@@ -70,7 +70,7 @@ describe("CheckpointRestoreDialog", () => {
 		})
 
 		it("renders edit dialog with checkpoint option", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} hasRestorableState={true} />)
 
 			expect(screen.getByText("Edit Message")).toBeInTheDocument()
 			expect(
@@ -84,7 +84,7 @@ describe("CheckpointRestoreDialog", () => {
 		})
 
 		it("renders delete dialog with checkpoint option", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="delete" hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} type="delete" hasRestorableState={true} />)
 
 			expect(screen.getByText("Delete Message")).toBeInTheDocument()
 			expect(
@@ -101,7 +101,7 @@ describe("CheckpointRestoreDialog", () => {
 	describe("User Interactions", () => {
 		it("calls onOpenChange when cancel is clicked", () => {
 			const onOpenChange = vi.fn()
-			render(<CheckpointRestoreDialog {...defaultProps} onOpenChange={onOpenChange} />)
+			render(<MessageRewindDialog {...defaultProps} onOpenChange={onOpenChange} />)
 
 			fireEvent.click(screen.getByText("Cancel"))
 			expect(onOpenChange).toHaveBeenCalledWith(false)
@@ -109,7 +109,7 @@ describe("CheckpointRestoreDialog", () => {
 
 		it("calls onConfirm with correct parameters when edit only is clicked", () => {
 			const onConfirm = vi.fn()
-			render(<CheckpointRestoreDialog {...defaultProps} onConfirm={onConfirm} />)
+			render(<MessageRewindDialog {...defaultProps} onConfirm={onConfirm} />)
 
 			fireEvent.click(screen.getByText("Edit Only"))
 			expect(onConfirm).toHaveBeenCalledWith(false) // restoreCheckpoint
@@ -117,7 +117,7 @@ describe("CheckpointRestoreDialog", () => {
 
 		it("calls onConfirm with restoreCheckpoint=false when edit only is clicked with checkpoint", () => {
 			const onConfirm = vi.fn()
-			render(<CheckpointRestoreDialog {...defaultProps} onConfirm={onConfirm} hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} onConfirm={onConfirm} hasRestorableState={true} />)
 
 			fireEvent.click(screen.getByText("Edit Only"))
 			expect(onConfirm).toHaveBeenCalledWith(false) // restoreCheckpoint
@@ -125,7 +125,7 @@ describe("CheckpointRestoreDialog", () => {
 
 		it("calls onConfirm with restoreCheckpoint=true when restore to checkpoint is clicked", () => {
 			const onConfirm = vi.fn()
-			render(<CheckpointRestoreDialog {...defaultProps} onConfirm={onConfirm} hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} onConfirm={onConfirm} hasRestorableState={true} />)
 
 			fireEvent.click(screen.getByText("Restore to Checkpoint"))
 			expect(onConfirm).toHaveBeenCalledWith(true) // restoreCheckpoint
@@ -133,7 +133,7 @@ describe("CheckpointRestoreDialog", () => {
 
 		it("calls onOpenChange when dialog is closed", () => {
 			const onOpenChange = vi.fn()
-			render(<CheckpointRestoreDialog {...defaultProps} onOpenChange={onOpenChange} hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} onOpenChange={onOpenChange} hasRestorableState={true} />)
 
 			fireEvent.click(screen.getByText("Edit Only"))
 			expect(onOpenChange).toHaveBeenCalledWith(false)
@@ -142,21 +142,21 @@ describe("CheckpointRestoreDialog", () => {
 
 	describe("Dialog State Management", () => {
 		it("does not render when open is false", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} open={false} />)
+			render(<MessageRewindDialog {...defaultProps} open={false} />)
 
 			expect(screen.queryByText("Edit Message")).not.toBeInTheDocument()
 			expect(screen.queryByText("Delete Message")).not.toBeInTheDocument()
 		})
 
 		it("maintains state when dialog stays open", async () => {
-			const { rerender } = render(<CheckpointRestoreDialog {...defaultProps} hasCheckpoint={true} open={true} />)
+			const { rerender } = render(<MessageRewindDialog {...defaultProps} hasRestorableState={true} open={true} />)
 
 			// Verify initial state
 			expect(screen.getByText("Edit Only")).toBeInTheDocument()
 			expect(screen.getByText("Restore to Checkpoint")).toBeInTheDocument()
 
 			// Re-render with same props
-			rerender(<CheckpointRestoreDialog {...defaultProps} hasCheckpoint={true} open={true} />)
+			rerender(<MessageRewindDialog {...defaultProps} hasRestorableState={true} open={true} />)
 
 			// Should still have same buttons
 			expect(screen.getByText("Edit Only")).toBeInTheDocument()
@@ -166,7 +166,7 @@ describe("CheckpointRestoreDialog", () => {
 
 	describe("Accessibility", () => {
 		it("has proper ARIA labels and roles", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} hasCheckpoint={true} />)
+			render(<MessageRewindDialog {...defaultProps} hasRestorableState={true} />)
 
 			expect(screen.getByRole("alertdialog")).toBeInTheDocument() // AlertDialog uses alertdialog role
 			expect(screen.getByRole("button", { name: "Edit Only" })).toBeInTheDocument()
@@ -179,7 +179,7 @@ describe("CheckpointRestoreDialog", () => {
 		it("handles missing translation keys gracefully", () => {
 			// This test is simplified since we can't easily mock the translation function mid-test
 			// The component should handle missing keys by returning the key itself
-			render(<CheckpointRestoreDialog {...defaultProps} />)
+			render(<MessageRewindDialog {...defaultProps} />)
 
 			// Should still render with proper text from our mock
 			expect(screen.getByText("Edit Message")).toBeInTheDocument()
@@ -189,11 +189,11 @@ describe("CheckpointRestoreDialog", () => {
 			const onConfirm = vi.fn()
 			const onOpenChange = vi.fn()
 			render(
-				<CheckpointRestoreDialog
+				<MessageRewindDialog
 					{...defaultProps}
 					onConfirm={onConfirm}
 					onOpenChange={onOpenChange}
-					hasCheckpoint={true}
+					hasRestorableState={true}
 				/>,
 			)
 
@@ -211,7 +211,7 @@ describe("CheckpointRestoreDialog", () => {
 
 	describe("Type-specific Behavior", () => {
 		it("shows correct warning text for edit type", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="edit" />)
+			render(<MessageRewindDialog {...defaultProps} type="edit" />)
 
 			expect(
 				screen.getByText(
@@ -221,7 +221,7 @@ describe("CheckpointRestoreDialog", () => {
 		})
 
 		it("shows correct warning text for delete type", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="delete" />)
+			render(<MessageRewindDialog {...defaultProps} type="delete" />)
 
 			expect(
 				screen.getByText(
@@ -231,13 +231,13 @@ describe("CheckpointRestoreDialog", () => {
 		})
 
 		it("shows correct title for edit type", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="edit" />)
+			render(<MessageRewindDialog {...defaultProps} type="edit" />)
 
 			expect(screen.getByText("Edit Message")).toBeInTheDocument()
 		})
 
 		it("shows correct title for delete type", () => {
-			render(<CheckpointRestoreDialog {...defaultProps} type="delete" />)
+			render(<MessageRewindDialog {...defaultProps} type="delete" />)
 
 			expect(screen.getByText("Delete Message")).toBeInTheDocument()
 		})

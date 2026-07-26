@@ -1,15 +1,7 @@
 import http from "node:http"
 import os from "node:os"
 
-import type {
-	AgentApi,
-	CheckpointDiffOptions,
-	CheckpointRestoreOptions,
-	ProviderSettings,
-	ServerEvent,
-	SyncedSecrets,
-	SyncedSettings,
-} from "@shofer/types"
+import type { AgentApi, ProviderSettings, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -112,8 +104,7 @@ export interface HttpServerOptions {
  *   POST /api/v1/task/:id/message    → { message }
  *   POST /api/v1/task/:id/cancel
  *   POST /api/v1/task/:id/ask        → { askResponse, text?, images?, askId? } (interactive approval)
- *   POST /api/v1/task/:id/checkpoint-diff     → CheckpointDiffOptions → 200 CheckpointDiffEntry[]  (L3)
- *   POST /api/v1/task/:id/checkpoint-restore  → CheckpointRestoreOptions → 202                     (L3)
+ *   POST /api/v1/task/:id/plugin-request      → { plugin, method, params } → 200 { result }       (L3)
  *   GET  /api/v1/task/:id/changed-files       → 200 ChangedFilesPayload                            (L3)
  *   POST /api/v1/task/:id/changed-files/diff  → { relPath } → 200 { original, final }              (L3)
  *   POST /api/v1/task/:id/changed-files/revert→ { relPath? } → 202 (one file, or all when omitted) (L3)
@@ -250,7 +241,7 @@ export function createRequestHandler(
 			return send(res, 202, { taskId, cancelled: true })
 		}
 
-		// ── Reverse data channel (Shofer Nodes L3) — remote checkpoint + changed-files ──
+		// ── Reverse data channel (Shofer Nodes L3) — changed-files + plugin requests ──
 
 		// GET the task's changed-files panel payload.
 		const changedFilesGet = path.match(new RegExp(`^${base}/task/([^/]+)/changed-files$`))
@@ -262,7 +253,7 @@ export function createRequestHandler(
 		// POST-with-body for the remaining L3 routes (data + execute).
 		const l3Match = path.match(
 			new RegExp(
-				`^${base}/task/([^/]+)/(checkpoint-diff|checkpoint-restore|plugin-request|changed-files/diff|changed-files/revert|changed-files/accept)$`,
+				`^${base}/task/([^/]+)/(plugin-request|changed-files/diff|changed-files/revert|changed-files/accept)$`,
 			),
 		)
 		if (method === "POST" && l3Match) {
@@ -270,16 +261,6 @@ export function createRequestHandler(
 			const action = l3Match[2]!
 			const body = await readJson(req)
 
-			if (action === "checkpoint-diff") {
-				if (typeof body.commitHash !== "string") return send(res, 400, { error: "commitHash is required" })
-				const changes = await api.getCheckpointDiff(taskId, body as unknown as CheckpointDiffOptions)
-				return send(res, 200, changes)
-			}
-			if (action === "checkpoint-restore") {
-				if (typeof body.commitHash !== "string") return send(res, 400, { error: "commitHash is required" })
-				await api.restoreCheckpoint(taskId, body as unknown as CheckpointRestoreOptions)
-				return send(res, 202, { taskId, restored: true })
-			}
 			if (action === "plugin-request") {
 				// Generic plugin RPC — the transport stays feature-agnostic: `plugin` +
 				// `method` + opaque `params` in, the plugin's JSON result out.

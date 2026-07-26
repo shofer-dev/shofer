@@ -22,7 +22,6 @@ import {
 	type PluginUiContributionsState,
 	RouterModels,
 	ORGANIZATION_ALLOW_ALL,
-	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 } from "@shofer/types"
 
 import { findLastIndex } from "@shofer/types"
@@ -59,7 +58,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	showWelcome: boolean
 	theme: any
 	mcpServers: McpServer[]
-	currentCheckpoint?: string
 	currentTaskTodos?: TodoItem[] // Initial todos for the current task
 	filePaths: string[]
 	openedTabs: Array<{ label: string; isActive: boolean; path?: string }>
@@ -122,9 +120,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setTerminalZdotdir: (value: boolean) => void
 	setTtsEnabled: (value: boolean) => void
 	setTtsSpeed: (value: number) => void
-	setEnableCheckpoints: (value: boolean) => void
-	checkpointTimeout: number
-	setCheckpointTimeout: (value: number) => void
 	setWriteDelayMs: (value: number) => void
 	terminalOutputPreviewSize?: "small" | "medium" | "large"
 	setTerminalOutputPreviewSize: (value: "small" | "medium" | "large") => void
@@ -278,8 +273,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		soundVolume: 0.5,
 		ttsEnabled: false,
 		ttsSpeed: 1.0,
-		enableCheckpoints: true,
-		checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS, // Default to 15 seconds
 		language: "en", // Default language code
 		writeDelayMs: 1000,
 		terminalShellIntegrationTimeout: 4000,
@@ -370,7 +363,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	const [openedTabs, setOpenedTabs] = useState<Array<{ label: string; isActive: boolean; path?: string }>>([])
 	const [commands, setCommands] = useState<Command[]>([])
 	const [mcpServers, setMcpServers] = useState<McpServer[]>([])
-	const [currentCheckpoint, setCurrentCheckpoint] = useState<string>()
 	const [extensionRouterModels, setExtensionRouterModels] = useState<RouterModels | undefined>(undefined)
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<VsCodeLmChatInfo[]>([])
 	const [marketplaceItems, setMarketplaceItems] = useState<any[]>([])
@@ -632,10 +624,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 					setMcpServers(message.mcpServers ?? [])
 					break
 				}
-				case "currentCheckpointUpdated": {
-					setCurrentCheckpoint(message.text)
-					break
-				}
 				case "listApiConfig": {
 					setListApiConfigMeta(message.listApiConfig ?? [])
 					break
@@ -800,7 +788,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			showWelcome,
 			theme,
 			mcpServers,
-			currentCheckpoint,
 			filePaths,
 			openedTabs,
 			commands,
@@ -850,8 +837,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			setSoundVolume: (value) => setState((prevState) => ({ ...prevState, soundVolume: value })),
 			setTtsEnabled: (value) => setState((prevState) => ({ ...prevState, ttsEnabled: value })),
 			setTtsSpeed: (value) => setState((prevState) => ({ ...prevState, ttsSpeed: value })),
-			setEnableCheckpoints: (value) => setState((prevState) => ({ ...prevState, enableCheckpoints: value })),
-			setCheckpointTimeout: (value) => setState((prevState) => ({ ...prevState, checkpointTimeout: value })),
 			setWriteDelayMs: (value) => setState((prevState) => ({ ...prevState, writeDelayMs: value })),
 			setTerminalOutputPreviewSize: (value) =>
 				setState((prevState) => ({ ...prevState, terminalOutputPreviewSize: value })),
@@ -961,7 +946,6 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			showWelcome,
 			theme,
 			mcpServers,
-			currentCheckpoint,
 			filePaths,
 			openedTabs,
 			commands,

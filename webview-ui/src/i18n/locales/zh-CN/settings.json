@@ -31,7 +31,6 @@
 		"mcp": "MCP 服务",
 		"worktrees": "Worktrees",
 		"autoApprove": "自动批准",
-		"checkpoints": "存档点",
 		"notifications": "通知",
 		"contextManagement": "上下文",
 		"terminal": "终端",
@@ -559,16 +558,6 @@
 			"placeholder": "默认：claude",
 			"maxTokensLabel": "最大输出 Token",
 			"maxTokensDescription": "Claude Code 响应的最大输出 Token 数量。默认为 8000。"
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "存档点初始化超时时间（秒）",
-			"description": "存档点服务初始化最长等待时间。默认 15 秒。范围：10-60 秒。"
-		},
-		"enable": {
-			"label": "启用自动存档点",
-			"description": "开启后自动创建任务存档点，方便回溯修改。 <0>了解更多</0>"
 		}
 	},
 	"notifications": {

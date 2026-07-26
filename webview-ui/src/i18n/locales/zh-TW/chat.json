@@ -181,25 +181,6 @@
 			"claudeCodeNotAuthenticated": "您需要登入才能使用 Claude Code。前往設定並點選「登入 Claude Code」以進行驗證。"
 		}
 	},
-	"checkpoint": {
-		"regular": "檢查點",
-		"initializingWarning": "正在初始化檢查點... 如果耗時過長，您可以在 <settingsLink>設定</settingsLink> 中停用檢查點並重新啟動工作。",
-		"menu": {
-			"viewDiff": "檢視差異",
-			"viewDiffFromInit": "檢視所有變更",
-			"viewDiffWithCurrent": "檢視自此檢查點以來的變更",
-			"restore": "還原檢查點",
-			"restoreFiles": "還原檔案",
-			"restoreFilesDescription": "將您的專案檔案還原到此時的快照。",
-			"restoreFilesAndTask": "還原檔案和工作",
-			"confirm": "確認",
-			"cancel": "取消",
-			"cannotUndo": "此操作無法復原。",
-			"restoreFilesAndTaskDescription": "將您的專案檔案還原到此時的快照，並刪除此點之後的所有訊息。",
-			"more": "更多選項"
-		},
-		"current": "目前"
-	},
 	"contextManagement": {
 		"tokens": "Token",
 		"condensation": {

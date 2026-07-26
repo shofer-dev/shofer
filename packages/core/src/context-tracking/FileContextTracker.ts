@@ -56,7 +56,6 @@ export class FileContextTracker {
 	private fileWatchers = new Map<string, HostFileWatcher>()
 	private recentlyModifiedFiles = new Set<string>()
 	private recentlyEditedByRoo = new Set<string>()
-	private checkpointPossibleFiles = new Set<string>()
 
 	/**
 	 * @param provider  The task provider (host-side services + storage).
@@ -216,7 +215,6 @@ export class FileContextTracker {
 				case "shofer_edited":
 					newEntry.shofer_read_date = now
 					newEntry.shofer_edit_date = now
-					this.checkpointPossibleFiles.add(filePath)
 					this.markFileAsEditedByRoo(filePath)
 					break
 
@@ -306,20 +304,14 @@ export class FileContextTracker {
 		}
 	}
 
-	getAndClearCheckpointPossibleFile(): string[] {
-		const files = Array.from(this.checkpointPossibleFiles)
-		this.checkpointPossibleFiles.clear()
-		return files
-	}
-
 	/**
 	 * Returns the unique file paths that Shofer has edited during this task,
 	 * sorted by most-recent edit first.
 	 *
 	 * Source of truth is the persisted task metadata (`files_in_context`),
 	 * which is appended to whenever {@link addFileToFileContextTracker} is
-	 * invoked with `shofer_edited`. This is independent of the shadow-git
-	 * checkpoint service and works even when checkpoints are disabled.
+	 * invoked with `shofer_edited`. This is independent of any snapshot plugin and
+	 * works whether or not one is installed.
 	 *
 	 * @param sinceTimestamp - Optional epoch ms; only include files edited at/after this time.
 	 */

@@ -31,7 +31,6 @@
 		"mcp": "MCP 서버",
 		"worktrees": "Worktrees",
 		"autoApprove": "자동 승인",
-		"checkpoints": "체크포인트",
 		"notifications": "알림",
 		"contextManagement": "컨텍스트",
 		"terminal": "터미널",
@@ -559,16 +558,6 @@
 			"placeholder": "기본값: claude",
 			"maxTokensLabel": "최대 출력 토큰",
 			"maxTokensDescription": "Claude Code 응답의 최대 출력 토큰 수. 기본값은 8000입니다."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "체크포인트 초기화 타임아웃(초)",
-			"description": "체크포인트 서비스 초기화를 기다리는 최대 시간입니다. 기본값은 15초. 범위: 10~60초."
-		},
-		"enable": {
-			"label": "자동 체크포인트 활성화",
-			"description": "활성화되면 Roo는 작업 실행 중에 자동으로 체크포인트를 생성하여 변경 사항을 검토하거나 이전 상태로 되돌리기 쉽게 합니다. <0>더 알아보기</0>"
 		}
 	},
 	"notifications": {

@@ -148,7 +148,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World", // edited content
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// Verify that UI messages were truncated at the correct index
@@ -205,7 +205,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// Verify UI messages were truncated to preserve earlier message
@@ -265,7 +265,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// Both should be truncated at index 0
@@ -303,7 +303,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// UI messages truncated
@@ -331,7 +331,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Hello World",
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// UI messages should be truncated
@@ -400,7 +400,7 @@ describe("webviewMessageHandler - Edit Message with Timestamp Fallback", () => {
 			type: "editMessageConfirm",
 			messageTs: userMessageTs,
 			text: "Do something else",
-			restoreCheckpoint: false,
+			restoreState: false,
 		})
 
 		// UI messages truncated at edited message

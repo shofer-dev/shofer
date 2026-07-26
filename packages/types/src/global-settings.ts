@@ -60,21 +60,6 @@ export const TERMINAL_PREVIEW_BYTES: Record<TerminalOutputPreviewSize, number> =
 export const DEFAULT_TERMINAL_OUTPUT_PREVIEW_SIZE: TerminalOutputPreviewSize = "medium"
 
 /**
- * Minimum checkpoint timeout in seconds.
- */
-export const MIN_CHECKPOINT_TIMEOUT_SECONDS = 10
-
-/**
- * Maximum checkpoint timeout in seconds.
- */
-export const MAX_CHECKPOINT_TIMEOUT_SECONDS = 60
-
-/**
- * Default checkpoint timeout in seconds.
- */
-export const DEFAULT_CHECKPOINT_TIMEOUT_SECONDS = 15
-
-/**
  * GlobalSettings
  */
 
@@ -162,14 +147,6 @@ export const globalSettingsSchema = z.object({
 	 * @default 50
 	 */
 	maxDiagnosticMessages: z.number().optional(),
-
-	enableCheckpoints: z.boolean().optional(),
-	checkpointTimeout: z
-		.number()
-		.int()
-		.min(MIN_CHECKPOINT_TIMEOUT_SECONDS)
-		.max(MAX_CHECKPOINT_TIMEOUT_SECONDS)
-		.optional(),
 
 	ttsEnabled: z.boolean().optional(),
 	ttsSpeed: z.number().optional(),
@@ -431,9 +408,6 @@ export const SETTING_SYNC_SCOPE = {
 	maxGitStatusFiles: "node",
 	includeDiagnosticMessages: "node",
 	maxDiagnosticMessages: "node",
-
-	enableCheckpoints: "node", // checkpoints are created/owned on the executor (per-task shadow-git); controller diff/restore needs them enabled there
-	checkpointTimeout: "node",
 
 	// ── Notification prefs (front-end only) ──
 	ttsEnabled: "frontend",
@@ -776,8 +750,6 @@ export const EVALS_SETTINGS: ShoferSettings = {
 	terminalShellIntegrationDisabled: true,
 
 	diagnosticsEnabled: true,
-
-	enableCheckpoints: false,
 
 	rateLimitSeconds: 0,
 	maxOpenTabsContext: 20,

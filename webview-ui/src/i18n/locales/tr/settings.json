@@ -31,7 +31,6 @@
 		"mcp": "MCP Sunucuları",
 		"worktrees": "Worktrees",
 		"autoApprove": "Oto-Onay",
-		"checkpoints": "Kontrol Noktaları",
 		"notifications": "Bildirimler",
 		"contextManagement": "Bağlam",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Varsayılan: claude",
 			"maxTokensLabel": "Maksimum Çıktı Token sayısı",
 			"maxTokensDescription": "Claude Code yanıtları için maksimum çıktı token sayısı. Varsayılan 8000'dir."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Kontrol noktası başlatma zaman aşımı (saniye)",
-			"description": "Kontrol noktası servisini başlatmak için maksimum bekleme süresi. Varsayılan 15 saniye. Aralık: 10-60 saniye."
-		},
-		"enable": {
-			"label": "Otomatik kontrol noktalarını etkinleştir",
-			"description": "Etkinleştirildiğinde, Shofer görev yürütme sırasında otomatik olarak kontrol noktaları oluşturarak değişiklikleri gözden geçirmeyi veya önceki durumlara dönmeyi kolaylaştırır. <0>Daha fazla bilgi</0>"
 		}
 	},
 	"notifications": {

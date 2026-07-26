@@ -110,7 +110,7 @@ flowchart TB
         direction TB
         SP["ShoferProvider<br/>webview lifecycle · state management · postMessage"]
         TASK["Task (agent)<br/>recursivelyMakeShoferRequests · LLM streaming<br/>tool dispatch · ask() · save/load"]
-        SVC["CodeIndexManager · GitIndexManager · Search · Glob<br/>MCP · Skills · Marketplace · TaskManager · Checkpoints"]
+        SVC["CodeIndexManager · GitIndexManager · Search · Glob<br/>MCP · Skills · Marketplace · TaskManager · Plugins"]
         VSCAPI["vscode.* API surface<br/>workspace.fs · window.createTerminal · commands<br/>window.activeTextEditor · workspace.findFiles"]
         SP --> VSCAPI
         TASK --> VSCAPI
@@ -377,7 +377,7 @@ unchanged in the Agent Worker. The vscode-shim transparently routes operations:
 | MCP tool calls (`McpHub.callTool`)            | **Shared `McpHub` on main thread** via `parentPort` RPC (async)                 | ✅ Yes (lightweight async RPC — see §3.7)                   |
 | Ripgrep / grep / git commands                 | `child_process` subprocess in Agent Worker                                      | ❌ No                                                       |
 | Token counting                                | Direct in Agent Worker (no separate workerpool needed)                          | ❌ No                                                       |
-| Checkpoint git operations                     | Direct `execFile` in Agent Worker                                               | ❌ No                                                       |
+| Plugin git operations (e.g. checkpoints)      | Direct `execFile` in Agent Worker                                               | ❌ No                                                       |
 | File watchers                                 | **Main Thread** (needs `vscode.FileSystemWatcher`)                              | ✅ Yes                                                      |
 | UI streaming (webview)                        | `MessageChannel` → Server Worker → WebSocket                                    | ❌ No                                                       |
 | Webview → Extension messages                  | WebSocket → Server Worker → `MessageChannel`                                    | ❌ No                                                       |

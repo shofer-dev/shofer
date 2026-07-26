@@ -31,7 +31,6 @@
 		"mcp": "MCP-servers",
 		"worktrees": "Worktrees",
 		"autoApprove": "Auto-goedkeuren",
-		"checkpoints": "Checkpoints",
 		"notifications": "Meldingen",
 		"contextManagement": "Context",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Standaard: claude",
 			"maxTokensLabel": "Max Output Tokens",
 			"maxTokensDescription": "Maximaal aantal output-tokens voor Claude Code-reacties. Standaard is 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Timeout voor checkpoint-initialisatie (seconden)",
-			"description": "Maximale wachttijd voor het initialiseren van de checkpointservice. Standaard is 15 seconden. Bereik: 10-60 seconden."
-		},
-		"enable": {
-			"label": "Automatische checkpoints inschakelen",
-			"description": "Indien ingeschakeld, maakt Shofer automatisch checkpoints tijdens het uitvoeren van taken, zodat je eenvoudig wijzigingen kunt bekijken of terugzetten. <0>Meer informatie</0>"
 		}
 	},
 	"notifications": {

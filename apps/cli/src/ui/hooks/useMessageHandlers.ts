@@ -61,10 +61,6 @@ export function useMessageHandlers({ nonInteractive }: UseMessageHandlersOptions
 			const messageId = ts.toString()
 			const isResuming = useCLIStore.getState().isResumingTask
 
-			if (say === "checkpoint_saved") {
-				return
-			}
-
 			if (say === "api_req_started") {
 				return
 			}

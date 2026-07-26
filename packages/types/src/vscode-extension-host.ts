@@ -154,8 +154,6 @@ export interface ExtensionMessage {
 		| "importModeResult"
 		| "checkRulesDirectoryResult"
 		| "deleteCustomModeCheck"
-		| "currentCheckpointUpdated"
-		| "checkpointInitWarning"
 		| "ttsStart"
 		| "ttsStop"
 		| "fileSearchResults"
@@ -247,10 +245,6 @@ export interface ExtensionMessage {
 	/** For changedFiles/update: snapshot of files Shofer edited in the current Task. */
 	changedFiles?: ChangedFilesPayload
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
-	checkpointWarning?: {
-		type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"
-		timeout: number
-	}
 	action?:
 		| "chatButtonClicked"
 		| "settingsButtonClicked"
@@ -342,7 +336,12 @@ export interface ExtensionMessage {
 	rulesFolderPath?: string
 	settings?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	messageTs?: number
-	hasCheckpoint?: boolean
+	/**
+	 * For showDeleteMessageDialog / showEditMessageDialog: whether a plugin holds a
+	 * restorable snapshot after this message, so the dialog can offer to roll the
+	 * workspace back along with the conversation.
+	 */
+	hasRestorableState?: boolean
 	context?: string
 	commands?: Command[]
 	queuedMessages?: QueuedMessage[]
@@ -542,8 +541,6 @@ export type ExtensionState = Pick<
 
 	writeDelayMs: number
 
-	enableCheckpoints: boolean
-	checkpointTimeout: number // Timeout for checkpoint initialization in seconds (default: 15)
 	maxOpenTabsContext: number // Maximum number of VSCode open tabs to include in context (0-500)
 	maxWorkspaceFiles: number // Maximum number of files to include in current working directory details (0-500)
 	showShoferIgnoredFiles: boolean // Whether to show .shoferignore'd files in listings
@@ -784,8 +781,6 @@ export interface WebviewMessage {
 		| "deleteCustomMode"
 		| "setopenAiCustomModelInfo"
 		| "openCustomModesSettings"
-		| "checkpointDiff"
-		| "checkpointRestore"
 		| "changedFiles/get"
 		| "changedFiles/showDiff"
 		| "changedFiles/revert"
@@ -1021,7 +1016,8 @@ export interface WebviewMessage {
 	ids?: string[]
 	terminalOperation?: "continue" | "abort"
 	messageTs?: number
-	restoreCheckpoint?: boolean
+	/** For deleteMessageConfirm / editMessageConfirm: also roll back plugin-held state. */
+	restoreState?: boolean
 	historyPreviewCollapsed?: boolean
 	/** Per-root-task cost-limit payload for the `updateCostLimit` message. */
 	costLimit?: CostLimit
@@ -1127,23 +1123,6 @@ export interface RequestOpenAiCodexRateLimitsMessage {
 	type: "requestOpenAiCodexRateLimits"
 }
 
-export const checkoutDiffPayloadSchema = z.object({
-	ts: z.number().optional(),
-	previousCommitHash: z.string().optional(),
-	commitHash: z.string(),
-	mode: z.enum(["full", "checkpoint", "from-init", "to-current"]),
-})
-
-export type CheckpointDiffPayload = z.infer<typeof checkoutDiffPayloadSchema>
-
-export const checkoutRestorePayloadSchema = z.object({
-	ts: z.number(),
-	commitHash: z.string(),
-	mode: z.enum(["preview", "restore"]),
-})
-
-export type CheckpointRestorePayload = z.infer<typeof checkoutRestorePayloadSchema>
-
 export interface IndexingStatusPayload {
 	state: "Standby" | "Indexing" | "Indexed" | "Error" | "Stopping"
 	message: string
@@ -1164,8 +1143,6 @@ export type InstallMarketplaceItemWithParametersPayload = z.infer<
 >
 
 export type WebViewMessagePayload =
-	| CheckpointDiffPayload
-	| CheckpointRestorePayload
 	| IndexingStatusPayload
 	| IndexClearedPayload
 	| InstallMarketplaceItemWithParametersPayload

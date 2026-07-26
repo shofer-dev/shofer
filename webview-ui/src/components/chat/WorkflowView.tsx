@@ -1338,8 +1338,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							break
 					}
 					break
-				case "checkpointInitWarning":
-					break
 				case "interactionRequired":
 					playSound("notification")
 					break
@@ -1391,39 +1389,9 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 	useEvent("message", handleMessage)
 
 	const visibleMessages = useMemo(() => {
-		// Pre-compute checkpoint hashes that have associated user messages for O(1) lookup
-		const userMessageCheckpointHashes = new Set<string>()
-		modifiedMessages.forEach((msg) => {
-			if (
-				msg.say === "user_feedback" &&
-				msg.checkpoint &&
-				msg.checkpoint["type"] === "user_message" &&
-				msg.checkpoint["hash"]
-			) {
-				userMessageCheckpointHashes.add(msg.checkpoint["hash"] as string)
-			}
-		})
-
 		// Remove the 500-message limit to prevent array index shifting
 		// Virtuoso is designed to efficiently handle large lists through virtualization
 		const newVisibleMessages = modifiedMessages.filter((message) => {
-			// Filter out checkpoint_saved messages that should be suppressed
-			if (message.say === "checkpoint_saved") {
-				// Check if this checkpoint has the suppressMessage flag set
-				if (
-					message.checkpoint &&
-					typeof message.checkpoint === "object" &&
-					"suppressMessage" in message.checkpoint &&
-					message.checkpoint.suppressMessage
-				) {
-					return false
-				}
-				// Also filter out checkpoint messages associated with user messages (legacy behavior)
-				if (message.text && userMessageCheckpointHashes.has(message.text)) {
-					return false
-				}
-			}
-
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
 				const alwaysHiddenOnceProcessedAsk: ShoferAsk[] = [
 					"api_req_failed",
@@ -1834,8 +1802,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 
 	const itemContent = useCallback(
 		(index: number, messageOrGroup: ShoferMessage) => {
-			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
-
 			// regular message
 			return (
 				<ChatRow
@@ -1869,7 +1835,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 							return tool.tool === "updateTodoList" && enableButtons && !!primaryButtonText
 						})()
 					}
-					hasCheckpoint={hasCheckpoint}
 				/>
 			)
 		},

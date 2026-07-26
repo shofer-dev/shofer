@@ -26,7 +26,6 @@ suite.skip("Shofer Subtasks", () => {
 				alwaysAllowModeSwitch: true,
 				alwaysAllowSubtasks: true,
 				autoApprovalEnabled: true,
-				enableCheckpoints: false,
 			},
 			text:
 				"You are the parent task. " +

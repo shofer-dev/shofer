@@ -34,7 +34,6 @@ const mockPushToolResult = vi.fn()
 const mockEmit = vi.fn()
 const mockRecordToolError = vi.fn()
 const mockSayAndCreateMissingParamError = vi.fn()
-const mockCheckpointSave = vi.fn()
 
 // Mock the Shofer instance and its methods/properties.
 // backgroundChildren is a real Map so set/get work correctly.
@@ -48,8 +47,6 @@ const mockShofer = {
 	isPaused: false,
 	pausedModeSlug: "code",
 	taskId: "mock-parent-task-id",
-	enableCheckpoints: false,
-	checkpointSave: mockCheckpointSave,
 	getTaskMode: vi.fn().mockResolvedValue(undefined),
 	backgroundChildren: new Map<string, any>(),
 	// Task-viz records the parent→child spawn (and child→parent return) arrows;
@@ -762,8 +759,6 @@ describe("newTaskTool delegation flow", () => {
 			isPaused: false,
 			pausedModeSlug: "code",
 			taskId: "mock-parent-task-id",
-			enableCheckpoints: false,
-			checkpointSave: vi.fn(),
 			getTaskMode: vi.fn().mockResolvedValue(undefined),
 			backgroundChildren: new Map<string, any>(),
 			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),

@@ -20,7 +20,7 @@ import SettingsView, { SettingsViewRef } from "./components/settings/SettingsVie
 import WelcomeView from "./components/welcome/WelcomeViewProvider"
 import { LauncherView } from "./components/launcher/LauncherView"
 import { LauncherMenu } from "./components/launcher/LauncherMenu"
-import { CheckpointRestoreDialog } from "./components/chat/CheckpointRestoreDialog"
+import { MessageRewindDialog } from "./components/chat/MessageRewindDialog"
 import { DeleteMessageDialog, EditMessageDialog } from "./components/chat/MessageModificationConfirmationDialog"
 import ErrorBoundary from "./components/ErrorBoundary"
 import { useAddNonInteractiveClickListener } from "./components/ui/hooks/useNonInteractiveClick"
@@ -32,21 +32,21 @@ type Tab = "settings" | "history" | "chat" | "launcher"
 interface DeleteMessageDialogState {
 	isOpen: boolean
 	messageTs: number
-	hasCheckpoint: boolean
+	hasRestorableState: boolean
 }
 
 interface EditMessageDialogState {
 	isOpen: boolean
 	messageTs: number
 	text: string
-	hasCheckpoint: boolean
+	hasRestorableState: boolean
 	images?: string[]
 }
 
 // Memoize dialog components to prevent unnecessary re-renders
 const MemoizedDeleteMessageDialog = React.memo(DeleteMessageDialog)
 const MemoizedEditMessageDialog = React.memo(EditMessageDialog)
-const MemoizedCheckpointRestoreDialog = React.memo(CheckpointRestoreDialog)
+const MemoizedMessageRewindDialog = React.memo(MessageRewindDialog)
 const tabsByMessageAction: Partial<Record<NonNullable<ExtensionMessage["action"]>, Tab>> = {
 	chatButtonClicked: "chat",
 	settingsButtonClicked: "settings",
@@ -134,14 +134,14 @@ const App = () => {
 	const [deleteMessageDialogState, setDeleteMessageDialogState] = useState<DeleteMessageDialogState>({
 		isOpen: false,
 		messageTs: 0,
-		hasCheckpoint: false,
+		hasRestorableState: false,
 	})
 
 	const [editMessageDialogState, setEditMessageDialogState] = useState<EditMessageDialogState>({
 		isOpen: false,
 		messageTs: 0,
 		text: "",
-		hasCheckpoint: false,
+		hasRestorableState: false,
 		images: [],
 	})
 
@@ -276,7 +276,7 @@ const App = () => {
 				setDeleteMessageDialogState({
 					isOpen: true,
 					messageTs: message.messageTs,
-					hasCheckpoint: message.hasCheckpoint || false,
+					hasRestorableState: message.hasRestorableState || false,
 				})
 			}
 
@@ -285,7 +285,7 @@ const App = () => {
 					isOpen: true,
 					messageTs: message.messageTs,
 					text: message.text,
-					hasCheckpoint: message.hasCheckpoint || false,
+					hasRestorableState: message.hasRestorableState || false,
 					images: message.images || [],
 				})
 			}
@@ -404,19 +404,19 @@ const App = () => {
 						showAnnouncement={showAnnouncement}
 						hideAnnouncement={() => setShowAnnouncement(false)}
 					/>
-					{deleteMessageDialogState.hasCheckpoint ? (
-						<MemoizedCheckpointRestoreDialog
+					{deleteMessageDialogState.hasRestorableState ? (
+						<MemoizedMessageRewindDialog
 							open={deleteMessageDialogState.isOpen}
 							type="delete"
-							hasCheckpoint={deleteMessageDialogState.hasCheckpoint}
+							hasRestorableState={deleteMessageDialogState.hasRestorableState}
 							onOpenChange={(open: boolean) =>
 								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: open }))
 							}
-							onConfirm={(restoreCheckpoint: boolean) => {
+							onConfirm={(restoreState: boolean) => {
 								vscode.postMessage({
 									type: "deleteMessageConfirm",
 									messageTs: deleteMessageDialogState.messageTs,
-									restoreCheckpoint,
+									restoreState,
 								})
 								setDeleteMessageDialogState((prev) => ({ ...prev, isOpen: false }))
 							}}
@@ -436,20 +436,20 @@ const App = () => {
 							}}
 						/>
 					)}
-					{editMessageDialogState.hasCheckpoint ? (
-						<MemoizedCheckpointRestoreDialog
+					{editMessageDialogState.hasRestorableState ? (
+						<MemoizedMessageRewindDialog
 							open={editMessageDialogState.isOpen}
 							type="edit"
-							hasCheckpoint={editMessageDialogState.hasCheckpoint}
+							hasRestorableState={editMessageDialogState.hasRestorableState}
 							onOpenChange={(open: boolean) =>
 								setEditMessageDialogState((prev) => ({ ...prev, isOpen: open }))
 							}
-							onConfirm={(restoreCheckpoint: boolean) => {
+							onConfirm={(restoreState: boolean) => {
 								vscode.postMessage({
 									type: "editMessageConfirm",
 									messageTs: editMessageDialogState.messageTs,
 									text: editMessageDialogState.text,
-									restoreCheckpoint,
+									restoreState,
 								})
 								setEditMessageDialogState((prev) => ({ ...prev, isOpen: false }))
 							}}

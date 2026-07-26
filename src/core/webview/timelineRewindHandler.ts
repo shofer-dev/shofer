@@ -52,10 +52,12 @@ export async function handleTimelineRewind(config: TimelineRewindConfig): Promis
 	const { provider, currentShofer, messageTs, messageIndex, operation, restoreState, editData } = config
 
 	try {
-		// A delete may land while an ask is outstanding; aborting first avoids the
-		// "current ask promise was ignored" path. An edit skips it — the pending-edit
-		// reinitialization below does the cancelling.
-		if (operation === "delete" && !currentShofer.abort) {
+		// Rolling back out-of-band state can land while an ask is outstanding, and the
+		// task is about to be reinitialized anyway; aborting first avoids the "current
+		// ask promise was ignored" path. A chat-only rewind leaves the task alone — it
+		// only loses messages, so there is nothing to reinitialize. An edit skips the
+		// abort either way: the pending-edit reinitialization does the cancelling.
+		if (operation === "delete" && restoreState && !currentShofer.abort) {
 			currentShofer.abortTask()
 			await pWaitFor(() => currentShofer.abort === true, { timeout: 1000, interval: 50 }).catch(() => {
 				// Proceed regardless — the abort flag is set synchronously.
@@ -87,17 +89,26 @@ export async function handleTimelineRewind(config: TimelineRewindConfig): Promis
 			includeTargetMessage: operation === "edit",
 		})
 
-		if (operation === "delete") {
-			await saveTaskMessages({
-				messages: currentShofer.shoferMessages,
-				taskId: currentShofer.taskId,
-				globalStoragePath: provider.contextProxy.globalStorageUri.fsPath,
-			})
+		if (operation === "edit") {
+			// The reinitialization triggered here picks up the pending edit set above.
+			await provider.cancelTask()
+			return
+		}
+
+		await saveTaskMessages({
+			messages: currentShofer.shoferMessages,
+			taskId: currentShofer.taskId,
+			globalStoragePath: provider.contextProxy.globalStorageUri.fsPath,
+		})
+
+		if (restoreState) {
+			// State outside the conversation moved; reinitialize the task so it runs
+			// against both the truncated history and the rolled-back state.
 			const { historyItem } = await provider.getTaskWithId(currentShofer.taskId)
 			await provider.createTaskWithHistoryItem(historyItem)
 		} else {
-			// The reinitialization triggered here picks up the pending edit set above.
-			await provider.cancelTask()
+			// Chat-only: nothing to reinitialize, just re-render the shortened timeline.
+			await provider.postInitState()
 		}
 	} catch (error) {
 		webviewLog.error(`Error in timeline rewind (${operation}):`, error)

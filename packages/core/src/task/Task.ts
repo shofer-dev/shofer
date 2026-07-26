@@ -58,9 +58,6 @@ import {
 	isResumableAsk,
 	QueuedMessage,
 	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
-	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-	MAX_CHECKPOINT_TIMEOUT_SECONDS,
-	MIN_CHECKPOINT_TIMEOUT_SECONDS,
 	ConsecutiveMistakeError,
 	MAX_MCP_TOOLS_THRESHOLD,
 	countEnabledMcpTools,
@@ -89,7 +86,6 @@ import type { BackgroundTaskStatus } from "@shofer/types"
 // services
 import { McpHub } from "../services/mcp/McpHub.js"
 import { getMcpHubFactory } from "../services/mcp/mcp-hub-factory.js"
-import { RepoPerTaskCheckpointService } from "../checkpoints/RepoPerTaskCheckpointService.js"
 
 // integrations
 import type { DiffView } from "@shofer/types"
@@ -144,14 +140,6 @@ import { getHost } from "@shofer/types"
 import { getEnvironmentDetails } from "../environment/getEnvironmentDetails.js"
 import { checkContextWindowExceededError } from "../context/context-management/context-error-handling.js"
 import { isNonRetryableApiError } from "../api/providers/utils/retryable-error.js"
-import {
-	type CheckpointDiffOptions,
-	type CheckpointRestoreOptions,
-	getCheckpointService,
-	checkpointSave,
-	checkpointRestore,
-	checkpointDiff,
-} from "../checkpoints/index.js"
 import { processUserContentMentions } from "../mentions/processUserContentMentions.js"
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense/index.js"
 import { MessageQueueService } from "../message-queue/MessageQueueService.js"
@@ -181,8 +169,6 @@ import {
 export interface TaskOptions extends CreateTaskOptions {
 	provider: TaskProviderLike<Task>
 	apiConfiguration: ProviderSettings
-	enableCheckpoints?: boolean
-	checkpointTimeout?: number
 	consecutiveMistakeLimit?: number
 	task?: string
 	images?: string[]
@@ -896,12 +882,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	// finishes connecting mid-turn invalidates the stale prompt.
 	_mcpServerSetId: string = ""
 
-	// Checkpoints
-	enableCheckpoints: boolean
-	checkpointTimeout: number
-	checkpointService?: RepoPerTaskCheckpointService
-	checkpointServiceInitializing = false
-
 	// Message Queue Service
 	public readonly messageQueueService: MessageQueueService
 	private messageQueueStateChangedHandler: (() => void) | undefined
@@ -910,7 +890,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	isWaitingForFirstChunk = false
 	isStreaming = false
 	currentStreamingContentIndex = 0
-	currentStreamingDidCheckpoint = false
 	/**
 	 * Assistant turns this task has run — incremented once per API request. Surfaced to
 	 * plugins as `PluginContext.turn` so a hook that fires per *tool call* (a turn can
@@ -1037,8 +1016,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	constructor({
 		provider,
 		apiConfiguration,
-		enableCheckpoints = true,
-		checkpointTimeout = DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 		consecutiveMistakeLimit = DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 		taskId,
 		task,
@@ -1070,20 +1047,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		if (startTask && !task && !images && !historyItem) {
 			throw new Error("Either historyItem or task/images must be provided")
-		}
-
-		if (
-			!checkpointTimeout ||
-			checkpointTimeout > MAX_CHECKPOINT_TIMEOUT_SECONDS ||
-			checkpointTimeout < MIN_CHECKPOINT_TIMEOUT_SECONDS
-		) {
-			throw new Error(
-				"checkpointTimeout must be between " +
-					MIN_CHECKPOINT_TIMEOUT_SECONDS +
-					" and " +
-					MAX_CHECKPOINT_TIMEOUT_SECONDS +
-					" seconds",
-			)
 		}
 
 		this.taskId = historyItem ? historyItem.id : (taskId ?? uuidv7())
@@ -1159,8 +1122,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.providerRef = new WeakRef(provider)
 		this.globalStoragePath = (provider.context as { globalStorageUri: { fsPath: string } }).globalStorageUri.fsPath
 		this.diffViewProvider = getHost().createDiffView(this.cwd, this)
-		this.enableCheckpoints = enableCheckpoints
-		this.checkpointTimeout = checkpointTimeout
 
 		this.parentTask = parentTask
 		this.rootTask = rootTask
@@ -3100,15 +3061,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.askResponseText = text
 		this.askResponseImages = images
 
-		// Create a checkpoint whenever the user sends a message.
-		// Pass force=true so allowEmpty=true and a checkpoint is recorded even
-		// when there are no file changes — otherwise saveCheckpoint() no-ops on
-		// an empty diff and the user message gets no rollback anchor, defeating
-		// the "create a checkpoint when the user sends a message" feature.
-		// Suppress the checkpoint_saved chat row for this checkpoint to keep the timeline clean.
 		if (askResponse === "messageResponse") {
-			void this.checkpointSave(true, true)
-
 			// Tell plugins the user just spoke (design §6.9). Not awaited: a plugin must
 			// never sit between the user pressing send and the agent hearing it.
 			void pluginRegistry
@@ -3384,7 +3337,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				error,
 				undefined /* images */,
 				false /* partial */,
-				undefined /* checkpoint */,
 				undefined /* progressStatus */,
 				{ isNonInteractive: true } /* options */,
 			)
@@ -3416,7 +3368,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			undefined /* text */,
 			undefined /* images */,
 			false /* partial */,
-			undefined /* checkpoint */,
 			undefined /* progressStatus */,
 			{ isNonInteractive: true } /* options */,
 			contextCondense,
@@ -3431,7 +3382,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		text?: string,
 		images?: string[],
 		partial?: boolean,
-		checkpoint?: Record<string, unknown>,
 		progressStatus?: ToolProgressStatus,
 		options: {
 			isNonInteractive?: boolean
@@ -3601,7 +3551,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				say: type,
 				text,
 				images,
-				checkpoint,
 				marker: options.marker,
 				contextCondense,
 				contextTruncation,
@@ -3742,7 +3691,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						serverCount: enabledServerCount,
 						threshold: MAX_MCP_TOOLS_THRESHOLD,
 					}),
-					undefined,
 					undefined,
 					undefined,
 					undefined,
@@ -4749,9 +4697,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				.map((b) => (b as any).text?.substring(0, 80))
 				.join(" | ")}`,
 		)
-		// Kicks off the checkpoints initialization process in the background.
-		getCheckpointService(this)
-
 		// H15: Invalidate per-turn system prompt and tool-array caches.
 		this._cachedSystemPromptBase = null
 		this._cachedSystemPromptKey = ""
@@ -5173,7 +5118,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 				// Reset streaming state for each new API request
 				this.currentStreamingContentIndex = 0
-				this.currentStreamingDidCheckpoint = false
 				this.turnCount++
 				this.assistantMessageContent = []
 				this.didCompleteReadingStream = false
@@ -6053,7 +5997,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						const citationLinks = pendingGroundingSources.map((source, i) => `[${i + 1}](${source.url})`)
 						const sourcesText = `${t("common:gemini.sources")} ${citationLinks.join(", ")}`
 
-						await this.say("text", sourcesText, undefined, false, undefined, undefined, {
+						await this.say("text", sourcesText, undefined, false, undefined, {
 							isNonInteractive: true,
 						})
 					}
@@ -6958,7 +6902,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					undefined /* text */,
 					undefined /* images */,
 					false /* partial */,
-					undefined /* checkpoint */,
 					undefined /* progressStatus */,
 					{ isNonInteractive: true } /* options */,
 					contextCondense,
@@ -6976,7 +6919,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					undefined /* text */,
 					undefined /* images */,
 					false /* partial */,
-					undefined /* checkpoint */,
 					undefined /* progressStatus */,
 					{ isNonInteractive: true } /* options */,
 					undefined /* contextCondense */,
@@ -7209,7 +7151,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						undefined /* text */,
 						undefined /* images */,
 						false /* partial */,
-						undefined /* checkpoint */,
 						undefined /* progressStatus */,
 						{ isNonInteractive: true } /* options */,
 						contextCondense,
@@ -7227,7 +7168,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 						undefined /* text */,
 						undefined /* images */,
 						false /* partial */,
-						undefined /* checkpoint */,
 						undefined /* progressStatus */,
 						{ isNonInteractive: true } /* options */,
 						undefined /* contextCondense */,
@@ -7632,12 +7572,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 	}
 
-	// Checkpoints
-
-	public async checkpointSave(force: boolean = false, suppressMessage: boolean = false) {
-		return checkpointSave(this, force, suppressMessage)
-	}
-
 	private buildCleanConversationHistory(messages: ApiMessage[]): Array<
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		Anthropic.Messages.MessageParam | { type: "reasoning"; encrypted_content: string; id?: string; summary?: any[] }
@@ -7783,14 +7717,6 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		return cleanConversationHistory
 	}
-	public async checkpointRestore(options: CheckpointRestoreOptions) {
-		return checkpointRestore(this, options)
-	}
-
-	public async checkpointDiff(options: CheckpointDiffOptions) {
-		return checkpointDiff(this, options)
-	}
-
 	// Metrics
 
 	public combineMessages(messages: ShoferMessage[]) {
@@ -7878,7 +7804,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * because the WorkflowTask root performs no filesystem work itself, and
 	 * agents read `this.cwd` at spawn time — so agents spawned after the change
 	 * run in the new worktree. Not for ordinary LLM tasks, whose cwd is bound to
-	 * their tools/checkpoints once running.
+	 * their tools/state once running.
 	 *
 	 * The FileContextTracker's cwd is kept in sync so that any file-change
 	 * tracking performed by the WorkflowTask root itself resolves against the

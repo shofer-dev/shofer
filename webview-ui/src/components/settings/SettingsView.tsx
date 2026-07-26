@@ -28,19 +28,12 @@ import {
 	Blocks,
 	Users2,
 	ArrowLeft,
-	GitCommitVertical,
 	GraduationCap,
 	Wrench,
 	ScrollText,
 } from "lucide-react"
 
-import {
-	type ProviderSettings,
-	type ExperimentId,
-	type TelemetrySetting,
-	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-	ImageGenerationProvider,
-} from "@shofer/types"
+import { type ProviderSettings, type ExperimentId, type TelemetrySetting, ImageGenerationProvider } from "@shofer/types"
 
 import { vscode } from "@src/utils/vscode"
 import { cn } from "@src/lib/utils"
@@ -69,7 +62,6 @@ import { SectionHeader } from "./SectionHeader"
 import ApiConfigManager from "./ApiConfigManager"
 import ApiOptions from "./ApiOptions"
 import { AutoApproveSettings } from "./AutoApproveSettings"
-import { CheckpointSettings } from "./CheckpointSettings"
 import { ContextManagementSettings } from "./ContextManagementSettings"
 import { TerminalSettings } from "./TerminalSettings"
 import { ExperimentalSettings } from "./ExperimentalSettings"
@@ -108,7 +100,6 @@ export const sectionNames = [
 	"tools",
 	"slashCommands",
 	"skills",
-	"checkpoints",
 	"contextManagement",
 	"terminal",
 	"codebaseIndex",
@@ -215,8 +206,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		alwaysAllowWriteProtected,
 		autoCondenseContext,
 		autoCondenseContextPercent,
-		enableCheckpoints,
-		checkpointTimeout,
 		disabledTools,
 		experiments,
 		maxOpenTabsContext,
@@ -465,8 +454,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					soundVolume: soundVolume ?? 0.5,
 					ttsEnabled,
 					ttsSpeed,
-					enableCheckpoints: enableCheckpoints ?? false,
-					checkpointTimeout: checkpointTimeout ?? DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 					writeDelayMs,
 					terminalShellIntegrationTimeout: terminalShellIntegrationTimeout ?? 30_000,
 					terminalShellIntegrationDisabled,
@@ -675,7 +662,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "mcp", icon: Server },
 			{ id: "shoferNodes", icon: Network },
 			{ id: "plugins", icon: Blocks },
-			{ id: "checkpoints", icon: GitCommitVertical },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "codebaseIndex", icon: Archive },
@@ -1006,15 +992,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Skills Section */}
 						{renderTab === "skills" && <SkillsSettings />}
-
-						{/* Checkpoints Section */}
-						{renderTab === "checkpoints" && (
-							<CheckpointSettings
-								enableCheckpoints={enableCheckpoints}
-								checkpointTimeout={checkpointTimeout}
-								setCachedStateField={setCachedStateField}
-							/>
-						)}
 
 						{/* Context Management Section */}
 						{renderTab === "contextManagement" && (

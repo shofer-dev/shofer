@@ -20,7 +20,11 @@ import { t } from "../i18n/index.js"
 import { getTaskDirectoryPath } from "../utils/storage.js"
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
 import { type TaskProviderLike } from "../task-provider/index.js"
-import { getWorktreeCommandWarning, getWorktreeSandboxPrefix, SandboxUnavailableError } from "../utils/worktreePathGuard.js"
+import {
+	getWorktreeCommandWarning,
+	getWorktreeSandboxPrefix,
+	SandboxUnavailableError,
+} from "../utils/worktreePathGuard.js"
 import { taskLog } from "../logging/subsystems.js"
 
 /**
@@ -238,7 +242,7 @@ export async function executeCommandInTerminal(
 
 	try {
 		await fs.access(workingDir)
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	} catch (error) {
 		return [false, `Working directory '${workingDir}' does not exist.`]
 	}
@@ -297,7 +301,7 @@ export async function executeCommandInTerminal(
 		lastQueuedCommandOutput = text
 		commandOutputSayChain = commandOutputSayChain
 			.then(async () => {
-				await task.say("command_output", text, undefined, partial, undefined, undefined, {
+				await task.say("command_output", text, undefined, partial, undefined, {
 					isNonInteractive: true,
 				})
 			})

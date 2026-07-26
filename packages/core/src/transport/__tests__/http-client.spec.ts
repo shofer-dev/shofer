@@ -64,18 +64,6 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		)
 	})
 
-	it("getCheckpointDiff POSTs opts to /checkpoint-diff and returns the parsed changes", async () => {
-		const changes = [{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } }]
-		const fetchMock = vi.fn(async () => new Response(JSON.stringify(changes), { status: 200 }))
-		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		const opts = { commitHash: "c1", mode: "checkpoint" as const }
-		expect(await client.getCheckpointDiff("t 1", opts)).toEqual(changes)
-		expect(fetchMock).toHaveBeenCalledWith(
-			"http://host:1/api/v1/task/t%201/checkpoint-diff",
-			expect.objectContaining({ method: "POST", body: JSON.stringify(opts) }),
-		)
-	})
-
 	it("getTaskChangedFiles GETs /changed-files and returns the payload", async () => {
 		const payload = { taskId: "t1", entries: [], backend: "none" }
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 }))
@@ -99,14 +87,16 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		)
 	})
 
-	it("restoreCheckpoint POSTs opts to /checkpoint-restore", async () => {
-		const fetchMock = vi.fn(async () => new Response("", { status: 202 }))
+	it("pluginRequest POSTs { plugin, method, params } and unwraps the result", async () => {
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ result: { changes: [] } }), { status: 200 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		const opts = { ts: 1, commitHash: "c1", mode: "restore" as const }
-		await client.restoreCheckpoint("t1", opts)
+		expect(await client.pluginRequest("t1", "checkpoints", "diff", { hash: "c1" })).toEqual({ changes: [] })
 		expect(fetchMock).toHaveBeenCalledWith(
-			"http://host:1/api/v1/task/t1/checkpoint-restore",
-			expect.objectContaining({ method: "POST", body: JSON.stringify(opts) }),
+			"http://host:1/api/v1/task/t1/plugin-request",
+			expect.objectContaining({
+				method: "POST",
+				body: JSON.stringify({ plugin: "checkpoints", method: "diff", params: { hash: "c1" } }),
+			}),
 		)
 	})
 

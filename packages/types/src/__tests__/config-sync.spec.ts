@@ -151,8 +151,6 @@ describe("SETTING_SYNC_SCOPE invariants (config_sync §3)", () => {
 	// future edit that flips one is caught here rather than silently changing sync behavior.
 	it("syncs settings whose behavior runs on the executor with a portable value", () => {
 		for (const key of [
-			"enableCheckpoints",
-			"checkpointTimeout",
 			"useAgentRules",
 			"enableSubfolderRules",
 			"showShoferIgnoredFiles",

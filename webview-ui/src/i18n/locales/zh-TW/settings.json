@@ -31,7 +31,6 @@
 		"mcp": "MCP 伺服器",
 		"worktrees": "Worktree",
 		"autoApprove": "自動核准",
-		"checkpoints": "檢查點",
 		"notifications": "通知",
 		"contextManagement": "上下文",
 		"terminal": "終端機",
@@ -569,16 +568,6 @@
 			"placeholder": "預設：claude",
 			"maxTokensLabel": "最大輸出 Token",
 			"maxTokensDescription": "Claude Code 回應的最大輸出 Token 數量。預設為 8000。"
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "檢查點初始化逾時（秒）",
-			"description": "檢查點服務初始化的最長等待時間。預設為 15 秒。範圍：10-60 秒。"
-		},
-		"enable": {
-			"label": "啟用自動檢查點",
-			"description": "啟用後，Shofer 將在工作執行期間自動建立檢查點，方便檢視變更或回到較早的狀態。 <0>了解更多</0>"
 		}
 	},
 	"notifications": {

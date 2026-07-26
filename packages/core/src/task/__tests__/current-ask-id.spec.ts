@@ -30,7 +30,6 @@ describe("Task per-ask _currentAskId", () => {
 		;(task as any)._currentAskId = undefined
 		;(task as any).isAwaitingAskResponse = false
 		;(task as any).cancelAutoApprovalTimeout = vi.fn(() => {})
-		;(task as any).checkpointSave = vi.fn(async () => {})
 		;(task as any).updateShoferMessage = vi.fn(async () => {})
 		;(task as any).saveShoferMessages = vi.fn(async () => {})
 		;(task as any).diagLog = vi.fn(() => {})

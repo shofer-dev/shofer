@@ -334,7 +334,7 @@ export interface HostExternal {
 
 /**
  * One file's before/after content for a multi-file diff (host-agnostic). Mirrors
- * the checkpoint service's `CheckpointDiff` shape so a diff result passes straight
+ * the shape a snapshot plugin's diff produces, so a computed diff passes straight
  * through {@link HostEditor.showMultiFileDiff} without the core knowing about
  * `vscode.Uri`. `before`/`after` are optional (empty = added/deleted side).
  */

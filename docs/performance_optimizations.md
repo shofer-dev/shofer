@@ -43,7 +43,7 @@ dependency), loaded lazily and cached per storage path.
   exactly one row write per mutation — no whole-array serialization, no clone.
 - **Reads.** `storeReadAll` returns rows ordered by `ts`; `storeReadTail(max)`
   returns the last `max` messages plus a `hasMore` flag for windowed loading.
-- **Compaction / overwrite.** `storeSaveAll` (used by checkpoint restore and
+- **Compaction / overwrite.** `storeSaveAll` (used by timeline rewind and
   message edit/delete) replaces the whole set in one transaction. There is no
   append-log, no periodic file rewrite, and no long-lived file handle to manage.
 
@@ -94,7 +94,7 @@ split boundary and re-consolidates only the bounded tail per chunk, producing
 byte-identical output. `findSafeSplitIndex` returns the largest boundary `B`
 where no consolidation head before `B` reaches an index `≥ B`; open (unclosed)
 heads use an `Infinity` reach sentinel so they always stay in the re-consolidated
-suffix. Reference-identity of the prefix detects task switch / edit / checkpoint
+suffix. Reference-identity of the prefix detects task switch / edit / rewind
 restore and forces a full recompute.
 
 Other webview memoization: `ExtensionStateContext` wraps its context value in
@@ -129,7 +129,7 @@ the single-threaded event loop:
 [`extension.ts`](../src/extension.ts), before any module that touches `fs` is
 imported (libuv reads it once on first use). This removes the default 4-thread
 serialization point when concurrent task switches, background saves, and
-checkpoint writes overlap.
+snapshot writes overlap.
 
 ## LLM system-prompt and tools caching
 

@@ -8,7 +8,7 @@ import delay from "delay"
 import axios from "axios"
 import pWaitFor from "p-wait-for"
 import * as vscode from "vscode"
-import { getHost, isPluginUiRequest, PLUGIN_LOCAL_REQUEST_PREFIX } from "@shofer/types"
+import { getHost, isPluginUiRequest } from "@shofer/types"
 
 import {
 	type TaskProviderLike,
@@ -46,7 +46,6 @@ import {
 	DEFAULT_WRITE_DELAY_MS,
 	ORGANIZATION_ALLOW_ALL,
 	DEFAULT_MODES,
-	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	getModelId,
 	isRetiredProvider,
 } from "@shofer/types"
@@ -125,7 +124,6 @@ import { getApiMetrics } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
-import { ShadowCheckpointService } from "@shofer/core"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { CodeIndexConfigManager } from "../../services/code-index/config-manager"
 import { CacheManager } from "../../services/code-index/cache-manager"
@@ -160,6 +158,7 @@ import { TaskHistoryStore } from "../task-persistence"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { buildPluginHostImportMap } from "./pluginHostImportMap"
+import { resolvePluginRequestTarget } from "./pluginUiRequestRouting"
 import { PluginPanelManager } from "./PluginPanelManager"
 import { REQUESTY_BASE_URL } from "@shofer/core"
 import { ipcLog, webviewLog, scrollLog } from "@shofer/core"
@@ -1813,8 +1812,7 @@ export class ShoferProvider
 			)
 		}
 
-		const { apiConfiguration, enableCheckpoints, checkpointTimeout, experiments, cloudUserInfo, taskSyncEnabled } =
-			await this.getState()
+		const { apiConfiguration, experiments, cloudUserInfo, taskSyncEnabled } = await this.getState()
 
 		// LLM hint: Preload-before-publish fix for the task-switch home-screen
 		// flash. We construct the Task with `startTask: false` so the
@@ -1833,8 +1831,6 @@ export class ShoferProvider
 		const task = new Task({
 			provider: this,
 			apiConfiguration,
-			enableCheckpoints,
-			checkpointTimeout,
 			consecutiveMistakeLimit: apiConfiguration.consecutiveMistakeLimit,
 			historyItem,
 			experiments,
@@ -1904,13 +1900,13 @@ export class ShoferProvider
 			)
 		}
 
-		// Check if there's a pending edit after checkpoint restoration
+		// Check if there's a pending edit left by a timeline rewind
 		const operationId = `task-${task.taskId}`
 		const pendingEdit = this.getPendingEditOperation(operationId)
 		if (pendingEdit) {
 			this.clearPendingEditOperation(operationId) // Clear the pending edit
 
-			this.debug(`[createTaskWithHistoryItem] Processing pending edit after checkpoint restoration`)
+			this.debug(`[createTaskWithHistoryItem] Processing pending edit after a timeline rewind`)
 
 			// Process the pending edit after a short delay to ensure the task is fully initialized
 			setTimeout(async () => {
@@ -2550,7 +2546,6 @@ export class ShoferProvider
 					input.text,
 					undefined /* images */,
 					undefined /* partial */,
-					undefined /* checkpoint */,
 					undefined /* progressStatus */,
 					{
 						isNonInteractive: true,
@@ -2964,28 +2959,30 @@ export class ShoferProvider
 			this.postPluginUiMessage(pluginName, { __pluginResponse: { id: request.id, ...payload } })
 
 		try {
-			// A `local:` method is for something only this host can do (open an editor,
-			// show a viewer); routing it to a headless executor would silently do nothing.
-			const isLocalOnly = request.method.startsWith(PLUGIN_LOCAL_REQUEST_PREFIX)
-			const shadowId = isLocalOnly ? undefined : this.nodeRegistry?.getFocusedShadow(this)?.taskId
+			const route = resolvePluginRequestTarget({
+				method: request.method,
+				mutates: request.mutates,
+				shadowTaskId: this.nodeRegistry?.getFocusedShadow(this)?.taskId,
+				hasActiveLocalTask: this.taskManager.getActiveManagedTasks().length > 0,
+				blockedMessage: t("common:fileChanges.blockedTaskRunning"),
+			})
 
-			if (shadowId && request.mutates && this.taskManager.getActiveManagedTasks().length > 0) {
-				// The executor and this host share the workspace; letting a remote mutation
-				// (e.g. a hard reset) run under a live local task would corrupt both.
-				throw new Error(t("common:fileChanges.blockedTaskRunning"))
+			if ("blocked" in route) {
+				throw new Error(route.blocked)
 			}
 
-			const result = shadowId
-				? await this.nodeRegistry!.pluginRequest(shadowId, pluginName, request.method, request.params)
-				: await pluginRegistry.request(pluginName, request.method, request.params, {
-						taskId: this.getCurrentTask()?.taskId,
-						cwd: this.getCurrentTask()?.cwd ?? this.cwd,
-					})
+			const result =
+				route.target === "shadow"
+					? await this.nodeRegistry!.pluginRequest(route.taskId, pluginName, request.method, request.params)
+					: await pluginRegistry.request(pluginName, request.method, request.params, {
+							taskId: this.getCurrentTask()?.taskId,
+							cwd: this.getCurrentTask()?.cwd ?? this.cwd,
+						})
 
 			// The remote task's conversation moved under us; rebuild the shadow so this
 			// host renders what the executor now actually has.
-			if (shadowId && (result as PluginRewoundResult | undefined)?.rewound) {
-				await this.nodeRegistry!.rebuildShadow(shadowId)
+			if (route.target === "shadow" && (result as PluginRewoundResult | undefined)?.rewound) {
+				await this.nodeRegistry!.rebuildShadow(route.taskId)
 			}
 
 			await respond({ result })
@@ -4460,7 +4457,8 @@ export class ShoferProvider
 		await this.postMessageToWebview({ type: "condenseTaskContextResponse", text: taskId })
 	}
 
-	// this function deletes a task from task history, and deletes its checkpoints and delete the task folder
+	// this function deletes a task from task history, tells plugins holding per-task
+	// state to drop it, and removes the task folder
 	// If the task has subtasks (childIds), they will also be deleted recursively
 	async deleteTaskWithId(id: string, cascadeSubtasks: boolean = true) {
 		try {
@@ -4517,21 +4515,12 @@ export class ShoferProvider
 			await this.taskHistoryStore.deleteMany(allIdsToDelete)
 			this.recentTasksCache = undefined
 
-			// Delete associated shadow repositories or branches and task directories
-			const globalStorageDir = this.contextProxy.globalStorageUri.fsPath
+			// Notify plugins, then delete the task directories.
 			const workspaceDir = this.cwd
 			const { getTaskDirectoryPath } = await import("@shofer/core")
 			const globalStoragePath = this.contextProxy.globalStorageUri.fsPath
 
 			for (const taskId of allIdsToDelete) {
-				try {
-					await ShadowCheckpointService.deleteTask({ taskId, globalStorageDir, workspaceDir })
-				} catch (error) {
-					webviewLog.error(
-						`[deleteTaskWithId${taskId}] failed to delete associated shadow repository or branch: ${error instanceof Error ? error.message : String(error)}`,
-					)
-				}
-
 				// Let plugins drop per-task state they keep OUTSIDE the task directory
 				// (design §6.9 `onTaskDeleted`) — deleting the directory below would
 				// otherwise leave it orphaned with nothing left to name it.
@@ -4787,8 +4776,6 @@ export class ShoferProvider
 			soundEnabled,
 			ttsEnabled,
 			ttsSpeed,
-			enableCheckpoints,
-			checkpointTimeout,
 			taskHistory,
 			soundVolume,
 			writeDelayMs,
@@ -4998,12 +4985,6 @@ export class ShoferProvider
 			soundEnabled: soundEnabled ?? false,
 			ttsEnabled: ttsEnabled ?? false,
 			ttsSpeed: ttsSpeed ?? 1.0,
-			// Shofer Nodes L2 (shared-fs): the remote executor's workspace is mounted
-			// at the SAME paths on the controller, so a shadow task's checkpoint
-			// markers/diffs resolve identically — render the checkpoint UI just like
-			// a local task's.
-			enableCheckpoints: enableCheckpoints ?? true,
-			checkpointTimeout: checkpointTimeout ?? DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 			shouldShowAnnouncement:
 				telemetrySetting !== "unset" && lastShownAnnouncementId !== this.latestAnnouncementId,
 			allowedCommands: mergedAllowedCommands,
@@ -5275,8 +5256,6 @@ export class ShoferProvider
 			soundEnabled: stateValues.soundEnabled ?? false,
 			ttsEnabled: stateValues.ttsEnabled ?? false,
 			ttsSpeed: stateValues.ttsSpeed ?? 1.0,
-			enableCheckpoints: stateValues.enableCheckpoints ?? true,
-			checkpointTimeout: stateValues.checkpointTimeout ?? DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 			soundVolume: stateValues.soundVolume,
 			writeDelayMs: stateValues.writeDelayMs ?? DEFAULT_WRITE_DELAY_MS,
 			terminalShellIntegrationTimeout:
@@ -5798,8 +5777,7 @@ export class ShoferProvider
 			}
 		}
 
-		const { apiConfiguration, organizationAllowList, enableCheckpoints, checkpointTimeout, experiments } =
-			await this.getState()
+		const { apiConfiguration, organizationAllowList, experiments } = await this.getState()
 
 		// Subtasks (and other mode-seeded tasks) arrive with `initialMode` but no
 		// explicit `initialApiConfigName` — e.g. new_task only knows the child's
@@ -5851,8 +5829,6 @@ export class ShoferProvider
 		const task = new Task({
 			provider: this,
 			apiConfiguration: taskApiConfiguration,
-			enableCheckpoints,
-			checkpointTimeout,
 			consecutiveMistakeLimit: apiConfiguration.consecutiveMistakeLimit,
 			task: text,
 			images,
@@ -6749,7 +6725,7 @@ export class ShoferProvider
 	 *
 	 * The persisted cascade is handled by `deleteTaskWithId` which recursively
 	 * collects child IDs (via `childIds` in persisted history) and deletes them
-	 * from the task-history store, shadow checkpoints, and on-disk task directories.
+	 * from the task-history store and on-disk task directories (and notifies plugins).
 	 *
 	 * Live (in-memory) child tasks running in `TaskManager` are also aborted and
 	 * removed here so they don't become zombie instances — `deleteTaskWithId`
@@ -6770,8 +6746,8 @@ export class ShoferProvider
 				}
 			}
 
-			// Persisted cascade: delete from task-history store, shadow checkpoints,
-			// and on-disk task directories for all descendants.
+			// Persisted cascade: delete from the task-history store and on-disk task
+			// directories for all descendants.
 			await this.deleteTaskWithId(taskId)
 		} catch (error) {
 			this.log(`Failed to delete managed task: ${error}`)

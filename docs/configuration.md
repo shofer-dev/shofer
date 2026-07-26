@@ -316,7 +316,7 @@ atomic-rewrite compaction); there is no configuration knob.
 | Default | `""` (default location) |
 | Scope   | window                  |
 
-Custom storage path for task history, checkpoints, and other
+Custom storage path for task history, plugin storage, and other
 persistent data. Supports absolute paths (e.g.,
 `"D:\\ShoferStorage"`).
 
@@ -540,7 +540,6 @@ absent:
   `autoCondenseContextPercent`, `maxOpenTabsContext`, `maxWorkspaceFiles`
 - **Terminal** — `terminalOutputPreviewSize`,
   `terminalShellIntegrationTimeout`, `terminalCommandDelay`
-- **Checkpoints** — `enableCheckpoints`, `checkpointTimeout`
 - **Modes** — `mode`, `customModes`, `customModePrompts` (per-mode API
   profile assignments live in the SecretStorage provider-profiles blob
   as `modeApiConfigs`, not in `globalSettingsSchema`)

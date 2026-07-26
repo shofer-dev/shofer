@@ -5,7 +5,6 @@ import { vscode } from "@/utils/vscode"
 
 import { MarketplaceView } from "../MarketplaceView"
 import { MarketplaceViewStateManager } from "../MarketplaceViewStateManager"
-import { DEFAULT_CHECKPOINT_TIMEOUT_SECONDS } from "@shofer/types"
 
 vi.mock("@/utils/vscode", () => ({
 	vscode: {
@@ -67,7 +66,6 @@ describe("MarketplaceView", () => {
 			setFollowupAutoApproveTimeoutMs: vi.fn(),
 			profileThresholds: {},
 			setProfileThresholds: vi.fn(),
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 			// ... other required context properties
 		}
 	})
@@ -88,7 +86,6 @@ describe("MarketplaceView", () => {
 		mockExtensionState = {
 			...mockExtensionState,
 			organizationSettingsVersion: 2,
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 		}
 
 		// Re-render with updated context

@@ -14,10 +14,8 @@ function makeExecutor(id: string) {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		applyConfig: vi.fn(async () => {}),
-		getCheckpointDiff: vi.fn(async () => []),
 		getTaskChangedFiles: vi.fn(async () => ({ taskId: `${id}-task-1`, entries: [], backend: "none" as const })),
 		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
-		restoreCheckpoint: vi.fn(async () => {}),
 		revertChangedFile: vi.fn(async () => {}),
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
@@ -71,17 +69,11 @@ describe("ExecutorPool (§13 controller side)", () => {
 		const t1 = await pool.createTask({ prompt: "1", mode: "code" }) // → A
 		await pool.createTask({ prompt: "2", mode: "code" }) // → B (advances round-robin)
 
-		await pool.getCheckpointDiff(t1.taskId, { commitHash: "c1", mode: "checkpoint" })
-		expect(a.api.getCheckpointDiff).toHaveBeenCalledWith("A-task-1", { commitHash: "c1", mode: "checkpoint" })
-
 		await pool.getTaskChangedFiles(t1.taskId)
 		expect(a.api.getTaskChangedFiles).toHaveBeenCalledWith("A-task-1")
 
 		await pool.getChangedFileDiff(t1.taskId, "src/x.ts")
 		expect(a.api.getChangedFileDiff).toHaveBeenCalledWith("A-task-1", "src/x.ts")
-
-		await pool.restoreCheckpoint(t1.taskId, { ts: 1, commitHash: "c1", mode: "restore" })
-		expect(a.api.restoreCheckpoint).toHaveBeenCalledWith("A-task-1", { ts: 1, commitHash: "c1", mode: "restore" })
 
 		await pool.revertChangedFile(t1.taskId, "src/x.ts")
 		expect(a.api.revertChangedFile).toHaveBeenCalledWith("A-task-1", "src/x.ts")
@@ -100,8 +92,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		expect(a.api.pluginRequest).toHaveBeenCalledWith("A-task-1", "checkpoints", "diff", { hash: "abc" })
 
 		// None of these leaked to the other executor.
-		expect(b.api.getCheckpointDiff).not.toHaveBeenCalled()
-		expect(b.api.restoreCheckpoint).not.toHaveBeenCalled()
+		expect(b.api.getTaskChangedFiles).not.toHaveBeenCalled()
 		expect(b.api.pluginRequest).not.toHaveBeenCalled()
 	})
 

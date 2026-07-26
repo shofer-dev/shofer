@@ -31,7 +31,6 @@
 		"mcp": "Servidors MCP",
 		"worktrees": "Worktrees",
 		"autoApprove": "Auto-aprovació",
-		"checkpoints": "Punts de control",
 		"notifications": "Notificacions",
 		"contextManagement": "Context",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Per defecte: claude",
 			"maxTokensLabel": "Tokens màxims de sortida",
 			"maxTokensDescription": "Nombre màxim de tokens de sortida per a les respostes de Claude Code. El valor per defecte és 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Temps d'espera per inicialitzar el punt de control (segons)",
-			"description": "Temps màxim d'espera per inicialitzar el servei de punts de control. El valor per defecte és 15 segons. Rang: 10-60 segons."
-		},
-		"enable": {
-			"label": "Habilitar punts de control automàtics",
-			"description": "Quan està habilitat, Shofer crearà automàticament punts de control durant l'execució de tasques, facilitant la revisió de canvis o la reversió a estats anteriors. <0>Més informació</0>"
 		}
 	},
 	"notifications": {

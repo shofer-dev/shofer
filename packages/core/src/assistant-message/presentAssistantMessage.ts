@@ -87,7 +87,6 @@ import { stringifyForLog } from "../utils/outputChannelLogger.js"
  * - Displays text content to the user.
  * - Executes tool use requests with appropriate user approval.
  * - Manages the flow of conversation by determining when to proceed to the next content block.
- * - Coordinates file system checkpointing for modified files.
  * - Controls the conversation state to determine when to continue to the next request.
  *
  * The function uses a locking mechanism to prevent concurrent execution and handles
@@ -404,7 +403,7 @@ export async function presentAssistantMessage(shofer: Task) {
 			// complete handoff in say() is immune to other messages being
 			// appended in between. This is the root-cause fix that replaces the
 			// earlier position/content based dedup heuristics.
-			await shofer.say("text", content, undefined, block.partial, undefined, undefined, {
+			await shofer.say("text", content, undefined, block.partial, undefined, {
 				streamBlockId: (block as TextContent).id,
 			})
 			break
@@ -1051,7 +1050,6 @@ export async function presentAssistantMessage(shofer: Task) {
 
 			switch (block.name) {
 				case "write_to_file":
-					await checkpointSaveAndMark(shofer)
 					await writeToFileTool.handle(shofer, block as ToolUse<"write_to_file">, {
 						askApproval,
 						handleError,
@@ -1066,7 +1064,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "apply_diff":
-					await checkpointSaveAndMark(shofer)
 					await applyDiffToolClass.handle(shofer, block as ToolUse<"apply_diff">, {
 						askApproval,
 						handleError,
@@ -1075,7 +1072,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "edit":
 				case "search_and_replace":
-					await checkpointSaveAndMark(shofer)
 					await editTool.handle(shofer, block as ToolUse<"edit">, {
 						askApproval,
 						handleError,
@@ -1083,7 +1079,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "search_replace":
-					await checkpointSaveAndMark(shofer)
 					await searchReplaceTool.handle(shofer, block as ToolUse<"search_replace">, {
 						askApproval,
 						handleError,
@@ -1091,7 +1086,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "edit_file":
-					await checkpointSaveAndMark(shofer)
 					await editFileTool.handle(shofer, block as ToolUse<"edit_file">, {
 						askApproval,
 						handleError,
@@ -1099,7 +1093,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "apply_patch":
-					await checkpointSaveAndMark(shofer)
 					await applyPatchTool.handle(shofer, block as ToolUse<"apply_patch">, {
 						askApproval,
 						handleError,
@@ -1213,7 +1206,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "new_task":
-					await checkpointSaveAndMark(shofer)
 					await newTaskTool.handle(shofer, block as ToolUse<"new_task">, {
 						askApproval,
 						handleError,
@@ -1368,7 +1360,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "generate_image":
-					await checkpointSaveAndMark(shofer)
 					await generateImageTool.handle(shofer, block as ToolUse<"generate_image">, {
 						askApproval,
 						handleError,
@@ -1376,7 +1367,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "create_directory":
-					await checkpointSaveAndMark(shofer)
 					await createDirectoryTool.handle(shofer, block as ToolUse<"create_directory">, {
 						askApproval,
 						handleError,
@@ -1391,7 +1381,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "file":
-					await checkpointSaveAndMark(shofer)
 					await fileTool.handle(shofer, block as ToolUse<"file">, {
 						askApproval,
 						handleError,
@@ -1434,7 +1423,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "insert_edit":
-					await checkpointSaveAndMark(shofer)
 					await insertEditTool.handle(shofer, block as ToolUse<"insert_edit">, {
 						askApproval,
 						handleError,
@@ -1442,7 +1430,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "sed":
-					await checkpointSaveAndMark(shofer)
 					await sedTool.handle(shofer, block as ToolUse<"sed">, {
 						askApproval,
 						handleError,
@@ -1464,7 +1451,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					})
 					break
 				case "rename_symbol":
-					await checkpointSaveAndMark(shofer)
 					await renameSymbolTool.handle(shofer, block as ToolUse<"rename_symbol">, {
 						askApproval,
 						handleError,
@@ -1824,25 +1810,5 @@ async function maybeRecordTaskInteraction(shofer: Task, block: ToolUse, toolCall
 			break
 		default:
 			break
-	}
-}
-
-/**
- * save checkpoint and mark done in the current streaming task.
- * @param task The Task instance to checkpoint save and mark.
- * @returns
- */
-async function checkpointSaveAndMark(task: Task) {
-	if (task.currentStreamingDidCheckpoint) {
-		return
-	}
-	try {
-		await task.checkpointSave(true)
-		task.currentStreamingDidCheckpoint = true
-	} catch (error) {
-		webviewLog.error(
-			`[Task#presentAssistantMessage] Error saving checkpoint: ${error instanceof Error ? error.message : String(error)}`,
-			error,
-		)
 	}
 }

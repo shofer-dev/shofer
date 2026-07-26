@@ -272,7 +272,6 @@ import { myTool } from "../tools/MyTool"
 
 ```typescript
 case "my_tool":
-    await checkpointSaveAndMark(shofer)  // if file-modifying
     await myTool.handle(shofer, block as ToolUse<"my_tool">, {
         askApproval, handleError, pushToolResult,
     })
@@ -603,7 +602,7 @@ The Step 4 handler example is intentionally minimal, but real tool implementatio
 
 - **File Change Tracking**: Tools that mutate workspace files must call `task.fileContextTracker.captureOriginal(relPath, content)` before mutation and `task.fileContextTracker.trackFileContext(relPath, "shofer_edited")` after. Without these, the file won't appear in the FileChangesPanel. See [`file-change-tracking.md`](file-change-tracking.md).
 
-- **`checkpointSaveAndMark`**: File-mutating tools get a `checkpointSaveAndMark(shofer)` call in the `presentAssistantMessage.ts` switch before the tool's `.handle()` is invoked (see Step 5b). The handler itself does not call checkpoint — the router does.
+- **Pre-tool plugin hook**: before any tool's `.handle()` runs, `presentAssistantMessage.ts` calls `pluginRegistry.applyBeforeToolCall(...)`, which is where a snapshot plugin (the bundled `checkpoints` one) takes its pre-mutation snapshot. Tool handlers need no snapshot code of their own — and no new tool needs registering anywhere for it, though a tool that mutates files in a NEW way should be added to that plugin's `FILE_MUTATING_TOOLS`.
 
 - **`resetPartialState()`**: Tools that override `handlePartial()` must call `this.resetPartialState()` at the end of `execute()` on both success and error paths. Skipping this causes the next invocation to short-circuit on a stale stabilized path.
 

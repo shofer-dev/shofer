@@ -434,14 +434,14 @@ describe("MessageManager", () => {
 		})
 	})
 
-	describe("Checkpoint scenarios", () => {
+	describe("Snapshot-marker rewind scenarios", () => {
 		it("should preserve Summary when checkpoint restore is BEFORE condense", async () => {
 			const condenseId = "summary-abc"
 
 			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 500, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
-				{ ts: 600, say: "checkpoint_saved", text: "checkpoint-hash" },
+				{ ts: 600, say: "plugin_marker", text: "checkpoint-hash" },
 				{ ts: 700, say: "user", text: "After checkpoint" },
 			]
 
@@ -482,7 +482,7 @@ describe("MessageManager", () => {
 
 			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
-				{ ts: 200, say: "checkpoint_saved", text: "checkpoint-hash" },
+				{ ts: 200, say: "plugin_marker", text: "checkpoint-hash" },
 				{ ts: 300, say: "condense_context", contextCondense: { condenseId, summary: "Summary" } },
 				{ ts: 400, say: "user", text: "After condense" },
 			]
@@ -525,7 +525,7 @@ describe("MessageManager", () => {
 			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
 				{ ts: 500, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
-				{ ts: 600, say: "checkpoint_saved", text: "checkpoint-hash" },
+				{ ts: 600, say: "plugin_marker", text: "checkpoint-hash" },
 				{ ts: 700, say: "user", text: "After checkpoint" },
 			]
 
@@ -560,7 +560,7 @@ describe("MessageManager", () => {
 
 			mockTask.shoferMessages = [
 				{ ts: 100, say: "user", text: "Task" },
-				{ ts: 200, say: "checkpoint_saved", text: "checkpoint-hash" },
+				{ ts: 200, say: "plugin_marker", text: "checkpoint-hash" },
 				{ ts: 300, say: "sliding_window_truncation", contextTruncation: { truncationId, reason: "window" } },
 				{ ts: 400, say: "user", text: "After truncation" },
 			]

@@ -892,7 +892,6 @@ Includes:
 - **Auto-approval:** `autoApprovalEnabled`, all `alwaysAllow*` toggles, `followupAutoApproveTimeoutMs`
 - **Command permissions:** `allowedCommands`, `deniedCommands`, `commandTimeoutAllowlist`, `commandExecutionTimeout`
 - **Cost/rate limits:** `allowedMaxRequests`, `allowedMaxCost`
-- **Checkpoints:** `enableCheckpoints`, `checkpointTimeout`
 - **Context management:** `autoCondenseContext`, `autoCondenseContextPercent`, `writeDelayMs`
 - **Code indexing:** `codebaseIndexConfig`, `codebaseIndexEnabled`
 - **Experiments:** `experiments` (feature flags)
@@ -1296,7 +1295,6 @@ The 19 Shofer settings tabs break down as follows:
 | **Experimental**       | Low        | ⚠️ **Degraded** — feature toggle checkboxes work but lose per-feature descriptions and inline docs                                                                                                                      |
 | **Terminal**           | Low        | ✅ Mostly portable — toggles (boolean), timeout (number), preview size (enum)                                                                                                                                           |
 | **Codebase Index**     | Low        | ✅ Mostly portable — enable (boolean), config object (nested object editor, basic but functional)                                                                                                                       |
-| **Checkpoints**        | Low        | ✅ Portable — enable (boolean), timeout (number)                                                                                                                                                                        |
 | **Notifications**      | Low        | ✅ Portable — toggles (boolean), volume/speed (number, no slider)                                                                                                                                                       |
 | **Live Memory**        | Low        | ⚠️ **Degraded** — enable (boolean) works, but profile picker needs dynamic list and context window config is a nested object                                                                                            |
 | **UI**                 | Low        | ✅ Portable — toggles (boolean), enter behavior (enum), collapse (boolean)                                                                                                                                              |
@@ -1421,7 +1419,7 @@ around a **staged-save (buffered) pattern**:
   `pendingDefaultConfigName` and only persisted on Save, with a `savingDefault` ref +
   re-sync `useEffect` suppressing a new→old→new flicker during the host round-trip
   (`SettingsView.tsx:158-170`, `559-567`).
-The staged-save flow, end to end — nothing reaches the host until Save:
+  The staged-save flow, end to end — nothing reaches the host until Save:
 
 ```mermaid
 flowchart TD

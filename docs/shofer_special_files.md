@@ -404,7 +404,7 @@ protected patterns list but not yet loaded or used by any subsystem.
 | **Purpose**        | Internal — stores embedded worktree task state           |
 | **Visible to LLM** | Yes (readable, but inside `.shofer/` so write-protected) |
 
-Used by the checkpoint system to scope shadow git repos for worktree tasks.
+Used by the bundled checkpoints plugin to scope shadow git repos for worktree tasks.
 Each embedded worktree gets a subdirectory here. Excluded from non-scoped
 shadow git tracking so sibling worktrees don't contaminate each other.
 

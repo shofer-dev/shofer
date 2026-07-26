@@ -7,9 +7,10 @@ import { webviewMessageHandler } from "../webviewMessageHandler"
 
 /**
  * Shofer Nodes L3 — reverse data channel. When a remote (shadow) task is focused,
- * the checkpoint diff/restore + changed-files webview handlers must route to the
- * owning executor via `provider.nodeRegistry`, NOT drive a local Task. These specs
- * exercise the shadow branches added in C5/C6.
+ * the changed-files webview handlers must route to the owning executor via
+ * `provider.nodeRegistry`, NOT drive a local Task. (Plugin-owned features route the
+ * same way, through `ShoferProvider`'s plugin-request routing — see
+ * `pluginUiRequestRouting.spec.ts`.)
  */
 
 const { executeCommand } = vi.hoisted(() => ({ executeCommand: vi.fn(async () => {}) }))
@@ -28,8 +29,7 @@ vi.mock("vscode", async (importOriginal) => {
 function makeNodeRegistry(shadowTaskId: string | undefined) {
 	return {
 		getFocusedShadow: vi.fn(() => (shadowTaskId ? { taskId: shadowTaskId } : undefined)),
-		getCheckpointDiff: vi.fn(async () => [] as any[]),
-		restoreCheckpoint: vi.fn(async () => {}),
+		pluginRequest: vi.fn(async () => ({})),
 		rebuildShadow: vi.fn(async () => {}),
 		getChangedFileDiff: vi.fn(async () => ({ original: "base", final: "final" })),
 		revertChangedFile: vi.fn(async () => {}),
@@ -73,51 +73,6 @@ describe("webviewMessageHandler — Shofer Nodes L3 shadow branches", () => {
 		provider = makeProvider()
 	})
 
-	// ── checkpoint diff ──────────────────────────────────────────────────────────
-
-	it("checkpointDiff fetches the diff from the executor and renders it locally", async () => {
-		const changes = [{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } }]
-		nodeRegistry.getCheckpointDiff.mockResolvedValue(changes)
-		await webviewMessageHandler(provider, {
-			type: "checkpointDiff",
-			payload: { commitHash: "c1", mode: "checkpoint" },
-		} as any)
-		expect(nodeRegistry.getCheckpointDiff).toHaveBeenCalledWith("r1-task-1", { commitHash: "c1", mode: "checkpoint" })
-		expect(showMultiFileDiff).toHaveBeenCalledWith(expect.any(String), changes)
-	})
-
-	it("checkpointDiff surfaces a no-changes notice when the executor returns nothing", async () => {
-		nodeRegistry.getCheckpointDiff.mockResolvedValue([])
-		await webviewMessageHandler(provider, {
-			type: "checkpointDiff",
-			payload: { commitHash: "c1", mode: "to-current" },
-		} as any)
-		expect(host.notifier.info).toHaveBeenCalled()
-		expect(showMultiFileDiff).not.toHaveBeenCalled()
-	})
-
-	// ── checkpoint restore ───────────────────────────────────────────────────────
-
-	it("checkpointRestore restores on the executor then rebuilds the shadow", async () => {
-		await webviewMessageHandler(provider, {
-			type: "checkpointRestore",
-			payload: { ts: 1, commitHash: "c1", mode: "restore" },
-		} as any)
-		expect(nodeRegistry.restoreCheckpoint).toHaveBeenCalledWith("r1-task-1", { ts: 1, commitHash: "c1", mode: "restore" })
-		expect(nodeRegistry.rebuildShadow).toHaveBeenCalledWith("r1-task-1")
-	})
-
-	it("checkpointRestore is blocked when another task is active in the worktree", async () => {
-		activeManagedTasks = [{ id: "local-1" }]
-		await webviewMessageHandler(provider, {
-			type: "checkpointRestore",
-			payload: { ts: 1, commitHash: "c1", mode: "restore" },
-		} as any)
-		expect(host.notifier.warn).toHaveBeenCalled()
-		expect(nodeRegistry.restoreCheckpoint).not.toHaveBeenCalled()
-		expect(nodeRegistry.rebuildShadow).not.toHaveBeenCalled()
-	})
-
 	// ── changed files ──────────────────────────────────────────────────────────
 
 	it("changedFiles/get fetches the shadow panel (never the local push path)", async () => {
@@ -129,7 +84,12 @@ describe("webviewMessageHandler — Shofer Nodes L3 shadow branches", () => {
 	it("changedFiles/showDiff builds the diff from the executor's base/final contents", async () => {
 		await webviewMessageHandler(provider, { type: "changedFiles/showDiff", text: "a.ts" } as any)
 		expect(nodeRegistry.getChangedFileDiff).toHaveBeenCalledWith("r1-task-1", "a.ts")
-		expect(executeCommand).toHaveBeenCalledWith("vscode.diff", expect.anything(), expect.anything(), expect.any(String))
+		expect(executeCommand).toHaveBeenCalledWith(
+			"vscode.diff",
+			expect.anything(),
+			expect.anything(),
+			expect.any(String),
+		)
 	})
 
 	it("changedFiles/revert reverts on the executor then refreshes; blocks when a task is active", async () => {

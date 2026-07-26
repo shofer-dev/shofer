@@ -45,7 +45,6 @@ import TaskStatsView from "./TaskStatsView"
 import TaskSequenceView from "./TaskSequenceView"
 import TaskLogsView from "./TaskLogsView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
-import { CheckpointWarning } from "./CheckpointWarning"
 import { QueuedMessages } from "./QueuedMessages"
 import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
@@ -396,9 +395,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const lastTtsRef = useRef<string>("")
 	const [wasStreaming, setWasStreaming] = useState<boolean>(false)
-	const [checkpointWarning, setCheckpointWarning] = useState<
-		{ type: "WAIT_TIMEOUT" | "INIT_TIMEOUT"; timeout: number } | undefined
-	>(undefined)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
@@ -1600,9 +1596,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						setIsCondensing(false)
 					}
 					break
-				case "checkpointInitWarning":
-					setCheckpointWarning(message.checkpointWarning)
-					break
 				case "interactionRequired":
 					playSound("notification")
 					break
@@ -1648,7 +1641,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleSetChatBoxMessage,
 			handlePrimaryButtonClick,
 			handleSecondaryButtonClick,
-			setCheckpointWarning,
 			playSound,
 			canStop,
 		],
@@ -1657,39 +1649,9 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	useEvent("message", handleMessage)
 
 	const visibleMessages = useMemo(() => {
-		// Pre-compute checkpoint hashes that have associated user messages for O(1) lookup
-		const userMessageCheckpointHashes = new Set<string>()
-		modifiedMessages.forEach((msg) => {
-			if (
-				msg.say === "user_feedback" &&
-				msg.checkpoint &&
-				msg.checkpoint["type"] === "user_message" &&
-				msg.checkpoint["hash"]
-			) {
-				userMessageCheckpointHashes.add(msg.checkpoint["hash"] as string)
-			}
-		})
-
 		// Remove the 500-message limit to prevent array index shifting
 		// Virtuoso is designed to efficiently handle large lists through virtualization
 		const newVisibleMessages = modifiedMessages.filter((message) => {
-			// Filter out checkpoint_saved messages that should be suppressed
-			if (message.say === "checkpoint_saved") {
-				// Check if this checkpoint has the suppressMessage flag set
-				if (
-					message.checkpoint &&
-					typeof message.checkpoint === "object" &&
-					"suppressMessage" in message.checkpoint &&
-					message.checkpoint.suppressMessage
-				) {
-					return false
-				}
-				// Also filter out checkpoint messages associated with user messages (legacy behavior)
-				if (message.text && userMessageCheckpointHashes.has(message.text)) {
-					return false
-				}
-			}
-
 			// A plugin marker the plugin asked to keep out of the timeline: persisted as
 			// its anchor, but not something the user needs to see.
 			if (message.say === "plugin_marker" && message.marker?.suppress) {
@@ -2066,13 +2028,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		[handleSetExpandedRow],
 	)
 
-	// Effect to clear checkpoint warning when messages appear or task changes
-	useEffect(() => {
-		if (isHidden || !task) {
-			setCheckpointWarning(undefined)
-		}
-	}, [modifiedMessages.length, isStreaming, isHidden, task])
-
 	const placeholderText = task ? t("chat:typeMessage") : t("chat:typeTask")
 
 	const switchToMode = useCallback(
@@ -2168,8 +2123,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 
 	const itemContent = useCallback(
 		(_index: number, messageOrGroup: ShoferMessage) => {
-			const hasCheckpoint = modifiedMessages.some((message) => message.say === "checkpoint_saved")
-
 			// regular message
 			return (
 				<ChatRow
@@ -2203,7 +2156,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							return tool.tool === "updateTodoList" && enableButtons && !!primaryButtonText
 						})()
 					}
-					hasCheckpoint={hasCheckpoint}
 				/>
 			)
 		},
@@ -2437,12 +2389,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						}
 						isRunning={canStop}
 					/>
-
-					{checkpointWarning && (
-						<div className="px-3">
-							<CheckpointWarning warning={checkpointWarning} />
-						</div>
-					)}
 				</>
 			) : (
 				<>

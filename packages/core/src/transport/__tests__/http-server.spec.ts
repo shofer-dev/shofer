@@ -66,12 +66,8 @@ describe("createRequestHandler (§11)", () => {
 			cancelTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
 			applyConfig: vi.fn(async () => {}),
-			getCheckpointDiff: vi.fn(async () => [
-				{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
-			]),
 			getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
 			getChangedFileDiff: vi.fn(async () => ({ original: "base", final: "final" })),
-			restoreCheckpoint: vi.fn(async () => {}),
 			revertChangedFile: vi.fn(async () => {}),
 			revertAllChangedFiles: vi.fn(async () => {}),
 			acceptChangedFile: vi.fn(async () => {}),
@@ -192,39 +188,6 @@ describe("createRequestHandler (§11)", () => {
 		await run(mockReq("POST", "/api/v1/task/t1/ask", {}), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(400)
 		expect(api.respondToAsk).not.toHaveBeenCalled()
-	})
-
-	it("L3: checkpoint-diff returns 200 with the computed changes", async () => {
-		const res = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/checkpoint-diff", { commitHash: "c1", mode: "checkpoint" }),
-			res as unknown as ServerResponse,
-		)
-		expect(res.statusCode).toBe(200)
-		expect(JSON.parse(res.body)).toEqual([
-			{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
-		])
-		expect(api.getCheckpointDiff).toHaveBeenCalledWith("t1", { commitHash: "c1", mode: "checkpoint" })
-	})
-
-	it("L3: checkpoint-diff 400s without a commitHash", async () => {
-		const res = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/checkpoint-diff", { mode: "checkpoint" }),
-			res as unknown as ServerResponse,
-		)
-		expect(res.statusCode).toBe(400)
-		expect(api.getCheckpointDiff).not.toHaveBeenCalled()
-	})
-
-	it("L3: checkpoint-restore returns 202", async () => {
-		const res = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/checkpoint-restore", { ts: 1, commitHash: "c1", mode: "restore" }),
-			res as unknown as ServerResponse,
-		)
-		expect(res.statusCode).toBe(202)
-		expect(api.restoreCheckpoint).toHaveBeenCalledWith("t1", { ts: 1, commitHash: "c1", mode: "restore" })
 	})
 
 	it("L3: plugin-request routes to the named plugin and wraps its result", async () => {

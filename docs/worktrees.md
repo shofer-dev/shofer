@@ -133,7 +133,7 @@ flowchart TD
 
 This guarantees a single, unambiguous trigger: an explicit worktree pick or an explicit "Current branch" opt-out both suppress auto-create, so the user never ends up with a second, unintended worktree.
 
-### 4. Checkpoint Isolation (`src/services/checkpoints/`)
+### 4. Checkpoint Isolation (the bundled `checkpoints` plugin)
 
 Two parallel tasks running against the same workspace would interfere if their shadow gits both pointed `core.worktree` at the workspace root. The solution uses scoped shadow gits:
 
@@ -142,7 +142,7 @@ Two parallel tasks running against the same workspace would interfere if their s
 | Main task (workspace root) | `<workspace>/`                          | `/.shofer/worktrees/` appended to exclude file |
 | Worktree task              | `<workspace>/.shofer/worktrees/<name>/` | (already scoped — no exclude needed)           |
 
-`ShadowCheckpointService` accepts an optional `scopedWorktreeDir` constructor argument. When set, the shadow git's `core.worktree` is set to the worktree subdirectory. Non-scoped instances exclude `.shofer/worktrees/` to prevent cross-contamination. `core.worktree` validation accepts the scoped path (not just `workspaceDir`).
+`ShadowGitRepo` accepts an optional `scopedWorktreeDir` constructor argument. When set, the shadow git's `core.worktree` is set to the worktree subdirectory. Non-scoped instances exclude `.shofer/worktrees/` to prevent cross-contamination. `core.worktree` validation accepts the scoped path (not just `workspaceDir`).
 
 ### 5. Embedded Worktree Detection (`isEmbeddedWorktree`)
 
@@ -308,7 +308,7 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 | 1   | **`handleGetWorktreeStatus` `cwdOverride` undocumented** | §2 VSCode Bridge / §Worktree Indicator | The handler accepts an optional second parameter `cwdOverride?: string` so callers can get status for worktrees that differ from `provider.cwd`. This parameter is absent from both the handler listing and the IPC table (which shows `getWorktreeStatus` payload as `(none)`).                                   |
 | 2   | **Missing handler functions**                            | §2 VSCode Bridge                       | `handleGetAvailableBranches`, `handleGetWorktreeIncludeStatus`, `handleCheckBranchWorktreeInclude`, `handleCreateWorktreeInclude`, and `handleCheckoutBranch` exist in [`handlers.ts`](src/core/webview/worktree/handlers.ts) but are not enumerated in the handler list. Only the five most-used ones are listed. |
 | 3   | **Missing types**                                        | §Type Definitions                      | `BranchInfo` (return of `getAvailableBranches`), `WorktreeDefaultsResponse` (return of `handleGetWorktreeDefaults`), and `CopyProgress`/`CopyProgressCallback` (`.shofer/worktreeinclude` copy progress) are defined in source but omitted from the type listing.                                                  |
-| 4   | **No mention of `RepoPerTaskCheckpointService`**         | §4 Checkpoint Isolation                | The section only references `ShadowCheckpointService`, but the per-task orchestration is done by [`RepoPerTaskCheckpointService`](src/services/checkpoints/RepoPerTaskCheckpointService.ts) which constructs scoped instances.                                                                                     |
+| 4   | **No mention of `CheckpointServiceRegistry`**            | §4 Checkpoint Isolation                | The section only references `ShadowGitRepo`, but the per-task orchestration is done by [`CheckpointServiceRegistry`](plugins/checkpoints/src/service-registry.ts) which constructs scoped instances.                                                                                                               |
 
 ### Diagram vs. Reality
 
@@ -319,11 +319,11 @@ This section catalogues discrepancies, omissions, and enhancement opportunities 
 
 ### Improvement Opportunities
 
-| #   | Area                                                                 | Suggestion                                                                                                                                                                                                                                                                                                                       |
-| --- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 7   | **Add sequence diagrams**                                            | A sequence diagram for worktree creation (webview → `createWorktree` → `handleCreateWorktree` → `WorktreeService.createWorktree` + `WorktreeIncludeService.copyWorktreeIncludeFiles` → `worktreeCopyProgress` → result) would clarify the multi-step flow.                                                                       |
-| 8   | **Document `handleGetWorktreeStatus` parallelism**                   | The handler runs 5+ git queries in parallel (`getCurrentBranch`, `detectBaseBranch`, `listWorktrees`, `git log`, `git status`, then `git rev-list` ahead/behind). This performance design choice should be surfaced in the Architecture section.                                                                                 |
-| 9   | **Cross-reference checkpoint isolation with `submodule-support.md`** | The checkpoint section should explicitly link to how `GIT_DIR` sanitization in `createSanitizedGit` (see [`ShadowCheckpointService.ts`](src/services/checkpoints/ShadowCheckpointService.ts:34-60)) prevents submodule gitlink pollution. This is mentioned for submodules (§Caveats) but not for the checkpoint section itself. |
+| #   | Area                                                                 | Suggestion                                                                                                                                                                                                                                                                                            |
+| --- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 7   | **Add sequence diagrams**                                            | A sequence diagram for worktree creation (webview → `createWorktree` → `handleCreateWorktree` → `WorktreeService.createWorktree` + `WorktreeIncludeService.copyWorktreeIncludeFiles` → `worktreeCopyProgress` → result) would clarify the multi-step flow.                                            |
+| 8   | **Document `handleGetWorktreeStatus` parallelism**                   | The handler runs 5+ git queries in parallel (`getCurrentBranch`, `detectBaseBranch`, `listWorktrees`, `git log`, `git status`, then `git rev-list` ahead/behind). This performance design choice should be surfaced in the Architecture section.                                                      |
+| 9   | **Cross-reference checkpoint isolation with `submodule-support.md`** | The checkpoint section should explicitly link to how `GIT_DIR` sanitization in `createSanitizedGit` (see [`shadow-git.ts`](plugins/checkpoints/src/shadow-git.ts:34-60)) prevents submodule gitlink pollution. This is mentioned for submodules (§Caveats) but not for the checkpoint section itself. |
 
 ## Known Limitations
 

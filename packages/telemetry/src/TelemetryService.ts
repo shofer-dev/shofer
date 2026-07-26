@@ -199,18 +199,6 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.TOOL_USED, { taskId, tool })
 	}
 
-	public captureCheckpointCreated(taskId: string): void {
-		this.captureEvent(TelemetryEventName.CHECKPOINT_CREATED, { taskId })
-	}
-
-	public captureCheckpointDiffed(taskId: string): void {
-		this.captureEvent(TelemetryEventName.CHECKPOINT_DIFFED, { taskId })
-	}
-
-	public captureCheckpointRestored(taskId: string): void {
-		this.captureEvent(TelemetryEventName.CHECKPOINT_RESTORED, { taskId })
-	}
-
 	public captureContextCondensed(taskId: string, isAutomaticTrigger: boolean, usedCustomPrompt?: boolean): void {
 		this.captureEvent(TelemetryEventName.CONTEXT_CONDENSED, {
 			taskId,

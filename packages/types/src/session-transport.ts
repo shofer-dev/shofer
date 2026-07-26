@@ -1,5 +1,4 @@
 import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
-import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { HostBridge } from "./host.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
@@ -30,11 +29,9 @@ export type SessionClientFrame =
 	// Node-scoped config replication (config_sync §4a). `secrets` carries the
 	// allow-listed credential slice alongside the settings slice.
 	| { t: "cmd"; id: number; method: "applyConfig"; config: SyncedSettings; version: string; secrets: SyncedSecrets }
-	// Reverse data channel (Shofer Nodes L3): checkpoint diff/restore + changed-files.
-	| { t: "cmd"; id: number; method: "getCheckpointDiff"; taskId: string; opts: CheckpointDiffOptions }
+	// Reverse data channel (Shofer Nodes L3): changed-files + plugin requests.
 	| { t: "cmd"; id: number; method: "getTaskChangedFiles"; taskId: string }
 	| { t: "cmd"; id: number; method: "getChangedFileDiff"; taskId: string; relPath: string }
-	| { t: "cmd"; id: number; method: "restoreCheckpoint"; taskId: string; opts: CheckpointRestoreOptions }
 	| { t: "cmd"; id: number; method: "revertChangedFile"; taskId: string; relPath: string }
 	| { t: "cmd"; id: number; method: "revertAllChangedFiles"; taskId: string }
 	| { t: "cmd"; id: number; method: "acceptChangedFile"; taskId: string; relPath: string }
@@ -116,12 +113,9 @@ export function serveSession({
 			else if (frame.method === "cancelTask") await api.cancelTask(frame.taskId)
 			else if (frame.method === "respondToAsk") await api.respondToAsk(frame.taskId, frame.response)
 			else if (frame.method === "applyConfig") await api.applyConfig(frame.config, frame.version, frame.secrets)
-			else if (frame.method === "getCheckpointDiff")
-				result = await api.getCheckpointDiff(frame.taskId, frame.opts)
 			else if (frame.method === "getTaskChangedFiles") result = await api.getTaskChangedFiles(frame.taskId)
 			else if (frame.method === "getChangedFileDiff")
 				result = await api.getChangedFileDiff(frame.taskId, frame.relPath)
-			else if (frame.method === "restoreCheckpoint") await api.restoreCheckpoint(frame.taskId, frame.opts)
 			else if (frame.method === "revertChangedFile") await api.revertChangedFile(frame.taskId, frame.relPath)
 			else if (frame.method === "revertAllChangedFiles") await api.revertAllChangedFiles(frame.taskId)
 			else if (frame.method === "acceptChangedFile") await api.acceptChangedFile(frame.taskId, frame.relPath)
@@ -186,10 +180,6 @@ export function connectSession({
 		applyConfig: async (config, version, secrets) => {
 			await command((id) => ({ t: "cmd", id, method: "applyConfig", config, version, secrets }))
 		},
-		getCheckpointDiff: (taskId, opts) =>
-			command((id) => ({ t: "cmd", id, method: "getCheckpointDiff", taskId, opts })) as Promise<
-				CheckpointDiffEntry[]
-			>,
 		getTaskChangedFiles: (taskId) =>
 			command((id) => ({ t: "cmd", id, method: "getTaskChangedFiles", taskId })) as Promise<ChangedFilesPayload>,
 		getChangedFileDiff: (taskId, relPath) =>
@@ -197,9 +187,6 @@ export function connectSession({
 				original: string | null
 				final: string | null
 			}>,
-		restoreCheckpoint: async (taskId, opts) => {
-			await command((id) => ({ t: "cmd", id, method: "restoreCheckpoint", taskId, opts }))
-		},
 		revertChangedFile: async (taskId, relPath) => {
 			await command((id) => ({ t: "cmd", id, method: "revertChangedFile", taskId, relPath }))
 		},

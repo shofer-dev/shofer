@@ -5,9 +5,6 @@ import * as vscode from "vscode"
 import {
 	type AgentApi,
 	type ChangedFilesPayload,
-	type CheckpointDiffEntry,
-	type CheckpointDiffOptions,
-	type CheckpointRestoreOptions,
 	type Event,
 	type GlobalSettings,
 	type LoadBalancerPolicy,
@@ -450,13 +447,9 @@ export class NodeRegistry {
 	}
 
 	// ── remote reverse data channel (Shofer Nodes L3) ────────────────────────────
-	// Route checkpoint diff/restore + changed-files ops for a shadow (remote) task
+	// Route changed-files ops and plugin requests for a shadow (remote) task
 	// over the pool to the owning executor. The webview shadow branches call these
 	// (guarded by `isShadow`/`getFocusedShadow`) instead of driving a local Task.
-
-	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
-		return this.pool.getCheckpointDiff(taskId, opts)
-	}
 
 	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
 		return this.pool.getTaskChangedFiles(taskId)
@@ -464,10 +457,6 @@ export class NodeRegistry {
 
 	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
 		return this.pool.getChangedFileDiff(taskId, relPath)
-	}
-
-	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
-		await this.pool.restoreCheckpoint(taskId, opts)
 	}
 
 	/** Reach a plugin running on the executor that owns `taskId` (generic plugin RPC). */
@@ -492,7 +481,8 @@ export class NodeRegistry {
 	}
 
 	/**
-	 * Rebuild a shadow after the executor restored a checkpoint (Shofer Nodes L3).
+	 * Rebuild a shadow after the executor rewound its task — e.g. a snapshot plugin
+	 * restoring an earlier point (Shofer Nodes L3).
 	 * The executor rewound + reinitialized its task, so its stale post-rewind
 	 * `Message` stream will repopulate the shadow: clear the buffered conversation,
 	 * re-post init state for the focused shadow, then re-fetch the changed-files

@@ -82,7 +82,6 @@ const SKIP_SAY_TYPES = new Set([
 	"api_req_retry_delayed",
 	"api_req_rate_limit_wait",
 	"api_req_deleted",
-	"checkpoint_saved",
 	"condense_context",
 	"condense_context_error",
 	"sliding_window_truncation",

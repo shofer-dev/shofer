@@ -11,20 +11,26 @@ import {
 	AlertDialogTitle,
 } from "@src/components/ui"
 
-interface CheckpointRestoreDialogProps {
+interface MessageRewindDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onConfirm: (restoreCheckpoint: boolean) => void
+	/** `true` ⇒ also roll back the state a plugin anchored here (e.g. the workspace). */
+	onConfirm: (restoreState: boolean) => void
 	type: "edit" | "delete"
-	hasCheckpoint: boolean
+	/** Whether any plugin holds a restorable point after this message. */
+	hasRestorableState: boolean
 }
 
-export const CheckpointRestoreDialog: React.FC<CheckpointRestoreDialogProps> = ({
+/**
+ * Confirmation for deleting or editing a message: chat-only, or — when a plugin holds
+ * a restorable point after it — chat plus that plugin's state.
+ */
+export const MessageRewindDialog: React.FC<MessageRewindDialogProps> = ({
 	open,
 	onOpenChange,
 	onConfirm,
 	type,
-	hasCheckpoint,
+	hasRestorableState,
 }) => {
 	const { t } = useAppTranslation()
 
@@ -60,7 +66,7 @@ export const CheckpointRestoreDialog: React.FC<CheckpointRestoreDialogProps> = (
 						className="bg-vscode-button-background hover:bg-vscode-button-hoverBackground text-vscode-button-foreground border-vscode-button-border">
 						{isEdit ? t("common:confirmation.editOnly") : t("common:confirmation.deleteOnly")}
 					</AlertDialogAction>
-					{hasCheckpoint && (
+					{hasRestorableState && (
 						<AlertDialogAction
 							onClick={handleConfirmWithRestore}
 							className="bg-vscode-button-background hover:bg-vscode-button-hoverBackground text-vscode-button-foreground border-vscode-button-border">
@@ -73,11 +79,10 @@ export const CheckpointRestoreDialog: React.FC<CheckpointRestoreDialogProps> = (
 	)
 }
 
-// Export convenience components for backward compatibility
-export const EditMessageWithCheckpointDialog: React.FC<Omit<CheckpointRestoreDialogProps, "type">> = (props) => (
-	<CheckpointRestoreDialog {...props} type="edit" />
+export const EditMessageDialog: React.FC<Omit<MessageRewindDialogProps, "type">> = (props) => (
+	<MessageRewindDialog {...props} type="edit" />
 )
 
-export const DeleteMessageWithCheckpointDialog: React.FC<Omit<CheckpointRestoreDialogProps, "type">> = (props) => (
-	<CheckpointRestoreDialog {...props} type="delete" />
+export const DeleteMessageDialog: React.FC<Omit<MessageRewindDialogProps, "type">> = (props) => (
+	<MessageRewindDialog {...props} type="delete" />
 )

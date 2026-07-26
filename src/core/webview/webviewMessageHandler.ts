@@ -21,8 +21,6 @@ import {
 	TelemetryEventName,
 	ShoferSettings,
 	ExperimentId,
-	checkoutDiffPayloadSchema,
-	checkoutRestorePayloadSchema,
 	webviewMetricsPushSchema,
 } from "@shofer/types"
 import { customToolRegistry } from "@shofer/core"
@@ -32,7 +30,6 @@ import { type ApiMessage } from "@shofer/core"
 import { saveTaskMessages } from "../task-persistence"
 
 import { ShoferProvider } from "./ShoferProvider"
-import { handleCheckpointRestoreOperation } from "./checkpointRestoreHandler"
 import { handleTimelineRewind } from "./timelineRewindHandler"
 import { pluginRegistry, type Task } from "@shofer/core"
 import { generateErrorDiagnostics } from "./diagnosticsHandler"
@@ -235,9 +232,7 @@ export const webviewMessageHandler = async (
 	 * Handles message deletion operations with user confirmation
 	 */
 	const handleDeleteOperation = async (messageTs: number): Promise<void> => {
-		// Check if there's a checkpoint before this message
 		const currentShofer = provider.getCurrentTask()
-		let hasCheckpoint = false
 
 		if (!currentShofer) {
 			await getHost().notifier.error(t("common:errors.message.no_active_task_to_delete"))
@@ -246,26 +241,18 @@ export const webviewMessageHandler = async (
 
 		const { messageIndex } = findMessageIndices(messageTs, currentShofer)
 
-		if (messageIndex !== -1) {
-			// Find the last checkpoint before this message
-			const checkpoints = currentShofer.shoferMessages.filter(
-				(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
-			)
-			hasCheckpoint = checkpoints.length > 0 || findRestorableMarker(currentShofer, messageTs) !== undefined
-		}
-
 		// Send message to webview to show delete confirmation dialog
 		await provider.postMessageToWebview({
 			type: "showDeleteMessageDialog",
 			messageTs,
-			hasCheckpoint,
+			hasRestorableState: messageIndex !== -1 && findRestorableMarker(currentShofer, messageTs) !== undefined,
 		})
 	}
 
 	/**
 	 * Handles confirmed message deletion from webview dialog
 	 */
-	const handleDeleteMessageConfirm = async (messageTs: number, restoreCheckpoint?: boolean): Promise<void> => {
+	const handleDeleteMessageConfirm = async (messageTs: number, restoreState?: boolean): Promise<void> => {
 		const currentShofer = provider.getCurrentTask()
 		if (!currentShofer) {
 			webviewLog.error("[handleDeleteMessageConfirm] No current shofer available")
@@ -288,82 +275,24 @@ export const webviewMessageHandler = async (
 		try {
 			const targetMessage = currentShofer.shoferMessages[messageIndex]
 
-			// If checkpoint restoration is requested, find and restore to the last checkpoint before this message
-			if (restoreCheckpoint) {
-				// Find the last checkpoint before this message
-				const checkpoints = currentShofer.shoferMessages.filter(
-					(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
-				)
-
-				const nextCheckpoint = checkpoints[0]
-
-				if (nextCheckpoint && nextCheckpoint.text) {
-					await handleCheckpointRestoreOperation({
-						provider,
-						currentShofer,
-						messageTs: targetMessage.ts!,
-						messageIndex,
-						checkpoint: { hash: nextCheckpoint.text },
-						operation: "delete",
-					})
-				} else if (findRestorableMarker(currentShofer, messageTs)) {
-					// A plugin owns the snapshot: it rolls its own state back through
-					// `onTimelineRewind`, then the host rewinds the chat.
-					await handleTimelineRewind({
-						provider,
-						currentShofer,
-						messageTs: targetMessage.ts!,
-						messageIndex,
-						operation: "delete",
-						restoreState: true,
-					})
-				} else {
-					// No checkpoint found before this message
-					webviewLog.info("[handleDeleteMessageConfirm] No checkpoint found before message")
-					getHost().notifier.warn("No checkpoint found before this message")
-				}
-			} else {
-				// Chat-only delete: plugins are still told (so they can drop anchors on the
-				// messages about to vanish) but `restoreState: false` forbids touching the
-				// workspace.
-				await pluginRegistry.notifyTimelineRewind({
-					ts: targetMessage.ts!,
-					taskId: currentShofer.taskId,
-					operation: "delete",
-					restoreState: false,
-				})
-
-				// For non-checkpoint deletes, preserve checkpoint associations for remaining messages
-				// Store checkpoints from messages that will be preserved
-				const preservedCheckpoints = new Map<number, any>()
-				for (let i = 0; i < messageIndex; i++) {
-					const msg = currentShofer.shoferMessages[i]
-					if (msg?.checkpoint && msg.ts) {
-						preservedCheckpoints.set(msg.ts, msg.checkpoint)
-					}
-				}
-
-				// Delete this message and all subsequent messages using MessageManager
-				await currentShofer.messageManager.rewindToTimestamp(targetMessage.ts!, { includeTargetMessage: false })
-
-				// Restore checkpoint associations for preserved messages
-				for (const [ts, checkpoint] of preservedCheckpoints) {
-					const msgIndex = currentShofer.shoferMessages.findIndex((msg) => msg.ts === ts)
-					if (msgIndex !== -1) {
-						currentShofer.shoferMessages[msgIndex].checkpoint = checkpoint
-					}
-				}
-
-				// Save the updated messages with restored checkpoints
-				await saveTaskMessages({
-					messages: currentShofer.shoferMessages,
-					taskId: currentShofer.taskId,
-					globalStoragePath: provider.contextProxy.globalStorageUri.fsPath,
-				})
-
-				// Update the UI to reflect the deletion
-				await provider.postInitState()
+			if (restoreState && !findRestorableMarker(currentShofer, messageTs)) {
+				// The user asked for state to come back but nothing holds a restorable
+				// point after this message — say so rather than silently deleting only.
+				webviewLog.info("[handleDeleteMessageConfirm] no restorable state after this message")
+				getHost().notifier.warn(t("common:errors.no_restorable_state"))
+				return
 			}
+
+			// A plugin holding state anchored to the doomed messages rolls it back first
+			// (`onTimelineRewind`), then the chat is rewound and the task reinitialized.
+			await handleTimelineRewind({
+				provider,
+				currentShofer,
+				messageTs: targetMessage.ts!,
+				messageIndex,
+				operation: "delete",
+				restoreState: restoreState === true,
+			})
 		} catch (error) {
 			webviewLog.error("Error in delete message:", error)
 			getHost().notifier.error(
@@ -378,18 +307,12 @@ export const webviewMessageHandler = async (
 	 * Handles message editing operations with user confirmation
 	 */
 	const handleEditOperation = async (messageTs: number, editedContent: string, images?: string[]): Promise<void> => {
-		// Check if there's a checkpoint before this message
 		const currentShofer = provider.getCurrentTask()
-		let hasCheckpoint = false
+		let hasRestorableState = false
 		if (currentShofer) {
 			const { messageIndex } = findMessageIndices(messageTs, currentShofer)
 			if (messageIndex !== -1) {
-				// Find the last checkpoint before this message
-				const checkpoints = currentShofer.shoferMessages.filter(
-					(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
-				)
-
-				hasCheckpoint = checkpoints.length > 0 || findRestorableMarker(currentShofer, messageTs) !== undefined
+				hasRestorableState = findRestorableMarker(currentShofer, messageTs) !== undefined
 			} else {
 				webviewLog.info("[webviewMessageHandler] Edit - Message not found in shoferMessages!")
 			}
@@ -402,7 +325,7 @@ export const webviewMessageHandler = async (
 			type: "showEditMessageDialog",
 			messageTs,
 			text: editedContent,
-			hasCheckpoint,
+			hasRestorableState,
 			images,
 		})
 	}
@@ -413,7 +336,7 @@ export const webviewMessageHandler = async (
 	const handleEditMessageConfirm = async (
 		messageTs: number,
 		editedContent: string,
-		restoreCheckpoint?: boolean,
+		restoreState?: boolean,
 		images?: string[],
 	): Promise<void> => {
 		const currentShofer = provider.getCurrentTask()
@@ -435,35 +358,11 @@ export const webviewMessageHandler = async (
 		try {
 			const targetMessage = currentShofer.shoferMessages[messageIndex]
 
-			// If checkpoint restoration is requested, find and restore to the last checkpoint before this message
-			if (restoreCheckpoint) {
-				// Find the last checkpoint before this message
-				const checkpoints = currentShofer.shoferMessages.filter(
-					(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
-				)
-
-				const nextCheckpoint = checkpoints[0]
-
-				if (nextCheckpoint && nextCheckpoint.text) {
-					await handleCheckpointRestoreOperation({
-						provider,
-						currentShofer,
-						messageTs: targetMessage.ts!,
-						messageIndex,
-						checkpoint: { hash: nextCheckpoint.text },
-						operation: "edit",
-						editData: {
-							editedContent,
-							images,
-							apiConversationHistoryIndex,
-						},
-					})
-					// The task will be cancelled and reinitialized by checkpointRestore
-					// The pending edit will be processed in the reinitialized task
-					return
-				} else if (findRestorableMarker(currentShofer, messageTs)) {
-					// A plugin owns the snapshot — it restores, then the host rewinds the
-					// chat and reinitializes with the pending edit.
+			if (restoreState) {
+				if (findRestorableMarker(currentShofer, messageTs)) {
+					// A plugin holding state anchored here rolls it back first
+					// (`onTimelineRewind`), then the chat is rewound and the task
+					// reinitialized with the pending edit.
 					await handleTimelineRewind({
 						provider,
 						currentShofer,
@@ -474,15 +373,14 @@ export const webviewMessageHandler = async (
 						editData: { editedContent, images, apiConversationHistoryIndex },
 					})
 					return
-				} else {
-					// No checkpoint found before this message
-					webviewLog.info("[handleEditMessageConfirm] No checkpoint found before message")
-					getHost().notifier.warn("No checkpoint found before this message")
-					// Continue with non-checkpoint edit
 				}
+				// Nothing holds a restorable point here; fall through to a chat-only edit
+				// rather than pretending state came back.
+				webviewLog.info("[handleEditMessageConfirm] no restorable state after this message")
+				getHost().notifier.warn(t("common:errors.no_restorable_state"))
 			}
 
-			// For non-checkpoint edits, remove the ORIGINAL user message being edited and all subsequent messages
+			// Chat-only edit: remove the ORIGINAL user message being edited and all subsequent messages
 			// Determine the correct starting index to delete from (prefer the last preceding user_feedback message)
 			let deleteFromMessageIndex = messageIndex
 			let deleteFromApiIndex = apiConversationHistoryIndex
@@ -514,15 +412,6 @@ export const webviewMessageHandler = async (
 				}
 			}
 
-			// Store checkpoints from messages that will be preserved
-			const preservedCheckpoints = new Map<number, any>()
-			for (let i = 0; i < deleteFromMessageIndex; i++) {
-				const msg = currentShofer.shoferMessages[i]
-				if (msg?.checkpoint && msg.ts) {
-					preservedCheckpoints.set(msg.ts, msg.checkpoint)
-				}
-			}
-
 			// Delete the original (user) message and all subsequent messages using MessageManager
 			const rewindTs = currentShofer.shoferMessages[deleteFromMessageIndex]?.ts
 			if (rewindTs) {
@@ -537,15 +426,7 @@ export const webviewMessageHandler = async (
 				await currentShofer.messageManager.rewindToTimestamp(rewindTs, { includeTargetMessage: false })
 			}
 
-			// Restore checkpoint associations for preserved messages
-			for (const [ts, checkpoint] of preservedCheckpoints) {
-				const msgIndex = currentShofer.shoferMessages.findIndex((msg) => msg.ts === ts)
-				if (msgIndex !== -1) {
-					currentShofer.shoferMessages[msgIndex].checkpoint = checkpoint
-				}
-			}
-
-			// Save the updated messages with restored checkpoints
+			// Save the truncated messages
 			await saveTaskMessages({
 				messages: currentShofer.shoferMessages,
 				taskId: currentShofer.taskId,
@@ -1669,82 +1550,6 @@ export const webviewMessageHandler = async (
 				vscode.env.openExternal(vscode.Uri.parse(message.url))
 			}
 			break
-		case "checkpointDiff": {
-			// Shofer Nodes L3: a shadow (remote) task's checkpoint repo lives on the
-			// OWNING EXECUTOR. Fetch the computed per-file changes over the control
-			// plane and render them locally (title resolved from the mode); the
-			// executor never opens a diff viewer. Route by the FOCUSED shadow id and
-			// re-assert focus after the await so a focus switch mid-fetch can't render
-			// the wrong task's diff.
-			const diffShadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
-			if (diffShadowId) {
-				const parsed = checkoutDiffPayloadSchema.safeParse(message.payload)
-				if (!parsed.success) break
-				const changes = await provider.nodeRegistry!.getCheckpointDiff(diffShadowId, parsed.data)
-				if (provider.nodeRegistry?.getFocusedShadow(provider)?.taskId !== diffShadowId) break
-				if (!changes.length) {
-					getHost().notifier.info(t("common:errors.checkpoint_no_changes"))
-					break
-				}
-				const titleKey =
-					parsed.data.mode === "checkpoint"
-						? "checkpoint_diff_with_next"
-						: parsed.data.mode === "to-current"
-							? "checkpoint_diff_to_current"
-							: "checkpoint_diff_since_first" // from-init | full
-				await getHost().editor.showMultiFileDiff(t(`common:errors.${titleKey}`), changes)
-				break
-			}
-			const result = checkoutDiffPayloadSchema.safeParse(message.payload)
-
-			if (result.success) {
-				await provider.getCurrentTask()?.checkpointDiff(result.data)
-			}
-
-			break
-		}
-		case "checkpointRestore": {
-			// Shofer Nodes L3: restore a shadow (remote) task's checkpoint on the
-			// owning executor, then rebuild the shadow so its conversation matches the
-			// executor's post-rewind state. Gate on shared-workspace safety first: a
-			// concurrently-running local task in this worktree would collide with the
-			// executor's `git clean -fd` + `reset --hard`.
-			const restoreShadowId = provider.nodeRegistry?.getFocusedShadow(provider)?.taskId
-			if (restoreShadowId) {
-				if (provider.taskManager.getActiveManagedTasks().length > 0) {
-					getHost().notifier.warn(t("common:fileChanges.blockedTaskRunning"))
-					break
-				}
-				const parsed = checkoutRestorePayloadSchema.safeParse(message.payload)
-				if (!parsed.success) break
-				try {
-					await provider.nodeRegistry!.restoreCheckpoint(restoreShadowId, parsed.data)
-					await provider.nodeRegistry!.rebuildShadow(restoreShadowId)
-				} catch (error) {
-					getHost().notifier.error(t("common:errors.checkpoint_failed"))
-				}
-				break
-			}
-			const result = checkoutRestorePayloadSchema.safeParse(message.payload)
-
-			if (result.success) {
-				await provider.cancelTask()
-
-				try {
-					await pWaitFor(() => provider.getCurrentTask()?.isInitialized === true, { timeout: 3_000 })
-				} catch (error) {
-					getHost().notifier.error(t("common:errors.checkpoint_timeout"))
-				}
-
-				try {
-					await provider.getCurrentTask()?.checkpointRestore(result.data)
-				} catch (error) {
-					getHost().notifier.error(t("common:errors.checkpoint_failed"))
-				}
-			}
-
-			break
-		}
 		case "cancelTask":
 			await provider.cancelTask()
 			break
@@ -2685,17 +2490,12 @@ export const webviewMessageHandler = async (
 				break
 			}
 
-			await handleDeleteMessageConfirm(message.messageTs, message.restoreCheckpoint)
+			await handleDeleteMessageConfirm(message.messageTs, message.restoreState)
 			break
 		case "editMessageConfirm":
 			if (message.messageTs && message.text) {
 				const resolved = await resolveIncomingImages({ text: message.text, images: message.images })
-				await handleEditMessageConfirm(
-					message.messageTs,
-					resolved.text,
-					message.restoreCheckpoint,
-					resolved.images,
-				)
+				await handleEditMessageConfirm(message.messageTs, resolved.text, message.restoreState, resolved.images)
 			}
 			break
 		case "getListApiConfiguration":

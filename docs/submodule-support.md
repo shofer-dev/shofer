@@ -16,7 +16,7 @@ operate correctly in the presence of nested git repositories.
 ## How Checkpoints Work
 
 Shofer implements checkpoints via a **shadow git repository**
-([`ShadowCheckpointService`](../src/services/checkpoints/ShadowCheckpointService.ts)):
+([`ShadowGitRepo`](../plugins/checkpoints/src/shadow-git.ts)):
 
 1. A separate `.git` directory is created **outside** the workspace (in a checkpoints directory)
 2. The shadow git's `core.worktree` is set to the user's actual workspace directory
@@ -148,10 +148,10 @@ prevent submodule detection during the filesystem walk.
 ## Implemented Fix: `GIT_DIR` without `GIT_WORK_TREE`
 
 The working solution sets `GIT_DIR` to the shadow repo's `.git` directory in
-[`createSanitizedGit`](../src/services/checkpoints/ShadowCheckpointService.ts), but does
+[`createSanitizedGit`](../plugins/checkpoints/src/shadow-git.ts), but does
 **not** set `GIT_WORK_TREE`.
 
-`core.worktree` (set during `initShadowGit`) overrides `GIT_WORK_TREE` during normal
+`core.worktree` (set during `init`) overrides `GIT_WORK_TREE` during normal
 operation, so the working tree is correctly the workspace. Crucially, the existing code
 already works with `core.worktree` + `git add .` from the shadow CWD — git resolves paths
 relative to the working tree when `core.worktree` is set. Setting only `GIT_DIR` adds
@@ -178,10 +178,10 @@ flowchart TD
 
 ### Changes
 
-| File                                                                                                       | Change                                                                           |
-| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts)                     | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `initShadowGit` |
-| [`ShadowCheckpointService.spec.ts`](../src/services/checkpoints/__tests__/ShadowCheckpointService.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)              |
+| File                                                                        | Change                                                                  |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts)                 | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `init` |
+| [`shadow-git.spec.ts`](../plugins/checkpoints/__tests__/shadow-git.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)     |
 
 ## Known Limitations
 
@@ -225,8 +225,8 @@ bearing on the file-changes panel — it always used the working-directory backe
 
 ## References
 
-- [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) — checkpoint implementation
-- [`RepoPerTaskCheckpointService.ts`](../src/services/checkpoints/RepoPerTaskCheckpointService.ts) — per-task shadow git instance (extends `ShadowCheckpointService`)
+- [`shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts) — checkpoint implementation
+- [`CheckpointServiceRegistry.ts`](../plugins/checkpoints/src/service-registry.ts) — per-task shadow git instance (extends `ShadowGitRepo`)
 - [`ChangedFilesService.ts`](../packages/core/src/file-changes/ChangedFilesService.ts) — file changes panel (working-directory backend, no git dependency)
 - [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
 - [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
@@ -245,4 +245,4 @@ bearing on the file-changes panel — it always used the working-directory backe
 
 The spec describe block was relabeled from `#hasNestedGitRepositories` to
 `#getNestedGitRepository` to match the actual private method on
-`ShadowCheckpointService`.
+`ShadowGitRepo`.

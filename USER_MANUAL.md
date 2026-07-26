@@ -97,27 +97,27 @@ Once a task is running, the chat view shows:
 
 Shofer's settings are organized by tab in the Settings panel (⚙️ gear icon):
 
-| Tab                | What You Configure                                         |
-| ------------------ | ---------------------------------------------------------- |
-| **Providers**      | API profiles, models, endpoints, pricing overrides         |
-| **Auto-Approve**   | Toggle which tool categories run without asking permission |
-| **Tools**          | Global tool disable list and tool group assignments        |
-| **Slash Commands** | Configure built-in and custom slash commands               |
-| **Skills**         | Browse, load, and manage skill packs                       |
-| **Checkpoints**    | Git-based workspace snapshots for diff and revert          |
-| **Notifications**  | Telemetry, error reporting, and notification preferences   |
-| **Live Memory**    | Configure the persistent read-only AI companion            |
-| **Context**        | Adjust condensation thresholds and context window limits   |
-| **Terminal**       | Configure command execution timeouts and allowlists        |
-| **RAG Indexer**    | Semantic code and git log search index configuration       |
-| **Modes**          | Create and edit built-in and custom modes                  |
-| **MCP Servers**    | Connect external tools (browser, databases, Kubernetes)    |
-| **Worktrees**      | Manage git worktrees (create, delete, view status)         |
-| **Prompts**        | Customize per-mode system prompts and instructions         |
-| **UI**             | Chat view and sidebar display preferences                  |
-| **Experimental**   | Feature flags and opt-in experimental capabilities         |
-| **Language**       | Change the display language                                |
-| **About**          | Export, import, or reset all Shofer settings               |
+| Tab                | What You Configure                                                   |
+| ------------------ | -------------------------------------------------------------------- |
+| **Providers**      | API profiles, models, endpoints, pricing overrides                   |
+| **Auto-Approve**   | Toggle which tool categories run without asking permission           |
+| **Tools**          | Global tool disable list and tool group assignments                  |
+| **Slash Commands** | Configure built-in and custom slash commands                         |
+| **Skills**         | Browse, load, and manage skill packs                                 |
+| **Checkpoints**    | Git-based workspace snapshots for diff and revert (a bundled plugin) |
+| **Notifications**  | Telemetry, error reporting, and notification preferences             |
+| **Live Memory**    | Configure the persistent read-only AI companion                      |
+| **Context**        | Adjust condensation thresholds and context window limits             |
+| **Terminal**       | Configure command execution timeouts and allowlists                  |
+| **RAG Indexer**    | Semantic code and git log search index configuration                 |
+| **Modes**          | Create and edit built-in and custom modes                            |
+| **MCP Servers**    | Connect external tools (browser, databases, Kubernetes)              |
+| **Worktrees**      | Manage git worktrees (create, delete, view status)                   |
+| **Prompts**        | Customize per-mode system prompts and instructions                   |
+| **UI**             | Chat view and sidebar display preferences                            |
+| **Experimental**   | Feature flags and opt-in experimental capabilities                   |
+| **Language**       | Change the display language                                          |
+| **About**          | Export, import, or reset all Shofer settings                         |
 
 ### Settings Backup & Reset
 

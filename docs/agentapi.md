@@ -1,7 +1,7 @@
 # AgentApi — the transport-agnostic agent surface
 
 `AgentApi` is the **one control-plane interface** every front-end and transport drives.
-It decouples the core agent (loop, tools, MCP, checkpoints, changed-files) from _how_ a
+It decouples the core agent (loop, tools, MCP, plugins, changed-files) from _how_ a
 UI reaches it, so arbitrary front-ends (VS Code, an editor over [ACP](./acp.md), a CLI, a
 remote controller) can drive the same core without touching it.
 
@@ -31,7 +31,7 @@ flowchart LR
     HS["createHttpServer(api)<br/>full 1:1 projection of the surface"]
     ACP["AcpAgentServer<br/>lossy adapter onto ACP"]
     IMPL["an AgentApi implementation<br/>ShoferApiAgent in 'shofer serve'"]
-    CORE["core agent<br/>loop · tools · MCP · checkpoints · changed-files"]
+    CORE["core agent<br/>loop · tools · MCP · plugins · changed-files"]
 
     VS -->|"in-process"| IMPL
     CTRLR -->|"HTTP + SSE, bearer auth + version handshake"| HS
@@ -61,18 +61,17 @@ The full method set (see the source for exact signatures):
 
 ### Reverse data channel (Shofer Nodes L3)
 
-Checkpoints + the changed-files panel for a **remote (shadow) task** — the controller
-fetches data / runs ops on the owning executor exactly like a local task drives its own
-in-process service:
+The changed-files panel — and any **plugin-owned** per-task feature, via
+`pluginRequest` — for a **remote (shadow) task**: the controller fetches data / runs ops
+on the owning executor exactly like a local task drives its own in-process service:
 
-| Method                                                           | Purpose                                                               |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `getCheckpointDiff(taskId, opts)` → `CheckpointDiffEntry[]`      | Compute a checkpoint diff on the executor.                            |
-| `restoreCheckpoint(taskId, opts)`                                | Rewind the task to a checkpoint on the executor.                      |
-| `getTaskChangedFiles(taskId)` → `ChangedFilesPayload`            | The task's changed-files panel payload.                               |
-| `getChangedFileDiff(taskId, relPath)` → `{ original, final }`    | Base + final content for one file (diff editor).                      |
-| `revertChangedFile` / `revertAllChangedFiles(taskId[, relPath])` | Revert one / every changed file to base.                              |
-| `acceptChangedFile` / `acceptAllChangedFiles(taskId[, relPath])` | Promote one / every changed file's current state to the new baseline. |
+| Method                                                           | Purpose                                                                                                                                                                                                           |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getTaskChangedFiles(taskId)` → `ChangedFilesPayload`            | The task's changed-files panel payload.                                                                                                                                                                           |
+| `getChangedFileDiff(taskId, relPath)` → `{ original, final }`    | Base + final content for one file (diff editor).                                                                                                                                                                  |
+| `revertChangedFile` / `revertAllChangedFiles(taskId[, relPath])` | Revert one / every changed file to base.                                                                                                                                                                          |
+| `acceptChangedFile` / `acceptAllChangedFiles(taskId[, relPath])` | Promote one / every changed file's current state to the new baseline.                                                                                                                                             |
+| `pluginRequest(taskId, plugin, method, params?)` → `unknown`     | Call a plugin's `handleRequest` on the executor that owns the task — how a plugin-owned feature (e.g. the bundled checkpoints plugin's diff/restore) reaches its per-task state without a wire method of its own. |
 
 ### Event model
 
@@ -102,8 +101,7 @@ POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } �
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
 POST /api/v1/task/:id/ask         AskResponse                 → respondToAsk()
-POST /api/v1/task/:id/checkpoint-diff       CheckpointDiffOptions → CheckpointDiffEntry[]
-POST /api/v1/task/:id/checkpoint-restore    CheckpointRestoreOptions
+POST /api/v1/task/:id/plugin-request        { plugin, method, params? } → { result }
 GET  /api/v1/task/:id/changed-files                          → ChangedFilesPayload
 POST /api/v1/task/:id/changed-files/diff    { relPath }      → { original, final }
 POST /api/v1/task/:id/changed-files/revert  { relPath? }     (one file, or all when omitted)

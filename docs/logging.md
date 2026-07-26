@@ -134,7 +134,6 @@ The `ctx` is the tag shown in the output channel.
 | `LiveMemory`  | `liveMemoryLog`  | The live-memory subsystem that answers questions and drives clarifying prompts.                                                                               |
 | `MCP`         | `mcpLog`         | MCP server lifecycle, transport, and tool discovery.                                                                                                          |
 | `IPC`         | `ipcLog`         | The `@shofer/ipc` socket server/client used by the CLI / headless runtime and public API.                                                                     |
-| `Checkpoints` | `checkpointLog`  | Checkpoint creation/restore via the shadow-git workspace snapshots.                                                                                           |
 | `API`         | `apiLog`         | LLM API providers (Anthropic, OpenAI, Bedrock, …) — requests, streaming, and retries.                                                                         |
 | `FS`          | `fsLog`          | File I/O utilities such as `safeWriteJson`, storage paths, and disk persistence.                                                                              |
 | `Config`      | `configLog`      | Configuration, `ContextProxy` settings/secrets, and settings migration.                                                                                       |
@@ -304,14 +303,6 @@ log.info("initialized")
   Output Channel regardless of the user's Settings → Logging checkboxes.
   Both methods now route through `webviewLog.info()` / `webviewLog.debug()`,
   gating output on the `[Webview]` category checkbox and log level.
-- **Checkpoint dual-write (fixed)** — The `log` closure in
-  [`checkpoints/index.ts`](../packages/core/src/checkpoints/index.ts) dual-wrote
-  every checkpoint message via BOTH `checkpointLog.info()` (filtered) AND
-  `provider?.log()` (unfiltered, now routed through `webviewLog`). The
-  `provider?.log()` call was removed, so checkpoint messages only appear
-  under the `[Checkpoint]` category. Two ad-hoc `provider?.log()` calls in
-  `checkpointRestore` and `checkpointDiff` error paths were similarly
-  redirected to `checkpointLog.warn`.
 - **Import-ordering noop binding (fixed)** — subsystem loggers in
   `subsystems.ts` are bound via `getLogger().child({ ctx })` at
   module-_import_ time, which runs before `activate()`. The shared transport

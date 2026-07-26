@@ -159,25 +159,6 @@
 			"claudeCodeNotAuthenticated": "Claude Code를 사용하려면 로그인해야 합니다. 설정으로 이동하여 \"Claude Code에 로그인\"을 클릭하여 인증하세요."
 		}
 	},
-	"checkpoint": {
-		"regular": "체크포인트",
-		"initializingWarning": "체크포인트 초기화 중... 시간이 너무 오래 걸리면 <settingsLink>설정</settingsLink>에서 체크포인트를 비활성화하고 작업을 다시 시작할 수 있습니다.",
-		"menu": {
-			"viewDiff": "차이점 보기",
-			"more": "더 많은 옵션",
-			"viewDiffFromInit": "모든 변경 사항 보기",
-			"viewDiffWithCurrent": "이 체크포인트 이후 변경 사항 보기",
-			"restore": "체크포인트 복원",
-			"restoreFiles": "파일 복원",
-			"restoreFilesDescription": "프로젝트 파일을 이 시점에 찍힌 스냅샷으로 복원합니다.",
-			"restoreFilesAndTask": "파일 및 작업 복원",
-			"confirm": "확인",
-			"cancel": "취소",
-			"cannotUndo": "이 작업은 취소할 수 없습니다.",
-			"restoreFilesAndTaskDescription": "프로젝트 파일을 이 시점에 찍힌 스냅샷으로 복원하고 이 지점 이후의 모든 메시지를 삭제합니다."
-		},
-		"current": "현재"
-	},
 	"instructions": {
 		"wantsToFetch": "Roo는 현재 작업을 지원하기 위해 자세한 지침을 가져오려고 합니다"
 	},

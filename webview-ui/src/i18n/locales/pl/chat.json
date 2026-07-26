@@ -159,25 +159,6 @@
 			"claudeCodeNotAuthenticated": "Musisz się zalogować, aby korzystać z Claude Code. Przejdź do Ustawień i kliknij \"Zaloguj się do Claude Code\", aby się uwierzytelnić."
 		}
 	},
-	"checkpoint": {
-		"regular": "Punkt kontrolny",
-		"initializingWarning": "Trwa inicjalizacja punktu kontrolnego... Jeśli to trwa zbyt długo, możesz wyłączyć punkty kontrolne w <settingsLink>ustawieniach</settingsLink> i uruchomić zadanie ponownie.",
-		"menu": {
-			"viewDiff": "Zobacz różnice",
-			"more": "Więcej opcji",
-			"viewDiffFromInit": "Zobacz wszystkie zmiany",
-			"viewDiffWithCurrent": "Zobacz zmiany od tego punktu kontrolnego",
-			"restore": "Przywróć punkt kontrolny",
-			"restoreFiles": "Przywróć pliki",
-			"restoreFilesDescription": "Przywraca pliki Twojego projektu do zrzutu wykonanego w tym punkcie.",
-			"restoreFilesAndTask": "Przywróć pliki i zadanie",
-			"confirm": "Potwierdź",
-			"cancel": "Anuluj",
-			"cannotUndo": "Tej akcji nie można cofnąć.",
-			"restoreFilesAndTaskDescription": "Przywraca pliki Twojego projektu do zrzutu wykonanego w tym punkcie i usuwa wszystkie wiadomości po tym punkcie."
-		},
-		"current": "Bieżący"
-	},
 	"instructions": {
 		"wantsToFetch": "Shofer chce pobrać szczegółowe instrukcje, aby pomóc w bieżącym zadaniu"
 	},

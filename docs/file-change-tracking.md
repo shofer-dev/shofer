@@ -11,7 +11,7 @@ mutations within the active task.
 
 ## Architecture overview
 
-A single unified backend replaces the old two-backend (checkpoint shadow-git + tracker JSON snapshots) design.
+A single unified backend replaces the old two-backend (shadow-git + tracker JSON snapshots) design.
 
 ### Per-task working directory
 
@@ -50,7 +50,7 @@ Insertions/deletions are computed via unified diff ([`diff`](https://npmjs.com/p
 ### Lifecycle
 
 - **Creation:** `getTaskDirectoryPath(globalStoragePath, taskId)` in [`storage.ts`](../src/utils/storage.ts) creates the per-task directory. [`FileContextTracker.captureOriginal()`](../packages/core/src/context-tracking/FileContextTracker.ts) writes `base/<relPath>` + `originals/<sha1>.json` on first Shofer edit (idempotent). [`captureFinal()`](../packages/core/src/context-tracking/FileContextTracker.ts) writes `final/<relPath>` + `finals/<sha1>.json` after every Shofer write.
-- **Retention (when they are _not_ deleted):** The per-task copies are **not** freed on task completion, abort, or `dispose()` (which only disposes the file watchers — `FileContextTracker.dispose()`), nor on extension restart. They **persist for as long as the task exists in history**, so the panel / click-to-diff / revert / redo keep working when the task is later revisited or resumed. They are removed only by the deletion paths below. There is **no** pruning, LRU, TTL, or size cap (see [No snapshot size limit](#no-snapshot-size-limit)), and a checkpoint restore does **not** clear them (see [Checkpoint restore interaction](#checkpoint-restore-interaction-stalls-basefinal-cleanup)).
+- **Retention (when they are _not_ deleted):** The per-task copies are **not** freed on task completion, abort, or `dispose()` (which only disposes the file watchers — `FileContextTracker.dispose()`), nor on extension restart. They **persist for as long as the task exists in history**, so the panel / click-to-diff / revert / redo keep working when the task is later revisited or resumed. They are removed only by the deletion paths below. There is **no** pruning, LRU, TTL, or size cap (see [No snapshot size limit](#no-snapshot-size-limit)), and a checkpoints-plugin restore does **not** clear them (see [Checkpoint restore interaction](#checkpoint-restore-interaction-stalls-basefinal-cleanup)).
 - **Deletion (whole directory):** When the user deletes a task, [`ShoferProvider.deleteTaskWithId()`](../src/core/webview/ShoferProvider.ts) removes the entire `<globalStorage>/tasks/<taskId>/` directory with `fs.rm({ recursive: true, force: true })` (ShoferProvider.ts ~3197) and deletes the shadow git branch `shofer-<taskId>`. This is the **only** place the whole working directory is removed, and it **cascades** — every subtask id in the delete set has its own task directory (and shadow repo) removed too. This is the normal way the copies are freed.
 - **Partial deletion (per file):** `removeFinalSnapshot()` deletes an individual file's `final/` + `finals/` entry when the user **accepts** a change, and `overwriteOriginalBase()` promotes that file's content into `base/` as the new baseline. Separately, when a tool **deletes** a tracked file, `captureFinal()` removes the now-stale `final/` copy and records the final snapshot as `absent`.
 
@@ -429,9 +429,10 @@ mount and on task switch via `changedFiles/get`.
 ## Operating without a git repo / without checkpoints
 
 The `ChangedFilesService` has **no** git dependency — it uses only the
-per-task working directories (`base/` and `final/`). The shadow checkpoint
-service (used only for user-initiated "restore to checkpoint" from the chat
-UI) is a separate concern and does **not** affect file change tracking.
+per-task working directories (`base/` and `final/`). The bundled
+[checkpoints plugin](../plugins/checkpoints/DESIGN.md) (which powers
+user-initiated "restore to checkpoint" from the chat UI) is a separate concern
+and does **not** affect file change tracking — including when it is disabled.
 
 This means file change tracking works identically in every workspace type:
 no git repo, nested git repo, protected paths — all function the same way.
@@ -448,7 +449,7 @@ The `FileChangesPanel` only shows changes for the focused foreground task.
 
 ## Checkpoint restore interaction
 
-When the user restores a checkpoint via the chat UI, the workspace files are reverted to the shadow-git commit at that point in the conversation. The `base/` and `final/` working directories for the current task are **not** automatically cleared — they still reflect the pre-restore state.
+When the user restores a checkpoint via the chat UI (the bundled checkpoints plugin), the workspace files are reverted to the shadow-git commit at that point in the conversation. The `base/` and `final/` working directories for the current task are **not** automatically cleared — they still reflect the pre-restore state.
 
 **Known gap:** After a checkpoint restore, the FileChangesPanel may show stale diffs (comparing current workspace files against old `base/` copies that no longer represent the actual pre-edit baseline). Revert would restore to the wrong baseline. New edits after restore will also skip `captureOriginal` because the snapshot for the path already exists.
 
@@ -465,7 +466,7 @@ The old shadow-git checkpoint backend and its dual-backend architecture:
 - "limited mode" badge from `FileChangesPanel.tsx`
 - `restoreCheckpoint()` call path in `restoreAll()`
 
-The shadow-git checkpoint service itself is **preserved** — it still powers user-initiated "restore to checkpoint" from the chat UI. Only `ChangedFilesService`'s dependency on it was removed.
+Shadow-git checkpointing itself is **preserved** — it now lives in the bundled [checkpoints plugin](../plugins/checkpoints/DESIGN.md) and still powers user-initiated "restore to checkpoint" from the chat UI. Only `ChangedFilesService`'s dependency on it was removed.
 
 ## Key files
 
@@ -479,7 +480,7 @@ The shadow-git checkpoint service itself is **preserved** — it still powers us
 | [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                           | `scheduleChangedFilesUpdate(taskId)` debouncer, `pushChangedFilesUpdate()`, and task deletion with directory cleanup                                            |
 | [`extension.ts`](../src/extension.ts)                                                  | Registers the `shofer-original:` content provider scheme (anonymous class implementing `TextDocumentContentProvider`)                                           |
 | [`storage.ts`](../src/utils/storage.ts)                                                | `getTaskDirectoryPath()` — resolves and creates `<globalStorage>/tasks/<taskId>/`                                                                               |
-| [`ShadowCheckpointService.ts`](../src/services/checkpoints/ShadowCheckpointService.ts) | Shadow git repo management, `deleteTask()` for branch cleanup on task deletion                                                                                  |
+| [`plugins/checkpoints/src/shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts)    | Shadow git repo management for the checkpoints plugin (separate from this subsystem)                                                                            |
 | [`vscode-extension-host.ts`](../packages/types/src/vscode-extension-host.ts)           | Types: `ChangedFileEntry`, `ChangedFilesPayload`                                                                                                                |
 
 ## i18n keys

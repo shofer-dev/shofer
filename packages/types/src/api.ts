@@ -1,7 +1,6 @@
 import type { EventEmitter } from "events"
 import type { Socket } from "net"
 
-import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings, SyncedSecrets, SyncedSettings } from "./global-settings.js"
@@ -87,22 +86,14 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	): Promise<void>
 
 	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────
-	// Executor side of remote checkpoint diff/restore + the changed-files panel:
+	// Executor side of the remote changed-files panel (and plugin requests):
 	// each resolves the managed task by id and drives the same in-process service a
 	// local task uses, so a controller can render/operate a remote task's diffs.
 
-	/**
-	 * Computes a checkpoint diff for the managed task and returns the per-file
-	 * changes (binary/oversized files skipped to bound the payload). Does NOT open
-	 * the diff viewer — the controller renders the returned changes.
-	 */
-	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]>
 	/** Returns the managed task's changed-files panel payload. */
 	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload>
 	/** Returns the base + final content for one changed file (for the diff editor). */
 	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }>
-	/** Restores the managed task to a checkpoint (rewinds its conversation + files). */
-	restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void>
 	/** Reverts one changed file to its base state. */
 	revertChangedFile(taskId: string, relPath: string): Promise<void>
 	/** Reverts every changed file for the task. */

@@ -48,7 +48,6 @@ export const LoggingSettings = ({
 					"Git",
 					"CodeIndex",
 					"MCP",
-					"Checkpoints",
 					"API",
 					"FS",
 					"Config",

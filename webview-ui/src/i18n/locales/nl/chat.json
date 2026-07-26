@@ -154,25 +154,6 @@
 			"claudeCodeNotAuthenticated": "Je moet inloggen om Claude Code te gebruiken. Ga naar Instellingen en klik op \"Inloggen bij Claude Code\" om te authenticeren."
 		}
 	},
-	"checkpoint": {
-		"regular": "Checkpoint",
-		"initializingWarning": "Checkpoint wordt nog steeds geïnitialiseerd... Als dit te lang duurt, kun je checkpoints uitschakelen in de <settingsLink>instellingen</settingsLink> en je taak opnieuw starten.",
-		"menu": {
-			"viewDiff": "Bekijk verschil",
-			"more": "Meer opties",
-			"viewDiffFromInit": "Bekijk alle wijzigingen",
-			"viewDiffWithCurrent": "Bekijk wijzigingen sinds dit checkpoint",
-			"restore": "Herstel checkpoint",
-			"restoreFiles": "Bestanden herstellen",
-			"restoreFilesDescription": "Herstelt de bestanden van je project naar een momentopname die op dit punt is gemaakt.",
-			"restoreFilesAndTask": "Bestanden & taak herstellen",
-			"confirm": "Bevestigen",
-			"cancel": "Annuleren",
-			"cannotUndo": "Deze actie kan niet ongedaan worden gemaakt.",
-			"restoreFilesAndTaskDescription": "Herstelt de bestanden van je project naar een momentopname die op dit punt is gemaakt en verwijdert alle berichten na dit punt."
-		},
-		"current": "Huidig"
-	},
 	"instructions": {
 		"wantsToFetch": "Shofer wil gedetailleerde instructies ophalen om te helpen met de huidige taak"
 	},

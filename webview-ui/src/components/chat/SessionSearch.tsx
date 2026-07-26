@@ -68,7 +68,6 @@ const MACHINE_DATA_SAY_TYPES = new Set<string>([
 	"api_req_retry_delayed",
 	"api_req_rate_limit_wait",
 	"api_req_deleted",
-	"checkpoint_saved",
 ])
 
 const SessionSearch: React.FC<SessionSearchProps> = ({ messages, isOpen, onClose, onNavigate }) => {

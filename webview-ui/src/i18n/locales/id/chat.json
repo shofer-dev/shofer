@@ -184,25 +184,6 @@
 			"claudeCodeNotAuthenticated": "Anda perlu masuk untuk menggunakan Claude Code. Buka Pengaturan dan klik \"Masuk ke Claude Code\" untuk mengautentikasi."
 		}
 	},
-	"checkpoint": {
-		"regular": "Checkpoint",
-		"initializingWarning": "Masih menginisialisasi checkpoint... Jika ini terlalu lama, kamu bisa menonaktifkan checkpoint di <settingsLink>pengaturan</settingsLink> dan restart tugas.",
-		"menu": {
-			"viewDiff": "Lihat Diff",
-			"more": "Opsi lainnya",
-			"viewDiffFromInit": "Lihat Semua Perubahan",
-			"viewDiffWithCurrent": "Lihat Perubahan Sejak Checkpoint Ini",
-			"restore": "Pulihkan Checkpoint",
-			"restoreFiles": "Pulihkan File",
-			"restoreFilesDescription": "Mengembalikan file proyek kamu ke snapshot yang diambil pada titik ini.",
-			"restoreFilesAndTask": "Pulihkan File & Tugas",
-			"confirm": "Konfirmasi",
-			"cancel": "Batal",
-			"cannotUndo": "Aksi ini tidak dapat dibatalkan.",
-			"restoreFilesAndTaskDescription": "Mengembalikan file proyek kamu ke snapshot yang diambil pada titik ini dan menghapus semua pesan setelah titik ini."
-		},
-		"current": "Saat Ini"
-	},
 	"contextManagement": {
 		"tokens": "token",
 		"condensation": {

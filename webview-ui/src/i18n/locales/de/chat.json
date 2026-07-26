@@ -159,25 +159,6 @@
 			"claudeCodeNotAuthenticated": "Du musst dich anmelden, um Claude Code zu verwenden. Gehe zu den Einstellungen und klicke auf \"Bei Claude Code anmelden\", um dich zu authentifizieren."
 		}
 	},
-	"checkpoint": {
-		"regular": "Checkpoint",
-		"initializingWarning": "Checkpoint wird noch initialisiert... Falls dies zu lange dauert, kannst du Checkpoints in den <settingsLink>Einstellungen</settingsLink> deaktivieren und deine Aufgabe neu starten.",
-		"menu": {
-			"viewDiff": "Unterschiede anzeigen",
-			"more": "Weitere Optionen",
-			"viewDiffFromInit": "Alle Änderungen anzeigen",
-			"viewDiffWithCurrent": "Änderungen seit diesem Checkpoint anzeigen",
-			"restore": "Checkpoint wiederherstellen",
-			"restoreFiles": "Dateien wiederherstellen",
-			"restoreFilesDescription": "Stellt die Dateien deines Projekts auf einen Snapshot zurück, der an diesem Punkt erstellt wurde.",
-			"restoreFilesAndTask": "Dateien & Aufgabe wiederherstellen",
-			"confirm": "Bestätigen",
-			"cancel": "Abbrechen",
-			"cannotUndo": "Diese Aktion kann nicht rückgängig gemacht werden.",
-			"restoreFilesAndTaskDescription": "Stellt die Dateien deines Projekts auf einen Snapshot zurück, der an diesem Punkt erstellt wurde, und löscht alle Nachrichten nach diesem Punkt."
-		},
-		"current": "Aktuell"
-	},
 	"instructions": {
 		"wantsToFetch": "Shofer möchte detaillierte Anweisungen abrufen, um bei der aktuellen Aufgabe zu helfen"
 	},

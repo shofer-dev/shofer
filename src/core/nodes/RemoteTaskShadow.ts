@@ -10,7 +10,7 @@ export type RemoteTaskStatus = "created" | "running" | "completed" | "aborted" |
 /**
  * A lightweight, controller-side buffer for a task that RUNS on a remote node
  * (Shofer Nodes L2). It is deliberately **not** a `taskManager`-managed {@link
- * import("../task/Task.js")} — it holds no agent, no tools, no checkpoint/diff
+ * import("../task/Task.js")} — it holds no agent, no tools, no file-diff
  * machinery. It exists only to reconstruct the reduced-but-real conversation the
  * webview renders from the remote's high-fidelity `Message` stream, plus a
  * synthetic `currentTaskItem`-shaped summary so the TaskHeader has something to
@@ -99,8 +99,8 @@ export class RemoteTaskShadow {
 	}
 
 	/**
-	 * Drop the buffered conversation (Shofer Nodes L3 rebuild). After the executor
-	 * restores a checkpoint it rewinds + reinitializes its task and re-emits the
+	 * Drop the buffered conversation (Shofer Nodes L3 rebuild). When the executor
+	 * rewinds its task it reinitializes and re-emits the
 	 * post-rewind `Message` stream; clearing here lets those deltas repopulate the
 	 * shadow so its conversation matches the executor, with no stale tail.
 	 */

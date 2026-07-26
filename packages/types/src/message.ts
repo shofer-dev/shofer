@@ -176,7 +176,6 @@ export function isAgentRunningAsk(ask: ShoferAsk): ask is AgentRunningAsk {
  * - `mcp_server_request_started`: MCP server request has been initiated
  * - `mcp_server_response`: Response received from MCP server
  * - `subtask_result`: Result of a completed subtask
- * - `checkpoint_saved`: Indicates a checkpoint has been saved
  * - `plugin_marker`: A row a plugin appended to the timeline; rendered by that plugin's
  *   own `chat-message-addon` UI component (payload in {@link ShoferMessage.marker})
  * - `shoferignore_error`: Error related to .shoferignore file processing
@@ -206,7 +205,6 @@ export const shoferSays = [
 	"mcp_server_response",
 	"subtask_result",
 	"peer_message",
-	"checkpoint_saved",
 	"plugin_marker",
 	"shoferignore_error",
 	"diff_error",
@@ -334,7 +332,6 @@ export const shoferMessageSchema = z.object({
 	partial: z.boolean().optional(),
 	reasoning: z.string().optional(),
 	conversationHistoryIndex: z.number().optional(),
-	checkpoint: z.record(z.string(), z.unknown()).optional(),
 	/**
 	 * Plugin-owned timeline row. Present when `say: "plugin_marker"`.
 	 */

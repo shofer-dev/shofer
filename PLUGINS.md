@@ -112,21 +112,23 @@ tools use (Node built-ins external, deps bundled).
 The manifest is validated **fail-closed**: every level is `.strict()`, so an unknown key is a hard
 error and the plugin is skipped with a warning. Fields:
 
-| Field                    | Type                | Notes                                                                                                                            |
-| ------------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                   | string **required** | Unique id. Must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`. Used for ordering, dedupe, namespacing.                                    |
-| `version`                | string **required** | Free-form version string.                                                                                                        |
-| `shoferPluginApiVersion` | string              | The plugin-API semver you target (current host API: `1.0.0`). Incompatible ⇒ refused at load.                                    |
-| `description`            | string              | Shown in the Plugins UI and `plugin list`.                                                                                       |
-| `author`                 | string              |                                                                                                                                  |
-| `homepage`               | string              |                                                                                                                                  |
-| `license`                | string              |                                                                                                                                  |
-| `shoferVersion`          | string              | Minimum Shofer version (semver range). Not yet enforced.                                                                         |
-| `main`                   | string \| null      | Code entry, relative to the plugin dir. Absent/`null` ⇒ purely declarative.                                                      |
-| `permissions`            | object              | The security contract. See below.                                                                                                |
-| `contributes`            | object              | Declarative modes/skills/commands/mcpServers/rules, plus `ui` bundles. See [§4](#4-extension-points), [§6](#6-ui-contributions). |
-| `dependencies`           | string[]            | Other plugins that must be installed. (Discovery records unmet deps; not fully enforced yet.)                                    |
-| `config`                 | object              | JSON-Schema-ish description of user settings. See below.                                                                         |
+| Field                    | Type                | Notes                                                                                                                                                               |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                   | string **required** | Unique id. Must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$`. Used for ordering, dedupe, namespacing.                                                                       |
+| `version`                | string **required** | Free-form version string.                                                                                                                                           |
+| `shoferPluginApiVersion` | string              | The plugin-API semver you target (current host API: `1.0.0`). Incompatible ⇒ refused at load.                                                                       |
+| `description`            | string              | Shown in the Plugins UI and `plugin list`.                                                                                                                          |
+| `author`                 | string              |                                                                                                                                                                     |
+| `homepage`               | string              |                                                                                                                                                                     |
+| `license`                | string              |                                                                                                                                                                     |
+| `shoferVersion`          | string              | Minimum Shofer version (semver range). Not yet enforced.                                                                                                            |
+| `main`                   | string \| null      | Code entry, relative to the plugin dir. Absent/`null` ⇒ purely declarative.                                                                                         |
+| `permissions`            | object              | The security contract. See below.                                                                                                                                   |
+| `contributes`            | object              | Declarative modes/skills/commands/mcpServers/rules, plus `ui` bundles. See [§4](#4-extension-points), [§6](#6-ui-contributions).                                    |
+| `dependencies`           | string[]            | Other plugins that must be installed. (Discovery records unmet deps; not fully enforced yet.)                                                                       |
+| `config`                 | object              | JSON-Schema-ish description of user settings. See below.                                                                                                            |
+| `defaultEnabled`         | boolean             | **Bundled (first-party) scope only.** Ship enabled instead of waiting to be opted into — for a plugin that IS a Shofer feature. Ignored for global/project plugins. |
+| `hookTimeoutMs`          | number              | Override the 500 ms per-hook budget for this plugin's lifecycle hooks (max 60000). Only for a hook the agent must genuinely wait for.                               |
 
 ### `permissions`
 
@@ -149,6 +151,8 @@ reachable, when its permission is present. All keys are optional:
 | `filesystem`   | string[] | Allowed paths for `ctx.host.fs` and `ctx.host.watch` (relative entries resolve to plugin root **and** workspace). |
 | `ai`           | boolean  | Host LLM/embeddings via `ctx.ai`. **Necessary but not sufficient** — also needs the AI-billing consent (§7).      |
 | `agent`        | boolean  | Proactive agent-steering via `ctx.agent.notify` (inject a message into the running agent). Billed/behavioral.     |
+| `task`         | boolean  | Timeline markers + rewind via `ctx.task`. Rewinding destroys conversation history, so it is its own grant.        |
+| `editor`       | boolean  | The host's multi-file diff viewer via `ctx.host.editor`.                                                          |
 
 ### `config`
 
@@ -258,13 +262,20 @@ Plugins run in registration order. Each hook is bounded by a **500 ms** per-hook
 per-plugin error isolation: a hook that throws or exceeds the budget is skipped with a shown+logged
 warning — it can never stall or crash the agent loop, and its would-be mutation is not applied.
 
-| Hook                | Return                              | Effect                                                                                                                                                                          |
-| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `beforeToolCall`    | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`). |
-| `afterToolCall`     | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                         |
-| `beforeAsk`         | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.    |
-| `beforeTaskStart`   | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                         |
-| `afterTaskComplete` | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                     |
+| Hook                | Return                              | Effect                                                                                                                                                                                      |
+| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beforeToolCall`    | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`).             |
+| `afterToolCall`     | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                                     |
+| `beforeAsk`         | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.                |
+| `beforeTaskStart`   | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                                     |
+| `afterTaskComplete` | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                                 |
+| `onUserMessage`     | ignored                             | **Observer.** The user sent a message into a running task — the step boundary the tool hooks cannot see.                                                                                    |
+| `onTimelineRewind`  | ignored (**awaited**)               | The chat is about to be rewound to `info.ts`. Runs BEFORE the messages go, so state anchored to them can be rolled back. `info.restoreState: false` ⇒ chat-only, don't touch the workspace. |
+| `onTaskDeleted`     | ignored                             | **Observer.** A task was deleted — drop per-task state kept outside its task dir.                                                                                                           |
+
+`ctx.turn` (a per-task turn counter) lets a hook that fires per _tool call_ act once per
+turn. A hook that legitimately needs longer than 500 ms declares `hookTimeoutMs` in its
+manifest — see [§3](#3-manifest-reference-pluginjson).
 
 ---
 
@@ -283,6 +294,8 @@ plugin's grants:
 | `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                    |
 | `ai`                   | Host LLM/embeddings. Present **only** with `permissions.ai` + a wired AI seam.                                  |
 | `agent`                | Proactive agent-steering. Present when the host wired its agent seam; denying stub without `permissions.agent`. |
+| `task`                 | Timeline markers + rewind. Present when the host wired its task seam; denying stub without `permissions.task`.  |
+| `turn`                 | The task's current turn index (one per assistant turn), for once-per-turn hook behaviour.                       |
 | `storage`              | Per-plugin persistent dir. Present when the host wired a storage base dir.                                      |
 | `registerService(svc)` | Register a background service. Present when the host wired the supervisor.                                      |
 
@@ -359,6 +372,29 @@ await ctx.agent?.notify("The deploy just failed — see /var/log/deploy.log for 
 Ungranted (host wired the seam) ⇒ `ctx.agent` is a _denying stub_ (`notify` throws + warns). No agent
 seam (headless/pure-core) ⇒ `ctx.agent` is **absent** entirely.
 
+**`ctx.task`** (`PluginTaskControl`) — the task's **chat timeline**, requires
+`permissions.task`. For a plugin whose feature belongs _in the conversation_ rather than
+in a side panel:
+
+- `marker({ kind, text, data?, restorable?, suppress?, taskId? })` — append a row the
+  plugin's own `chat-message-addon` component renders (the host never interprets
+  `kind`/`data`). `suppress` persists it without rendering it (an anchor the user
+  doesn't need to see); `restorable` makes the delete/edit dialog offer to roll your
+  state back.
+- `listMarkers(taskId?)` — your markers, oldest first: how you recover anchors after a
+  restart without a second, drift-prone copy in `ctx.storage`. Scoped to your plugin.
+- `rewind(ts, { includeTargetMessage? })` — truncate the conversation to `ts` and restart
+  the task. Roll back anything _outside_ the conversation yourself, first.
+
+```ts
+await ctx.task?.marker({ kind: "snapshot", text: commitHash, restorable: true })
+```
+
+Ungranted (seam wired) ⇒ a denying stub; no task seam ⇒ **absent**.
+
+**`ctx.host.editor`** (`permissions.editor`) — `showMultiFileDiff(title, changes)` opens
+the host's native multi-file diff view for a set of before/after file contents.
+
 **`ctx.storage`** (`PluginStorage`) — the plugin's own persistent dir at
 `<globalStorage>/plugins/<name>/`, independent of `permissions.filesystem`. `readFile`/`writeFile`/
 `exists`/`delete`/`list`, all resolved under `dir` and **traversal-blocked** (a `..` escape is
@@ -369,6 +405,30 @@ denied). Created lazily, survives restart, removed on uninstall.
 disable/uninstall/deactivate. Each `start`/`stop` is bounded by a **5 s** timeout and error-isolated,
 so a hanging or throwing service can never crash the host. Returns a disposable that stops + removes
 the service.
+
+### Answering requests (`handleRequest`)
+
+`onUiMessage` is fire-and-forget; when your UI needs an **answer**, implement
+`handleRequest(method, params, ctx)` and call it with **`api.request(method, params?, opts?)`**
+from the component. Errors propagate to the caller (they are not swallowed like observer
+hooks), so a failure surfaces instead of looking like an empty result.
+
+The host answers the request on the machine that OWNS the focused task — a remote
+executor for a task running there — so a plugin-owned feature works the same locally and
+remotely. Three conventions:
+
+- prefix a method **`local:`** to force it onto the host the UI runs on (opening an
+  editor/viewer, which a headless executor cannot do);
+- pass **`{ mutates: true }`** for a state-changing request: the host refuses to route it
+  to an executor while a local task shares the workspace;
+- return **`{ rewound: true }`** if you rewound the task's conversation, so the controller
+  resyncs its view of a remote task.
+
+```ts
+// ui/row.tsx
+const result = await api.request("diff", { id }) // answered where the task runs
+await api.request("local:show-diff", result, { mutates: false }) // rendered here
+```
 
 ---
 
@@ -707,6 +767,28 @@ Now the model sees a `ci_status` tool (network-scoped), and any attempt to run `
 `execute_command` is short-circuited with the guard's reason — unless the user sets
 `blockForcePush: false` in the plugin's config.
 
+### A feature as a plugin: Checkpoints (first-party, bundled)
+
+**`plugins/checkpoints/`** is per-task undo history — shadow-git snapshots, the timeline
+row with diff/restore, cleanup on task deletion — implemented entirely on the public
+surface. It is the reference for a plugin that owns a _feature_ rather than adding a tool:
+
+| What it does                                        | Extension point                                                                                |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Snapshot before a file-mutating tool                | `lifecycle.beforeToolCall`, **awaited**, once per `ctx.turn`, under a manifest `hookTimeoutMs` |
+| An anchor per user message                          | `lifecycle.onUserMessage`                                                                      |
+| The checkpoint row in the chat                      | **`ctx.task.marker`** + a `chat-message-addon` bundle                                          |
+| Diff / restore from that row                        | **`handleRequest`** + `api.request` (incl. the `local:` and `mutates` conventions)             |
+| Rewinding the conversation                          | **`ctx.task.rewind`**                                                                          |
+| Rolling the workspace back on a message delete/edit | `lifecycle.onTimelineRewind`                                                                   |
+| Dropping a deleted task's shadow repo               | `lifecycle.onTaskDeleted`                                                                      |
+| Rendering a computed diff                           | **`ctx.host.editor.showMultiFileDiff`**                                                        |
+| Being on out of the box                             | manifest `defaultEnabled` (bundled scope only)                                                 |
+
+It also shows the packaging end: `build-ui.mjs` bundles both the UI and `main.js` (with
+`simple-git` inlined), so the plugin ships with no `node_modules` and packs to a single
+`.shofer-plugin` archive.
+
 ### A capability-rich plugin: Live Memory (first-party dogfood)
 
 The repo ships **`plugins/live-memory/`** — a real, first-party plugin that re-implements the core of
@@ -744,4 +826,7 @@ external-edit watch granularity) that Phase 7's path-carrying watch closed.
 - UI: `webview-ui/src/components/settings/PluginsSettings.tsx`,
   `webview-ui/src/components/marketplace/PluginsTab.tsx`,
   `webview-ui/src/components/plugins/` (`PluginSlot`, component resolver)
-- Worked example: `plugins/live-memory/` (+ `plugins/live-memory/DOGFOOD.md`)
+- Worked examples: `plugins/live-memory/` (+ `plugins/live-memory/DOGFOOD.md`) and
+  `plugins/checkpoints/` (+ its `DESIGN.md`) — the latter is a whole _feature_
+  (per-task undo history) living outside core on `beforeToolCall` + `ctx.task` +
+  `onTimelineRewind` + `handleRequest`.

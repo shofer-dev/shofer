@@ -1,5 +1,4 @@
 import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "./agent-api.js"
-import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
@@ -235,10 +234,6 @@ export class ExecutorPool implements AgentApi {
 
 	// ── Reverse data channel (Shofer Nodes L3) — route to the owning executor ────
 
-	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
-		return this.owner(taskId).api.getCheckpointDiff(taskId, opts)
-	}
-
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.owner(taskId).api.pluginRequest(taskId, plugin, method, params)
 	}
@@ -249,10 +244,6 @@ export class ExecutorPool implements AgentApi {
 
 	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
 		return this.owner(taskId).api.getChangedFileDiff(taskId, relPath)
-	}
-
-	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
-		await this.owner(taskId).api.restoreCheckpoint(taskId, opts)
 	}
 
 	async revertChangedFile(taskId: string, relPath: string): Promise<void> {

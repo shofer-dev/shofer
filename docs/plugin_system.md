@@ -174,7 +174,14 @@ flowchart TD
 		"filesystem": ["./ci-config/"], // Host-path fs allowlist
 		"ai": true, // Host LLM/embeddings (billed; consented separately)
 		"agent": true, // Proactive agent-steering via ctx.agent.notify
+		"task": true, // Timeline markers + rewind via ctx.task
+		"editor": true, // Multi-file diff viewer via ctx.host.editor
 	},
+
+	// Bundled (first-party) only: ship enabled rather than waiting to be opted into.
+	"defaultEnabled": false,
+	// Override the 500ms per-hook budget for THIS plugin's lifecycle hooks (max 60000).
+	"hookTimeoutMs": 500,
 
 	// Declarative contributions (no code needed for these).
 	"contributes": {
@@ -422,13 +429,13 @@ injected into the system prompt via `addCustomInstructions()`.
 **The key differentiator from MCP.** A plugin contributes React components that
 render in designated Shofer UI regions:
 
-| Region ID            | Location                        | What plugins render                      |
-| -------------------- | ------------------------------- | ---------------------------------------- |
-| `chat-input-toolbar` | ChatTextArea toolbar            | Buttons, chips, status badges/popovers   |
-| `task-header`        | TaskHeader (expanded)           | Status badges, info rows, action buttons |
-| `settings-tab`       | SettingsView (per-plugin panel) | Full plugin settings panel               |
-| `chat-message-addon` | Below specific ChatRow messages | Inline annotations, per-message actions  |
-| `sidebar-panel`      | New panel in the Shofer sidebar | Custom dashboard/view                    |
+| Region ID            | Location                          | What plugins render                                                        |
+| -------------------- | --------------------------------- | -------------------------------------------------------------------------- |
+| `chat-input-toolbar` | ChatTextArea toolbar              | Buttons, chips, status badges/popovers                                     |
+| `task-header`        | TaskHeader (expanded)             | Status badges, info rows, action buttons                                   |
+| `settings-tab`       | SettingsView (per-plugin panel)   | Full plugin settings panel                                                 |
+| `chat-message-addon` | A `plugin_marker` row in the chat | The plugin's own timeline row (see [§5.13](#513-timeline-markers-ctxtask)) |
+| `sidebar-panel`      | New panel in the Shofer sidebar   | Custom dashboard/view                                                      |
 
 **Loading model — dynamic `import()`, not iframe.** A plugin UI component loads
 into the webview by dynamic `import()` with a restricted API surface
@@ -527,8 +534,33 @@ export interface LifecycleHooks {
 		payload: unknown,
 		context: PluginContext,
 	): Promise<{ decision?: "approve" | "deny" | "ask"; text?: string } | void>
+	/** The user sent a message into a running task (a step the tool hooks cannot see). Observer. */
+	onUserMessage?(
+		info: { taskId: string; text?: string; imageCount?: number },
+		context: PluginContext,
+	): void | Promise<void>
+	/**
+	 * The task's chat timeline is about to be rewound to `info.ts` (a message delete/edit,
+	 * or a restore). **Awaited before the messages disappear**, so a plugin holding state
+	 * anchored to them rolls it back while its anchor still exists. `info.restoreState`
+	 * says whether the user asked for that out-of-band state at all — `false` is a
+	 * chat-only rewind and must not touch the workspace.
+	 */
+	onTimelineRewind?(
+		info: { ts: number; taskId: string; operation: "delete" | "edit" | "restore"; restoreState: boolean },
+		context: PluginContext,
+	): void | Promise<void>
+	/** A task was deleted from history — drop per-task state kept OUTSIDE its task dir. Observer. */
+	onTaskDeleted?(info: { taskId: string; workspacePath?: string }, context: PluginContext): void | Promise<void>
 }
 ```
+
+**Per-plugin hook budget.** Hooks run under a **500 ms** default budget
+({@link PLUGIN*HOOK_TIMEOUT_MS}); a plugin whose hook does work the agent must
+genuinely \_wait* for declares a manifest **`hookTimeoutMs`** (capped at 60 s) that
+overrides it for that plugin only. The bundled checkpoints plugin is the motivating
+case: snapshotting a large workspace inside `beforeToolCall` takes seconds, and
+finishing late is useless because the file has already been written.
 
 This enables **policy** plugins (block `rm -rf`, require review before
 `attempt_completion`), **integration** plugins (auto-approve known-safe commands,
@@ -703,6 +735,81 @@ flowchart TD
 
 ---
 
+### 5.12 Plugin Requests (`handleRequest`)
+
+`onUiMessage` is fire-and-forget, which is the wrong shape for the common case where a
+plugin's UI needs an **answer** ("give me this diff", "list my markers"). A plugin
+implements `handleRequest(method, params, ctx)` and the caller awaits its result:
+
+- from its own UI, via **`api.request(method, params?, { mutates? })`**
+  ([`PluginUIApi`](../packages/types/src/plugin.ts)) — the same scoped, name-tagged
+  channel as `postMessage`, with correlation handled by the transport;
+- from the controller to a plugin running on a **remote executor**, via
+  **`AgentApi.pluginRequest(taskId, plugin, method, params)`**
+  ([`agentapi.md`](./agentapi.md)).
+
+Unlike the observer hooks, a request is **not** timeout-guarded or error-isolated: a
+caller is waiting on the answer, so a throw (or an unknown plugin / missing
+`handleRequest`) propagates to it rather than becoming a silent `undefined`.
+
+**Routing.** A UI request is answered by the plugin instance on the host that OWNS the
+focused task — a remote executor when a shadow task is focused — because that is where
+its per-task state lives. Three conventions shape that
+([`pluginUiRequestRouting.ts`](../src/core/webview/pluginUiRequestRouting.ts)):
+
+| Convention                 | Meaning                                                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| method prefixed `local:`   | Always answered on **this** host: for things only it can do (opening an editor/viewer), which a headless executor would silently no-op. |
+| `{ mutates: true }`        | Refused rather than routed to an executor while a local task is running — both hosts share the workspace.                               |
+| result `{ rewound: true }` | The plugin rewound the task's conversation; the controller rebuilds its shadow so it renders what the executor now has.                 |
+
+### 5.13 Timeline Markers (`ctx.task`)
+
+A plugin granted **`permissions.task`** can write to the task's **chat timeline** and
+rewind it — what lets a plugin own a feature whose UX belongs _in the conversation_
+rather than in a side panel:
+
+```typescript
+interface PluginTaskControl {
+	marker(input: {
+		kind: string
+		text: string
+		taskId?: string
+		data?: Record<string, unknown>
+		restorable?: boolean
+		suppress?: boolean
+	}): Promise<void>
+	listMarkers(taskId?: string): Promise<PluginMarker[]>
+	rewind(ts: number, opts?: { includeTargetMessage?: boolean }): Promise<void>
+}
+```
+
+- **`marker`** appends a `say: "plugin_marker"` message, persisted with the task and
+  rendered by **that plugin's** `chat-message-addon` component (the host renders no
+  chrome and never interprets `kind`/`data`). `suppress` keeps an anchor out of the
+  rendered timeline; `restorable` is what makes the delete/edit dialog offer to roll
+  back plugin-held state.
+- **`listMarkers`** reads them back in order — how a plugin recovers its anchors after a
+  restart without keeping a second, drift-prone copy in `ctx.storage`. Scoped to the
+  calling plugin: one plugin can neither see nor rewind another's.
+- **`rewind`** truncates the conversation to `ts`, reports the discarded API cost, and
+  restarts the task. Rolling back anything _outside_ the conversation is the plugin's
+  own job, done before it calls this.
+
+Gated like the other capabilities: ungranted ⇒ a denying stub, no host seam ⇒ absent.
+The complementary direction is `lifecycle.onTimelineRewind` ([§5.9](#59-lifecycle-hooks-permissionslifecycle)),
+where the _host_ is rewinding and the plugin follows.
+
+**`ctx.host.editor`** (`permissions.editor`) rounds this out with the host's multi-file
+diff viewer, for a plugin that computes a set of before/after contents and needs it
+rendered rather than reinvented.
+
+The bundled **checkpoints** plugin ([`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md))
+is built entirely from §5.9 + §5.12 + §5.13 — it is the worked example of a _feature_,
+not just a tool, living outside core.
+
+---
+
 ## 6. Plugin Lifecycle
 
 ```mermaid
@@ -754,7 +861,13 @@ warning logged to the output channel.
 
 Consent is **per-plugin, via the enable toggle**, not a per-permission dialog. A
 discovered plugin is **disabled by default**; enabling it in the Plugins panel (or
-`--enable` on CLI install) is the user's consent to run it at all. The manifest
+`--enable` on CLI install) is the user's consent to run it at all. The single exception
+is a **bundled** (first-party) plugin whose manifest declares **`defaultEnabled`** — a
+shipped Shofer _feature_ packaged as a plugin rather than an opt-in add-on (the
+checkpoints plugin). It is on until the user says otherwise, and that "otherwise" is
+recorded explicitly (`shofer.plugins.disabledPlugins`) rather than inferred from
+absence, so it is never resurrected by the next discovery. `defaultEnabled` is ignored
+for non-bundled scopes — a third party can never enable itself. The manifest
 `permissions` then gate each capability at runtime — a contribution is only
 surfaced, and a code capability only reachable, when its permission is granted;
 `fs`/`network`/`filesystem` calls are checked against their allowlists. Enabling
@@ -802,17 +915,19 @@ Enabled state is persisted in `globalState` under
 
 ### Permission boundaries
 
-| Permission     | What it allows                     | Risk                                                                                                                                                                     |
-| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tools`        | Register model-callable tools      | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                              |
-| `systemPrompt` | Modify the system prompt           | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                               |
-| `modes`        | Contribute mode definitions        | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                              |
-| `ui`           | Render React components            | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                     |
-| `lifecycle`    | Hook into task lifecycle           | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                             |
-| `network`      | HTTP to listed domains             | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork). |
-| `filesystem`   | Read/write listed paths            | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                            |
-| `ai`           | Host LLM/embeddings via `ctx.ai`   | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                     |
-| `agent`        | Proactive steering via `ctx.agent` | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                          |
+| Permission     | What it allows                             | Risk                                                                                                                                                                     |
+| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tools`        | Register model-callable tools              | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                              |
+| `systemPrompt` | Modify the system prompt                   | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                               |
+| `modes`        | Contribute mode definitions                | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                              |
+| `ui`           | Render React components                    | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                     |
+| `lifecycle`    | Hook into task lifecycle                   | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                             |
+| `network`      | HTTP to listed domains                     | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork). |
+| `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                            |
+| `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                     |
+| `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                          |
+| `task`         | Timeline markers + rewind via `ctx.task`   | Writes rows into the conversation and can **destroy** conversation history (rewind restarts the task). Dedicated grant; ungranted ⇒ denying stub.                        |
+| `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                             |
 
 ### Sandboxing
 
@@ -845,7 +960,7 @@ Logging).
 
 Discovery classifies each plugin by where it was found (`PluginScope`):
 
-- **`bundled`** — first-party plugins shipped inside the extension build. **Disabled by default**, **non-uninstallable**. The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). **Live Memory** (`plugins/live-memory/`) is the first bundled first-party plugin — self-contained, with its domain types living in the plugin (zero `@shofer/types` footprint); see [`PLUGINS.md`](../PLUGINS.md).
+- **`bundled`** — first-party plugins shipped inside the extension build. **Disabled by default**, **non-uninstallable**. The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). Bundled plugins are **Live Memory** (`plugins/live-memory/`) and **Checkpoints** (`plugins/checkpoints/`) — both self-contained, with their domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.js` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
 - **`global`** — installed under `~/.shofer/plugins/` (all workspaces).
 - **`project`** — installed under `<workspace>/.shofer/plugins/` (checked into VCS or gitignored per team choice).
 
@@ -945,6 +1060,7 @@ optionally add a UI status badge — no MCP protocol changes needed.
 - **`CustomModesManager`** — `getAllModes()` includes plugin modes from `contributes.modes`, emitted under the namespaced slug `<plugin>:<authoredSlug>` with `source: "plugin"`; `private` modes are agent-switchable but hidden from the picker.
 - **`McpHub`** reads MCP configs from plugin manifests (`contributes.mcpServers`), merged with `.shofer/mcp.json` and `mcp_settings.json`.
 - **Marketplace** installs plugins (`.shofer-plugin` archives) in addition to mode/MCP YAML items; a plugin can contain modes and MCP configs as declarative contributions, so a plugin install is a superset of the current mode/MCP install.
+- **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `checkpoints` plugin, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`checkpoints.md`](./checkpoints.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
 
 ---
 

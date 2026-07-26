@@ -31,7 +31,6 @@
 		"mcp": "Serveurs MCP",
 		"worktrees": "Worktrees",
 		"autoApprove": "Auto-approbation",
-		"checkpoints": "Points de contrôle",
 		"notifications": "Notifications",
 		"contextManagement": "Contexte",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Défaut : claude",
 			"maxTokensLabel": "Jetons de sortie max",
 			"maxTokensDescription": "Nombre maximum de jetons de sortie pour les réponses de Claude Code. La valeur par défaut est 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Délai d'initialisation du point de contrôle (secondes)",
-			"description": "Temps d'attente maximum pour l'initialisation du service de points de contrôle. Par défaut : 15 secondes. Plage : 10-60 secondes."
-		},
-		"enable": {
-			"label": "Activer les points de contrôle automatiques",
-			"description": "Lorsque cette option est activée, Shofer créera automatiquement des points de contrôle pendant l'exécution des tâches, facilitant la révision des modifications ou le retour à des états antérieurs. <0>En savoir plus</0>"
 		}
 	},
 	"notifications": {

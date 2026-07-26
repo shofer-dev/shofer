@@ -13,7 +13,7 @@
  * file content lives in `<taskDir>/base/<relPath>` and
  * `<taskDir>/final/<relPath>`, accessed via FileContextTracker methods.
  *
- * This backend has NO git dependency — no shadow git, no checkpoints, no
+ * This backend has NO git dependency — no shadow git, no snapshot plugin, no
  * binary-on-PATH requirement. It works identically in every workspace type.
  */
 
@@ -261,7 +261,7 @@ export async function restoreFile(task: Task, relPath: string): Promise<void> {
 	if (snap.kind === "absent") {
 		try {
 			await fs.unlink(abs)
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		} catch (err: any) {
 			if (err?.code !== "ENOENT") throw err
 		}

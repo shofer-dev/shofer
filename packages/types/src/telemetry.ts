@@ -28,10 +28,6 @@ export enum TelemetryEventName {
 	MODE_SELECTOR_OPENED = "Mode Selector Opened",
 	TOOL_USED = "Tool Used",
 
-	CHECKPOINT_CREATED = "Checkpoint Created",
-	CHECKPOINT_RESTORED = "Checkpoint Restored",
-	CHECKPOINT_DIFFED = "Checkpoint Diffed",
-
 	TAB_SHOWN = "Tab Shown",
 	MODE_SETTINGS_CHANGED = "Mode Setting Changed",
 	CUSTOM_MODE_CREATED = "Custom Mode Created",
@@ -200,9 +196,6 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.MODE_SWITCH,
 			TelemetryEventName.MODE_SELECTOR_OPENED,
 			TelemetryEventName.TOOL_USED,
-			TelemetryEventName.CHECKPOINT_CREATED,
-			TelemetryEventName.CHECKPOINT_RESTORED,
-			TelemetryEventName.CHECKPOINT_DIFFED,
 			TelemetryEventName.CODE_ACTION_USED,
 			TelemetryEventName.PROMPT_ENHANCED,
 			TelemetryEventName.TITLE_BUTTON_CLICKED,

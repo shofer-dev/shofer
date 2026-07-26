@@ -23,7 +23,7 @@ flowchart TD
     NA -->|yes| VAL["validateToolUse()<br/>name, user-disabled, mode, fileRegex"]
     VAL --> REP["toolRepetitionDetector.check()"]
     REP --> ROUTE["router — switch on block.name<br/>presentAssistantMessage.ts"]
-    ROUTE -->|"file-mutating tools"| CP["checkpointSaveAndMark()"]
+    ROUTE -->|"file-mutating tools"| CP["pluginRegistry.applyBeforeToolCall()<br/>(a snapshot plugin checkpoints here)"]
     CP --> H
     ROUTE --> H["tool.handle(task, block, callbacks)<br/>BaseTool subclass"]
     H --> EX["execute(params, task, callbacks)"]

@@ -71,7 +71,6 @@ describe("SessionSearch", () => {
 			"api_req_retry_delayed",
 			"api_req_rate_limit_wait",
 			"api_req_deleted",
-			"checkpoint_saved",
 		] as const
 
 		const messages: ShoferMessage[] = machineTypes.map((say, i) =>

@@ -31,7 +31,6 @@
 		"mcp": "Server MCP",
 		"worktrees": "Worktrees",
 		"autoApprove": "Auto-Approve",
-		"checkpoints": "Checkpoint",
 		"notifications": "Notifikasi",
 		"contextManagement": "Konteks",
 		"terminal": "Terminal",
@@ -559,16 +558,6 @@
 			"placeholder": "Default: claude",
 			"maxTokensLabel": "Token Output Maks",
 			"maxTokensDescription": "Jumlah maksimum token output untuk respons Claude Code. Default adalah 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Batas waktu inisialisasi checkpoint (detik)",
-			"description": "Waktu maksimum menunggu inisialisasi layanan checkpoint. Default 15 detik. Rentang: 10-60 detik."
-		},
-		"enable": {
-			"label": "Aktifkan checkpoint otomatis",
-			"description": "Ketika diaktifkan, Shofer akan secara otomatis membuat checkpoint selama eksekusi tugas, memudahkan untuk meninjau perubahan atau kembali ke state sebelumnya. <0>Pelajari lebih lanjut</0>"
 		}
 	},
 	"notifications": {

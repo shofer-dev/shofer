@@ -44,7 +44,6 @@ describe("Task.ask queued message drain", () => {
 		;(task as any).saveShoferMessages = vi.fn(async () => {})
 		;(task as any).updateShoferMessage = vi.fn(async () => {})
 		;(task as any).cancelAutoApprovalTimeout = vi.fn(() => {})
-		;(task as any).checkpointSave = vi.fn(async () => {})
 		;(task as any).emit = vi.fn()
 		// providerRef returns undefined → state = undefined → auto-approval disabled
 		;(task as any).providerRef = { deref: () => undefined }

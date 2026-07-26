@@ -17,12 +17,8 @@ function makeExecutorApi() {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		applyConfig: vi.fn(async () => {}),
-		getCheckpointDiff: vi.fn(async () => [
-			{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
-		]),
 		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
 		getChangedFileDiff: vi.fn(async () => ({ original: "base", final: "final" })),
-		restoreCheckpoint: vi.fn(async () => {}),
 		revertChangedFile: vi.fn(async () => {}),
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
@@ -69,21 +65,12 @@ describe("session transport (controller ↔ executor)", () => {
 		const { api } = makeExecutorApi()
 		const { controller } = wire(createInMemoryHost(), api)
 
-		// Data method: the computed diff comes back as the command result.
-		const diff = await controller.api.getCheckpointDiff("t1", { commitHash: "c1", mode: "checkpoint" })
-		expect(api.getCheckpointDiff).toHaveBeenCalledWith("t1", { commitHash: "c1", mode: "checkpoint" })
-		expect(diff).toEqual([
-			{ paths: { relative: "a.ts", absolute: "/w/a.ts" }, content: { before: "x", after: "y" } },
-		])
-
+		// Data method: the payload comes back as the command result.
 		const changed = await controller.api.getChangedFileDiff("t1", "a.ts")
 		expect(api.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")
 		expect(changed).toEqual({ original: "base", final: "final" })
 
 		// Execute methods resolve void and reach the executor.
-		await controller.api.restoreCheckpoint("t1", { ts: 1, commitHash: "c1", mode: "restore" })
-		expect(api.restoreCheckpoint).toHaveBeenCalledWith("t1", { ts: 1, commitHash: "c1", mode: "restore" })
-
 		await controller.api.revertChangedFile("t1", "a.ts")
 		expect(api.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
 		await controller.api.revertAllChangedFiles("t1")

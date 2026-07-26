@@ -4,9 +4,6 @@ import type {
 	AgentApi,
 	AskResponse,
 	ChangedFilesPayload,
-	CheckpointDiffEntry,
-	CheckpointDiffOptions,
-	CheckpointRestoreOptions,
 	CreateTaskInput,
 	ServerEvent,
 	SyncedSecrets,
@@ -127,20 +124,12 @@ export class ShoferApiAgent implements AgentApi {
 
 	// ── Reverse data channel (Shofer Nodes L3) — delegate to the in-process API ──
 
-	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]> {
-		return this.api.getCheckpointDiff(taskId, opts)
-	}
-
 	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
 		return this.api.getTaskChangedFiles(taskId)
 	}
 
 	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
 		return this.api.getChangedFileDiff(taskId, relPath)
-	}
-
-	async restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void> {
-		await this.api.restoreCheckpoint(taskId, opts)
 	}
 
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {

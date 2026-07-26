@@ -162,25 +162,6 @@
 			"claudeCodeNotAuthenticated": "Devi accedere per utilizzare Claude Code. Vai su Impostazioni e clicca su \"Accedi a Claude Code\" per autenticarti."
 		}
 	},
-	"checkpoint": {
-		"regular": "Checkpoint",
-		"initializingWarning": "Inizializzazione del checkpoint in corso... Se questa operazione richiede troppo tempo, puoi disattivare i checkpoint nelle <settingsLink>impostazioni</settingsLink> e riavviare l'attività.",
-		"menu": {
-			"viewDiff": "Visualizza differenze",
-			"more": "Altre opzioni",
-			"viewDiffFromInit": "Visualizza tutte le modifiche",
-			"viewDiffWithCurrent": "Visualizza le modifiche da questo checkpoint",
-			"restore": "Ripristina checkpoint",
-			"restoreFiles": "Ripristina file",
-			"restoreFilesDescription": "Ripristina i file del tuo progetto a uno snapshot catturato in questo punto.",
-			"restoreFilesAndTask": "Ripristina file e attività",
-			"confirm": "Conferma",
-			"cancel": "Annulla",
-			"cannotUndo": "Questa azione non può essere annullata.",
-			"restoreFilesAndTaskDescription": "Ripristina i file del tuo progetto a uno snapshot catturato in questo punto ed elimina tutti i messaggi successivi a questo punto."
-		},
-		"current": "Corrente"
-	},
 	"fileOperations": {
 		"wantsToRead": "Shofer vuole leggere questo file",
 		"wantsToReadOutsideWorkspace": "Shofer vuole leggere questo file al di fuori dell'area di lavoro",

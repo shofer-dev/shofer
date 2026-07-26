@@ -19,16 +19,13 @@ describe("ShoferApiAgent (§11)", () => {
 			respondToAsk: vi.fn(async () => {}),
 			applySyncedSettings: vi.fn(async () => {}),
 			applySyncedSecrets: vi.fn(async () => {}),
-			getCheckpointDiff: vi.fn(async () => [
-				{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } },
-			]),
 			getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" })),
 			getChangedFileDiff: vi.fn(async () => ({ original: "o", final: "f" })),
-			restoreCheckpoint: vi.fn(async () => {}),
 			revertChangedFile: vi.fn(async () => {}),
 			revertAllChangedFiles: vi.fn(async () => {}),
 			acceptChangedFile: vi.fn(async () => {}),
 			acceptAllChangedFiles: vi.fn(async () => {}),
+			pluginRequest: vi.fn(async () => ({ ok: true })),
 		}) as unknown as ShoferAPI & EventEmitter
 		return api
 	}
@@ -135,19 +132,11 @@ describe("ShoferApiAgent (§11)", () => {
 		const agent = new ShoferApiAgent(api)
 		const rec = api as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-		expect(await agent.getCheckpointDiff("t1", { commitHash: "c1", mode: "checkpoint" })).toEqual([
-			{ paths: { relative: "a", absolute: "/a" }, content: { before: "b", after: "c" } },
-		])
-		expect(rec.getCheckpointDiff).toHaveBeenCalledWith("t1", { commitHash: "c1", mode: "checkpoint" })
-
 		expect(await agent.getChangedFileDiff("t1", "a.ts")).toEqual({ original: "o", final: "f" })
 		expect(rec.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")
 
 		await agent.getTaskChangedFiles("t1")
 		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("t1")
-
-		await agent.restoreCheckpoint("t1", { ts: 1, commitHash: "c1", mode: "restore" })
-		expect(rec.restoreCheckpoint).toHaveBeenCalledWith("t1", { ts: 1, commitHash: "c1", mode: "restore" })
 
 		await agent.revertChangedFile("t1", "a.ts")
 		expect(rec.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
@@ -157,6 +146,9 @@ describe("ShoferApiAgent (§11)", () => {
 		expect(rec.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
 		await agent.acceptAllChangedFiles("t1")
 		expect(rec.acceptAllChangedFiles).toHaveBeenCalledWith("t1")
+
+		await agent.pluginRequest("t1", "checkpoints", "diff", { hash: "c1" })
+		expect(rec.pluginRequest).toHaveBeenCalledWith("t1", "checkpoints", "diff", { hash: "c1" })
 	})
 
 	it("subscribe forwards ShoferAPI events and unsubscribes", () => {

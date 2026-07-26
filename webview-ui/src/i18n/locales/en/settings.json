@@ -76,7 +76,6 @@
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",
 		"tools": "Tools",
-		"checkpoints": "Checkpoints",
 		"notifications": "Notifications",
 		"liveMemory": "Live Memory",
 		"contextManagement": "Context",
@@ -752,16 +751,6 @@
 			"placeholder": "Default: claude",
 			"maxTokensLabel": "Max Output Tokens",
 			"maxTokensDescription": "Maximum number of output tokens for Claude Code responses. Default is 8000."
-		}
-	},
-	"checkpoints": {
-		"timeout": {
-			"label": "Checkpoint initialization timeout (seconds)",
-			"description": "Maximum time to wait for checkpoint service initialization. Default is 15 seconds. Range: 10-60 seconds."
-		},
-		"enable": {
-			"label": "Enable automatic checkpoints",
-			"description": "When enabled, Shofer will automatically create checkpoints during task execution, making it easy to review changes or revert to earlier states. <0>Learn more</0>"
 		}
 	},
 	"notifications": {

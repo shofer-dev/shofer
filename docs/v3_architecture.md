@@ -204,7 +204,7 @@ the host only through Category I (`getHost()` + the registries above):
   tiktoken/token-counter, `safeWriteJson`, storage, live-memory leaves, and hundreds of
   utils.
 - **Context tracking** (`FileContextTracker`, `getEnvironmentDetails`, `mentions`,
-  `ChangedFilesService`, `checkpoints`, `message-manager`), the **ignore controller**,
+  `ChangedFilesService`, `message-manager`), the **ignore controller**,
   and the model-dispatch core.
 
 The core imports **no** front-end SDK: `Task.ts` has zero `vscode.` references and reaches
@@ -225,7 +225,7 @@ built-in `node:sqlite` — no flat files, no native dependency.
 > which owns the `ExecutorPool`, persists node definitions (+ tokens in SecretStorage), and
 > handles the connect/auth/version handshake, live status, and load-balancing. Tasks run on
 > remote nodes and render in the webview with interactive approvals, token/context metering,
-> and checkpoint diff/restore + the changed-files panel (over the reverse data channel,
+> and the changed-files panel + plugin-owned features like checkpoints (over the reverse data channel,
 > below); focus is per-view so the sidebar and an editor tab can watch two different tasks at
 > once. The Shofer Nodes UI is wired in (Settings panel, header status, a composer
 > node-picker, and the load-balancer selector). The split-host RPC (`host-rpc.ts`) + session
@@ -315,26 +315,25 @@ Distributing execution uses two boundaries that the v3 split already defines:
     Category I, and the boundary is already drawn.
 
 3. **Reverse data channel (controller → executor), typed methods on `AgentApi`.**
-   Checkpoint diff/restore and the changed-files panel operate on per-task state
-   that lives on the **owning executor** (its shadow-git checkpoint repo + its
-   `ChangedFilesService` snapshots). For a remote (shadow) task the controller
-   therefore does not touch a local `Task`; it calls typed `AgentApi` methods that
-   round-trip to the executor over the same session/HTTP transport as the rest of
-   the control plane:
+   The changed-files panel — and any plugin-owned per-task feature, such as the
+   bundled checkpoints plugin's shadow-git history — operates on state that lives on
+   the **owning executor**. For a remote (shadow) task the controller therefore does
+   not touch a local `Task`; it calls typed `AgentApi` methods that round-trip to the
+   executor over the same session/HTTP transport as the rest of the control plane:
 
-    - **Data fetch** — `getCheckpointDiff` (the executor resolves the from/to
-      hashes and runs `service.getDiff`, skipping binary/oversized files to bound
-      the payload; the controller renders the returned `CheckpointDiff[]` and
-      resolves the diff title locally), `getTaskChangedFiles`, `getChangedFileDiff`.
-    - **Execute-on-executor** — `restoreCheckpoint` (after which the controller
-      **rebuilds the shadow** so its buffered conversation matches the executor's
-      post-rewind state), `revert{,All}ChangedFile(s)`, `accept{,All}ChangedFile(s)`.
+    - **Data fetch** — `getTaskChangedFiles`, `getChangedFileDiff`.
+    - **Execute-on-executor** — `revert{,All}ChangedFile(s)`, `accept{,All}ChangedFile(s)`.
+    - **Plugin-owned features** — `pluginRequest(taskId, plugin, method, params)`
+      dispatches to that plugin's `handleRequest` on the executor, so a feature living
+      in a plugin needs no wire method of its own. A plugin that rewinds the task
+      reports `{ rewound: true }`, after which the controller **rebuilds the shadow**
+      so its buffered conversation matches the executor's post-rewind state.
 
     The controller-side `NodeRegistry` routes each through the `ExecutorPool` to the
     task's owner, refreshes the focused shadow's changed-files panel on a debounce as
     remote `Message` deltas arrive, and gates restore/revert on "no other active task
     in this worktree" (shared-workspace safety — an executor `git clean -fd`/`reset
-    --hard` must not race a local task's writes).
+--hard` must not race a local task's writes).
 
 The three channels, and which of them the shipped node model actually uses:
 
@@ -345,7 +344,7 @@ flowchart LR
     LOC["served executor-locally<br/>fs · findFiles · watcher · config · env<br/>command execution"]
 
     CTRL -->|"1 · session transport (AgentApi control plane)<br/>createTask · sendMessage · cancelTask<br/>respondToAsk · subscribe — version-locked"| EXEC
-    CTRL -->|"3 · reverse data channel (typed AgentApi methods)<br/>getCheckpointDiff · restoreCheckpoint<br/>getTaskChangedFiles · revert/accept changed files"| EXEC
+    CTRL -->|"3 · reverse data channel (typed AgentApi methods)<br/>getTaskChangedFiles · revert/accept changed files<br/>pluginRequest (plugin-owned features)"| EXEC
     EXEC -.->|"2 · host-callback channel over Category I (createSplitHost)<br/>notifier · lsp · workspace · private-tool commands<br/>substrate — NOT used by the shipped node model"| CTRL
     EXEC --> LOC
 ```
@@ -362,7 +361,7 @@ workspace filesystem and serves that whole slice executor-locally.
   multi-task coordination tools (`new_task`, `check_task_status`, `wait_for_task`,
   `send_message_to_task`) keep working unchanged; coordination never crosses the wire.
 - **Single-owner invariant.** A whole root-task tree has exactly one executor owner,
-  so per-task state (message queue, checkpoints, file-change snapshots, cost
+  so per-task state (message queue, plugin state, file-change snapshots, cost
   aggregation) is never shared between machines.
 - **Per-task working isolation.** Concurrent root tasks on different executors each
   operate in their own `.shofer/worktrees/<name>/` branch, so they don't collide on
@@ -417,20 +416,20 @@ single-host story.)
 The v3 architecture is delivered as a set of initiatives. Current status (initiative
 numbers are local to this document):
 
-| #   | Initiative                                                                                     | Status                                                                                                                                                        |
-| --- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                                                                                                         |
-| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 56 tools migrated                                                                                                                                      |
-| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                                                                                                            |
-| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                                                                                                            |
-| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                                                                                                            |
-| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                                                                                             |
-| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                                                                                                            |
-| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ complete — `Task` + all 56 tools + `presentAssistantMessage` in `@shofer/core`; every seam abstracted and shipped (below)                                  |
-| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`)                                                                                           |
-| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                |
-| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                     |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + checkpoint/changed-files reverse data channel, per-view shadow focus, controller→node config sync incl. search-only RAG (nodes answer `rag_search` against the controller's index). Split-host RPC/session-transport substrate remains for the controller-host model; serializing shadow-git/worktree creation on the shared repo is the remaining hardening |
+| #   | Initiative                                                                                     | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 56 tools migrated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ complete — `Task` + all 56 tools + `presentAssistantMessage` in `@shofer/core`; every seam abstracted and shipped (below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`), plus the seams a plugin needs to own a whole feature — lifecycle hooks, `ctx.task` timeline markers/rewind, `ctx.host.editor`, `handleRequest`/`pluginRequest`. Proven by extracting **checkpoints** out of core into a bundled plugin                                                                                                                                                                                                                                                                                                    |
+| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + changed-files/plugin-request reverse data channel, per-view shadow focus, controller→node config sync incl. search-only RAG (nodes answer `rag_search` against the controller's index). Split-host RPC/session-transport substrate remains for the controller-host model; serializing shadow-git/worktree creation on the shared repo is the remaining hardening |
 
 ### What "done" means, per initiative
 
@@ -517,7 +516,7 @@ abstracted, their implementations staying Category II in `src`:
 
 **Portable relocation — ✅ done.** Moved into `@shofer/core`: `utils/logging`,
 `utils/path` (with its `String.prototype.toPosix` global), `services/blob-store`,
-`ShoferIgnoreController`, `services/ripgrep`, `services/search`, `services/checkpoints`,
+`ShoferIgnoreController`, `services/ripgrep`, `services/search`,
 and the terminal core — plus a portable `fileExistsAtPath` helper, which let the tail
 avoid moving the 62-consumer `utils/fs` (not on `Task`'s path; it stays in `src`).
 
@@ -579,27 +578,27 @@ prerequisites:
   or more executors — pluggable root-task assignment, per-task routing, and a merged
   event feed tagged by `executorId` (the unified view). Single-executor behaviour is
   identical to driving one directly.
-  - **Load-balancing policy** (`LoadBalancerPolicy`, `setPolicy`/`getPolicy`): the
-    default `round-robin` rotates evenly; the `least-load-1m`/`5m`/`15m` policies pick the
-    assignable executor with the lowest **normalized** load average
-    (`loadavg[window] / max(cpus, 1)`) for the chosen window, so a bigger-core node can
-    absorb more work. The load metric is an **injected accessor**
-    (`PooledExecutor.load?: () => LoadSample`) — `@shofer/types` stays browser-safe and
-    never imports `node:os`. The Node-side `NodeRegistry` supplies it: the Local executor
-    reads this host's live `os.loadavg()`/`os.cpus().length`; each remote reads the sample
-    from its `NodeConnection` (carried on the periodic `GET /health` ping, which now
-    returns `loadavg` + `cpus`). Fallbacks keep it robust: executors with no sample are
-    excluded from the comparison, an all-no-sample pool degrades to round-robin, and ties
-    (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
-    the round-robin cursor. The policy is selected by the `shofer.nodes.loadBalancer`
-    setting (read on init + on configuration change).
+    - **Load-balancing policy** (`LoadBalancerPolicy`, `setPolicy`/`getPolicy`): the
+      default `round-robin` rotates evenly; the `least-load-1m`/`5m`/`15m` policies pick the
+      assignable executor with the lowest **normalized** load average
+      (`loadavg[window] / max(cpus, 1)`) for the chosen window, so a bigger-core node can
+      absorb more work. The load metric is an **injected accessor**
+      (`PooledExecutor.load?: () => LoadSample`) — `@shofer/types` stays browser-safe and
+      never imports `node:os`. The Node-side `NodeRegistry` supplies it: the Local executor
+      reads this host's live `os.loadavg()`/`os.cpus().length`; each remote reads the sample
+      from its `NodeConnection` (carried on the periodic `GET /health` ping, which now
+      returns `loadavg` + `cpus`). Fallbacks keep it robust: executors with no sample are
+      excluded from the comparison, an all-no-sample pool degrades to round-robin, and ties
+      (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
+      the round-robin cursor. The policy is selected by the `shofer.nodes.loadBalancer`
+      setting (read on init + on configuration change).
 - **Shipped**: the remote executor process (`shofer serve`, HTTP/SSE over
   `ShoferApiAgent`), the `NodeRegistry` that wires the `ExecutorPool` into the extension
   (node registry + SecretStorage tokens, connect/auth/version handshake, live status,
   load-balancing), the full Shofer Nodes UI (Settings panel, header status, composer
   node-picker, load-balancer selector), interactive approvals (`respondToAsk`),
   full-fidelity remote render, per-view shadow focus, and the reverse data channel
-  (checkpoint diff/restore + changed-files).
+  (changed-files + plugin requests).
 
 **Remaining hardening**: serializing shadow-git/worktree creation on the shared repo
 (single-writer for the code index is enforced — see _Shared-resource reconciliation_

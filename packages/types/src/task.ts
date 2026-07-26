@@ -117,7 +117,6 @@ export type TaskProviderEvents = {
 
 export interface CreateTaskOptions {
 	taskId?: string
-	enableCheckpoints?: boolean
 	consecutiveMistakeLimit?: number
 	experiments?: Record<string, boolean>
 	initialTodos?: TodoItem[]

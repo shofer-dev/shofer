@@ -30,9 +30,6 @@ export const codeIndexLog = getLogger().child({ ctx: "CodeIndex" })
 /** MCP servers and transport */
 export const mcpLog = getLogger().child({ ctx: "MCP" })
 
-/** Checkpoints / shadow git */
-export const checkpointLog = getLogger().child({ ctx: "Checkpoints" })
-
 /** API providers (Anthropic, OpenAI, Bedrock, etc.) */
 export const apiLog = getLogger().child({ ctx: "API" })
 

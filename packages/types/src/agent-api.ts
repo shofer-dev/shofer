@@ -11,7 +11,6 @@
  * the wire-protocol modules (`session-transport.ts`) can share it.
  */
 
-import type { CheckpointDiffEntry, CheckpointDiffOptions, CheckpointRestoreOptions } from "./checkpoints.js"
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { ProviderSettings } from "./provider-settings.js"
 import type { ChangedFilesPayload } from "./vscode-extension-host.js"
@@ -88,24 +87,16 @@ export interface AgentApi {
 	applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
-	// Checkpoint diff/restore + the changed-files panel for a REMOTE (shadow) task:
-	// the controller fetches data / executes ops on the owning executor over the
-	// control plane, exactly like a local task drives its own in-process service.
-	// Data methods return a payload; execute methods run an op and resolve.
+	// The changed-files panel — and any plugin-owned per-task feature, via
+	// `pluginRequest` — for a REMOTE (shadow) task: the controller fetches data /
+	// executes ops on the owning executor over the control plane, exactly like a local
+	// task drives its own in-process service. Data methods return a payload; execute
+	// methods run an op and resolve.
 
-	/**
-	 * Compute a checkpoint diff on the executor and ship the per-file changes back.
-	 * The executor resolves from/to hashes and runs `service.getDiff` (skipping
-	 * binary/oversized files to bound the payload); the controller renders them via
-	 * `showMultiFileDiff` and resolves the title locally.
-	 */
-	getCheckpointDiff(taskId: string, opts: CheckpointDiffOptions): Promise<CheckpointDiffEntry[]>
 	/** The task's changed-files panel payload (files the executor's task edited). */
 	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload>
 	/** The original (base) + final content for one changed file, for the diff editor. */
 	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }>
-	/** Restore the task to a checkpoint on the executor (rewinds the executor's task). */
-	restoreCheckpoint(taskId: string, opts: CheckpointRestoreOptions): Promise<void>
 	/** Revert one changed file to its base state on the executor. */
 	revertChangedFile(taskId: string, relPath: string): Promise<void>
 	/** Revert every changed file for the task on the executor. */

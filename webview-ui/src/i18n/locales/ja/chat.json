@@ -159,25 +159,6 @@
 			"claudeCodeNotAuthenticated": "Claude Codeを使用するにはサインインが必要です。設定に移動して「Claude Codeにサインイン」をクリックして認証してください。"
 		}
 	},
-	"checkpoint": {
-		"regular": "チェックポイント",
-		"initializingWarning": "チェックポイントの初期化中... 時間がかかりすぎる場合は、<settingsLink>設定</settingsLink>でチェックポイントを無効にしてタスクを再開できます。",
-		"menu": {
-			"viewDiff": "差分を表示",
-			"more": "その他のオプション",
-			"viewDiffFromInit": "すべての変更を表示",
-			"viewDiffWithCurrent": "このチェックポイント以降の変更を表示",
-			"restore": "チェックポイントを復元",
-			"restoreFiles": "ファイルを復元",
-			"restoreFilesDescription": "この時点で撮影されたスナップショットにプロジェクトのファイルを復元します。",
-			"restoreFilesAndTask": "ファイルとタスクを復元",
-			"confirm": "確認",
-			"cancel": "キャンセル",
-			"cannotUndo": "このアクションは元に戻せません。",
-			"restoreFilesAndTaskDescription": "この時点で撮影されたスナップショットにプロジェクトのファイルを復元し、この時点以降のすべてのメッセージを削除します。"
-		},
-		"current": "現在"
-	},
 	"instructions": {
 		"wantsToFetch": "Rooは現在のタスクを支援するための詳細な指示を取得したい"
 	},

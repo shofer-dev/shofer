@@ -1,11 +1,6 @@
 import { render, screen, act } from "@/utils/test-utils"
 
-import {
-	type ProviderSettings,
-	type ExperimentId,
-	type ExtensionState,
-	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
-} from "@shofer/types"
+import { type ProviderSettings, type ExperimentId, type ExtensionState } from "@shofer/types"
 
 import { ExtensionStateContextProvider, useExtensionState, mergeExtensionState } from "../ExtensionStateContext"
 
@@ -245,7 +240,6 @@ describe("mergeExtensionState", () => {
 			shoferMessages: [],
 			taskHistory: [],
 			shouldShowAnnouncement: false,
-			enableCheckpoints: true,
 			writeDelayMs: 1000,
 			mode: "default",
 			experiments: {} as Record<ExperimentId, boolean>,
@@ -269,7 +263,6 @@ describe("mergeExtensionState", () => {
 			maxImageFileSize: 5,
 			maxTotalImageSize: 20,
 			taskSyncEnabled: false,
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS, // Add the checkpoint timeout property
 			maxReadFileLine: -1,
 			useAgentRules: false,
 		}
@@ -278,7 +271,6 @@ describe("mergeExtensionState", () => {
 			...baseState,
 			apiConfiguration: { modelMaxTokens: 1234, modelMaxThinkingTokens: 123 },
 			experiments: {} as Record<ExperimentId, boolean>,
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS - 5,
 		}
 
 		const newState: ExtensionState = {
@@ -290,7 +282,6 @@ describe("mergeExtensionState", () => {
 				runSlashCommand: false,
 				customTools: false,
 			} as Record<ExperimentId, boolean>,
-			checkpointTimeout: DEFAULT_CHECKPOINT_TIMEOUT_SECONDS + 5,
 		}
 
 		const result = mergeExtensionState(prevState, newState)
