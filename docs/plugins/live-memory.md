@@ -1,5 +1,19 @@
 # Live Memory — Design & Implementation
 
+> **✅ Shipped** — as a **bundled first-party plugin**
+> ([`plugins/live-memory/`](../../plugins/live-memory/)), not a core subsystem. It ships
+> with the extension but is **disabled by default** — enable it in Settings → Plugins,
+> and separately consent to its billed AI calls.
+>
+> This document is the feature's design. Sections that describe _host wiring_ —
+> a `the plugin's main module` singleton, a `the `sidebar-panel` UI bundle` webview, an
+> `the `ask_live_memory` tool definition` native tool, `liveMemory*` global settings — describe the
+> **pre-plugin built-in** and are superseded by the plugin seams
+> (`registerTools`, `transformSystemPrompt`, `ctx.ai`, `ctx.storage`,
+> `ctx.host.watch`, `ctx.registerService`, manifest `config`).
+> [`plugins/live-memory/DOGFOOD.md`](../../plugins/live-memory/DOGFOOD.md) maps every
+> built-in piece to the seam that replaced it.
+
 ## Purpose
 
 The Live Memory is a **persistent, long-context LLM companion** that lives alongside the RAG indexer. Unlike per-task agents that are ephemeral and destroyed when a task terminates, the Live Memory survives across tasks and even VSCode restarts. It runs on a **cheap model with a very large context window**, allowing it to accumulate codebase knowledge over time and answer simple questions that other agents (running in their own tasks) can leverage without re-loading the entire codebase. It is exposed to agents as the `ask_live_memory` native tool.
@@ -20,35 +34,31 @@ The key design principles:
 
 ## Architecture
 
-`LiveMemoryManager` is a thin orchestrator that owns the lifecycle, the
-configuration, and the event emitters consumed by the webview. All heavy
-lifting lives in focused single-responsibility collaborators it composes:
+`main.ts` is a thin orchestrator: it declares the `ShoferPlugin` (hooks, the
+`ask_live_memory` tool, the prompt transform) and owns the state the hooks share. All
+heavy lifting lives in focused single-responsibility collaborators it composes:
 
 ```
-LiveMemoryManager (singleton per workspace, vscode.Disposable)
+main.ts — the ShoferPlugin (one memory per workspace)
  │
- ├── ShoferIgnoreController       — .shofer/shoferignore pattern validation
- │                                 (shared with rest of extension; filters all paths)
- ├── ConversationStore           — versioned JSON snapshot persistence
- │                                 (SHA-256 file-context validation, ENOENT-safe)
- ├── QuestionQueue                — bounded FIFO with per-entry AbortSignal
+ ├── LiveMemoryAgent             — the question-answering loop (bounded iterations)
+ ├── MemoryStore                 — persistence over ctx.storage (observations, Q&A,
+ │                                 conversation window, cost ledger)
+ ├── QuestionQueue               — bounded FIFO with per-entry AbortSignal
  │                                 (serializes question processing; bulk cancel)
- ├── ContextWindow                — token budget + LRU eviction
+ ├── ContextWindow               — token budget + LRU eviction
  │                                 (file contexts evicted before message pairs)
- ├── LiveMemoryLlmClient         — wraps shared `buildApiHandler()` ApiHandler
+ ├── MemoryLlmClient             — calls ctx.ai.buildHandler() (never sees keys)
  │                                 (streaming, abort-aware, full provider catalog)
- ├── LiveMemoryToolExecutor   — read-only tool dispatcher (wraps ripgrep, glob,
- │                                 extract-text, CodeIndexManager; no Task dependency)
+ ├── LiveMemoryToolExecutor      — read-only tools over ctx.host.search + ctx.host.fs
  ├── LiveMemoryDirectoryTree     — workspace scanner, ~10% context-window cap
- │                                 (.shofer/shoferignore-filtered via ShoferIgnoreController)
- ├── LiveMemoryFileWatcher       — VSCode FileSystemWatcher, 500ms debounce
- │                                 (.shofer/shoferignore-filtered via ShoferIgnoreController)
- └── pricing                       — per-model USD cost from ApiHandler.getModel()
+ └── pricing                     — per-model USD cost from the handler's model info
 
-Configuration & secrets are read through `ContextProxy` so the helper
-agent participates in the extension's typed settings/migration plumbing
-(no direct vscode.workspace.getConfiguration / context.secrets).
-Commands are registered through the typed `commandIds` plumbing.
+External edits arrive through `ctx.host.watch` (scoped to the plugin's granted
+filesystem roots); periodic compaction runs as a supervised `ctx.registerService`
+service. Settings come from the manifest `config` schema via `ctx.config` (rendered
+in Settings → Plugins), and the slash commands from `contributes.commands` — the
+plugin touches neither `ContextProxy` nor the host's command registry.
 
 State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Standby
                                   ↓                ↓
@@ -57,21 +67,22 @@ State machine:  Standby → Initializing → Ready ⇄ Busy → Stopping → Sta
 
 ### Key Source Files
 
-| File                                             | Lines | Role                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/services/live-memory/manager.ts`            | ~910  | Singleton orchestrator. Public API: `initialize`, `startAgent`, `stopAgent`, `askQuestion`, `clearContext`, getters for state/usage/cost, two event emitters.                                                                                                                                       |
-| `src/services/live-memory/conversation-store.ts` | ~140  | Versioned JSON snapshot persistence under `globalStorage`. SHA-256 hash validation of cached file contents on load; drops on mismatch or `ENOENT`.                                                                                                                                                  |
-| `src/services/live-memory/question-queue.ts`     | ~160  | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                                                                                                       |
-| `src/services/live-memory/context-window.ts`     | ~200  | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                                                                                                        |
-| `src/services/live-memory/llm-client.ts`         | ~320  | Adapter onto the shared `buildApiHandler()`. Maps the live-memory's curated provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                                                                                                                                           |
-| `src/services/live-memory/tool-executor.ts`      | ~380  | Read-only tool dispatcher wrapping ripgrep, glob, extract-text, and CodeIndexManager. No Task dependency — pure utility layer. Only `TOOL_GROUPS.read` tools (minus `ask_live_memory` itself).                                                                                                      |
-| `src/services/live-memory/pricing.ts`            | ~50   | Reads per-model USD pricing from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                                                                                                |
-| `src/services/live-memory/directory-tree.ts`     | ~170  | Recursive workspace scan. `find .`-style tree generation. Filtered through `.shofer/shoferignore` (via `ShoferIgnoreController.validateAccess()`); hardcoded `SKIP_PARTS` set (exported, shared with file-watcher) as fast-path pre-filter. Capped at ~10% of context window.                       |
-| `src/services/live-memory/file-watcher.ts`       | ~110  | VSCode `FileSystemWatcher` wrapper. 500ms per-file debounce. Filtered through `.shofer/shoferignore` (via `ShoferIgnoreController.validateAccess()`); `SKIP_PARTS` set (imported from `directory-tree.ts`) as fast-path pre-filter. Notifies the manager which invalidates `ContextWindow` entries. |
-| `src/services/live-memory/__tests__/`            |       | Vitest specs for `ConversationStore`, `QuestionQueue`, `ContextWindow` (25 cases, no `vscode` mocks needed).                                                                                                                                                                                        |
-| `packages/types/src/live-memory.ts`              | ~230  | Zod schemas (`AgentMessage`, `FileContextEntry`, `LiveMemoryConfig`, `QuestionResult`, `LiveMemoryCostTracking`, `LiveMemoryConversationData`); the fixed `LIVE_MEMORY_SYSTEM_PROMPT`; 13 constants.                                                                                                |
-| `packages/types/src/global-settings.ts`          |       | `liveMemory{Enabled,ApiConfigId,MaxContextTokens,ContextFillThreshold}` keys on `globalSettingsSchema`. Credentials come from the linked API Configuration profile (no live-memory-specific `GLOBAL_SECRET_KEYS`).                                                                                  |
-| `packages/types/src/vscode.ts`                   |       | Live-memory command ids on the typed `commandIds` array (`liveMemory.{start,stop,clearContext,showChat,openSettings}`).                                                                                                                                                                             |
+| File                                            | Role                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugins/live-memory/main.ts`                   | Plugin entry: the `ShoferPlugin` object — `initialize`, `registerTools` (`ask_live_memory`), `transformSystemPrompt`, the lifecycle hooks, `ctx.host.watch` for external edits, and the supervised compaction service. |
+| `plugins/live-memory/agent.ts`                  | The question-answering loop (tool-calling iterations, bounded by `MAX_AGENT_ITERATIONS`).                                                                                                                              |
+| `plugins/live-memory/memory-store.ts`           | Per-workspace persistence over `ctx.storage` (its own traversal-blocked dir): observations, Q&A pairs, the conversation window, the cost ledger.                                                                       |
+| `plugins/live-memory/question-queue.ts`         | Bounded FIFO with per-entry `AbortSignal`. Reentrant-safe drain loop; per-entry timeouts; bulk `cancelAll()`.                                                                                                          |
+| `plugins/live-memory/context-window.ts`         | In-memory window: messages + file contexts with token estimates. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs).                                                           |
+| `plugins/live-memory/memory-llm.ts`             | Calls the host LLM through `ctx.ai.buildHandler()` — the plugin never sees provider keys — and renders the memory context for the prompt.                                                                              |
+| `plugins/live-memory/tool-executor.ts`          | Read-only tool dispatcher over `ctx.host.search` (rag/git search, symbols, diagnostics) + the scoped `ctx.host.fs`.                                                                                                    |
+| `plugins/live-memory/pricing.ts`                | Reads per-model USD pricing from the handler's `getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler does not expose pricing.                                                                |
+| `plugins/live-memory/directory-tree.ts`         | Recursive workspace scan, `find .`-style tree, capped at ~10% of the context window.                                                                                                                                   |
+| `plugins/live-memory/system-section.ts`         | Builds the "LIVE MEMORY" section injected by `transformSystemPrompt`.                                                                                                                                                  |
+| `plugins/live-memory/types.ts`                  | The plugin's own domain types + the fixed system prompt (kept in the plugin: zero `@shofer/types` runtime footprint).                                                                                                  |
+| `plugins/live-memory/ui/panel.tsx`, `badge.tsx` | The `sidebar-panel` chat view and the `chat-input-toolbar` status badge, built to `ui/*.js` by `build-ui.mjs`.                                                                                                         |
+| `plugins/live-memory/plugin.json`               | Manifest: permissions (`tools`, `systemPrompt`, `lifecycle`, `events`, `ai`, `search`, `skills`, `commands`, `filesystem`, `ui`), contributed skills/commands/UI, and the `config` schema behind Settings → Plugins.   |
+| `plugins/live-memory/__tests__/`                | Vitest specs for the store, queue, context window, agent, tool executor, pricing, directory tree and system section.                                                                                                   |
 
 ### Module Contracts
 
@@ -80,10 +91,10 @@ directory). The Manager depends directly on each class; substitution for
 testing is achieved by constructor injection at the spec level. The public
 shape of each module:
 
-- **`ConversationStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. In-memory `ConversationSnapshot` shape: `{ messages, fileContexts, costTracking }` (version lives on the persisted `LiveMemoryConversationData`). Discards on version mismatch (no migrations).
+- **`MemoryStore`** — `load(): Promise<ConversationSnapshot>`, `save(snapshot)`, `filePath` getter. In-memory `ConversationSnapshot` shape: `{ messages, fileContexts, costTracking }` (version lives on the persisted `LiveMemoryConversationData`). Discards on version mismatch (no migrations).
 - **`QuestionQueue`** — `setProcessor(fn)`, `enqueue(question, contextFiles?, timeoutMs?, softLimits?): Promise<QuestionResult>`, `cancelAll()`, `pendingCount`, `isProcessing`. `softLimits` carries `{ softTimeoutSec?, softResultLength? }` — prompt-embedded recommendations, not enforced. Processor signature: `(question, contextFiles, signal, softLimits) => Promise<QuestionResult>`.
 - **`ContextWindow`** — `configure(opts)`, `restore(messages, fileContexts)`, `clear()`, `appendMessage`, `upsertFileContext`, `removeFileContext`, `invalidateFileContext`, `enforceLimit()`, `getUsage()`, `consumeEvictedTokens()`. Plus getters used by the Manager: `messages`, `fileContexts`, `fileContextPaths`, `estimatedTokenCount`, `maxContextTokens`, `contextFillThreshold`, `isNearlyFull`.
-- **`LiveMemoryLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: LIVE_MEMORY_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
+- **`MemoryLlmClient`** — constructor builds an `ApiHandler` via `buildApiHandler(toProviderSettings(config), { taskId: LIVE_MEMORY_TASK_ID })`. `chat(messages, signal?): Promise<ChatResult>` drains `ApiStream`, accumulating `text` chunks into the answer and `usage` chunks into prompt/completion tokens; cooperatively aborts between chunks via the `AbortSignal`.
 - **`LiveMemoryDirectoryTree`** — constructor `(workspacePath, maxContextTokens, shoferIgnoreController?)`; `generate(): Promise<string>` returning the formatted tree string capped at `DIRECTORY_TREE_MAX_CONTEXT_FRACTION * maxContextTokens`. Filters entries through `validateAccess()` when a controller is provided. Hardcoded `SKIP_PARTS` set (`node_modules`, `.git`, `.shofer`, `__pycache__`, `.cache`, `dist`, `out`, `build`, `target`, `.next`, `.turbo`) acts as a fast-path pre-filter.
 - **`LiveMemoryFileWatcher`** — constructor `(workspacePath, onChange, shoferIgnoreController?)`; `start()`, `dispose()`; 500ms per-file debounce. Filters change events through `validateAccess()` when a controller is provided. `SKIP_PARTS` set (imported from `directory-tree.ts`) acts as a fast-path pre-filter.
 
@@ -202,25 +213,25 @@ State transitions:
 During extension activation, for each workspace folder:
 
 ```
-LiveMemoryManager.getInstance(context, folder.uri.fsPath)
+the plugin's main module.getInstance(context, folder.uri.fsPath)
   → manager.initialize(contextProxy)   // non-blocking, runs in background
 ```
 
-### 2. Initialization (`manager.ts` → `initialize()`)
+### 2. Initialization (`main.ts` → `initialize()`)
 
 ```
 Manager.initialize()
   → loadConfigFromContextProxy()  // reads liveMemory* state keys + secrets
   → check: enabled? configured?
-  → ConversationStore.load() → snapshot { version, messages, fileContexts, costTracking }
+  → MemoryStore.load() → snapshot { version, messages, fileContexts, costTracking }
       version mismatch → discard (no migrations)
   → ContextWindow.configure({ maxContextTokens, contextFillThreshold })
   → ContextWindow.restore(snapshot.messages, validatedFileContexts)
-  → instantiate LiveMemoryLlmClient (wraps buildApiHandler)
+  → instantiate MemoryLlmClient (wraps buildApiHandler)
   → startAgent()
 ```
 
-### 3. Agent Startup (`manager.ts` → `startAgent()`)
+### 3. Agent Startup (`main.ts` → `startAgent()`)
 
 ```
 for each FileContextEntry restored from snapshot:
@@ -233,7 +244,7 @@ new LiveMemoryFileWatcher(workspacePath, onFileChanged)
 state → Ready
 ```
 
-### 4. Question Handling (`manager.ts` → `_processQuestion()` via `QuestionQueue`)
+### 4. Question Handling (`main.ts` → `_processQuestion()` via `QuestionQueue`)
 
 ```
 External Task calls ask_live_memory tool (synchronous — task blocks until answer or timeout)
@@ -264,7 +275,7 @@ When dequeued (QuestionQueue invokes the processor with an AbortSignal):
         [user/assistant messages from window] + [current question]
   → Agent loop (max 25 tool-call iterations):
       for each iteration:
-        → LiveMemoryLlmClient.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
+        → MemoryLlmClient.chatWithTools({ systemPrompt, messages: conversation, tools, signal })
             → drains ApiStream: accumulates `text` chunks, captures `usage` chunks
             → if toolCalls.length === 0 → got final answer, break
         → Append assistant turn (text + tool_use blocks) to in-flight conversation
@@ -277,7 +288,7 @@ When dequeued (QuestionQueue invokes the processor with an AbortSignal):
   → ContextWindow.appendMessage({ role: "assistant", content: finalAnswer })
   → ContextWindow.enforceLimit() → LRU eviction if over budget  ← (3) post-append enforcement
   → accumulate evicted tokens into costTracking
-  → ConversationStore.save(snapshot)
+  → MemoryStore.save(snapshot)
   → state → Ready (or stay Busy if queue non-empty)
   → Return QuestionResult { answer, usage, costSnapshot, evictedTokens } to caller
 ```
@@ -314,13 +325,13 @@ flowchart TD
     FIN --> SAVE --> OUT
 ```
 
-### 5. File Change Handling (`file-watcher.ts`)
+### 5. File Change Handling (`ctx.host.watch`)
 
 The live memory stays aware of file modifications through **two complementary mechanisms**:
 
 #### 5a. File System Watcher (`vscode.workspace.createFileSystemWatcher`)
 
-Detects changes originating from outside Shofer (e.g., user edits in another editor, git checkout, external scripts). Implemented in `file-watcher.ts` using VSCode's native `FileSystemWatcher` (no `chokidar` dependency).
+Detects changes originating from outside Shofer (e.g., user edits in another editor, git checkout, external scripts). Implemented in `ctx.host.watch` using VSCode's native `FileSystemWatcher` (no `chokidar` dependency).
 
 ```
 FileSystemWatcher detects change (create/modify/delete)
@@ -342,7 +353,7 @@ Instead, the live memory accumulates a list of **recently modified file paths** 
 ```
 Task tool modifies file (write_to_file, apply_diff, insert_edit, sed, file rm/mv, rename_symbol)
   → Tool execution completes successfully
-  → LiveMemoryManager.onFileModifiedByTask(filePath)  // hook invoked
+  → the plugin's main module.onFileModifiedByTask(filePath)  // hook invoked
   → Check against .shofer/shoferignore — skip if ignored
   → Check against .shofer/worktrees/ — skip worktree files
   → Add filePath to recentlyModifiedFiles set          // NO eviction — KV cache preserved
@@ -400,7 +411,7 @@ This approach:
 - **Aligns with worktree best practices** — since tasks normally operate in worktrees (`.shofer/worktrees/<name>/`), main-branch files are rarely modified directly. The primary case where files appear in this list is after a worktree merge back into master. The live memory does not depend on git — it just sees "file X was modified."
 - **Clears on use** — the set is drained after each question, so stale notifications don't accumulate across questions.
 
-Integration point: `LiveMemoryManager` subscribes to tool execution events (filtered by `"shofer_edited"` source) via [`FileContextTracker.trackFileContext`](packages/core/src/context-tracking/FileContextTracker.ts:39) or an equivalent centralized event bus emitted by the tool execution pipeline.
+Integration point: `the plugin's main module` subscribes to tool execution events (filtered by `"shofer_edited"` source) via [`FileContextTracker.trackFileContext`](../../packages/core/src/context-tracking/FileContextTracker.ts:39) or an equivalent centralized event bus emitted by the tool execution pipeline.
 
 ```
 
@@ -445,7 +456,7 @@ The directory tree is:
 - **Excludes** `.shofer/shoferignore`-listed paths and `.shofer/worktrees/` directories
 - **Provides immediate orientation** — the agent knows the project layout without tool calls
 
-Integration point: `src/services/live-memory/directory-tree.ts` — generates and token-counts the tree.
+Integration point: `plugins/live-memory/directory-tree.ts` — generates and token-counts the tree.
 
 ### 7. Context Window Management (`context-window.ts`)
 
@@ -615,7 +626,7 @@ Tool schema: `packages/core/src/prompts/tools/native-tools/ask_live_memory.ts`
 
 ### Tool Availability
 
-- The `ask_live_memory` tool is **conditionally available** only when `LiveMemoryManager` is enabled + configured + in `Ready` or `Busy` state.
+- The `ask_live_memory` tool is **conditionally available** only when `the plugin's main module` is enabled + configured + in `Ready` or `Busy` state.
 - If the agent is in `Standby`, `Initializing`, `Error`, or `Stopping` state, the tool is filtered out (similar to `rag_search` filtering).
 - Filter logic in `packages/core/src/prompts/tools/filter-tools-for-mode.ts`.
 
@@ -649,8 +660,8 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 | Point      | File                                                       | Details                                                                                                      |
 | ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Activation | `src/extension.ts`                                         | Creates `LiveMemoryManager` per workspace folder, initializes in background                                  |
-| Chat View  | `src/core/webview/LiveMemoryChatProvider.ts`               | Registers webview panel for the live memory chat view; streams live responses                                |
+| Activation | `src/extension.ts`                                         | Creates `the plugin's main module` per workspace folder, initializes in background                           |
+| Chat View  | `src/core/webview/the `sidebar-panel` UI bundle.ts`        | Registers webview panel for the live memory chat view; streams live responses                                |
 | Provider   | `src/core/webview/ShoferProvider.ts`                       | Subscribes to `onAgentStateChange` to push live memory status to webview                                     |
 | Toolbar    | `webview-ui/src/components/chat/LiveMemoryStatusBadge.tsx` | Badge + popover in the Shofer chat-input toolbar; hosts start/stop/clear/chat actions via `liveMemoryAction` |
 | Commands   | `src/activate/registerCommands.ts`                         | Registers `liveMemory.start`, `liveMemory.stop`, `liveMemory.clearContext`, `liveMemory.showChat`            |
@@ -668,7 +679,7 @@ These restrictions are enforced at the tool-filtering layer (`filter-tools-for-m
 
 | Point             | File                                                             | Details                                                                                             |
 | ----------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Tool registration | `packages/core/src/task/build-tools.ts`                          | Gets `LiveMemoryManager` for current workspace, passes to tool filter                               |
+| Tool registration | `packages/core/src/task/build-tools.ts`                          | Gets `the plugin's main module` for current workspace, passes to tool filter                        |
 | Tool filtering    | `packages/core/src/prompts/tools/filter-tools-for-mode.ts`       | Removes `ask_live_memory` if agent is disabled/unconfigured/not-ready                               |
 | Tool dispatch     | `packages/core/src/assistant-message/presentAssistantMessage.ts` | Routes to `LiveMemoryTool`                                                                          |
 | Auto-approval     | `packages/core/src/auto-approval/tools.ts`                       | `askLiveMemory` is auto-approved by default                                                         |
@@ -737,7 +748,7 @@ All exported from `packages/types/src/live-memory.ts`:
 
 ## Multi-Workspace Support
 
-`LiveMemoryManager` uses the same **singleton-per-workspace** pattern as `CodeIndexManager`, via `Map<string, LiveMemoryManager>` keyed by `workspacePath`. Each workspace gets its own:
+`the plugin's main module` uses the same **singleton-per-workspace** pattern as `CodeIndexManager`, via `Map<string, the plugin's main module>` keyed by `workspacePath`. Each workspace gets its own:
 
 - Independent conversation history
 - Independent file context registry
@@ -817,7 +828,7 @@ The chat view displays:
 
 The chat view is **read-only** — the user cannot send messages directly to the live memory. All messages come from tasks via the `ask_live_memory` tool. This keeps the interaction model simple and prevents the user from accidentally polluting the context window.
 
-Integration point: `src/core/webview/LiveMemoryChatProvider.ts` — manages a `WebviewPanel` with coalesced `postMessage` ticks; subscribes to manager state/conversation changes and forwards `state` messages containing the full message list and context usage to the webview for client-side diff-rendering.
+Integration point: `src/core/webview/the `sidebar-panel` UI bundle.ts` — manages a `WebviewPanel` with coalesced `postMessage` ticks; subscribes to manager state/conversation changes and forwards `state` messages containing the full message list and context usage to the webview for client-side diff-rendering.
 
 ---
 
@@ -846,280 +857,3 @@ Integration point: `src/core/webview/LiveMemoryChatProvider.ts` — manages a `W
 | **Survival**         | Survives reboots (Qdrant PVC + hash cache)  | Survives reboots (globalStorage JSON)                     |
 | **Context overflow** | N/A (stateless)                             | Truncation (oldest messages dropped, no summarization)    |
 | **Cost visibility**  | Not tracked per-query                       | Cumulative input/output token counts + USD estimate       |
-
----
-
-## Implementation Phases
-
-The feature is designed to be implemented in **5 incremental phases**, each producing a testable, working artifact. No phase depends on future phases for basic functionality — each phase layers on additional capability.
-
-### Phase 1: Core Manager + Configuration (Minimal Viable Agent)
-
-**Goal:** The live memory can be configured, initialized, and can answer a single question via direct API call. No tool integration yet — testable via VS Code commands.
-
-**Files to create/modify:**
-| File | Action | Notes |
-|------|--------|-------|
-| `packages/types/src/live-memory.ts` | Create | Zod schemas, TypeScript interfaces, constants |
-| `packages/types/src/index.ts` | Modify | Add `export * from "./live-memory.js"` |
-| `packages/types/src/tool.ts` | Modify | Add `"ask_live_memory"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read` |
-| `src/services/live-memory/manager.ts` | Create | Singleton Manager with `initialize()`, `askQuestion()`, conversation persistence, LLM calling (OpenAI-compatible + Gemini) |
-| `src/extension.ts` | Modify | Import, create per-workspace instances, background `initialize()`, `disposeAll()` in deactivate |
-| `src/shared/tools.ts` | Modify | Add `ask_live_memory` to `NativeToolArgs` |
-
-**What works at end of Phase 1:**
-
-- User sets `liveMemoryEnabled`, provider, model, API key via settings
-- Extension activation creates `LiveMemoryManager` per workspace
-- `manager.initialize()` loads config + persisted conversation
-- `manager.askQuestion("what is X?")` → returns answer from LLM
-- Conversation persists across VSCode restarts
-- Testable via `vscode.commands.executeCommand` or a temporary test command
-
-**Out of scope for Phase 1:** Tool integration, status bar, file watcher, directory tree, chat view, timeouts.
-
----
-
-### Phase 2: Native Tool + Tool System Integration
-
-**Goal:** Tasks can call `ask_live_memory` via the native tool system. The tool is conditionally available based on live memory state.
-
-**Files to create/modify:**
-| File | Action | Notes |
-|------|--------|-------|
-| `packages/core/src/prompts/tools/native-tools/ask_live_memory.ts` | Create | OpenAI tool schema (description, parameters) |
-| `packages/core/src/prompts/tools/native-tools/index.ts` | Modify | Import + register in `getNativeTools()` |
-| `packages/core/src/tools/AskLiveMemoryTool.ts` | Create | `BaseTool<"ask_live_memory">` implementation |
-| `packages/core/src/assistant-message/presentAssistantMessage.ts` | Modify | Import + dispatch case for `"ask_live_memory"` |
-| `packages/core/src/prompts/tools/filter-tools-for-mode.ts` | Modify | Add `liveMemoryManager` parameter, conditional exclusion logic |
-| `packages/core/src/task/build-tools.ts` | Modify | Import `LiveMemoryManager`, pass to `filterNativeToolsForMode` |
-| `packages/core/src/auto-approval/tools.ts` | Modify | Add `askLiveMemory` to auto-approved tools |
-| `src/services/live-memory/manager.ts` | Modify | Add `isLiveMemoryAvailable` getter |
-
-**What works at end of Phase 2:**
-
-- `ask_live_memory` appears in the agent's tool set when helper is enabled+configured+initialized
-- Tool is auto-approved (read-only, separate model)
-- Tool is filtered out when live memory is disabled/unconfigured
-
-**Out of scope for Phase 2:** Timeout handling, recently-modified file notifications, status bar UI.
-
----
-
-### Phase 3: Queue + Timeout + KV-Cache-Preserving Notifications
-
-**Goal:** Questions are serialized via FIFO queue. Timeout covers queue wait + LLM processing. File modifications from tasks are accumulated as "recently modified" hints without evicting context.
-
-**Files to modify:**
-| File | Action | Notes |
-|------|--------|-------|
-| `src/services/live-memory/manager.ts` | Modify | Add question queue, timeout handling, `notifyFileModified()`, `recentlyModifiedFiles` set, abort support |
-| `packages/core/src/tools/AskLiveMemoryTool.ts` | Modify | Pass `timeoutMs`, handle timeout errors gracefully |
-
-**What works at end of Phase 3:**
-
-- Multiple tasks can ask questions concurrently; they serialize via FIFO
-- Each `ask_live_memory` call blocks up to `timeoutMs` (default 5 min)
-- Timeout fires during queue wait OR LLM processing
-- On timeout: LLM call aborted, partial work retained in context, error returned
-- `manager.notifyFileModified(filePath)` hooks exist (wired in Phase 5)
-- Recently modified files attached to next question as system hint
-
----
-
-### Phase 4: Status Bar + Info Panel + Clear Context
-
-**Goal:** User-visible status bar button (next to RAG indexer) with state indicators, fill percentage, and info panel. Clear Context button works.
-
-**Files to create/modify:**
-| File | Action | Notes |
-|------|--------|-------|
-| `src/extension.ts` | Modify | Register live memory status bar button (blinking pattern, left-click info panel) |
-| `src/services/live-memory/manager.ts` | Modify | Add `getContextUsage()`, `clearContext()`, `onStateChange`/`onConversationUpdate` events |
-| `src/activate/registerCommands.ts` | Modify | Register `liveMemory.start`, `liveMemory.stop`, `liveMemory.clearContext`, `liveMemory.openSettings` |
-
-**What works at end of Phase 4:**
-
-- Status bar shows live memory state + fill percentage
-- Icon blinks when Busy (matching RAG pattern)
-- Left-click opens info panel: status, model, token usage bar, fill %, cost, files in context
-- Clear Context button resets conversation to system prompt (cost tracking preserved)
-- All actions (View Chat, Clear Context, Configure API, Start Agent) accessible via info panel quick pick
-
----
-
-### Phase 5: Directory Tree + File Watcher + Chat View
-
-**Goal:** System prompt includes workspace directory tree. File watcher detects external changes. Chat view panel lets user observe agent activity.
-
-**Files to create/modify:**
-| File | Action | Notes |
-|------|--------|-------|
-| `src/services/live-memory/directory-tree.ts` | Create | Scan workspace, generate `find .`-style tree, exclude `.shofer/shoferignore` + worktree paths, cap at 10% of context window |
-| `src/services/live-memory/file-watcher.ts` | Create | VSCode FileSystemWatcher wrapper, 500ms debounce, notify ContextWindow |
-| `src/services/live-memory/manager.ts` | Modify | Integrate directory tree into system prompt on init + Clear Context, integrate file watcher, hook `notifyFileModified` from tool execution pipeline |
-| `src/core/webview/LiveMemoryChatProvider.ts` | Create | Webview panel provider for read-only chat view |
-| `src/core/webview/ShoferProvider.ts` | Modify | Register chat view provider, subscribe to events |
-| `packages/core/src/context-tracking/FileContextTracker.ts` | Modify | Emit events on file modification that `LiveMemoryManager` subscribes to |
-
-**What works at end of Phase 5:**
-
-- Directory tree injected into system prompt (capped, `.shofer/shoferignore`-respecting)
-- File watcher detects external changes (lazy re-read on next reference)
-- Tool-based file modifications trigger `notifyFileModified()` → accumulated for next question
-- Chat view panel shows live conversation (read-only, agent-to-agent)
-- `FileContextTracker` events wired to live memory
-
----
-
-### Dependency Graph
-
-```
-Phase 1 (Core Manager)
-  └── Phase 2 (Native Tool Integration)
-        └── Phase 3 (Queue + Timeout + Notifications)
-              ├── Phase 4 (Status Bar + Info Panel)
-              └── Phase 5 (Directory Tree + File Watcher + Chat View)
-```
-
-Phases 4 and 5 can be implemented in parallel after Phase 3 is complete.
-
----
-
-## Implementation Status (Completed 2026-05-14)
-
-### Commit History
-
-| Phase | Commit                                                                                    | Files Changed                                                                          |
-| ----- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 1     | `3a26139d5` `feat(live-memory): Phase 1 — Core Manager + Configuration`                   | 2 new: `packages/types/src/live-memory.ts`, `src/services/live-memory/manager.ts`      |
-| 2     | `d1309e281` `feat(live-memory): Phase 2 — Native Tool + Tool System Integration`          | 2 new, 5 modified                                                                      |
-| 3     | `4bab12a81` `feat(live-memory): Phase 3 — Queue + Timeout + KV-Cache Notifications`       | 1 modified: `manager.ts` (+256/-63)                                                    |
-| 4     | `9d4c50554` `feat(live-memory): Phase 4 — Status Bar + Info Panel + Clear Context`        | 1 modified: `extension.ts` (+189)                                                      |
-| 5a    | `d80dbdc8c` `feat(live-memory): Phase 5 — Directory Tree + File Watcher`                  | 2 new, 1 modified                                                                      |
-| 5b    | `3a90b5003` `feat(live-memory): Phase 5b — Chat View + FileContextTracker hooks`          | 1 new, 2 modified                                                                      |
-| R     | `794e6d0ac` `shofer: refactor live memory into focused modules + typed plumbing`          | 5 new modules, 3 new test specs, 7 modified (incl. types + registerCommands)           |
-| L     | `9cb81669f` `fix(live-memory): enforce context budget during agent loop and after append` | 1 modified: `manager.ts` (+53/-20); split `_buildAgentPrompt`, add 3-point enforcement |
-
-_Fix:_ `80fef4f63` — pre-existing `toolParamNames` missing `rating`/`feedback` for `attempt_completion`.
-
-### Status Summary
-
-| Phase                                                        | Status      |
-| ------------------------------------------------------------ | ----------- |
-| Phase 1: Core Manager + Configuration                        | ✅ Complete |
-| Phase 2: Native Tool + Tool System Integration               | ✅ Complete |
-| Phase 3: Queue + Timeout + KV-Cache-Preserving Notifications | ✅ Complete |
-| Phase 4: Status Bar + Info Panel + Clear Context             | ✅ Complete |
-| Phase 5a: Directory Tree + File Watcher                      | ✅ Complete |
-| Phase 5b: Chat View + FileContextTracker hooks               | ✅ Complete |
-| R: Refactor into focused modules + typed plumbing            | ✅ Complete |
-
-### Files Created (14)
-
-| File                                                                                                                                                     | Phase | Lines | Description                                                                                                                                                  |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`packages/types/src/live-memory.ts`](extensions/shofer/packages/types/src/live-memory.ts:1)                                                             | 1     | 228   | Zod schemas for AgentMessage, FileContextEntry, LiveMemoryConfig, QuestionResult, CostTracking; LIVE_MEMORY_SYSTEM_PROMPT; 13 constants                      |
-| [`src/services/live-memory/manager.ts`](extensions/shofer/src/services/live-memory/manager.ts:1)                                                         | 1, R  | 912   | Singleton-per-workspace orchestrator. Owns lifecycle, config, event emitters; delegates everything else to focused collaborators.                            |
-| [`src/services/live-memory/conversation-store.ts`](extensions/shofer/src/services/live-memory/conversation-store.ts:1)                                   | R     | 141   | Versioned JSON snapshot persistence. SHA-256 file-context validation on load; ENOENT-safe; discards on version mismatch.                                     |
-| [`src/services/live-memory/question-queue.ts`](extensions/shofer/src/services/live-memory/question-queue.ts:1)                                           | R     | 158   | Bounded FIFO with per-entry AbortSignal + timeout. Reentrant-safe drain loop. `cancelAll()` for shutdown.                                                    |
-| [`src/services/live-memory/context-window.ts`](extensions/shofer/src/services/live-memory/context-window.ts:1)                                           | R     | 197   | In-memory window for messages + file contexts. LRU eviction (file contexts first by `lastReferencedAt`, then oldest user/assistant pairs). Token estimation. |
-| [`src/services/live-memory/llm-client.ts`](extensions/shofer/src/services/live-memory/llm-client.ts:1)                                                   | R     | 320   | Adapter wrapping `buildApiHandler()`. Maps the live-memory provider list to `ProviderSettings`; consumes `ApiStream` with abort support.                     |
-| [`src/services/live-memory/tool-executor.ts`](extensions/shofer/src/services/live-memory/tool-executor.ts:1)                                             | R     | 383   | Read-only tool dispatcher for the Live Memory. Wraps ripgrep, glob, extract-text, CodeIndexManager; no Task dependency. Only `TOOL_GROUPS.read` tools.       |
-| [`src/services/live-memory/pricing.ts`](extensions/shofer/src/services/live-memory/pricing.ts:1)                                                         | R     | 48    | Per-model USD cost from `ApiHandler.getModel().info.{inputPrice,outputPrice}`; fallback constants when the handler omits pricing.                            |
-| [`src/services/live-memory/directory-tree.ts`](extensions/shofer/src/services/live-memory/directory-tree.ts:1)                                           | 5a    | 158   | Recursive workspace scan, `find .`-style tree generation, ~10% token cap, common-dir exclusion set                                                           |
-| [`src/services/live-memory/file-watcher.ts`](extensions/shofer/src/services/live-memory/file-watcher.ts:1)                                               | 5a    | 106   | VSCode FileSystemWatcher wrapper, 500ms per-file debounce, worktree + hidden-path skipping                                                                   |
-| [`src/services/live-memory/__tests__/conversation-store.spec.ts`](extensions/shofer/src/services/live-memory/__tests__/conversation-store.spec.ts:1)     | R     |       | Vitest spec for versioned persistence + hash validation.                                                                                                     |
-| [`src/services/live-memory/__tests__/question-queue.spec.ts`](extensions/shofer/src/services/live-memory/__tests__/question-queue.spec.ts:1)             | R     |       | Vitest spec for FIFO ordering, abort, timeout, bulk cancel.                                                                                                  |
-| [`src/services/live-memory/__tests__/context-window.spec.ts`](extensions/shofer/src/services/live-memory/__tests__/context-window.spec.ts:1)             | R     |       | Vitest spec for LRU eviction + token-budget enforcement.                                                                                                     |
-| [`packages/core/src/prompts/tools/native-tools/ask_live_memory.ts`](extensions/shofer/packages/core/src/prompts/tools/native-tools/ask_live_memory.ts:1) | 2     | 74    | OpenAI ChatCompletionTool schema: question (required), contextFiles, timeoutMs, softTimeoutSec, softResultLength                                             |
-| [`packages/core/src/tools/AskLiveMemoryTool.ts`](extensions/shofer/packages/core/src/tools/AskLiveMemoryTool.ts:1)                                       | 2     | 151   | BaseTool<"ask_live_memory"> delegating to LiveMemoryManager                                                                                                  |
-| [`src/core/webview/LiveMemoryChatProvider.ts`](extensions/shofer/src/core/webview/LiveMemoryChatProvider.ts:1)                                           | 5b    | 467   | Read-only WebviewPanel with conversation history, live streaming via coalesced postMessage ticks, client-side markdown rendering                             |
-
-### Files Modified (13)
-
-| File                                                             | Phase    | Changes                                                                                                                                                             |
-| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/types/src/index.ts`                                    | 1        | Added `export * from "./live-memory.js"`                                                                                                                            |
-| `packages/types/src/tool.ts`                                     | 1        | Added `"ask_live_memory"` to `toolNames`, `TOOL_DISPLAY_NAMES`, `TOOL_GROUPS.read`                                                                                  |
-| `packages/types/src/telemetry.ts`                                | 1        | Added `LIVE_MEMORY_ERROR = "Live Memory Error"` to TelemetryEventName                                                                                               |
-| `packages/types/src/global-settings.ts`                          | R        | Added 4 `liveMemory*` keys to `globalSettingsSchema` (`liveMemoryEnabled`, `liveMemoryApiConfigId`, `liveMemoryMaxContextTokens`, `liveMemoryContextFillThreshold`) |
-| `packages/types/src/vscode.ts`                                   | R        | Added 5 live-memory command ids to the typed `commandIds` array                                                                                                     |
-| `src/shared/tools.ts`                                            | 1, fix   | Added `ask_live_memory` to `NativeToolArgs`; pre-existing fix for `toolParamNames`                                                                                  |
-| `src/extension.ts`                                               | 1,4,5b,R | Per-workspace activation, disposeAll(), status bar button, chat view import; commands now registered via registerCommands.ts                                        |
-| `src/activate/registerCommands.ts`                               | R        | Registers the 5 live-memory commands through the typed `commandIds` plumbing                                                                                        |
-| `packages/core/src/prompts/tools/native-tools/index.ts`          | 2        | Import + registration in `getNativeTools()`                                                                                                                         |
-| `packages/core/src/assistant-message/presentAssistantMessage.ts` | 2        | Import, description, dispatch case                                                                                                                                  |
-| `packages/core/src/prompts/tools/filter-tools-for-mode.ts`       | 2        | Added `liveMemoryManager` (9th parameter), conditional `ask_live_memory` exclusion                                                                                  |
-| `packages/core/src/task/build-tools.ts`                          | 2        | Import `LiveMemoryManager`, pass to `filterNativeToolsForMode`                                                                                                      |
-| `packages/core/src/auto-approval/tools.ts`                       | 2        | Added `askLiveMemory: "ask_live_memory"` auto-approval entry                                                                                                        |
-| `packages/core/src/context-tracking/FileContextTracker.ts`       | 5b       | Added `_notifyLiveMemory()` hook on `shofer_edited` events                                                                                                          |
-
-### Implementation Deviations from Design
-
-All deviations originally listed here have been resolved. The current implementation
-matches the design contract: typed config via `ContextProxy`, typed `CommandId`
-plumbing, the shared `buildApiHandler()` for LLM transport, and dedicated modules
-for conversation storage, the question queue, the context window, and pricing.
-
-| Original Deviation                                                                   | Status   | Resolution                                                                                                                                                             |
-| ------------------------------------------------------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| All functionality consolidated in `manager.ts` (~1020 lines)                         | Resolved | Split into focused modules: `conversation-store.ts`, `question-queue.ts`, `context-window.ts`, `llm-client.ts`, `pricing.ts`. `manager.ts` is now a thin orchestrator. |
-| Config read from `vscode.workspace.getConfiguration(...)` + `context.secrets.get()`  | Resolved | Reads/writes go through `ContextProxy.getInstance(context)`. Config keys added to `globalSettingsSchema`; secrets added to `GLOBAL_SECRET_KEYS`.                       |
-| `_callLLM()` did direct `fetch()` calls per provider                                 | Resolved | `LiveMemoryLlmClient` wraps the shared `buildApiHandler()`. Streaming-only, abort-aware via `AbortSignal`. Adds OpenRouter + Anthropic without bespoke code.           |
-| Inline `_loadConversation()` / `_saveConversation()`                                 | Resolved | Extracted into `ConversationStore` with versioned snapshot, hash-based file-context validation, and async I/O helpers.                                                 |
-| Inline `_questionQueue` array + `_processNextQuestion()`                             | Resolved | Extracted into `QuestionQueue` with per-entry `AbortSignal`, FIFO processing, queue-size cap, and bulk cancellation.                                                   |
-| Commands registered directly in `extension.ts` via `vscode.commands.registerCommand` | Resolved | Live Memory command IDs added to `commandIds` in `packages/types/src/vscode.ts`; registered in `src/activate/registerCommands.ts` like every other command.            |
-
-### Deferred Items
-
-_No deferred items remain. All originally deferred work has been completed._
-
-| Item                                                      | Design Reference         | Status                                                                                                                   |
-| --------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `system.ts` — live memory status in system prompt context | Integration Points table | ✅ Resolved (2026-06-13) — see [`live-memory.ts`](extensions/shofer/packages/core/src/prompts/sections/live-memory.ts:1) |
-
-### Build Verification
-
-All 5 phase commits pass:
-
-- **ESLint**: `pnpm run lint` — zero warnings
-- **TypeScript**: `pnpm run check-types` — only pre-existing test file errors (unrelated `AttemptCompletionToolUse` rating type issue)
-- **VSCE Packaging**: `./deploy2.sh dev build shofer` — produces `shofer-0.5.0.vsix` (31.74 MB)
-
----
-
-## Gaps, Issues & Areas for Improvement
-
-_Audit performed 2026-05-20 — cross-referencing the design document against the actual source code._
-
-### Resolved in This Review
-
-These items were inaccurate in the doc and have been corrected above:
-
-1. **Missing module: `tool-executor.ts`** — The architecture diagram and Key Source Files table omitted [`tool-executor.ts`](extensions/shofer/src/services/live-memory/tool-executor.ts:1) (383 lines), a significant module imported by the manager. Added.
-2. **Stale line counts** — The Key Source Files table had `manager.ts` ~820 (actual: 912), `llm-client.ts` ~210 (actual: 320), `ask_live_memory.ts` 51 (actual: 74), `AskLiveMemoryTool.ts` 102 (actual: 151), `LiveMemoryChatProvider.ts` 134 (actual: 467). All corrected.
-3. **Outdated configuration model** — `LiveMemoryConfig` and settings schema described pre-refactor per-provider keys. Now documents the actual linked API Configuration profile model (`liveMemoryApiConfigId`).
-4. **Section numbering gap** — Skipped §6 entirely. Renumbered.
-5. **Wrong UI placement** — Described a VS Code status bar button; actual implementation uses a toolbar badge + popover in the chat-input toolbar. Corrected.
-6. **Stale Integration Points rows** — Removed phantom `registerStatusBar.ts` reference; marked `system.ts` as deferred.
-7. **Overstated deferred items** — `ShoferProvider.ts` and `webviewMessageHandler.ts` were listed as deferred but are fully implemented. Removed.
-8. **`CONVERSATION_STORE_VERSION` → 2** — Persisted format version is `z.literal(2)`, not `1`. Fixed.
-9. **Constants count 11 → 13** — Missing `DEFAULT_ASSISTANT_SOFT_TIMEOUT_SEC` and `DEFAULT_ASSISTANT_SOFT_RESULT_LENGTH`. Fixed.
-10. **Files Created 13 → 14** — Missing `tool-executor.ts`. Fixed.
-
-### Resolved in This Review (cont'd)
-
-11. **`file-watcher.ts` now consults `.shofer/shoferignore`** — ✅ Resolved (2026-05-24). The file watcher accepts an optional `ShoferIgnoreController` and calls `validateAccess(filePath)` in `_shouldSkip()`. Files matching `.shofer/shoferignore` patterns are silently skipped.
-
-12. **`directory-tree.ts` now consults `.shofer/shoferignore`** — ✅ Resolved (2026-05-24). The directory tree generator accepts an optional `ShoferIgnoreController` and calls `validateAccess(relPath)` for each entry in `_scanDirectory()`. Ignored paths are excluded from the tree.
-
-Additional fix: **`notifyFileModified()` now filters through `.shofer/shoferignore`** — The `LiveMemoryManager.notifyFileModified()` method previously only filtered `.shofer/` prefix paths. Now it also calls `validateAccess()` on the `ShoferIgnoreController`, preventing stale-file notifications for `.shofer/shoferignore`-ignored files.
-
-### Open Issues (Not Yet Addressed in Source)
-
-13. **No test coverage for `tool-executor.ts`, `directory-tree.ts`, `file-watcher.ts`, `llm-client.ts`** — Tests exist only for `ConversationStore`, `QuestionQueue`, and `ContextWindow`. The other modules are untested.
-
-14. **Agent loop max tool-call iteration cap** — ✅ Verified present. `LiveMemoryManager.MAX_AGENT_ITERATIONS = 25` (manager.ts) is enforced at the top of the agent loop; on hitting the cap the loop breaks with a "could not finish within N tool iterations" answer rather than looping unbounded.
-
-15. **`LiveMemoryChatProvider` test coverage** — The 467-line webview panel manager has no spec file.

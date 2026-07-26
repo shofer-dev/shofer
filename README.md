@@ -147,7 +147,7 @@ Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in S
 
 Enable in Settings and choose a lightweight model (e.g., Gemini Flash, GPT-4o-mini).
 
-[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/live_memory.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/live-memory.md)
 
 ## Special Files
 

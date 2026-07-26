@@ -12,6 +12,16 @@ one rule:
 Future work belongs in a TODO (`todos/`) or an explicitly-labeled section, not as
 a spec masquerading as current state.
 
+## Per-plugin docs live in `plugins/`
+
+A feature that ships as a **plugin** rather than as core keeps its doc in
+[`docs/plugins/`](plugins/) — [`plugins/checkpoints.md`](plugins/checkpoints.md),
+[`plugins/live-memory.md`](plugins/live-memory.md) — while the plugin _substrate_
+(seams, manifest, lifecycle) stays in [`plugin_system.md`](plugin_system.md) and the
+authoring guide in [`../PLUGINS.md`](../PLUGINS.md). Deeper per-plugin material that
+belongs next to its code (a `DESIGN.md`, `README.md`, `TODO.md`) lives in the plugin
+directory itself; the doc here is the entry point that says where.
+
 ## Status banner convention
 
 When a doc describes anything other than fully-shipped, behavior, put a banner

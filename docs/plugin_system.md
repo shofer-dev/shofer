@@ -1060,7 +1060,7 @@ optionally add a UI status badge — no MCP protocol changes needed.
 - **`CustomModesManager`** — `getAllModes()` includes plugin modes from `contributes.modes`, emitted under the namespaced slug `<plugin>:<authoredSlug>` with `source: "plugin"`; `private` modes are agent-switchable but hidden from the picker.
 - **`McpHub`** reads MCP configs from plugin manifests (`contributes.mcpServers`), merged with `.shofer/mcp.json` and `mcp_settings.json`.
 - **Marketplace** installs plugins (`.shofer-plugin` archives) in addition to mode/MCP YAML items; a plugin can contain modes and MCP configs as declarative contributions, so a plugin install is a superset of the current mode/MCP install.
-- **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `checkpoints` plugin, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`checkpoints.md`](./checkpoints.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
+- **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `checkpoints` plugin, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`plugins/checkpoints.md`](./plugins/checkpoints.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
 
 ---
 

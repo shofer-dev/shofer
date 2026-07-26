@@ -239,7 +239,7 @@ bearing on the file-changes panel — it always used the working-directory backe
 `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
 `GIT_ALTERNATE_OBJECT_DIRECTORIES`, and `GIT_TEMPLATE_DIR`). Why stripping
 `GIT_CEILING_DIRECTORIES` matters is not discussed in this doc or in
-[`checkpoints.md`](checkpoints.md).
+[`plugins/checkpoints.md`](plugins/checkpoints.md).
 
 ### 2. ~~Spec describe block name mismatch~~ — ✅ fixed
 

@@ -4,15 +4,15 @@ Checkpoints — per-task undo history over a shadow git repository — are **not
 Shofer core**. They are a first-party plugin, bundled with the extension and enabled by
 default:
 
-- **Design + rationale:** [`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md)
-- **Usage, settings, packaging:** [`plugins/checkpoints/README.md`](../plugins/checkpoints/README.md)
-- **Known gaps:** [`plugins/checkpoints/TODO.md`](../plugins/checkpoints/TODO.md)
+- **Design + rationale:** [`plugins/checkpoints/DESIGN.md`](../../plugins/checkpoints/DESIGN.md)
+- **Usage, settings, packaging:** [`plugins/checkpoints/README.md`](../../plugins/checkpoints/README.md)
+- **Known gaps:** [`plugins/checkpoints/TODO.md`](../../plugins/checkpoints/TODO.md)
 
 ## What core provides instead
 
 Core knows nothing about shadow git, commits, or restore. It provides the generic
 plugin seams the feature is built from, all documented in
-[`plugin_system.md`](plugin_system.md):
+[`plugin_system.md`](../plugin_system.md):
 
 | Seam                                                    | What checkpoints uses it for                                           |
 | ------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -31,8 +31,8 @@ without leaving anything behind in core.
 
 ## Related
 
-- [`file-change-tracking.md`](file-change-tracking.md) — the File Changes Panel, a
+- [`file-change-tracking.md`](../file-change-tracking.md) — the File Changes Panel, a
   separate per-file diff/revert system with no git dependency.
-- [`worktrees.md`](worktrees.md) — how an embedded worktree task scopes its snapshots.
-- [`submodule-support.md`](submodule-support.md) — the nested-repository investigation
+- [`worktrees.md`](../worktrees.md) — how an embedded worktree task scopes its snapshots.
+- [`submodule-support.md`](../submodule-support.md) — the nested-repository investigation
   behind the plugin's `GIT_DIR` isolation.

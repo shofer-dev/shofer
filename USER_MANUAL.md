@@ -598,7 +598,7 @@ The **Live Memory Status** badge in the Shofer sidebar shows whether the agent i
 - **KV-cache friendly** — append-only context window keeps the provider's attention cache warm
 - **File-aware** — notified of file changes to keep its knowledge fresh
 
-[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/live_memory.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/live-memory.md)
 
 ---
 
