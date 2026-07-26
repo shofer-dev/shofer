@@ -742,10 +742,17 @@ capability **tags**.
   workspace declares its own tags. It also goes stale the moment a runner gains
   one. The algebra is allow-only, like every other selector on the platform.
   `not` is refused at parse time with that reason.
-- **`requires: [a, b]`** is sugar for `a and b`.
-- **Atoms may be namespaced and globbed within a segment**: `tool:screenshot`,
-  `tool:*`, `os:win*`. A `*` never crosses a `:`, matching the bus's address
-  rule, so one containment model covers both.
+- **`requires: [a, b]`** is sugar for `a and b`. An EMPTY list is refused: an
+  empty conjunction is vacuously true, so `requires: []` would mean "runs
+  anywhere" — the opposite of what writing an empty requirement list looks like
+  it means. Omit the clause instead.
+- **Atoms are `[A-Za-z0-9_-]` plus the globs `?` and `*`**, in `:`-delimited
+  segments: `tool:screenshot`, `tool:*`, `os:win*`, `gpu-a?`. `?` is exactly one
+  character and `*` any run WITHIN a segment — neither crosses a `:`, matching
+  the bus's address rule, so one containment model covers both. There is no
+  `**`: whole-segment-spanning wildcards belong to the segmented address domain,
+  and admitting one here would blur two vocabularies kept distinct on purpose.
+  The charset is the security boundary, validated before an atom is ever matched.
 - **Agent-level, not per-stake.** A stake dispatches to an agent SESSION pinned
   to one runner for its lifetime — output-contract reprompts resume that same
   session — so the requirement is naturally per-agent.
@@ -763,7 +770,17 @@ This only works if the same requirement always produces the same queue.
 `browser and (gpu or highmem)` and `(browser and gpu) or (browser and highmem)`
 are the same requirement, and canonicalisation makes them the same string —
 otherwise they would name two queues, and one of them would have no runner
-polling it: a pipeline that hangs with no error.
+polling it: a pipeline that hangs with no error. Canonicalisation therefore
+includes **absorption** (`a or (a and b)` is just `a`) as well as sorting and
+deduplication.
+
+The canonical form is `" and "`-joined atoms in `" or "`-joined terms, hashed as
+the first 64 bits of its SHA-256. That is a CROSS-LANGUAGE contract, not a
+formatting choice: the platform's canonical implementation is Go
+(`shared/tagexpr` in the arkware deployment) and this TypeScript engine is its
+mirror, with both sides pinned to one shared vector corpus. The two must agree
+exactly, because the producer naming a queue and the consumer polling it are
+different services in different languages.
 
 ### Backend semantics
 
