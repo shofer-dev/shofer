@@ -61,6 +61,23 @@ export interface ShoferPlugin {
 	 * its UI via the host-side sender (`ShoferProvider.postPluginUiMessage`).
 	 */
 	onUiMessage?(message: unknown, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Answer a **request/response** call addressed to this plugin (design §5.12). Unlike
+	 * {@link onUiMessage} (fire-and-forget, UI-scoped), this is a typed RPC entry the host
+	 * awaits and whose result it hands back to the caller — the seam a plugin owning a
+	 * *feature* (rather than just a tool) needs so a host surface can query/drive it:
+	 *
+	 * - a plugin UI component asking its extension side for data to render;
+	 * - the controller reaching a plugin running on a **remote executor** over the
+	 *   `AgentApi` (`pluginRequest`), which is how per-task plugin state that lives on
+	 *   the owning executor stays reachable.
+	 *
+	 * `method` is plugin-defined; unknown methods should throw. Throwing is safe — the
+	 * error is isolated and surfaced to the caller (never silently swallowed), because a
+	 * request has a waiting caller that must learn it failed.
+	 */
+	handleRequest?(method: string, params: unknown, context: PluginContext): Promise<unknown>
 }
 
 /**
@@ -126,6 +143,53 @@ export interface LifecycleHooks {
 		payload: unknown,
 		context: PluginContext,
 	): BeforeAskResult | void | Promise<BeforeAskResult | void>
+
+	/**
+	 * Called **before** the host rewinds a task's chat timeline to `info.ts` — the user
+	 * deleting/editing a message, or restoring to an earlier point. A plugin holding
+	 * out-of-band state anchored to the timeline (a workspace snapshot, an external
+	 * job, a cache) uses this to roll *its* state back in step, before the messages it
+	 * was anchored to disappear.
+	 *
+	 * Awaited (the rewind waits for it), so it runs under the plugin's hook budget —
+	 * a plugin doing real work here (e.g. a `git reset`) must declare a manifest
+	 * `hookTimeoutMs` large enough, or it will be skipped with a warning.
+	 */
+	onTimelineRewind?(info: TimelineRewindInfo, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called when a task is deleted from history (its messages and task directory are
+	 * being removed). The hook for a plugin that keeps **per-task** state outside the
+	 * task directory — e.g. a shadow repository under global storage — so deleting a
+	 * task doesn't leak it. Fire-and-forget observer; errors are isolated.
+	 */
+	onTaskDeleted?(info: TaskDeletedInfo, context: PluginContext): void | Promise<void>
+}
+
+/** What a {@link LifecycleHooks.onTimelineRewind} hook is being told (design §5.9). */
+export interface TimelineRewindInfo {
+	/** Timestamp of the message the timeline is being rewound to. */
+	readonly ts: number
+	/** Task whose timeline is rewinding. */
+	readonly taskId: string
+	/**
+	 * Why the rewind is happening: the user deleted a message, edited one (the target
+	 * message is itself replaced), or explicitly restored to this point.
+	 */
+	readonly operation: "delete" | "edit" | "restore"
+	/**
+	 * Whether the user asked for out-of-band state (e.g. the workspace) to be rolled
+	 * back too. `false` ⇒ chat-only rewind: a snapshot plugin must NOT touch the
+	 * workspace.
+	 */
+	readonly restoreState: boolean
+}
+
+/** What a {@link LifecycleHooks.onTaskDeleted} hook is being told (design §5.9). */
+export interface TaskDeletedInfo {
+	readonly taskId: string
+	/** Workspace the task ran in, when known — needed to locate per-workspace state. */
+	readonly workspacePath?: string
 }
 
 /**
@@ -228,6 +292,34 @@ export interface PluginHost {
 	 * (all results are plain DTOs).
 	 */
 	readonly search?: PluginSearch
+	/**
+	 * Editor-surface actions (currently the multi-file diff viewer — see
+	 * {@link PluginEditor}). Gated on `permissions.editor`: granted ⇒ live; granted-not
+	 * with the seam wired ⇒ a denying stub (calls throw + warn); no seam (headless) ⇒
+	 * absent entirely. Kept separate from {@link notifier} because opening editors is a
+	 * heavier, focus-stealing action than surfacing a message.
+	 */
+	readonly editor?: PluginEditor
+}
+
+/**
+ * Editor actions handed to a plugin granted `permissions.editor`. A plugin that
+ * computes a set of before/after file contents (a snapshot diff, a proposed refactor)
+ * renders it in the host's own multi-file diff viewer instead of inventing a UI for it.
+ * All inputs are plain DTOs, so `@shofer/types` stays browser-safe.
+ */
+export interface PluginEditor {
+	/**
+	 * Open the host's native multi-file diff view. `changes` is the same shape the
+	 * host editor consumes (`{ paths: { relative, absolute }, content: { before, after } }`).
+	 */
+	showMultiFileDiff(title: string, changes: PluginFileDiff[]): Promise<void>
+}
+
+/** One file's before/after content in a {@link PluginEditor.showMultiFileDiff} call. */
+export interface PluginFileDiff {
+	readonly paths: { readonly relative: string; readonly absolute: string }
+	readonly content: { readonly before: string; readonly after: string }
 }
 
 /** Options for {@link PluginSearch.ragSearch} (semantic code-index search). */
@@ -481,6 +573,87 @@ export interface PluginAgentNotifyOptions {
 }
 
 /**
+ * **Timeline control** handed to a plugin granted `permissions.task`. Where
+ * {@link PluginAgent} steers what the agent *does*, this governs the task's visible
+ * **chat timeline**: appending the plugin's own rows to it and rewinding it.
+ *
+ * It exists so a plugin can own a feature whose UX lives inline in the conversation
+ * (a snapshot marker, an external-job status row) rather than being exiled to a side
+ * panel. A {@link PluginMarker} appended here is persisted with the task's messages,
+ * survives restart, and is rendered by the plugin's own `chat-message-addon` component
+ * — the host never interprets `kind`/`data`.
+ *
+ * Ungranted with the seam wired ⇒ a denying stub (calls throw + warn); no seam
+ * (pure-core embedding) ⇒ `ctx.task` is absent.
+ */
+export interface PluginTaskControl {
+	/**
+	 * Append a marker row to a task's timeline. Resolves once persisted. Targets
+	 * `input.taskId`, defaulting to the host's current task.
+	 */
+	marker(input: PluginMarkerInput): Promise<void>
+
+	/**
+	 * This plugin's markers on `taskId` (default: the current task), oldest first —
+	 * how a plugin recovers its per-task anchor list after a restart without keeping a
+	 * second, drift-prone copy in {@link PluginStorage}.
+	 */
+	listMarkers(taskId?: string): Promise<PluginMarker[]>
+
+	/**
+	 * Rewind the task's chat timeline to the message at `ts`: messages after it are
+	 * removed (their token/cost accounting is reported as a deleted API request) and
+	 * the task restarts against the truncated history.
+	 *
+	 * This is the *chat* half of a restore. A plugin that also rolls back out-of-band
+	 * state (a workspace snapshot) does that itself first, then calls this.
+	 */
+	rewind(ts: number, opts?: PluginRewindOptions): Promise<void>
+}
+
+/** What a plugin passes to {@link PluginTaskControl.marker}. */
+export interface PluginMarkerInput {
+	/** Plugin-defined marker kind (e.g. `"checkpoint"`); opaque to the host. */
+	readonly kind: string
+	/** The row's primary text — also what a plugin keys its own lookups on. */
+	readonly text: string
+	/** Task to append to; defaults to the host's current task. */
+	readonly taskId?: string
+	/** Plugin-defined payload rendered by the plugin's own UI component. Opaque. */
+	readonly data?: Record<string, unknown>
+	/**
+	 * Whether this marker names a point the task can be restored to. The host uses it
+	 * only to decide whether to *offer* state restoration when the user deletes/edits an
+	 * earlier message (the restoring itself is the plugin's, via
+	 * {@link LifecycleHooks.onTimelineRewind}).
+	 */
+	readonly restorable?: boolean
+	/**
+	 * Persist the marker but keep it out of the rendered timeline. For anchors that
+	 * matter to the plugin but would be noise in the chat.
+	 */
+	readonly suppress?: boolean
+}
+
+/** A marker read back from a task's timeline ({@link PluginTaskControl.listMarkers}). */
+export interface PluginMarker extends PluginMarkerInput {
+	/** Timestamp of the marker message — the handle {@link PluginTaskControl.rewind} takes. */
+	readonly ts: number
+	/** The plugin that appended it. */
+	readonly pluginName: string
+}
+
+/** Options for {@link PluginTaskControl.rewind}. */
+export interface PluginRewindOptions {
+	/**
+	 * Whether the message at `ts` is itself removed. `false` (default) keeps it as the
+	 * new last message (delete semantics); `true` drops it too (edit semantics, where
+	 * the caller replaces it).
+	 */
+	includeTargetMessage?: boolean
+}
+
+/**
  * A plugin's **private** persistent storage (design §6.11 G2; Phase 6). Rooted at
  * {@link dir} (`<globalStorage>/plugins/<name>/`); every path is resolved relative to
  * it and **traversal-blocked** (a `..` escape is denied). Created lazily, survives
@@ -586,6 +759,20 @@ export interface PluginContext {
 	 * `notify` throws + warns; no seam (headless) ⇒ absent entirely. See {@link PluginAgent}.
 	 */
 	readonly agent?: PluginAgent
+	/**
+	 * Chat-timeline control — append the plugin's own marker rows, rewind the task.
+	 * Present only when the host wired its task seam. Granted `permissions.task` ⇒ a
+	 * live surface; granted-not / seam wired ⇒ a denying stub; no seam ⇒ absent.
+	 * See {@link PluginTaskControl}.
+	 */
+	readonly task?: PluginTaskControl
+	/**
+	 * The task's current turn index — incremented once per assistant turn (each new API
+	 * request). Lets a hook that fires per *tool call* (`beforeToolCall` can run several
+	 * times in one turn) act only once per turn, without the plugin having to guess turn
+	 * boundaries. Present on contexts built for a running task.
+	 */
+	readonly turn?: number
 	/** This plugin's private persistent storage (design §6.11 G2; Phase 6). */
 	readonly storage?: PluginStorage
 	/**
@@ -623,6 +810,14 @@ export interface PluginEvent {
 // unknown keys are rejected), mirroring how tool schemas are done. Phase 1 wires
 // the *declarative* contributions; code hooks (`main`) land in Phase 2.
 // ---------------------------------------------------------------------------
+
+/**
+ * Ceiling for a manifest's `hookTimeoutMs`. A lifecycle hook runs INSIDE the agent
+ * loop, so its budget is time the user waits with nothing happening; 60 s is already
+ * generous for the one case that needs it (snapshotting a big workspace) and keeps a
+ * misconfigured manifest from hanging the loop indefinitely.
+ */
+export const MAX_PLUGIN_HOOK_TIMEOUT_MS = 60_000
 
 /**
  * UI regions a plugin may request to contribute components to (design §6.8).
@@ -688,6 +883,21 @@ export const pluginPermissionsSchema = z
 		 * provider.
 		 */
 		search: z.boolean().optional(),
+		/**
+		 * **Chat-timeline control** (`ctx.task`): append the plugin's own marker rows to a
+		 * task's timeline and rewind it (design §6.11). Rewinding destroys conversation
+		 * history and restarts the task, so it is its own grant rather than riding on
+		 * `permissions.agent` (which only *adds* messages): ungranted ⇒ `ctx.task` is a
+		 * denying stub (calls throw + warn), absent on a host with no task seam.
+		 */
+		task: z.boolean().optional(),
+		/**
+		 * **Editor actions** (`ctx.host.editor`) — currently the multi-file diff viewer.
+		 * Opening editors steals focus, so it is granted explicitly rather than being
+		 * always-on like `notifier`: ungranted ⇒ a denying stub (calls throw + warn),
+		 * absent on a host with no editor seam.
+		 */
+		editor: z.boolean().optional(),
 	})
 	.strict()
 
@@ -851,6 +1061,24 @@ export const pluginManifestSchema = z
 		dependencies: z.array(z.string()).optional(),
 		/** JSON-schema-ish description of user-configurable settings (Phase 2). */
 		config: z.record(z.string(), z.unknown()).optional(),
+		/**
+		 * Enable this plugin on first discovery, without waiting for the user to toggle
+		 * it (design §7). Honored **only for `bundled` (first-party) scope** — a global
+		 * or project plugin can never enable itself, since enabling is the user's consent
+		 * to run third-party code. It exists so a first-party plugin that *is* a shipped
+		 * Shofer feature (rather than an opt-in add-on) is on out of the box; the user
+		 * can still disable it, and their choice always wins once recorded.
+		 */
+		defaultEnabled: z.boolean().optional(),
+		/**
+		 * Per-hook time budget in ms for this plugin's lifecycle hooks, overriding the
+		 * shared default (`PLUGIN_HOOK_TIMEOUT_MS`, 500 ms). Raise it only when a hook
+		 * legitimately does slow work the agent must WAIT for — e.g. snapshotting a large
+		 * workspace before a file-mutating tool runs, where finishing late is useless
+		 * because the mutation already happened. The agent loop is blocked for up to this
+		 * long, so it is capped at {@link MAX_PLUGIN_HOOK_TIMEOUT_MS}.
+		 */
+		hookTimeoutMs: z.number().int().positive().max(MAX_PLUGIN_HOOK_TIMEOUT_MS).optional(),
 	})
 	.strict()
 
@@ -1048,6 +1276,27 @@ export interface PluginUIContext {
 	readonly config?: Record<string, unknown>
 	/** VS Code theme CSS variables (name → value), for theme-aware rendering. */
 	readonly theme?: Record<string, string>
+	/**
+	 * The timeline row this component is rendering — present only in the
+	 * `chat-message-addon` region, where the mount exists *because* of a specific
+	 * message. Carries the marker payload the plugin itself wrote, so the component
+	 * renders from its own data rather than having to request it over the channel.
+	 */
+	readonly message?: PluginUiMessageSummary
+}
+
+/** The timeline row a `chat-message-addon` component is mounted for. */
+export interface PluginUiMessageSummary {
+	/** Timestamp of the message — the handle for restore/diff actions on it. */
+	readonly ts: number
+	/** The marker's primary text (for a snapshot plugin, typically its id/hash). */
+	readonly text?: string
+	/** The marker kind this plugin recorded. */
+	readonly kind: string
+	/** The plugin-defined payload from `ctx.task.marker(...)`. */
+	readonly data?: Record<string, unknown>
+	/** Whether the plugin declared this point restorable. */
+	readonly restorable?: boolean
 }
 
 /**

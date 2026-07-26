@@ -4,6 +4,7 @@ import type {
 	PluginUIApi,
 	PluginUIContext,
 	PluginUiContribution,
+	PluginUiMessageSummary,
 	PluginUiRegion,
 	PluginUiTaskSummary,
 } from "@shofer/types"
@@ -56,7 +57,12 @@ class PluginErrorBoundary extends Component<{ pluginName: string; children: Reac
  * channel namespaced to `pluginName` (so a plugin can neither spoof nor observe
  * another's channel) plus the read-only context blob.
  */
-function usePluginUiApi(pluginName: string, region: PluginUiRegion, task: PluginUiTaskSummary): PluginUIApi {
+function usePluginUiApi(
+	pluginName: string,
+	region: PluginUiRegion,
+	task: PluginUiTaskSummary,
+	message?: PluginUiMessageSummary,
+): PluginUIApi {
 	// A single window listener per mount, demuxed to the mount's subscribers by name.
 	const listenersRef = useRef(new Set<(message: unknown) => void>())
 
@@ -67,11 +73,14 @@ function usePluginUiApi(pluginName: string, region: PluginUiRegion, task: Plugin
 		return unsubscribe
 	}, [pluginName])
 
-	const context = useMemo<PluginUIContext>(() => ({ region, pluginName, task }), [region, pluginName, task])
+	const context = useMemo<PluginUIContext>(
+		() => ({ region, pluginName, task, message }),
+		[region, pluginName, task, message],
+	)
 
 	return useMemo<PluginUIApi>(
 		() => ({
-			postMessage: (message: unknown) => postPluginUiMessage(pluginName, message),
+			postMessage: (outgoing: unknown) => postPluginUiMessage(pluginName, outgoing),
 			onMessage: (listener: (message: unknown) => void) => {
 				listenersRef.current.add(listener)
 				return () => listenersRef.current.delete(listener)
@@ -87,13 +96,15 @@ function PluginContributionMount({
 	contribution,
 	region,
 	task,
+	message,
 }: {
 	contribution: PluginUiContribution
 	region: PluginUiRegion
 	task: PluginUiTaskSummary
+	message?: PluginUiMessageSummary
 }) {
 	const [Component, setComponent] = useState<PluginUIComponent | null>(null)
-	const api = usePluginUiApi(contribution.pluginName, region, task)
+	const api = usePluginUiApi(contribution.pluginName, region, task, message)
 
 	useEffect(() => {
 		let cancelled = false
@@ -140,10 +151,12 @@ export function PluginSlotView({
 	region,
 	contributions,
 	task,
+	message,
 }: {
 	region: PluginUiRegion
 	contributions: PluginUiContribution[]
 	task: PluginUiTaskSummary
+	message?: PluginUiMessageSummary
 }) {
 	if (contributions.length === 0) return null
 	return (
@@ -154,6 +167,7 @@ export function PluginSlotView({
 					contribution={contribution}
 					region={region}
 					task={task}
+					message={message}
 				/>
 			))}
 		</>
@@ -165,12 +179,28 @@ export function PluginSlotView({
  * from {@link useExtensionState} and renders those for `region`. With no
  * UI-contributing plugins the snapshot is empty and this renders nothing.
  */
-export function PluginSlot({ region }: { region: PluginUiRegion }) {
+export function PluginSlot({
+	region,
+	pluginName,
+	message,
+}: {
+	region: PluginUiRegion
+	/**
+	 * Restrict the slot to one plugin's contribution. Used by `chat-message-addon`,
+	 * where the mount exists for a specific plugin's timeline row — every other
+	 * plugin's addon component would be rendering someone else's message.
+	 */
+	pluginName?: string
+	message?: PluginUiMessageSummary
+}) {
 	const { pluginUiContributions, mode, currentTaskItem } = useExtensionState()
 
 	const contributions = useMemo(
-		() => (pluginUiContributions?.contributions ?? []).filter((c) => c.region === region),
-		[pluginUiContributions, region],
+		() =>
+			(pluginUiContributions?.contributions ?? []).filter(
+				(c) => c.region === region && (!pluginName || c.pluginName === pluginName),
+			),
+		[pluginUiContributions, region, pluginName],
 	)
 
 	const task = useMemo<PluginUiTaskSummary>(
@@ -178,5 +208,5 @@ export function PluginSlot({ region }: { region: PluginUiRegion }) {
 		[currentTaskItem?.id, mode],
 	)
 
-	return <PluginSlotView region={region} contributions={contributions} task={task} />
+	return <PluginSlotView region={region} contributions={contributions} task={task} message={message} />
 }

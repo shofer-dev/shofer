@@ -76,6 +76,7 @@ describe("createRequestHandler (§11)", () => {
 			revertAllChangedFiles: vi.fn(async () => {}),
 			acceptChangedFile: vi.fn(async () => {}),
 			acceptAllChangedFiles: vi.fn(async () => {}),
+			pluginRequest: vi.fn(async () => ({ changes: [] })),
 			subscribe: vi.fn((l: (e: ServerEvent) => void) => {
 				events.push(l)
 				return () => {
@@ -224,6 +225,29 @@ describe("createRequestHandler (§11)", () => {
 		)
 		expect(res.statusCode).toBe(202)
 		expect(api.restoreCheckpoint).toHaveBeenCalledWith("t1", { ts: 1, commitHash: "c1", mode: "restore" })
+	})
+
+	it("L3: plugin-request routes to the named plugin and wraps its result", async () => {
+		const res = mockRes()
+		await run(
+			mockReq("POST", "/api/v1/task/t1/plugin-request", {
+				plugin: "checkpoints",
+				method: "diff",
+				params: { hash: "c1" },
+			}),
+			res as unknown as ServerResponse,
+		)
+		expect(res.statusCode).toBe(200)
+		// Wrapped so a plugin returning a bare value still travels as a JSON object.
+		expect(JSON.parse(res.body)).toEqual({ result: { changes: [] } })
+		expect(api.pluginRequest).toHaveBeenCalledWith("t1", "checkpoints", "diff", { hash: "c1" })
+	})
+
+	it("L3: plugin-request 400s without plugin/method", async () => {
+		const res = mockRes()
+		await run(mockReq("POST", "/api/v1/task/t1/plugin-request", { params: {} }), res as unknown as ServerResponse)
+		expect(res.statusCode).toBe(400)
+		expect(api.pluginRequest).not.toHaveBeenCalled()
 	})
 
 	it("L3: GET changed-files returns 200 with the payload", async () => {

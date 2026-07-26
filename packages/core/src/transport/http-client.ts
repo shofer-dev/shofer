@@ -86,6 +86,17 @@ export class ShoferHttpClient implements AgentApi {
 		await this.post(`/task/${encodeURIComponent(taskId)}/checkpoint-restore`, opts)
 	}
 
+	async pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
+		// Wrapped server-side (`{ result }`) so a plugin returning a bare value —
+		// `null`, a string, an array — still travels as a JSON object body.
+		const body = (await this.post(`/task/${encodeURIComponent(taskId)}/plugin-request`, {
+			plugin,
+			method,
+			params,
+		})) as { result: unknown }
+		return body?.result
+	}
+
 	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
 		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/revert`, { relPath })
 	}

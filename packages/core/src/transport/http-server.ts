@@ -262,7 +262,7 @@ export function createRequestHandler(
 		// POST-with-body for the remaining L3 routes (data + execute).
 		const l3Match = path.match(
 			new RegExp(
-				`^${base}/task/([^/]+)/(checkpoint-diff|checkpoint-restore|changed-files/diff|changed-files/revert|changed-files/accept)$`,
+				`^${base}/task/([^/]+)/(checkpoint-diff|checkpoint-restore|plugin-request|changed-files/diff|changed-files/revert|changed-files/accept)$`,
 			),
 		)
 		if (method === "POST" && l3Match) {
@@ -279,6 +279,15 @@ export function createRequestHandler(
 				if (typeof body.commitHash !== "string") return send(res, 400, { error: "commitHash is required" })
 				await api.restoreCheckpoint(taskId, body as unknown as CheckpointRestoreOptions)
 				return send(res, 202, { taskId, restored: true })
+			}
+			if (action === "plugin-request") {
+				// Generic plugin RPC — the transport stays feature-agnostic: `plugin` +
+				// `method` + opaque `params` in, the plugin's JSON result out.
+				if (typeof body.plugin !== "string" || typeof body.method !== "string") {
+					return send(res, 400, { error: "plugin and method are required" })
+				}
+				const result = await api.pluginRequest(taskId, body.plugin, body.method, body.params)
+				return send(res, 200, { result })
 			}
 			if (action === "changed-files/diff") {
 				if (typeof body.relPath !== "string") return send(res, 400, { error: "relPath is required" })

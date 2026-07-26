@@ -36,6 +36,7 @@ function l3Stubs() {
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
 		acceptAllChangedFiles: vi.fn(async () => {}),
+		pluginRequest: vi.fn(async () => null),
 	}
 }
 

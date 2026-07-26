@@ -115,6 +115,20 @@ export interface AgentApi {
 	/** Accept every changed file for the task on the executor. */
 	acceptAllChangedFiles(taskId: string): Promise<void>
 
+	/**
+	 * Call a plugin running on the task's host and return its result — the generic
+	 * request/response channel for a FEATURE that lives in a plugin (`ShoferPlugin.handleRequest`).
+	 *
+	 * Per-task plugin state (a workspace snapshot, an external job) lives wherever the
+	 * task runs, so a controller rendering a REMOTE task cannot reach it in-process. This
+	 * routes the call to the owning host, keeping the transport generic: a new
+	 * plugin-owned feature needs no new wire method.
+	 *
+	 * `params`/result are plugin-defined JSON. Errors propagate to the caller — a
+	 * request has someone waiting on the answer.
+	 */
+	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown>
+
 	/** Subscribe to the agent event stream; returns an unsubscribe fn. */
 	subscribe(listener: (event: ServerEvent) => void): () => void
 }

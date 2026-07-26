@@ -39,6 +39,7 @@ import McpResourceRow from "../mcp/McpResourceRow"
 
 import { Mention } from "./Mention"
 import { CheckpointSaved } from "./checkpoints/CheckpointSaved"
+import { PluginSlot } from "../plugins/PluginSlot"
 import { FollowUpSuggest } from "./FollowUpSuggest"
 import { WorkflowParamForm } from "./WorkflowParamForm"
 import { BatchFilePermission } from "./BatchFilePermission"
@@ -1819,6 +1820,26 @@ export const ChatRowContent = ({
 							checkpoint={message.checkpoint}
 						/>
 					)
+				case "plugin_marker": {
+					// A plugin's own timeline row: the host renders no chrome and no
+					// fallback text — the owning plugin's `chat-message-addon` component
+					// is the whole row, so an unloadable component shows nothing rather
+					// than a half-rendered host guess at what the marker meant.
+					if (!message.marker) return null
+					return (
+						<PluginSlot
+							region="chat-message-addon"
+							pluginName={message.marker.pluginName}
+							message={{
+								ts: message.ts!,
+								text: message.text,
+								kind: message.marker.kind,
+								data: message.marker.data,
+								restorable: message.marker.restorable,
+							}}
+						/>
+					)
+				}
 				case "condense_context":
 					// In-progress state
 					if (message.partial) {

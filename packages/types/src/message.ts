@@ -177,6 +177,8 @@ export function isAgentRunningAsk(ask: ShoferAsk): ask is AgentRunningAsk {
  * - `mcp_server_response`: Response received from MCP server
  * - `subtask_result`: Result of a completed subtask
  * - `checkpoint_saved`: Indicates a checkpoint has been saved
+ * - `plugin_marker`: A row a plugin appended to the timeline; rendered by that plugin's
+ *   own `chat-message-addon` UI component (payload in {@link ShoferMessage.marker})
  * - `shoferignore_error`: Error related to .shoferignore file processing
  * - `diff_error`: Error occurred while applying a diff/patch
  * - `condense_context`: Context condensation/summarization has started
@@ -205,6 +207,7 @@ export const shoferSays = [
 	"subtask_result",
 	"peer_message",
 	"checkpoint_saved",
+	"plugin_marker",
 	"shoferignore_error",
 	"diff_error",
 	"condense_context",
@@ -283,6 +286,33 @@ export const contextTruncationSchema = z.object({
 export type ContextTruncation = z.infer<typeof contextTruncationSchema>
 
 /**
+ * PluginMarkerPayload
+ *
+ * The payload of a `say: "plugin_marker"` message — a timeline row a plugin appended
+ * via `ctx.task.marker(...)`. The host persists and orders it but never interprets
+ * `kind`/`data`: rendering belongs to the owning plugin's `chat-message-addon`
+ * component, which is looked up by {@link pluginName}.
+ */
+export const pluginMarkerSchema = z.object({
+	/** Plugin that appended the marker; selects which UI component renders the row. */
+	pluginName: z.string(),
+	/** Plugin-defined kind (e.g. `"checkpoint"`). Opaque to the host. */
+	kind: z.string(),
+	/** Plugin-defined payload handed to that plugin's UI component. Opaque to the host. */
+	data: z.record(z.string(), z.unknown()).optional(),
+	/**
+	 * Whether this marker names a point out-of-band state can be restored to. The host
+	 * reads it only to decide whether to OFFER state restoration when the user
+	 * deletes/edits an earlier message; the restore itself is the plugin's.
+	 */
+	restorable: z.boolean().optional(),
+	/** Persisted but not rendered — an anchor the plugin needs and the user doesn't. */
+	suppress: z.boolean().optional(),
+})
+
+export type PluginMarkerPayload = z.infer<typeof pluginMarkerSchema>
+
+/**
  * ShoferMessage
  *
  * The main message type used for communication between the extension and webview.
@@ -305,6 +335,10 @@ export const shoferMessageSchema = z.object({
 	reasoning: z.string().optional(),
 	conversationHistoryIndex: z.number().optional(),
 	checkpoint: z.record(z.string(), z.unknown()).optional(),
+	/**
+	 * Plugin-owned timeline row. Present when `say: "plugin_marker"`.
+	 */
+	marker: pluginMarkerSchema.optional(),
 	progressStatus: toolProgressStatusSchema.optional(),
 	/**
 	 * Stable UUID v7 assigned to this ask when it enters the pWaitFor

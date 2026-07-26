@@ -21,6 +21,7 @@ function makeApi() {
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
 		acceptAllChangedFiles: vi.fn(async () => {}),
+		pluginRequest: vi.fn(async () => null),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {}

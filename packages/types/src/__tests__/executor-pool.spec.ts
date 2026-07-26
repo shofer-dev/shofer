@@ -22,6 +22,7 @@ function makeExecutor(id: string) {
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
 		acceptAllChangedFiles: vi.fn(async () => {}),
+		pluginRequest: vi.fn(async () => ({ ok: true })),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {
@@ -94,9 +95,14 @@ describe("ExecutorPool (§13 controller side)", () => {
 		await pool.acceptAllChangedFiles(t1.taskId)
 		expect(a.api.acceptAllChangedFiles).toHaveBeenCalledWith("A-task-1")
 
+		// Generic plugin RPC routes to the OWNING executor like every other L3 op.
+		expect(await pool.pluginRequest(t1.taskId, "checkpoints", "diff", { hash: "abc" })).toEqual({ ok: true })
+		expect(a.api.pluginRequest).toHaveBeenCalledWith("A-task-1", "checkpoints", "diff", { hash: "abc" })
+
 		// None of these leaked to the other executor.
 		expect(b.api.getCheckpointDiff).not.toHaveBeenCalled()
 		expect(b.api.restoreCheckpoint).not.toHaveBeenCalled()
+		expect(b.api.pluginRequest).not.toHaveBeenCalled()
 	})
 
 	it("merges executor event streams, tagging each with executorId", async () => {

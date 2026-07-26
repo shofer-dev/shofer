@@ -33,6 +33,8 @@ import { saveTaskMessages } from "../task-persistence"
 
 import { ShoferProvider } from "./ShoferProvider"
 import { handleCheckpointRestoreOperation } from "./checkpointRestoreHandler"
+import { handleTimelineRewind } from "./timelineRewindHandler"
+import { pluginRegistry, type Task } from "@shofer/core"
 import { generateErrorDiagnostics } from "./diagnosticsHandler"
 import {
 	handleRequestSkills,
@@ -219,6 +221,17 @@ export const webviewMessageHandler = async (
 	}
 
 	/**
+	 * The first plugin marker after `messageTs` that declares itself restorable — the
+	 * anchor a snapshot plugin would roll back to. Its presence is what makes the
+	 * "restore workspace too" option meaningful for a delete/edit; the restoring itself
+	 * is the plugin's, via its `onTimelineRewind` hook.
+	 */
+	const findRestorableMarker = (currentShofer: Task, messageTs: number) =>
+		currentShofer.shoferMessages.find(
+			(msg) => msg.say === "plugin_marker" && msg.marker?.restorable && msg.ts > messageTs,
+		)
+
+	/**
 	 * Handles message deletion operations with user confirmation
 	 */
 	const handleDeleteOperation = async (messageTs: number): Promise<void> => {
@@ -238,7 +251,7 @@ export const webviewMessageHandler = async (
 			const checkpoints = currentShofer.shoferMessages.filter(
 				(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
 			)
-			hasCheckpoint = checkpoints.length > 0
+			hasCheckpoint = checkpoints.length > 0 || findRestorableMarker(currentShofer, messageTs) !== undefined
 		}
 
 		// Send message to webview to show delete confirmation dialog
@@ -293,12 +306,33 @@ export const webviewMessageHandler = async (
 						checkpoint: { hash: nextCheckpoint.text },
 						operation: "delete",
 					})
+				} else if (findRestorableMarker(currentShofer, messageTs)) {
+					// A plugin owns the snapshot: it rolls its own state back through
+					// `onTimelineRewind`, then the host rewinds the chat.
+					await handleTimelineRewind({
+						provider,
+						currentShofer,
+						messageTs: targetMessage.ts!,
+						messageIndex,
+						operation: "delete",
+						restoreState: true,
+					})
 				} else {
 					// No checkpoint found before this message
 					webviewLog.info("[handleDeleteMessageConfirm] No checkpoint found before message")
 					getHost().notifier.warn("No checkpoint found before this message")
 				}
 			} else {
+				// Chat-only delete: plugins are still told (so they can drop anchors on the
+				// messages about to vanish) but `restoreState: false` forbids touching the
+				// workspace.
+				await pluginRegistry.notifyTimelineRewind({
+					ts: targetMessage.ts!,
+					taskId: currentShofer.taskId,
+					operation: "delete",
+					restoreState: false,
+				})
+
 				// For non-checkpoint deletes, preserve checkpoint associations for remaining messages
 				// Store checkpoints from messages that will be preserved
 				const preservedCheckpoints = new Map<number, any>()
@@ -355,7 +389,7 @@ export const webviewMessageHandler = async (
 					(msg) => msg.say === "checkpoint_saved" && msg.ts > messageTs,
 				)
 
-				hasCheckpoint = checkpoints.length > 0
+				hasCheckpoint = checkpoints.length > 0 || findRestorableMarker(currentShofer, messageTs) !== undefined
 			} else {
 				webviewLog.info("[webviewMessageHandler] Edit - Message not found in shoferMessages!")
 			}
@@ -427,6 +461,19 @@ export const webviewMessageHandler = async (
 					// The task will be cancelled and reinitialized by checkpointRestore
 					// The pending edit will be processed in the reinitialized task
 					return
+				} else if (findRestorableMarker(currentShofer, messageTs)) {
+					// A plugin owns the snapshot — it restores, then the host rewinds the
+					// chat and reinitializes with the pending edit.
+					await handleTimelineRewind({
+						provider,
+						currentShofer,
+						messageTs: targetMessage.ts!,
+						messageIndex,
+						operation: "edit",
+						restoreState: true,
+						editData: { editedContent, images, apiConversationHistoryIndex },
+					})
+					return
 				} else {
 					// No checkpoint found before this message
 					webviewLog.info("[handleEditMessageConfirm] No checkpoint found before message")
@@ -479,6 +526,14 @@ export const webviewMessageHandler = async (
 			// Delete the original (user) message and all subsequent messages using MessageManager
 			const rewindTs = currentShofer.shoferMessages[deleteFromMessageIndex]?.ts
 			if (rewindTs) {
+				// Chat-only edit: plugins are told so they can drop anchors, but
+				// `restoreState: false` forbids touching the workspace.
+				await pluginRegistry.notifyTimelineRewind({
+					ts: rewindTs,
+					taskId: currentShofer.taskId,
+					operation: "edit",
+					restoreState: false,
+				})
 				await currentShofer.messageManager.rewindToTimestamp(rewindTs, { includeTargetMessage: false })
 			}
 

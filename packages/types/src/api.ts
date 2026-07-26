@@ -113,6 +113,20 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	acceptAllChangedFiles(taskId: string): Promise<void>
 
 	/**
+	 * Call a plugin running on the task's host and return its result — the generic
+	 * request/response channel for a FEATURE that lives in a plugin (`ShoferPlugin.handleRequest`).
+	 *
+	 * Per-task plugin state (a workspace snapshot, an external job) lives wherever the
+	 * task runs, so a controller rendering a REMOTE task cannot reach it in-process. This
+	 * routes the call to the owning host, keeping the transport generic: a new
+	 * plugin-owned feature needs no new wire method.
+	 *
+	 * `params`/result are plugin-defined JSON. Errors propagate to the caller — a
+	 * request has someone waiting on the answer.
+	 */
+	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown>
+
+	/**
 	 * Removes a queued message by ID from the current task's message queue.
 	 * @param messageId The ID of the queued message to remove.
 	 */

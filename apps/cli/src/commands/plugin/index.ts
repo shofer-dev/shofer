@@ -38,6 +38,9 @@ function getGlobalShoferDirectory(): string {
 /** Global-state key holding the enabled/installed plugin allow-list (matches ShoferProvider). */
 const ENABLED_PLUGINS_KEY = "shofer.plugins.enabledPlugins"
 
+/** Global-state key holding explicit "off" decisions (matches ShoferProvider). */
+const DISABLED_PLUGINS_KEY = "shofer.plugins.disabledPlugins"
+
 /**
  * Shared knobs for the `plugin` subcommands. All paths default to the real global
  * locations; tests inject temp dirs to exercise the handlers in isolation.
@@ -79,7 +82,7 @@ function out(options: PluginCommandOptions): (line: string) => void {
 async function buildManager(options: PluginCommandOptions): Promise<PluginManager> {
 	const manager = new PluginManager({
 		fs: createNodePluginFs(),
-		stateStore: createFileStateStore(resolveStateFile(options), ENABLED_PLUGINS_KEY),
+		stateStore: createFileStateStore(resolveStateFile(options), ENABLED_PLUGINS_KEY, DISABLED_PLUGINS_KEY),
 		pluginDirs: [{ dir: resolvePluginsDir(options), scope: "global" }],
 	})
 	await manager.discover()

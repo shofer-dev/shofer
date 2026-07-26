@@ -27,6 +27,8 @@ import type {
 	HostDisposable,
 	HostEnv,
 	HostFileSystem,
+	PluginEditor,
+	PluginFileDiff,
 	PluginHost,
 	PluginPermissions,
 	PluginSearch,
@@ -211,6 +213,24 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 		return composite
 	}
 
+	/**
+	 * Editor actions (`permissions.editor`). Unlike `ai`/`agent`/`task` this needs no
+	 * host provider seam — {@link HostBridge.editor} is already host-agnostic — so the
+	 * sandbox gates it directly: granted ⇒ delegate, ungranted ⇒ throw + warn.
+	 */
+	const editor: PluginEditor = {
+		async showMultiFileDiff(title: string, changes: PluginFileDiff[]): Promise<void> {
+			if (!permissions?.editor) {
+				const message =
+					`[plugin:${pluginName}] ctx.host.editor.showMultiFileDiff denied — ` +
+					`the plugin declares no permissions.editor grant. Add "editor": true to the manifest permissions.`
+				warn(message)
+				throw new Error(message)
+			}
+			await host.editor.showMultiFileDiff(title, changes)
+		},
+	}
+
 	const restrictedFetch = (input: string | URL, init?: RequestInit): Promise<Response> => {
 		const url = input.toString()
 		if (!isNetworkAllowed(url, networkAllowlist)) {
@@ -239,5 +259,6 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 		watch,
 		// Already gated by the manager (live / denying stub / absent); surfaced as-is.
 		search: options.search,
+		editor,
 	}
 }

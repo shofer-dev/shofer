@@ -1022,6 +1022,8 @@ export async function presentAssistantMessage(shofer: Task) {
 				taskId: shofer.taskId,
 				cwd: shofer.cwd,
 				mode: mode ?? defaultModeSlug,
+				// A turn can issue several tool calls; `turn` lets a hook act once per turn.
+				turn: shofer.turnCount,
 			}
 			if (!block.partial && pluginRegistry.hasLifecycleHook("beforeToolCall")) {
 				const toolArgs = (block.nativeArgs ?? block.params ?? {}) as Record<string, unknown>

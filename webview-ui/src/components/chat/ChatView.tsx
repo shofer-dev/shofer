@@ -1690,6 +1690,12 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				}
 			}
 
+			// A plugin marker the plugin asked to keep out of the timeline: persisted as
+			// its anchor, but not something the user needs to see.
+			if (message.say === "plugin_marker" && message.marker?.suppress) {
+				return false
+			}
+
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
 				if (message.ask && ALWAYS_HIDDEN_ONCE_PROCESSED_ASK.includes(message.ask)) return false
 				if (message.say && ALWAYS_HIDDEN_ONCE_PROCESSED_SAY.includes(message.say)) return false

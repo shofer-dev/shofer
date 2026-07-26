@@ -239,6 +239,10 @@ export class ExecutorPool implements AgentApi {
 		return this.owner(taskId).api.getCheckpointDiff(taskId, opts)
 	}
 
+	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
+		return this.owner(taskId).api.pluginRequest(taskId, plugin, method, params)
+	}
+
 	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
 		return this.owner(taskId).api.getTaskChangedFiles(taskId)
 	}

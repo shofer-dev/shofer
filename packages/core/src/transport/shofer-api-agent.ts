@@ -143,6 +143,10 @@ export class ShoferApiAgent implements AgentApi {
 		await this.api.restoreCheckpoint(taskId, opts)
 	}
 
+	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
+		return this.api.pluginRequest(taskId, plugin, method, params)
+	}
+
 	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
 		await this.api.revertChangedFile(taskId, relPath)
 	}

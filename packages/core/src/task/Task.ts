@@ -29,6 +29,7 @@ import {
 	type ShoferMessage,
 	type ShoferSay,
 	type ShoferAsk,
+	type PluginMarkerPayload,
 	type ToolProgressStatus,
 	type HistoryItem,
 	type CreateTaskOptions,
@@ -910,6 +911,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	isStreaming = false
 	currentStreamingContentIndex = 0
 	currentStreamingDidCheckpoint = false
+	/**
+	 * Assistant turns this task has run — incremented once per API request. Surfaced to
+	 * plugins as `PluginContext.turn` so a hook that fires per *tool call* (a turn can
+	 * issue several) can act once per turn without guessing where turn boundaries are.
+	 */
+	turnCount = 0
 	assistantMessageContent: AssistantMessageContent[] = []
 	presentAssistantMessageLocked = false
 	presentAssistantMessageHasPendingUpdates = false
@@ -2608,6 +2615,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskId: this.taskId,
 				cwd: this.cwd,
 				mode: this._taskMode,
+				turn: this.turnCount,
 			})
 			if (hookResult) {
 				if (typeof hookResult.text === "string") {
@@ -3428,6 +3436,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			 * finalization no longer defeats the merge.
 			 */
 			streamBlockId?: string
+			/**
+			 * Payload for a `say: "plugin_marker"` row — a timeline entry a plugin
+			 * appended via `ctx.task.marker(...)`. The host persists and orders it
+			 * but never interprets `kind`/`data`; the owning plugin's UI component
+			 * renders it.
+			 */
+			marker?: PluginMarkerPayload
 		} = {},
 		contextCondense?: ContextCondense,
 		contextTruncation?: ContextTruncation,
@@ -3578,6 +3593,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				text,
 				images,
 				checkpoint,
+				marker: options.marker,
 				contextCondense,
 				contextTruncation,
 			})
@@ -4313,6 +4329,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				taskId: this.taskId,
 				cwd: this.cwd,
 				mode: this._taskMode,
+				turn: this.turnCount,
 				reason: abortReasonValue === "completed" ? "completed" : "aborted",
 			})
 			.catch(() => {})
@@ -5148,6 +5165,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				// Reset streaming state for each new API request
 				this.currentStreamingContentIndex = 0
 				this.currentStreamingDidCheckpoint = false
+				this.turnCount++
 				this.assistantMessageContent = []
 				this.didCompleteReadingStream = false
 				this.userMessageContent = []

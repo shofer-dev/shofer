@@ -107,11 +107,20 @@ import type {
 	PluginsState,
 	PluginUiMessageEnvelope,
 	PluginUiRegion,
+	PluginMarker,
 	PluginTaskHandle,
 	PluginTaskResult,
 	PluginEvent,
+	ShoferApiReqInfo,
 } from "@shofer/types"
-import type { ApiHandler, PluginAiProvider, PluginAgentProvider, PluginSearchProvider } from "@shofer/core"
+import type {
+	ApiHandler,
+	PluginAiProvider,
+	PluginAgentProvider,
+	PluginSearchProvider,
+	PluginTaskProvider,
+} from "@shofer/core"
+import { getApiMetrics } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
@@ -2153,6 +2162,10 @@ export class ShoferProvider
 
 	private async buildPluginManager(): Promise<PluginManager> {
 		const stateKey = "shofer.plugins.enabledPlugins"
+		// Explicit "off" decisions. Needed because a bundled plugin declaring
+		// `defaultEnabled` is on when it appears in NEITHER list, so "not enabled" alone
+		// cannot express "the user turned this off".
+		const disabledKey = "shofer.plugins.disabledPlugins"
 		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
 		const cwd = this.cwd
 		const pluginDirs: PluginDir[] = [
@@ -2215,6 +2228,10 @@ export class ShoferProvider
 				setEnabledPlugins: async (names) => {
 					await this.context.globalState.update(stateKey, names)
 				},
+				getDisabledPlugins: () => this.context.globalState.get<string[]>(disabledKey) ?? [],
+				setDisabledPlugins: async (names) => {
+					await this.context.globalState.update(disabledKey, names)
+				},
 			},
 			// Phase 2: load enabled code plugins (`main`) and register their hooks.
 			// The esbuild binary lives in the extension's dist/bin in production.
@@ -2242,6 +2259,10 @@ export class ShoferProvider
 			// (not in @shofer/core) because it needs the provider's task stack + message
 			// queue; gated on `permissions.agent` inside the manager.
 			agentProvider: this.buildPluginAgentProvider(),
+			// §6.11 G9 — host seam for `ctx.task` (timeline markers + rewind). Wired here
+			// because it needs the task stack, the message manager, and task persistence;
+			// gated on `permissions.task` inside the manager.
+			taskProvider: this.buildPluginTaskProvider(),
 			// §6.11 — host seam for `ctx.host.search` (read-only index/symbol/diagnostics
 			// queries). Wired here (not in @shofer/core) because it needs the extension's
 			// CodeIndexManager / GitIndexManager / vscode symbol+diagnostics providers; gated
@@ -2481,6 +2502,117 @@ export class ShoferProvider
 			cancel: async (taskId: string): Promise<void> => {
 				const target = this.shoferStack.find((t) => t.taskId === taskId)
 				if (target) await target.abortTask(true)
+			},
+		}
+	}
+
+	/**
+	 * Build the host {@link PluginTaskProvider} seam backing a granted plugin's `ctx.task`
+	 * — the chat **timeline**: marker rows and rewind.
+	 *
+	 * - `marker` ⇒ a persisted `say: "plugin_marker"` row on the target task, tagged with
+	 *   the owning plugin so only that plugin's UI component renders it. Non-interactive,
+	 *   so appending one never disturbs a pending ask.
+	 * - `listMarkers` ⇒ that plugin's markers, read from the live task when it is on the
+	 *   stack and from persisted messages otherwise (a plugin must be able to recover its
+	 *   anchors for a task the user has not reopened).
+	 * - `rewind` ⇒ truncate the chat to `ts`, report the discarded API cost, and restart
+	 *   the task loop against the shortened history. This is the chat half of a restore;
+	 *   rolling back anything outside the conversation is the plugin's own job, done
+	 *   before it calls this.
+	 */
+	private buildPluginTaskProvider(): PluginTaskProvider {
+		const resolveTask = (taskId?: string): Task | undefined =>
+			(taskId ? this.shoferStack.find((t) => t.taskId === taskId) : undefined) ?? this.getCurrentTask()
+
+		const toMarkers = (messages: ShoferMessage[], pluginName: string): PluginMarker[] =>
+			messages
+				.filter((m) => m.say === "plugin_marker" && m.marker?.pluginName === pluginName)
+				.map((m) => ({
+					ts: m.ts,
+					pluginName,
+					kind: m.marker!.kind,
+					text: m.text ?? "",
+					data: m.marker!.data,
+					restorable: m.marker!.restorable,
+					suppress: m.marker!.suppress,
+				}))
+
+		return {
+			marker: async (pluginName, input): Promise<void> => {
+				const task = resolveTask(input.taskId)
+				if (!task) {
+					throw new Error(`[plugin:${pluginName}] ctx.task.marker: no task to append to`)
+				}
+				await task.say(
+					"plugin_marker",
+					input.text,
+					undefined /* images */,
+					undefined /* partial */,
+					undefined /* checkpoint */,
+					undefined /* progressStatus */,
+					{
+						isNonInteractive: true,
+						marker: {
+							pluginName,
+							kind: input.kind,
+							data: input.data,
+							restorable: input.restorable,
+							suppress: input.suppress,
+						},
+					},
+				)
+			},
+
+			listMarkers: async (pluginName, taskId): Promise<PluginMarker[]> => {
+				const live = resolveTask(taskId)
+				if (live && (!taskId || live.taskId === taskId)) {
+					return toMarkers(live.shoferMessages, pluginName)
+				}
+				if (!taskId) return []
+				const { readTaskMessages } = await import("@shofer/core")
+				const messages = (await readTaskMessages({
+					taskId,
+					globalStoragePath: this.contextProxy.globalStorageUri.fsPath,
+				})) as ShoferMessage[]
+				return toMarkers(messages, pluginName)
+			},
+
+			rewind: async (pluginName, ts, opts): Promise<void> => {
+				const task = this.getCurrentTask()
+				if (!task) {
+					throw new Error(`[plugin:${pluginName}] ctx.task.rewind: no current task`)
+				}
+				const index = task.shoferMessages.findIndex((m) => m.ts === ts)
+				if (index === -1) {
+					throw new Error(`[plugin:${pluginName}] ctx.task.rewind: no message at ts ${ts}`)
+				}
+
+				// Account for the requests about to be discarded BEFORE truncating — the
+				// messages carrying that usage are what the rewind removes.
+				const discarded = task.combineMessages(task.shoferMessages.slice(index + 1))
+				const { totalTokensIn, totalTokensOut, totalCacheWrites, totalCacheReads, totalCost } =
+					getApiMetrics(discarded)
+
+				// MessageManager (not a raw splice) so orphaned condense/truncation markers
+				// are cleaned up with the messages they refer to.
+				await task.messageManager.rewindToTimestamp(ts, {
+					includeTargetMessage: opts?.includeTargetMessage ?? false,
+				})
+
+				await task.say(
+					"api_req_deleted",
+					JSON.stringify({
+						tokensIn: totalTokensIn,
+						tokensOut: totalTokensOut,
+						cacheWrites: totalCacheWrites,
+						cacheReads: totalCacheReads,
+						cost: totalCost,
+					} satisfies ShoferApiReqInfo),
+				)
+
+				// Restart the loop so it runs against the truncated history.
+				await this.cancelTask()
 			},
 		}
 	}
@@ -4344,6 +4476,11 @@ export class ShoferProvider
 						`[deleteTaskWithId${taskId}] failed to delete associated shadow repository or branch: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				}
+
+				// Let plugins drop per-task state they keep OUTSIDE the task directory
+				// (design §6.9 `onTaskDeleted`) — deleting the directory below would
+				// otherwise leave it orphaned with nothing left to name it.
+				await pluginRegistry.notifyTaskDeleted({ taskId, workspacePath: workspaceDir })
 
 				// Delete the task directory
 				try {

@@ -33,6 +33,7 @@ import { IpcServer } from "@shofer/ipc"
 import { Package } from "@shofer/core"
 import {
 	computeCheckpointDiff,
+	pluginRegistry,
 	getChangedFiles,
 	getOriginalContent,
 	getFinalContent,
@@ -549,6 +550,23 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		const task = this.resolveTaskForL3(taskId, "restoreCheckpoint")
 		if (!task) return
 		await task.checkpointRestore(opts)
+	}
+
+	/**
+	 * Generic plugin RPC (`ShoferPlugin.handleRequest`) for a task on THIS host — how a
+	 * controller reaches a plugin-owned feature whose per-task state lives on the
+	 * executor that runs the task.
+	 *
+	 * Errors propagate rather than degrading to an empty result (unlike the data methods
+	 * above): the caller is waiting on an answer, and "the plugin isn't enabled here" is
+	 * something it must be able to tell apart from "there is nothing to show".
+	 */
+	public async pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
+		const task = this.resolveTaskForL3(taskId, "pluginRequest")
+		return pluginRegistry.request(plugin, method, params, {
+			taskId: task?.taskId ?? taskId,
+			cwd: task?.cwd,
+		})
 	}
 
 	public async revertChangedFile(taskId: string, relPath: string): Promise<void> {

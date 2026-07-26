@@ -39,6 +39,16 @@ export type SessionClientFrame =
 	| { t: "cmd"; id: number; method: "revertAllChangedFiles"; taskId: string }
 	| { t: "cmd"; id: number; method: "acceptChangedFile"; taskId: string; relPath: string }
 	| { t: "cmd"; id: number; method: "acceptAllChangedFiles"; taskId: string }
+	// Generic plugin RPC: reach a plugin-owned feature on the task's own host.
+	| {
+			t: "cmd"
+			id: number
+			method: "pluginRequest"
+			taskId: string
+			plugin: string
+			pluginMethod: string
+			params?: unknown
+	  }
 	/** Reply to a host-callback request. */
 	| { t: "hostResult"; id: number; result?: unknown; error?: string }
 
@@ -105,8 +115,7 @@ export function serveSession({
 			else if (frame.method === "sendMessage") await api.sendMessage(frame.taskId, frame.message)
 			else if (frame.method === "cancelTask") await api.cancelTask(frame.taskId)
 			else if (frame.method === "respondToAsk") await api.respondToAsk(frame.taskId, frame.response)
-			else if (frame.method === "applyConfig")
-				await api.applyConfig(frame.config, frame.version, frame.secrets)
+			else if (frame.method === "applyConfig") await api.applyConfig(frame.config, frame.version, frame.secrets)
 			else if (frame.method === "getCheckpointDiff")
 				result = await api.getCheckpointDiff(frame.taskId, frame.opts)
 			else if (frame.method === "getTaskChangedFiles") result = await api.getTaskChangedFiles(frame.taskId)
@@ -117,6 +126,8 @@ export function serveSession({
 			else if (frame.method === "revertAllChangedFiles") await api.revertAllChangedFiles(frame.taskId)
 			else if (frame.method === "acceptChangedFile") await api.acceptChangedFile(frame.taskId, frame.relPath)
 			else if (frame.method === "acceptAllChangedFiles") await api.acceptAllChangedFiles(frame.taskId)
+			else if (frame.method === "pluginRequest")
+				result = await api.pluginRequest(frame.taskId, frame.plugin, frame.pluginMethod, frame.params)
 			send({ t: "result", id: frame.id, result })
 		} catch (e) {
 			send({ t: "result", id: frame.id, error: errMsg(e) })
@@ -201,6 +212,8 @@ export function connectSession({
 		acceptAllChangedFiles: async (taskId) => {
 			await command((id) => ({ t: "cmd", id, method: "acceptAllChangedFiles", taskId }))
 		},
+		pluginRequest: (taskId, plugin, method, params) =>
+			command((id) => ({ t: "cmd", id, method: "pluginRequest", taskId, plugin, pluginMethod: method, params })),
 		subscribe: (listener) => {
 			listeners.add(listener)
 			return () => listeners.delete(listener)

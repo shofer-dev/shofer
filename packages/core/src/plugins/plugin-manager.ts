@@ -21,6 +21,7 @@ import { createPluginSandbox } from "./plugin-sandbox.js"
 import { type PluginAiProvider, createPluginAi, createDeniedPluginAi } from "./plugin-ai.js"
 import { type PluginUiProvider, createPluginUi } from "./plugin-ui.js"
 import { type PluginAgentProvider, createPluginAgent, createDeniedPluginAgent } from "./plugin-agent.js"
+import { type PluginTaskProvider, createPluginTaskControl, createDeniedPluginTaskControl } from "./plugin-task.js"
 import { type PluginSearchProvider, createPluginSearch, createDeniedPluginSearch } from "./plugin-search.js"
 import { createPluginStorage } from "./plugin-storage.js"
 import { PluginServiceSupervisor } from "./plugin-services.js"
@@ -107,6 +108,19 @@ export interface PluginStateStore {
 	getEnabledPlugins(): string[] | Promise<string[]>
 	/** Persist the new enabled set. */
 	setEnabledPlugins(names: string[]): void | Promise<void>
+	/**
+	 * Names the user has explicitly **turned off**. Only meaningful for a bundled
+	 * plugin declaring `defaultEnabled` — it is on unless it appears here, so an
+	 * explicit "off" must be recorded as its own fact (an absent name means "no
+	 * decision yet", which for that plugin means on).
+	 *
+	 * Optional: a store that doesn't implement it cannot remember an off decision, so
+	 * the manager ignores `defaultEnabled` entirely there rather than resurrecting a
+	 * plugin the user disabled.
+	 */
+	getDisabledPlugins?(): string[] | Promise<string[]>
+	/** Persist the explicitly-disabled set. */
+	setDisabledPlugins?(names: string[]): void | Promise<void>
 }
 
 /**
@@ -161,8 +175,9 @@ export interface DiscoveredPlugin {
 	 * Whether this is a **first-party** plugin shipped inside the extension
 	 * (`scope: "bundled"`). First-party plugins are non-uninstallable — they are
 	 * part of the install, not user-added — and the Plugins panel hides their
-	 * uninstall affordance accordingly. They still follow the normal enable
-	 * allow-list (disabled by default; the user opts in), like any other plugin.
+	 * uninstall affordance accordingly. They follow the normal enable allow-list
+	 * (disabled until the user opts in) unless their manifest declares
+	 * `defaultEnabled` — see {@link PluginManager.resolveEnabled}.
 	 */
 	firstParty: boolean
 	/** The user's persisted intent — did they toggle this plugin on? (design §7). */
@@ -261,6 +276,13 @@ export interface PluginManagerOptions {
 	 */
 	agentProvider?: PluginAgentProvider
 	/**
+	 * Host seam backing a plugin's `ctx.task` — timeline markers + rewind (design §6.11
+	 * G9). When omitted, no plugin gets timeline control (even a granted one), so
+	 * pure-core embeddings stay host-agnostic and `ctx.task` is absent. Supplied by the
+	 * extension, where the task stack and message persistence live.
+	 */
+	taskProvider?: PluginTaskProvider
+	/**
 	 * Host seam running a plugin's `ctx.host.search` queries (design §6.11). When omitted,
 	 * no plugin gets search access (even a granted one) — headless/pure-core stays
 	 * host-agnostic and `ctx.host.search` is absent. Supplied by the extension where the
@@ -297,11 +319,16 @@ export class PluginManager {
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
 	private readonly agentProvider?: PluginAgentProvider
+	private readonly taskProvider?: PluginTaskProvider
 	private readonly searchProvider?: PluginSearchProvider
 	private readonly uiProvider?: PluginUiProvider
 	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
+	/** Plugins the user explicitly turned off — see {@link PluginStateStore.getDisabledPlugins}. */
+	private explicitlyDisabled = new Set<string>()
+	/** Whether the state store can record an explicit "off" (gates `defaultEnabled`). */
+	private canRecordDisable = false
 	/** Names of code plugins currently loaded + registered into `pluginRegistry`. */
 	private readonly loadedCodePlugins = new Set<string>()
 	/** Per-plugin `ctx.host.watch` disposables, torn down when the plugin unloads (P6.G3). */
@@ -329,6 +356,7 @@ export class PluginManager {
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
 		this.agentProvider = options.agentProvider
+		this.taskProvider = options.taskProvider
 		this.searchProvider = options.searchProvider
 		this.uiProvider = options.uiProvider
 		this.storageBaseDir = options.storageBaseDir
@@ -345,6 +373,8 @@ export class PluginManager {
 		const enabledList = await this.stateStore.getEnabledPlugins()
 		this.enabledOrder = [...enabledList]
 		const enabled = new Set(enabledList)
+		this.explicitlyDisabled = new Set((await this.stateStore.getDisabledPlugins?.()) ?? [])
+		this.canRecordDisable = typeof this.stateStore.setDisabledPlugins === "function"
 		// Load the billed-AI consent set (design §8) — an independent gate on `ctx.ai`.
 		this.aiConsented = new Set((await this.aiConsentStore?.getAiConsentedPlugins()) ?? [])
 		const byName = new Map<string, DiscoveredPlugin>()
@@ -369,6 +399,29 @@ export class PluginManager {
 
 		this.plugins = Array.from(byName.values())
 		this.resolveDependencies()
+	}
+
+	/**
+	 * Whether a discovered plugin is on (design §7).
+	 *
+	 * The default is the user's allow-list: enabling a plugin is the consent to run its
+	 * code at all, so an unlisted plugin is off. The one exception is a **bundled**
+	 * (first-party) plugin whose manifest declares `defaultEnabled` — a shipped Shofer
+	 * *feature* packaged as a plugin rather than a third-party add-on. It is on until
+	 * the user says otherwise, and their "otherwise" is remembered in the
+	 * explicitly-disabled set (never inferred from absence, which would resurrect it on
+	 * the next discovery).
+	 *
+	 * `defaultEnabled` is ignored — fail-safe to opt-in — for a non-bundled plugin (a
+	 * third party can never enable itself) and when the state store cannot record an
+	 * explicit disable, since a plugin the user cannot turn off is worse than one they
+	 * have to turn on.
+	 */
+	private resolveEnabled(manifest: PluginManifest, scope: PluginScope, enabled: Set<string>): boolean {
+		if (enabled.has(manifest.name)) return true
+		if (manifest.defaultEnabled !== true) return false
+		if (scope !== "bundled" || !this.canRecordDisable) return false
+		return !this.explicitlyDisabled.has(manifest.name)
 	}
 
 	/**
@@ -473,6 +526,7 @@ export class PluginManager {
 
 		const manifest = parsed.data
 		const contributes = manifest.contributes ?? {}
+		const isEnabled = this.resolveEnabled(manifest, scope, enabled)
 		return {
 			name: manifest.name,
 			version: manifest.version,
@@ -481,10 +535,10 @@ export class PluginManager {
 			manifestPath,
 			scope,
 			firstParty: scope === "bundled",
-			enabled: enabled.has(manifest.name),
+			enabled: isEnabled,
 			// Recomputed by resolveDependencies() right after discovery; seed to the
 			// user intent so a manager inspected mid-discovery is never inconsistent.
-			effectiveEnabled: enabled.has(manifest.name),
+			effectiveEnabled: isEnabled,
 			hasCode: typeof manifest.main === "string" && manifest.main.length > 0,
 			manifest,
 			// Counts feed the user-facing Plugins settings panel, so **private**
@@ -536,6 +590,22 @@ export class PluginManager {
 		}
 		await this.stateStore.setEnabledPlugins(order)
 		this.enabledOrder = order
+
+		// Record the user's OFF decision as its own fact, so a `defaultEnabled` bundled
+		// plugin stays off across restarts instead of being resurrected by its manifest
+		// (absence from the enabled list means "no decision" for those plugins).
+		if (this.stateStore.setDisabledPlugins) {
+			const next = new Set(this.explicitlyDisabled)
+			if (enabled) {
+				next.delete(name)
+			} else {
+				next.add(name)
+			}
+			if (next.size !== this.explicitlyDisabled.size) {
+				this.explicitlyDisabled = next
+				await this.stateStore.setDisabledPlugins([...next])
+			}
+		}
 
 		const plugin = this.getPlugin(name)
 		if (plugin) {
@@ -682,6 +752,9 @@ export class PluginManager {
 					// Gate lifecycle hooks on the manifest grant (design §6.9, §8): only a
 					// plugin that requested `permissions.lifecycle` participates.
 					lifecycle: plugin.manifest.permissions?.lifecycle === true,
+					// A manifest may raise its own hook budget (already range-checked by the
+					// schema) when a hook does work the agent must genuinely wait for.
+					hookTimeoutMs: plugin.manifest.hookTimeoutMs,
 				})
 				this.loadedCodePlugins.add(plugin.name)
 				// Start any services the plugin registered during initialize (supervised,
@@ -762,6 +835,7 @@ export class PluginManager {
 			host,
 			ai: this.buildPluginAi(plugin),
 			agent: this.buildPluginAgent(plugin),
+			task: this.buildPluginTaskControl(plugin),
 			ui: this.buildPluginUi(plugin),
 			storage:
 				this.storageBaseDir && this.host
@@ -797,6 +871,19 @@ export class PluginManager {
 		if (!this.agentProvider) return undefined
 		if (plugin.manifest.permissions?.agent !== true) return createDeniedPluginAgent(plugin.name)
 		return createPluginAgent(plugin.name, this.agentProvider)
+	}
+
+	/**
+	 * Construct a plugin's `ctx.task` surface — timeline markers + rewind (design §6.11
+	 * G9). Fail-closed, mirroring {@link buildPluginAgent}: no host
+	 * {@link PluginTaskProvider} wired ⇒ `undefined` (there is no timeline to control);
+	 * wired but `permissions.task` ungranted ⇒ a denying stub; wired **and** granted ⇒
+	 * the live surface.
+	 */
+	private buildPluginTaskControl(plugin: DiscoveredPlugin): PluginContext["task"] {
+		if (!this.taskProvider) return undefined
+		if (plugin.manifest.permissions?.task !== true) return createDeniedPluginTaskControl(plugin.name)
+		return createPluginTaskControl(plugin.name, this.taskProvider)
 	}
 
 	/**

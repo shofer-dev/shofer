@@ -27,6 +27,7 @@ function makeExecutorApi() {
 		revertAllChangedFiles: vi.fn(async () => {}),
 		acceptChangedFile: vi.fn(async () => {}),
 		acceptAllChangedFiles: vi.fn(async () => {}),
+		pluginRequest: vi.fn(async () => ({ ok: true })),
 		subscribe: (listener) => {
 			emit = listener
 			return () => {}
@@ -91,6 +92,10 @@ describe("session transport (controller ↔ executor)", () => {
 		expect(api.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
 		await controller.api.acceptAllChangedFiles("t1")
 		expect(api.acceptAllChangedFiles).toHaveBeenCalledWith("t1")
+
+		// Generic plugin RPC round-trips the plugin's result over the session frames.
+		expect(await controller.api.pluginRequest("t1", "checkpoints", "diff", { hash: "abc" })).toEqual({ ok: true })
+		expect(api.pluginRequest).toHaveBeenCalledWith("t1", "checkpoints", "diff", { hash: "abc" })
 	})
 
 	it("streams executor events to controller subscribers", async () => {

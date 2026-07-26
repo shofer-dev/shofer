@@ -6,7 +6,9 @@ import type {
 	PluginContext,
 	PluginEvent,
 	ShoferPlugin,
+	TaskDeletedInfo,
 	TaskLifecycleContext,
+	TimelineRewindInfo,
 } from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
@@ -25,7 +27,11 @@ export const PLUGIN_HOOK_TIMEOUT_MS = 500
  * promise's value if it wins, or to `onTimeout()` if the timer fires first. The
  * timer is always cleared so it never keeps the event loop alive.
  */
-async function withHookTimeout<T>(promise: Promise<T>, onTimeout: () => T, timeoutMs = PLUGIN_HOOK_TIMEOUT_MS): Promise<T> {
+async function withHookTimeout<T>(
+	promise: Promise<T>,
+	onTimeout: () => T,
+	timeoutMs = PLUGIN_HOOK_TIMEOUT_MS,
+): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined
 	const timeout = new Promise<{ __timedOut: true }>((resolve) => {
 		timer = setTimeout(() => resolve({ __timedOut: true }), timeoutMs)
@@ -55,12 +61,31 @@ export interface PluginGrants {
 	 * plugin's `lifecycle` hooks never fire (design §6.9, §8).
 	 */
 	lifecycle?: boolean
+	/**
+	 * The plugin's manifest `hookTimeoutMs`, when it declared one. Overrides
+	 * {@link PLUGIN_HOOK_TIMEOUT_MS} for *that plugin's* hooks only, so a plugin doing
+	 * work the agent must genuinely wait for (snapshotting a workspace before a
+	 * file-mutating tool) is not silently skipped, while every other plugin keeps the
+	 * strict default. Already range-validated by the manifest schema.
+	 */
+	hookTimeoutMs?: number
 }
 
 export class PluginRegistry {
 	private readonly plugins: ShoferPlugin[] = []
 	/** Names of plugins granted `permissions.lifecycle` (see {@link PluginGrants}). */
 	private readonly lifecycleGranted = new Set<string>()
+	/** Per-plugin hook budgets (see {@link PluginGrants.hookTimeoutMs}). */
+	private readonly hookBudgets = new Map<string, number>()
+	/**
+	 * The rich {@link PluginContext} each plugin was registered with — its `host`,
+	 * `storage`, `ai`, `task`, `config`, … capabilities. Hook call sites in the task
+	 * loop can only supply the *situational* half (`taskId`, `cwd`, `mode`, `turn`),
+	 * because that is all they know; merging the registered half back in here is what
+	 * lets a hook use `ctx.task`/`ctx.storage` directly instead of every plugin having
+	 * to stash its context in a module-level global at `initialize` time.
+	 */
+	private readonly contexts = new Map<string, PluginContext>()
 	/**
 	 * Monotonic counter bumped on every register/unregister. Consumers that **cache**
 	 * plugin-derived state (e.g. the per-task tool catalog in {@link Task}) fold this into
@@ -85,8 +110,29 @@ export class PluginRegistry {
 		}
 		this.plugins.push(plugin)
 		if (grants.lifecycle) this.lifecycleGranted.add(plugin.name)
+		if (grants.hookTimeoutMs) this.hookBudgets.set(plugin.name, grants.hookTimeoutMs)
+		this.contexts.set(plugin.name, context)
 		this._revision++
 		await plugin.initialize?.(context)
+	}
+
+	/** This plugin's hook budget — its manifest override, else the shared default. */
+	private budgetFor(pluginName: string): number {
+		return this.hookBudgets.get(pluginName) ?? PLUGIN_HOOK_TIMEOUT_MS
+	}
+
+	/**
+	 * The context a hook receives: the plugin's registered capabilities overlaid with
+	 * the call site's situational fields (which win, since they describe *this* call).
+	 * Undefined situational values never clobber a registered one.
+	 */
+	private contextFor(pluginName: string, callContext: PluginContext): PluginContext {
+		const registered = this.contexts.get(pluginName)
+		if (!registered) return callContext
+		const situational = Object.fromEntries(
+			Object.entries(callContext).filter(([, value]) => value !== undefined),
+		) as PluginContext
+		return { ...registered, ...situational }
 	}
 
 	/** Registered plugin names, in registration order. */
@@ -109,6 +155,8 @@ export class PluginRegistry {
 		if (index === -1) return false
 		this.plugins.splice(index, 1)
 		this.lifecycleGranted.delete(name)
+		this.hookBudgets.delete(name)
+		this.contexts.delete(name)
 		this._revision++
 		return true
 	}
@@ -124,14 +172,14 @@ export class PluginRegistry {
 		for (const plugin of this.plugins) {
 			if (!plugin.registerTools) continue
 			try {
+				const budget = this.budgetFor(plugin.name)
 				const contributed = await withHookTimeout(
-					Promise.resolve(plugin.registerTools(context)),
+					Promise.resolve(plugin.registerTools(this.contextFor(plugin.name, context))),
 					() => {
-						warnPlugin(
-							`[plugin:${plugin.name}] registerTools exceeded ${PLUGIN_HOOK_TIMEOUT_MS}ms — skipped.`,
-						)
+						warnPlugin(`[plugin:${plugin.name}] registerTools exceeded ${budget}ms — skipped.`)
 						return [] as CustomToolDefinition[]
 					},
+					budget,
 				)
 				tools.push(...contributed)
 			} catch (error) {
@@ -152,14 +200,14 @@ export class PluginRegistry {
 		for (const plugin of this.plugins) {
 			if (!plugin.transformSystemPrompt) continue
 			try {
+				const budget = this.budgetFor(plugin.name)
 				result = await withHookTimeout(
-					Promise.resolve(plugin.transformSystemPrompt(result, context)),
+					Promise.resolve(plugin.transformSystemPrompt(result, this.contextFor(plugin.name, context))),
 					() => {
-						warnPlugin(
-							`[plugin:${plugin.name}] transformSystemPrompt exceeded ${PLUGIN_HOOK_TIMEOUT_MS}ms — skipped.`,
-						)
+						warnPlugin(`[plugin:${plugin.name}] transformSystemPrompt exceeded ${budget}ms — skipped.`)
 						return result
 					},
+					budget,
 				)
 			} catch {
 				// Skip a failing transform; keep the prior prompt.
@@ -193,28 +241,37 @@ export class PluginRegistry {
 	/**
 	 * Generic lifecycle-hook runner (design §6.9, owner decision #8). Iterates the
 	 * permitted plugins declaring `hookName` in registration order, invoking
-	 * `run(hook, plugin)` for each — wrapped in the shared {@link PLUGIN_HOOK_TIMEOUT_MS}
-	 * timeout and per-plugin error isolation. A hook that throws or exceeds the budget
-	 * is skipped (its `run` never applies its mutation, since each reducer mutates its
-	 * accumulator only *after* awaiting the hook) with a shown+logged warning, so one
-	 * slow/bad plugin can never stall or crash the task. `run` may return `{ stop: true }`
-	 * to short-circuit the remaining plugins (used by `beforeToolCall`/`beforeAsk`).
+	 * `run(hook, plugin, context)` for each — wrapped in that plugin's hook budget
+	 * ({@link PLUGIN_HOOK_TIMEOUT_MS} unless its manifest raised it) and per-plugin error
+	 * isolation. A hook that throws or exceeds the budget is skipped (its `run` never
+	 * applies its mutation, since each reducer mutates its accumulator only *after*
+	 * awaiting the hook) with a shown+logged warning, so one slow/bad plugin can never
+	 * stall or crash the task. `run` may return `{ stop: true }` to short-circuit the
+	 * remaining plugins (used by `beforeToolCall`/`beforeAsk`).
+	 *
+	 * `context` is the **call site's** situational context; each plugin's `run` receives
+	 * it merged over that plugin's registered capabilities (see {@link contextFor}).
 	 */
 	async applyLifecycleHook<K extends keyof LifecycleHooks>(
 		hookName: K,
-		run: (hook: NonNullable<LifecycleHooks[K]>, plugin: ShoferPlugin) => Promise<{ stop?: boolean } | void>,
+		run: (
+			hook: NonNullable<LifecycleHooks[K]>,
+			plugin: ShoferPlugin,
+			context: PluginContext,
+		) => Promise<{ stop?: boolean } | void>,
+		context: PluginContext = {},
 	): Promise<void> {
 		for (const plugin of this.lifecyclePlugins(hookName)) {
 			const hook = plugin.lifecycle![hookName] as NonNullable<LifecycleHooks[K]>
+			const budget = this.budgetFor(plugin.name)
 			try {
 				const outcome = await withHookTimeout<{ stop?: boolean } | void>(
-					Promise.resolve(run(hook, plugin)),
+					Promise.resolve(run(hook, plugin, this.contextFor(plugin.name, context))),
 					() => {
-						warnPlugin(
-							`[plugin:${plugin.name}] ${String(hookName)} exceeded ${PLUGIN_HOOK_TIMEOUT_MS}ms — skipped.`,
-						)
+						warnPlugin(`[plugin:${plugin.name}] ${String(hookName)} exceeded ${budget}ms — skipped.`)
 						return undefined
 					},
+					budget,
 				)
 				if (outcome?.stop) break
 			} catch (error) {
@@ -239,17 +296,21 @@ export class PluginRegistry {
 		let current = args
 		let blockedReason: string | undefined
 		let blocked = false
-		await this.applyLifecycleHook("beforeToolCall", async (hook) => {
-			const res = await hook(toolName, current, context)
-			if (!res) return
-			if (res.allow === false) {
-				blocked = true
-				blockedReason = res.reason
-				return { stop: true }
-			}
-			if (res.modifiedArgs) current = res.modifiedArgs
-			return undefined
-		})
+		await this.applyLifecycleHook(
+			"beforeToolCall",
+			async (hook, _plugin, ctx) => {
+				const res = await hook(toolName, current, ctx)
+				if (!res) return
+				if (res.allow === false) {
+					blocked = true
+					blockedReason = res.reason
+					return { stop: true }
+				}
+				if (res.modifiedArgs) current = res.modifiedArgs
+				return undefined
+			},
+			context,
+		)
 		if (blocked) return { allow: false, reason: blockedReason }
 		return { allow: true, modifiedArgs: current === args ? undefined : current }
 	}
@@ -266,10 +327,14 @@ export class PluginRegistry {
 		context: PluginContext = {},
 	): Promise<string> {
 		let current = result
-		await this.applyLifecycleHook("afterToolCall", async (hook) => {
-			const out = await hook(toolName, args, current, context)
-			if (typeof out === "string") current = out
-		})
+		await this.applyLifecycleHook(
+			"afterToolCall",
+			async (hook, _plugin, ctx) => {
+				const out = await hook(toolName, args, current, ctx)
+				if (typeof out === "string") current = out
+			},
+			context,
+		)
 		return current
 	}
 
@@ -280,21 +345,29 @@ export class PluginRegistry {
 	 * prompt. Returns `undefined` when no plugin participated (so the caller's ask path
 	 * is byte-for-byte unchanged), otherwise the merged `{ decision, text }`.
 	 */
-	async applyBeforeAsk(askType: string, payload: unknown, context: PluginContext = {}): Promise<BeforeAskResult | undefined> {
+	async applyBeforeAsk(
+		askType: string,
+		payload: unknown,
+		context: PluginContext = {},
+	): Promise<BeforeAskResult | undefined> {
 		let participated = false
 		let text: string | undefined
 		let decision: BeforeAskResult["decision"]
-		await this.applyLifecycleHook("beforeAsk", async (hook) => {
-			const res = await hook(askType, payload, context)
-			if (!res) return
-			participated = true
-			if (typeof res.text === "string") text = res.text
-			if (res.decision && res.decision !== "ask") {
-				decision = res.decision
-				return { stop: true }
-			}
-			return undefined
-		})
+		await this.applyLifecycleHook(
+			"beforeAsk",
+			async (hook, _plugin, ctx) => {
+				const res = await hook(askType, payload, ctx)
+				if (!res) return
+				participated = true
+				if (typeof res.text === "string") text = res.text
+				if (res.decision && res.decision !== "ask") {
+					decision = res.decision
+					return { stop: true }
+				}
+				return undefined
+			},
+			context,
+		)
 		if (!participated) return undefined
 		return { decision: decision ?? "ask", text }
 	}
@@ -306,9 +379,13 @@ export class PluginRegistry {
 	 * never delays task start.
 	 */
 	async notifyBeforeTaskStart(context: TaskLifecycleContext): Promise<void> {
-		await this.applyLifecycleHook("beforeTaskStart", async (hook) => {
-			await hook(context)
-		})
+		await this.applyLifecycleHook(
+			"beforeTaskStart",
+			async (hook, _plugin, ctx) => {
+				await hook({ ...ctx, prompt: context.prompt, reason: context.reason })
+			},
+			context,
+		)
 	}
 
 	/**
@@ -316,16 +393,73 @@ export class PluginRegistry {
 	 * Observer-only, timeout-guarded, invoked non-blocking like {@link notifyBeforeTaskStart}.
 	 */
 	async notifyAfterTaskComplete(context: TaskLifecycleContext): Promise<void> {
-		await this.applyLifecycleHook("afterTaskComplete", async (hook) => {
-			await hook(context)
-		})
+		await this.applyLifecycleHook(
+			"afterTaskComplete",
+			async (hook, _plugin, ctx) => {
+				await hook({ ...ctx, prompt: context.prompt, reason: context.reason })
+			},
+			context,
+		)
+	}
+
+	/**
+	 * Tell permitted plugins a task's chat timeline is about to be rewound to `info.ts`
+	 * (design §6.9). **Awaited** by the caller, unlike the task-lifecycle observers: a
+	 * plugin rolling back state anchored to the doomed messages (a workspace snapshot)
+	 * must finish *before* they are gone, so its work is ordered, not merely observed.
+	 * Each plugin still runs under its own budget with error isolation, so a slow or
+	 * failing plugin degrades to "its state wasn't rolled back" rather than blocking the
+	 * rewind.
+	 */
+	async notifyTimelineRewind(info: TimelineRewindInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onTimelineRewind",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, ...context },
+		)
+	}
+
+	/**
+	 * Tell permitted plugins a task was deleted from history (design §6.9), so a plugin
+	 * holding per-task state *outside* the task directory can drop it. Observer-only.
+	 */
+	async notifyTaskDeleted(info: TaskDeletedInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onTaskDeleted",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, workspacePath: info.workspacePath, ...context },
+		)
+	}
+
+	/**
+	 * Call a plugin's {@link ShoferPlugin.handleRequest} and return its result (design
+	 * §5.12) — the request/response counterpart to the fire-and-forget hooks.
+	 *
+	 * Deliberately **not** timeout-guarded or error-isolated the way observer hooks are:
+	 * a request has a caller waiting on the answer, so a failure must reach that caller
+	 * (which can decide) instead of being swallowed into a silent `undefined`. Unknown
+	 * plugin, or one declaring no `handleRequest`, throws for the same reason.
+	 */
+	async request(pluginName: string, method: string, params: unknown, context: PluginContext = {}): Promise<unknown> {
+		const plugin = this.plugins.find((p) => p.name === pluginName)
+		if (!plugin) {
+			throw new Error(`Plugin '${pluginName}' is not registered (enabled?) — cannot handle request '${method}'`)
+		}
+		if (!plugin.handleRequest) {
+			throw new Error(`Plugin '${pluginName}' does not implement handleRequest — cannot handle '${method}'`)
+		}
+		return plugin.handleRequest(method, params, this.contextFor(pluginName, context))
 	}
 
 	/** Dispatch an event to every plugin's `onEvent` (errors are swallowed). */
 	dispatchEvent(event: PluginEvent, context: PluginContext = {}): void {
 		for (const plugin of this.plugins) {
 			try {
-				plugin.onEvent?.(event, context)
+				plugin.onEvent?.(event, this.contextFor(plugin.name, context))
 			} catch {
 				// Observers must never break the caller.
 			}
@@ -344,11 +478,13 @@ export class PluginRegistry {
 		const plugin = this.plugins.find((p) => p.name === pluginName)
 		if (!plugin?.onUiMessage) return
 		try {
+			const budget = this.budgetFor(pluginName)
 			await withHookTimeout(
-				Promise.resolve(plugin.onUiMessage(message, context)),
+				Promise.resolve(plugin.onUiMessage(message, this.contextFor(pluginName, context))),
 				() => {
-					warnPlugin(`[plugin:${pluginName}] onUiMessage exceeded ${PLUGIN_HOOK_TIMEOUT_MS}ms — skipped.`)
+					warnPlugin(`[plugin:${pluginName}] onUiMessage exceeded ${budget}ms — skipped.`)
 				},
+				budget,
 			)
 		} catch (error) {
 			warnPlugin(`[plugin:${pluginName}] onUiMessage failed: ${String(error)} — skipped.`)

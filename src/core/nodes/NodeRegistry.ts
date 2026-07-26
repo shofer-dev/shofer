@@ -470,6 +470,11 @@ export class NodeRegistry {
 		await this.pool.restoreCheckpoint(taskId, opts)
 	}
 
+	/** Reach a plugin running on the executor that owns `taskId` (generic plugin RPC). */
+	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
+		return this.pool.pluginRequest(taskId, plugin, method, params)
+	}
+
 	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
 		await this.pool.revertChangedFile(taskId, relPath)
 	}
