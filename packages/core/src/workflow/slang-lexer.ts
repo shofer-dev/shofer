@@ -153,6 +153,15 @@ export enum TokenType {
 	BackArrow = "<-",
 	Dot = ".",
 	Star = "*",
+	/**
+	 * `?` and `-`. Slang itself has no use for either — they are lexed purely so
+	 * that a capability tag atom (`gpu-a?`, whose charset is fixed by
+	 * `shared/tagexpr`, not by Slang) survives tokenization for the parser to
+	 * rescan from source. The lexer deliberately learns no tag syntax beyond
+	 * "these are characters, not errors".
+	 */
+	Question = "?",
+	Minus = "-",
 	Eq = "=",
 	Gt = ">",
 	Gte = ">=",
@@ -348,6 +357,8 @@ export function tokenize(source: string): Token[] {
 			",": TokenType.Comma,
 			".": TokenType.Dot,
 			"*": TokenType.Star,
+			"?": TokenType.Question,
+			"-": TokenType.Minus,
 			">": TokenType.Gt,
 			"<": TokenType.Lt,
 		}

@@ -48,6 +48,14 @@ import type {
 } from "./slang-ast.js"
 // These are functions used as values (not types), so they need a value import.
 import { exprAsString, exprAsNumber, exprAsBoolean, exprAsStringList } from "./slang-ast.js"
+import { validateAtom } from "./slang-tags.js"
+
+/**
+ * The capability-atom charset, per `shared/tagexpr`'s `SetBinding`. Broader than
+ * Slang's identifier charset on purpose — an atom is a value in the platform's
+ * selection vocabulary, not a Slang identifier.
+ */
+const TAG_ATOM_CHAR = /[A-Za-z0-9_?*:-]/
 
 export class ParseError extends SlangError {
 	public token: Token
@@ -817,11 +825,21 @@ class Parser {
 	private parseTagExpr(): TagExpr {
 		if (this.match(TokenType.LBracket)) {
 			const terms: TagExpr[] = []
-			if (!this.check(TokenType.RBracket)) {
+			// `requires: []` is rejected rather than read as "no requirement":
+			// an empty conjunction is vacuously true, so it would silently mean the
+			// opposite of what an author writing an empty requirement list intends.
+			// Omitting the clause is how you say "runs anywhere".
+			if (this.check(TokenType.RBracket)) {
+				throw new ParseError(
+					SlangErrorCode.P201,
+					"`requires: []` is empty — omit the clause entirely to run on any runner, rather than writing a requirement that matches everything",
+					this.peek(),
+					this.source,
+				)
+			}
+			terms.push({ kind: "tag", name: this.parseTagAtom() })
+			while (this.match(TokenType.Comma)) {
 				terms.push({ kind: "tag", name: this.parseTagAtom() })
-				while (this.match(TokenType.Comma)) {
-					terms.push({ kind: "tag", name: this.parseTagAtom() })
-				}
 			}
 			this.expect(TokenType.RBracket)
 			return terms.length === 1 ? terms[0]! : { kind: "and", terms }
@@ -870,34 +888,41 @@ class Parser {
 	}
 
 	/**
-	 * One tag atom: an identifier, optionally namespaced (`tool:foo`) and
-	 * optionally globbed within a segment (`os:win*`).
+	 * One tag atom: `[A-Za-z0-9_-]` plus the globs `?` and `*`, in `:`-delimited
+	 * segments (`tool:foo`, `os:win*`, `gpu-a?`).
 	 *
-	 * Assembled from tokens rather than lexed as one, so the lexer keeps no
-	 * knowledge of tag syntax.
+	 * Scanned from the RAW SOURCE rather than assembled from tokens, because the
+	 * atom charset is not Slang's — it is fixed by `shared/tagexpr`'s
+	 * `SetBinding`, the platform-wide selection engine, and it is the security
+	 * boundary that engine validates against. Assembling from tokens silently
+	 * intersected the two grammars: `-` and `?` are not Slang token characters, so
+	 * a perfectly legal atom like `gpu-a?` failed to lex, and the two halves of
+	 * one contract accepted different languages.
+	 *
+	 * The token stream is then resynchronised past the consumed text.
 	 */
 	private parseTagAtom(): string {
-		let atom = this.tagSegment()
-		while (this.check(TokenType.Colon)) {
-			this.advance()
-			atom += ":" + this.tagSegment()
-		}
-		return atom
-	}
+		const start = this.peek().offset
+		let end = start
+		while (end < this.source.length && TAG_ATOM_CHAR.test(this.source[end]!)) end++
 
-	/** One `:`-delimited segment, which may be a bare `*`. */
-	private tagSegment(): string {
-		if (this.check(TokenType.Star)) {
-			this.advance()
-			return "*"
+		const atom = this.source.slice(start, end)
+		if (atom === "") {
+			throw new ParseError(SlangErrorCode.P201, "expected a capability tag", this.peek(), this.source)
 		}
-		let seg = this.expect(TokenType.Ident).value
-		// A trailing glob (`win*`) arrives as Ident then Star.
-		while (this.check(TokenType.Star)) {
-			this.advance()
-			seg += "*"
+		const problem = validateAtom(atom)
+		if (problem) {
+			throw new ParseError(
+				SlangErrorCode.P201,
+				`invalid capability tag \`${atom}\`: ${problem}`,
+				this.peek(),
+				this.source,
+			)
 		}
-		return seg
+
+		// Resynchronise: drop every token the raw scan just consumed.
+		while (this.peek().offset < end && this.peek().type !== TokenType.EOF) this.advance()
+		return atom
 	}
 
 	private parseOutputSchema(): OutputSchema {

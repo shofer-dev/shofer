@@ -6,6 +6,19 @@
  * Temporal — so the same code answers "does this runner satisfy this
  * requirement" in the interpreter, in a validator, and in whatever routes work.
  *
+ * # This file is a MIRROR, not an implementation
+ *
+ * `shared/tagexpr` (Go) is the canonical implementation, and this is its
+ * TypeScript half. They are not two libraries that happen to agree — they are
+ * one contract with two runtimes, because the producer naming a queue and the
+ * consumer polling it are different services in different languages. The
+ * canonical serialization, the absorption rule, the hash and the glob semantics
+ * are all fixed there; nothing in this file may be "improved" on its own.
+ *
+ * The agreement is enforced, not asserted: both sides run the shared corpus at
+ * `shared/tagexpr/testdata/vectors.json`. Change the algebra and the corpus
+ * fails on whichever side you forgot.
+ *
  * # Why DNF is the canonical form
  *
  * Temporal's routing primitive is the task queue, and an activity goes to
@@ -31,6 +44,7 @@
  */
 
 import type { TagExpr } from "./slang-ast.js"
+import { sha256Hex } from "./sha256.js"
 
 /** Disjunctive normal form: an OR of AND-terms, each a sorted tag list. */
 export type TagDNF = string[][]
@@ -43,18 +57,37 @@ export type TagDNF = string[][]
  * handful of atoms and not a generated formula.
  */
 export function toDNF(expr: TagExpr): TagDNF {
-	const raw = distribute(expr)
+	// 1. Sort and dedup atoms within each term.
+	let terms = distribute(expr).map((t) => [...new Set(t)].sort())
 
-	// Normalise each term, then the term list. Both sorts matter: without the
-	// inner one `a and b` and `b and a` hash differently; without the outer one
-	// `a or b` and `b or a` do.
-	const terms = raw
-		.map((term) => [...new Set(term)].sort())
-		.filter((term) => term.length > 0)
-		.map((term) => term.join(" "))
+	// 2. Dedup identical terms.
+	const seen = new Set<string>()
+	terms = terms.filter((t) => {
+		const key = t.join("\u0000")
+		if (seen.has(key)) return false
+		seen.add(key)
+		return true
+	})
 
-	const unique = [...new Set(terms)].sort()
-	return unique.map((t) => t.split(" "))
+	// 3. Absorption: drop any term T that some other term S strictly covers
+	//    (S ⊆ T). S is satisfiable whenever T is, so T's extra atoms are
+	//    redundant — `a or (a and b)` is just `a`. Without this step the same
+	//    requirement written two ways survives as two terms and hashes to two
+	//    queue names, which is the whole failure this module exists to prevent.
+	const kept = terms.filter((t, i) => !terms.some((s, j) => i !== j && s.length < t.length && subset(s, t)))
+
+	// 4. Sort terms by their serialized form.
+	return kept.sort((a, b) => {
+		const [x, y] = [a.join(" and "), b.join(" and ")]
+		return x < y ? -1 : x > y ? 1 : 0
+	})
+}
+
+/** Does every atom of the sorted term `s` appear in the sorted term `t`? */
+function subset(s: string[], t: string[]): boolean {
+	let i = 0
+	for (const a of t) if (i < s.length && s[i] === a) i++
+	return i === s.length
 }
 
 /** Recursively distribute AND over OR. */
@@ -81,35 +114,32 @@ function distribute(expr: TagExpr): string[][] {
 }
 
 /**
- * A stable, human-readable rendering of canonical DNF.
+ * The canonical serialization: terms joined by `" or "`, atoms by `" and "`.
  *
- * Used as the hash input, and readable on its own so a queue name can be traced
- * back to a requirement without a lookup table.
+ * No parentheses are ever needed because the form is DNF and `and` binds tighter
+ * than `or`. This is the cross-language contract — `shared/tagexpr`'s
+ * `Expr.String()` — so its shape is fixed, not a formatting preference.
  */
 export function dnfToString(dnf: TagDNF): string {
-	return dnf.map((term) => term.join("+")).join("|")
+	return dnf.map((term) => term.join(" and ")).join(" or ")
 }
 
 /**
- * A stable short hash of a canonical expression, for naming a queue.
+ * A stable content hash of the canonical serialization: the first 16 hex
+ * characters (64 bits) of its SHA-256.
  *
- * FNV-1a: tiny, dependency-free, and deterministic across processes — the last
- * point being the one that matters, since the producer naming a queue and the
- * consumer polling it are different services in different languages.
+ * It names Temporal task queues and dedups registry entries, so it MUST stay
+ * stable across releases and identical to `shared/tagexpr`'s `Expr.Hash()` — a
+ * change silently re-partitions live work, and a divergence means the queue a
+ * runner polls is not the queue the interpreter dispatches to.
  *
- * It is not a cryptographic hash and does not need to be: a collision costs two
- * unrelated requirements sharing a queue, which the runner-side match then
- * filters out anyway, because a runner still checks that it satisfies the
+ * The strength is irrelevant to security here; it names a queue. A collision
+ * would cost two unrelated requirements sharing a queue, which the runner-side
+ * match filters anyway, because a runner re-checks that it satisfies the
  * expression before accepting work.
  */
 export function tagExprHash(expr: TagExpr): string {
-	const canonical = dnfToString(toDNF(expr))
-	let h = 0x811c9dc5
-	for (let i = 0; i < canonical.length; i++) {
-		h ^= canonical.charCodeAt(i)
-		h = Math.imul(h, 0x01000193) >>> 0
-	}
-	return h.toString(16).padStart(8, "0")
+	return sha256Hex(dnfToString(toDNF(expr))).slice(0, 16)
 }
 
 /**
@@ -125,9 +155,13 @@ export function satisfies(expr: TagExpr, tags: Iterable<string>): boolean {
 /**
  * Does one tag match one atom?
  *
- * `*` globs WITHIN a `:`-delimited segment and never across one, so `tool:*`
- * matches `tool:screenshot` but not `tool:a:b` — the same containment rule the
- * bus's address grammar uses, so one mental model covers both.
+ * Mirrors `shared/tagexpr`'s `SetBinding.MatchAtom`. Segment counts must be
+ * equal, and each atom segment glob-matches the corresponding element segment:
+ * `?` is exactly one character and `*` any run WITHIN a `:`-delimited segment,
+ * never across one. So `tool:*` matches `tool:screenshot` but not `tool:a:b`.
+ * There is deliberately no `**` — whole-segment-spanning wildcards belong to the
+ * segmented address domain (`shared/tagaddr`), and admitting one here would blur
+ * two vocabularies that are kept distinct on purpose.
  */
 export function tagMatches(atom: string, tag: string): boolean {
 	const atomSegs = atom.split(":")
@@ -136,18 +170,60 @@ export function tagMatches(atom: string, tag: string): boolean {
 	return atomSegs.every((a, i) => segmentMatches(a, tagSegs[i]!))
 }
 
-/** Glob one segment. `*` matches any run of characters within it. */
-function segmentMatches(pattern: string, value: string): boolean {
-	if (!pattern.includes("*")) return pattern === value
-	// Escape everything but `*`, which becomes `.*`. Built from a closed
-	// character set (the tag charset), so nothing can smuggle regex structure.
-	const rx = "^" + pattern.split("*").map(escapeRegex).join(".*") + "$"
-	return new RegExp(rx).test(value)
+/**
+ * Glob one segment: `?` consumes exactly one character, `*` any run including
+ * empty. Linear-time backtracking, matching the Go implementation's shape rather
+ * than compiling a regex — an atom is untrusted spec text, and translating it to
+ * a pattern language is how a metacharacter escapes its literal meaning.
+ */
+function segmentMatches(pattern: string, s: string): boolean {
+	let px = 0
+	let sx = 0
+	let starPx = -1
+	let starSx = -1
+	while (sx < s.length) {
+		if (px < pattern.length && (pattern[px] === "?" || pattern[px] === s[sx])) {
+			px++
+			sx++
+		} else if (px < pattern.length && pattern[px] === "*") {
+			starPx = px
+			starSx = sx
+			px++
+		} else if (starPx >= 0) {
+			px = starPx + 1
+			starSx++
+			sx = starSx
+		} else {
+			return false
+		}
+	}
+	while (px < pattern.length && pattern[px] === "*") px++
+	return px === pattern.length
 }
 
-/** Escape regex metacharacters in a literal segment. */
-function escapeRegex(s: string): string {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+/**
+ * The atom grammar, and the security boundary: a segment is `[A-Za-z0-9_-]` plus
+ * the globs `?` and `*`. Validation runs before an atom is ever matched, so no
+ * out-of-charset character reaches the matcher. Mirrors
+ * `SetBinding.ValidateAtom`.
+ */
+export function validateAtom(atom: string): string | undefined {
+	if (atom === "") return "empty atom"
+	for (const seg of atom.split(":")) {
+		if (seg === "") return "empty segment (consecutive ':' or a leading/trailing ':')"
+		for (let i = 0; i < seg.length; i++) {
+			const c = seg[i]!
+			if (/[A-Za-z0-9_?-]/.test(c)) continue
+			if (c === "*") {
+				if (seg[i + 1] === "*") {
+					return `segment "${seg}" contains '**'; '**' is not a set-binding token (globs are '?' and '*' within a segment)`
+				}
+				continue
+			}
+			return `segment "${seg}" contains "${c}"; atoms must match [A-Za-z0-9_-?*]`
+		}
+	}
+	return undefined
 }
 
 /** Every distinct atom an expression names, for validation and UI. */
