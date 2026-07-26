@@ -166,6 +166,7 @@ export interface AgentMeta {
 
 export type Operation =
 	| StakeOp
+	| CallOp
 	| AwaitOp
 	| CommitOp
 	| EscalateOp
@@ -175,6 +176,38 @@ export type Operation =
 	| LetOp
 	| SetOp
 	| RepeatBlock
+
+/**
+ * `call fn(args…) -> @recipient` — the DETERMINISTIC twin of `stake`.
+ *
+ * Where a `stake` dispatches a prompt to an LLM agent, a `call` dispatches to a
+ * **registered function**: developer-authored, vetted code selected by name from
+ * a fixed registry. Both ride the same dispatcher seam (args in, result out), so
+ * the difference is vocabulary plus one branch — but the difference in TRUST is
+ * the point.
+ *
+ * An agent COMPOSES `call` functions by name; it cannot define one. Adding a
+ * function is a developer writing, registering and deploying it. So a `call`
+ * runs trusted code over untrusted arguments, which is the inverse of running
+ * agent-authored code — and it is why real computation belongs here rather than
+ * in Slang's deliberately anemic expression layer.
+ *
+ * Where it runs is the trust decision, expressed as placement: a pure or
+ * platform transform with no project data can run on the trusted worker, while
+ * anything touching a project's data, credentials or filesystem runs on that
+ * project's own (semi-trusted, contained) runner.
+ */
+export interface CallOp extends BaseNode {
+	type: "CallOp"
+	/** The registered function and its arguments. */
+	call: FuncCall
+	/** Where the result is routed, exactly as for a stake. */
+	recipients: Recipient[]
+	/** Optional guard, evaluated before dispatch. */
+	condition?: Expr
+	/** Optional binding for the result. */
+	binding?: string
+}
 
 export interface StakeOp extends BaseNode {
 	type: "StakeOp"

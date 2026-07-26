@@ -689,6 +689,39 @@ budget: tokens(token_limit), rounds(10), time(300)
 
 ---
 
+## `call` — deterministic steps
+
+```slang
+agent Pipeline {
+  call fetch_diff(mr: mr_id) -> @Reviewer
+  stake review(diff: diff) -> @out
+  commit
+}
+```
+
+`stake` dispatches a prompt to an **LLM agent**. `call` dispatches to a
+**registered function** — developer-authored, vetted code selected by name from
+a fixed registry. Both ride the same dispatcher seam (args in, result out) and
+route results identically; the difference is what runs.
+
+**An agent composes `call` functions; it cannot define one.** Adding a function
+is a developer writing, registering and deploying it. So a `call` runs _trusted
+code over untrusted arguments_, which is the inverse of running agent-authored
+code — and it is why real computation belongs in a `call` rather than in Slang's
+deliberately anemic expression layer (no arithmetic, scalar-only contracts).
+
+**Placement is the trust decision.** A pure or platform transform with no
+project data can run on the trusted worker; anything touching a project's data,
+credentials or filesystem runs on that project's own contained runner. Same
+grammar either way — the registry decides.
+
+`call` **blocks**, exactly as `stake` does. It is tempting to imagine the VM
+could simply evaluate a "deterministic function", but the work happens outside
+the interpreter by design: that is where the placement decision lives.
+
+`call` is a **contextual** keyword (`call ident(`), so a spec already using
+`call` as a name keeps working.
+
 ## Capability Routing — `requires:`
 
 ```slang

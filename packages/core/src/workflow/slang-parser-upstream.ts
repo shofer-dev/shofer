@@ -41,6 +41,7 @@ import type {
 	Expr,
 	Span,
 	Position,
+	CallOp,
 	OutputSchema,
 	TagExpr,
 	OutputField,
@@ -421,6 +422,8 @@ class Parser {
 	// ─── Operations ───
 
 	private parseOperation(): Operation {
+		// Checked before the switch: `call` is a contextual ident, not a token type.
+		if (this.isCallOpStart()) return this.parseCallOp()
 		const t = this.peek()
 		switch (t.type) {
 			case TokenType.Stake:
@@ -455,16 +458,9 @@ class Parser {
 
 		// Optional recipients: -> @Agent1, @Agent2 or -> @out
 		if (this.match(TokenType.Arrow)) {
-			// Accept both Ident and AgentRef for recipients (Shofer extension)
-			const refToken = this.peek()
-			const ref = refToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
-			recipients.push({ ref })
+			recipients.push(this.parseRecipient())
 			while (this.match(TokenType.Comma)) {
-				// Accept both Ident and AgentRef for recipients (Shofer extension)
-				const refToken = this.peek()
-				const ref =
-					refToken.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
-				recipients.push({ ref })
+				recipients.push(this.parseRecipient())
 			}
 		}
 
@@ -766,6 +762,50 @@ class Parser {
 	}
 
 	// ─── Output Schema ───
+
+	/**
+	 * Parse one routing recipient.
+	 *
+	 * Extracted so `stake` and `call` share it: they route results identically,
+	 * and two copies would drift on what counts as a recipient. Accepts both
+	 * `@Agent` and a bare ident (a Shofer extension over upstream).
+	 */
+	private parseRecipient(): Recipient {
+		const t = this.peek()
+		const ref = t.type === TokenType.AgentRef ? this.advance().value : this.expect(TokenType.Ident).value
+		return { ref }
+	}
+
+	/**
+	 * Parse `call fn(args…) -> @recipient`.
+	 *
+	 * Deliberately mirrors `stake`'s shape — same call syntax, same routing arrow
+	 * — because the two are siblings and a spec author should not have to hold
+	 * two grammars. What differs is what runs, not how it is written.
+	 */
+	private parseCallOp(): CallOp {
+		const start = this.peek()
+		this.advance() // `call`
+		const call = this.parseFuncCall()
+
+		const recipients: Recipient[] = []
+		if (this.match(TokenType.Arrow)) {
+			recipients.push(this.parseRecipient())
+			while (this.match(TokenType.Comma)) {
+				recipients.push(this.parseRecipient())
+			}
+		}
+
+		const condition = this.parseOptionalCondition()
+
+		return {
+			type: "CallOp",
+			call,
+			recipients,
+			condition,
+			span: this.spanFrom(start),
+		}
+	}
 
 	/**
 	 * Parse a `requires:` value.
@@ -1129,7 +1169,18 @@ class Parser {
 		return undefined
 	}
 
+	/** Is the cursor on a contextual `call fn(` operation? */
+	private isCallOpStart(): boolean {
+		return (
+			this.check(TokenType.Ident) &&
+			this.peek().value === "call" &&
+			this.tokens[this.pos + 1]?.type === TokenType.Ident &&
+			this.tokens[this.pos + 2]?.type === TokenType.LParen
+		)
+	}
+
 	private isOperationStart(): boolean {
+		if (this.isCallOpStart()) return true
 		const t = this.peek().type
 		return (
 			t === TokenType.Stake ||

@@ -15,6 +15,7 @@ import type { AgentState, FlowState, MailboxEntry } from "./slang-types.js"
 import type {
 	Expr,
 	StakeOp,
+	CallOp,
 	AwaitOp,
 	EscalateOp,
 	CommitOp,
@@ -39,6 +40,7 @@ import type {
 
 export type Instr =
 	| { kind: "stake"; op: StakeOp }
+	| { kind: "call"; op: CallOp }
 	| { kind: "await"; op: AwaitOp }
 	| { kind: "escalate"; op: EscalateOp }
 	| { kind: "commit"; op: CommitOp }
@@ -52,6 +54,12 @@ export type Instr =
 /** Result of advancing an agent's program counter over non-blocking instructions. */
 export type AdvanceResult =
 	| { type: "stake"; op: StakeOp }
+	/**
+	 * A deterministic function call. BLOCKING like a stake — the VM cannot
+	 * evaluate it, because the whole point is that the work happens outside the
+	 * interpreter, in registered code the dispatcher selects.
+	 */
+	| { type: "call"; op: CallOp }
 	| { type: "escalate"; op: EscalateOp }
 	| { type: "await" }
 	| { type: "committed" }
@@ -112,6 +120,9 @@ export function compileAgentProgram(agent: AgentDecl): Instr[] {
 		switch (op.type) {
 			case "StakeOp":
 				instrs.push({ kind: "stake", op })
+				break
+			case "CallOp":
+				instrs.push({ kind: "call", op })
 				break
 			case "AwaitOp":
 				instrs.push({ kind: "await", op })
@@ -270,6 +281,9 @@ export function advanceAgent(
 				log.error(`advanceAgent '${state.name}' → error: ${message}`)
 				return { type: "error", op: instr.op }
 			}
+			case "call":
+				log.info(`advanceAgent '${state.name}' → call fn=${instr.op.call.name}`)
+				return { type: "call", op: instr.op }
 			case "stake":
 				log.info(
 					`advanceAgent '${state.name}' → stake call=${instr.op.call.name} recipients=[${instr.op.recipients.map((r) => r.ref).join(",")}] hasOutput=${!!instr.op.output}`,
