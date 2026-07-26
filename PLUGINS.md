@@ -144,6 +144,7 @@ reachable, when its permission is present. All keys are optional:
 | `commands`     | boolean  | `contributes.commands`.                                                                                           |
 | `rules`        | boolean  | `contributes.rules`.                                                                                              |
 | `mcpServers`   | boolean  | `contributes.mcpServers`.                                                                                         |
+| `workflows`    | boolean  | `contributes.workflows` — `.slang` workflows under your `workflows/` dir.                                         |
 | `ui`           | region[] | UI regions the plugin may render into. See [§6](#6-ui-contributions).                                             |
 | `lifecycle`    | boolean  | The `lifecycle` hooks. Without it, none of them ever fire.                                                        |
 | `events`       | boolean  | `onEvent` observation.                                                                                            |

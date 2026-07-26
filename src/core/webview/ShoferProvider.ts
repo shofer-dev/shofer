@@ -58,7 +58,7 @@ import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
-import { builtInModesDisabled, builtInWorkflowsDisabled } from "@shofer/core"
+import { builtInModesDisabled, builtInWorkflowsDisabled, governanceDisabledPlugins } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
@@ -2292,6 +2292,11 @@ export class ShoferProvider
 						values: { section: "plugins" },
 					}),
 			},
+			// Org governance (env-delivered): plugins an organization has suppressed —
+			// including the bundled built-ins, which is how "disable the built-in
+			// workflows/modes" works now that they ARE plugins. Not a user preference:
+			// a listed plugin cannot be enabled from the Plugins panel.
+			forceDisabledPlugins: governanceDisabledPlugins(),
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.

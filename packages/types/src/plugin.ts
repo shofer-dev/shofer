@@ -876,6 +876,13 @@ export const pluginPermissionsSchema = z
 		commands: z.boolean().optional(),
 		rules: z.boolean().optional(),
 		mcpServers: z.boolean().optional(),
+		/**
+		 * Contribute `.slang` **workflows** — the multi-phase, multi-agent programs the
+		 * workflow runner executes (`contributes.workflows`). Shipped as files under the
+		 * plugin's `workflows/` dir and discovered alongside the user's
+		 * (`~/.shofer/workflows/`) and the project's (`.shofer/workflows/`).
+		 */
+		workflows: z.boolean().optional(),
 		/** UI regions the plugin wants to render into (Phase 4). */
 		ui: z.array(pluginUiRegionSchema).optional(),
 		lifecycle: z.boolean().optional(),
@@ -1031,12 +1038,33 @@ export const pluginUiEntrySchema = z
 
 export type PluginUiEntry = z.infer<typeof pluginUiEntrySchema>
 
+/**
+ * A `.slang` workflow a plugin ships. The physical `<name>.slang` lives under the
+ * plugin's `workflows/` directory; this entry is the manifest-level declaration.
+ *
+ * Unlike modes/skills/commands these are **not** namespaced: a workflow is addressed
+ * by the flow name inside its `.slang` source, and the discovery chain is a plain
+ * priority merge (plugin < global < project) so a user or project can override a
+ * shipped workflow by dropping in a file of the same name — which is exactly how the
+ * built-in workflows behaved before they became a plugin.
+ */
+export const pluginWorkflowContributionSchema = z
+	.object({
+		/** File base name under `workflows/`, without the `.slang` extension. */
+		name: z.string().min(1),
+		description: z.string().optional(),
+	})
+	.strict()
+
+export type PluginWorkflowContribution = z.infer<typeof pluginWorkflowContributionSchema>
+
 /** The declarative `contributes` block (design §5, §6). All entries optional. */
 export const pluginContributesSchema = z
 	.object({
 		modes: z.array(pluginModeContributionSchema).optional(),
 		skills: z.array(pluginSkillContributionSchema).optional(),
 		commands: z.array(pluginCommandContributionSchema).optional(),
+		workflows: z.array(pluginWorkflowContributionSchema).optional(),
 		mcpServers: pluginMcpServersSchema.optional(),
 		rules: z.array(pluginRuleContributionSchema).optional(),
 		/**

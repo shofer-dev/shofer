@@ -43,3 +43,23 @@ export function builtInModesDisabled(): boolean {
 export function builtInWorkflowsDisabled(): boolean {
 	return envFlagEnabled("SHOFER_DISABLE_BUILTIN_WORKFLOWS")
 }
+
+/**
+ * Bundled plugin names the org env flags suppress. The built-ins ship as plugins now,
+ * so "remove the built-ins" is "do not load these plugins" — enforced by
+ * `PluginManager` (`forceDisabledPlugins`), which ignores the user's enable state for
+ * them, exactly as the flags did when the built-ins lived in core.
+ *
+ * `SHOFER_DISABLED_PLUGINS` (comma-separated) is the general form: an org can suppress
+ * any bundled plugin, not just the two the original flags knew about.
+ */
+export function governanceDisabledPlugins(): string[] {
+	const disabled = new Set<string>()
+	if (builtInWorkflowsDisabled()) disabled.add("builtin-workflows")
+	if (builtInModesDisabled()) disabled.add("builtin-modes")
+	for (const name of (process.env.SHOFER_DISABLED_PLUGINS ?? "").split(",")) {
+		const trimmed = name.trim()
+		if (trimmed) disabled.add(trimmed)
+	}
+	return [...disabled]
+}

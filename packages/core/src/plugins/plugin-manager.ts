@@ -212,8 +212,11 @@ export interface PluginDirContribution {
 	 * Authored names (skill dir names / command file basenames) the manifest marked
 	 * `private` — resolvable/invocable by qualified name but hidden from user-facing
 	 * enumerations. Empty when the plugin declares no private entries of this kind.
+	 *
+	 * Absent for contribution kinds that have no private concept (workflows, which are
+	 * not namespaced and so cannot be "invocable only by qualified name").
 	 */
-	privateNames: string[]
+	privateNames?: string[]
 }
 
 /** A plugin-contributed rules file. */
@@ -276,6 +279,13 @@ export interface PluginManagerOptions {
 	 */
 	agentProvider?: PluginAgentProvider
 	/**
+	 * Plugin names an **organization** has suppressed (delivered as pod env vars, see
+	 * `config/governance.ts`). Unlike the user's enable/disable these are not a
+	 * preference: a listed plugin never loads and the user cannot turn it back on, which
+	 * is what lets an org fully define the available mode/workflow set.
+	 */
+	forceDisabledPlugins?: string[]
+	/**
 	 * Host seam backing a plugin's `ctx.task` — timeline markers + rewind (design §6.11
 	 * G9). When omitted, no plugin gets timeline control (even a granted one), so
 	 * pure-core embeddings stay host-agnostic and `ctx.task` is absent. Supplied by the
@@ -318,6 +328,7 @@ export class PluginManager {
 	private readonly workspacePath?: string
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
+	private readonly forceDisabled: ReadonlySet<string>
 	private readonly agentProvider?: PluginAgentProvider
 	private readonly taskProvider?: PluginTaskProvider
 	private readonly searchProvider?: PluginSearchProvider
@@ -355,6 +366,7 @@ export class PluginManager {
 		this.workspacePath = options.workspacePath
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
+		this.forceDisabled = new Set(options.forceDisabledPlugins ?? [])
 		this.agentProvider = options.agentProvider
 		this.taskProvider = options.taskProvider
 		this.searchProvider = options.searchProvider
@@ -418,6 +430,9 @@ export class PluginManager {
 	 * have to turn on.
 	 */
 	private resolveEnabled(manifest: PluginManifest, scope: PluginScope, enabled: Set<string>): boolean {
+		// Organization suppression wins over every user choice, including an explicit
+		// enable — that is the point of it.
+		if (this.forceDisabled.has(manifest.name)) return false
 		if (enabled.has(manifest.name)) return true
 		if (manifest.defaultEnabled !== true) return false
 		if (scope !== "bundled" || !this.canRecordDisable) return false
@@ -609,7 +624,13 @@ export class PluginManager {
 
 		const plugin = this.getPlugin(name)
 		if (plugin) {
-			plugin.enabled = enabled
+			// The user's intent is still recorded above (so it takes effect if the org
+			// lifts the suppression), but it cannot switch on a plugin the org disabled —
+			// otherwise the toggle would appear to work and silently do nothing.
+			plugin.enabled = this.forceDisabled.has(name) ? false : enabled
+			if (enabled && this.forceDisabled.has(name)) {
+				warnPlugin(`[plugins] "${name}" is disabled by your organization and cannot be enabled here.`)
+			}
 		}
 		// Re-run fail-closed resolution: toggling one plugin can satisfy or break
 		// another's dependency closure (design §14.3).
@@ -1047,6 +1068,25 @@ export class PluginManager {
 					dir: path.join(plugin.root, "commands"),
 					privateNames: commands.filter((c) => c.private).map((c) => c.name),
 				})
+			}
+		}
+		return out
+	}
+
+	/**
+	 * `<root>/workflows` directories for enabled plugins that ship `.slang` workflows.
+	 *
+	 * Not namespaced, unlike skills/commands: a workflow is addressed by the flow name
+	 * in its source, and discovery is a priority merge where a user's or project's file
+	 * of the same name wins — the behaviour the built-in workflows had before they
+	 * became a plugin, and what lets someone fork a shipped workflow by copying it.
+	 */
+	getContributedWorkflowDirs(): PluginDirContribution[] {
+		const out: PluginDirContribution[] = []
+		for (const plugin of this.enabledWithPermission("workflows")) {
+			const workflows = plugin.manifest.contributes?.workflows ?? []
+			if (workflows.length > 0) {
+				out.push({ pluginName: plugin.name, dir: path.join(plugin.root, "workflows") })
 			}
 		}
 		return out

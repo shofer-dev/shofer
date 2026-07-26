@@ -158,19 +158,6 @@ async function main() {
 						srcDir,
 						buildDir,
 					)
-					// Copy built-in .slang workflows so discoverWorkflows() finds them at runtime.
-					// They go into dist/media/workflows/, which is bundled into the VSIX.
-					// discoverWorkflows() resolves __dirname + "/media/workflows" at runtime.
-					const workflowsDest = path.join(distDir, "media", "workflows")
-					fs.mkdirSync(workflowsDest, { recursive: true })
-					fs.copyFileSync(
-						path.join(srcDir, "media", "workflows", "debug.slang"),
-						path.join(workflowsDest, "debug.slang"),
-					)
-					fs.copyFileSync(
-						path.join(srcDir, "media", "workflows", "implement-feature.slang"),
-						path.join(workflowsDest, "implement-feature.slang"),
-					)
 					// Copy the sandbox wrapper binary so it is available
 					// alongside the extension bundle in dist/.  The binary is
 					// a prebuilt Go artifact at src/sandbox/shofer-sandbox.

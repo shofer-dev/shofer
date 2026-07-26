@@ -22,7 +22,7 @@ import { Task, type TaskOptions } from "@shofer/core"
 import { SlangEditorProvider } from "../webview/SlangEditorProvider"
 import { ShoferProvider } from "../webview/ShoferProvider"
 import { workflowLog } from "@shofer/core"
-import { builtInWorkflowsDisabled } from "@shofer/core"
+import { getSharedPluginManager } from "@shofer/core"
 import { runWithLogTaskContext } from "@shofer/core"
 import { findLastIndex } from "@shofer/core"
 import { waitForTasksEventDriven } from "./wait-for-task-helper"
@@ -2130,45 +2130,24 @@ export const TERMINAL_FLOW_STATUSES: ReadonlySet<FlowStatus> = new Set<FlowStatu
 
 // ── .slang File Discovery ──
 
-/** Absolute path of the shipped built-in `.slang` workflow directory. */
-function builtInWorkflowsDir(): string {
-	// In dev, __dirname = src/; in deployed VSIX, __dirname = dist/.
-	// Both contain media/workflows/ after build.
-	return path.join(__dirname, "media", "workflows")
-}
-
-/**
- * Load ONLY the shipped built-in workflows as data (flow name → `.slang`
- * source), independent of the `SHOFER_DISABLE_BUILTIN_WORKFLOWS` governance flag.
- * The platform uses this to copy the built-ins into a config bundle for seeding
- * — it must reach them even in a workspace where they are otherwise suppressed.
- */
-export async function loadBuiltInWorkflows(): Promise<Map<string, string>> {
-	const workflows = new Map<string, string>()
-	await loadFromDir(builtInWorkflowsDir(), workflows)
-	return workflows
-}
-
 /**
  * Priority order for workflow discovery (lowest to highest):
- *   1. Built-in  — shipped with the extension under dist/media/workflows/
- *   2. Global    — ~/.shofer/workflows/
- *   3. Project   — .shofer/workflows/ (highest priority, overrides lower layers)
+ *   1. Plugin   — `workflows/` dirs of enabled plugins that contribute them
+ *                 (the `builtin-workflows` plugin ships Debug + Implement a Feature)
+ *   2. Global   — ~/.shofer/workflows/
+ *   3. Project  — .shofer/workflows/ (highest priority, overrides lower layers)
  *
- * Org governance: when `SHOFER_DISABLE_BUILTIN_WORKFLOWS` is set (see
- * `builtInWorkflowsDisabled()`), the built-in layer is skipped so that ONLY
- * global/project (bundle-provided) workflows remain — letting an org fully
- * define the workflow set via a config bundle.
+ * An org suppresses the shipped workflows by suppressing the plugin
+ * (`governanceDisabledPlugins()` → `PluginManager.forceDisabledPlugins`), so there is
+ * no separate built-in layer to skip here.
  */
 export async function discoverWorkflows(workspacePath: string): Promise<Map<string, string>> {
 	const workflows = new Map<string, string>()
-	// Built-in workflows — lowest priority; suppressed under org governance.
-	if (!builtInWorkflowsDisabled()) {
-		const builtinDir = builtInWorkflowsDir()
-		workflowLog.info(`[discoverWorkflows] __dirname=${__dirname} builtinDir=${builtinDir}`)
-		await loadFromDir(builtinDir, workflows)
-	} else {
-		workflowLog.info(`[discoverWorkflows] built-in workflows suppressed (SHOFER_DISABLE_BUILTIN_WORKFLOWS)`)
+	// Plugin-contributed workflows — lowest priority. Read through the shared plugin
+	// manager, like skills / commands / MCP configs; unset (pure-core, tests) ⇒ no
+	// contributions and only the user's own workflows are found.
+	for (const { dir } of getSharedPluginManager()?.getContributedWorkflowDirs() ?? []) {
+		await loadFromDir(dir, workflows)
 	}
 	// Global user workflows — medium priority
 	const globalDir = path.join(os.homedir(), ".shofer", "workflows")

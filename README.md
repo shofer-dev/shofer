@@ -95,7 +95,7 @@ Shofer ships with **two built-in multi-agent workflows** — formal, determinist
 
 Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
 
-Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/built-in-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
+Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/plugins/builtin-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
 
 ## Parallel Tasks & Worktrees
 

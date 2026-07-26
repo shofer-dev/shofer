@@ -55,10 +55,4 @@ export {
 } from "@shofer/core"
 
 // WorkflowTask (vscode-bound — stays in the extension)
-export {
-	WorkflowTask,
-	createWorkflowTask,
-	discoverWorkflows,
-	loadBuiltInWorkflows,
-	type WorkflowTaskOptions,
-} from "./WorkflowTask"
+export { WorkflowTask, createWorkflowTask, discoverWorkflows, type WorkflowTaskOptions } from "./WorkflowTask"

@@ -1,0 +1,24 @@
+{
+	"name": "builtin-workflows",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "Shofer's built-in multi-agent workflows: Debug (two independent investigators, one writer, count-matched review loop) and Implement a Feature. Plain `.slang` sources a user or project can override by name.",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"defaultEnabled": true,
+	"permissions": {
+		"workflows": true
+	},
+	"contributes": {
+		"workflows": [
+			{
+				"name": "debug",
+				"description": "Two developers investigate a bug read-only; the orchestrator consolidates one fix plan, one implements it, the other reviews until satisfied."
+			},
+			{
+				"name": "implement-feature",
+				"description": "Plan, implement and review a feature end to end across specialised agents."
+			}
+		]
+	}
+}

@@ -12,7 +12,8 @@ import { analyzeFlow } from "@shofer/core"
  * workers' job itself (investigate / write code) instead of coordinating.
  * See docs/workflow_design.md and slang_specs.md (`tools:` wiring).
  */
-const DIR = path.resolve(__dirname, "../../../media/workflows")
+// The shipped workflows live in the bundled `builtin-workflows` plugin.
+const DIR = path.resolve(__dirname, "../../../../plugins/builtin-workflows/workflows")
 
 describe("shipped workflow orchestrator tool scope", () => {
 	for (const [file, agentName] of [
