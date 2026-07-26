@@ -35,6 +35,12 @@ export interface PluginUiProvider {
 	 * which case {@link PluginUiSender.showPanel} is a warned no-op.
 	 */
 	showPanel?(pluginName: string, opts?: PluginPanelOptions): void | Promise<void>
+	/**
+	 * Reveal Settings → Plugins (where the named plugin's toggle, config form and
+	 * AI-consent live). Optional: a host without a settings surface omits it, in which
+	 * case {@link PluginUiSender.openSettings} is a warned no-op.
+	 */
+	openSettings?(pluginName: string): void | Promise<void>
 }
 
 /**
@@ -68,6 +74,19 @@ export function createPluginUi(pluginName: string, provider: PluginUiProvider): 
 				})
 			} catch (error) {
 				warnPlugin(`[plugin:${pluginName}] ctx.ui.showPanel failed: ${String(error)}`)
+			}
+		},
+		openSettings(): void {
+			if (!provider.openSettings) {
+				warnPlugin(`[plugin:${pluginName}] ctx.ui.openSettings: host has no settings surface (ignored)`)
+				return
+			}
+			try {
+				void Promise.resolve(provider.openSettings(pluginName)).catch((error) => {
+					warnPlugin(`[plugin:${pluginName}] ctx.ui.openSettings failed: ${String(error)}`)
+				})
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.ui.openSettings failed: ${String(error)}`)
 			}
 		},
 	}

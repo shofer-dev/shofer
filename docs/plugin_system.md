@@ -484,6 +484,12 @@ export default function Toolbar({ api }: { api: PluginUIApi }) {
 }
 ```
 
+**Sending the user to your own controls — `ctx.ui.openSettings()`.** Reveals Settings →
+Plugins, where the plugin's enable toggle, `config` form and billed-AI consent live. It
+exists for the state a `defaultEnabled` + `permissions.ai` plugin starts in: enabled but
+unable to act, where the UI's job is to say so and offer the fix. Live Memory's badge
+renders a `NeedsApproval` state whose only action calls this.
+
 **Standalone panels — `ctx.ui.showPanel({ title, region })`.** Beyond in-region
 mounts, a plugin can open its UI bundle in a **standalone editor panel** (a
 `WebviewPanel` tab beside the editor) via `ctx.ui.showPanel(...)`

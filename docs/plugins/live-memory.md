@@ -5,8 +5,10 @@
 > **enabled** (manifest `defaultEnabled`) but **inert**: every hook returns early until
 > the user grants the separate **billed-AI consent** in Settings → Plugins, so an
 > unconsented install contributes no tool, no prompt section, no watcher, no background
-> service and no stored observations. Granting consent reloads the plugin and it comes
-> alive.
+> service and no stored observations. It is not silent about it, though: the chat-input
+> badge and the chat panel render a **"Needs your approval"** state whose action calls
+> `ctx.ui.openSettings()` to take the user straight to the consent control. Granting it
+> reloads the plugin and it comes alive.
 >
 > This document is the feature's design. Sections that describe _host wiring_ —
 > a `the plugin's main module` singleton, a `the `sidebar-panel` UI bundle` webview, an

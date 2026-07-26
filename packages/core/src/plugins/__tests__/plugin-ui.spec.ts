@@ -89,8 +89,28 @@ describe("plugin-ui — createPluginUi (unit)", () => {
 			{ name: "p", message: { type: "state", n: 1 } },
 			{ name: "p", message: "hello" },
 		])
-		// Surface exposes ONLY the scoped push + panel-open — no host internals leak.
-		expect(Object.keys(ui)).toEqual(["postMessage", "showPanel"])
+		// Surface exposes ONLY the scoped push + panel-open + settings-reveal — no host
+		// internals leak.
+		expect(Object.keys(ui)).toEqual(["postMessage", "showPanel", "openSettings"])
+	})
+
+	it("delegates openSettings to the host provider, name-tagged, and is a safe no-op without one", () => {
+		const revealed: string[] = []
+		const ui = createPluginUi("p", { post() {}, openSettings: (name) => void revealed.push(name) })
+		ui.openSettings()
+		expect(revealed).toEqual(["p"])
+
+		// A host with no settings surface (headless): warned no-op, never a throw — a
+		// plugin telling the user "approve me here" must be safe to call anywhere.
+		expect(() => createPluginUi("p", { post() {} }).openSettings()).not.toThrow()
+		expect(() =>
+			createPluginUi("p", {
+				post() {},
+				openSettings() {
+					throw new Error("no settings")
+				},
+			}).openSettings(),
+		).not.toThrow()
 	})
 
 	it("delegates showPanel to the host provider, name-tagged, and is a safe no-op without one", () => {

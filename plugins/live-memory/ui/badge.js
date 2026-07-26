@@ -1,6 +1,6 @@
 // ui/badge.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { jsx, jsxs } from "react/jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 var DOT_COLOR = {
   Standby: "var(--vscode-descriptionForeground)",
   Initializing: "#eab308",
@@ -105,6 +105,7 @@ function LiveMemoryBadge({ api }) {
       if (m && m.type === "state") {
         setS({
           state: m.state,
+          needsConsent: Boolean(m.needsConsent),
           stateMessage: m.stateMessage,
           modelId: m.modelId,
           contextUsage: m.contextUsage,
@@ -147,9 +148,8 @@ function LiveMemoryBadge({ api }) {
   const viewChat = act(() => api.postMessage({ type: "showChat" }));
   const clearContext = act(() => api.postMessage({ type: "clear" }));
   const emptyMemory = act(() => api.postMessage({ type: "empty" }));
-  const configure = act(
-    () => window.postMessage({ type: "action", action: "settingsButtonClicked", values: { section: "plugins" } }, "*")
-  );
+  const configure = act(() => api.postMessage({ type: "openSettings" }));
+  const approve = act(() => api.postMessage({ type: "openSettings" }));
   return /* @__PURE__ */ jsxs("span", { ref: wrapRef, style: { position: "relative", display: "inline-flex" }, children: [
     /* @__PURE__ */ jsxs(
       "button",
@@ -218,43 +218,58 @@ function LiveMemoryBadge({ api }) {
             /* @__PURE__ */ jsx(Icon, { name: "message", size: 15 }),
             /* @__PURE__ */ jsx("span", { children: "Live Memory" })
           ] }),
-          /* @__PURE__ */ jsxs("div", { style: { padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }, children: [
-            /* @__PURE__ */ jsx(InfoRow, { icon: "info", label: "State", value: s.state, sub: s.stateMessage }),
-            s.modelId ? /* @__PURE__ */ jsx(InfoRow, { icon: "cpu", label: "Model", value: s.modelId }) : null,
-            usage ? /* @__PURE__ */ jsx(
-              InfoRow,
-              {
-                icon: "database",
-                label: "Context",
-                value: `${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`,
-                sub: usage.isNearlyFull ? "\u26A0 Nearly full" : void 0
-              }
-            ) : null,
-            /* @__PURE__ */ jsx(InfoRow, { icon: "files", label: "Files in context", value: String(s.contextFiles?.length ?? 0) }),
-            /* @__PURE__ */ jsx(
-              InfoRow,
-              {
-                icon: "turns",
-                label: "Conversation turns",
-                value: String(s.conversationTurnCount ?? 0),
-                sub: s.stats?.pendingQuestions ? `${s.stats.pendingQuestions} question(s) queued` : void 0
-              }
-            ),
-            s.costSnapshot ? /* @__PURE__ */ jsx(
-              InfoRow,
-              {
-                icon: "card",
-                label: "Session cost",
-                value: `$${(s.costSnapshot.sessionEstimatedCostUSD ?? 0).toFixed(6)}`,
-                sub: s.costSnapshot.sessionInputTokens !== void 0 && s.costSnapshot.sessionOutputTokens !== void 0 ? `${s.costSnapshot.sessionInputTokens.toLocaleString()} in + ${s.costSnapshot.sessionOutputTokens.toLocaleString()} out` : void 0
-              }
-            ) : null
-          ] }),
-          /* @__PURE__ */ jsxs("div", { style: { padding: 8, borderTop: `1px solid ${V.border}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: [
-            /* @__PURE__ */ jsx(ActionButton, { icon: "message", label: "View Chat", onClick: viewChat }),
-            /* @__PURE__ */ jsx(ActionButton, { icon: "trash", label: "Clear Context", onClick: clearContext }),
-            /* @__PURE__ */ jsx(ActionButton, { icon: "settings", label: "Configure", onClick: configure }),
-            /* @__PURE__ */ jsx(ActionButton, { icon: "eraser", label: "Empty memory", onClick: emptyMemory })
+          s.needsConsent ? /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsxs("div", { style: { padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }, children: [
+              /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "#f59e0b" }, children: [
+                /* @__PURE__ */ jsx(Icon, { name: "info", size: 14 }),
+                /* @__PURE__ */ jsx("span", { children: "Needs your approval" })
+              ] }),
+              /* @__PURE__ */ jsxs("div", { style: { color: V.muted, lineHeight: 1.45 }, children: [
+                "Live Memory is enabled but not allowed to make ",
+                /* @__PURE__ */ jsx("strong", { children: "billed AI calls" }),
+                " yet, so it is not observing your workspace or answering questions. Approving it starts it immediately."
+              ] })
+            ] }),
+            /* @__PURE__ */ jsx("div", { style: { padding: 8, borderTop: `1px solid ${V.border}`, display: "grid", gap: 6 }, children: /* @__PURE__ */ jsx(ActionButton, { icon: "settings", label: "Approve billed AI calls\u2026", onClick: approve }) })
+          ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsxs("div", { style: { padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }, children: [
+              /* @__PURE__ */ jsx(InfoRow, { icon: "info", label: "State", value: s.state, sub: s.stateMessage }),
+              s.modelId ? /* @__PURE__ */ jsx(InfoRow, { icon: "cpu", label: "Model", value: s.modelId }) : null,
+              usage ? /* @__PURE__ */ jsx(
+                InfoRow,
+                {
+                  icon: "database",
+                  label: "Context",
+                  value: `${usage.currentTokens.toLocaleString()} / ${usage.maxTokens.toLocaleString()} (${fillPct}%)`,
+                  sub: usage.isNearlyFull ? "\u26A0 Nearly full" : void 0
+                }
+              ) : null,
+              /* @__PURE__ */ jsx(InfoRow, { icon: "files", label: "Files in context", value: String(s.contextFiles?.length ?? 0) }),
+              /* @__PURE__ */ jsx(
+                InfoRow,
+                {
+                  icon: "turns",
+                  label: "Conversation turns",
+                  value: String(s.conversationTurnCount ?? 0),
+                  sub: s.stats?.pendingQuestions ? `${s.stats.pendingQuestions} question(s) queued` : void 0
+                }
+              ),
+              s.costSnapshot ? /* @__PURE__ */ jsx(
+                InfoRow,
+                {
+                  icon: "card",
+                  label: "Session cost",
+                  value: `$${(s.costSnapshot.sessionEstimatedCostUSD ?? 0).toFixed(6)}`,
+                  sub: s.costSnapshot.sessionInputTokens !== void 0 && s.costSnapshot.sessionOutputTokens !== void 0 ? `${s.costSnapshot.sessionInputTokens.toLocaleString()} in + ${s.costSnapshot.sessionOutputTokens.toLocaleString()} out` : void 0
+                }
+              ) : null
+            ] }),
+            /* @__PURE__ */ jsxs("div", { style: { padding: 8, borderTop: `1px solid ${V.border}`, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }, children: [
+              /* @__PURE__ */ jsx(ActionButton, { icon: "message", label: "View Chat", onClick: viewChat }),
+              /* @__PURE__ */ jsx(ActionButton, { icon: "trash", label: "Clear Context", onClick: clearContext }),
+              /* @__PURE__ */ jsx(ActionButton, { icon: "settings", label: "Configure", onClick: configure }),
+              /* @__PURE__ */ jsx(ActionButton, { icon: "eraser", label: "Empty memory", onClick: emptyMemory })
+            ] })
           ] })
         ]
       }

@@ -2281,6 +2281,16 @@ export class ShoferProvider
 						region: (opts?.region as PluginUiRegion) ?? "sidebar-panel",
 						title: opts?.title ?? pluginName,
 					}),
+				// §6.8 — reveal Settings → Plugins, where the plugin's own toggle, config
+				// form and billed-AI consent live. This is how a plugin that cannot act
+				// until the user approves something takes them to the approval instead of
+				// merely describing where it is.
+				openSettings: () =>
+					void this.postMessageToWebview({
+						type: "action",
+						action: "settingsButtonClicked",
+						values: { section: "plugins" },
+					}),
 			},
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),

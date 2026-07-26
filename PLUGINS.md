@@ -395,6 +395,12 @@ Ungranted (seam wired) ⇒ a denying stub; no task seam ⇒ **absent**.
 **`ctx.host.editor`** (`permissions.editor`) — `showMultiFileDiff(title, changes)` opens
 the host's native multi-file diff view for a set of before/after file contents.
 
+**`ctx.ui.openSettings()`** — reveal Settings → Plugins, where this plugin's toggle,
+`config` form and (with `permissions.ai`) its billed-AI consent live. For the case where
+your UI has to say "I need your approval before I can do anything": send the user to the
+approval rather than describing where it is. Fire-and-forget; a warned no-op on a host
+with no settings surface.
+
 **`ctx.storage`** (`PluginStorage`) — the plugin's own persistent dir at
 `<globalStorage>/plugins/<name>/`, independent of `permissions.filesystem`. `readFile`/`writeFile`/
 `exists`/`delete`/`list`, all resolved under `dir` and **traversal-blocked** (a `..` escape is

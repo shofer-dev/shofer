@@ -188,6 +188,20 @@ function LiveMemoryPanel({ api }) {
   const usage = state.contextUsage || EMPTY_USAGE;
   const pct = Math.round((usage.fillFraction || 0) * 100);
   const messages = state.messages || [];
+  if (state.needsConsent) {
+    return /* @__PURE__ */ jsxs("div", { className: "lm-panel", "data-testid": "lm-panel", children: [
+      /* @__PURE__ */ jsx("style", { children: PANEL_CSS }),
+      /* @__PURE__ */ jsxs("div", { className: "header", children: [
+        /* @__PURE__ */ jsx("div", { className: "header-row", children: /* @__PURE__ */ jsx("div", { className: "state state-NeedsApproval", "data-testid": "lm-state", children: "State: Needs your approval" }) }),
+        /* @__PURE__ */ jsxs("div", { className: "state-msg", "data-testid": "lm-consent-msg", children: [
+          "Live Memory is enabled but not allowed to make ",
+          /* @__PURE__ */ jsx("strong", { children: "billed AI calls" }),
+          " yet, so it is not observing your workspace or answering questions. Approving it starts it immediately."
+        ] }),
+        /* @__PURE__ */ jsx("div", { className: "actions", children: /* @__PURE__ */ jsx("button", { type: "button", "data-testid": "lm-approve", onClick: () => send("openSettings"), children: "Approve billed AI calls\u2026" }) })
+      ] })
+    ] });
+  }
   return /* @__PURE__ */ jsxs("div", { className: "lm-panel", "data-testid": "lm-panel", children: [
     /* @__PURE__ */ jsx("style", { children: PANEL_CSS }),
     /* @__PURE__ */ jsxs("div", { className: "header", children: [

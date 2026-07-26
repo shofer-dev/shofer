@@ -33,6 +33,9 @@ import { buildLiveMemorySection } from "./system-section.js"
 
 const PLUGIN_NAME = "live-memory"
 
+/** Agent-state label the UI renders as "needs your approval" (see {@link isReady}). */
+const NEEDS_APPROVAL_STATE = "NeedsApproval"
+
 /** Tools whose invocation means Shofer *edited* a file (the built-in's `shofer_edited`). */
 const EDIT_TOOLS = new Set(["write_to_file", "apply_diff", "insert_content", "search_and_replace", "edit_file"])
 /** Tools whose invocation means Shofer *read/searched* a file. */
@@ -128,6 +131,30 @@ function peekAgent(ctx: PluginContext): LiveMemoryAgent | undefined {
  */
 async function pushPanelState(ctx: PluginContext, agent?: LiveMemoryAgent): Promise<void> {
 	if (!ctx.ui) return
+
+	// Enabled but not AI-consented: the UI must SAY so. Reporting "Standby" here would
+	// be the plugin pretending to be running while every hook is returning early —
+	// the user would see an idle agent and no reason it never wakes up.
+	if (!isReady(ctx)) {
+		try {
+			ctx.ui.postMessage({
+				type: "state",
+				state: NEEDS_APPROVAL_STATE,
+				stateMessage:
+					"Live Memory is enabled but not allowed to make billed AI calls yet. Approve it in Settings → Plugins and it starts observing and answering immediately.",
+				needsConsent: true,
+				contextUsage: { currentTokens: 0, maxTokens: 0, fillFraction: 0, isNearlyFull: false },
+				messages: [],
+				stats: { observations: 0, questions: 0, pendingQuestions: 0 },
+				contextFiles: [],
+				conversationTurnCount: 0,
+			})
+		} catch {
+			// A detached webview must never break the caller.
+		}
+		return
+	}
+
 	const a = agent ?? peekAgent(ctx)
 	let observations = 0
 	let questions = 0
@@ -258,6 +285,9 @@ const plugin: ShoferPlugin = {
 	async initialize(ctx: PluginContext): Promise<void> {
 		if (!isReady(ctx)) {
 			ctx.host?.log.info("enabled but not AI-consented — staying inert until the user consents")
+			// The badge/panel still get a state push, so the UI shows "Needs approval"
+			// with a way to grant it rather than an agent that looks idle forever.
+			await pushPanelState(ctx)
 			return
 		}
 		const store = getStore(ctx)
@@ -460,6 +490,11 @@ Files in context: ${result.contextFiles.length}`
 			case "ready":
 			case "getState":
 				await pushPanelState(ctx)
+				return
+			case "openSettings":
+				// The "Approve billed AI calls" button in the badge/panel: take the user to
+				// the consent control instead of describing where it is.
+				ctx.ui?.openSettings()
 				return
 			case "showChat":
 				// The badge popover's "View Chat" — open the live chat bundle (the

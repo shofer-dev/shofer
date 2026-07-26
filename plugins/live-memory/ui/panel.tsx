@@ -67,6 +67,8 @@ interface ContextUsage {
 interface PanelState {
 	type: "state"
 	state: string
+	/** Enabled, but the user has not allowed its billed AI calls yet. */
+	needsConsent?: boolean
 	stateMessage: string
 	contextUsage: ContextUsage
 	messages: Message[]
@@ -301,6 +303,33 @@ export default function LiveMemoryPanel({ api }: { api: PluginUIApi }) {
 	const usage = state.contextUsage || EMPTY_USAGE
 	const pct = Math.round((usage.fillFraction || 0) * 100)
 	const messages = state.messages || []
+
+	// Enabled but unapproved: an empty transcript with a "Standby" header would read as
+	// "nothing has happened yet" when the truth is "it cannot start". Say that instead,
+	// and offer the one action that fixes it.
+	if (state.needsConsent) {
+		return (
+			<div className="lm-panel" data-testid="lm-panel">
+				<style>{PANEL_CSS}</style>
+				<div className="header">
+					<div className="header-row">
+						<div className="state state-NeedsApproval" data-testid="lm-state">
+							State: Needs your approval
+						</div>
+					</div>
+					<div className="state-msg" data-testid="lm-consent-msg">
+						Live Memory is enabled but not allowed to make <strong>billed AI calls</strong> yet, so it is
+						not observing your workspace or answering questions. Approving it starts it immediately.
+					</div>
+					<div className="actions">
+						<button type="button" data-testid="lm-approve" onClick={() => send("openSettings")}>
+							Approve billed AI calls…
+						</button>
+					</div>
+				</div>
+			</div>
+		)
+	}
 
 	return (
 		<div className="lm-panel" data-testid="lm-panel">

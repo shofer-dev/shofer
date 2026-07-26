@@ -14,6 +14,8 @@ function makeCtx(consented: boolean) {
 	const writes: string[] = []
 	const watched: string[] = []
 	const services: string[] = []
+	const pushed: Record<string, unknown>[] = []
+	const settingsOpened: number[] = []
 	const ctx = {
 		workspacePath: "/ws",
 		cwd: "/ws",
@@ -51,8 +53,17 @@ function makeCtx(consented: boolean) {
 			services.push(svc.name)
 			return { dispose: () => {} }
 		},
+		ui: {
+			postMessage: (m: unknown) => {
+				pushed.push(m as Record<string, unknown>)
+			},
+			showPanel: () => {},
+			openSettings: () => {
+				settingsOpened.push(Date.now())
+			},
+		},
 	}
-	return { ctx, writes, watched, services }
+	return { ctx, writes, watched, services, pushed, settingsOpened }
 }
 
 describe("live-memory — inert until AI-consented", () => {
@@ -81,6 +92,25 @@ describe("live-memory — inert until AI-consented", () => {
 		plugin.onEvent!({ name: "Task Created" }, ctx as never)
 		await new Promise((r) => setTimeout(r, 20)) // the observers persist fire-and-forget
 		expect(writes).toEqual([])
+	})
+
+	it("tells its UI it needs approval instead of reporting an idle agent", async () => {
+		const { ctx, pushed } = makeCtx(false)
+		await plugin.initialize!(ctx as never)
+
+		// "Standby" here would be the plugin pretending to run while every hook returns
+		// early — the user would see an idle agent and no reason it never wakes up.
+		const state = pushed.find((m) => m.type === "state")
+		expect(state).toBeDefined()
+		expect(state!.state).toBe("NeedsApproval")
+		expect(state!.needsConsent).toBe(true)
+		expect(String(state!.stateMessage)).toMatch(/billed AI calls/i)
+	})
+
+	it("takes the user to the consent control when its UI asks", async () => {
+		const { ctx, settingsOpened } = makeCtx(false)
+		await plugin.onUiMessage!({ type: "openSettings" }, ctx as never)
+		expect(settingsOpened).toHaveLength(1)
 	})
 
 	it("comes alive once consent is granted (the same hooks, now contributing)", async () => {

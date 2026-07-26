@@ -730,6 +730,16 @@ export interface PluginUiSender {
 	 * receives reach it too. Fire-and-forget; a no-op on a host with no panel surface.
 	 */
 	showPanel(opts?: PluginPanelOptions): void
+	/**
+	 * Open Settings on the Plugins tab, where this plugin's own controls live — its
+	 * enable toggle, its `config` form, and (for a `permissions.ai` plugin) the
+	 * billed-AI consent.
+	 *
+	 * A plugin whose UI has to tell the user "I need your approval before I can do
+	 * anything" would otherwise be reduced to *describing* where that approval lives.
+	 * Fire-and-forget; a no-op on a host with no settings surface.
+	 */
+	openSettings(): void
 }
 
 /** Options for {@link PluginUiSender.showPanel} (design §6.8). */
