@@ -21,6 +21,16 @@ export {
 	type AgentDep,
 } from "./slang-resolver.js"
 
+// Output contracts: the structural schema + the semantic `where` predicate.
+export {
+	validateContract,
+	checkSemanticContract,
+	checkContract,
+	contractFeedback,
+	stripFence,
+	type ContractCheck,
+} from "./slang-contract.js"
+
 // Slang AST types (upstream)
 export type {
 	Program,

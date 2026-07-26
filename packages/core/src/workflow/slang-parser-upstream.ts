@@ -466,6 +466,16 @@ class Parser {
 			output = this.parseOutputSchema()
 		}
 
+		// Optional `where <expr>` semantic assertion. Parsed CONTEXTUALLY as a bare
+		// `where` ident — like `timeout`/`retries` below — so it reserves no keyword
+		// and cannot break a spec that already uses `where` as a name. Only valid
+		// after `output:`, because it asserts over the fields that schema declares.
+		let where: Expr | undefined
+		if (output && this.check(TokenType.Ident) && this.peek().value === "where") {
+			this.advance()
+			where = this.parseExpr()
+		}
+
 		// Optional per-stake `timeout(N)` / `retries(N)` clauses (Shofer extension).
 		// Parsed as bare idents (not reserved keywords) followed by a parenthesized
 		// number, in either order. `timeout` is seconds; `retries` is a count.
@@ -493,6 +503,7 @@ class Parser {
 			recipients,
 			condition,
 			output,
+			where,
 			binding,
 			timeout,
 			retries,

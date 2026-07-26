@@ -159,6 +159,21 @@ export interface StakeOp extends BaseNode {
 	recipients: Recipient[]
 	condition?: Expr
 	output?: OutputSchema
+	/**
+	 * Optional semantic assertion over the result fields:
+	 * `output: { … } where <expr>`.
+	 *
+	 * Evaluated with the result's fields in scope as bare idents, **after** the
+	 * structural schema check — so `where score > 7` can assume `score` exists and
+	 * is a number, because the schema already established that. A false result is
+	 * a contract failure and is retried exactly like a structural one, which is
+	 * the point: "the shape is right but the answer is wrong" is the case a JSON
+	 * schema cannot express.
+	 *
+	 * Pure expression, no I/O — it is evaluated by the interpreter over a recorded
+	 * result, so it must replay deterministically.
+	 */
+	where?: Expr
 	binding?: string
 	/**
 	 * Optional per-stake wall-clock timeout in **seconds** (`timeout(N)`). When the

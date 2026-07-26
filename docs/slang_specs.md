@@ -281,7 +281,6 @@ guiding the user to fill it in before the flow starts.
 
 See [`src/media/workflows/debug.slang`](../src/media/workflows/debug.slang) for the canonical example.
 
-
 ---
 
 ## Agent Declaration
@@ -718,9 +717,39 @@ The interpreter parses the `completionResultSummary` field of the agent's
 Validation proceeds in two steps:
 
 1. **JSON parse** — string results are `JSON.parse()`d. Parse failure produces
-   a validation error.
+   a validation error. A surrounding Markdown code fence is stripped rather than
+   rejected: a fenced object is the agent answering correctly and formatting
+   habitually, and failing it would spend a retry on punctuation.
 2. **Schema check** — parsed objects are checked against the `output:` field list.
-   Missing fields produce a validation error.
+   Missing fields, and fields of the wrong scalar type, produce a validation
+   error naming the field.
+
+### Semantic assertions — the `where` clause
+
+```slang
+stake review(diff: d) -> @out
+  output: { score: "number", verdict: "string" } where score > 7
+```
+
+A structural schema says what an answer must LOOK like. It structurally cannot
+say whether the answer is any good — `{"score": 3, "verdict": "ship"}` satisfies
+every schema you can write for it and is still wrong. `where` is where a spec
+says so.
+
+- The predicate is evaluated **after** the structural check, with the result's
+  fields in scope as **bare idents**. `where score > 7` may assume `score` exists
+  and is a number precisely because step 2 already established that.
+- The fields **shadow** the agent's bindings for the check only. The agent's own
+  bindings are never mutated by a validation.
+- A false predicate is a contract failure and is retried exactly like a
+  structural one — but the reprompt says which layer failed, because "answer in
+  this shape" and "the shape was right, change the values" are different
+  corrections.
+- `where` is a **contextual** keyword, not a reserved one: a spec already using
+  `where` as an identifier keeps working.
+- The expression is **pure** — no clock, no RNG, no IO. Under the Temporal
+  backend it is evaluated inside the workflow over the activity's recorded
+  result, so it must replay deterministically.
 
 On validation failure (max 3 retries):
 
