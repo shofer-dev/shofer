@@ -113,6 +113,29 @@ export interface AgentMeta {
 	 */
 	apiConfiguration?: string
 	tools?: string[]
+	/**
+	 * Slang `requires:` — a boolean expression over runner capability TAGS,
+	 * selecting which runner an agent's stakes may execute on.
+	 *
+	 *     requires: browser and (gpu or highmem)
+	 *     requires: [browser, gpu]          -- sugar for `browser and gpu`
+	 *
+	 * `and` / `or` / parentheses, and deliberately **no negation**: matching on
+	 * the ABSENCE of a self-declared tag would turn an advisory scheduling signal
+	 * into a security-relevant one, and it goes stale the moment a runner gains a
+	 * tag. The model stays allow-only, like every other selection algebra on the
+	 * platform (`docs/tag_matching.md`).
+	 *
+	 * Agent-level rather than per-stake, because a stake dispatches to an agent
+	 * SESSION pinned to one runner for its lifetime — output-contract reprompts
+	 * resume the same session — so the requirement is naturally per-agent.
+	 *
+	 * **Backend-specific semantics.** The Temporal backend routes on this. The
+	 * native single-process backend has no runners, so it is parsed and analysed
+	 * but ignored at dispatch — the same forward-compatible precedent as
+	 * `deliver` / `expect` / `import`.
+	 */
+	requires?: TagExpr
 	retry?: number
 	/**
 	 * Slang `context { ... }` block — controls ambient project context injected
@@ -458,3 +481,18 @@ export function exprAsStringList(expr: Expr): string[] | undefined {
 	}
 	return out
 }
+
+/**
+ * A boolean expression over capability tag atoms.
+ *
+ * Deliberately a tiny closed union rather than reusing `Expr`: `Expr` carries
+ * comparisons, member access and literals, none of which mean anything over a
+ * tag set, and admitting them would invite a `requires:` that reads like a
+ * predicate but cannot be evaluated against a runner's flat list of strings.
+ *
+ * There is no `Not` node. See `AgentMeta.requires`.
+ */
+export type TagExpr =
+	| { kind: "tag"; name: string }
+	| { kind: "and"; terms: TagExpr[] }
+	| { kind: "or"; terms: TagExpr[] }

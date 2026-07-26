@@ -689,6 +689,59 @@ budget: tokens(token_limit), rounds(10), time(300)
 
 ---
 
+## Capability Routing — `requires:`
+
+```slang
+agent Screenshotter {
+  requires: browser and (gpu or highmem)
+  role: "Captures pages."
+  stake grab(url: target) -> @out
+}
+```
+
+Some runners are special — a GPU box, a browser-enabled sandbox, a host holding
+a bespoke tool — and an agent needing that capability must land on such a runner
+rather than any runner. `requires:` is a boolean expression over runner
+capability **tags**.
+
+- **`and`, `or`, parentheses. No negation.** Matching on the ABSENCE of a tag
+  would turn an advisory capability claim into a security signal — and a
+  workspace declares its own tags. It also goes stale the moment a runner gains
+  one. The algebra is allow-only, like every other selector on the platform.
+  `not` is refused at parse time with that reason.
+- **`requires: [a, b]`** is sugar for `a and b`.
+- **Atoms may be namespaced and globbed within a segment**: `tool:screenshot`,
+  `tool:*`, `os:win*`. A `*` never crosses a `:`, matching the bus's address
+  rule, so one containment model covers both.
+- **Agent-level, not per-stake.** A stake dispatches to an agent SESSION pinned
+  to one runner for its lifetime — output-contract reprompts resume that same
+  session — so the requirement is naturally per-agent.
+
+### Canonical form, and why it matters
+
+An expression canonicalises to **sorted DNF** and hashes to a stable short
+string. That is not tidiness: under the Temporal backend the hash names a task
+queue, and an activity goes to exactly one queue — there is no "post to either".
+So `a or b` cannot be resolved by the sender, and the resolution is inverted:
+**runners** evaluate every active expression against their own tags and poll the
+queues they satisfy.
+
+This only works if the same requirement always produces the same queue.
+`browser and (gpu or highmem)` and `(browser and gpu) or (browser and highmem)`
+are the same requirement, and canonicalisation makes them the same string —
+otherwise they would name two queues, and one of them would have no runner
+polling it: a pipeline that hangs with no error.
+
+### Backend semantics
+
+**Temporal backend** — routes on it, as above.
+
+**Native (in-editor) backend** — has no runners at all, so `requires:` is parsed
+and analysed but **ignored at dispatch**. This is the established
+forward-compatible precedent (`deliver`, `expect`, `import` are parsed-not-
+executed), and it is stated here so the clause's meaning is unambiguous per
+backend rather than silently different.
+
 ## Structured Output Contracts
 
 ```slang

@@ -42,6 +42,7 @@ import type {
 	Span,
 	Position,
 	OutputSchema,
+	TagExpr,
 	OutputField,
 } from "./slang-ast.js"
 // These are functions used as values (not types), so they need a value import.
@@ -365,6 +366,17 @@ class Parser {
 				this.expect(TokenType.Colon)
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic metadata bag from upstream slang grammar
 				;(meta as any).mode = this.expect(TokenType.String).value
+			} else if (
+				this.check(TokenType.Ident) &&
+				this.peek().value === "requires" &&
+				this.tokens[this.pos + 1]?.type === TokenType.Colon
+			) {
+				// `requires:` — the capability tag expression. A contextual ident, so
+				// it reserves no keyword and cannot break a spec already using the
+				// name.
+				this.advance()
+				this.expect(TokenType.Colon)
+				meta.requires = this.parseTagExpr()
 			} else if (this.check(TokenType.Retry)) {
 				this.advance()
 				this.expect(TokenType.Colon)
@@ -754,6 +766,99 @@ class Parser {
 	}
 
 	// ─── Output Schema ───
+
+	/**
+	 * Parse a `requires:` value.
+	 *
+	 * Two surface forms, one tree: a bracketed list is sugar for a conjunction,
+	 * because `requires: [browser, gpu]` is the common case and reads better than
+	 * `browser and gpu` for a flat set. The canonical form is the expression.
+	 */
+	private parseTagExpr(): TagExpr {
+		if (this.match(TokenType.LBracket)) {
+			const terms: TagExpr[] = []
+			if (!this.check(TokenType.RBracket)) {
+				terms.push({ kind: "tag", name: this.parseTagAtom() })
+				while (this.match(TokenType.Comma)) {
+					terms.push({ kind: "tag", name: this.parseTagAtom() })
+				}
+			}
+			this.expect(TokenType.RBracket)
+			return terms.length === 1 ? terms[0]! : { kind: "and", terms }
+		}
+		return this.parseTagOr()
+	}
+
+	/** `or` binds loosest, so it is parsed outermost. */
+	private parseTagOr(): TagExpr {
+		const terms = [this.parseTagAnd()]
+		while (this.check(TokenType.Ident) && this.peek().value === "or") {
+			this.advance()
+			terms.push(this.parseTagAnd())
+		}
+		return terms.length === 1 ? terms[0]! : { kind: "or", terms }
+	}
+
+	private parseTagAnd(): TagExpr {
+		const terms = [this.parseTagPrimary()]
+		while (this.check(TokenType.Ident) && this.peek().value === "and") {
+			this.advance()
+			terms.push(this.parseTagPrimary())
+		}
+		return terms.length === 1 ? terms[0]! : { kind: "and", terms }
+	}
+
+	private parseTagPrimary(): TagExpr {
+		if (this.match(TokenType.LParen)) {
+			const inner = this.parseTagOr()
+			this.expect(TokenType.RParen)
+			return inner
+		}
+		// `not` is rejected explicitly rather than simply failing to parse, so an
+		// author gets the REASON: matching on the absence of a self-declared tag
+		// would make an advisory signal security-relevant, and goes stale whenever
+		// a runner gains a tag.
+		if (this.check(TokenType.Ident) && this.peek().value === "not") {
+			throw new ParseError(
+				SlangErrorCode.P201,
+				"`requires:` has no negation — the tag algebra is allow-only, because matching on a MISSING tag would treat an advisory capability claim as a security signal, and would go stale whenever a runner gained a tag",
+				this.peek(),
+				this.source,
+			)
+		}
+		return { kind: "tag", name: this.parseTagAtom() }
+	}
+
+	/**
+	 * One tag atom: an identifier, optionally namespaced (`tool:foo`) and
+	 * optionally globbed within a segment (`os:win*`).
+	 *
+	 * Assembled from tokens rather than lexed as one, so the lexer keeps no
+	 * knowledge of tag syntax.
+	 */
+	private parseTagAtom(): string {
+		let atom = this.tagSegment()
+		while (this.check(TokenType.Colon)) {
+			this.advance()
+			atom += ":" + this.tagSegment()
+		}
+		return atom
+	}
+
+	/** One `:`-delimited segment, which may be a bare `*`. */
+	private tagSegment(): string {
+		if (this.check(TokenType.Star)) {
+			this.advance()
+			return "*"
+		}
+		let seg = this.expect(TokenType.Ident).value
+		// A trailing glob (`win*`) arrives as Ident then Star.
+		while (this.check(TokenType.Star)) {
+			this.advance()
+			seg += "*"
+		}
+		return seg
+	}
 
 	private parseOutputSchema(): OutputSchema {
 		this.expect(TokenType.LBrace)

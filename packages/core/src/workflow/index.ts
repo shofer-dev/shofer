@@ -21,6 +21,9 @@ export {
 	type AgentDep,
 } from "./slang-resolver.js"
 
+// Capability tag expressions: canonical DNF, stable hash, satisfaction.
+export { toDNF, dnfToString, tagExprHash, satisfies, tagMatches, tagAtoms, type TagDNF } from "./slang-tags.js"
+
 // Output contracts: the structural schema + the semantic `where` predicate.
 export {
 	validateContract,
@@ -52,6 +55,7 @@ export type {
 	BudgetItem,
 	Span,
 	OutputSchema,
+	TagExpr,
 } from "./slang-ast.js"
 
 // Slang AST helpers (value exports)
