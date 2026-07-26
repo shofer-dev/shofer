@@ -1392,6 +1392,18 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		// Remove the 500-message limit to prevent array index shifting
 		// Virtuoso is designed to efficiently handle large lists through virtualization
 		const newVisibleMessages = modifiedMessages.filter((message) => {
+			// A plugin marker the plugin asked to keep out of the timeline.
+			if (message.say === "plugin_marker" && message.marker?.suppress) {
+				return false
+			}
+
+			// Rows written by the built-in checkpoints subsystem before it became a
+			// plugin: their `say` no longer has a case, so showing them would print a
+			// bare commit hash into an old task's transcript.
+			if ((message.say as string) === "checkpoint_saved") {
+				return false
+			}
+
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
 				const alwaysHiddenOnceProcessedAsk: ShoferAsk[] = [
 					"api_req_failed",

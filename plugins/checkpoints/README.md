@@ -53,13 +53,13 @@ shofer plugin pack plugins/checkpoints        # → checkpoints-0.1.0.shofer-plu
 shofer plugin install checkpoints-0.1.0.shofer-plugin --enable
 ```
 
-The archive ships the built `main.js` (with `simple-git` bundled) and `ui/row.js`, so
+The archive ships the built `main.mjs` (with `simple-git` bundled) and `ui/row.js`, so
 it installs with no build step and no `npm install`.
 
 ## Development
 
 ```bash
-node plugins/checkpoints/build-ui.mjs                            # build main.js + ui/row.js
+node plugins/checkpoints/build-ui.mjs                            # build main.mjs + ui/row.js
 npx tsgo -p plugins/checkpoints                                  # typecheck
 cd packages/core && npx vitest run --config vitest.plugins.config.ts checkpoints
 ```

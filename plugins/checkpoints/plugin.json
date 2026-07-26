@@ -5,7 +5,7 @@
 	"description": "Per-task undo history. Snapshots the workspace into a shadow git repository before every file-mutating turn, so any point in a task can be diffed and restored without touching the workspace's own repository.",
 	"author": "Shofer",
 	"license": "Apache-2.0",
-	"main": "main.js",
+	"main": "main.mjs",
 	"defaultEnabled": true,
 	"hookTimeoutMs": 20000,
 	"permissions": {

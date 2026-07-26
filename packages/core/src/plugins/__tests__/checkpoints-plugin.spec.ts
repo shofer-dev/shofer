@@ -170,7 +170,7 @@ describe("Checkpoints plugin (first-party, loaded off disk)", () => {
 		// The built entry + UI bundle travel with it, so the archive is self-contained:
 		// no build step and no `npm install` on the installing machine.
 		expect(fs.existsSync(path.join(installed.dir, "plugin.json"))).toBe(true)
-		expect(fs.existsSync(path.join(installed.dir, "main.js"))).toBe(true)
+		expect(fs.existsSync(path.join(installed.dir, "main.mjs"))).toBe(true)
 		expect(fs.existsSync(path.join(installed.dir, "ui", "row.js"))).toBe(true)
 	})
 })

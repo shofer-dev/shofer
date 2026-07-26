@@ -6,4 +6,4 @@
 plugins/*/ui/*.js
 # Same for a plugin's pre-bundled entry point (checkpoints ships `main.js` with its
 # runtime dependency inlined, so the packaged plugin needs no `node_modules`).
-plugins/*/main.js
+plugins/*/main.mjs

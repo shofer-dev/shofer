@@ -9,7 +9,9 @@
  *     externalized (the host injects an import map so it resolves to the webview's
  *     single shared React; a second copy silently breaks hooks).
  *
- *  2. `src/main.ts` → `main.js` — the plugin entry, with `simple-git` **bundled in**.
+ *  2. `src/main.ts` → `main.mjs` — the plugin entry, with `simple-git` **bundled in**.
+ *     (`.mjs`, not `.js`: the plugin dir has no `package.json`, so a `.js` bundle makes
+ *     Node reparse it as ESM on every load and warn.)
  *     (Sources live under `src/` so the built bundle never shadows them when the
  *     tests import the TypeScript.)
  *     A bundled plugin ships without `node_modules` (the packaging step excludes it),
@@ -48,7 +50,7 @@ console.log("[checkpoints] built ui/row.js")
 
 await esbuild.build({
 	entryPoints: [resolve(here, "src/main.ts")],
-	outfile: resolve(here, "main.js"),
+	outfile: resolve(here, "main.mjs"),
 	bundle: true,
 	format: "esm",
 	platform: "node",
@@ -63,4 +65,4 @@ await esbuild.build({
 	external: ["node:*", "fs", "fs/promises", "path", "os", "events", "child_process", "util", "stream", "crypto"],
 	legalComments: "none",
 })
-console.log("[checkpoints] built main.js (simple-git bundled)")
+console.log("[checkpoints] built main.mjs (simple-git bundled)")

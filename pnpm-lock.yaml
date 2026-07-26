@@ -861,6 +861,9 @@ importers:
       '@shofer/types':
         specifier: workspace:^
         version: link:../packages/types
+      '@shofer/vscode-shim':
+        specifier: workspace:^
+        version: link:../packages/vscode-shim
       '@vscode/codicons':
         specifier: ^0.0.36
         version: 0.0.36

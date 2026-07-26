@@ -1658,6 +1658,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				return false
 			}
 
+			// Rows written by the built-in checkpoints subsystem before it became a
+			// plugin. Their `say` no longer has a case, so rendering them would fall
+			// through to the default branch and print a bare commit hash into an old
+			// task's transcript. The data stays on disk; it is just not shown.
+			if ((message.say as string) === "checkpoint_saved") {
+				return false
+			}
+
 			if (everVisibleMessagesTsRef.current.has(message.ts)) {
 				if (message.ask && ALWAYS_HIDDEN_ONCE_PROCESSED_ASK.includes(message.ask)) return false
 				if (message.say && ALWAYS_HIDDEN_ONCE_PROCESSED_SAY.includes(message.say)) return false

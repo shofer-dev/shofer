@@ -785,7 +785,7 @@ surface. It is the reference for a plugin that owns a _feature_ rather than addi
 | Rendering a computed diff                           | **`ctx.host.editor.showMultiFileDiff`**                                                        |
 | Being on out of the box                             | manifest `defaultEnabled` (bundled scope only)                                                 |
 
-It also shows the packaging end: `build-ui.mjs` bundles both the UI and `main.js` (with
+It also shows the packaging end: `build-ui.mjs` bundles both the UI and `main.mjs` (with
 `simple-git` inlined), so the plugin ships with no `node_modules` and packs to a single
 `.shofer-plugin` archive.
 
