@@ -58,6 +58,21 @@ function workspaceKey(ctx: PluginContext): string {
 	return ctx.workspacePath ?? ctx.cwd ?? "default-workspace"
 }
 
+/**
+ * Whether this plugin may actually do its job.
+ *
+ * The plugin is **enabled by default** (bundled scope), but everything it does costs
+ * the user money: answering a question, compacting the memory log. Until they grant
+ * the separate billed-AI consent, `ctx.ai` is a denying stub — so every hook below
+ * returns early and the plugin is inert: no tool in the model's catalog that would
+ * only fail, no prompt section, no watcher, no background service, no stored
+ * observations. Granting consent reloads the plugin, and it comes alive with the same
+ * code path a manual enable takes.
+ */
+function isReady(ctx: PluginContext): boolean {
+	return ctx.ai?.hasConsent() ?? false
+}
+
 /** Config accessors with defaults matching the manifest. */
 function cfg(ctx: PluginContext) {
 	const c = ctx.config ?? {}
@@ -241,6 +256,10 @@ const plugin: ShoferPlugin = {
 	name: PLUGIN_NAME,
 
 	async initialize(ctx: PluginContext): Promise<void> {
+		if (!isReady(ctx)) {
+			ctx.host?.log.info("enabled but not AI-consented — staying inert until the user consents")
+			return
+		}
 		const store = getStore(ctx)
 		if (!store) return
 		// Prime the cache so the first prompt build / question sees persisted memory.
@@ -305,6 +324,9 @@ const plugin: ShoferPlugin = {
 	},
 
 	registerTools(ctx: PluginContext) {
+		// An unconsented plugin contributes nothing: a registered `ask_live_memory` would
+		// cost every task's catalog its schema and burn a turn when the model tried it.
+		if (!isReady(ctx)) return []
 		// Capture this call's `ctx` (with ai/storage) in the tool closure — the tool's
 		// own `execute` receives a CustomToolContext, not the PluginContext.
 		const store = getStore(ctx)
@@ -387,6 +409,9 @@ Files in context: ${result.contextFiles.length}`
 	},
 
 	async transformSystemPrompt(prompt: string, ctx: PluginContext): Promise<string> {
+		// Without consent there is no tool to describe, so the section would be prompt
+		// tokens spent telling the model about something it cannot use.
+		if (!isReady(ctx)) return prompt
 		const store = getStore(ctx)
 		if (!store) return prompt
 		const data = await store.snapshot()
@@ -465,6 +490,7 @@ Files in context: ${result.contextFiles.length}`
 	},
 
 	onEvent(event: PluginEvent, ctx: PluginContext): void {
+		if (!isReady(ctx)) return
 		// Lightweight, read-only observation of the telemetry catalog. Task starts/
 		// completions are captured with richer detail by the lifecycle hooks below;
 		// this catches anything else worth a memory marker without ever throwing.
@@ -477,6 +503,7 @@ Files in context: ${result.contextFiles.length}`
 
 	lifecycle: {
 		beforeTaskStart(ctx): void {
+			if (!isReady(ctx)) return
 			const store = getStore(ctx)
 			if (!store) return
 			const prompt = ctx.prompt ? truncate(ctx.prompt, 200) : "(no prompt)"
@@ -492,6 +519,7 @@ Files in context: ${result.contextFiles.length}`
 		},
 
 		afterTaskComplete(ctx): void {
+			if (!isReady(ctx)) return
 			const store = getStore(ctx)
 			if (!store) return
 			void store
@@ -512,6 +540,7 @@ Files in context: ${result.contextFiles.length}`
 		 * nothing, leaving the tool result untouched for the model.
 		 */
 		async afterToolCall(toolName, args, result, ctx): Promise<void> {
+			if (!isReady(ctx)) return
 			const kind = classify(toolName)
 			if (!kind) return
 			const store = getStore(ctx)

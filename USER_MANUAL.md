@@ -585,7 +585,8 @@ Any task can call the `ask_live_memory` tool to ask Live Memory a question. The 
 
 ### Setup
 
-1. Open **Settings** → enable Live Memory
+1. Open **Settings → Plugins → Live Memory**. It is enabled out of the box, but it stays
+   dormant until you allow its **billed AI calls** — grant that consent there.
 2. Link an **API Configuration profile** with a lightweight model (e.g., Gemini Flash, GPT-4o-mini, Claude Haiku)
 3. The agent starts with an empty context and fills it as tasks ask questions
 

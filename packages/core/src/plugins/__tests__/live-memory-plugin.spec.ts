@@ -226,15 +226,26 @@ describe("Live Memory plugin (P1–P6 dogfood)", () => {
 		expect(answer).toContain("Files in context: 1")
 	})
 
-	it("gates ctx.ai on the billed-AI consent (denying stub when not consented)", async () => {
+	it("stays inert without the billed-AI consent — no tool, no prompt section", async () => {
+		// The plugin ships ENABLED (bundled `defaultEnabled`), so "not consented" is the
+		// state a fresh install is in. It must contribute nothing at all there: a
+		// registered `ask_live_memory` would cost every task's catalog its schema and
+		// burn a turn when the model tried it, and a prompt section would describe a tool
+		// that cannot run.
 		await buildHarness({ consented: false })
 		await pluginRegistry.applyAfterToolCall("write_to_file", { path: "src/foo.ts" }, "ok")
 
 		const tools = await pluginRegistry.collectTools()
-		const ask = tools.find((t) => t.name === "ask_live_memory")!
-		const answer = await ask.execute({ question: "anything?" }, { mode: "code", task: {} as never })
-		expect(answer).toContain("Live Memory error")
-		expect(answer.toLowerCase()).toContain("consent")
+		expect(tools.find((t) => t.name === "ask_live_memory")).toBeUndefined()
+		expect(await pluginRegistry.applySystemPromptTransforms("BASE")).toBe("BASE")
+	})
+
+	it("contributes its tool + prompt section once consent is granted", async () => {
+		await buildHarness({ consented: true })
+
+		const tools = await pluginRegistry.collectTools()
+		expect(tools.find((t) => t.name === "ask_live_memory")).toBeDefined()
+		expect(await pluginRegistry.applySystemPromptTransforms("BASE")).not.toBe("BASE")
 	})
 
 	it("writes memory through ctx.storage as a per-workspace JSON document", async () => {

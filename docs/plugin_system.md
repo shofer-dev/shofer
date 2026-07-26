@@ -863,11 +863,20 @@ Consent is **per-plugin, via the enable toggle**, not a per-permission dialog. A
 discovered plugin is **disabled by default**; enabling it in the Plugins panel (or
 `--enable` on CLI install) is the user's consent to run it at all. The single exception
 is a **bundled** (first-party) plugin whose manifest declares **`defaultEnabled`** — a
-shipped Shofer _feature_ packaged as a plugin rather than an opt-in add-on (the
-checkpoints plugin). It is on until the user says otherwise, and that "otherwise" is
+shipped Shofer _feature_ packaged as a plugin rather than an opt-in add-on (both bundled
+plugins declare it). It is on until the user says otherwise, and that "otherwise" is
 recorded explicitly (`shofer.plugins.disabledPlugins`) rather than inferred from
 absence, so it is never resurrected by the next discovery. `defaultEnabled` is ignored
-for non-bundled scopes — a third party can never enable itself. The manifest
+for non-bundled scopes — a third party can never enable itself.
+
+**`defaultEnabled` never implies the AI consent.** The two gates stay independent: a
+default-enabled plugin declaring `permissions.ai` loads, but its `ctx.ai` is a denying
+stub until the user consents — so it must **stay inert** rather than contribute things
+that cannot work. Live Memory returns `[]` from `registerTools`, leaves the system
+prompt untouched, and starts no watcher or service until `ctx.ai.hasConsent()`;
+registering a tool that can only fail would cost every task's catalog its schema and
+burn a turn when the model tried it. Consent triggers `reloadPlugin`, so the plugin
+comes alive through the ordinary enable path. The manifest
 `permissions` then gate each capability at runtime — a contribution is only
 surfaced, and a code capability only reachable, when its permission is granted;
 `fs`/`network`/`filesystem` calls are checked against their allowlists. Enabling

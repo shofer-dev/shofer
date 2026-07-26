@@ -2,8 +2,11 @@
 
 > **✅ Shipped** — as a **bundled first-party plugin**
 > ([`plugins/live-memory/`](../../plugins/live-memory/)), not a core subsystem. It ships
-> with the extension but is **disabled by default** — enable it in Settings → Plugins,
-> and separately consent to its billed AI calls.
+> **enabled** (manifest `defaultEnabled`) but **inert**: every hook returns early until
+> the user grants the separate **billed-AI consent** in Settings → Plugins, so an
+> unconsented install contributes no tool, no prompt section, no watcher, no background
+> service and no stored observations. Granting consent reloads the plugin and it comes
+> alive.
 >
 > This document is the feature's design. Sections that describe _host wiring_ —
 > a `the plugin's main module` singleton, a `the `sidebar-panel` UI bundle` webview, an

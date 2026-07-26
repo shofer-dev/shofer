@@ -6,6 +6,7 @@
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"main": "main.ts",
+	"defaultEnabled": true,
 	"permissions": {
 		"tools": true,
 		"systemPrompt": true,

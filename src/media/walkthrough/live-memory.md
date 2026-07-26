@@ -21,7 +21,8 @@ The agent answers from its accumulated knowledge without the calling task having
 
 <img src="images/AssistantView.png" alt="Live Memory Status" width="280" />
 
-1. Open **Settings** → enable the Live Memory
+1. Open **Settings → Plugins → Live Memory** and allow its **billed AI calls** — it ships
+   enabled but stays dormant until you do
 2. Choose a lightweight model (e.g., Gemini Flash, GPT-4o-mini)
 3. The agent starts with an empty context and fills it as tasks ask questions
 
