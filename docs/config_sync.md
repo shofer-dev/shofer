@@ -1,35 +1,39 @@
-# Controller → Node Configuration Sync (Design)
+# Controller → Node Configuration Sync
 
-**Status:** Implemented (branch `feat/config-sync`). This doc is the spec; the implementation follows it.
-**Owner:** —
-**Related:** [`v3_architecture.md`](v3_architecture.md), [`settings_overlay.md`](settings_overlay.md), [`agentapi.md`](agentapi.md), [`headless.md`](headless.md), [`outside-workspace-path-allowlist.md`](outside-workspace-path-allowlist.md) (a consumer)
+**Related:** [`v3_architecture.md`](v3_architecture.md), [`settings_overlay.md`](settings_overlay.md), [`agentapi.md`](agentapi.md), [`headless.md`](headless.md), [`plugin_system.md`](plugin_system.md), [`outside-workspace-path-allowlist.md`](outside-workspace-path-allowlist.md) (a consumer)
 
 ---
 
-## 1. Problem
+## 1. What this solves
 
 In the [Shofer Nodes](v3_architecture.md#distributed-execution-horizontal-scaling) model, a
 task can run on a **remote executor** (`shofer serve` on another host). The agent core —
 including every decision that reads settings — runs **on that executor**, not on the
-controller's VS Code front-end. Today the shipped node model **serves config
-executor-locally**: a node evaluates against _its own_ local state.
+controller's VS Code front-end, and a node serves everything else executor-locally: its
+filesystem, its terminal, its own state.
 
-That means controller-side configuration does **not** reach the node. Consequences:
+Configuration cannot work that way, because the settings that matter are the ones the user
+sets in the controller's UI:
 
 - **Auto-approval** (`checkAutoApproval`, `@shofer/core`) reads `provider.getState()` on the
-  executor. A path/command the user trusts in the controller's Settings UI is invisible to a
-  remote node, which will re-prompt (RPC an ask back to the controller) or diverge.
-- Any other node-scoped setting the front-end owns (context-management thresholds,
-  write-delay, followup timeout, disabled tools, …) is likewise stranded.
+  executor. Without replication, a path or command the user trusts in the controller's
+  Settings UI is invisible to a remote node, which re-prompts (RPC an ask back to the
+  controller) or diverges from what the user asked for.
+- Every other node-scoped setting the front-end owns (context-management thresholds,
+  write-delay, followup timeout, disabled tools, …) would be stranded the same way.
+- A plugin that owns a workspace-scoped resource has the same problem one level up: the
+  bundled `rag-indexing` plugin must reach a node with the controller's index identity and
+  credentials, and as a **reader** ([§4b-2](#4b-2-the-plugin-half--syncedpluginstate)).
 
-The **only** controller→executor configuration that flows today is **per-task provider
-config**: `CreateTaskInput.apiConfiguration`
-([`agent-api.ts:35`](../packages/types/src/agent-api.ts)), applied by `ShoferApiAgent.createTask`
-([`shofer-api-agent.ts:60`](../packages/core/src/transport/shofer-api-agent.ts)) so a task
-runs on the same provider/model the front-end picked. Everything else is executor-local.
+The narrow precedent this generalizes is **per-task provider config**:
+`CreateTaskInput.apiConfiguration` ([`agent-api.ts`](../packages/types/src/agent-api.ts)),
+applied by `ShoferApiAgent.createTask`
+([`shofer-api-agent.ts`](../packages/core/src/transport/shofer-api-agent.ts)) so a task runs
+on the provider/model the front-end picked. That is per-task; this channel is the
+node-scoped, continuous equivalent.
 
-We want the node to require **zero local administration**: the user (or an external service)
-configures once, **on the controller**, and it propagates.
+The goal is a node that requires **zero local administration**: the user (or an external
+service) configures once, **on the controller**, and it propagates.
 
 ## 2. Goal & principle
 
@@ -61,7 +65,7 @@ Two axes decide whether a setting belongs on this channel:
 | **A plugin's config + credentials**                   | **This channel**, as the separate `SyncedPluginState` argument — opt-in per plugin |
 | **Front-end-only** UI state (pinned tabs, dismissals) | Not synced (no executor effect)                                                    |
 
-**In scope (v1): the whole node-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
+**In scope: the whole node-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
 field that changes how the agent core behaves on the executor, not just the auto-approval
 ones. Concretely that includes:
 
@@ -178,8 +182,8 @@ Three thin additions, each mirroring an existing seam.
 
 ### 4a. `AgentApi.applyConfig` (the wire method)
 
-Add one method to the transport-agnostic surface
-([`AgentApi`](../packages/types/src/agent-api.ts:54)):
+One method on the transport-agnostic surface
+([`AgentApi`](../packages/types/src/agent-api.ts)):
 
 ```ts
 /** Node-scoped settings + secrets the controller replicates to this executor (§config_sync).
@@ -207,7 +211,7 @@ which are secrets rather than settings and so cannot ride in `SyncedSettings`. L
 keys are deliberately NOT in it — they already travel per-task on
 `CreateTaskInput.apiConfiguration`. Transport bindings follow the existing pattern exactly:
 
-- **HTTP route** ([`http-server.ts`](../packages/core/src/transport/http-server.ts:58)):
+- **HTTP route** ([`http-server.ts`](../packages/core/src/transport/http-server.ts)):
   `POST /api/v1/config → { config, version, secrets, plugins } → 202` (token-authed like
   every `/api/v1/*` route; an absent `secrets` defaults to `{}`, an absent `plugins` means
   "no plugin state to apply").
@@ -337,12 +341,12 @@ sequenceDiagram
 
 ## 5. Semantics
 
-- **Authoritative, last-write-wins** for the keys present in a payload. v1 ships the full
-  slice each time (small, simple, idempotent); a future optimization may diff.
+- **Authoritative, last-write-wins** for the keys present in a payload. Every push carries
+  the full slice (small, simple, idempotent); diffing is a possible later optimization.
 - **Node-override precedence.** `allowClientConfig === false` (node launched with CLI
   provider/model/key/base-url overrides) ⇒ the node ignores pushes entirely, consistent with
-  `apiConfiguration`. (Open question: should _settings_ overrides be independent of
-  _provider_ overrides? — [§10](#10-open-questions).)
+  `apiConfiguration`. (Whether _settings_ overrides should be independent of _provider_
+  overrides is a decided trade-off, not an open one — [§10](#10-decisions--open-questions).)
 - **Union with local grants?** No. Unlike the [path-allowlist doc's](outside-workspace-path-allowlist.md)
   intra-controller union of config + interactive grants, the _controller→node_ relationship
   is **replace**: the node mirrors the controller's resolved state. A managed node has no
@@ -375,20 +379,19 @@ version never moves, so the reconciliation never re-pushes and the node holds th
 indefinitely. Note the consequence for `/health`, below.
 
 **Reporting (piggybacked on the health ping).** The node echoes its last-applied version on
-the existing `GET /health` body, which already carries `loadavg`/`cpus` and is parsed every
-~15 s by `NodeConnection.ping()`
-([`node-connection.ts:253`](../packages/core/src/transport/node-connection.ts)). Add
-`configVersion` alongside the load sample → the controller learns each node's applied version
-**for free**, on a channel that already exists (and again on the `whoami` handshake for the
-connect-time read). Expose it as `conn.configVersion`.
+the `GET /health` body, which already carries `loadavg`/`cpus` and is parsed every ~15 s by
+`NodeConnection.ping()` ([`node-connection.ts`](../packages/core/src/transport/node-connection.ts)).
+`configVersion` rides alongside the load sample, so the controller learns each node's applied
+version **for free**, on a channel that already exists (and again on the `whoami` handshake
+for the connect-time read); it surfaces as `conn.configVersion`.
 
-**Three node states** (a refinement of today's two):
+**Three node states** — connectedness alone does not decide eligibility:
 
-| State                     | Connected? | In pool?                                                |
-| ------------------------- | ---------- | ------------------------------------------------------- |
-| `disconnected`            | no         | no (already excluded)                                   |
-| **`connected` but stale** | yes        | **no** — new: excluded until it echoes `desiredVersion` |
-| `connected` and current   | yes        | yes                                                     |
+| State                     | Connected? | Takes a new task?                                                  |
+| ------------------------- | ---------- | ------------------------------------------------------------------ |
+| `disconnected`            | no         | no — not in the pool at all                                        |
+| **`connected` but stale** | yes        | **no** — in the pool, but skipped until it echoes `desiredVersion` |
+| `connected` and current   | yes        | yes                                                                |
 
 ```mermaid
 stateDiagram-v2
@@ -407,35 +410,43 @@ stateDiagram-v2
     end note
 ```
 
-**Pool eligibility gains one clause.** Today the `ExecutorPool` admits a node when
-`status === "connected" && !!conn.api` ([`NodeRegistry.ts:726`](../src/core/nodes/NodeRegistry.ts)).
-Add: **`&& conn.configVersion === desiredVersion`**. An out-of-sync node is removed from the
-pool (no _new_ task routing) but stays connected and health-pinged — **recoverable**.
+**Where the gate lives.** Membership and eligibility are separate. `NodeRegistry` adds a node
+to the pool on connectedness alone (`status === "connected" && !!conn.api && !disabled`,
+[`NodeRegistry.ts`](../src/core/nodes/NodeRegistry.ts)); the version gate is evaluated
+**per assignment** inside `ExecutorPool`, which holds `setDesiredConfigVersion(version)` and
+reads each executor's live `configVersion()` in `configMatches()`
+([`executor-pool.ts`](../packages/types/src/executor-pool.ts)). A stale node therefore stays
+in the pool, connected and health-pinged, but takes no _new_ task — **recoverable**, and
+in-flight tasks are untouched. Two escapes are deliberate: no desired version yet (gating
+off), and an executor reporting `managed() === false` — a self-administered node (and the
+Local in-process executor, which reads controller state directly) is exempt rather than
+permanently stale.
 
 **The loop.**
 
 - **On any settings change** — the controller recomputes `desiredVersion`, broadcasts
-  `applyConfig(slice, desiredVersion, secrets, plugins)` to all connected nodes, and drops
-  from the pool any node whose reported version ≠ `desiredVersion` until it converges.
+  `applyConfig(slice, desiredVersion, secrets, plugins)` to all connected nodes, and passes
+  the new desired version to the pool, which skips any node whose reported version ≠
+  `desiredVersion` until it converges.
 - **On a synced plugin's config change** — the same loop. The plugin slice is rebuilt
   asynchronously (each plugin shapes its own) and compared by value first, so a plugin
   reload that produces an identical slice does not bump the version and make every node
   re-apply the same payload.
 - **On each health ping** — the controller compares reported vs desired; on mismatch it
-  **re-sends** `applyConfig` (idempotent) and keeps the node out of the pool. This is the
+  **re-sends** `applyConfig` (idempotent) and the node keeps taking no new work. This is the
   self-heal path for a node whose earlier push failed.
 - **On (re)connect** — `NodeConnection` re-probes with backoff and re-enters `connected`
   ([`node-connection.ts`](../packages/core/src/transport/node-connection.ts)); it reports its
-  (stale) version, gets pushed, converges, and only then rejoins the pool.
+  (stale) version, gets pushed, converges, and only then becomes assignable again.
 
 **This subsumes the connect-time race** (the former "gate the first task on the first ack"
 question): version-match gating covers connect, reconnect, and mid-session change with one
 uniform rule — no defaults window, no special first-task case.
 
-**In-flight tasks are not killed.** Pool removal means _no new assignment_; a task already
+**In-flight tasks are not killed.** The gate means _no new assignment_; a task already
 running on a now-stale node keeps running and picks up the new config on its next
 `getState()` read once the node applies it (same as a local task reacting to a mid-task
-settings change — no per-task snapshotting in v1). _Optional hardening:_ the controller
+settings change — no per-task snapshotting). _Optional hardening, not built:_ the controller
 stamps `desiredVersion` on `createTask` and the node rejects a task whose expected version ≠
 its applied version — defense-in-depth against a pool-gating race.
 
@@ -512,17 +523,19 @@ of pull-through.
   after it has applied the current config and echoes `desiredVersion`; connected-but-stale
   nodes are excluded until they converge. This is the version-gating in
   [§6](#6-convergence--config-version--pool-gating) — there is no "defaults window."
-- **v1 syncs the broader node-scoped `globalSettings` set**, not just the auto-approval slice
-  — defined as the positive allowlist in [§3](#3-what-is-synced-and-what-is-not).
-- **One gate, not two — and it defaults open.** The existing `allowClientConfig` flag governs
-  whether a node honors _both_ the controller's per-task provider config and these synced
-  settings — no separate `allowClientSettings` opt-out in v1. **A `shofer serve` node defaults
-  to open** (accept controller config), so a freshly-provisioned node is a managed replica
-  with zero node-side setup; it flips closed only when the operator supplies explicit local
-  config (CLI overrides). _(This is a deliberate change from the flag's current code default
-  of `false`, which today is only the in-process/local adapter's value —
-  [`shofer-api-agent.ts:14`](../packages/core/src/transport/shofer-api-agent.ts).)_ Splitting
-  the gate (front-end policy + node's own provider) is a later refinement if a use-case appears.
+- **The broader node-scoped `globalSettings` set is synced**, not just the auto-approval
+  slice — defined as the positive allowlist in [§3](#3-what-is-synced-and-what-is-not).
+- **One gate, not two — and it opens by default.** `allowClientConfig` governs whether a node
+  honors _both_ the controller's per-task provider config and these synced settings; there is
+  no separate `allowClientSettings` opt-out. `shofer serve` passes `allowClientConfig: !hasOverride`
+  ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts)), so a freshly-provisioned node is an
+  open, managed replica with zero node-side setup and flips closed only when the operator
+  supplies explicit local config (CLI provider/model/key/base-url). The option's own default is
+  `false`, which is the in-process/local adapter's value — it never receives a remote config
+  anyway ([`shofer-api-agent.ts`](../packages/core/src/transport/shofer-api-agent.ts)). A closed
+  node advertises `managed: false` and is exempted from version-gating rather than treated as
+  permanently stale ([§6](#6-convergence--config-version--pool-gating)). Splitting the gate
+  (front-end policy + node's own provider) is a later refinement if a use-case appears.
 - **Full-slice pushes, not diffs.** Each push carries the entire `SyncedSettings` slice
   (last-write-wins, idempotent); no per-key diffing. The slice is tiny, so there is no
   payload/perf reason to complicate it, and the content-hash version works unchanged.
@@ -538,11 +551,6 @@ of pull-through.
 
 ### Open
 
-1. **One-time authoring of `SETTING_SYNC_SCOPE`** (implementation task, not a design question).
-   Fill the scope map for the ~96 current `globalSettingsSchema` keys. This is a single pass
-   done _once_ at implementation; the `satisfies Record<…>` guard keeps it correct thereafter,
-   so it never needs repeating ([§3](#3-what-is-synced-and-what-is-not)).
-
-```
-
-```
+None. `SETTING_SYNC_SCOPE` is authored for every `globalSettingsSchema` key, and its
+`satisfies Record<…>` guard makes classifying a new setting a compile-time obligation rather
+than a recurring manual pass ([§3](#3-what-is-synced-and-what-is-not)).
