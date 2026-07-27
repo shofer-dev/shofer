@@ -29,7 +29,6 @@
 		"providers": "Provider",
 		"modes": "Mode",
 		"mcp": "Server MCP",
-		"worktrees": "Worktrees",
 		"autoApprove": "Auto-Approve",
 		"notifications": "Notifikasi",
 		"contextManagement": "Konteks",

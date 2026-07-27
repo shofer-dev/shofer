@@ -133,10 +133,18 @@ function CheckpointRow({ api }) {
             /* @__PURE__ */ jsxs(Popover, { open: moreOpen, onOpenChange: setMoreOpen, children: [
               /* @__PURE__ */ jsx(StandardTooltip, { content: t("row.more"), children: /* @__PURE__ */ jsx(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "icon", "aria-label": t("row.more"), children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-kebab-vertical" }) }) }) }),
               /* @__PURE__ */ jsxs(PopoverContent, { align: "end", className: "flex flex-col gap-1 w-72", children: [
-                /* @__PURE__ */ jsxs(Button, { variant: "ghost", className: "justify-start", onClick: () => void showDiff("from-init"), children: [
-                  /* @__PURE__ */ jsx("span", { className: "codicon codicon-versions" }),
-                  t("more.sinceFirst")
-                ] }),
+                /* @__PURE__ */ jsxs(
+                  Button,
+                  {
+                    variant: "ghost",
+                    className: "justify-start",
+                    onClick: () => void showDiff("from-init"),
+                    children: [
+                      /* @__PURE__ */ jsx("span", { className: "codicon codicon-versions" }),
+                      t("more.sinceFirst")
+                    ]
+                  }
+                ),
                 /* @__PURE__ */ jsxs(
                   Button,
                   {

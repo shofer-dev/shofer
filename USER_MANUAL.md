@@ -112,7 +112,6 @@ Shofer's settings are organized by tab in the Settings panel (⚙️ gear icon):
 | **RAG Indexer**    | Semantic code and git log search index configuration                 |
 | **Modes**          | Create and edit built-in and custom modes                            |
 | **MCP Servers**    | Connect external tools (browser, databases, Kubernetes)              |
-| **Worktrees**      | Manage git worktrees (create, delete, view status)                   |
 | **Prompts**        | Customize per-mode system prompts and instructions                   |
 | **UI**             | Chat view and sidebar display preferences                            |
 | **Experimental**   | Feature flags and opt-in experimental capabilities                   |
@@ -480,23 +479,42 @@ Shofer manages git worktrees for parallel tasks, letting multiple tasks run on d
 
 <img src="src/media/walkthrough/images/WorktreeSelector.png" alt="Worktree Selector Dropdown" width="280" />
 
+Worktrees are a bundled plugin, enabled by default (Settings → Plugins → Worktrees).
+Disable it and every task simply runs in the workspace.
+
+### Where a task runs
+
+A task you start without picking anything gets a **fresh worktree** on a new branch off
+your current HEAD, so two agents never edit the same files. Click the branch chip in the
+chat input to pick an existing worktree instead, or the current branch to opt out for
+that task.
+
 ### Creating a Worktree
 
 1. Click the branch chip in the chat input bar.
 2. Click "Create new worktree…".
 3. Confirm the branch and path (auto-generated).
-4. A new task spawns automatically in that worktree.
+4. It becomes the selection for your next message.
 
 ### `.shofer/worktreeinclude`
 
 By default, only tracked git files are present in a new worktree. Create a `.shofer/worktreeinclude` file to specify which gitignored files (e.g., `node_modules/`) to copy automatically. Only files matching **both** `.gitignore` and `.shofer/worktreeinclude` are copied.
 
-Manage worktrees from Settings → Worktrees (view, delete, force-delete with uncommitted changes). Multi-root workspaces are not supported.
+Manage worktrees from Settings → Plugins → Worktrees (view, delete, force-delete with uncommitted changes). Multi-root workspaces are not supported.
+
+### Finishing up
+
+Six slash commands handle the merge back: `/merge-worktree`,
+`/merge-worktree-cleanup`, `/rebase-worktree`, `/rebase-worktree-cleanup`,
+`/dryrun-rebase-worktree` and `/worktree-status`. They auto-detect the base branch, stop
+rather than guess at an ambiguous conflict, and **never push**.
 
 **Limitations:**
 
-- Git submodules are not initialized automatically. You must run `git submodule update --init` in the worktree manually.
-- Merging and rebasing should be done manually. For safety, Shofer only provides create, delete, and select operations on worktrees — it does not merge, rebase, or push.
+- Submodules are initialized shallowly (`--depth 1`) when the "Initialize submodules"
+  option is left on; a repository needing full history must run `git submodule update`
+  itself.
+- Nothing is ever pushed for you.
 
 ---
 

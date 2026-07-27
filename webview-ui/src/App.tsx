@@ -72,6 +72,7 @@ const App = () => {
 		parallelTasks,
 		currentTaskItem,
 		customModes,
+		cwd,
 	} = useExtensionState()
 
 	// Merge built-in and custom modes into a flat slug→name lookup for
@@ -96,19 +97,6 @@ const App = () => {
 			})),
 		[customModes],
 	)
-
-	// Worktree list — populated by worktreeList window messages from the
-	// extension host (same mechanism WorktreeIndicator uses).
-	const [worktrees, setWorktrees] = useState<Array<{ path: string; branch: string }>>([])
-	useEffect(() => {
-		const onMessage = (e: MessageEvent) => {
-			if (e.data?.type === "worktreeList") {
-				setWorktrees(e.data.worktrees || [])
-			}
-		}
-		window.addEventListener("message", onMessage)
-		return () => window.removeEventListener("message", onMessage)
-	}, [])
 
 	const [showAnnouncement, setShowAnnouncement] = useState(false)
 	const [tab, setTab] = useState<Tab>("chat")
@@ -471,7 +459,7 @@ const App = () => {
 						/>
 					)}
 					{/* Single shared portal target for popovers/dropdowns (AutoApproveDropdown,
-					 * WorktreeIndicator, …). Lives at the App root —
+					 * plugin popovers, …). Lives at the App root —
 					 * always visible — so popovers never mount into a `display:none` view.
 					 * ChatView and WorkflowView must NOT render their own `#shofer-portal`:
 					 * duplicate ids made `getElementById` resolve to the hidden ChatView copy,
@@ -508,7 +496,7 @@ const App = () => {
 				parallelTasks={parallelTasks || []}
 				currentTaskId={currentTaskItem?.id}
 				modes={allModes}
-				worktrees={worktrees}
+				workspacePath={cwd ?? ""}
 			/>
 		</>
 	)

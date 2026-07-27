@@ -76,7 +76,7 @@ The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plu
 
 ## File Operations
 
-> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`worktrees.md §3a`](worktrees.md#3a-path-isolation-mutating-tool-guard).
+> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`plugins/worktrees.md §3`](plugins/worktrees.md#3-what-core-keeps-confinement).
 
 | Tool                   | Origin | Group | Always Available | Status | Description                                    |
 | ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
@@ -370,7 +370,7 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 ## Execution & System
 
-> **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`worktrees.md §3a`](worktrees.md#3a-path-isolation-mutating-tool-guard).
+> **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`plugins/worktrees.md §3`](plugins/worktrees.md#3-what-core-keeps-confinement).
 
 | Tool                  | Origin | Group   | Always Available | Status | Description                                 |
 | --------------------- | :----: | ------- | :--------------: | :----: | ------------------------------------------- |

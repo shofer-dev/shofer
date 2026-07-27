@@ -31,7 +31,7 @@ Neither approach provides a quick, discoverable way to browse available commands
 
 ## Solution
 
-Two compact chip buttons in the chat input bar, placed after WorktreeStatusIndicator:
+Two compact chip buttons in the chat input bar, placed after the plugin chips (the worktrees branch chip among them):
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐

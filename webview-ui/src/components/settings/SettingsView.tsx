@@ -11,7 +11,6 @@ import React, {
 } from "react"
 import {
 	CheckCheck,
-	GitBranch,
 	Archive,
 	Database,
 	SquareTerminal,
@@ -78,7 +77,6 @@ import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
 import { ShoferNodesSettings, ShoferNodesSettingsRef } from "./ShoferNodesSettings"
 import { PluginsSettings, type PluginsSettingsRef } from "./PluginsSettings"
-import { WorktreesView } from "../worktrees/WorktreesView"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
 import { RagIndexerSettings, type RagIndexerSettingsRef } from "./RagIndexerSettings"
@@ -107,7 +105,6 @@ export const sectionNames = [
 	"mcp",
 	"shoferNodes",
 	"plugins",
-	"worktrees",
 	"prompts",
 	"ui",
 	"experimental",
@@ -666,7 +663,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "terminal", icon: SquareTerminal },
 			{ id: "codebaseIndex", icon: Archive },
 			{ id: "prompts", icon: MessageSquare },
-			{ id: "worktrees", icon: GitBranch },
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
 			{ id: "logging", icon: ScrollText },
@@ -1060,9 +1056,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{renderTab === "plugins" && (
 							<PluginsSettings ref={pluginsSettingsRef} onConfigDirty={() => setChangeDetected(true)} />
 						)}
-
-						{/* Worktrees Section */}
-						{renderTab === "worktrees" && <WorktreesView />}
 
 						{/* Prompts Section */}
 						{renderTab === "prompts" && (

@@ -2247,6 +2247,9 @@ export class ShoferProvider
 			getPluginConfigs: () =>
 				this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined,
 			workspacePath: cwd,
+			// A repository-shaped plugin (worktrees) must be able to tell a multi-root
+			// window apart from a single-root one; the webview cannot.
+			workspaceFolders: vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath),
 			// P6.G1 — host LLM/embeddings seam for `ctx.ai` (never leaks keys). Wired here
 			// (not in @shofer/core) because it needs the extension's ProviderSettingsManager
 			// + code-index embedder to reach buildApiHandler.
@@ -2586,6 +2589,49 @@ export class ShoferProvider
 					globalStoragePath: this.contextProxy.globalStorageUri.fsPath,
 				})) as ShoferMessage[]
 				return toMarkers(messages, pluginName)
+			},
+
+			openTask: async (pluginName, opts): Promise<string> => {
+				// The same path the chat input takes for a parallel task: the current task
+				// keeps running in the background and the new one is focused. With no text
+				// it lands idle, waiting for the user — a plugin opening a task has prepared
+				// a place to work, not a prompt.
+				const taskId = await this.createManagedTask(opts?.name, opts?.text, opts?.images, opts?.cwd, {
+					mode: opts?.mode,
+				})
+				if (!taskId) {
+					throw new Error(`[plugin:${pluginName}] ctx.task.openTask: the host could not create a task`)
+				}
+				this.log(`[plugin:${pluginName}] opened task ${taskId} in ${opts?.cwd ?? "the workspace"}`)
+				return taskId
+			},
+
+			setCwd: async (pluginName, cwd, taskId): Promise<void> => {
+				const task = resolveTask(taskId)
+				if (!task) {
+					throw new Error(`[plugin:${pluginName}] ctx.task.setCwd: no task to re-point`)
+				}
+
+				// A workflow that has already started has agents with work on disk in the
+				// old directory; moving it now would desync the two. Refuse loudly — the
+				// caller is a UI action the user just took.
+				const { WorkflowTask } = await import("../workflow/index")
+				if (task instanceof WorkflowTask && task.flowState.started) {
+					throw new Error(
+						`[plugin:${pluginName}] ctx.task.setCwd: workflow ${task.taskId} has already started its agents`,
+					)
+				}
+
+				task.reassignCwd(cwd)
+				// Persist so the task rehydrates into the same directory later.
+				try {
+					const { historyItem } = await this.getTaskWithId(task.taskId)
+					await this.updateTaskHistory({ ...historyItem, cwd })
+				} catch {
+					// Not in history yet — the task's next metadata save carries the cwd.
+				}
+				await this.postInitState()
+				this.log(`[plugin:${pluginName}] task ${task.taskId} re-pointed to ${cwd}`)
 			},
 
 			rewind: async (pluginName, ts, opts): Promise<void> => {
@@ -5731,9 +5777,9 @@ export class ShoferProvider
 			// Ensure this task is present in shoferStack before startTask() emits
 			// its initial state update, so state.currentTaskId is available ASAP.
 			startTask: false,
-			// Per-task CWD: for embedded worktree tasks, this is the worktree
-			// subdirectory. Merged from options first, then overridden by the
-			// explicit cwd parameter if provided.
+			// Per-task CWD: wherever placement put this task (a plugin may give it its
+			// own checkout). Merged from options first, then overridden by the explicit
+			// cwd parameter if provided.
 			cwd: cwd ?? options.cwd,
 			...options,
 		})
@@ -6255,7 +6301,8 @@ export class ShoferProvider
 	 * @param name Optional task name (auto-generated from text if not provided)
 	 * @param text Initial task text
 	 * @param images Optional images
-	 * @param worktreeDir Optional embedded worktree directory used as the task cwd
+	 * @param cwd Directory the task runs in; defaults to the workspace. A plugin may
+	 *   place a task elsewhere (the bundled `worktrees` plugin gives each its own checkout).
 	 * @param seeds Optional per-task mode / API-config profile seeds (from the
 	 *   pre-task chat dropdown). Absent values fall back to the global defaults.
 	 */
@@ -6263,13 +6310,13 @@ export class ShoferProvider
 		name?: string,
 		text?: string,
 		images?: string[],
-		worktreeDir?: string,
+		cwd?: string,
 		seeds?: { mode?: string; apiConfigName?: string },
 	): Promise<string | undefined> {
 		this.log(
 			`[createManagedTask] Called — name=${name || "(auto)"} ` +
 				`textLen=${text?.length ?? 0} images=${images?.length ?? 0} ` +
-				`worktreeDir=${worktreeDir ?? "(none)"} ` +
+				`cwd=${cwd ?? "(workspace)"} ` +
 				`mode=${seeds?.mode ?? "(global)"} apiConfig=${seeds?.apiConfigName ?? "(global)"} ` +
 				`stackDepth=${this.shoferStack.length}`,
 		)
@@ -6292,8 +6339,8 @@ export class ShoferProvider
 			const taskName = name || (text ? this.generateTaskNameFromText(text) : "New Task")
 
 			// Create a new task with keepCurrentTask=true so createTask won't abort any remaining tasks.
-			// Pass worktreeDir as the task's cwd for embedded worktree tasks, and the optional
-			// per-task mode / API-config seeds from the pre-task chat dropdown.
+			// `cwd` is where the task runs (a plugin may have placed it), and the seeds are
+			// the per-task mode / API-config from the pre-task chat dropdown.
 			const task = await this.createTask(
 				text,
 				images,
@@ -6304,7 +6351,7 @@ export class ShoferProvider
 					initialApiConfigName: seeds?.apiConfigName,
 				},
 				{},
-				worktreeDir,
+				cwd,
 			)
 
 			if (!task) {
@@ -6326,7 +6373,8 @@ export class ShoferProvider
 				tokensOut: 0,
 				totalCost: 0,
 				// workspace is the VS Code workspace root (for history filtering);
-				// cwd is the per-task working directory (for worktree badge display).
+				// cwd is the per-task working directory (shown in the task list when it
+				// differs).
 				workspace: task.workspacePath || "",
 				cwd: task.cwd !== task.workspacePath ? task.cwd : undefined,
 				name: managedTask.name,

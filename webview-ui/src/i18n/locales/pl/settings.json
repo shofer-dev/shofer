@@ -29,7 +29,6 @@
 		"providers": "Dostawcy",
 		"modes": "Tryby",
 		"mcp": "Serwery MCP",
-		"worktrees": "Worktrees",
 		"autoApprove": "Auto-zatwierdzanie",
 		"notifications": "Powiadomienia",
 		"contextManagement": "Kontekst",

@@ -609,9 +609,10 @@ export class WorkflowTask extends Task {
 
 	private async slangLoopInner(): Promise<void> {
 		this.slangLoopEntered = true
-		// Lock the worktree from here on: the loop is about to spawn agents
-		// (subtasks), whose cwd must not move. Persisted via serializeFlowState so
-		// the webview's WorktreeIndicator switches to read-only.
+		// Lock the working directory from here on: the loop is about to spawn agents
+		// (subtasks), whose cwd must not move. Persisted via serializeFlowState, and
+		// the reason `ShoferProvider`'s `setCwd` seam refuses a started workflow — a UI
+		// offering to re-point it (the worktrees plugin's picker) reads the same flag.
 		this.flowState.started = true
 		const provider = this.providerRef.deref() as ShoferProvider | undefined
 		if (!provider) throw new Error("WorkflowTask: provider reference lost")
@@ -1091,9 +1092,9 @@ export class WorkflowTask extends Task {
 				// lock it: the agent cannot rename itself via set_task_title, so the
 				// task list stays aligned with the workflow's agent declarations.
 				initialTitle: agentName,
-				// Inherit the workflow's worktree: every agent in the tree operates
-				// inside the same directory the WorkflowTask runs in (the worktree the
-				// user selected at launch, or the workspace root when none was picked).
+				// Inherit the workflow's directory: every agent in the tree operates
+				// inside the same one the WorkflowTask runs in (wherever placement put it
+				// at launch, or the workspace root).
 				cwd: this.cwd,
 			})
 			if (task) {
@@ -2014,9 +2015,9 @@ export async function createWorkflowTask(
 	slangSource: string,
 	flowParams?: Record<string, unknown>,
 	/**
-	 * Worktree directory the whole workflow runs in. When set, the WorkflowTask
-	 * and every agent it spawns operate inside this worktree (see
-	 * {@link WorkflowTask.spawnAgentTask}). Falls back to the workspace root.
+	 * Directory the whole workflow runs in. When set, the WorkflowTask and every
+	 * agent it spawns operate inside it (see {@link WorkflowTask.spawnAgentTask});
+	 * a plugin chooses it at creation time. Falls back to the workspace root.
 	 */
 	cwd?: string,
 ): Promise<WorkflowTask> {
@@ -2041,8 +2042,8 @@ export async function createWorkflowTask(
 		slangSource,
 		flowDecl,
 		flowParams,
-		// Run the workflow root inside the selected worktree (if any); child
-		// agents inherit this via spawnAgentTask.
+		// Run the workflow root wherever placement decided; child agents inherit this
+		// via spawnAgentTask.
 		cwd,
 		// Wire the same provider-level event forwarding that createTask() gets,
 		// so the workflow root's TaskCompleted reaches the public ShoferAPI.

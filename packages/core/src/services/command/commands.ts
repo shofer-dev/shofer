@@ -143,6 +143,23 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 		commands.set(command.name, command)
 	}
 
+	// A bundled plugin shipping the platform's own commands (`unqualifiedContributions`)
+	// registers them under their authored names, HERE — at the built-in tier — so a user's
+	// or project's file of the same name still wins, exactly as it did when the command
+	// was compiled into core. Third-party plugin commands are namespaced further below.
+	const unqualifiedPluginManager = getSharedPluginManager()
+	if (unqualifiedPluginManager) {
+		for (const {
+			pluginName,
+			dir,
+			privateNames,
+			unqualified,
+		} of unqualifiedPluginManager.getContributedCommandDirs()) {
+			if (!unqualified) continue
+			await scanCommandDirectory(dir, "plugin", commands, pluginName, privateNames ?? [], true)
+		}
+	}
+
 	// Scan global commands (override built-in)
 	const globalDir = path.join(getGlobalShoferDirectory(), "commands")
 	await scanCommandDirectory(globalDir, "global", commands)
@@ -157,7 +174,8 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 	// plugin's — no override/warning is needed. Empty when no plugin manager is wired.
 	const pluginManager = getSharedPluginManager()
 	if (pluginManager) {
-		for (const { pluginName, dir, privateNames } of pluginManager.getContributedCommandDirs()) {
+		for (const { pluginName, dir, privateNames, unqualified } of pluginManager.getContributedCommandDirs()) {
+			if (unqualified) continue
 			await scanCommandDirectory(dir, "plugin", commands, pluginName, privateNames ?? [])
 		}
 	}
@@ -188,9 +206,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 		if (sep > 0) {
 			const pluginName = name.slice(0, sep)
 			const bareName = name.slice(sep + 1)
-			const contribution = pluginManager
-				.getContributedCommandDirs()
-				.find((c) => c.pluginName === pluginName)
+			const contribution = pluginManager.getContributedCommandDirs().find((c) => c.pluginName === pluginName)
 			if (contribution) {
 				const pluginCommand = await tryLoadCommand(contribution.dir, bareName, "plugin")
 				if (pluginCommand) {
@@ -213,7 +229,25 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 	}
 
 	// Check built-in commands if not found anywhere else (lowest priority)
-	return await getBuiltInCommand(name)
+	const builtInCommand = await getBuiltInCommand(name)
+	if (builtInCommand) {
+		return builtInCommand
+	}
+
+	// …and, at that same tier, the authored names a bundled plugin claimed with
+	// `unqualifiedContributions` — the reason `/merge-worktree` still resolves after the
+	// worktree commands moved out of core into `plugins/worktrees`.
+	if (pluginManager) {
+		for (const contribution of pluginManager.getContributedCommandDirs()) {
+			if (!contribution.unqualified) continue
+			const pluginCommand = await tryLoadCommand(contribution.dir, name, "plugin")
+			if (pluginCommand) {
+				return { ...pluginCommand, name, source: "plugin", pluginName: contribution.pluginName }
+			}
+		}
+	}
+
+	return undefined
 }
 
 /**
@@ -319,6 +353,7 @@ async function scanCommandDirectory(
 	commands: Map<string, Command>,
 	pluginName?: string,
 	privateNames: string[] = [],
+	unqualified = false,
 ): Promise<void> {
 	try {
 		const stats = await fs.stat(dirPath)
@@ -345,8 +380,11 @@ async function scanCommandDirectory(
 			// Plugin commands are **namespaced** as `<pluginName>:<command>` (design
 			// §14.7 → namespacing) so they can never collide with built-in/user
 			// commands or with another plugin's commands.
+			// A bundled plugin with `unqualifiedContributions` keeps the authored name
+			// (`/merge-worktree`), which is the whole point of the exemption.
 			const bareName = getCommandNameFromFile(path.basename(originalPath))
-			const commandName = source === "plugin" && pluginName ? `${pluginName}:${bareName}` : bareName
+			const commandName =
+				source === "plugin" && pluginName && !unqualified ? `${pluginName}:${bareName}` : bareName
 
 			try {
 				const content = await fs.readFile(resolvedPath, "utf-8")
@@ -387,6 +425,9 @@ async function scanCommandDirectory(
 				// command — no last-installed-wins tie-break or warning is needed here
 				// (design §14.7 → namespacing).
 				if (source === "plugin") {
+					// Unqualified plugin commands sit at the built-in tier, so a user's or
+					// project's file of the same name still overrides them (they are scanned
+					// before both). Namespaced ones cannot collide at all.
 					commands.set(commandName, {
 						name: commandName,
 						content: commandContent,

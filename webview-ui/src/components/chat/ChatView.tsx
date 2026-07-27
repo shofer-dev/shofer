@@ -177,8 +177,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 		messageQueue = [],
 		parallelTasks,
 		taskNotifications,
-		pendingWorktreeDir,
-		setPendingWorktreeDir,
 		hasMoreShoferMessages,
 		preferredNodeId,
 	} = useExtensionState()
@@ -1179,14 +1177,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				userRespondedRef.current = true
 
 				if (messagesRef.current.length === 0) {
-					// On the home screen the user may have chosen a target worktree
-					// via WorktreeIndicator. Forward it so the new task spawns
-					// scoped to that worktree's directory; clear after consuming.
 					vscode.postMessage({
 						type: "newTask",
 						text,
 						images,
-						worktreeDir: pendingWorktreeDir ?? undefined,
 						// Pre-task tier-1 selections from the chat dropdown. The host
 						// seeds the new task with these and falls back to the global
 						// Settings defaults when absent.
@@ -1197,7 +1191,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						// like mode/apiConfigName above.
 						preferredNodeId: preferredNodeId ?? undefined,
 					})
-					if (pendingWorktreeDir) setPendingWorktreeDir(null)
 				} else if (shoferAskRef.current) {
 					if (shoferAskRef.current === "followup") {
 						markFollowUpAsAnswered()
@@ -1273,8 +1266,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			isStreaming,
 			messageQueue.length,
 			apiConfiguration?.apiProvider,
-			pendingWorktreeDir,
-			setPendingWorktreeDir,
 			mode,
 			currentApiConfigName,
 			preferredNodeId,

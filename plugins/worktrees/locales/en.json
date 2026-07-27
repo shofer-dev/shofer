@@ -1,0 +1,75 @@
+{
+	"common": {
+		"cancel": "Cancel"
+	},
+	"view": {
+		"title": "Worktrees",
+		"description": "A worktree is a second checkout of this repository on another branch. Each task can run in its own, so two agents never edit the same files.",
+		"newWorktree": "Create worktree",
+		"noWorkspace": "No folder is open. Open the repository you want worktrees for.",
+		"notGitRepo": "This workspace is not a Git repository. Open a workspace with a Git repository to use worktrees.",
+		"multiRootNotSupported": "Worktrees are not supported in multi-root workspaces. Open a single folder to use them.",
+		"subfolderNotSupported": "This workspace is a subfolder of a Git repository. Open the repository root to use worktrees.",
+		"gitRoot": "Git root",
+		"primary": "Primary",
+		"locked": "Locked",
+		"detachedHead": "Detached HEAD",
+		"noBranch": "No branch",
+		"includeFileExists": ".shofer/worktreeinclude found. Its files are copied into new worktrees.",
+		"noIncludeFile": "No .shofer/worktreeinclude file",
+		"createFromGitignore": "Create from .gitignore"
+	},
+	"picker": {
+		"tooltip": "Worktree status — click for details",
+		"selectWorktree": "Select worktree for new task",
+		"createNew": "Create new worktree…",
+		"disabledNotGitRepo": "Worktrees unavailable: workspace is not a git repository",
+		"disabledMultiRoot": "Worktrees unavailable in multi-root workspaces",
+		"disabledSubfolder": "Worktrees unavailable: workspace is a subfolder of a git repository",
+		"disabledNoFolder": "Worktrees unavailable: no workspace folder open"
+	},
+	"status": {
+		"lastCommit": "Last commit",
+		"ahead": "ahead",
+		"behind": "behind",
+		"upToDate": "Up to date with base",
+		"filesChanged": "files changed",
+		"uncommittedChanges": "uncommitted change(s)",
+		"safeToMerge": "Safe to merge",
+		"conflictsDetected": "{{count}} conflicted file(s)",
+		"noData": "No status data available"
+	},
+	"step": {
+		"copy": "Copying worktreeinclude files",
+		"submodules": "Initializing submodules"
+	},
+	"create": {
+		"title": "Create Worktree",
+		"branchName": "New branch",
+		"baseBranch": "From base branch",
+		"loadingBranches": "Loading branches...",
+		"selectBranch": "Select branch",
+		"searchBranch": "Search branches...",
+		"noBranchFound": "No branch found",
+		"worktreePath": "In",
+		"noIncludeFileWarning": "No .shofer/worktreeinclude file",
+		"noIncludeFileHint": "Worktrees are created with just the files from their branch. To copy over local files like .env and node_modules, list them in .shofer/worktreeinclude at the root of the repository.",
+		"initSubmodules": "Initialize submodules",
+		"copyWorktreeInclude": "Copy files per worktreeinclude",
+		"create": "Create",
+		"creating": "Creating...",
+		"copyingFiles": "Copying files...",
+		"copyingProgress": "{{item}} — {{copied}} copied"
+	},
+	"delete": {
+		"title": "Delete Worktree",
+		"delete": "Delete",
+		"deleting": "Deleting...",
+		"warning": "This can't be undone. It will delete:",
+		"warningBranch": "The branch and any uncommitted changes",
+		"warningFiles": "All files in the worktree directory",
+		"noticeLarge": "If this is a large repository, it may take a little while.",
+		"force": "Force delete",
+		"isLocked": "worktree is locked"
+	}
+}

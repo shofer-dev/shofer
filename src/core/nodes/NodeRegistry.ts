@@ -108,7 +108,7 @@ export interface NodeProviderHost {
 		name?: string,
 		text?: string,
 		images?: string[],
-		worktreeDir?: string,
+		cwd?: string,
 		seeds?: { mode?: string; apiConfigName?: string },
 	): Promise<string | undefined>
 	getCurrentTask(): { taskId?: string } | undefined
@@ -123,7 +123,8 @@ export interface RouteNewTaskInput {
 	images?: string[]
 	mode?: string
 	apiConfigName?: string
-	worktreeDir?: string
+	/** Directory the task runs in, when a plugin placed it somewhere other than the workspace. */
+	cwd?: string
 	/** Optional caller-preferred node; honored when enabled+assignable, else round-robin. */
 	preferredNodeId?: string
 	/**
@@ -381,7 +382,7 @@ export class NodeRegistry {
 
 		if (owner === LOCAL_NODE_ID) {
 			if (!view) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
-			const taskId = await view.createManagedTask(undefined, input.prompt, input.images, input.worktreeDir, {
+			const taskId = await view.createManagedTask(undefined, input.prompt, input.images, input.cwd, {
 				mode: input.mode,
 				apiConfigName: input.apiConfigName,
 			})

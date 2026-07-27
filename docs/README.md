@@ -19,7 +19,8 @@ A feature that ships as a **plugin** rather than as core keeps its doc in
 [`plugins/live-memory.md`](plugins/live-memory.md),
 [`plugins/builtin-modes.md`](plugins/builtin-modes.md),
 [`plugins/file-changes.md`](plugins/file-changes.md),
-[`plugins/builtin-workflows.md`](plugins/builtin-workflows.md) — while the plugin _substrate_
+[`plugins/builtin-workflows.md`](plugins/builtin-workflows.md),
+[`plugins/worktrees.md`](plugins/worktrees.md) — while the plugin _substrate_
 (seams, manifest, lifecycle) stays in [`plugin_system.md`](plugin_system.md) and the
 authoring guide in [`../PLUGINS.md`](../PLUGINS.md). Deeper per-plugin material that
 belongs next to its code (a `DESIGN.md`, `README.md`, `TODO.md`) lives in the plugin
@@ -53,7 +54,7 @@ docs and their verdicts:
 | `parallelism.md`, `message_queue.md`, `task-export.md`, `summarization.md` | ✅ Shipped                                                                                                                                                                          |
 | `performance_optimizations.md`, `public_api.md`, `headless.md`             | ✅ Shipped (`performance_optimizations.md` rewritten to current-state characteristics for SQLite persistence + delta IPC)                                                           |
 | `otel-metrics.md`                                                          | ✅ Shipped — OpenTelemetry metrics catalog + instrument surface                                                                                                                     |
-| `worktrees.md`, `worktree-shell-sandboxing.md`                             | ✅ Shipped                                                                                                                                                                          |
+| `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `worktrees` plugin — see `plugins/worktrees.md`)                                                                                      |
 | `chatview-windowed-message-loading.md`                                     | ✅ Shipped (H2 reverted, re-shipped as tail-window cold load — doc already explains this)                                                                                           |
 | `multi_threaded.md`                                                        | 🚧 Phase 0–1 worker infrastructure built + unit-tested but **not wired into production** (no task currently runs in a worker); the four-runtime architecture is desired, not active |
 | `cloud.md`                                                                 | ⛔ Inherited from upstream; the described cloud package/services do not exist (doc already carries this banner)                                                                     |

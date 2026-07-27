@@ -109,7 +109,14 @@ declare module "@shofer/plugin-ui" {
 	}
 
 	export const Popover: ComponentType<OpenChangeProps & { modal?: boolean }>
-	export const PopoverTrigger: ComponentType<{ asChild?: boolean; children?: ReactNode; className?: string }>
+	/**
+	 * Renders a `<button>` (or, with `asChild`, its single child), so it takes the
+	 * button attributes a trigger needs — `disabled` for a control that is present but
+	 * unusable, and the aria mirror of it.
+	 */
+	export const PopoverTrigger: ComponentType<
+		React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean; children?: ReactNode }
+	>
 	export const PopoverContent: ComponentType<
 		React.HTMLAttributes<HTMLDivElement> & {
 			align?: "start" | "center" | "end"
@@ -120,7 +127,13 @@ declare module "@shofer/plugin-ui" {
 	>
 
 	export const Dialog: ComponentType<OpenChangeProps & { modal?: boolean }>
-	export const DialogContent: ComponentType<React.HTMLAttributes<HTMLDivElement> & { container?: HTMLElement | null }>
+	export const DialogContent: ComponentType<
+		React.HTMLAttributes<HTMLDivElement> & {
+			container?: HTMLElement | null
+			/** Classes for the backdrop — the way to lift a dialog above a host overlay. */
+			overlayClassName?: string
+		}
+	>
 	export const DialogHeader: ComponentType<React.HTMLAttributes<HTMLDivElement>>
 	export const DialogFooter: ComponentType<React.HTMLAttributes<HTMLDivElement>>
 	export const DialogTitle: ComponentType<React.HTMLAttributes<HTMLHeadingElement>>
@@ -136,6 +149,8 @@ declare module "@shofer/plugin-ui" {
 		value: string
 		label: string
 		disabled?: boolean
+		/** Rendered before the label — typically a codicon `<span>`. */
+		icon?: ReactNode
 	}
 
 	export interface SearchableSelectProps {

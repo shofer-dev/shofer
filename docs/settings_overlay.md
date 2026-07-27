@@ -1482,13 +1482,12 @@ The index pass (§16a) mounts **every** tab once per Settings open. Several tabs
 backend requests on mount, so each open triggers a burst of redundant work even for
 tabs the user never views:
 
-| Tab mounted during indexing | Fires on mount                                                                                               | Source                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Modes                       | `checkRulesDirectory`                                                                                        | [`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx)                            |
-| Skills                      | `requestSkills` (filesystem scan)                                                                            | [`SkillsSettings.tsx`](../webview-ui/src/components/settings/SkillsSettings.tsx)               |
-| Slash Commands              | `requestCommands` (filesystem scan)                                                                          | [`SlashCommandsSettings.tsx`](../webview-ui/src/components/settings/SlashCommandsSettings.tsx) |
-| Worktrees                   | `listWorktrees` + `getWorktreeIncludeStatus` (git ops); a 3s poll is set then immediately cleared on unmount | [`WorktreesView.tsx`](../webview-ui/src/components/worktrees/WorktreesView.tsx)                |
-| Providers (Ollama selected) | `requestOllamaModels`                                                                                        | `providers/Ollama.tsx`                                                                         |
+| Tab mounted during indexing | Fires on mount                      | Source                                                                                         |
+| --------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Modes                       | `checkRulesDirectory`               | [`ModesView.tsx`](../webview-ui/src/components/modes/ModesView.tsx)                            |
+| Skills                      | `requestSkills` (filesystem scan)   | [`SkillsSettings.tsx`](../webview-ui/src/components/settings/SkillsSettings.tsx)               |
+| Slash Commands              | `requestCommands` (filesystem scan) | [`SlashCommandsSettings.tsx`](../webview-ui/src/components/settings/SlashCommandsSettings.tsx) |
+| Providers (Ollama selected) | `requestOllamaModels`               | `providers/Ollama.tsx`                                                                         |
 
 The tab the user actually opens on also **double-fetches** — once during the indexing
 pass and again when it becomes the active tab. The mounts are cheap-ish individually,

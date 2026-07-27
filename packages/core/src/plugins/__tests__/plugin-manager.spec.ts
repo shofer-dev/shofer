@@ -134,7 +134,8 @@ describe("PluginManager (design §7, Phase 1)", () => {
 			{ pluginName: "p1", dir: `${PROJECT}/p1/skills`, privateNames: [] },
 		])
 		expect(pm.getContributedCommandDirs()).toEqual([
-			{ pluginName: "p1", dir: `${PROJECT}/p1/commands`, privateNames: [] },
+			// `unqualified: false` — a project-scope plugin cannot claim the built-in names.
+			{ pluginName: "p1", dir: `${PROJECT}/p1/commands`, privateNames: [], unqualified: false },
 		])
 
 		const mcp = pm.getContributedMcpServers()

@@ -40,7 +40,6 @@ import type { McpServer } from "./mcp.js"
 import type { ModelRecord, RouterModels } from "./model.js"
 import type { OpenAiCodexRateLimitInfo } from "./providers/openai-codex-rate-limits.js"
 import type { SkillMetadata } from "./skills.js"
-import type { WorktreeIncludeStatus, WorktreeStatus } from "./worktree.js"
 
 /** Workflow metadata for the launcher UI — mirrors FlowDecl + FlowParam fields from the Slang AST. */
 export interface LauncherWorkflow {
@@ -197,16 +196,6 @@ export interface ExtensionMessage {
 		| "taskNotificationCleared"
 		// Workflow response types
 		| "workflowsList"
-		// Worktree response types
-		| "worktreeList"
-		| "worktreeResult"
-		| "worktreeCopyProgress"
-		| "worktreeCreationStep"
-		| "branchList"
-		| "worktreeDefaults"
-		| "worktreeIncludeStatus"
-		| "branchWorktreeIncludeResult"
-		| "worktreeStatus"
 		| "folderSelected"
 		| "skills"
 		| "loadedSkills"
@@ -384,58 +373,8 @@ export interface ExtensionMessage {
 	taskHistory?: HistoryItem[] // For taskHistoryUpdated: full sorted task history
 	/** For taskHistoryItemUpdated: single updated/added history item */
 	taskHistoryItem?: HistoryItem
-	// Worktree response properties
-	worktrees?: Array<{
-		path: string
-		branch: string
-		commitHash: string
-		isCurrent: boolean
-		isBare: boolean
-		isDetached: boolean
-		isLocked: boolean
-		lockReason?: string
-	}>
-	isGitRepo?: boolean
-	isMultiRoot?: boolean
-	isSubfolder?: boolean
-	gitRootPath?: string
-	worktreeResult?: {
-		success: boolean
-		message: string
-		worktree?: {
-			path: string
-			branch: string
-			commitHash: string
-			isCurrent: boolean
-			isBare: boolean
-			isDetached: boolean
-			isLocked: boolean
-			lockReason?: string
-		}
-	}
-	localBranches?: string[]
-	remoteBranches?: string[]
-	currentBranch?: string
-	suggestedBranch?: string
-	suggestedPath?: string
-	worktreeIncludeExists?: boolean
-	worktreeIncludeStatus?: WorktreeIncludeStatus
-	hasGitignore?: boolean
-	gitignoreContent?: string
-	// branchWorktreeIncludeResult
-	branch?: string
-	hasWorktreeInclude?: boolean
-	// worktreeCopyProgress (size-based)
-	copyProgressBytesCopied?: number
-	copyProgressTotalBytes?: number
-	copyProgressItemName?: string
-	// worktreeCreationStep — current phase during worktree creation
-	worktreeCreationStep?: string
-	worktreeCreationStepDetail?: string
 	// folderSelected
 	path?: string
-	// worktreeStatus
-	worktreeStatus?: WorktreeStatus
 }
 
 export interface OpenAiCodexRateLimitsMessage {
@@ -813,18 +752,6 @@ export interface WebviewMessage {
 		| "requestModes"
 		| "switchMode"
 		| "debugSetting"
-		// Worktree messages
-		| "listWorktrees"
-		| "createWorktree"
-		| "deleteWorktree"
-		| "getAvailableBranches"
-		| "getWorktreeDefaults"
-		| "getWorktreeIncludeStatus"
-		| "checkBranchWorktreeInclude"
-		| "createWorktreeInclude"
-		| "checkoutBranch"
-		| "browseForWorktreePath"
-		| "getWorktreeStatus"
 		// Webview health messages
 		| "fatal_error"
 		| "pong"
@@ -861,9 +788,6 @@ export interface WebviewMessage {
 		// Resume a stopped (aborted) WorkflowTask: re-enter the slang loop and
 		// continue every agent that still exists.
 		| "resumeWorkflow"
-		// Re-point a running WorkflowTask (and its future agents) at a worktree
-		// the user selects/creates on the workflow surface.
-		| "setWorkflowWorktree"
 		// Launcher: start a fresh task in the chosen mode (replaces the old plus → new chat)
 		| "launchTask"
 		// Diagnostic logging from webview → extension OutputChannel
@@ -1047,27 +971,12 @@ export interface WebviewMessage {
 	// Workflow properties — launching a discovered .slang flow as a WorkflowTask.
 	flowName?: string
 	flowParams?: Record<string, string>
-	// Worktree properties
-	worktreePath?: string
-	/** Embedded worktree directory for new tasks scoped to a git worktree subdirectory. */
-	worktreeDir?: string
 	/**
 	 * Shofer Nodes L2: caller-preferred executor for this new task. When enabled +
 	 * assignable it wins owner selection; otherwise the pool round-robins. Carried
 	 * on `newTask`; the picker UI that sets it is optional (L3).
 	 */
 	preferredNodeId?: string
-	/** When true, the host auto-creates a worktree before starting the new task. */
-	autoCreateWorktree?: boolean
-	worktreeBranch?: string
-	worktreeBaseBranch?: string
-	worktreeCreateNewBranch?: boolean
-	worktreeForce?: boolean
-	worktreeIncludeContent?: string
-	/** When true, run git submodule update --init in the new worktree. */
-	initSubmodules?: boolean
-	/** When true, copy .shofer/worktreeinclude files into the new worktree. */
-	copyWorktreeInclude?: boolean
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {

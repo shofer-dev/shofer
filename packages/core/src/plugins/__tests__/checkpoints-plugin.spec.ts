@@ -59,6 +59,8 @@ function makeTaskProvider() {
 		rewind: async (_pluginName: string, at: number) => {
 			rewinds.push(at)
 		},
+		setCwd: async () => {},
+		openTask: async () => "task-1",
 	}
 	return { provider, markers, rewinds }
 }

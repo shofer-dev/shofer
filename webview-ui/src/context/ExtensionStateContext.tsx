@@ -175,12 +175,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setIncludeCurrentCost: (value: boolean) => void
 	skills?: SkillMetadata[]
 	loadedSkills?: Record<string, string>
-	// Webview-only: when set on the home screen (no active task), the next
-	// `newTask`/`createParallelTask` will use this as `worktreeDir` so the
-	// task is scoped to the chosen worktree. Cleared once consumed. Not
-	// persisted across reloads and not synced to the extension host.
-	pendingWorktreeDir: string | null
-	setPendingWorktreeDir: (value: string | null) => void
 	/**
 	 * Webview-only: which Shofer Node the NEXT new task should run on. `undefined`
 	 * means "Auto" — round-robin — and the `newTask` post omits `preferredNodeId`
@@ -190,21 +184,6 @@ export interface ExtensionStateContextType extends ExtensionState {
 	 */
 	preferredNodeId: string | undefined
 	setPreferredNodeId: (value: string | undefined) => void
-	/**
-	 * When true, the user explicitly chose "Current branch" to opt out of
-	 * worktree isolation. Used to distinguish from "never chose anything"
-	 * (where auto-create worktree should fire).
-	 */
-	worktreeExplicitOptOut: boolean
-	setWorktreeExplicitOptOut: (value: boolean) => void
-	/**
-	 * Name of a workflow being launched. Set by LauncherView when the user
-	 * picks a workflow; cleared when a task arrives in the webview (signaling
-	 * the workflow has been created). WorktreeIndicator shows a spinner with
-	 * this name while pending.
-	 */
-	pendingWorkflowName: string | null
-	setPendingWorkflowName: (value: string | null) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -370,11 +349,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 	})
 	const [skills, setSkills] = useState<SkillMetadata[]>([])
 	const [loadedSkills, setLoadedSkills] = useState<Record<string, string>>({})
-	const [pendingWorktreeDir, setPendingWorktreeDir] = useState<string | null>(null)
 	// Webview-only "run the next task on this node" selection (undefined = Auto).
 	const [preferredNodeId, setPreferredNodeId] = useState<string | undefined>(undefined)
-	const [worktreeExplicitOptOut, setWorktreeExplicitOptOut] = useState(false)
-	const [pendingWorkflowName, setPendingWorkflowName] = useState<string | null>(null)
 	const [prevCloudIsAuthenticated, setPrevCloudIsAuthenticated] = useState(false)
 	// Shofer Nodes snapshot pushed by the extension (undefined until a backend sends it).
 	const [shoferNodes, setShoferNodes] = useState<ShoferNodesState | undefined>(undefined)
@@ -910,14 +886,8 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			includeTaskHistoryInEnhance: state.includeTaskHistoryInEnhance ?? true,
 			setIncludeTaskHistoryInEnhance: (value) =>
 				setState((prevState) => ({ ...prevState, includeTaskHistoryInEnhance: value })),
-			pendingWorktreeDir,
-			setPendingWorktreeDir,
 			preferredNodeId,
 			setPreferredNodeId,
-			worktreeExplicitOptOut,
-			setWorktreeExplicitOptOut,
-			pendingWorkflowName,
-			setPendingWorkflowName,
 			includeCurrentTime: state.includeCurrentTime ?? true,
 			setIncludeCurrentTime: (value) => setState((prevState) => ({ ...prevState, includeCurrentTime: value })),
 			includeCurrentCost: state.includeCurrentCost ?? true,
@@ -953,10 +923,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			marketplaceInstalledMetadata,
 			skills,
 			loadedSkills,
-			pendingWorktreeDir,
 			preferredNodeId,
-			worktreeExplicitOptOut,
-			pendingWorkflowName,
 			setApiConfiguration,
 			setEditingApiConfiguration,
 			setListApiConfigMeta,

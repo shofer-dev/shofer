@@ -5,7 +5,7 @@ describe("Built-in Commands", () => {
 		it("should return all built-in commands", async () => {
 			const commands = await getBuiltInCommands()
 
-			expect(commands).toHaveLength(11)
+			expect(commands).toHaveLength(5)
 			expect(commands.map((cmd) => cmd.name)).toEqual(
 				expect.arrayContaining([
 					"init",
@@ -13,12 +13,6 @@ describe("Built-in Commands", () => {
 					"migrate-from-copilot",
 					"migrate-from-claude",
 					"migrate-from-opencode",
-					"merge-worktree",
-					"merge-worktree-cleanup",
-					"rebase-worktree",
-					"rebase-worktree-cleanup",
-					"dryrun-rebase-worktree",
-					"worktree-status",
 				]),
 			)
 
@@ -77,7 +71,7 @@ describe("Built-in Commands", () => {
 		it("should return all built-in command names", async () => {
 			const names = await getBuiltInCommandNames()
 
-			expect(names).toHaveLength(11)
+			expect(names).toHaveLength(5)
 			expect(names).toEqual(
 				expect.arrayContaining([
 					"init",
@@ -85,27 +79,15 @@ describe("Built-in Commands", () => {
 					"migrate-from-copilot",
 					"migrate-from-claude",
 					"migrate-from-opencode",
-					"merge-worktree",
-					"merge-worktree-cleanup",
-					"rebase-worktree",
-					"rebase-worktree-cleanup",
-					"dryrun-rebase-worktree",
-					"worktree-status",
 				]),
 			)
 			// Order doesn't matter since it's based on object property order
 			expect(names.sort()).toEqual([
-				"dryrun-rebase-worktree",
 				"init",
-				"merge-worktree",
-				"merge-worktree-cleanup",
 				"migrate-from-claude",
 				"migrate-from-copilot",
 				"migrate-from-opencode",
 				"migrate-from-roocode",
-				"rebase-worktree",
-				"rebase-worktree-cleanup",
-				"worktree-status",
 			])
 		})
 
@@ -138,13 +120,6 @@ describe("Built-in Commands", () => {
 			expect(content).toContain("rules-debug")
 			expect(content).toContain("rules-ask")
 			expect(content).toContain("rules-architect")
-
-			// Should mention worktree conventions
-			expect(content).toContain(".shofer/worktrees/")
-			expect(content).toContain("worktree")
-			expect(content).toContain("merge-worktree-cleanup")
-			expect(content).toContain("rebase-worktree")
-			expect(content).toContain("rebase-worktree-cleanup")
 		})
 	})
 })

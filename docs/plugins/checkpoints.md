@@ -33,6 +33,6 @@ without leaving anything behind in core.
 
 - [`plugins/file-changes.md`](./file-changes.md) — the File Changes Panel, a
   separate per-file diff/revert system with no git dependency.
-- [`worktrees.md`](../worktrees.md) — how an embedded worktree task scopes its snapshots.
+- [`worktrees.md`](./worktrees.md) — how a per-task worktree scopes its snapshots.
 - [`submodule-support.md`](../submodule-support.md) — the nested-repository investigation
   behind the plugin's `GIT_DIR` isolation.

@@ -29,7 +29,6 @@
 		"providers": "공급자",
 		"modes": "모드",
 		"mcp": "MCP 서버",
-		"worktrees": "Worktrees",
 		"autoApprove": "자동 승인",
 		"notifications": "알림",
 		"contextManagement": "컨텍스트",

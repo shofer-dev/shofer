@@ -174,7 +174,7 @@ flowchart TD
 		"filesystem": ["./ci-config/"], // Host-path fs allowlist
 		"ai": true, // Host LLM/embeddings (billed; consented separately)
 		"agent": true, // Proactive agent-steering via ctx.agent.notify
-		"task": true, // Timeline markers + rewind via ctx.task
+		"task": true, // Task control via ctx.task: markers, rewind, setCwd, openTask
 		"editor": true, // Multi-file diff viewer via ctx.host.editor
 	},
 
@@ -317,12 +317,13 @@ Namespacing makes plugin↔plugin slug collisions impossible — there is no pre
 tie-break. `ModeConfig.source` is `z.enum(["global", "project", "plugin"])` with a
 sibling `pluginName?`.
 
-**The one exemption:** a **bundled** plugin may set `unqualifiedModes: true` in its
-manifest, and its modes then keep their authored slugs. It exists solely for a plugin
-shipping the platform's own defaults, whose names are a public contract — the
-built-ins must stay `code`/`architect`/…, not `builtin-modes:code`. Scope is enforced:
-a global or project plugin declaring it is ignored, because an unqualified
-third-party slug could silently shadow a built-in. A user or project mode of the same
+**The one exemption:** a **bundled** plugin may set `unqualifiedContributions: true` in
+its manifest, and its modes — and its slash commands — then keep their authored names,
+registered at the built-in precedence tier. It exists solely for a plugin shipping the
+platform's own defaults, whose names are a public contract — the built-ins must stay
+`code`/`architect`/…, not `builtin-modes:code`, and `/merge-worktree` must not become
+`/worktrees:merge-worktree`. Scope is enforced: a global or project plugin declaring it
+is ignored, because an unqualified third-party name could silently shadow a built-in. A user or project mode of the same
 slug replaces the contributed one **in place**, so overriding a built-in neither
 duplicates it nor reorders the mode picker.
 
@@ -835,11 +836,11 @@ its per-task state lives. Three conventions shape that
 | `{ mutates: true }`        | Refused rather than routed to an executor while a local task is running — both hosts share the workspace.                               |
 | result `{ rewound: true }` | The plugin rewound the task's conversation; the controller rebuilds its shadow so it renders what the executor now has.                 |
 
-### 5.14 Timeline Markers (`ctx.task`)
+### 5.14 Task control (`ctx.task`)
 
-A plugin granted **`permissions.task`** can write to the task's **chat timeline** and
-rewind it — what lets a plugin own a feature whose UX belongs _in the conversation_
-rather than in a side panel:
+A plugin granted **`permissions.task`** can write to the task's **chat timeline**, rewind
+it, move it, and open a new one — what lets a plugin own a feature whose UX belongs _in
+the conversation_ rather than in a side panel, and one that decides where work happens:
 
 ```typescript
 interface PluginTaskControl {
@@ -853,6 +854,8 @@ interface PluginTaskControl {
 	}): Promise<void>
 	listMarkers(taskId?: string): Promise<PluginMarker[]>
 	rewind(ts: number, opts?: { includeTargetMessage?: boolean }): Promise<void>
+	setCwd(cwd: string, taskId?: string): Promise<void>
+	openTask(opts?: { name?: string; text?: string; images?: string[]; cwd?: string; mode?: string }): Promise<string>
 }
 ```
 
@@ -867,6 +870,15 @@ interface PluginTaskControl {
 - **`rewind`** truncates the conversation to `ts`, reports the discarded API cost, and
   restarts the task. Rolling back anything _outside_ the conversation is the plugin's
   own job, done before it calls this.
+- **`setCwd`** re-points an existing task (and every agent it starts afterwards) at
+  another directory — the seam a plugin that _manages_ directories needs, since only the
+  host can move a live task. It refuses a workflow that has already started its agents,
+  whose work is on disk in the old directory, rather than silently doing nothing.
+- **`openTask`** opens and focuses a NEW task, optionally in another directory, and
+  resolves with its id. Without `text` the task is idle and waits for the user — the
+  distinction from `ctx.agent.spawn`, which starts an agent _run_ (prompt in, awaitable
+  result out, `permissions.agent` because it bills). The bundled `worktrees` plugin uses
+  it to put the user inside a checkout it just created.
 
 Gated like the other capabilities: ungranted ⇒ a denying stub, no host seam ⇒ absent.
 The complementary direction is `lifecycle.onTimelineRewind` ([§5.10](#510-lifecycle-hooks-permissionslifecycle)),
@@ -1005,19 +1017,19 @@ Enabled state is persisted in `globalState` under
 
 ### Permission boundaries
 
-| Permission     | What it allows                             | Risk                                                                                                                                                                     |
-| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tools`        | Register model-callable tools              | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                              |
-| `systemPrompt` | Modify the system prompt                   | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                               |
-| `modes`        | Contribute mode definitions                | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                              |
-| `ui`           | Render React components                    | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                     |
-| `lifecycle`    | Hook into task lifecycle                   | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                             |
-| `network`      | HTTP to listed domains                     | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork). |
-| `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                            |
-| `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                     |
-| `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                          |
-| `task`         | Timeline markers + rewind via `ctx.task`   | Writes rows into the conversation and can **destroy** conversation history (rewind restarts the task). Dedicated grant; ungranted ⇒ denying stub.                        |
-| `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                             |
+| Permission     | What it allows                             | Risk                                                                                                                                                                                                 |
+| -------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools`        | Register model-callable tools              | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                                                          |
+| `systemPrompt` | Modify the system prompt                   | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                                                           |
+| `modes`        | Contribute mode definitions                | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                                                          |
+| `ui`           | Render React components                    | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                                                 |
+| `lifecycle`    | Hook into task lifecycle                   | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                                                         |
+| `network`      | HTTP to listed domains                     | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork).                             |
+| `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                                                        |
+| `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                                                 |
+| `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                                                      |
+| `task`         | Task control via `ctx.task`                | Writes rows into the conversation, can **destroy** conversation history (rewind restarts the task), move a task to another directory, and open new tasks. Dedicated grant; ungranted ⇒ denying stub. |
+| `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                                                         |
 
 ### Sandboxing
 
@@ -1050,7 +1062,7 @@ Logging).
 
 Discovery classifies each plugin by where it was found (`PluginScope`):
 
-- **`bundled`** — first-party plugins shipped inside the extension build. **Disabled by default**, **non-uninstallable**. The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). Bundled plugins are **Live Memory** (`plugins/live-memory/`) and **Checkpoints** (`plugins/checkpoints/`) — both self-contained, with their domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.mjs` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
+- **`bundled`** — first-party plugins shipped inside the extension build. **Non-uninstallable**, and opt-in unless the manifest sets `defaultEnabled` (a plugin that IS a Shofer feature does). The esbuild build (`src/esbuild.mjs`) copies `plugins/**` → `dist/plugins`, auto-builds each plugin's UI bundles (running its `build-ui.mjs`), and ships the runtime deps external bundles need: the esbuild-wasm CLI (`dist/bin/esbuild`), the shared-React shims (`webview-ui/build/plugin-host/*.js`), and a self-contained `@shofer/types` SDK (`dist/plugin-sdk/node_modules/@shofer/types`, so a bare `@shofer/types` import resolves at runtime). The bundled set is **Live Memory**, **Checkpoints**, **File Changes**, **Worktrees**, **Built-in Modes** and **Built-in Workflows** (`plugins/<name>/`) — each self-contained, with its domain types living in the plugin (zero `@shofer/types` runtime footprint); see [`PLUGINS.md`](../PLUGINS.md). A bundled plugin may ship a **pre-built** entry (checkpoints bundles `simple-git` into `main.mjs` via its `build-ui.mjs`), which is what keeps it dependency-free at runtime and packable to a single archive.
 - **`global`** — installed under `~/.shofer/plugins/` (all workspaces).
 - **`project`** — installed under `<workspace>/.shofer/plugins/` (checked into VCS or gitignored per team choice).
 

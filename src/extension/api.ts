@@ -29,6 +29,7 @@ import { IpcServer } from "@shofer/ipc"
 import { Package } from "@shofer/core"
 import { pluginRegistry } from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
+import { resolveTaskCwd } from "../core/webview/resolveTaskCwd"
 import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "@shofer/core"
 import { getModels } from "@shofer/core"
@@ -333,7 +334,15 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			...(initialMode ? { initialMode } : {}),
 		}
 
-		const task = await provider.createTask(text, images, undefined, options, taskConfiguration)
+		// Where does this task run? The same question the chat input asks, asked here too:
+		// this is the entry point every NON-webview caller comes through — the AgentApi a
+		// controller drives a headless executor with, the CLI, the public API — and a task
+		// created that way deserves the same isolation as one typed into the sidebar. A
+		// plugin that recognised the question and failed throws, aborting creation, rather
+		// than quietly running the agent in the workspace.
+		const cwd = await resolveTaskCwd(provider)
+
+		const task = await provider.createTask(text, images, undefined, options, taskConfiguration, cwd)
 
 		if (!task) {
 			throw new Error("Failed to create task due to policy restrictions")

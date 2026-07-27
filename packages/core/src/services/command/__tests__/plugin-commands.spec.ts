@@ -29,9 +29,7 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockFs.stat = vi.fn().mockResolvedValue({ isDirectory: () => true })
-		mockFs.readdir = vi.fn(async (dir: any) =>
-			dir === PLUGIN_DIR ? [dirent("deploy.md", PLUGIN_DIR)] : [],
-		) as any
+		mockFs.readdir = vi.fn(async (dir: any) => (dir === PLUGIN_DIR ? [dirent("deploy.md", PLUGIN_DIR)] : [])) as any
 		mockFs.readFile = vi.fn(async (file: any) => {
 			if (file === DEPLOY_MD) {
 				return `---\ndescription: Deploy the current project\nargument-hint: <environment>\n---\nDeploy body`
@@ -79,11 +77,56 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 		expect(commands).toHaveLength(0)
 	})
 
+	describe("the bundled-plugin exemption (`unqualifiedContributions`)", () => {
+		// A first-party plugin shipping the platform's own commands keeps their authored
+		// names — `/merge-worktree` must not become `/worktrees:merge-worktree` just
+		// because the worktree feature moved out of core into `plugins/worktrees`.
+		beforeEach(() => {
+			setSharedPluginManager({
+				getContributedCommandDirs: () => [{ pluginName: "my-plugin", dir: PLUGIN_DIR, unqualified: true }],
+			} as any)
+		})
+
+		it("lists and resolves the command under its authored name", async () => {
+			const commands = await getCommands("/test/cwd")
+			expect(commands.find((c) => c.name === "my-plugin:deploy")).toBeUndefined()
+			expect(commands.find((c) => c.name === "deploy")).toMatchObject({
+				name: "deploy",
+				source: "plugin",
+				pluginName: "my-plugin",
+			})
+
+			const cmd = await getCommand("/test/cwd", "deploy")
+			expect(cmd).toMatchObject({ name: "deploy", source: "plugin", pluginName: "my-plugin" })
+			expect(cmd?.content).toBe("Deploy body")
+		})
+
+		it("sits at the built-in tier, so a project file of the same name still wins", async () => {
+			const projectDir = path.join("/test/cwd", ".shofer", "commands")
+			const projectMd = path.join(projectDir, "deploy.md")
+			mockFs.readdir = vi.fn(async (dir: any) => {
+				if (dir === PLUGIN_DIR) return [dirent("deploy.md", PLUGIN_DIR)]
+				if (dir === projectDir) return [dirent("deploy.md", projectDir)]
+				return []
+			}) as any
+			mockFs.readFile = vi.fn(async (file: any) => {
+				if (file === DEPLOY_MD) return "Deploy body"
+				if (file === projectMd) return "Project body"
+				throw new Error("File not found")
+			}) as any
+
+			const deploy = (await getCommands("/test/cwd")).find((c) => c.name === "deploy")
+			expect(deploy).toMatchObject({ name: "deploy", source: "project" })
+			expect(deploy?.content).toBe("Project body")
+
+			// …and the direct lookup agrees: project is checked before the plugin.
+			expect(await getCommand("/test/cwd", "deploy")).toMatchObject({ source: "project" })
+		})
+	})
+
 	it("hides a private command from getCommands but keeps it resolvable via getCommand", async () => {
 		setSharedPluginManager({
-			getContributedCommandDirs: () => [
-				{ pluginName: "my-plugin", dir: PLUGIN_DIR, privateNames: ["deploy"] },
-			],
+			getContributedCommandDirs: () => [{ pluginName: "my-plugin", dir: PLUGIN_DIR, privateNames: ["deploy"] }],
 		} as any)
 
 		// Enumeration excludes the private command entirely.

@@ -20,7 +20,13 @@
  * `ctx.task` entirely — there is no timeline to control.
  */
 
-import type { PluginMarker, PluginMarkerInput, PluginRewindOptions, PluginTaskControl } from "@shofer/types"
+import type {
+	PluginMarker,
+	PluginMarkerInput,
+	PluginOpenTaskOptions,
+	PluginRewindOptions,
+	PluginTaskControl,
+} from "@shofer/types"
 
 import { warnPlugin } from "./plugin-warnings.js"
 
@@ -37,6 +43,10 @@ export interface PluginTaskProvider {
 	listMarkers(pluginName: string, taskId?: string): Promise<PluginMarker[]>
 	/** Rewind the current task's chat timeline to `ts` and restart it. */
 	rewind(pluginName: string, ts: number, opts?: PluginRewindOptions): Promise<void>
+	/** Re-point a task (default: the current one) at another working directory. */
+	setCwd(pluginName: string, cwd: string, taskId?: string): Promise<void>
+	/** Open and focus a new task, optionally in another directory. Resolves with its id. */
+	openTask(pluginName: string, opts?: PluginOpenTaskOptions): Promise<string>
 }
 
 /**
@@ -71,6 +81,22 @@ export function createPluginTaskControl(pluginName: string, provider: PluginTask
 				throw error
 			}
 		},
+		async setCwd(cwd: string, taskId?: string): Promise<void> {
+			try {
+				await provider.setCwd(pluginName, cwd, taskId)
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.task.setCwd failed: ${String(error)}`)
+				throw error
+			}
+		},
+		async openTask(opts?: PluginOpenTaskOptions): Promise<string> {
+			try {
+				return await provider.openTask(pluginName, opts)
+			} catch (error) {
+				warnPlugin(`[plugin:${pluginName}] ctx.task.openTask failed: ${String(error)}`)
+				throw error
+			}
+		},
 	}
 }
 
@@ -87,7 +113,8 @@ export function createDeniedPluginTaskControl(
 	const deny = (method: string): never => {
 		const message =
 			`[plugin:${pluginName}] ctx.task.${method} denied — the plugin declares no permissions.task grant. ` +
-			`Writing to and rewinding a task's timeline is destructive; add "task": true to the manifest permissions.`
+			`Writing to a task's timeline, rewinding it, moving it, or opening a new one all change what a ` +
+			`task IS; add "task": true to the manifest permissions.`
 		warn(message)
 		throw new Error(message)
 	}
@@ -101,6 +128,12 @@ export function createDeniedPluginTaskControl(
 		},
 		async rewind(): Promise<void> {
 			deny("rewind")
+		},
+		async setCwd(): Promise<void> {
+			deny("setCwd")
+		},
+		async openTask(): Promise<string> {
+			return deny("openTask")
 		},
 	}
 }

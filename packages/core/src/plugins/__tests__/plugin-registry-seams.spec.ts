@@ -15,6 +15,10 @@ function stubTaskControl(): PluginTaskControl & { markers: string[] } {
 			return []
 		},
 		async rewind() {},
+		async setCwd() {},
+		async openTask() {
+			return "task-1"
+		},
 	}
 }
 

@@ -29,7 +29,6 @@
 		"providers": "Providers",
 		"modes": "Modi",
 		"mcp": "MCP-servers",
-		"worktrees": "Worktrees",
 		"autoApprove": "Auto-goedkeuren",
 		"notifications": "Meldingen",
 		"contextManagement": "Context",

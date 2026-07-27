@@ -5,6 +5,7 @@ import {
 	type PluginContext,
 	type PluginMarker,
 	type PluginMarkerInput,
+	type PluginOpenTaskOptions,
 	type PluginRewindOptions,
 	type ShoferPlugin,
 } from "@shofer/types"
@@ -93,12 +94,18 @@ function makeCapturingLoader(): { loader: PluginCodeLoader; captured: () => Plug
 function makeTaskProvider(): PluginTaskProvider & {
 	markers: { plugin: string; input: PluginMarkerInput }[]
 	rewinds: { plugin: string; ts: number; opts?: PluginRewindOptions }[]
+	cwdChanges: { plugin: string; cwd: string; taskId?: string }[]
+	opened: { plugin: string; opts?: PluginOpenTaskOptions }[]
 } {
 	const markers: { plugin: string; input: PluginMarkerInput }[] = []
 	const rewinds: { plugin: string; ts: number; opts?: PluginRewindOptions }[] = []
+	const cwdChanges: { plugin: string; cwd: string; taskId?: string }[] = []
+	const opened: { plugin: string; opts?: PluginOpenTaskOptions }[] = []
 	return {
 		markers,
 		rewinds,
+		cwdChanges,
+		opened,
 		async marker(plugin, input) {
 			markers.push({ plugin, input })
 		},
@@ -109,6 +116,13 @@ function makeTaskProvider(): PluginTaskProvider & {
 		},
 		async rewind(plugin, ts, opts) {
 			rewinds.push({ plugin, ts, opts })
+		},
+		async setCwd(plugin, cwd, taskId) {
+			cwdChanges.push({ plugin, cwd, taskId })
+		},
+		async openTask(plugin, opts) {
+			opened.push({ plugin, opts })
+			return `task-${opened.length}`
 		},
 	}
 }
@@ -126,12 +140,21 @@ describe("plugin-task — createPluginTaskControl / createDeniedPluginTaskContro
 		const control = createPluginTaskControl("p", provider)
 		await control.marker({ kind: "checkpoint", text: "abc123", restorable: true })
 		await control.rewind(42, { includeTargetMessage: true })
+		await control.setCwd("/repo/.shofer/worktrees/shofer-ab12c", "task-1")
+		const openedId = await control.openTask({ cwd: "/repo/.shofer/worktrees/shofer-ab12c", name: "worktree" })
 
 		expect(provider.markers).toEqual([
 			{ plugin: "p", input: { kind: "checkpoint", text: "abc123", restorable: true } },
 		])
 		expect(provider.rewinds).toEqual([{ plugin: "p", ts: 42, opts: { includeTargetMessage: true } }])
-		expect(Object.keys(control)).toEqual(["marker", "listMarkers", "rewind"])
+		expect(provider.cwdChanges).toEqual([
+			{ plugin: "p", cwd: "/repo/.shofer/worktrees/shofer-ab12c", taskId: "task-1" },
+		])
+		expect(provider.opened).toEqual([
+			{ plugin: "p", opts: { cwd: "/repo/.shofer/worktrees/shofer-ab12c", name: "worktree" } },
+		])
+		expect(openedId).toBe("task-1")
+		expect(Object.keys(control)).toEqual(["marker", "listMarkers", "rewind", "setCwd", "openTask"])
 	})
 
 	it("reads back only its own markers", async () => {
@@ -153,6 +176,10 @@ describe("plugin-task — createPluginTaskControl / createDeniedPluginTaskContro
 				return []
 			},
 			async rewind() {},
+			async setCwd() {},
+			async openTask() {
+				return "task-1"
+			},
 		})
 		await expect(control.marker({ kind: "k", text: "t" })).rejects.toThrow(/boom/)
 		warnSpy.mockRestore()
@@ -163,7 +190,9 @@ describe("plugin-task — createPluginTaskControl / createDeniedPluginTaskContro
 		const control = createDeniedPluginTaskControl("p", warn)
 		await expect(control.marker({ kind: "k", text: "t" })).rejects.toThrow(/denied/)
 		await expect(control.rewind(1)).rejects.toThrow(/denied/)
-		expect(warn).toHaveBeenCalledTimes(2)
+		await expect(control.setCwd("/somewhere")).rejects.toThrow(/denied/)
+		await expect(control.openTask()).rejects.toThrow(/denied/)
+		expect(warn).toHaveBeenCalledTimes(4)
 	})
 })
 

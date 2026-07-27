@@ -86,11 +86,6 @@ export const TERMINAL_OUTPUT_CHARACTER_LIMIT = 50_000
  */
 export const DEFAULT_BLOB_CAP_BYTES = 2048
 
-// ── worktree ─────────────────────────────────────────────────────────────────
-
-/** Interval (ms) between directory-size polls while copying a worktree include. */
-export const WORKTREE_POLL_INTERVAL_MS = 500
-
 // ── custom tools: esbuild runner ─────────────────────────────────────────────
 
 /**

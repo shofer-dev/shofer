@@ -230,6 +230,16 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 			}
 			await host.editor.showMultiFileDiff(title, changes)
 		},
+		async openFile(absolutePath: string): Promise<void> {
+			if (!permissions?.editor) {
+				const message =
+					`[plugin:${pluginName}] ctx.host.editor.openFile denied — ` +
+					`the plugin declares no permissions.editor grant. Add "editor": true to the manifest permissions.`
+				warn(message)
+				throw new Error(message)
+			}
+			await host.editor.openFile(absolutePath)
+		},
 	}
 
 	const restrictedFetch = (input: string | URL, init?: RequestInit): Promise<Response> => {

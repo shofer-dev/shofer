@@ -6,7 +6,7 @@
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"defaultEnabled": true,
-	"unqualifiedModes": true,
+	"unqualifiedContributions": true,
 	"permissions": {
 		"modes": true
 	},

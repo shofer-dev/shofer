@@ -207,6 +207,17 @@ export interface DiscoveredPlugin {
 }
 
 /** A plugin-contributed skills/commands source directory. */
+/**
+ * Whether a plugin ships the platform's own defaults under their authored names.
+ *
+ * Scope is the gate, not the flag: only a **bundled** (first-party) plugin can claim
+ * the exemption, because an unqualified name from a global or project plugin could
+ * silently shadow a built-in.
+ */
+function isUnqualified(plugin: DiscoveredPlugin): boolean {
+	return plugin.scope === "bundled" && plugin.manifest.unqualifiedContributions === true
+}
+
 export interface PluginDirContribution {
 	pluginName: string
 	/** Absolute directory holding the physical files (`<root>/skills` or `<root>/commands`). */
@@ -220,6 +231,13 @@ export interface PluginDirContribution {
 	 * not namespaced and so cannot be "invocable only by qualified name").
 	 */
 	privateNames?: string[]
+	/**
+	 * The plugin ships these under their **authored** names rather than
+	 * `<plugin>:<name>` (bundled first-party only — see the manifest's
+	 * `unqualifiedContributions`). Consumers register them at the built-in tier, so a
+	 * user's or project's own entry of the same name still wins.
+	 */
+	unqualified?: boolean
 }
 
 /** A plugin-contributed rules file. */
@@ -262,6 +280,12 @@ export interface PluginManagerOptions {
 	getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
 	/** Absolute workspace path threaded into code-plugin contexts (`workspacePath`/`cwd`). */
 	workspacePath?: string
+	/**
+	 * Every open workspace folder, when the host has more than one. Threaded into
+	 * `PluginContext.workspaceFolders` so a repository-shaped plugin can tell a
+	 * multi-root window apart from a single-root one.
+	 */
+	workspaceFolders?: readonly string[]
 	/**
 	 * Host seam constructing a plugin's `ctx.ai` (design §6.11 G1). When omitted, no
 	 * plugin gets AI access (even a granted+consented one) — headless/pure-core stays
@@ -329,6 +353,7 @@ export class PluginManager {
 	private readonly host?: HostBridge
 	private readonly getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
 	private readonly workspacePath?: string
+	private readonly workspaceFolders?: readonly string[]
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
 	private readonly forceDisabled: ReadonlySet<string>
@@ -367,6 +392,7 @@ export class PluginManager {
 		this.host = options.host
 		this.getPluginConfigs = options.getPluginConfigs
 		this.workspacePath = options.workspacePath
+		this.workspaceFolders = options.workspaceFolders
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
 		this.forceDisabled = new Set(options.forceDisabledPlugins ?? [])
@@ -854,6 +880,7 @@ export class PluginManager {
 			: undefined
 		return {
 			workspacePath: this.workspacePath,
+			workspaceFolders: this.workspaceFolders,
 			cwd: this.workspacePath,
 			config,
 			host,
@@ -1033,9 +1060,9 @@ export class PluginManager {
 		const bySlug = new Map<string, ModeConfig>()
 		for (const plugin of this.enabledWithPermission("modes")) {
 			// A bundled first-party plugin may ship the platform's own modes under their
-			// authored slugs (`code`, `architect`, …) — see `unqualifiedModes`. Everything
-			// else is namespaced, so cross-plugin collisions stay impossible.
-			const unqualified = plugin.scope === "bundled" && plugin.manifest.unqualifiedModes === true
+			// authored slugs (`code`, `architect`, …) — see `unqualifiedContributions`.
+			// Everything else is namespaced, so cross-plugin collisions stay impossible.
+			const unqualified = isUnqualified(plugin)
 			for (const mode of plugin.manifest.contributes?.modes ?? []) {
 				const slug = unqualified ? mode.slug : `${plugin.name}:${mode.slug}`
 				const prior = bySlug.get(slug)
@@ -1080,6 +1107,10 @@ export class PluginManager {
 					pluginName: plugin.name,
 					dir: path.join(plugin.root, "commands"),
 					privateNames: commands.filter((c) => c.private).map((c) => c.name),
+					// A bundled first-party plugin shipping the platform's own commands keeps
+					// their authored names (`/merge-worktree`), at the built-in precedence
+					// tier — see `unqualifiedContributions`.
+					unqualified: isUnqualified(plugin),
 				})
 			}
 		}

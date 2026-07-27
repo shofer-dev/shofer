@@ -79,18 +79,7 @@ const ALLOWED_VSCODE_SETTINGS = new Set(["terminal.integrated.inheritEnv"])
 
 import { MarketplaceManager, MarketplaceItemType } from "../../services/marketplace"
 import { webviewLog, scrollLog } from "@shofer/core"
-import {
-	handleListWorktrees,
-	handleCreateWorktree,
-	handleDeleteWorktree,
-	handleGetAvailableBranches,
-	handleGetWorktreeDefaults,
-	handleGetWorktreeIncludeStatus,
-	handleCheckBranchWorktreeInclude,
-	handleCreateWorktreeInclude,
-	handleCheckoutBranch,
-	handleGetWorktreeStatus,
-} from "./worktree"
+import { resolveTaskCwd } from "./resolveTaskCwd"
 
 export const webviewMessageHandler = async (
 	provider: ShoferProvider,
@@ -735,26 +724,19 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
-				// Auto-create worktree when the webview signals that no worktree was
-				// explicitly picked (neither a specific worktree nor explicit "Current branch").
-				let worktreeDir = message.worktreeDir
-				if (message.autoCreateWorktree && !worktreeDir) {
-					const defaults = await handleGetWorktreeDefaults(provider)
-					const createResult = await handleCreateWorktree(provider, {
-						path: defaults.suggestedPath,
-						branch: defaults.suggestedBranch,
-						baseBranch: undefined, // defaults to HEAD
-						createNewBranch: true,
-					})
-					if (createResult.success && createResult.worktree) {
-						worktreeDir = createResult.worktree.path
-					} else {
-						// Worktree creation (or its required submodule init) failed.
-						// Abort — don't start a task with a broken/missing worktree.
-						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-						getHost().notifier.error(`Failed to create worktree: ${createResult.message}`)
-						return
-					}
+				// Where should this task run? Core does not know — a plugin may place it
+				// somewhere other than the workspace (the bundled `worktrees` plugin gives
+				// each task its own checkout). Failure is fatal on purpose: a plugin that
+				// cannot place the task is not the same as one that chose not to, and
+				// running on the user's current branch instead would be exactly the
+				// outcome that placement exists to prevent.
+				let cwd: string | undefined
+				try {
+					cwd = await resolveTaskCwd(provider)
+				} catch (error) {
+					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
+					getHost().notifier.error(error instanceof Error ? error.message : String(error))
+					return
 				}
 
 				// Shofer Nodes L2: route through the executor pool ONLY when there is a
@@ -787,7 +769,7 @@ export const webviewMessageHandler = async (
 							images: resolved.images,
 							mode: message.mode,
 							apiConfigName: message.apiConfigName,
-							worktreeDir,
+							cwd,
 							preferredNodeId: message.preferredNodeId,
 							apiConfiguration,
 						},
@@ -798,7 +780,7 @@ export const webviewMessageHandler = async (
 				} else {
 					// Pre-task mode / API-config seeds chosen in the chat dropdown.
 					// When absent, createTask falls back to the global Settings defaults.
-					await provider.createManagedTask(undefined, messageText, resolved.images, worktreeDir, {
+					await provider.createManagedTask(undefined, messageText, resolved.images, cwd, {
 						mode: message.mode,
 						apiConfigName: message.apiConfigName,
 					})
@@ -3843,296 +3825,18 @@ export const webviewMessageHandler = async (
 			break
 		}
 
-		/**
-		 * Git Worktree Management
-		 */
-
-		case "listWorktrees": {
-			try {
-				const { worktrees, isGitRepo, isMultiRoot, isSubfolder, gitRootPath, error } =
-					await handleListWorktrees(provider)
-
-				await provider.postMessageToWebview({
-					type: "worktreeList",
-					worktrees,
-					isGitRepo,
-					isMultiRoot,
-					isSubfolder,
-					gitRootPath,
-					error,
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				await provider.postMessageToWebview({
-					type: "worktreeList",
-					worktrees: [],
-					isGitRepo: false,
-					isMultiRoot: false,
-					isSubfolder: false,
-					gitRootPath: "",
-					error: errorMessage,
-				})
-			}
-
-			break
-		}
-
-		case "createWorktree": {
-			try {
-				const result = await handleCreateWorktree(
-					provider,
-					{
-						path: message.worktreePath!,
-						branch: message.worktreeBranch,
-						baseBranch: message.worktreeBaseBranch,
-						createNewBranch: message.worktreeCreateNewBranch,
-						initSubmodules: message.initSubmodules,
-						copyWorktreeInclude: message.copyWorktreeInclude,
-					},
-					(progress) => {
-						provider.postMessageToWebview({
-							type: "worktreeCopyProgress",
-							copyProgressBytesCopied: progress.bytesCopied,
-							copyProgressItemName: progress.itemName,
-						})
-					},
-					(step, detail) => {
-						provider.postMessageToWebview({
-							type: "worktreeCreationStep",
-							worktreeCreationStep: step,
-							worktreeCreationStepDetail: detail,
-						})
-					},
-				)
-
-				await provider.postMessageToWebview({
-					type: "worktreeResult",
-					success: result.success,
-					text: result.message,
-					worktree:
-						result.success && result.worktree
-							? {
-									path: result.worktree.path,
-									branch: result.worktree.branch,
-									isCurrent: result.worktree.isCurrent,
-								}
-							: undefined,
-				} as any)
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })
-			}
-
-			break
-		}
-
-		case "deleteWorktree": {
-			try {
-				const { success, message: text } = await handleDeleteWorktree(
-					provider,
-					message.worktreePath!,
-					message.worktreeForce ?? false,
-				)
-
-				await provider.postMessageToWebview({ type: "worktreeResult", success, text })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })
-			}
-
-			break
-		}
-
-		case "getAvailableBranches": {
-			try {
-				const { localBranches, remoteBranches, currentBranch } = await handleGetAvailableBranches(provider)
-
-				await provider.postMessageToWebview({
-					type: "branchList",
-					localBranches,
-					remoteBranches,
-					currentBranch,
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				await provider.postMessageToWebview({
-					type: "branchList",
-					localBranches: [],
-					remoteBranches: [],
-					currentBranch: "",
-					error: errorMessage,
-				})
-			}
-
-			break
-		}
-
-		case "getWorktreeDefaults": {
-			try {
-				const { suggestedBranch, suggestedPath } = await handleGetWorktreeDefaults(provider)
-				await provider.postMessageToWebview({ type: "worktreeDefaults", suggestedBranch, suggestedPath })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				await provider.postMessageToWebview({
-					type: "worktreeDefaults",
-					suggestedBranch: "",
-					suggestedPath: "",
-					error: errorMessage,
-				})
-			}
-
-			break
-		}
-
-		case "getWorktreeIncludeStatus": {
-			try {
-				const worktreeIncludeStatus = await handleGetWorktreeIncludeStatus(provider)
-				await provider.postMessageToWebview({ type: "worktreeIncludeStatus", worktreeIncludeStatus })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				await provider.postMessageToWebview({
-					type: "worktreeIncludeStatus",
-					worktreeIncludeStatus: {
-						exists: false,
-						hasGitignore: false,
-						gitignoreContent: undefined,
-					},
-					error: errorMessage,
-				})
-			}
-
-			break
-		}
-
-		case "checkBranchWorktreeInclude": {
-			try {
-				const branch = message.worktreeBranch
-				if (!branch) {
-					await provider.postMessageToWebview({
-						type: "branchWorktreeIncludeResult",
-						hasWorktreeInclude: false,
-						error: "No branch specified",
-					})
-					break
-				}
-				const hasWorktreeInclude = await handleCheckBranchWorktreeInclude(provider, branch)
-				await provider.postMessageToWebview({
-					type: "branchWorktreeIncludeResult",
-					branch,
-					hasWorktreeInclude,
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				await provider.postMessageToWebview({
-					type: "branchWorktreeIncludeResult",
-					hasWorktreeInclude: false,
-					error: errorMessage,
-				})
-			}
-
-			break
-		}
-
-		case "createWorktreeInclude": {
-			try {
-				const { success, message: text } = await handleCreateWorktreeInclude(
-					provider,
-					message.worktreeIncludeContent ?? "",
-				)
-
-				await provider.postMessageToWebview({ type: "worktreeResult", success, text })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.log(`Error creating worktree include: ${errorMessage}`)
-				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })
-			}
-
-			break
-		}
-
-		case "checkoutBranch": {
-			try {
-				const { success, message: text } = await handleCheckoutBranch(provider, message.worktreeBranch!)
-				await provider.postMessageToWebview({ type: "worktreeResult", success, text })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				await provider.postMessageToWebview({ type: "worktreeResult", success: false, text: errorMessage })
-			}
-
-			break
-		}
-
-		case "browseForWorktreePath": {
-			try {
-				const options: vscode.OpenDialogOptions = {
-					canSelectFiles: false,
-					canSelectFolders: true,
-					canSelectMany: false,
-					openLabel: t("worktrees:selectWorktreeLocation"),
-					title: t("worktrees:selectFolderForWorktree"),
-					defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri
-						? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, "..")
-						: undefined,
-				}
-
-				const result = await vscode.window.showOpenDialog(options)
-				if (result && result[0]) {
-					await provider.postMessageToWebview({
-						type: "folderSelected",
-						path: result[0].fsPath,
-					})
-				}
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.log(`Error opening folder picker: ${errorMessage}`)
-			}
-
-			break
-		}
-
-		case "getWorktreeStatus": {
-			try {
-				const status = await handleGetWorktreeStatus(provider, message.worktreeDir)
-				await provider.postMessageToWebview({ type: "worktreeStatus", worktreeStatus: status })
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-				provider.log(`Error getting worktree status: ${errorMessage}`)
-				await provider.postMessageToWebview({
-					type: "worktreeStatus",
-					worktreeStatus: {
-						branch: "",
-						path: "",
-						baseBranch: "",
-						commitsAhead: 0,
-						commitsBehind: 0,
-						filesChanged: 0,
-						insertions: 0,
-						deletions: 0,
-						hasUncommittedChanges: false,
-						uncommittedCount: 0,
-						lastCommit: null,
-						mergeReadiness: { hasConflicts: null, conflictedFiles: [] },
-						isBaseBranch: false,
-						otherWorktrees: [],
-					},
-				})
-			}
-
-			break
-		}
-
 		// Parallel task management messages
 		case "createParallelTask": {
 			try {
-				await provider.createManagedTask(message.taskName, message.text, message.images, message.worktreeDir)
+				await provider.createManagedTask(
+					message.taskName,
+					message.text,
+					message.images,
+					await resolveTaskCwd(provider),
+				)
 				// Notify the UI to reset the chat input and save the outgoing
 				// task's draft, matching the "newTask" handler behaviour.
 				await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" })
-				// Send worktree status update so the UI can show badge info
 				await provider.postInitState()
 			} catch (error) {
 				provider.log(`Error creating managed task: ${error}`)
@@ -4381,33 +4085,22 @@ export const webviewMessageHandler = async (
 				provider.log(
 					`[createWorkflow] Slang source for '${flowName}' is ${slangSource.length} chars. First 200: ${slangSource.slice(0, 200)}`,
 				)
-				// Resolve the worktree the user picked in the chat dropdown before
-				// launching (same path as `newTask`): an explicit worktree, or an
-				// auto-created one when the webview signals `autoCreateWorktree` and
-				// none was picked. The whole workflow tree runs inside this cwd —
-				// the WorkflowTask and every agent it spawns (see spawnAgentTask).
-				let worktreeDir = message.worktreeDir
-				if (message.autoCreateWorktree && !worktreeDir) {
-					const defaults = await handleGetWorktreeDefaults(provider)
-					const createResult = await handleCreateWorktree(provider, {
-						path: defaults.suggestedPath,
-						branch: defaults.suggestedBranch,
-						baseBranch: undefined, // defaults to HEAD
-						createNewBranch: true,
-					})
-					if (createResult.success && createResult.worktree) {
-						worktreeDir = createResult.worktree.path
-					} else {
-						await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
-						getHost().notifier.error(`Failed to create worktree: ${createResult.message}`)
-						break
-					}
+				// Where the whole workflow tree runs — the WorkflowTask and every agent it
+				// spawns (see spawnAgentTask). Same placement question as `newTask`, same
+				// answer: whichever plugin manages directories decides.
+				let cwd: string | undefined
+				try {
+					cwd = await resolveTaskCwd(provider)
+				} catch (error) {
+					await provider.postMessageToWebview({ type: "invoke", invoke: "newChat" } as any)
+					getHost().notifier.error(error instanceof Error ? error.message : String(error))
+					break
 				}
 
-				const task = await createWorkflowTask(provider, slangSource, flowParams, worktreeDir)
+				const task = await createWorkflowTask(provider, slangSource, flowParams, cwd)
 				provider.log(
 					`[createWorkflow] Created WorkflowTask ${task.taskId} for flow '${flowName}'` +
-						`${worktreeDir ? ` in worktree ${worktreeDir}` : ""} — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
+						`${cwd ? ` in ${cwd}` : ""} — ${task.flowState.agents.size} agent(s): ${[...task.flowState.agents.keys()].join(", ")}`,
 				)
 
 				// Pop the current task to the background (parallel execution)
@@ -4498,38 +4191,6 @@ export const webviewMessageHandler = async (
 					}
 				} catch (error) {
 					provider.log(`Error resuming workflow: ${error}`)
-				}
-			}
-			break
-		}
-
-		case "setWorkflowWorktree": {
-			// Re-point a WorkflowTask at a worktree the user selected/created on the
-			// workflow surface — but ONLY before the slang loop has started spawning
-			// agents (i.e. during flow-param collection / the initial questions).
-			// Once `flowState.started` is set, subtasks exist and their cwd is locked;
-			// reassigning then would desync the workflow from its already-spawned
-			// agents, so we reject and re-broadcast state to re-lock the UI.
-			const dir = message.worktreeDir
-			const current = provider.getCurrentTask()
-			if (dir && current) {
-				const { WorkflowTask } = await import("../workflow/index")
-				if (current instanceof WorkflowTask && !current.flowState.started) {
-					current.reassignCwd(dir)
-					// Persist so the chip and a later rehydrate reflect the new worktree.
-					try {
-						const { historyItem } = await provider.getTaskWithId(current.taskId)
-						await provider.updateTaskHistory({ ...historyItem, cwd: dir })
-					} catch {
-						// Not yet in history — the task's next metadata save carries cwd.
-					}
-					await provider.postInitState()
-					provider.log(`[setWorkflowWorktree] WorkflowTask ${current.taskId} re-pointed to ${dir}`)
-				} else if (current instanceof WorkflowTask) {
-					provider.log(
-						`[setWorkflowWorktree] ignored — workflow ${current.taskId} already started (agents exist); worktree locked`,
-					)
-					await provider.postInitState()
 				}
 			}
 			break

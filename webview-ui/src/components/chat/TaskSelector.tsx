@@ -303,8 +303,8 @@ export interface TaskSelectorProps {
 	currentTaskId: string | undefined
 	/** All modes (built-in + custom) for resolving mode slug → display name. */
 	modes: Array<{ slug: string; name: string }>
-	/** All worktrees for resolving cwd path → branch name. */
-	worktrees: Array<{ path: string; branch: string }>
+	/** The workspace directory — a task running elsewhere is labelled with where. */
+	workspacePath: string
 }
 
 /**
@@ -369,14 +369,14 @@ interface TaskRowParams {
 	handleToggleCollapse: (taskId: string, e: React.MouseEvent) => void
 	t: TFunction
 	modeNameMap: Map<string, string>
-	worktreeBranchMap: Map<string, string>
+	workspacePath: string
 }
 
 /**
  * Renders a single task row in the dropdown.
  *
  * Layout (left → right):
- *   [tree-gutter] [status-icon] [title \n mode · lines · time · worktree] [hover actions]
+ *   [tree-gutter] [status-icon] [title \n mode · lines · time · directory] [hover actions]
  *
  * The tree-gutter draws ├ / └ / │ connectors so subtasks visually nest under
  * their parent within a date bucket.
@@ -401,7 +401,7 @@ function renderTaskRow({
 	handleToggleCollapse,
 	t,
 	modeNameMap,
-	worktreeBranchMap,
+	workspacePath,
 }: TaskRowParams) {
 	const { item, depth, isLastSibling, ancestorIsLast } = node
 	const runtime = runtimeStateMap.get(item.id)
@@ -419,10 +419,12 @@ function renderTaskRow({
 	// Resolve mode display name from the task's persisted mode slug.
 	const modeName = (item.mode && modeNameMap.get(item.mode)) || null
 
-	// Resolve worktree branch name from the task's cwd (if the cwd is a
-	// known worktree path). This mirrors WorktreeIndicator's path-based
-	// lookup — the cwd is the authoritative worktree directory.
-	const worktreeBranch = (item.cwd && worktreeBranchMap.get(item.cwd)) || null
+	// A task that runs somewhere other than the workspace is labelled with that
+	// directory's name. Core knows a task has a cwd and nothing more; when the
+	// worktrees plugin created it, the basename IS the branch, because the plugin
+	// keeps branch and directory in lock-step.
+	const taskDirName =
+		item.cwd && workspacePath && item.cwd !== workspacePath ? item.cwd.split(/[\\/]/).filter(Boolean).pop() : null
 
 	return (
 		<div
@@ -537,12 +539,12 @@ function renderTaskRow({
 							</>
 						)}
 						<span>{formatTimeAgo(item.ts)}</span>
-						{worktreeBranch && (
+						{taskDirName && (
 							<>
 								<span className="mx-1">·</span>
 								<span className="inline-flex items-center gap-0.5">
 									<GitBranch className="w-2.5 h-2.5 shrink-0" />
-									{worktreeBranch}
+									{taskDirName}
 								</span>
 							</>
 						)}
@@ -632,7 +634,7 @@ function renderTaskRow({
 export const TASK_SIDEBAR_TOGGLE_EVENT = "shofer.taskSidebarToggle"
 
 export const TaskSelector = memo(
-	({ taskHistory, parallelTasks, currentTaskId, modes, worktrees }: TaskSelectorProps) => {
+	({ taskHistory, parallelTasks, currentTaskId, modes, workspacePath }: TaskSelectorProps) => {
 		const { t } = useTranslation()
 		const [isOpen, setIsOpen] = useState(false)
 		const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
@@ -655,9 +657,8 @@ export const TaskSelector = memo(
 		// Build a fast O(1) lookup map from parallelTasks for runtime state overlay.
 		const runtimeStateMap = useMemo(() => new Map(parallelTasks.map((t) => [t.id, t])), [parallelTasks])
 
-		// Build lookup maps from props: mode slug → name, worktree path → branch.
+		// Build the mode slug → display-name lookup from props.
 		const modeNameMap = useMemo(() => new Map(modes.map((m) => [m.slug, m.name])), [modes])
-		const worktreeBranchMap = useMemo(() => new Map(worktrees.map((w) => [w.path, w.branch])), [worktrees])
 
 		// Build the flattened DFS tree once per taskHistory change.
 		const flatTree = useMemo(() => buildFlatTree(taskHistory), [taskHistory])
@@ -1020,7 +1021,7 @@ export const TaskSelector = memo(
 																handleToggleCollapse,
 																t,
 																modeNameMap,
-																worktreeBranchMap,
+																workspacePath,
 															}),
 														)}
 													</div>
@@ -1067,7 +1068,7 @@ export const TaskSelector = memo(
 															handleToggleCollapse,
 															t,
 															modeNameMap,
-															worktreeBranchMap,
+															workspacePath,
 														}),
 													)}
 												</div>
@@ -1121,7 +1122,7 @@ export const TaskSelector = memo(
 														handleToggleCollapse,
 														t,
 														modeNameMap,
-														worktreeBranchMap,
+														workspacePath,
 													}),
 												)}
 									</div>

@@ -211,9 +211,23 @@ export function PluginSlot({
 		[pluginUiContributions, region, pluginName],
 	)
 
+	// A workflow that has not started its agents is still movable: it has made no file
+	// changes yet, so re-pointing it costs nothing. Anything else that has begun speaking
+	// is not — the host refuses, and a plugin UI should not offer what will be refused.
+	const workflowUnstarted =
+		currentTaskItem?.isWorkflow === true &&
+		(currentTaskItem.flowState as { started?: boolean } | undefined)?.started !== true
+	const cwdMutable = !(shoferMessages?.length ?? 0) || workflowUnstarted
+
 	const task = useMemo<PluginUiTaskSummary>(
-		() => ({ taskId: currentTaskItem?.id, mode, messageCount: shoferMessages?.length }),
-		[currentTaskItem?.id, mode, shoferMessages?.length],
+		() => ({
+			taskId: currentTaskItem?.id,
+			mode,
+			messageCount: shoferMessages?.length,
+			cwd: currentTaskItem?.cwd,
+			cwdMutable,
+		}),
+		[currentTaskItem?.id, currentTaskItem?.cwd, mode, shoferMessages?.length, cwdMutable],
 	)
 
 	return <PluginSlotView region={region} contributions={contributions} task={task} message={message} />

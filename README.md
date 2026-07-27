@@ -116,7 +116,7 @@ Run parallel tasks on different branches — all in one VS Code window:
 - Each task can be scoped to a specific worktree for branch-isolated parallel work
 - No more stash/commit gymnastics or multiple VS Code windows for PRs
 
-[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/docs/worktrees.md)
+[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/worktrees.md)
 
 ## RAG Indexing
 

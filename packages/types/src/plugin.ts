@@ -374,6 +374,12 @@ export interface PluginEditor {
 	 * host editor consumes (`{ paths: { relative, absolute }, content: { before, after } }`).
 	 */
 	showMultiFileDiff(title: string, changes: PluginFileDiff[]): Promise<void>
+	/**
+	 * Open a file in the editor. For the case where a plugin just wrote a file the user
+	 * is expected to edit next (a generated config) — telling them where it is and
+	 * making them find it is worse than showing it.
+	 */
+	openFile(absolutePath: string): Promise<void>
 }
 
 /** One file's before/after content in a {@link PluginEditor.showMultiFileDiff} call. */
@@ -669,6 +675,55 @@ export interface PluginTaskControl {
 	 * state (a workspace snapshot) does that itself first, then calls this.
 	 */
 	rewind(ts: number, opts?: PluginRewindOptions): Promise<void>
+
+	/**
+	 * Re-point a task at another working directory: the task, and every agent it starts
+	 * afterwards, run there.
+	 *
+	 * The seam a plugin that *manages* directories (worktrees) needs, since only the host
+	 * can move a running task. The host refuses when the move would be incoherent — a
+	 * workflow that has already started agents has work on disk in the old directory —
+	 * and reports that rather than silently doing nothing.
+	 *
+	 * Defaults to the host's current task.
+	 */
+	setCwd(cwd: string, taskId?: string): Promise<void>
+
+	/**
+	 * Open a **new task** and focus it, optionally somewhere other than the workspace.
+	 *
+	 * The counterpart of {@link setCwd} for a task that does not exist yet: a plugin that
+	 * has just prepared a place to work (a fresh worktree) can put the user in it, rather
+	 * than describing where they should go. With no `text` the task is created idle and
+	 * waits for the user's first message — the plugin has produced a *place*, not a
+	 * prompt.
+	 *
+	 * Distinct from {@link PluginAgent.spawn}, deliberately: that one starts an agent RUN
+	 * (it takes a prompt, returns an awaitable handle, and is gated on `permissions.agent`
+	 * because it bills). This one only opens a task the user then drives, which is why it
+	 * sits on task control with the other "change what a task is" operations.
+	 *
+	 * Resolves with the new task's id. Rejects (+ warns) when the plugin lacks
+	 * `permissions.task`, and on any host that has no task stack to open into.
+	 */
+	openTask(opts?: PluginOpenTaskOptions): Promise<string>
+}
+
+/** Options for {@link PluginTaskControl.openTask}. */
+export interface PluginOpenTaskOptions {
+	/** Title for the new task; the host generates one from `text` when omitted. */
+	readonly name?: string
+	/** First user message. Omit to leave the task idle, awaiting the user. */
+	readonly text?: string
+	/** Images to seed alongside `text`. */
+	readonly images?: string[]
+	/**
+	 * Where the task runs. Omitted means the workspace — the same default a task gets
+	 * when no plugin answers `"resolve-task-cwd"`.
+	 */
+	readonly cwd?: string
+	/** Mode slug to start in; defaults to the host's current mode. */
+	readonly mode?: string
 }
 
 /** What a plugin passes to {@link PluginTaskControl.marker}. */
@@ -805,6 +860,14 @@ export interface PluginPanelOptions {
 export interface PluginContext {
 	/** Absolute path of the active workspace, if any. */
 	readonly workspacePath?: string
+	/**
+	 * Every open workspace folder, when the host has more than one.
+	 *
+	 * {@link workspacePath} is the one a task runs in; a plugin whose feature is
+	 * repository-shaped (worktrees) needs to know that the window has several roots,
+	 * because "the repository" is then ambiguous and the honest answer is to refuse.
+	 */
+	readonly workspaceFolders?: readonly string[]
 	/** Current mode slug. */
 	readonly mode?: string
 	/** Id of the task the hook is running for, if applicable (design §6.2). */
@@ -969,11 +1032,13 @@ export const pluginPermissionsSchema = z
 		 */
 		search: z.boolean().optional(),
 		/**
-		 * **Chat-timeline control** (`ctx.task`): append the plugin's own marker rows to a
-		 * task's timeline and rewind it (design §6.11). Rewinding destroys conversation
-		 * history and restarts the task, so it is its own grant rather than riding on
-		 * `permissions.agent` (which only *adds* messages): ungranted ⇒ `ctx.task` is a
-		 * denying stub (calls throw + warn), absent on a host with no task seam.
+		 * **Task control** (`ctx.task`): append the plugin's own marker rows to a task's
+		 * timeline, rewind it, and re-point it at another working directory (design
+		 * §6.11). Each of those changes what the task IS — rewinding destroys conversation
+		 * history and restarts it, `setCwd` moves where its tools write — so this is its
+		 * own grant rather than riding on `permissions.agent` (which only *adds*
+		 * messages): ungranted ⇒ `ctx.task` is a denying stub (calls throw + warn), absent
+		 * on a host with no task seam.
 		 */
 		task: z.boolean().optional(),
 		/**
@@ -1009,7 +1074,7 @@ export const PLUGIN_NAMESPACE_SEPARATOR = ":"
  * Whether a mode slug is a plugin-namespaced one (`<plugin>:<authoredSlug>`).
  *
  * The complement — an unqualified slug on a plugin mode — means a bundled first-party
- * plugin with the {@link pluginManifestSchema} `unqualifiedModes` exemption: Shofer's
+ * plugin with the {@link pluginManifestSchema} `unqualifiedContributions` exemption: Shofer's
  * own defaults, which keep their canonical names. Mode slugs authored by a user or a
  * project can never contain the separator, so this is an exact test.
  */
@@ -1192,20 +1257,24 @@ export const pluginManifestSchema = z
 		 */
 		defaultEnabled: z.boolean().optional(),
 		/**
-		 * Register this plugin's **modes** under their authored slugs instead of the
-		 * namespaced `<plugin>:<slug>` form.
+		 * Register this plugin's **modes and slash commands** under their authored names
+		 * instead of the namespaced `<plugin>:<name>` form.
 		 *
 		 * Honored **only for `bundled` (first-party) scope**, and it exists for exactly one
 		 * situation: a plugin that ships the *platform's own* defaults, whose names are a
 		 * public contract. Shofer's built-in modes are `code`, `architect`, `debug`, … in
-		 * every user setting, every mode link, every `switch_mode` call and every doc —
-		 * moving them into a plugin must not rename them to `builtin-modes:code`.
+		 * every user setting, every mode link and every `switch_mode` call; its worktree
+		 * commands are `/merge-worktree`, `/rebase-worktree`, … in every doc and every
+		 * `run_slash_command` the agent makes. Moving them into a plugin must not rename
+		 * them to `builtin-modes:code` or `worktrees:merge-worktree`.
 		 *
 		 * It trades away the "collisions are impossible by construction" guarantee for
-		 * those slugs, so a third-party plugin can never have it: an unqualified slug from
-		 * a global/project plugin could silently shadow a built-in.
+		 * those names, so a third-party plugin can never have it: an unqualified name from
+		 * a global/project plugin could silently shadow a built-in. An unqualified command
+		 * sits at the **built-in** precedence tier, so a user's or project's own command of
+		 * the same name still wins.
 		 */
-		unqualifiedModes: z.boolean().optional(),
+		unqualifiedContributions: z.boolean().optional(),
 		/**
 		 * Per-hook time budget in ms for this plugin's lifecycle hooks, overriding the
 		 * shared default (`PLUGIN_HOOK_TIMEOUT_MS`, 500 ms). Raise it only when a hook
@@ -1402,6 +1471,24 @@ export interface PluginUiTaskSummary {
 	 * component that must stay current there watches this instead.
 	 */
 	readonly messageCount?: number
+	/**
+	 * The directory the task runs in.
+	 *
+	 * "A task runs somewhere" is core's execution model, not any one plugin's feature —
+	 * but a plugin that *chooses* that directory (worktrees) has to be able to show which
+	 * one won, and reading it back from the task is the only honest source: the choice
+	 * may have been made in another window, or restored from history.
+	 */
+	readonly cwd?: string
+	/**
+	 * Whether the host would still accept {@link PluginTaskControl.setCwd} for this task.
+	 *
+	 * False once the task's work is on disk in the current directory — an ordinary task
+	 * that has started, or a workflow whose agents are running. A UI that offers to move
+	 * the task asks this rather than re-deriving the rule, which lives host-side with the
+	 * task it protects.
+	 */
+	readonly cwdMutable?: boolean
 }
 
 /**

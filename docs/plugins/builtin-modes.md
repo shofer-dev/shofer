@@ -106,7 +106,7 @@ The six modes, in manifest order:
 ### The namespacing exemption
 
 Plugin contributions are normally namespaced (`<plugin>:<slug>`), which is what makes
-cross-plugin collisions impossible. This plugin sets `unqualifiedModes: true` in its
+cross-plugin collisions impossible. This plugin sets `unqualifiedContributions: true` in its
 manifest, so its modes keep their authored slugs: `code`, not `builtin-modes:code`.
 The exemption is honoured **only for `bundled` scope** — a global or project plugin
 cannot claim it, because an unqualified slug from a third party could silently shadow
@@ -320,7 +320,7 @@ user has not disabled it (a distinct message, so the model does not retry), and 
 | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | [`plugins/builtin-modes/plugin.json`](../../plugins/builtin-modes/plugin.json)                                               | The six mode definitions (`contributes.modes`) — the canonical source                             |
 | [`packages/core/src/plugins/plugin-modes.ts`](../../packages/core/src/plugins/plugin-modes.ts)                               | `effectiveModes()` — merges plugin contributions with the user's and project's modes              |
-| [`packages/core/src/plugins/plugin-manager.ts`](../../packages/core/src/plugins/plugin-manager.ts)                           | `getContributedModes()` — tagging, namespacing and the `unqualifiedModes` exemption               |
+| [`packages/core/src/plugins/plugin-manager.ts`](../../packages/core/src/plugins/plugin-manager.ts)                           | `getContributedModes()` — tagging, namespacing and the `unqualifiedContributions` exemption       |
 | [`src/core/config/CustomModesManager.ts`](../../src/core/config/CustomModesManager.ts)                                       | Reads the mode files, merges, caches, persists to `globalState.customModes`                       |
 | [`packages/types/src/modes.ts`](../../packages/types/src/modes.ts)                                                           | `resolveModeConfig()`, `getAllModes()`, `getModeBySlug()`, `getToolsForMode()`, `defaultModeSlug` |
 | [`packages/types/src/mode.ts`](../../packages/types/src/mode.ts)                                                             | `ModeConfig` type + schema                                                                        |

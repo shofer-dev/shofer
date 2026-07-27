@@ -91,8 +91,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 		messageQueue = [],
 		parallelTasks,
 		taskNotifications,
-		pendingWorktreeDir,
-		setPendingWorktreeDir,
 		workflowVizHtml,
 		workflowVizRunState,
 		workflowVizMeta,
@@ -1018,16 +1016,11 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 				userRespondedRef.current = true
 
 				if (messagesRef.current.length === 0) {
-					// On the home screen the user may have chosen a target worktree
-					// via WorktreeIndicator. Forward it so the new task spawns
-					// scoped to that worktree's directory; clear after consuming.
 					vscode.postMessage({
 						type: "newTask",
 						text,
 						images,
-						worktreeDir: pendingWorktreeDir ?? undefined,
 					})
-					if (pendingWorktreeDir) setPendingWorktreeDir(null)
 				} else if (shoferAskRef.current) {
 					if (shoferAskRef.current === "followup") {
 						markFollowUpAsAnswered()
@@ -1100,8 +1093,6 @@ const WorkflowViewComponent: React.ForwardRefRenderFunction<WorkflowViewRef, Wor
 			isStreaming,
 			messageQueue.length,
 			apiConfiguration?.apiProvider,
-			pendingWorktreeDir,
-			setPendingWorktreeDir,
 		], // messagesRef and shoferAskRef are stable
 	)
 

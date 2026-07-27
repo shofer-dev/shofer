@@ -26,8 +26,6 @@ vi.mock("@src/context/ExtensionStateContext", () => ({
 	useExtensionState: () => ({
 		renderContext: "sidebar",
 		setMode: vi.fn(),
-		pendingWorktreeDir: undefined,
-		setPendingWorktreeDir: vi.fn(),
 	}),
 }))
 

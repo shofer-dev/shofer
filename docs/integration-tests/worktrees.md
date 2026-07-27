@@ -2,19 +2,30 @@
 
 ## Setup
 
-Each scenario assumes a git repository with at least one commit and a clean working tree.
+Each scenario assumes a git repository with at least one commit and a clean working tree,
+and the bundled `worktrees` plugin enabled (its default).
 
 ## Scenarios
 
-### 1. Create an embedded worktree and spawn a parallel task
+### 1. Create an embedded worktree and run a task in it
 
 1. Open a single-folder git workspace.
-2. Click the WorktreeIndicator chip → "Create new worktree…".
+2. Click the branch chip in the chat input → "Create new worktree…".
 3. Accept auto-generated branch and path. Click **Create**.
-4. **Assert:** A new task appears in the TaskSelector with the worktree branch badge.
-5. **Assert:** The new worktree directory exists at `<workspace>/.shofer/worktrees/<name>/`.
-6. **Assert:** `git worktree list` shows both the main tree and the new worktree.
-7. **Assert:** The new task's `cwd` is the worktree subdirectory (verify via `execute_command pwd` in the new task).
+4. **Assert:** The new worktree directory exists at `<workspace>/.shofer/worktrees/<name>/`.
+5. **Assert:** `git worktree list` shows both the main tree and the new worktree.
+6. **Assert:** `.gitignore` contains `.shofer/worktrees/`.
+7. Send a message.
+8. **Assert:** The task appears in the TaskSelector badged with the worktree's directory name.
+9. **Assert:** The task's `cwd` is the worktree subdirectory (verify via `execute_command pwd`).
+
+### 1b. A task started with no choice gets its own worktree
+
+1. Open a single-folder git workspace with no pending selection (fresh window).
+2. Send a message straight away.
+3. **Assert:** A `shofer-<random>` worktree was created and the task runs in it.
+4. Click the branch chip, choose the current branch, and start another task.
+5. **Assert:** That task runs in the workspace root — no second worktree.
 
 ### 2. Copy `.shofer/worktreeinclude` files on creation
 
@@ -33,31 +44,31 @@ Each scenario assumes a git repository with at least one commit and a clean work
 
 ### 4. Worktree path enforcement
 
-1. Attempt to create a worktree with a path outside `.shofer/worktrees/` (e.g., via a manually-crafted `createWorktree` IPC message or by modifying the modal).
-2. **Assert:** The path is normalized to `.shofer/worktrees/<dirname>/` by `handleCreateWorktree`.
+1. Attempt to create a worktree with a path outside `.shofer/worktrees/` (e.g. by calling the plugin's `create` request with an absolute path elsewhere).
+2. **Assert:** The path is normalized to `.shofer/worktrees/<dirname>/` by the plugin.
 
 ### 5. List worktrees and availability constraints
 
 1. Open a single-folder git workspace.
-2. Open the Worktrees settings page.
+2. Open Settings → Plugins → Worktrees.
 3. **Assert:** The worktree list appears with the main tree and any existing worktrees.
 4. **Assert:** The `.shofer/worktreeinclude` status footer shows correct status.
 5. Open a multi-root workspace.
-6. **Assert:** Worktrees view shows "not supported in multi-root workspaces".
+6. **Assert:** The panel explains that multi-root workspaces are not supported.
 7. Open a subfolder of a git repo (not under `.shofer/worktrees/`).
-8. **Assert:** Worktrees view shows "not supported when workspace is a subfolder".
+8. **Assert:** The panel explains that the workspace is a subfolder of a repository.
 
 ### 6. Embedded worktree exemption for subfolder restriction
 
 1. Create an embedded worktree via the UI.
 2. Open that worktree as a VS Code workspace (`code .shofer/worktrees/<name>/`).
-3. Navigate to the Worktrees settings page.
+3. Open Settings → Plugins → Worktrees.
 4. **Assert:** Worktrees ARE available (the subfolder restriction is bypassed for embedded worktrees).
 
 ### 7. Delete worktree
 
 1. Create a worktree via the UI.
-2. Delete it via the Worktrees settings page (normal delete).
+2. Delete it from Settings → Plugins → Worktrees (normal delete).
 3. **Assert:** The worktree directory no longer exists on disk.
 4. **Assert:** `git worktree list` no longer shows the worktree.
 5. **Assert:** The branch is deleted (best-effort via `git branch -d`) if it had no unmerged changes.
@@ -70,23 +81,23 @@ Each scenario assumes a git repository with at least one commit and a clean work
 4. **Assert:** The worktree directory is removed.
 5. **Assert:** The branch is NOT deleted (force-delete prunes the worktree but not the branch).
 
-### 9. WorktreeIndicator status display
+### 9. Branch-chip status display
 
 1. Open a git workspace with commits on current branch.
-2. Click the WorktreeIndicator chip.
+2. Click the branch chip.
 3. **Assert:** The popover shows: branch name, ahead/behind counts, files changed, last commit info.
 4. Make an uncommitted change.
 5. Re-open the popover.
 6. **Assert:** The status updates to show the uncommitted change count.
 
-### 10. Switch to another worktree via WorktreeIndicator
+### 10. Pick which worktree the next task runs in
 
 1. Create two worktrees (A and B) in addition to the main tree.
-2. Click the WorktreeIndicator chip.
-3. **Assert:** The "Other Worktrees" section lists worktrees A and B (not the current one, not the bare repo).
-4. Click on worktree A.
-5. **Assert:** A new parallel task is spawned (`createParallelTask` with `worktreeDir` set to worktree A's path).
-6. **Assert:** The new task appears in the TaskSelector with the correct worktree badge.
+2. Click the branch chip.
+3. **Assert:** The "Select worktree for new task" section lists A and B alongside the current one (never the bare repo).
+4. Click worktree A, then send a message.
+5. **Assert:** The task runs in worktree A (`execute_command pwd`), and the TaskSelector badges it with A's directory name.
+6. **Assert:** The message after that does NOT reuse A — one pick scopes one task.
 
 ### 11. Checkpoint isolation between parallel worktree tasks
 
@@ -105,17 +116,16 @@ Each scenario assumes a git repository with at least one commit and a clean work
 4. Resume the task.
 5. **Assert:** `execute_command pwd` in the resumed task shows the worktree subdirectory.
 
-### 13. `handleGetWorktreeStatus` with `cwdOverride`
+### 13. Status is scoped to the task's own worktree
 
 1. Create a worktree task (Task B) while the main task (Task A) is active.
-2. Request worktree status from Task B's context (with `cwdOverride` set to Task B's worktree path).
-3. **Assert:** The returned status reflects Task B's worktree (branch, ahead/behind, uncommitted changes), NOT the main workspace's status.
+2. With Task B focused, open the branch chip.
+3. **Assert:** The status reflects Task B's worktree (branch, ahead/behind, uncommitted changes), NOT the main workspace's.
 
 ### 14. Submodule interaction
 
 1. Open a git repo that has submodules.
 2. Create a worktree.
-3. **Assert:** The worktree is created successfully.
-4. **Assert:** Submodule directories in the worktree are empty (no auto-init).
-5. Run `git submodule update --init` in the worktree.
-6. **Assert:** Submodules populate correctly.
+3. **Assert:** With "Initialize submodules" left on, the worktree is created and its submodules are populated (`--depth 1`).
+4. Repeat with the option unchecked.
+5. **Assert:** The worktree is created and its submodule directories are empty.

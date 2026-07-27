@@ -331,7 +331,7 @@ This enables companion extensions to seamlessly contribute tools to Shofer's too
 
 No need to maintain separate VS Code windows per worktree anymore.
 
-See [`worktrees.md`](../worktrees.md) for the full architecture.
+See [`plugins/worktrees.md`](../plugins/worktrees.md) for the full architecture.
 
 ### What Was Built
 
