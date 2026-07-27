@@ -1391,14 +1391,55 @@ export interface PluginView {
 	 * The user's stored config overrides for this plugin (a subset of the schema's
 	 * properties). A field absent here falls back to its schema `default`. The effective
 	 * value the plugin sees is `default` merged under these overrides.
+	 *
+	 * **Never carries a `secret` property's value** — those live in the host's secret
+	 * store and are reported only as names in {@link configSecretsSet}.
 	 */
 	config?: Record<string, unknown>
+	/**
+	 * Which of the schema's `secret` properties currently have a stored value.
+	 *
+	 * The panel needs to distinguish "no key configured" from "a key is set, and I am not
+	 * going to show it to you" — so the value never crosses to the webview, only the fact
+	 * that it exists.
+	 */
+	configSecretsSet?: string[]
 }
 
 /** A plugin's config JSON-schema (manifest `config`) as surfaced to the Plugins panel. */
 export interface PluginConfigSchema {
 	type?: string
-	properties?: Record<string, { type?: string; default?: unknown; description?: string; enum?: unknown[] }>
+	properties?: Record<
+		string,
+		{
+			type?: string
+			default?: unknown
+			description?: string
+			enum?: unknown[]
+			/**
+			 * A credential rather than a preference: stored in the host's secret store
+			 * (the OS keychain), never written to `globalState`, never sent to the
+			 * webview, and rendered as a password field. `ctx.config` still carries the
+			 * value, so the plugin reads it exactly like any other property.
+			 */
+			secret?: boolean
+		}
+	>
+}
+
+/**
+ * The `secret: true` property names in a plugin's config schema.
+ *
+ * One helper rather than three inline `Object.entries(...).filter(...)`: the host splits
+ * an incoming config by it, redacts an outgoing one by it, and the manager merges
+ * secrets by it — three places that must agree on what counts as a secret.
+ */
+export function pluginConfigSecretKeys(schema: PluginConfigSchema | undefined): string[] {
+	const properties = schema?.properties
+	if (!properties) return []
+	return Object.entries(properties)
+		.filter(([, spec]) => spec?.secret === true)
+		.map(([key]) => key)
 }
 
 /** Snapshot of discovered plugins pushed to the webview (`ExtensionMessage.plugins`). */

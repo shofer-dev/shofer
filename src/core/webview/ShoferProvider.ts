@@ -99,7 +99,9 @@ import {
 	installPluginFromUrl as installPluginArchiveFromUrl,
 	PluginPackError,
 } from "@shofer/core"
+import { pluginConfigSecretKeys } from "@shofer/types"
 import type {
+	PluginConfigSchema,
 	PluginRequest,
 	PluginView,
 	PluginsState,
@@ -120,6 +122,7 @@ import type {
 	PluginTaskProvider,
 } from "@shofer/core"
 import { getApiMetrics } from "@shofer/core"
+import { applyPluginSecretEdits, redactPluginSecretConfig, splitPluginConfigBySecrets } from "@shofer/core"
 import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
@@ -2246,6 +2249,8 @@ export class ShoferProvider
 			// Per-plugin config (merged with manifest defaults) from ContextProxy.
 			getPluginConfigs: () =>
 				this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined,
+			// …and the `secret: true` half of it, which lives in the secret store instead.
+			getPluginSecrets: () => this.readPluginSecrets(),
 			workspacePath: cwd,
 			// A repository-shaped plugin (worktrees) must be able to tell a multi-root
 			// window apart from a single-root one; the webview cannot.
@@ -2779,11 +2784,41 @@ export class ShoferProvider
 		}
 	}
 
+	/**
+	 * Every plugin's stored secret config values, as `{ [plugin]: { [key]: value } }`.
+	 *
+	 * One `pluginSecrets` entry in the secret store rather than one per property:
+	 * `SecretState` is a fixed, typed key set, and a plugin must not be able to mint new
+	 * keys in it. A corrupt/absent blob reads as "no secrets", which degrades a plugin to
+	 * unconfigured rather than breaking the whole panel.
+	 */
+	private readPluginSecrets(): Record<string, Record<string, string>> {
+		const raw = this.contextProxy.getSecret("pluginSecrets")
+		if (!raw) return {}
+		try {
+			const parsed = JSON.parse(raw) as unknown
+			return parsed && typeof parsed === "object" ? (parsed as Record<string, Record<string, string>>) : {}
+		} catch {
+			return {}
+		}
+	}
+
+	private async writePluginSecrets(all: Record<string, Record<string, string>>): Promise<void> {
+		const populated = Object.fromEntries(Object.entries(all).filter(([, values]) => Object.keys(values).length > 0))
+		await this.contextProxy.storeSecret(
+			"pluginSecrets",
+			Object.keys(populated).length > 0 ? JSON.stringify(populated) : undefined,
+		)
+	}
+
 	/** Push the discovered-plugins snapshot to the webview (design §12). */
 	public async pushPluginsState(): Promise<void> {
 		const manager = await this.getPluginManager()
 		const storedConfigs =
 			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
+		const storedSecrets = this.readPluginSecrets()
+		const secretKeysOf = (p: { manifest: { config?: unknown } }) =>
+			pluginConfigSecretKeys(p.manifest.config as PluginConfigSchema | undefined)
 		const plugins: PluginView[] = manager.listPlugins().map((p) => ({
 			name: p.name,
 			version: p.version,
@@ -2805,7 +2840,10 @@ export class ShoferProvider
 			// Config schema (manifest `config`) + the user's stored overrides so the panel
 			// can render an editable form. Absent schema ⇒ the panel shows no config section.
 			configSchema: p.manifest.config as PluginView["configSchema"],
-			config: storedConfigs[p.name] ?? {},
+			// A `secret` property's VALUE never crosses to the webview — only whether one
+			// is stored, so the panel can say "set" instead of showing a key.
+			config: redactPluginSecretConfig(storedConfigs[p.name] ?? {}, secretKeysOf(p)),
+			configSecretsSet: secretKeysOf(p).filter((key) => Boolean(storedSecrets[p.name]?.[key])),
 		}))
 		const state: PluginsState = { plugins }
 		await this.postMessageToWebview({ type: "plugins", plugins: state })
@@ -2833,13 +2871,30 @@ export class ShoferProvider
 			case "setConfig": {
 				// Persist the plugin's config overrides, then reload it so `ctx.config`
 				// reflects the new values immediately (design §5/§6.2).
+				//
+				// The incoming object carries both halves; the split by `secret: true` is the
+				// host's job, so a plugin author declares a credential once and never has to
+				// route it. An empty string clears a secret (the panel's way of saying
+				// "forget this key"); an ABSENT one leaves the stored value alone, so the
+				// panel need not round-trip a value it is never shown.
+				const declared = manager.listPlugins().find((p) => p.name === request.name)
+				const secretKeys = pluginConfigSecretKeys(declared?.manifest.config as PluginConfigSchema | undefined)
+				const { plain, secrets: incomingSecrets } = splitPluginConfigBySecrets(request.config, secretKeys)
+
 				const all = {
 					...((this.contextProxy.getValue("pluginConfigs") as
 						| Record<string, Record<string, unknown>>
 						| undefined) ?? {}),
 				}
-				all[request.name] = request.config
+				all[request.name] = plain
 				await this.contextProxy.setValue("pluginConfigs", all)
+
+				if (Object.keys(incomingSecrets).length > 0) {
+					const secrets = this.readPluginSecrets()
+					secrets[request.name] = applyPluginSecretEdits(secrets[request.name], incomingSecrets)
+					await this.writePluginSecrets(secrets)
+				}
+
 				await manager.reloadPlugin(request.name)
 				await this.resyncAfterPluginChange()
 				break

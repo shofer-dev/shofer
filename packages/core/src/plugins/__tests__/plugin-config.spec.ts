@@ -42,3 +42,37 @@ describe("resolvePluginConfig (step 2.3)", () => {
 		})
 	})
 })
+
+describe("resolvePluginConfig — secret properties", () => {
+	const manifestConfig = {
+		type: "object",
+		properties: {
+			qdrantUrl: { type: "string", default: "http://localhost:6333" },
+			qdrantApiKey: { type: "string", secret: true },
+		},
+	}
+
+	it("delivers a secret to the plugin as an ordinary config value", () => {
+		// The host keeps it somewhere else (its secret store); the plugin author declares
+		// the property once and reads it like any other.
+		expect(
+			resolvePluginConfig(manifestConfig, { qdrantUrl: "http://qdrant:6333" }, { qdrantApiKey: "k-123" }),
+		).toEqual({
+			qdrantUrl: "http://qdrant:6333",
+			qdrantApiKey: "k-123",
+		})
+	})
+
+	it("prefers the secret store over a stale value left in the plain config", () => {
+		expect(resolvePluginConfig(manifestConfig, { qdrantApiKey: "stale" }, { qdrantApiKey: "current" })).toEqual({
+			qdrantUrl: "http://localhost:6333",
+			qdrantApiKey: "current",
+		})
+	})
+
+	it("leaves the property unset when the host stores no secret", () => {
+		expect(resolvePluginConfig(manifestConfig, undefined, undefined)).toEqual({
+			qdrantUrl: "http://localhost:6333",
+		})
+	})
+})

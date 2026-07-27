@@ -22,6 +22,17 @@ vi.mock("../../plugins/PluginSlot", () => ({
 	PluginSlot: () => null,
 }))
 
+// The real `vscode-text-field` is a web component with no value setter under jsdom, so a
+// plain <input> stands in — enough to assert what the field is TYPED as and what it shows.
+vi.mock("@vscode/webview-ui-toolkit/react", () => ({
+	VSCodeTextField: ({ value, onInput, placeholder, type, children }: any) => (
+		<>
+			{children}
+			<input type={type ?? "text"} value={value ?? ""} placeholder={placeholder} onChange={(e) => onInput?.(e)} />
+		</>
+	),
+}))
+
 const plugin = {
 	name: "live-memory",
 	version: "1.0.0",
@@ -102,5 +113,43 @@ describe("PluginsSettings save-gating", () => {
 		expect(vscode.postMessage).not.toHaveBeenCalledWith(
 			expect.objectContaining({ plugin: expect.objectContaining({ action: "setEnabled" }) }),
 		)
+	})
+
+	it("renders a secret config property as a password field that never shows the stored value", async () => {
+		const ref = createRef<PluginsSettingsRef>()
+		renderPlugins(ref, {
+			enabled: true,
+			configSchema: {
+				type: "object",
+				properties: {
+					qdrantUrl: { type: "string", default: "http://localhost:6333" },
+					qdrantApiKey: { type: "string", secret: true },
+				},
+			},
+			// The host sends the NAMES of stored secrets, never their values.
+			config: { qdrantUrl: "http://qdrant:6333" },
+			configSecretsSet: ["qdrantApiKey"],
+		})
+
+		fireEvent.click(await waitFor(() => screen.getByText("settings:plugins.configure")))
+
+		const secretField = await waitFor(() =>
+			screen.getByPlaceholderText<HTMLInputElement>("settings:plugins.secretSet"),
+		)
+		// A password field, empty: the key exists, and the panel cannot read it.
+		expect(secretField.type).toBe("password")
+		expect(secretField.value).toBe("")
+
+		fireEvent.change(secretField, { target: { value: "replacement-key" } })
+		ref.current?.commitConfigBuffers()
+
+		expect(vscode.postMessage).toHaveBeenCalledWith({
+			type: "plugin",
+			plugin: {
+				action: "setConfig",
+				name: "live-memory",
+				config: { qdrantUrl: "http://qdrant:6333", qdrantApiKey: "replacement-key" },
+			},
+		})
 	})
 })

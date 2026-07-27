@@ -122,9 +122,13 @@ describe("SETTING_SYNC_SCOPE invariants (config_sync §3)", () => {
 	it("never routes a secret over the sync channel — no GLOBAL_SECRET_KEYS entry is 'node'", () => {
 		// The motivating secret example (image-gen API key).
 		expect(SETTING_SYNC_SCOPE["openRouterImageApiKey"]).not.toBe("node")
-		// And, generally, no global secret is node-scoped.
+		// And, generally, no global secret is node-scoped. A secret that is not ALSO a
+		// settings key (e.g. `pluginSecrets`, which exists only in the secret store) has no
+		// entry here at all — it cannot ride the settings channel by construction.
 		for (const secret of GLOBAL_SECRET_KEYS) {
-			expect(SETTING_SYNC_SCOPE[secret]).not.toBe("node")
+			const scope = (SETTING_SYNC_SCOPE as Record<string, string>)[secret]
+			if (scope === undefined) continue
+			expect(scope).not.toBe("node")
 		}
 	})
 

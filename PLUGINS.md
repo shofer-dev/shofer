@@ -163,6 +163,25 @@ shallow **default-merge**: any `properties.<key>.default` seeds `ctx.config[key]
 stored a value (stored values always win). Full type/enum validation of stored values is not yet
 enforced — treat `ctx.config` as best-effort typed.
 
+**Credentials: `"secret": true`.** A property marked secret is stored in the host's secret store
+(the OS keychain), never in plain state, and its value is never sent to the settings webview — the
+panel renders it as a password field showing only whether one is stored. Your plugin reads it from
+`ctx.config[key]` like any other property; the split is the host's job:
+
+```json
+"config": {
+	"type": "object",
+	"properties": {
+		"qdrantUrl": { "type": "string", "default": "http://localhost:6333" },
+		"qdrantApiKey": { "type": "string", "secret": true, "description": "Vector-store token" }
+	}
+}
+```
+
+Saving an **empty** secret field deletes the stored value; leaving it untouched keeps it (the panel
+cannot round-trip a value it is never shown). "Reset to defaults" clears the plain config and leaves
+credentials alone — losing a key to a button labelled "reset defaults" would be a surprise.
+
 ### A real example
 
 ```json

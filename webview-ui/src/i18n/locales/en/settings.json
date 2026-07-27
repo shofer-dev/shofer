@@ -47,6 +47,9 @@
 		"save": "Save",
 		"saved": "Saved",
 		"resetDefaults": "Reset to defaults",
+		"secretSet": "Stored — type to replace",
+		"secretUnset": "Not set",
+		"secretHint": "Kept in your OS keychain, never shown here. Clear the field and save to remove it.",
 		"scope": {
 			"bundled": "Built-in",
 			"global": "Global",

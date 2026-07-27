@@ -74,6 +74,13 @@ function PluginConfigForm({
 				<div className="mt-2 flex flex-col gap-3 pl-3 border-l border-vscode-panel-border">
 					{Object.entries(props).map(([key, spec]) => {
 						const val = valueOf(key)
+						// A credential the host keeps in its secret store: its value never
+						// reaches this webview, so the field shows whether one is stored and
+						// takes a replacement. Typing nothing leaves the stored key alone;
+						// clearing a staged edit to empty deletes it.
+						const isSecret = spec.secret === true
+						const secretStored = isSecret && plugin.configSecretsSet?.includes(key)
+						const staged = override[key]
 						return (
 							<div key={key} className="flex flex-col gap-1">
 								<div className="flex items-center gap-2">
@@ -92,7 +99,7 @@ function PluginConfigForm({
 										{spec.description}
 									</span>
 								)}
-								{spec.type !== "boolean" && (
+								{spec.type !== "boolean" && !isSecret && (
 									<VSCodeTextField
 										value={val === undefined || val === null ? "" : String(val)}
 										onInput={(e) => {
@@ -103,6 +110,25 @@ function PluginConfigForm({
 											)
 										}}
 									/>
+								)}
+								{isSecret && (
+									<>
+										<VSCodeTextField
+											type="password"
+											value={typeof staged === "string" ? staged : ""}
+											placeholder={
+												secretStored
+													? t("settings:plugins.secretSet")
+													: t("settings:plugins.secretUnset")
+											}
+											onInput={(e) => onChange(key, (e.target as HTMLInputElement).value)}
+										/>
+										{secretStored && (
+											<span className="text-xs text-vscode-descriptionForeground">
+												{t("settings:plugins.secretHint")}
+											</span>
+										)}
+									</>
 								)}
 							</div>
 						)

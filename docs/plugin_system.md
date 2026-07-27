@@ -1000,6 +1000,17 @@ self-contained `@shofer/types` SDK at `<extension>/dist/plugin-sdk` (see
 `pluginRegistry.register(plugin, context)` — `context` includes the plugin's
 validated, default-merged config values (manifest `config` schema + user settings).
 
+**Config vs credentials.** A manifest config property may declare `"secret": true`. Its
+value is stored in the host's **secret store** (`pluginSecrets` in `GLOBAL_SECRET_KEYS`,
+one JSON blob keyed by plugin — `SecretState` is a fixed typed key set and a plugin must
+not be able to mint entries in it), never in the plain `pluginConfigs` state, and never
+sent to the webview: `PluginView.config` is redacted and `PluginView.configSecretsSet`
+reports only which credentials exist. The plugin reads the value from `ctx.config[key]`
+like any other property — `resolvePluginConfig(manifest, stored, secrets)` merges it in.
+The split rules (empty string deletes, an absent key keeps, a non-string is refused) live
+in [`plugin-config-secrets.ts`](../packages/core/src/plugins/plugin-config-secrets.ts) so
+the write path, the read path and the manager cannot disagree about them.
+
 ### Enable / Disable / Reload / Uninstall
 
 - **Disable** — the plugin is removed from the registry; tools, modes, skills, commands disappear, UI unmounts, MCP servers disconnect, services stop.

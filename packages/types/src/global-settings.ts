@@ -608,6 +608,18 @@ export const SECRET_STATE_KEYS = [
 // Global secrets that are part of GlobalSettings (not ProviderSettings)
 export const GLOBAL_SECRET_KEYS = [
 	"openRouterImageApiKey", // For image generation
+	/**
+	 * Every plugin's secret config values, as one JSON blob
+	 * (`{ [plugin]: { [key]: value } }`).
+	 *
+	 * A plugin declares a config property `secret: true` and the host routes it here
+	 * instead of into `pluginConfigs` (plain `globalState`, and echoed to the webview):
+	 * an embedding-provider key or a vector-store token belongs in the OS keychain like
+	 * every other credential. One blob rather than a key per plugin property because
+	 * `SecretState` is a fixed, typed key set — a plugin cannot add to it, and should not
+	 * be able to.
+	 */
+	"pluginSecrets",
 ] as const
 
 // Type for the actual secret storage keys

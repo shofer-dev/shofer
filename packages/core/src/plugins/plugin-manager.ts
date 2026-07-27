@@ -50,8 +50,15 @@ export { warnPlugin, warnPluginConflict } from "./plugin-warnings.js"
 export function resolvePluginConfig(
 	manifestConfig: Record<string, unknown> | undefined,
 	stored: Record<string, unknown> | undefined,
+	/**
+	 * The plugin's stored **secret** values (schema properties marked `secret: true`),
+	 * which the host keeps in its secret store rather than in `pluginConfigs`. Merged in
+	 * last so the plugin reads a credential exactly like any other config property — the
+	 * split is the host's problem, not the plugin author's.
+	 */
+	secrets?: Record<string, string> | undefined,
 ): Record<string, unknown> {
-	const result: Record<string, unknown> = { ...(stored ?? {}) }
+	const result: Record<string, unknown> = { ...(stored ?? {}), ...(secrets ?? {}) }
 	const properties = manifestConfig?.properties
 	if (properties && typeof properties === "object") {
 		for (const [key, schema] of Object.entries(properties as Record<string, unknown>)) {
@@ -278,6 +285,13 @@ export interface PluginManagerOptions {
 	 * keyed by plugin name. Merged with manifest defaults into `PluginContext.config`.
 	 */
 	getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
+	/**
+	 * Read the persisted per-plugin **secret** config values, keyed by plugin name. Kept
+	 * separate from {@link getPluginConfigs} because the host stores them somewhere else
+	 * (its secret store / the OS keychain). Omitted ⇒ no plugin sees a secret value, which
+	 * is the right failure for a host with nowhere safe to put one.
+	 */
+	getPluginSecrets?: () => Record<string, Record<string, string>> | undefined
 	/** Absolute workspace path threaded into code-plugin contexts (`workspacePath`/`cwd`). */
 	workspacePath?: string
 	/**
@@ -352,6 +366,7 @@ export class PluginManager {
 	private readonly codeLoader?: PluginCodeLoader
 	private readonly host?: HostBridge
 	private readonly getPluginConfigs?: () => Record<string, Record<string, unknown>> | undefined
+	private readonly getPluginSecrets?: () => Record<string, Record<string, string>> | undefined
 	private readonly workspacePath?: string
 	private readonly workspaceFolders?: readonly string[]
 	private readonly aiProvider?: PluginAiProvider
@@ -391,6 +406,7 @@ export class PluginManager {
 		this.codeLoader = options.codeLoader
 		this.host = options.host
 		this.getPluginConfigs = options.getPluginConfigs
+		this.getPluginSecrets = options.getPluginSecrets
 		this.workspacePath = options.workspacePath
 		this.workspaceFolders = options.workspaceFolders
 		this.aiProvider = options.aiProvider
@@ -858,7 +874,11 @@ export class PluginManager {
 	 * restricted sandbox host (permission-checked; only when a base host was supplied).
 	 */
 	private buildPluginContext(plugin: DiscoveredPlugin): PluginContext {
-		const config = resolvePluginConfig(plugin.manifest.config, this.getPluginConfigs?.()?.[plugin.name])
+		const config = resolvePluginConfig(
+			plugin.manifest.config,
+			this.getPluginConfigs?.()?.[plugin.name],
+			this.getPluginSecrets?.()?.[plugin.name],
+		)
 		const host = this.host
 			? createPluginSandbox({
 					pluginName: plugin.name,
