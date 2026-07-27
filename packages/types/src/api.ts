@@ -3,6 +3,7 @@ import type { Socket } from "net"
 
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings, SyncedSecrets, SyncedSettings } from "./global-settings.js"
+import type { SyncedPluginState } from "./plugin.js"
 import type { HistoryItem } from "./history.js"
 import type { ProviderSettingsEntry, ProviderSettings } from "./provider-settings.js"
 import type { IpcMessage, IpcServerEvents } from "./ipc.js"
@@ -138,6 +139,16 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	 *  Writes only the `SYNCED_SECRET_KEYS` credentials via ContextProxy's secret path —
 	 *  no provider-profile save. Keys absent from the slice are left untouched. */
 	applySyncedSecrets(secrets: SyncedSecrets): Promise<void>
+	/**
+	 * Apply the controller's plugin slice (config + credentials) for the plugins that
+	 * declare `syncConfig`.
+	 *
+	 * Merged **per plugin**, never wholesale: a node may hold local config for plugins the
+	 * controller does not sync, and losing it on every push would make the node's own
+	 * setup unreproducible. Affected plugins are reloaded so `ctx.config` reflects the new
+	 * values without a restart.
+	 */
+	applySyncedPluginState(plugins: SyncedPluginState): Promise<void>
 	/**
 	 * Returns a list of all configured profile names
 	 * @returns Array of profile names

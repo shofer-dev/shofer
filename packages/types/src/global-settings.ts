@@ -10,6 +10,7 @@ import {
 import { historyItemSchema, costLimitSchema } from "./history.js"
 import { codebaseIndexModelsSchema, codebaseIndexConfigSchema } from "./codebase-index.js"
 import { experimentsSchema } from "./experiment.js"
+import type { SyncedPluginState } from "./plugin.js"
 import { telemetrySettingsSchema } from "./telemetry.js"
 import { modeConfigSchema } from "./mode.js"
 import { customModePromptsSchema, customSupportPromptsSchema } from "./mode.js"
@@ -544,13 +545,19 @@ function canonicalize(value: unknown): unknown {
  *
  * `secrets` participates in the hash so that rotating a credential moves the version
  * and the health-echo reconciliation re-pushes it; hashing settings alone would leave
- * nodes holding a stale key forever, since the settings slice never changed. The
+ * nodes holding a stale key forever, since the settings slice never changed. `plugins`
+ * is in for the same reason: an indexer's embedder swapped in a plugin's own config must
+ * reach the node, and that change touches nothing in the settings slice. The
  * version is an opaque convergence token, not a security boundary — it is a 32-bit
  * non-cryptographic digest and is echoed on `/health` & `/whoami`, so it must never be
  * treated as proof of knowing a secret.
  */
-export function computeConfigVersion(config: SyncedSettings, secrets: SyncedSecrets = {}): string {
-	const canonical = JSON.stringify(canonicalize({ config, secrets }))
+export function computeConfigVersion(
+	config: SyncedSettings,
+	secrets: SyncedSecrets = {},
+	plugins: SyncedPluginState = {},
+): string {
+	const canonical = JSON.stringify(canonicalize({ config, secrets, plugins }))
 	let hash = 0x811c9dc5 // FNV-1a 32-bit offset basis
 	for (let i = 0; i < canonical.length; i++) {
 		hash ^= canonical.charCodeAt(i)

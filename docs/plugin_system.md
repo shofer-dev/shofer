@@ -1011,6 +1011,15 @@ The split rules (empty string deletes, an absent key keeps, a non-string is refu
 in [`plugin-config-secrets.ts`](../packages/core/src/plugins/plugin-config-secrets.ts) so
 the write path, the read path and the manager cannot disagree about them.
 
+**Config on a remote executor.** A manifest may also declare `"syncConfig": true`, and the
+controller then replicates that plugin's config + secrets to every Shofer Node it drives
+(`AgentApi.applyConfig`'s `plugins` argument — [`config_sync.md` §4b-2](./config_sync.md)).
+Opt-in per plugin, because only the plugin knows whether its settings describe the machine
+it is on or the feature it provides. Before sending, the controller asks the plugin the
+`"node-config"` request so it can shape its own outgoing slice — how the bundled indexer
+pins nodes to search-only against the collection the controller resolved, without the host
+knowing what either means. The node merges per plugin and reloads the affected plugins.
+
 ### Enable / Disable / Reload / Uninstall
 
 - **Disable** — the plugin is removed from the registry; tools, modes, skills, commands disappear, UI unmounts, MCP servers disconnect, services stop.

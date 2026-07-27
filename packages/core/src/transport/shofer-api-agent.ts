@@ -1,6 +1,14 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
+import type {
+	AgentApi,
+	AskResponse,
+	CreateTaskInput,
+	ServerEvent,
+	SyncedPluginState,
+	SyncedSecrets,
+	SyncedSettings,
+} from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
 export interface ShoferApiAgentOptions {
@@ -66,13 +74,21 @@ export class ShoferApiAgent implements AgentApi {
 		return !!this.options.allowClientConfig
 	}
 
-	async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
+	async applyConfig(
+		config: SyncedSettings,
+		version: string,
+		secrets: SyncedSecrets,
+		plugins?: SyncedPluginState,
+	): Promise<void> {
 		// Node CLI override wins — ignore controller pushes, same rule as apiConfiguration.
 		if (!this.options.allowClientConfig) return
 		await this.api.applySyncedSettings(config)
 		// Credentials land after the settings they belong to, so a node never briefly
 		// holds a store/embedder config it has no key for.
 		await this.api.applySyncedSecrets(secrets)
+		// Plugin state last: applying it reloads the affected plugins, which then read a
+		// settings + secrets picture that is already complete.
+		if (plugins) await this.api.applySyncedPluginState(plugins)
 		this.appliedConfigVersion = version // opaque; echoed on /health & /whoami so the controller sees convergence
 	}
 

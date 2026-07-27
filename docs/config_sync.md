@@ -58,6 +58,7 @@ Two axes decide whether a setting belongs on this channel:
 | **Node-scoped** behavior settings (auto-approval, …)  | **This channel** — one node-wide config, replicated on registration + on change    |
 | **LLM provider keys**                                 | _Not_ on this channel — per-task via `apiConfiguration` (see below)                |
 | **Code-index (RAG) credentials**                      | **This channel**, as the separate `SyncedSecrets` argument → SecretStorage         |
+| **A plugin's config + credentials**                   | **This channel**, as the separate `SyncedPluginState` argument — opt-in per plugin |
 | **Front-end-only** UI state (pinned tabs, dismissals) | Not synced (no executor effect)                                                    |
 
 **In scope (v1): the whole node-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
@@ -134,7 +135,7 @@ outside the workspace, so not mirrored) and **loopback/controller-hosted** HTTP 
 remote node can't reach — and both are out of config-sync's scope; revisit with remote-MCP
 support. These calls are pinned by the `SETTING_SYNC_SCOPE` classification tests.
 
-Both allow-lists, and where a key that is *not* on them goes instead:
+Both allow-lists, and where a key that is _not_ on them goes instead:
 
 ```mermaid
 flowchart TD
@@ -159,7 +160,7 @@ config (`apiConfiguration`) and front-end-only UI state (`pinnedApiConfigs`,
 `dismissedUpsells`, `lastShownAnnouncementId`, task history) that has no executor effect.
 
 **Secrets travel on their own allow-list, not in `SyncedSettings`.** Credentials are never
-plaintext *settings* — `SyncedSettings` carries none, and a secret key in that slice is a
+plaintext _settings_ — `SyncedSettings` carries none, and a secret key in that slice is a
 bug. They ride the same `applyConfig` call as a separate `SyncedSecrets` argument, written
 on the node through `ContextProxy.storeSecret` (SecretStorage), never into globalState JSON.
 The allow-list is deliberately narrow: only the code-index (RAG) credentials, because a
@@ -189,7 +190,12 @@ Add one method to the transport-agnostic surface
  *  allow-listed credential slice the node needs to act on `config` — `{}` when there
  *  is nothing to replicate. Both are ignored when the node has local CLI overrides
  *  (allowClientConfig === false), same rule as apiConfiguration. */
-applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
+applyConfig(
+  config: SyncedSettings,
+  version: string,
+  secrets: SyncedSecrets,
+  plugins?: SyncedPluginState,
+): Promise<void>
 ```
 
 `SyncedSettings` is a `Pick<GlobalSettings, …node-scoped keys…>` in `@shofer/types`
@@ -202,10 +208,11 @@ keys are deliberately NOT in it — they already travel per-task on
 `CreateTaskInput.apiConfiguration`. Transport bindings follow the existing pattern exactly:
 
 - **HTTP route** ([`http-server.ts`](../packages/core/src/transport/http-server.ts:58)):
-  `POST /api/v1/config → { config, version, secrets } → 202` (token-authed like every
-  `/api/v1/*` route; an absent `secrets` defaults to `{}`).
+  `POST /api/v1/config → { config, version, secrets, plugins } → 202` (token-authed like
+  every `/api/v1/*` route; an absent `secrets` defaults to `{}`, an absent `plugins` means
+  "no plugin state to apply").
 - **Client** ([`http-client.ts`](../packages/core/src/transport/http-client.ts)):
-  `applyConfig(config, version, secrets) → this.post("/config", { config, version, secrets })`.
+  `applyConfig(config, version, secrets, plugins) → this.post("/config", { … })`.
 
 Because `ShoferHttpClient implements AgentApi`, adding the method to the interface makes
 client/server drift a compile error (the property the doc-comment at
@@ -219,10 +226,11 @@ slice into the node's in-process settings so the very next `provider.getState()`
 `checkAutoApproval`) sees it:
 
 ```ts
-async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
+async applyConfig(config, version, secrets, plugins?): Promise<void> {
   if (!this.options.allowClientConfig) return   // node CLI override wins — ignore, like apiConfiguration
   await this.api.applySyncedSettings(config)     // → ContextProxy.setValues(slice) on the node
   await this.api.applySyncedSecrets(secrets)     // → ContextProxy.storeSecret per allow-listed key
+  if (plugins) await this.api.applySyncedPluginState(plugins)  // → per-plugin merge + reload
   this.appliedConfigVersion = version            // opaque; echoed on /health (§6) so the controller sees convergence
 }
 ```
@@ -243,6 +251,35 @@ replica is the default and self-administration is the opt-out. The node-side app
 of the slice (the same write path `importConfiguration` uses,
 [`settings_overlay.md` §10c](settings_overlay.md)), **not** a full import (no provider
 profiles; the only secrets written are the `SYNCED_SECRET_KEYS` allow-list).
+
+### 4b-2. The plugin half — `SyncedPluginState`
+
+A plugin's settings are host-local by default, which is right for anything describing THIS
+machine and wrong for a plugin whose feature actually **runs on the executor**: the bundled
+codebase indexer asked to answer a search there needs its embedder settings and its store
+credentials, and neither is in `globalSettingsSchema`.
+
+So a manifest may declare **`"syncConfig": true`**, and the controller then sends that
+plugin's config and its `secret` properties as
+`SyncedPluginState = Record<pluginName, { config?, secrets? }>`:
+
+- **Opt-in, per plugin.** Nothing is synced for a plugin that does not ask. The set is not a
+  host allow-list, because the host has no way to know which of a third-party plugin's
+  settings describe the machine it is on.
+- **The plugin shapes its own slice.** Before sending, the controller asks each opted-in
+  plugin the `"node-config"` request with its stored config+secrets; whatever it returns is
+  what goes on the wire. That is the seam that lets a plugin pin a node to a different mode
+  of itself — the indexer's "nodes are search-only, against the collection I resolved" —
+  instead of the host encoding a feature's semantics on its behalf. A plugin that does not
+  answer sends its stored values unchanged.
+- **Merged on the node, never replaced** ([`applySyncedPluginState`](../src/extension/api.ts)):
+  per plugin, and per key within it. A node may hold local config for plugins the controller
+  does not sync at all, and replacing the whole map would erase it — the same reasoning that
+  makes `applySyncedSecrets` leave an omitted key alone. Touched plugins are then reloaded so
+  `ctx.config` is live without a restart.
+- **Hashed into the version** (§6), so a change that touches only a plugin's own config still
+  moves the version and converges. Without that, a rotated embedder key would sit unnoticed:
+  nothing in the settings slice moved.
 
 ### 4c. Controller side — push on registration + on change
 
@@ -281,14 +318,16 @@ sequenceDiagram
     participant P as ContextProxy on the node
     participant A as checkAutoApproval
 
-    Note over C: a settings change, or a node connects / reconnects
+    Note over C: a settings change, a synced plugin's config change,<br/>or a node connects / reconnects
     C->>C: currentSyncedSlice + currentSyncedSecrets
-    C->>C: computeConfigVersion of config and secrets = desiredVersion
-    C->>N: POST /api/v1/config — applyConfig with config, version, secrets
+    C->>C: currentPluginSlice — each opted-in plugin shapes its own
+    C->>C: computeConfigVersion of config, secrets and plugins = desiredVersion
+    C->>N: POST /api/v1/config — applyConfig with config, version, secrets, plugins
     alt allowClientConfig is false
         N-->>C: ignored — the node is self-administered
     else managed replica
         N->>P: applySyncedSettings then applySyncedSecrets
+        N->>P: applySyncedPluginState — per-plugin merge, then reload
         N->>N: appliedConfigVersion = version
     end
     C->>N: GET /health, every ~15s
@@ -376,8 +415,12 @@ pool (no _new_ task routing) but stays connected and health-pinged — **recover
 **The loop.**
 
 - **On any settings change** — the controller recomputes `desiredVersion`, broadcasts
-  `applyConfig(slice, desiredVersion)` to all connected nodes, and drops from the pool any
-  node whose reported version ≠ `desiredVersion` until it converges.
+  `applyConfig(slice, desiredVersion, secrets, plugins)` to all connected nodes, and drops
+  from the pool any node whose reported version ≠ `desiredVersion` until it converges.
+- **On a synced plugin's config change** — the same loop. The plugin slice is rebuilt
+  asynchronously (each plugin shapes its own) and compared by value first, so a plugin
+  reload that produces an identical slice does not bump the version and make every node
+  re-apply the same payload.
 - **On each health ping** — the controller compares reported vs desired; on mismatch it
   **re-sends** `applyConfig` (idempotent) and keeps the node out of the pool. This is the
   self-heal path for a node whose earlier push failed.
@@ -418,12 +461,12 @@ its applied version — defense-in-depth against a pool-gating race.
   node is current, not _what_ the config is. Config **writes** stay on the authed
   `/api/v1/config` route.
 
-  Since [§6](#6-convergence--config-version--pool-gating) folds the synced secrets into that
-  hash, the digest is now taken over credential values too. It stays a 32-bit non-cryptographic
-  FNV-1a digest of the *whole* slice, so it is not a practical oracle for any individual key —
-  but it is **not** a secrecy boundary and must never be treated as proof of knowing a secret,
-  nor compared against an attacker-supplied value to authorize anything. It exists solely so
-  the controller can tell a converged node from a stale one.
+    Since [§6](#6-convergence--config-version--pool-gating) folds the synced secrets into that
+    hash, the digest is now taken over credential values too. It stays a 32-bit non-cryptographic
+    FNV-1a digest of the _whole_ slice, so it is not a practical oracle for any individual key —
+    but it is **not** a secrecy boundary and must never be treated as proof of knowing a secret,
+    nor compared against an attacker-supplied value to authorize anything. It exists solely so
+    the controller can tell a converged node from a stale one.
 
 ## 8. Failure handling
 

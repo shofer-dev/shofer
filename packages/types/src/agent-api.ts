@@ -12,6 +12,7 @@
  */
 
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
+import type { SyncedPluginState } from "./plugin.js"
 import type { ProviderSettings } from "./provider-settings.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
@@ -78,12 +79,23 @@ export interface AgentApi {
 	respondToAsk(taskId: string, response: AskResponse): Promise<void>
 
 	/** Node-scoped settings + secrets the controller replicates to this executor (config_sync §4a).
+	 *  `plugins` carries the same thing for plugins that declare `syncConfig`: a plugin
+	 *  whose feature runs on the executor (the codebase indexer answering a search) is
+	 *  useless there without its settings and credentials, and those live outside the
+	 *  global settings schema. Only opted-in plugins appear, and each may shape its own
+	 *  outgoing slice, so what a node receives is the plugin's decision, not the
+	 *  controller's guess.
 	 *  `version` is the controller-assigned, node-opaque token the node stores and echoes
 	 *  on /health so the controller detects drift. `secrets` is the allow-listed credential
 	 *  slice (`SYNCED_SECRET_KEYS`) the node needs to act on `config` — pass `{}` when there
 	 *  is nothing to replicate. Both are ignored when the node has local CLI overrides
 	 *  (allowClientConfig === false), same rule as apiConfiguration. */
-	applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
+	applyConfig(
+		config: SyncedSettings,
+		version: string,
+		secrets: SyncedSecrets,
+		plugins?: SyncedPluginState,
+	): Promise<void>
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
 	// A plugin-owned per-task feature for a REMOTE (shadow) task: the controller reads

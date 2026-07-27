@@ -257,7 +257,7 @@ describe("createRequestHandler (§11)", () => {
 			)
 			expect(res.statusCode).toBe(202)
 			expect(JSON.parse(res.body)).toEqual({ applied: true })
-			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", secrets)
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", secrets, undefined)
 		})
 
 		it("defaults the secret slice to empty when the push carries none", async () => {
@@ -265,7 +265,20 @@ describe("createRequestHandler (§11)", () => {
 			const config = { autoApprovalEnabled: true }
 			await run(mockReq("POST", "/api/v1/config", { config, version: "v1" }), res as unknown as ServerResponse)
 			expect(res.statusCode).toBe(202)
-			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", {})
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", {}, undefined)
+		})
+
+		it("passes the plugin slice through to the node when the push carries one", async () => {
+			const res = mockRes()
+			const config = { autoApprovalEnabled: true }
+			// The plugin half of the slice (config_sync §4b-2) — opaque to the transport.
+			const plugins = { "rag-indexing": { config: { searchOnly: true }, secrets: { apiKey: "k" } } }
+			await run(
+				mockReq("POST", "/api/v1/config", { config, version: "v1", plugins }),
+				res as unknown as ServerResponse,
+			)
+			expect(res.statusCode).toBe(202)
+			expect(api.applyConfig).toHaveBeenCalledWith(config, "v1", {}, plugins)
 		})
 
 		it("400s a config push with no version", async () => {

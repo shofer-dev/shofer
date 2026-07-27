@@ -1,4 +1,12 @@
-import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
+import type {
+	AgentApi,
+	AskResponse,
+	CreateTaskInput,
+	ServerEvent,
+	SyncedPluginState,
+	SyncedSecrets,
+	SyncedSettings,
+} from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -47,8 +55,13 @@ export class ShoferHttpClient implements AgentApi {
 		await this.post(`/task/${encodeURIComponent(taskId)}/ask`, response)
 	}
 
-	async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
-		await this.post("/config", { config, version, secrets })
+	async applyConfig(
+		config: SyncedSettings,
+		version: string,
+		secrets: SyncedSecrets,
+		plugins?: SyncedPluginState,
+	): Promise<void> {
+		await this.post("/config", { config, version, secrets, plugins })
 	}
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────

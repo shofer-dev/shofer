@@ -182,6 +182,30 @@ Saving an **empty** secret field deletes the stored value; leaving it untouched 
 cannot round-trip a value it is never shown). "Reset to defaults" clears the plain config and leaves
 credentials alone — losing a key to a button labelled "reset defaults" would be a surprise.
 
+### `syncConfig`
+
+`"syncConfig": true` replicates this plugin's config **and** its secret properties from a controller
+to the Shofer Nodes it drives. Default off: plugin settings are host-local, which is right for
+anything describing the machine it runs on. Turn it on when your feature actually runs on the
+executor — an indexer answering a search there is useless without its embedder settings and store
+credentials, and those are not in the settings schema the node sync already carries.
+
+Your plugin can shape what leaves the controller by answering the **`"node-config"`** request:
+
+```ts
+async handleRequest(method, params) {
+	if (method === "node-config") {
+		const { config, secrets } = params as { config: Record<string, unknown>; secrets: Record<string, string> }
+		// A node queries the shared index; it must never scan or watch (the controller does).
+		return { config: { ...config, searchOnly: true, indexKey: resolvedKey() }, secrets }
+	}
+}
+```
+
+Answer nothing and your stored values go as they are. The node **merges** the slice per plugin and
+per key — it may hold local config for plugins the controller does not sync — and reloads your
+plugin so `ctx.config` is live without a restart.
+
 ### A real example
 
 ```json

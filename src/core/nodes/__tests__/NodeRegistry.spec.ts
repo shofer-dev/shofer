@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { AgentApi, GlobalSettings, LoadSample, ServerEvent, ShoferAPI, ShoferNodeConnState } from "@shofer/types"
+import type {
+	AgentApi,
+	GlobalSettings,
+	LoadSample,
+	ServerEvent,
+	ShoferAPI,
+	ShoferNodeConnState,
+	SyncedPluginState,
+} from "@shofer/types"
 import {
 	LOCAL_NODE_ID,
 	ShoferEventName,
@@ -16,6 +24,7 @@ import {
 	NodeRegistry,
 	type INodeConnection,
 	type NodeConnectionFactory,
+	type PluginSyncSource,
 	type SyncedConfigSource,
 } from "../NodeRegistry.js"
 
@@ -115,7 +124,7 @@ class FakeConn implements INodeConnection {
 	}
 }
 
-function makeRegistry(seedDefs?: unknown[], configSource?: SyncedConfigSource) {
+function makeRegistry(seedDefs?: unknown[], configSource?: SyncedConfigSource, pluginSyncSource?: PluginSyncSource) {
 	const { context, globals, secrets } = makeContext()
 	if (seedDefs) globals.set("shoferNodes.defs", seedDefs)
 	const conns = new Map<string, FakeConn>()
@@ -126,7 +135,7 @@ function makeRegistry(seedDefs?: unknown[], configSource?: SyncedConfigSource) {
 	}
 	const localAgent = makeAgent()
 	const registry = new NodeRegistry(
-		{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0", configSource },
+		{ context, localApi: {} as ShoferAPI, controllerVersion: "1.0.0", configSource, pluginSyncSource },
 		{ createConnection, localAgent },
 	)
 	return { registry, globals, secrets, conns, localAgent }
@@ -159,7 +168,26 @@ function makeConfigSource(initial: Partial<GlobalSettings> = { allowedCommands: 
 		fire: (key: string) => emitter.fire({ key }),
 		slice: () => pickSyncedSettings(values),
 		secrets: () => pickSyncedSecrets(secrets),
-		version: () => computeConfigVersion(pickSyncedSettings(values), pickSyncedSecrets(secrets)),
+		version: (plugins: SyncedPluginState = {}) =>
+			computeConfigVersion(pickSyncedSettings(values), pickSyncedSecrets(secrets), plugins),
+	}
+}
+
+/** A drivable {@link PluginSyncSource} — the plugin half of the controller's slice. */
+function makePluginSyncSource(initial: SyncedPluginState = {}) {
+	let slice: SyncedPluginState = initial
+	const emitter = new TypedEmitter<void>()
+	const source: PluginSyncSource = {
+		currentPluginSlice: async () => slice,
+		onDidChange: emitter.event,
+	}
+	return {
+		source,
+		set: (next: SyncedPluginState) => {
+			slice = next
+		},
+		fire: () => emitter.fire(undefined),
+		slice: () => slice,
 	}
 }
 
@@ -825,7 +853,8 @@ describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)"
 
 		// The registry resolved the slice from configSource.getValues() and hashed it (§6).
 		expect(api.applyConfig).toHaveBeenCalledTimes(1)
-		expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets())
+		// The fourth argument is the plugin slice — empty here (no plugin sync source).
+		expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets(), {})
 	})
 
 	// 2 ── Broadcast on a synced-key change (and NOT on a frontend-only key) ───────
@@ -839,7 +868,7 @@ describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)"
 		h.cfg.setValues({ allowedCommands: ["ls", "pwd"], autoApprovalEnabled: true })
 		h.cfg.fire("allowedCommands")
 		expect(api.applyConfig).toHaveBeenCalledTimes(1)
-		expect(api.applyConfig).toHaveBeenLastCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets())
+		expect(api.applyConfig).toHaveBeenLastCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets(), {})
 
 		// A frontend-only key is filtered out (SYNCED_KEYS) → no broadcast.
 		;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
@@ -948,5 +977,85 @@ describe("NodeRegistry — controller→node config sync (config_sync §4c/§6)"
 		expect(api.applyConfig).not.toHaveBeenCalled()
 		// desiredConfigVersion stays undefined → the pool never gates on config.
 		expect(h.registry.executorPool.assignableIds()).toContain("r1")
+	})
+
+	// 7 ── The plugin half of the slice ───────────────────────────────────────────
+	describe("plugin state (plugins that declare syncConfig)", () => {
+		const INDEXER: SyncedPluginState = {
+			"rag-indexing": {
+				config: { embedderProvider: "openai", searchOnly: true },
+				secrets: { embedderApiKey: "sk-controller" },
+			},
+		}
+
+		function withPluginSync(initial: SyncedPluginState = INDEXER) {
+			const cfg = makeConfigSource()
+			const plugins = makePluginSyncSource(initial)
+			const h = makeRegistry(undefined, cfg.source, plugins.source)
+			return { ...h, cfg, plugins }
+		}
+
+		it("pushes the plugin slice alongside the settings slice", async () => {
+			const h = withPluginSync()
+			await Promise.resolve() // the slice is built asynchronously at wiring time
+			const api = makeAgent()
+			await connectRemote(h, remoteDef, api)
+
+			expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), expect.any(String), h.cfg.secrets(), INDEXER)
+		})
+
+		it("hashes the plugin slice into the config version, so a plugin-only change converges", async () => {
+			const h = withPluginSync()
+			await Promise.resolve()
+			const api = makeAgent()
+			await connectRemote(h, remoteDef, api)
+			const before = (api.applyConfig as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1]
+			;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+
+			// Nothing in the SETTINGS slice moved — only the plugin's own config did. Without
+			// the plugin slice in the hash the version would be unchanged and the node would
+			// sit on a stale embedder forever.
+			const rotated: SyncedPluginState = {
+				"rag-indexing": {
+					config: { embedderProvider: "gemini", searchOnly: true },
+					secrets: { embedderApiKey: "sk-rotated" },
+				},
+			}
+			h.plugins.set(rotated)
+			h.plugins.fire()
+			await Promise.resolve()
+			await Promise.resolve()
+
+			expect(api.applyConfig).toHaveBeenCalledTimes(1)
+			const [, after, , pluginSlice] = (api.applyConfig as ReturnType<typeof vi.fn>).mock.calls[0]
+			expect(pluginSlice).toEqual(rotated)
+			expect(after).not.toBe(before)
+			expect(after).toBe(h.cfg.version(rotated))
+		})
+
+		it("does not re-broadcast when the rebuilt plugin slice is identical", async () => {
+			const h = withPluginSync()
+			await Promise.resolve()
+			const api = makeAgent()
+			await connectRemote(h, remoteDef, api)
+			;(api.applyConfig as ReturnType<typeof vi.fn>).mockClear()
+
+			// A plugin reload or an unrelated save fires the change; the slice is unchanged,
+			// so every node would otherwise re-apply an identical payload.
+			h.plugins.fire()
+			await Promise.resolve()
+			await Promise.resolve()
+
+			expect(api.applyConfig).not.toHaveBeenCalled()
+		})
+
+		it("sends an empty plugin slice when no plugin opts in", async () => {
+			const h = withPluginSync({})
+			await Promise.resolve()
+			const api = makeAgent()
+			await connectRemote(h, remoteDef, api)
+
+			expect(api.applyConfig).toHaveBeenCalledWith(h.cfg.slice(), h.cfg.version(), h.cfg.secrets(), {})
+		})
 	})
 })

@@ -1,7 +1,14 @@
 import http from "node:http"
 import os from "node:os"
 
-import type { AgentApi, ProviderSettings, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
+import type {
+	AgentApi,
+	ProviderSettings,
+	ServerEvent,
+	SyncedPluginState,
+	SyncedSecrets,
+	SyncedSettings,
+} from "@shofer/types"
 
 /**
  * HTTP + SSE transport boundary (v3 architecture §11).
@@ -196,6 +203,7 @@ export function createRequestHandler(
 				body.config as SyncedSettings,
 				body.version,
 				(body.secrets as SyncedSecrets | undefined) ?? {},
+				body.plugins as SyncedPluginState | undefined,
 			)
 			return send(res, 202, { applied: true })
 		}

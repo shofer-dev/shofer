@@ -17,6 +17,7 @@ import {
 	type ShoferNodeRequest,
 	type ShoferNodeView,
 	type ShoferNodesState,
+	type SyncedPluginState,
 	type SyncedSecrets,
 	type SyncedSettings,
 	type TokenUsage,
@@ -89,6 +90,21 @@ export interface SyncedConfigSource {
 	onDidChange: Event<{ key: string }>
 }
 
+/**
+ * Where the controller's **plugin** slice comes from (config_sync, plugin half).
+ *
+ * Separate from {@link SyncedConfigSource} because plugin state is not in the global
+ * settings schema and is not the controller's to shape: the source asks each opted-in
+ * plugin what a node should receive. Absent ⇒ nodes get no plugin state, which is the
+ * pre-plugin-sync behaviour.
+ */
+export interface PluginSyncSource {
+	/** The controller→node slice for every plugin that declares `syncConfig`. */
+	currentPluginSlice(): Promise<SyncedPluginState>
+	/** Fires when a synced plugin's config or credentials changed. */
+	onDidChange?: Event<void>
+}
+
 /** Factory for a node connection (injectable so the registry is unit-testable). */
 export type NodeConnectionFactory = (opts: {
 	baseUrl: string
@@ -147,6 +163,11 @@ export interface NodeRegistryOptions {
 	 * when absent, config sync is inert (no desired version → the pool is never gated).
 	 */
 	configSource?: SyncedConfigSource
+	/**
+	 * Source of the plugin half of the synced config. Wired by the extension, where the
+	 * plugin manager lives; omitted in tests that do not exercise plugin sync.
+	 */
+	pluginSyncSource?: PluginSyncSource
 }
 
 export interface NodeRegistryDeps {
@@ -196,6 +217,18 @@ export class NodeRegistry {
 	private readonly configDisposable: vscode.Disposable
 	/** Controller-authoritative settings source (config_sync §4c); undefined disables sync. */
 	private readonly configSource?: SyncedConfigSource
+	/** Controller-authoritative plugin-state source; undefined ⇒ nodes get no plugin slice. */
+	private readonly pluginSyncSource?: PluginSyncSource
+	/**
+	 * The last plugin slice built from {@link pluginSyncSource}.
+	 *
+	 * Cached because building it is async (each plugin may shape its own slice) while the
+	 * settings slice — and every caller that pairs the two — is synchronous. Refreshed
+	 * whenever plugin state changes, and once at wiring time.
+	 */
+	private pluginSlice: SyncedPluginState = {}
+	/** Disposes the `pluginSyncSource.onDidChange` subscription. */
+	private pluginChangeDisposable?: { dispose(): void }
 	/** Disposes the `configSource.onDidChange` subscription for config-sync broadcasts. */
 	private configChangeDisposable?: { dispose(): void }
 	/** The controller's current desired config-sync version (config_sync §6). */
@@ -239,6 +272,7 @@ export class NodeRegistry {
 		this.context = opts.context
 		this.controllerVersion = opts.controllerVersion
 		this.configSource = opts.configSource
+		this.pluginSyncSource = opts.pluginSyncSource
 		this.localAgent = deps.localAgent ?? new ShoferApiAgent(opts.localApi)
 		this.createConnection = deps.createConnection ?? ((o) => new NodeConnection(o))
 
@@ -274,12 +308,44 @@ export class NodeRegistry {
 		// keep the pool's gate current on every synced-settings change. Inert without a
 		// configSource (unit tests) — desiredConfigVersion stays undefined ⇒ no gating.
 		if (this.configSource) {
-			this.desiredConfigVersion = computeConfigVersion(this.currentSyncedSlice(), this.currentSyncedSecrets())
+			this.desiredConfigVersion = computeConfigVersion(
+				this.currentSyncedSlice(),
+				this.currentSyncedSecrets(),
+				this.pluginSlice,
+			)
 			this.pool.setDesiredConfigVersion(this.desiredConfigVersion)
 			this.configChangeDisposable = this.configSource.onDidChange((e) => {
 				// Only react to keys that are actually synced (ignore frontend-only churn).
 				if (NodeRegistry.SYNCED_KEYS.has(e.key)) this.recomputeAndBroadcast()
 			})
+		}
+
+		// The plugin half of the same sync. Built asynchronously (each plugin may shape
+		// its own slice), so it lands via the cache and a re-broadcast rather than being
+		// read inline above; until it does, nodes simply hold no plugin state.
+		if (this.pluginSyncSource) {
+			void this.refreshPluginSlice()
+			this.pluginChangeDisposable = this.pluginSyncSource.onDidChange?.(() => {
+				void this.refreshPluginSlice()
+			})
+		}
+	}
+
+	/**
+	 * Rebuild the cached plugin slice and re-broadcast if it changed.
+	 *
+	 * Compared by value, not fired blindly: a plugin reload or an unrelated settings save
+	 * would otherwise bump the config version and make every node re-apply an identical
+	 * slice.
+	 */
+	private async refreshPluginSlice(): Promise<void> {
+		try {
+			const next = (await this.pluginSyncSource?.currentPluginSlice()) ?? {}
+			if (JSON.stringify(next) === JSON.stringify(this.pluginSlice)) return
+			this.pluginSlice = next
+			this.recomputeAndBroadcast()
+		} catch (e) {
+			configLog.warn(`plugin config sync build failed: ${e instanceof Error ? e.message : String(e)}`)
 		}
 	}
 
@@ -710,6 +776,7 @@ export class NodeRegistry {
 	dispose(): void {
 		this.configDisposable.dispose()
 		this.configChangeDisposable?.dispose()
+		this.pluginChangeDisposable?.dispose()
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()
@@ -765,7 +832,7 @@ export class NodeRegistry {
 		if (this.configSource && conn.status === "connected" && conn.api) {
 			const slice = this.currentSyncedSlice()
 			const secrets = this.currentSyncedSecrets()
-			const version = this.desiredConfigVersion ?? computeConfigVersion(slice, secrets)
+			const version = this.desiredConfigVersion ?? computeConfigVersion(slice, secrets, this.pluginSlice)
 			if (conn.configVersion !== version) void this.pushConfig(id, conn, slice, version, secrets)
 		}
 		this.fireChange()
@@ -824,7 +891,7 @@ export class NodeRegistry {
 	private recomputeAndBroadcast(): void {
 		const slice = this.currentSyncedSlice()
 		const secrets = this.currentSyncedSecrets()
-		const version = computeConfigVersion(slice, secrets)
+		const version = computeConfigVersion(slice, secrets, this.pluginSlice)
 		this.desiredConfigVersion = version
 		this.pool.setDesiredConfigVersion(version)
 		for (const [id, conn] of this.connections) {
@@ -846,7 +913,7 @@ export class NodeRegistry {
 		secrets: SyncedSecrets,
 	): Promise<void> {
 		try {
-			await conn.api!.applyConfig(slice, version, secrets)
+			await conn.api!.applyConfig(slice, version, secrets, this.pluginSlice)
 			conn.markConfigApplied(version)
 		} catch (e) {
 			configLog.warn(`config sync push to node ${id} failed: ${e instanceof Error ? e.message : String(e)}`)

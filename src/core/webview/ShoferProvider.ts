@@ -103,6 +103,8 @@ import { pluginConfigSecretKeys } from "@shofer/types"
 import type {
 	PluginConfigSchema,
 	PluginRequest,
+	SyncedPluginSlice,
+	SyncedPluginState,
 	PluginView,
 	PluginsState,
 	PluginUiMessageEnvelope,
@@ -2106,6 +2108,13 @@ export class ShoferProvider
 			localApi,
 			controllerVersion,
 			configSource: this.contextProxy,
+			// …and the plugin half of the same sync: a plugin whose feature runs on the
+			// executor (an indexer answering a search there) needs its own settings and
+			// credentials, which are not in the global settings schema.
+			pluginSyncSource: {
+				currentPluginSlice: () => this.buildSyncedPluginSlice(),
+				onDidChange: this.pluginSyncChanged.event,
+			},
 		})!
 		this.attachNodeRegistry(registry)
 		void registry.init()
@@ -2792,6 +2801,73 @@ export class ShoferProvider
 	 * keys in it. A corrupt/absent blob reads as "no secrets", which degrades a plugin to
 	 * unconfigured rather than breaking the whole panel.
 	 */
+	/**
+	 * Build the controller→node plugin slice: for every enabled plugin that declares
+	 * `syncConfig`, what a node needs to run its feature.
+	 *
+	 * A plugin may **shape its own slice** by answering the `"node-config"` request. That
+	 * is deliberate: the rule "a node runs this feature in search-only mode, against the
+	 * collection the controller resolved" is the plugin's knowledge, and encoding it here
+	 * would put a feature's semantics back in the host the plugin was extracted from. A
+	 * plugin that does not answer sends its stored config and credentials unchanged; one
+	 * that throws is skipped rather than sent a slice it disowns.
+	 */
+	private async buildSyncedPluginSlice(): Promise<SyncedPluginState> {
+		const manager = await this.getPluginManager()
+		const configs =
+			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
+		const secrets = this.readPluginSecrets()
+
+		const out: SyncedPluginState = {}
+		for (const plugin of manager.listPlugins()) {
+			if (!plugin.enabled || plugin.manifest.syncConfig !== true) continue
+			const stored: SyncedPluginSlice = {
+				config: configs[plugin.name] ?? {},
+				secrets: secrets[plugin.name] ?? {},
+			}
+			try {
+				const shaped = (await pluginRegistry.request(plugin.name, "node-config", stored, {
+					workspacePath: this.cwd,
+					cwd: this.cwd,
+				})) as SyncedPluginSlice | undefined
+				out[plugin.name] = shaped ?? stored
+			} catch {
+				// The plugin does not answer the question (or failed answering it): send
+				// what the user configured, which is what it would have received anyway.
+				out[plugin.name] = stored
+			}
+		}
+		return out
+	}
+
+	/** Tell the node registry a synced plugin's config or credentials changed. */
+	private readonly pluginSyncChanged = new vscode.EventEmitter<void>()
+
+	/** {@link readPluginSecrets} for the controller→node sync path (`ShoferAPI`). */
+	public readPluginSecretsForSync(): Record<string, Record<string, string>> {
+		return this.readPluginSecrets()
+	}
+
+	/** {@link writePluginSecrets} for the controller→node sync path (`ShoferAPI`). */
+	public async writePluginSecretsForSync(all: Record<string, Record<string, string>>): Promise<void> {
+		await this.writePluginSecrets(all)
+	}
+
+	/**
+	 * Reload several plugins at once, then re-sync the subsystems their contributions
+	 * feed — what a controller config push needs after rewriting plugin config on a node.
+	 */
+	public async reloadPlugins(names: string[]): Promise<void> {
+		if (names.length === 0) return
+		const manager = await this.getPluginManager()
+		for (const name of names) {
+			await manager.reloadPlugin(name).catch((error: unknown) => {
+				this.log(`[plugins] reload after config sync failed for ${name}: ${String(error)}`)
+			})
+		}
+		await this.resyncAfterPluginChange()
+	}
+
 	private readPluginSecrets(): Record<string, Record<string, string>> {
 		const raw = this.contextProxy.getSecret("pluginSecrets")
 		if (!raw) return {}
@@ -2895,6 +2971,9 @@ export class ShoferProvider
 					await this.writePluginSecrets(secrets)
 				}
 
+				// A synced plugin's settings just changed — the nodes running its feature
+				// need the new ones (the registry re-broadcasts only on a real difference).
+				this.pluginSyncChanged.fire()
 				await manager.reloadPlugin(request.name)
 				await this.resyncAfterPluginChange()
 				break
