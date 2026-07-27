@@ -1000,6 +1000,18 @@ loads, `setEnabled` refuses to switch it on, and the user's recorded intent only
 effect if the org lifts it. This is what lets an org define the entire mode/workflow set
 from a config bundle.
 
+**Deployment activation (`forceEnabledPlugins`).** The mirror image, fed from env by
+`governanceEnabledPlugins()` (`SHOFER_ENABLED_PLUGINS`, comma-separated). A host that was
+**provisioned** with a plugin — a pod whose reason to exist is running it, e.g. a headless
+Shofer that must register as a Temporal runner before any human attaches — comes up with
+it on. `defaultEnabled` cannot serve this case by design (bundled scope only: a
+third-party plugin must never enable itself), and seeding the host's persisted enable list
+would put deployment policy in per-host state where it drifts. Activation answers exactly
+one question — is this plugin on — and bypasses nothing else: manifest permissions,
+billed-AI consent, and fail-closed dependencies all still apply. Suppression wins when a
+name appears in both lists; `setEnabled(name, false)` records the intent but cannot switch
+it off, and says so.
+
 **Dependencies fail-closed.** An enabled plugin whose declared `dependencies`
 (plugin names) are not all enabled+present is itself treated as **disabled** — none
 of its contributions register. `PluginManager.resolveDependencies()` (run after

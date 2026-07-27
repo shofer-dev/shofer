@@ -662,6 +662,13 @@ Two independent gates decide what a plugin can do:
    `filesystem` calls are checked at runtime against the allowlists; `lifecycle` hooks don't fire
    without `permissions.lifecycle`; UI regions must be in `permissions.ui`.
 
+**A deployment can decide both, by env.** `SHOFER_DISABLED_PLUGINS` suppresses plugins (a
+suppressed one never loads and the panel toggle refuses); `SHOFER_ENABLED_PLUGINS` activates them (on
+without a user enabling, for a host that was _provisioned_ with the plugin — a headless pod whose job
+is to run it). Suppression wins if a name is in both. Activation is not a way around anything else:
+permissions, AI consent and dependency resolution are unchanged, and there is no way for a plugin to
+put its own name in either list.
+
 **AI billing is a third, separate consent.** `permissions.ai` alone is not enough: `ctx.ai` only
 becomes live after the user grants the **"uses AI (billed)"** consent in the Plugins panel (a
 distinct toggle from enable). Granted-but-unconsented gives a denying `ctx.ai` stub; consent can be

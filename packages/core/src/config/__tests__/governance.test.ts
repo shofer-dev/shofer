@@ -1,4 +1,4 @@
-import { governanceDisabledPlugins } from "../governance.js"
+import { governanceDisabledPlugins, governanceEnabledPlugins } from "../governance.js"
 
 /**
  * The built-ins ship as bundled plugins, so an org suppressing them means exactly one
@@ -59,5 +59,40 @@ describe("governanceDisabledPlugins", () => {
 		process.env[MODES_ENV] = "1"
 		process.env[LIST_ENV] = "builtin-modes"
 		expect(governanceDisabledPlugins()).toEqual(["builtin-modes"])
+	})
+})
+
+/**
+ * Activation is how a pod that was PROVISIONED with a plugin comes up running it — no
+ * Plugins panel, no seeded per-host state. `defaultEnabled` cannot express it (bundled
+ * scope only), so this env flag is the only lever, and a flag that silently reads as
+ * "off" means a workspace that registers as no runner at all.
+ */
+describe("governanceEnabledPlugins", () => {
+	const LIST_ENV = "SHOFER_ENABLED_PLUGINS"
+	let saved: string | undefined
+
+	beforeEach(() => {
+		saved = process.env[LIST_ENV]
+		delete process.env[LIST_ENV]
+	})
+
+	afterEach(() => {
+		if (saved === undefined) delete process.env[LIST_ENV]
+		else process.env[LIST_ENV] = saved
+	})
+
+	it("activates nothing when unset", () => {
+		expect(governanceEnabledPlugins()).toEqual([])
+	})
+
+	it("accepts a comma-separated list, tolerating spacing and empties", () => {
+		process.env[LIST_ENV] = "temporal-runner, shofer-mesh ,"
+		expect(governanceEnabledPlugins()).toEqual(["temporal-runner", "shofer-mesh"])
+	})
+
+	it("does not repeat a name listed twice", () => {
+		process.env[LIST_ENV] = "temporal-runner,temporal-runner"
+		expect(governanceEnabledPlugins()).toEqual(["temporal-runner"])
 	})
 })

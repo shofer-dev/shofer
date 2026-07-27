@@ -57,7 +57,7 @@ import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
-import { governanceDisabledPlugins } from "@shofer/core"
+import { governanceDisabledPlugins, governanceEnabledPlugins } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
@@ -2293,6 +2293,10 @@ export class ShoferProvider
 			// workflows/modes" works now that they ARE plugins. Not a user preference:
 			// a listed plugin cannot be enabled from the Plugins panel.
 			forceDisabledPlugins: governanceDisabledPlugins(),
+			// The mirror: plugins THIS host was provisioned to run (`SHOFER_ENABLED_PLUGINS`).
+			// A headless runner pod drops a plugin into the global scope and comes up running
+			// it — no Plugins panel, and no per-host enable state to seed.
+			forceEnabledPlugins: governanceEnabledPlugins(),
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.

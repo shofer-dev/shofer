@@ -327,6 +327,14 @@ export interface PluginManagerOptions {
 	 */
 	forceDisabledPlugins?: string[]
 	/**
+	 * Plugin names the **deployment** has activated (delivered as pod env vars, see
+	 * `config/governance.ts`). The mirror of {@link forceDisabledPlugins}: a listed
+	 * plugin is on without the user enabling it, which is what lets a host that
+	 * PROVISIONS a plugin — a pod that exists to run it — come up running it. Suppression
+	 * wins over activation when a name appears in both.
+	 */
+	forceEnabledPlugins?: string[]
+	/**
 	 * Host seam backing a plugin's `ctx.task` — timeline markers + rewind (design §6.11
 	 * G9). When omitted, no plugin gets timeline control (even a granted one), so
 	 * pure-core embeddings stay host-agnostic and `ctx.task` is absent. Supplied by the
@@ -372,6 +380,7 @@ export class PluginManager {
 	private readonly aiProvider?: PluginAiProvider
 	private readonly aiConsentStore?: PluginAiConsentStore
 	private readonly forceDisabled: ReadonlySet<string>
+	private readonly forceEnabled: ReadonlySet<string>
 	private readonly agentProvider?: PluginAgentProvider
 	private readonly taskProvider?: PluginTaskProvider
 	private readonly searchProvider?: PluginSearchProvider
@@ -412,6 +421,7 @@ export class PluginManager {
 		this.aiProvider = options.aiProvider
 		this.aiConsentStore = options.aiConsentStore
 		this.forceDisabled = new Set(options.forceDisabledPlugins ?? [])
+		this.forceEnabled = new Set(options.forceEnabledPlugins ?? [])
 		this.agentProvider = options.agentProvider
 		this.taskProvider = options.taskProvider
 		this.searchProvider = options.searchProvider
@@ -473,11 +483,17 @@ export class PluginManager {
 	 * third party can never enable itself) and when the state store cannot record an
 	 * explicit disable, since a plugin the user cannot turn off is worse than one they
 	 * have to turn on.
+	 *
+	 * Deployment **activation** ({@link PluginManagerOptions.forceEnabledPlugins}) is the
+	 * exception that covers the case `defaultEnabled` deliberately cannot: a non-bundled
+	 * plugin the HOST provisioned. The plugin still does not enable itself — the host
+	 * running it said so, out-of-band, in the same channel as suppression.
 	 */
 	private resolveEnabled(manifest: PluginManifest, scope: PluginScope, enabled: Set<string>): boolean {
 		// Organization suppression wins over every user choice, including an explicit
 		// enable — that is the point of it.
 		if (this.forceDisabled.has(manifest.name)) return false
+		if (this.forceEnabled.has(manifest.name)) return true
 		if (enabled.has(manifest.name)) return true
 		if (manifest.defaultEnabled !== true) return false
 		if (scope !== "bundled" || !this.canRecordDisable) return false
@@ -672,9 +688,12 @@ export class PluginManager {
 			// The user's intent is still recorded above (so it takes effect if the org
 			// lifts the suppression), but it cannot switch on a plugin the org disabled —
 			// otherwise the toggle would appear to work and silently do nothing.
-			plugin.enabled = this.forceDisabled.has(name) ? false : enabled
+			plugin.enabled = this.forceDisabled.has(name) ? false : this.forceEnabled.has(name) || enabled
 			if (enabled && this.forceDisabled.has(name)) {
 				warnPlugin(`[plugins] "${name}" is disabled by your organization and cannot be enabled here.`)
+			}
+			if (!enabled && !this.forceDisabled.has(name) && this.forceEnabled.has(name)) {
+				warnPlugin(`[plugins] "${name}" is enabled by this host's configuration and cannot be turned off here.`)
 			}
 		}
 		// Re-run fail-closed resolution: toggling one plugin can satisfy or break
