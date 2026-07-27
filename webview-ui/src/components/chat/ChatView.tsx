@@ -36,6 +36,7 @@ import { StandardTooltip, Button } from "@src/components/ui"
 import VersionIndicator from "../common/VersionIndicator"
 import HistoryPreview from "../history/HistoryPreview"
 import Announcement from "./Announcement"
+import { PluginSlot } from "../plugins/PluginSlot"
 import ChatRow from "./ChatRow"
 import WarningRow from "./WarningRow"
 import { ChatTextArea } from "./ChatTextArea"
@@ -46,7 +47,6 @@ import TaskSequenceView from "./TaskSequenceView"
 import TaskLogsView from "./TaskLogsView"
 import ProfileViolationWarning from "./ProfileViolationWarning"
 import { QueuedMessages } from "./QueuedMessages"
-import FileChangesPanel from "./FileChangesPanel"
 import SessionSearch from "./SessionSearch"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
 import { TaskNotificationContainer } from "../tasks/TaskNotification"
@@ -2557,7 +2557,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 									</StandardTooltip>
 								)}
 							</div>
-							<FileChangesPanel taskId={currentTaskItem?.id} />
+							{/* Plugin footer: the file-changes panel mounts here (chat-footer region). */}
+							<PluginSlot region="chat-footer" />
 							{showScrollToBottom && (
 								<div className="flex h-9 items-center mb-px px-[15px]">
 									<StandardTooltip content={t("chat:scrollToBottom")}>

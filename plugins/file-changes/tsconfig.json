@@ -1,0 +1,14 @@
+{
+	"//": "Standalone tsconfig for the File Changes plugin. Its entry is TypeScript the host bundles at load time, so the sources sit OUTSIDE every extension/package tsc root. This config exists so a developer/CI can typecheck the plugin against the public @shofer/types surface in isolation: `npx tsgo -p plugins/file-changes`.",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"typeRoots": ["../../packages/core/node_modules/@types", "../../node_modules/@types"],
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"]
+		}
+	},
+	"include": ["src/*.ts", "src/vendor/*.d.mts"],
+	"exclude": ["node_modules", "__tests__", "ui", "vitest.config.ts"]
+}

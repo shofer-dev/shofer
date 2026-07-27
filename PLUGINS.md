@@ -451,6 +451,7 @@ module (see [Shipping your own UI bundle](#shipping-your-own-ui-bundle)). Region
 - `task-header`
 - `settings-tab`
 - `chat-message-addon`
+- `chat-footer`
 - `sidebar-panel`
 
 The component is loaded into the webview by **dynamic import** (not a sandboxed iframe), so it shares

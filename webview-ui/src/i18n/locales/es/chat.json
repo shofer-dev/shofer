@@ -31,9 +31,6 @@
 	},
 	"unpin": "Desfijar",
 	"pin": "Fijar",
-	"fileChangesInConversation": {
-		"header": "{{count}} archivo(s) modificado(s) en esta conversación"
-	},
 	"retry": {
 		"title": "Reintentar",
 		"tooltip": "Intenta la operación de nuevo"

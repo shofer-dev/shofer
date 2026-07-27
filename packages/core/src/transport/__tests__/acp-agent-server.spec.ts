@@ -13,12 +13,6 @@ function makeApi() {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		applyConfig: vi.fn(async () => {}),
-		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
-		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
-		revertChangedFile: vi.fn(async () => {}),
-		revertAllChangedFiles: vi.fn(async () => {}),
-		acceptChangedFile: vi.fn(async () => {}),
-		acceptAllChangedFiles: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => null),
 		subscribe: (listener) => {
 			emit = listener

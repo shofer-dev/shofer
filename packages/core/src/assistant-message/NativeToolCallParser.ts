@@ -1112,10 +1112,6 @@ export class NativeToolCallParser {
 				}
 				break
 
-			case "get_changed_files":
-				nativeArgs = {}
-				break
-
 			case "get_project_setup_info":
 				nativeArgs = {}
 				break
@@ -1866,10 +1862,6 @@ export class NativeToolCallParser {
 					nativeArgs = {
 						filePaths: args.filePaths,
 					} as NativeArgsFor<TName>
-					break
-
-				case "get_changed_files":
-					nativeArgs = {} as NativeArgsFor<TName>
 					break
 
 				case "get_project_setup_info":

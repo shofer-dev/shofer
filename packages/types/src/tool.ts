@@ -68,7 +68,6 @@ export const toolNames = [
 	"get_errors",
 	"get_project_setup_info",
 	// get_search_results removed — merged into grep_search
-	"get_changed_files",
 	"insert_edit",
 	"list_code_usages",
 	"read_project_structure",
@@ -146,7 +145,6 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	file: "manage files (rm/mv)",
 	fetch_web_page: "fetch web pages",
 	find_files: "find files by pattern",
-	get_changed_files: "list files changed by Shofer",
 	get_errors: "get diagnostics",
 	get_project_setup_info: "get project info",
 	// get_search_results removed — merged into grep_search
@@ -193,7 +191,6 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"list_code_usages",
 			"get_errors",
 			"get_project_setup_info",
-			"get_changed_files",
 			"lsp_search",
 			"fetch_web_page",
 			"git_search",

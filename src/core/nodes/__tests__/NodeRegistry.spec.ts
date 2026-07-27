@@ -25,17 +25,9 @@ import {
  * persistence, pool population, and the pushed view model are all deterministic.
  */
 
-/** The L3 reverse-data-channel stubs shared by the agent mocks below. */
+/** The L3 reverse-data-channel stub shared by the agent mocks below. */
 function l3Stubs() {
 	return {
-		getCheckpointDiff: vi.fn(async () => []),
-		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t", entries: [], backend: "none" as const })),
-		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
-		restoreCheckpoint: vi.fn(async () => {}),
-		revertChangedFile: vi.fn(async () => {}),
-		revertAllChangedFiles: vi.fn(async () => {}),
-		acceptChangedFile: vi.fn(async () => {}),
-		acceptAllChangedFiles: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => null),
 	}
 }
@@ -471,7 +463,7 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.registry.isShadow("local-task-99")).toBe(false)
 	})
 
-	it("routes the L3 reverse-data-channel methods for a shadow task to the owning executor", async () => {
+	it("routes a plugin request for a shadow task to the owning executor", async () => {
 		const host = makeProviderHost()
 		h.registry.attachProvider(host)
 		const remote = makeDrivableAgent("r1-task-1")
@@ -483,46 +475,16 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 		expect(h.registry.isShadow(taskId!)).toBe(true)
 		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-		await h.registry.getTaskChangedFiles(taskId!)
-		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
-
-		await h.registry.getChangedFileDiff(taskId!, "src/a.ts")
-		expect(rec.getChangedFileDiff).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
-
+		// Every plugin-owned per-task feature (checkpoints, the change list, …) reaches
+		// the executor through this one call, addressed by the REMOTE task id.
 		await h.registry.pluginRequest(taskId!, "checkpoints", "restore", { hash: "c1" })
 		expect(rec.pluginRequest).toHaveBeenCalledWith("r1-task-1", "checkpoints", "restore", { hash: "c1" })
-
-		await h.registry.revertChangedFile(taskId!, "src/a.ts")
-		expect(rec.revertChangedFile).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
-		await h.registry.revertAllChangedFiles(taskId!)
-		expect(rec.revertAllChangedFiles).toHaveBeenCalledWith("r1-task-1")
-		await h.registry.acceptChangedFile(taskId!, "src/a.ts")
-		expect(rec.acceptChangedFile).toHaveBeenCalledWith("r1-task-1", "src/a.ts")
-		await h.registry.acceptAllChangedFiles(taskId!)
-		expect(rec.acceptAllChangedFiles).toHaveBeenCalledWith("r1-task-1")
 	})
 
-	it("rebuildShadow clears the buffered conversation, re-posts init state, and re-fetches changed files", async () => {
+	it("rebuildShadow clears the buffered conversation and re-posts init state", async () => {
 		const host = makeProviderHost()
 		h.registry.attachProvider(host)
 		const remote = makeDrivableAgent("r1-task-1")
-		const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
-		rec.getTaskChangedFiles.mockResolvedValue({
-			taskId: "r1-task-1",
-			entries: [
-				{
-					path: "a.ts",
-					insertions: 1,
-					deletions: 0,
-					binary: false,
-					state: "modified",
-					source: "working",
-					hasOriginalContent: true,
-					hasFinalContent: true,
-				},
-			],
-			backend: "working",
-		})
 		await h.registry.upsert(remoteDef, "tok")
 		await h.registry.connect("r1")
 		h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
@@ -538,39 +500,9 @@ describe("NodeRegistry (Shofer Nodes L1)", () => {
 
 		await h.registry.rebuildShadow(taskId!)
 
-		expect(h.registry.getFocusedShadow(host)!.messages).toHaveLength(0) // cleared
+		// The executor re-emits its post-rewind stream, which repopulates the shadow.
+		expect(h.registry.getFocusedShadow(host)!.messages).toHaveLength(0)
 		expect(host.postInitState).toHaveBeenCalled()
-		expect(rec.getTaskChangedFiles).toHaveBeenCalledWith("r1-task-1")
-		expect(h.registry.getFocusedShadow(host)!.changedFiles?.entries).toHaveLength(1)
-		expect(host.postMessageToWebview).toHaveBeenCalledWith(expect.objectContaining({ type: "changedFiles/update" }))
-	})
-
-	it("debounces a changed-files fetch for the focused shadow as Message deltas arrive", async () => {
-		vi.useFakeTimers()
-		try {
-			const host = makeProviderHost()
-			h.registry.attachProvider(host)
-			const remote = makeDrivableAgent("r1-task-1")
-			const rec = remote.api as unknown as Record<string, ReturnType<typeof vi.fn>>
-			await h.registry.upsert(remoteDef, "tok")
-			await h.registry.connect("r1")
-			h.conns.get("http://host:1")!.drive("connected", { api: remote.api })
-			const taskId = await h.registry.routeNewTask({ prompt: "go", preferredNodeId: "r1" })
-			rec.getTaskChangedFiles.mockClear()
-
-			// A burst of deltas coalesces into a single fetch after the debounce.
-			for (let i = 0; i < 3; i++) {
-				remote.emit({
-					type: ShoferEventName.Message,
-					args: [{ taskId, action: "created", message: { ts: 100 + i, say: "text", text: `m${i}` } }],
-				})
-			}
-			expect(rec.getTaskChangedFiles).not.toHaveBeenCalled() // still within the debounce window
-			await vi.advanceTimersByTimeAsync(600)
-			expect(rec.getTaskChangedFiles).toHaveBeenCalledTimes(1)
-		} finally {
-			vi.useRealTimers()
-		}
 	})
 
 	it("carries remote token usage onto the shadow's header summary (full-fidelity meter)", async () => {

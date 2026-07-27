@@ -2978,7 +2978,7 @@ export class ShoferProvider
 				mutates: request.mutates,
 				shadowTaskId: this.nodeRegistry?.getFocusedShadow(this)?.taskId,
 				hasActiveLocalTask: this.taskManager.getActiveManagedTasks().length > 0,
-				blockedMessage: t("common:fileChanges.blockedTaskRunning"),
+				blockedMessage: t("common:plugins.blockedTaskRunning"),
 			})
 
 			if ("blocked" in route) {
@@ -3018,131 +3018,6 @@ export class ShoferProvider
 		// Fan out to any open standalone plugin panels for this plugin (design §6.8), so a
 		// plugin's `ctx.ui` state pushes reach its editor-tab panel, not just the sidebar.
 		this.pluginPanelManager.broadcast(pluginName, message)
-	}
-
-	// ------------------------------------------------------------------
-	// FileChangesPanel push notifications.
-	//
-	// Every Shofer edit triggers a debounced refresh of the
-	// `changedFiles/update` payload to the webview. This is the only push
-	// channel; the webview can also pull on demand via `changedFiles/get`.
-	// ------------------------------------------------------------------
-
-	private changedFilesPushTimer?: NodeJS.Timeout
-	private changedFilesPushPendingTaskId?: string
-	private static readonly CHANGED_FILES_PUSH_DEBOUNCE_MS = 500
-
-	// Serialization state for pushChangedFilesUpdate. Concurrent invocations
-	// (e.g. rapid Accept clicks each calling pushChangedFilesUpdate after
-	// their acceptFile completes) used to race: each push computed its
-	// payload independently and the LAST message to arrive at the webview
-	// won — which could be a stale snapshot taken before later accepts had
-	// finished mutating base/final, leaving "accepted" files visible in the
-	// panel. The in-flight + queued flags coalesce overlapping pushes so the
-	// final message sent always reflects the post-accept state.
-	private changedFilesPushInFlight = false
-	private changedFilesPushQueued = false
-	private changedFilesPushQueuedTaskId?: string
-
-	/**
-	 * Schedules a debounced push of the unified ChangedFiles payload for the
-	 * given task. Called by FileContextTracker after each `shofer_edited`. Safe
-	 * to call frequently — coalesces into one push per debounce window.
-	 */
-	public scheduleChangedFilesUpdate(taskId: string): void {
-		this.changedFilesPushPendingTaskId = taskId
-		if (this.changedFilesPushTimer) clearTimeout(this.changedFilesPushTimer)
-		this.changedFilesPushTimer = setTimeout(() => {
-			this.changedFilesPushTimer = undefined
-			void this.pushChangedFilesUpdate(this.changedFilesPushPendingTaskId)
-		}, ShoferProvider.CHANGED_FILES_PUSH_DEBOUNCE_MS)
-	}
-
-	/**
-	 * Computes and pushes the ChangedFiles payload immediately. Used by the
-	 * debounced scheduler and by IPC handlers (e.g. after accept/revert).
-	 *
-	 * Serialized: if a push is already in flight when this is called, the
-	 * request is coalesced and a fresh recomputation is run after the
-	 * current one finishes. This guarantees the LAST message sent to the
-	 * webview reflects all preceding state mutations, even when the caller
-	 * issues many rapid invocations (e.g. clicking Accept on multiple
-	 * files in quick succession).
-	 */
-	public async pushChangedFilesUpdate(taskId?: string): Promise<void> {
-		if (this.changedFilesPushInFlight) {
-			this.changedFilesPushQueued = true
-			// Remember the most recent caller-supplied taskId for the queued run.
-			this.changedFilesPushQueuedTaskId = taskId
-			return
-		}
-		this.changedFilesPushInFlight = true
-		try {
-			let nextTaskId = taskId
-			do {
-				this.changedFilesPushQueued = false
-				const queuedTaskId = this.changedFilesPushQueuedTaskId
-				this.changedFilesPushQueuedTaskId = undefined
-
-				// Resolve the Task instance for the target taskId. Prefer the
-				// foreground task (getCurrentTask) for the common case; fall back
-				// to TaskManager when the foreground task has changed. The
-				// TaskManager path handles eventual consistency for +N/-N counts
-				// on tasks the user navigated away from before the debounce fired.
-				const foregroundTask = this.getCurrentTask()
-				const isForeground = foregroundTask && (!nextTaskId || foregroundTask.taskId === nextTaskId)
-				const task: Task | undefined = isForeground
-					? foregroundTask
-					: nextTaskId
-						? this.taskManager.getManagedTaskInstance(nextTaskId)
-						: undefined
-
-				if (!task) return
-
-				try {
-					const { getChangedFiles } = await import("@shofer/core")
-					const payload = await getChangedFiles(task)
-					this.debug(
-						`[ShoferProvider#pushChangedFilesUpdate] task=${task.taskId} entries=${payload.entries.length} backend=${payload.backend}`,
-					)
-					// Only push changedFiles/update for the foreground task;
-					// serializing a background-task panel would be stale.
-					if (isForeground) {
-						await this.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
-					}
-
-					// Update the task history with live file-change stats so the
-					// TaskSelector can show +N/-N in real time without waiting for
-					// task completion. This always runs — even for background tasks —
-					// so counts are eventually consistent.
-					let totalInsertions = 0
-					let totalDeletions = 0
-					for (const entry of payload.entries) {
-						totalInsertions += entry.insertions
-						totalDeletions += entry.deletions
-					}
-					const existing = this.taskHistoryStore.get(task.taskId)
-					if (
-						existing &&
-						(existing.insertions !== totalInsertions || existing.deletions !== totalDeletions)
-					) {
-						await this.updateTaskHistory({
-							...existing,
-							insertions: totalInsertions,
-							deletions: totalDeletions,
-						})
-					}
-				} catch (err) {
-					this.log(`[ShoferProvider#pushChangedFilesUpdate] failed: ${err}`)
-				}
-
-				// If another push was requested while we were running, loop
-				// again so the final message reflects post-mutation state.
-				nextTaskId = queuedTaskId
-			} while (this.changedFilesPushQueued)
-		} finally {
-			this.changedFilesPushInFlight = false
-		}
 	}
 
 	private async getHMRHtmlContent(webview: vscode.Webview): Promise<string> {
@@ -4984,10 +4859,6 @@ export class ShoferProvider
 				}
 				return msgs
 			})(),
-			// Shofer Nodes L3: a focused remote shadow renders the executor's
-			// changed-files panel (fetched over the control plane), NOT the local
-			// task's — so the FileChangesPanel isn't stale on a full-state push.
-			...(focusedShadow ? { changedFiles: focusedShadow.changedFiles } : {}),
 			// T1.B: signal the webview that older messages exist on disk
 			// and a "Load older messages" sentinel should be shown.
 			hasMoreShoferMessages: focusedShadow ? false : (currentTask?.hasMoreShoferMessages ?? false),

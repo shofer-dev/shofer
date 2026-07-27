@@ -54,7 +54,6 @@ import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool.js"
 import { fetchWebPageTool } from "../tools/FetchWebPageTool.js"
 import { fileTool } from "../tools/FileTool.js"
 import { findFilesTool } from "../tools/FindFilesTool.js"
-import { getChangedFilesTool } from "../tools/GetChangedFilesTool.js"
 import { getErrorsTool } from "../tools/GetErrorsTool.js"
 import { getProjectSetupInfoTool } from "../tools/GetProjectSetupInfoTool.js"
 import { insertEditTool } from "../tools/InsertEditTool.js"
@@ -563,8 +562,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					case "generate_image":
 						return `[${block.name} for '${block.params.path}']`
 					case "get_errors":
-						return `[${block.name}]`
-					case "get_changed_files":
 						return `[${block.name}]`
 					case "get_project_setup_info":
 						return `[${block.name}]`
@@ -1403,13 +1400,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "get_errors":
 					await getErrorsTool.handle(shofer, block as ToolUse<"get_errors">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "get_changed_files":
-					await getChangedFilesTool.handle(shofer, block as ToolUse<"get_changed_files">, {
 						askApproval,
 						handleError,
 						pushToolResult,

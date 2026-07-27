@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import path from "path"
 import { fileURLToPath } from "url"
 
-import { createInMemoryHost, setHost, getAllModes, resolveModeConfig, defaultModeSlug } from "@shofer/types"
+import {
+	createInMemoryHost,
+	setHost,
+	getAllModes,
+	resolveModeConfig,
+	defaultModeSlug,
+	type ModeConfig,
+} from "@shofer/types"
 
 import { PluginManager, createNodePluginFs, setSharedPluginManager, type PluginStateStore } from "../plugin-manager.js"
 import { effectiveModes } from "../plugin-modes.js"
@@ -100,12 +107,12 @@ describe("builtin-modes plugin", () => {
 
 	it("lets a user mode override one by slug, in place", async () => {
 		await build()
-		const mine = {
+		const mine: ModeConfig = {
 			slug: "code",
 			name: "My Code",
 			roleDefinition: "Mine",
-			tools: ["read"] as const,
-			source: "project" as const,
+			tools: ["read"],
+			source: "project",
 		}
 		const modes = effectiveModes([mine])
 
@@ -132,8 +139,8 @@ describe("builtin-modes plugin", () => {
 		expect(manager.getContributedModes()).toEqual([])
 
 		// Only the org's own modes remain — the built-ins are not silently re-added.
-		const orgModes = [
-			{ slug: "org", name: "Org", roleDefinition: "r", tools: ["read"] as const, source: "global" as const },
+		const orgModes: ModeConfig[] = [
+			{ slug: "org", name: "Org", roleDefinition: "r", tools: ["read"], source: "global" },
 		]
 		expect(getAllModes(effectiveModes(orgModes)).map((m) => m.slug)).toEqual(["org"])
 	})

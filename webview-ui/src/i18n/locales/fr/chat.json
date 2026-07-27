@@ -31,9 +31,6 @@
 	},
 	"unpin": "Désépingler",
 	"pin": "Épingler",
-	"fileChangesInConversation": {
-		"header": "{{count}} fichier(s) modifié(s) dans cette conversation"
-	},
 	"tokenProgress": {
 		"availableSpace": "Espace disponible : {{amount}} tokens",
 		"tokensUsed": "Tokens utilisés : {{used}} sur {{total}}",

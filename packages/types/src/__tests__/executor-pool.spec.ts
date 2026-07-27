@@ -14,12 +14,6 @@ function makeExecutor(id: string) {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		applyConfig: vi.fn(async () => {}),
-		getTaskChangedFiles: vi.fn(async () => ({ taskId: `${id}-task-1`, entries: [], backend: "none" as const })),
-		getChangedFileDiff: vi.fn(async () => ({ original: null, final: null })),
-		revertChangedFile: vi.fn(async () => {}),
-		revertAllChangedFiles: vi.fn(async () => {}),
-		acceptChangedFile: vi.fn(async () => {}),
-		acceptAllChangedFiles: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => ({ ok: true })),
 		subscribe: (listener) => {
 			emit = listener
@@ -59,7 +53,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		expect(b.api.respondToAsk).not.toHaveBeenCalled()
 	})
 
-	it("routes the L3 reverse-data-channel methods to the owning executor", async () => {
+	it("routes a plugin request to the executor that owns the task", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
 		const pool = new ExecutorPool()
@@ -69,30 +63,10 @@ describe("ExecutorPool (§13 controller side)", () => {
 		const t1 = await pool.createTask({ prompt: "1", mode: "code" }) // → A
 		await pool.createTask({ prompt: "2", mode: "code" }) // → B (advances round-robin)
 
-		await pool.getTaskChangedFiles(t1.taskId)
-		expect(a.api.getTaskChangedFiles).toHaveBeenCalledWith("A-task-1")
-
-		await pool.getChangedFileDiff(t1.taskId, "src/x.ts")
-		expect(a.api.getChangedFileDiff).toHaveBeenCalledWith("A-task-1", "src/x.ts")
-
-		await pool.revertChangedFile(t1.taskId, "src/x.ts")
-		expect(a.api.revertChangedFile).toHaveBeenCalledWith("A-task-1", "src/x.ts")
-
-		await pool.revertAllChangedFiles(t1.taskId)
-		expect(a.api.revertAllChangedFiles).toHaveBeenCalledWith("A-task-1")
-
-		await pool.acceptChangedFile(t1.taskId, "src/x.ts")
-		expect(a.api.acceptChangedFile).toHaveBeenCalledWith("A-task-1", "src/x.ts")
-
-		await pool.acceptAllChangedFiles(t1.taskId)
-		expect(a.api.acceptAllChangedFiles).toHaveBeenCalledWith("A-task-1")
-
-		// Generic plugin RPC routes to the OWNING executor like every other L3 op.
+		// One generic method carries every plugin-owned per-task feature, and it must
+		// land on the host holding that task's state — not on whichever executor is next.
 		expect(await pool.pluginRequest(t1.taskId, "checkpoints", "diff", { hash: "abc" })).toEqual({ ok: true })
 		expect(a.api.pluginRequest).toHaveBeenCalledWith("A-task-1", "checkpoints", "diff", { hash: "abc" })
-
-		// None of these leaked to the other executor.
-		expect(b.api.getTaskChangedFiles).not.toHaveBeenCalled()
 		expect(b.api.pluginRequest).not.toHaveBeenCalled()
 	})
 

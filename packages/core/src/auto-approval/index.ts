@@ -239,7 +239,6 @@ export async function checkAutoApproval({
 				"findFiles",
 				"viewImage",
 				"getErrors",
-				"getChangedFiles",
 				"getProjectSetupInfo",
 				// getSearchResults removed — merged into grep_search
 				"readProjectStructure",

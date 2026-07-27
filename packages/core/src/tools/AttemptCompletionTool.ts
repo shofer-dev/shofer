@@ -7,7 +7,7 @@ import { formatResponse } from "../prompts/responses.js"
 import { Package } from "../shared/package.js"
 import { type ToolUse } from "@shofer/types"
 import { t } from "../i18n/index.js"
-import { getChangedFiles } from "../file-changes/ChangedFilesService.js"
+import { pluginRegistry } from "../plugins/plugin-registry.js"
 import { getOutputChannel } from "../utils/outputChannel.js"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
@@ -55,17 +55,25 @@ interface DelegationProvider {
 }
 
 /**
- * Computes the total insertions and deletions across all files changed
- * by the task, aggregating the per-file stats from ChangedFilesService.
+ * How much this task changed, for the +/− badge on its history entry.
+ *
+ * Core does not track file changes — a plugin does (the bundled `file-changes` one) —
+ * so the numbers are asked for rather than computed: every plugin is offered the
+ * `"task-stats"` question and the ones that answer are summed. No plugin answering
+ * means no badge, which is the correct rendering of "nothing is tracking this".
  */
 async function computeFileChangeStats(task: Task): Promise<{ insertions: number; deletions: number }> {
 	try {
-		const payload = await getChangedFiles(task)
+		const answers = await pluginRegistry.requestAll("task-stats", undefined, {
+			taskId: task.taskId,
+			cwd: task.cwd,
+		})
 		let insertions = 0
 		let deletions = 0
-		for (const entry of payload.entries) {
-			insertions += entry.insertions
-			deletions += entry.deletions
+		for (const answer of answers) {
+			const stats = answer as { insertions?: unknown; deletions?: unknown } | undefined
+			if (typeof stats?.insertions === "number") insertions += stats.insertions
+			if (typeof stats?.deletions === "number") deletions += stats.deletions
 		}
 		return { insertions, deletions }
 	} catch (err) {

@@ -23,7 +23,6 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	findFiles: "find_files",
 	viewImage: "view_image",
 	getErrors: "get_errors",
-	getChangedFiles: "get_changed_files",
 	getProjectSetupInfo: "get_project_setup_info",
 	// getSearchResults removed — merged into grep_search
 	readProjectStructure: "read_project_structure",

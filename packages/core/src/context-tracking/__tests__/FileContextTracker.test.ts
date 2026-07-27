@@ -1,13 +1,14 @@
 /**
- * Integration tests for FileContextTracker, focusing on the worktree cwd fix.
+ * Integration tests for FileContextTracker: what it records in the task metadata, and
+ * what it publishes to plugins.
  *
- * Regression test for the bug where `get_changed_files` underreported changes
- * in embedded worktrees: the tracker resolved files against the VS Code
- * workspace folder (main checkout) instead of the task's worktree cwd, so
- * `captureFinal` read stale/absent files and `getChangedFiles` skipped them.
+ * The tracker keeps no file copies — the file-changes plugin does — so the contract
+ * under test is the pair of hooks it fires and, critically, the **cwd** it fires them
+ * with: an embedded-worktree task's files are not under the VS Code workspace folder,
+ * and resolving against the wrong tree is what made `get_changed_files` silently
+ * under-report changes before the cwd was threaded through.
  *
- * These tests use real temp directories (no fs mocks) so the cwd resolution
- * is exercised end-to-end.
+ * Real temp directories (no fs mocks), so path resolution is exercised end-to-end.
  */
 
 import * as path from "path"
@@ -15,13 +16,13 @@ import * as fs from "fs/promises"
 import * as os from "os"
 
 import { FileContextTracker } from "../FileContextTracker.js"
+import { pluginRegistry } from "../../plugins/plugin-registry.js"
 import { GlobalFileNames } from "../../shared/globalFileNames.js"
 
 /** Minimal provider stub: only exposes globalStorageUri.fsPath. */
 function makeProviderStub(storageDir: string) {
 	return {
 		context: { globalStorageUri: { fsPath: storageDir } },
-		scheduleChangedFilesUpdate: vi.fn(),
 	}
 }
 
@@ -65,138 +66,124 @@ async function setupTree(): Promise<{
 	}
 }
 
-describe("FileContextTracker — worktree cwd", () => {
+describe("FileContextTracker — publishing edits to plugins", () => {
 	let tree: Awaited<ReturnType<typeof setupTree>>
 
 	beforeEach(async () => {
 		tree = await setupTree()
+		for (const name of pluginRegistry.list()) pluginRegistry.unregister(name)
 	})
 
 	afterEach(async () => {
+		for (const name of pluginRegistry.list()) pluginRegistry.unregister(name)
 		await tree.cleanup()
 	})
 
-	it("constructor requires a cwd parameter", () => {
-		const provider = makeProviderStub(tree.storage)
-		// The cwd arg is mandatory now; passing the worktree path anchors all
-		// file reads to the worktree, not the VS Code workspace folder.
-		const tracker = new FileContextTracker(
-			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
-			"task-1",
-			tree.worktree,
+	/** Records what a file-tracking plugin would be told. */
+	function registerRecorder() {
+		const before: { path: string; content?: string; cwd?: string }[] = []
+		const after: { path: string; cwd?: string }[] = []
+		void pluginRegistry.register(
+			{
+				name: "recorder",
+				lifecycle: {
+					beforeFileEdit: (edit, ctx) => {
+						before.push({ path: edit.path, content: edit.before, cwd: ctx.cwd })
+					},
+					afterFileEdit: (edit, ctx) => {
+						after.push({ path: edit.path, cwd: ctx.cwd })
+					},
+				},
+			},
+			{},
+			{ lifecycle: true },
 		)
-		expect(tracker.taskId).toBe("task-1")
-	})
+		return { before, after }
+	}
 
-	it("captureFinal reads from the worktree cwd, not the workspace folder", async () => {
+	function makeTracker(taskId: string, cwd = tree.worktree) {
 		const provider = makeProviderStub(tree.storage)
-		const tracker = new FileContextTracker(
+		return new FileContextTracker(
 			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
-			"task-1",
-			tree.worktree,
+			taskId,
+			cwd,
 		)
+	}
 
-		// Simulate Shofer editing existing.txt in the worktree.
-		await fs.writeFile(path.join(tree.worktree, "existing.txt"), "worktree-edited\nline2\n", "utf8")
+	it("hands the pre-edit content to plugins, with the task's own cwd", async () => {
+		const recorder = registerRecorder()
+		const tracker = makeTracker("task-1")
 
-		// captureOriginal: the file existed at "worktree-original" before the edit.
 		await tracker.captureOriginal("existing.txt", "worktree-original\n")
 
-		// captureFinal: must read the WORKTREE copy ("worktree-edited\nline2\n"),
-		// NOT the main-checkout copy ("main-checkout-content\n").
-		await tracker.captureFinal("existing.txt")
-
-		const finalSnap = await tracker.getFinalSnapshot("existing.txt")
-		expect(finalSnap).toBeDefined()
-		expect(finalSnap!.kind).toBe("text")
-
-		const finalContent = await tracker.getFinalContent("existing.txt")
-		expect(finalContent).toBe("worktree-edited\nline2\n")
-
-		// The original snapshot must also reflect the worktree's pre-edit state.
-		const origSnap = await tracker.getOriginalSnapshot("existing.txt")
-		expect(origSnap).toBeDefined()
-		expect(origSnap!.kind).toBe("text")
-		const baseContent = await tracker.getBaseContent("existing.txt")
-		expect(baseContent).toBe("worktree-original\n")
+		// The cwd matters: a worktree task's files are NOT under the workspace folder,
+		// so a plugin resolving against the wrong tree would snapshot the wrong file.
+		expect(recorder.before).toEqual([{ path: "existing.txt", content: "worktree-original\n", cwd: tree.worktree }])
 	})
 
-	it("captureFinal detects a newly-created file in the worktree", async () => {
-		const provider = makeProviderStub(tree.storage)
-		const tracker = new FileContextTracker(
-			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
-			"task-1",
-			tree.worktree,
-		)
+	it("passes `undefined` content for a file that does not exist yet", async () => {
+		const recorder = registerRecorder()
+		const tracker = makeTracker("task-1")
 
-		// Simulate Shofer creating a brand-new file via write_to_file.
-		const newContent = "new file in worktree\nline2\nline3\n"
-		await fs.writeFile(path.join(tree.worktree, "new-file.ts"), newContent, "utf8")
-
-		// captureOriginal with undefined content (file did not exist before).
 		await tracker.captureOriginal("new-file.ts", undefined)
-		await tracker.captureFinal("new-file.ts")
 
-		const origSnap = await tracker.getOriginalSnapshot("new-file.ts")
-		expect(origSnap).toBeDefined()
-		expect(origSnap!.kind).toBe("absent")
-
-		const finalSnap = await tracker.getFinalSnapshot("new-file.ts")
-		expect(finalSnap).toBeDefined()
-		expect(finalSnap!.kind).toBe("text")
-
-		const finalContent = await tracker.getFinalContent("new-file.ts")
-		expect(finalContent).toBe(newContent)
+		expect(recorder.before).toEqual([{ path: "new-file.ts", content: undefined, cwd: tree.worktree }])
 	})
 
-	it("trackFileContext(shofer_edited) records the edit and captures final from worktree", async () => {
-		const provider = makeProviderStub(tree.storage)
-		const tracker = new FileContextTracker(
-			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
-			"task-1",
-			tree.worktree,
-		)
+	it("tells plugins about the edit after tracking it", async () => {
+		const recorder = registerRecorder()
+		const tracker = makeTracker("task-1")
 
-		// Simulate a Shofer edit: write new content, then track it.
-		await fs.writeFile(path.join(tree.worktree, "edited.js"), "edited-content\n", "utf8")
-		await tracker.captureOriginal("edited.js", undefined)
 		await tracker.trackFileContext("edited.js", "shofer_edited")
-
-		// captureFinal is fired asynchronously (best-effort .then in
-		// addFileToFileContextTracker). Wait a tick for it to settle.
+		// The notification is fire-and-forget so the tool never waits on a plugin.
 		await new Promise((resolve) => setTimeout(resolve, 50))
 
-		const edited = await tracker.getFilesEditedByRoo()
-		expect(edited).toContain("edited.js")
-
-		const finalSnap = await tracker.getFinalSnapshot("edited.js")
-		expect(finalSnap).toBeDefined()
-		expect(finalSnap!.kind).toBe("text")
-		const finalContent = await tracker.getFinalContent("edited.js")
-		expect(finalContent).toBe("edited-content\n")
+		expect(recorder.after).toEqual([{ path: "edited.js", cwd: tree.worktree }])
 	})
 
-	it("reassignCwd re-points file reads to a new worktree", async () => {
-		const provider = makeProviderStub(tree.storage)
-		const tracker = new FileContextTracker(
-			provider as unknown as ConstructorParameters<typeof FileContextTracker>[0],
-			"task-1",
-			tree.worktree,
-		)
+	it("says nothing for a file the USER edited — plugins track the agent's work", async () => {
+		const recorder = registerRecorder()
+		const tracker = makeTracker("task-1")
 
-		// Create a second "worktree" with its own content.
+		await tracker.trackFileContext("user-edited.js", "user_edited")
+		await tracker.trackFileContext("read.js", "read_tool")
+		await new Promise((resolve) => setTimeout(resolve, 50))
+
+		expect(recorder.after).toEqual([])
+	})
+
+	it("follows the task to a new working directory", async () => {
+		const recorder = registerRecorder()
+		const tracker = makeTracker("task-1")
+
 		const worktree2 = path.join(tree.root, "worktree2")
 		await fs.mkdir(worktree2, { recursive: true })
-		await fs.writeFile(path.join(worktree2, "moved.txt"), "moved-content\n", "utf8")
-
-		// Reassign and verify reads now resolve against worktree2.
 		tracker.reassignCwd(worktree2)
-		await tracker.captureOriginal("moved.txt", undefined)
-		await fs.writeFile(path.join(worktree2, "moved.txt"), "moved-content\nextra\n", "utf8")
-		await tracker.captureFinal("moved.txt")
+		await tracker.captureOriginal("moved.txt", "x")
 
-		const finalContent = await tracker.getFinalContent("moved.txt")
-		expect(finalContent).toBe("moved-content\nextra\n")
+		expect(recorder.before[0]!.cwd).toBe(worktree2)
+	})
+
+	it("never lets a failing plugin reach the tool", async () => {
+		void pluginRegistry.register(
+			{
+				name: "broken",
+				lifecycle: {
+					beforeFileEdit: () => {
+						throw new Error("plugin exploded")
+					},
+					afterFileEdit: () => {
+						throw new Error("plugin exploded")
+					},
+				},
+			},
+			{},
+			{ lifecycle: true },
+		)
+		const tracker = makeTracker("task-1")
+
+		await expect(tracker.captureOriginal("existing.txt", "x")).resolves.toBeUndefined()
+		await expect(tracker.trackFileContext("existing.txt", "shofer_edited")).resolves.toBeUndefined()
 	})
 })
 

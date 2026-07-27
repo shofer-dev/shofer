@@ -141,7 +141,7 @@ Creates a directory including parent directories (mkdir -p).
 
 ### `file`
 
-Filesystem operations on workspace files. Use this instead of `execute_command` with `rm`/`mv` so the operation is captured in the FileChangesPanel and is reversible via per-file Revert/Redo.
+Filesystem operations on workspace files. Use this instead of `execute_command` with `rm`/`mv` so the operation is captured in the file-changes panel and is reversible from there.
 
 Subcommands:
 
@@ -316,7 +316,6 @@ The tool is synchronous: the calling task blocks until the assistant returns an 
 | ------------------------ | :----: | ----- | :--------------: | :----: | -------------------------------------------------- |
 | `get_errors`             | 🆕 WS  | read  |        –         |   ✅   | Get compile/lint diagnostics                       |
 | `get_project_setup_info` | 🆕 WS  | read  |        –         |   ✅   | Detect project languages, frameworks, build system |
-| `get_changed_files`      | 🟣 AW  | read  |        –         |   ✅   | List files changed in current task with line stats |
 | `read_project_structure` | 🆕 WS  | read  |        –         |   ✅   | ASCII tree of workspace structure                  |
 | `rename_symbol`          | 🆕 WS  | write |        –         |   ✅   | Rename symbol across codebase (LSP)                |
 | `view_image`             | 🆕 WS  | read  |        –         |   ✅   | View image file for visual analysis                |
@@ -332,14 +331,6 @@ Retrieves compile/lint errors and warnings from VS Code's language server diagno
 ### `get_project_setup_info`
 
 Analyzes workspace root for config files and detects languages, frameworks, build systems, and package managers.
-
-**Parameters:** None.
-
-### `get_changed_files`
-
-Returns the files Shofer edited in the current task with per-file net-state annotations (+insertions / −deletions). Backed by the working-directory `ChangedFilesService` — each edited file has a `base/` copy captured at first edit and a `final/` copy captured after every `shofer_edited`. Diff stats are computed via unified diff against the base content. No git dependency.
-
-No approval prompt — read-only meta-operation.
 
 **Parameters:** None.
 

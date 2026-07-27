@@ -61,17 +61,14 @@ The full method set (see the source for exact signatures):
 
 ### Reverse data channel (Shofer Nodes L3)
 
-The changed-files panel — and any **plugin-owned** per-task feature, via
-`pluginRequest` — for a **remote (shadow) task**: the controller fetches data / runs ops
-on the owning executor exactly like a local task drives its own in-process service:
+Any **plugin-owned** per-task feature for a **remote (shadow) task**: the controller
+reads and mutates it on the owning executor exactly like a local task drives its own
+in-process plugin. One generic method carries all of them, so a new feature never means a
+new wire method:
 
-| Method                                                           | Purpose                                                                                                                                                                                                           |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getTaskChangedFiles(taskId)` → `ChangedFilesPayload`            | The task's changed-files panel payload.                                                                                                                                                                           |
-| `getChangedFileDiff(taskId, relPath)` → `{ original, final }`    | Base + final content for one file (diff editor).                                                                                                                                                                  |
-| `revertChangedFile` / `revertAllChangedFiles(taskId[, relPath])` | Revert one / every changed file to base.                                                                                                                                                                          |
-| `acceptChangedFile` / `acceptAllChangedFiles(taskId[, relPath])` | Promote one / every changed file's current state to the new baseline.                                                                                                                                             |
-| `pluginRequest(taskId, plugin, method, params?)` → `unknown`     | Call a plugin's `handleRequest` on the executor that owns the task — how a plugin-owned feature (e.g. the bundled checkpoints plugin's diff/restore) reaches its per-task state without a wire method of its own. |
+| Method                                                       | Purpose                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pluginRequest(taskId, plugin, method, params?)` → `unknown` | Call a plugin's `handleRequest` on the executor that owns the task — how the file-changes panel's list/revert/accept and the checkpoints plugin's diff/restore reach their per-task state. `params`/result are plugin-defined JSON; errors propagate. |
 
 ### Event model
 
@@ -102,10 +99,6 @@ POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
 POST /api/v1/task/:id/ask         AskResponse                 → respondToAsk()
 POST /api/v1/task/:id/plugin-request        { plugin, method, params? } → { result }
-GET  /api/v1/task/:id/changed-files                          → ChangedFilesPayload
-POST /api/v1/task/:id/changed-files/diff    { relPath }      → { original, final }
-POST /api/v1/task/:id/changed-files/revert  { relPath? }     (one file, or all when omitted)
-POST /api/v1/task/:id/changed-files/accept  { relPath? }     (one file, or all when omitted)
 ```
 
 `GET /api/v1/event` is the whole node's firehose — every task's events. `GET

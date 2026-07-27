@@ -31,7 +31,7 @@ without leaving anything behind in core.
 
 ## Related
 
-- [`file-change-tracking.md`](../file-change-tracking.md) — the File Changes Panel, a
+- [`plugins/file-changes.md`](./file-changes.md) — the File Changes Panel, a
   separate per-file diff/revert system with no git dependency.
 - [`worktrees.md`](../worktrees.md) — how an embedded worktree task scopes its snapshots.
 - [`submodule-support.md`](../submodule-support.md) — the nested-repository investigation

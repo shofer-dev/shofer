@@ -173,6 +173,30 @@ export interface LifecycleHooks {
 	 * Fire-and-forget observer: it must never make the user wait to be heard.
 	 */
 	onUserMessage?(info: UserMessageInfo, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called just **before** a tool mutates a workspace file, with the file's content
+	 * as it is right now (`before === undefined` ⇒ it does not exist yet).
+	 *
+	 * This is the seam for a plugin that needs the pre-edit state, and it exists
+	 * because only the tool knows what it is about to touch: a path may be embedded in
+	 * a patch body, resolved by the language server (a symbol rename hitting N files),
+	 * or be the destination of a move. Deriving that from `beforeToolCall`'s arguments
+	 * would mean re-implementing every tool's semantics in the plugin — and silently
+	 * missing files when one changes.
+	 *
+	 * Called once per path per mutation, in the tool, on the path that already tracks
+	 * file context. Awaited under the plugin's hook budget (the tool waits), because a
+	 * "before" snapshot taken after the write is worthless. Errors never reach the tool.
+	 */
+	beforeFileEdit?(edit: PluginFileEdit, context: PluginContext): void | Promise<void>
+
+	/**
+	 * Called **after** a tool mutated a workspace file. The current content is on
+	 * disk — deliberately not passed, so a plugin reads only what it actually needs.
+	 * Fire-and-forget observer; the tool does not wait.
+	 */
+	afterFileEdit?(edit: PluginFileEditResult, context: PluginContext): void | Promise<void>
 }
 
 /** What a {@link LifecycleHooks.onUserMessage} hook is being told (design §5.9). */
@@ -201,6 +225,20 @@ export interface TimelineRewindInfo {
 	 * workspace.
 	 */
 	readonly restoreState: boolean
+}
+
+/** A workspace file a tool is about to mutate ({@link LifecycleHooks.beforeFileEdit}). */
+export interface PluginFileEdit {
+	/** Workspace-relative path, resolved against the **task's** cwd (a worktree task's subdirectory). */
+	readonly path: string
+	/** The file's content before the mutation; `undefined` when it does not exist. */
+	readonly before?: string
+}
+
+/** A workspace file a tool has mutated ({@link LifecycleHooks.afterFileEdit}). */
+export interface PluginFileEditResult {
+	/** Workspace-relative path, resolved against the **task's** cwd. */
+	readonly path: string
 }
 
 /** What a {@link LifecycleHooks.onTaskDeleted} hook is being told (design §5.9). */
@@ -274,8 +312,12 @@ export interface PluginLogger {
 export interface PluginHost {
 	/** Filesystem access, scoped to the plugin's `permissions.filesystem` allowlist. */
 	readonly fs: HostFileSystem
-	/** Surface an info/warning/error message (always permitted). */
-	readonly notifier: Pick<Notifier, "info" | "warn" | "error">
+	/**
+	 * Surface an info/warning/error message, or ask the user to pick one of a set of
+	 * actions (always permitted — asking is as safe as telling, and a plugin that must
+	 * confirm a destructive action needs an answer, not a toast).
+	 */
+	readonly notifier: Pick<Notifier, "info" | "warn" | "error" | "showChoice">
 	/**
 	 * Scoped logger — always available (logging is inherently safe). Writes to the
 	 * plugin's own `Plugin:<name>` Log category (Settings → Logging), so its output can
@@ -769,6 +811,13 @@ export interface PluginContext {
 	readonly taskId?: string
 	/** Current working directory (design §6.2). */
 	readonly cwd?: string
+	/**
+	 * Whether the task is **currently producing output** (mid-turn). Set on request
+	 * contexts, so a plugin whose UI offers a workspace-mutating action can refuse it
+	 * while the agent is still writing the very files it would touch — the answer has
+	 * to come from the host, since a plugin cannot see the agent loop.
+	 */
+	readonly taskStreaming?: boolean
 	/** This plugin's validated, user-configured settings (design §6.2, step 2.3). */
 	readonly config?: Record<string, unknown>
 	/** Restricted, permission-checked host surface (design §6.2, §8; step 2.4). */
@@ -856,6 +905,7 @@ export const pluginUiRegionSchema = z.enum([
 	"task-header",
 	"settings-tab",
 	"chat-message-addon",
+	"chat-footer",
 	"sidebar-panel",
 ])
 
@@ -1343,6 +1393,15 @@ export interface PluginUiTaskSummary {
 	readonly taskId?: string
 	/** Current mode slug, if any. */
 	readonly mode?: string
+	/**
+	 * How many rows the task's timeline currently has — a cheap "the conversation
+	 * moved" signal a component can re-read state on.
+	 *
+	 * It is the only such signal a UI bundle has for a task running on a **remote
+	 * executor**: that host's plugin pushes reach its own webview, not this one, so a
+	 * component that must stay current there watches this instead.
+	 */
+	readonly messageCount?: number
 }
 
 /**

@@ -1,6 +1,5 @@
 import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent } from "./agent-api.js"
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
-import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /**
  * Executor pool — the controller side of distributed execution (v3 architecture §13).
@@ -236,30 +235,6 @@ export class ExecutorPool implements AgentApi {
 
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.owner(taskId).api.pluginRequest(taskId, plugin, method, params)
-	}
-
-	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
-		return this.owner(taskId).api.getTaskChangedFiles(taskId)
-	}
-
-	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
-		return this.owner(taskId).api.getChangedFileDiff(taskId, relPath)
-	}
-
-	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.owner(taskId).api.revertChangedFile(taskId, relPath)
-	}
-
-	async revertAllChangedFiles(taskId: string): Promise<void> {
-		await this.owner(taskId).api.revertAllChangedFiles(taskId)
-	}
-
-	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.owner(taskId).api.acceptChangedFile(taskId, relPath)
-	}
-
-	async acceptAllChangedFiles(taskId: string): Promise<void> {
-		await this.owner(taskId).api.acceptAllChangedFiles(taskId)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

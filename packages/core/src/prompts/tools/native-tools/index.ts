@@ -65,7 +65,6 @@ import fetchWebPage from "./fetch_web_page.js"
 import fileTool from "./file.js"
 import findFiles from "./find_files.js"
 import generateImage from "./generate_image.js"
-import getChangedFiles from "./get_changed_files.js"
 import getErrors from "./get_errors.js"
 import getProjectSetupInfo from "./get_project_setup_info.js"
 // get_search_results removed — merged into grep_search
@@ -159,7 +158,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		fileTool,
 		findFiles,
 		generateImage,
-		getChangedFiles,
 		getErrors,
 		getProjectSetupInfo,
 		// get_search_results removed — merged into grep_search

@@ -1,30 +1,15 @@
 import { safeWriteJson } from "../utils/safeWriteJson.js"
+import { fileExistsAtPath } from "../fs/fs.js"
 import * as path from "path"
-import * as crypto from "crypto"
 import type { HostFileWatcher } from "@shofer/types"
 import { getHost } from "@shofer/types"
 import { getTaskDirectoryPath } from "../utils/storage.js"
 import { GlobalFileNames } from "../shared/globalFileNames.js"
-import { fileExistsAtPath } from "../fs/fs.js"
 import fs from "fs/promises"
+import { pluginRegistry } from "../plugins/plugin-registry.js"
 import { type FileMetadataEntry, type RecordSource, type TaskMetadata } from "./FileContextTrackerTypes.js"
 import { type TaskProviderLike } from "../task-provider/index.js"
 import { taskLog } from "../logging/subsystems.js"
-
-/**
- * Snapshot kind written to the per-task originals/finals stores.
- *  - "absent" : the file did not exist on disk at the moment of capture.
- *  - "text"   : the file existed. Actual content lives in base/<relPath>
- *               (originals) or final/<relPath> (finals).
- *  - "binary" : the file existed but content is not retained.
- */
-export type SnapshotKind = "absent" | "text" | "binary"
-
-export interface FileSnapshot {
-	kind: SnapshotKind
-	/** sha256 of captured bytes (only meaningful when kind === "text"). */
-	hash?: string
-}
 
 // This class is responsible for tracking file operations that may result in stale context.
 // If a user modifies a file outside of Shofer, the context may become stale and need to be updated.
@@ -228,16 +213,13 @@ export class FileContextTracker {
 			metadata.files_in_context.push(newEntry)
 			await this.saveTaskMetadata(taskId, metadata)
 
-			// Capture the post-edit "final" content snapshot so per-file Redo can
-			// re-apply Shofer's last produced state after a Revert. Also notify the
-			// provider so the FileChangesPanel updates promptly. These are
-			// best-effort and must never propagate errors back to tools.
+			// Tell plugins the file changed, so one tracking file changes can record what
+			// the agent produced. Fire-and-forget: the tool must not wait for it, and a
+			// plugin's failure must never surface as a tool error.
 			if (source === "shofer_edited") {
-				this.captureFinal(filePath).catch((err) =>
-					taskLog.error(`[FileContextTracker] captureFinal failed:`, err),
-				)
-				const provider = this.providerRef.deref()
-				provider?.scheduleChangedFilesUpdate?.(this.taskId)
+				void pluginRegistry
+					.applyAfterFileEdit({ path: filePath }, { taskId: this.taskId, cwd: this.getCwd() })
+					.catch((err) => taskLog.error(`[FileContextTracker] afterFileEdit dispatch failed:`, err))
 			}
 		} catch (error) {
 			taskLog.error("Failed to add file to metadata:", error)
@@ -351,256 +333,26 @@ export class FileContextTracker {
 		this.recentlyEditedByRoo.add(filePath)
 	}
 
-	// ------------------------------------------------------------------
-	// Original/final content snapshot store (used by ChangedFilesService)
-	// ------------------------------------------------------------------
-
 	/**
-	 * Returns absolute paths to the per-task `originals/` and `finals/`
-	 * directories. Created on demand by callers that write into them.
-	 */
-	private async getSnapshotDirs(): Promise<{ originals: string; finals: string } | undefined> {
-		const storage = this.getGlobalStoragePath()
-		if (!storage) return undefined
-		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
-		return {
-			originals: path.join(taskDir, "originals"),
-			finals: path.join(taskDir, "finals"),
-		}
-	}
-
-	private snapshotFileName(relPath: string): string {
-		// sha1 over the workspace-relative path is enough for collision-resistant
-		// per-file storage; the original path is kept inside the JSON payload.
-		return crypto.createHash("sha1").update(relPath).digest("hex") + ".json"
-	}
-
-	private async readSnapshot(dir: string, relPath: string): Promise<FileSnapshot | undefined> {
-		const file = path.join(dir, this.snapshotFileName(relPath))
-		if (!(await fileExistsAtPath(file))) return undefined
-		try {
-			const raw = await fs.readFile(file, "utf8")
-			return JSON.parse(raw) as FileSnapshot
-		} catch (err) {
-			taskLog.error(`[FileContextTracker] Failed to read snapshot for ${relPath}:`, err)
-			return undefined
-		}
-	}
-
-	private async writeSnapshot(dir: string, relPath: string, snap: FileSnapshot): Promise<void> {
-		const file = path.join(dir, this.snapshotFileName(relPath))
-		await safeWriteJson(file, { ...snap, _path: relPath })
-	}
-
-	private buildSnapshotFromContent(content: string | undefined): FileSnapshot {
-		if (content === undefined) return { kind: "absent" }
-		return {
-			kind: "text",
-			hash: crypto.createHash("sha256").update(content).digest("hex"),
-		}
-	}
-
-	/**
-	 * Returns absolute paths to the per-task working-directory `base/` and
-	 * `final/` directories (for file copies, not metadata).
-	 */
-	private async getWorkingDirs(): Promise<{ base: string; final: string } | undefined> {
-		const storage = this.getGlobalStoragePath()
-		if (!storage) return undefined
-		const taskDir = await getTaskDirectoryPath(storage, this.taskId)
-		return {
-			base: path.join(taskDir, "base"),
-			final: path.join(taskDir, "final"),
-		}
-	}
-
-	/**
-	 * Captures the file's content as it existed BEFORE Shofer's first edit in this
-	 * Task. Idempotent: subsequent calls for the same path are no-ops, so
-	 * intermediate Shofer edits cannot overwrite the original.
+	 * Hand the file's pre-edit content to any plugin tracking file changes, and get out
+	 * of the way.
 	 *
-	 * Should be called from edit infrastructure (e.g. DiffViewProvider.open)
-	 * after the original content has been read but before the file is mutated.
-	 * Pass `content === undefined` to indicate the file did not exist on disk.
+	 * Called by edit infrastructure (`DiffViewProvider`) and by every tool that writes
+	 * files directly, right before the mutation — the only moment the previous content
+	 * still exists. `content === undefined` means the file is being created.
 	 *
-	 * Writes a lightweight metadata snapshot to `originals/` and a verbatim
-	 * file copy to `base/<relPath>`.
+	 * Core keeps no copy: what a baseline is *for* (a change list, a revert, a diff) is
+	 * a feature, and it lives in the bundled `file-changes` plugin. Awaited, because a
+	 * baseline captured after the write is worthless; never throws into the tool.
 	 */
 	async captureOriginal(relPath: string, content: string | undefined): Promise<void> {
 		try {
-			const dirs = await this.getSnapshotDirs()
-			if (!dirs) return
-			const existing = await this.readSnapshot(dirs.originals, relPath)
-			if (existing) return
-
-			const snap = this.buildSnapshotFromContent(content)
-
-			// Write the verbatim base copy FIRST. If it fails the snapshot is
-			// never persisted, keeping the capture atomic. The reverse order
-			// could leave a dangling snapshot with no corresponding base file.
-			if (snap.kind === "text" && content !== undefined) {
-				const wdirs = await this.getWorkingDirs()
-				if (wdirs) {
-					const dest = path.join(wdirs.base, relPath)
-					await fs.mkdir(path.dirname(dest), { recursive: true })
-					await fs.writeFile(dest, content, "utf8")
-				}
-			}
-
-			await this.writeSnapshot(dirs.originals, relPath, snap)
+			await pluginRegistry.applyBeforeFileEdit(
+				{ path: relPath, before: content },
+				{ taskId: this.taskId, cwd: this.getCwd() },
+			)
 		} catch (err) {
-			taskLog.error(`[FileContextTracker] captureOriginal failed for ${relPath}:`, err)
-		}
-	}
-
-	/**
-	 * Captures the file's current on-disk content as the latest "final" state
-	 * produced by Shofer. Overwrites any prior final snapshot. Used to power Redo
-	 * after a per-file Revert.
-	 *
-	 * Writes a lightweight metadata snapshot to `finals/` and a verbatim
-	 * file copy to `final/<relPath>`.
-	 */
-	async captureFinal(relPath: string): Promise<void> {
-		try {
-			const dirs = await this.getSnapshotDirs()
-			if (!dirs) {
-				taskLog.warn(
-					`[FileContextTracker] captureFinal skipped for ${relPath}: no snapshot dirs (globalStorage unavailable)`,
-				)
-				return
-			}
-			const abs = path.resolve(this.getCwd(), relPath)
-			let content: string | undefined
-			try {
-				content = await fs.readFile(abs, "utf8")
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			} catch (err: any) {
-				if (err?.code !== "ENOENT") {
-					taskLog.warn(
-						`[FileContextTracker] captureFinal read error for ${relPath}: ${err?.code ?? err?.message ?? err}`,
-					)
-				}
-				content = undefined
-			}
-			const snap = this.buildSnapshotFromContent(content)
-			await this.writeSnapshot(dirs.finals, relPath, snap)
-
-			// Also write a verbatim copy to final/<relPath>.
-			const wdirs = await this.getWorkingDirs()
-			if (!wdirs) {
-				taskLog.warn(
-					`[FileContextTracker] captureFinal(${relPath}): metadata snapshot written but working dirs unavailable — verbatim final copy skipped`,
-				)
-				return
-			}
-			if (snap.kind === "absent") {
-				// Remove any stale final copy when the file was deleted.
-				const dest = path.join(wdirs.final, relPath)
-				try {
-					await fs.unlink(dest)
-				} catch {
-					/* ok if missing */
-				}
-			} else if (content !== undefined) {
-				const dest = path.join(wdirs.final, relPath)
-				await fs.mkdir(path.dirname(dest), { recursive: true })
-				await fs.writeFile(dest, content, "utf8")
-			}
-		} catch (err) {
-			taskLog.error(`[FileContextTracker] captureFinal failed for ${relPath}:`, err)
-		}
-	}
-
-	async getOriginalSnapshot(relPath: string): Promise<FileSnapshot | undefined> {
-		const dirs = await this.getSnapshotDirs()
-		if (!dirs) return undefined
-		return this.readSnapshot(dirs.originals, relPath)
-	}
-
-	async getFinalSnapshot(relPath: string): Promise<FileSnapshot | undefined> {
-		const dirs = await this.getSnapshotDirs()
-		if (!dirs) return undefined
-		return this.readSnapshot(dirs.finals, relPath)
-	}
-
-	/**
-	 * Overwrites the original baseline for a file — both the metadata snapshot
-	 * in originals/ and the verbatim copy in base/<relPath>. Used by acceptFile
-	 * to promote the final state as the new baseline. Pass content === undefined
-	 * to mark the file as absent at baseline.
-	 */
-	async overwriteOriginalBase(relPath: string, content: string | undefined): Promise<void> {
-		const snapDirs = await this.getSnapshotDirs()
-		const wdirs = await this.getWorkingDirs()
-		if (!snapDirs || !wdirs) return
-
-		const snap = this.buildSnapshotFromContent(content)
-		await this.writeSnapshot(snapDirs.originals, relPath, snap)
-
-		const dest = path.join(wdirs.base, relPath)
-		if (snap.kind === "absent") {
-			try {
-				await fs.unlink(dest)
-			} catch {
-				/* ok if missing */
-			}
-		} else if (content !== undefined) {
-			await fs.mkdir(path.dirname(dest), { recursive: true })
-			await fs.writeFile(dest, content, "utf8")
-		}
-	}
-
-	/**
-	 * Removes the final-state snapshot for a file — both the metadata JSON
-	 * and the verbatim copy in final/<relPath>. Used by acceptFile after
-	 * promoting the final state to the new baseline.
-	 */
-	async removeFinalSnapshot(relPath: string): Promise<void> {
-		const snapDirs = await this.getSnapshotDirs()
-		const wdirs = await this.getWorkingDirs()
-		if (!snapDirs || !wdirs) return
-
-		const meta = path.join(snapDirs.finals, this.snapshotFileName(relPath))
-		try {
-			await fs.unlink(meta)
-		} catch {
-			/* ok if missing */
-		}
-
-		const dest = path.join(wdirs.final, relPath)
-		try {
-			await fs.unlink(dest)
-		} catch {
-			/* ok if missing */
-		}
-	}
-
-	/**
-	 * Reads the verbatim base file copy from `<taskDir>/base/<relPath>`.
-	 * Returns undefined when the file copy does not exist.
-	 */
-	async getBaseContent(relPath: string): Promise<string | undefined> {
-		const wdirs = await this.getWorkingDirs()
-		if (!wdirs) return undefined
-		try {
-			return await fs.readFile(path.join(wdirs.base, relPath), "utf8")
-		} catch {
-			return undefined
-		}
-	}
-
-	/**
-	 * Reads the verbatim final file copy from `<taskDir>/final/<relPath>`.
-	 * Returns undefined when the file copy does not exist.
-	 */
-	async getFinalContent(relPath: string): Promise<string | undefined> {
-		const wdirs = await this.getWorkingDirs()
-		if (!wdirs) return undefined
-		try {
-			return await fs.readFile(path.join(wdirs.final, relPath), "utf8")
-		} catch {
-			return undefined
+			taskLog.error(`[FileContextTracker] beforeFileEdit dispatch failed for ${relPath}:`, err)
 		}
 	}
 

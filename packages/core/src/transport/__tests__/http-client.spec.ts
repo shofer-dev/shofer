@@ -64,29 +64,6 @@ describe("ShoferHttpClient (typed SDK)", () => {
 		)
 	})
 
-	it("getTaskChangedFiles GETs /changed-files and returns the payload", async () => {
-		const payload = { taskId: "t1", entries: [], backend: "none" }
-		const fetchMock = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 }))
-		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		expect(await client.getTaskChangedFiles("t 1")).toEqual(payload)
-		expect(fetchMock).toHaveBeenCalledWith(
-			"http://host:1/api/v1/task/t%201/changed-files",
-			expect.objectContaining({ method: "GET" }),
-		)
-	})
-
-	it("getChangedFileDiff POSTs { relPath } to /changed-files/diff", async () => {
-		const fetchMock = vi.fn(
-			async () => new Response(JSON.stringify({ original: "base", final: "final" }), { status: 200 }),
-		)
-		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		expect(await client.getChangedFileDiff("t1", "src/a.ts")).toEqual({ original: "base", final: "final" })
-		expect(fetchMock).toHaveBeenCalledWith(
-			"http://host:1/api/v1/task/t1/changed-files/diff",
-			expect.objectContaining({ method: "POST", body: JSON.stringify({ relPath: "src/a.ts" }) }),
-		)
-	})
-
 	it("pluginRequest POSTs { plugin, method, params } and unwraps the result", async () => {
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify({ result: { changes: [] } }), { status: 200 }))
 		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
@@ -97,35 +74,6 @@ describe("ShoferHttpClient (typed SDK)", () => {
 				method: "POST",
 				body: JSON.stringify({ plugin: "checkpoints", method: "diff", params: { hash: "c1" } }),
 			}),
-		)
-	})
-
-	it("revert/accept POST to their subroutes; per-file sends { relPath }, all sends {}", async () => {
-		const fetchMock = vi.fn(async () => new Response("", { status: 202 }))
-		const client = new ShoferHttpClient({ baseUrl: "http://host:1", fetch: fetchMock as unknown as typeof fetch })
-		await client.revertChangedFile("t1", "a.ts")
-		await client.revertAllChangedFiles("t1")
-		await client.acceptChangedFile("t1", "a.ts")
-		await client.acceptAllChangedFiles("t1")
-		expect(fetchMock).toHaveBeenNthCalledWith(
-			1,
-			"http://host:1/api/v1/task/t1/changed-files/revert",
-			expect.objectContaining({ body: JSON.stringify({ relPath: "a.ts" }) }),
-		)
-		expect(fetchMock).toHaveBeenNthCalledWith(
-			2,
-			"http://host:1/api/v1/task/t1/changed-files/revert",
-			expect.objectContaining({ body: JSON.stringify({}) }),
-		)
-		expect(fetchMock).toHaveBeenNthCalledWith(
-			3,
-			"http://host:1/api/v1/task/t1/changed-files/accept",
-			expect.objectContaining({ body: JSON.stringify({ relPath: "a.ts" }) }),
-		)
-		expect(fetchMock).toHaveBeenNthCalledWith(
-			4,
-			"http://host:1/api/v1/task/t1/changed-files/accept",
-			expect.objectContaining({ body: JSON.stringify({}) }),
 		)
 	})
 

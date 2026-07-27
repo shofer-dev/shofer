@@ -112,7 +112,7 @@ Clicking the `codicon-chevron-down` button calls `handleScrollToBottomClick`:
 
 When `isAtBottom` becomes `false` while already in `ANCHORED_FOLLOWING` during streaming (a transient not-at-bottom blip from rapid content growth), the hook calls `scrollToBottomAuto()` and keeps the button hidden — a safety net that prevents Virtuoso from momentarily dropping the follow anchor.
 
-When `isAtBottom` becomes `false` while in `ANCHORED_FOLLOWING` and **not** streaming, the hook only disengages to `USER_BROWSING_HISTORY` if `userIntentScrollUpRef` is already set by a real input gesture (Cause C fix). A bare not-at-bottom with no corroborating gesture — a row collapsing, a late image loading, the `FileChangesPanel` resizing — leaves the user in `ANCHORED_FOLLOWING` instead of spuriously ejecting them.
+When `isAtBottom` becomes `false` while in `ANCHORED_FOLLOWING` and **not** streaming, the hook only disengages to `USER_BROWSING_HISTORY` if `userIntentScrollUpRef` is already set by a real input gesture (Cause C fix). A bare not-at-bottom with no corroborating gesture — a row collapsing, a late image loading, the file-changes panel resizing — leaves the user in `ANCHORED_FOLLOWING` instead of spuriously ejecting them.
 
 ## Scroll Commands
 
@@ -191,7 +191,7 @@ File changed:
 
 ### Cause C — Non-streaming disengage false positives (Fixed)
 
-In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` used to treat **any** `isAtBottom === false` as a user scroll-up and transition to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, [`FileChangesPanel`](../webview-ui/src/components/chat/ChatView.tsx) resizing) spuriously ejected the user from follow and flashed the scroll-to-bottom button.
+In `ANCHORED_FOLLOWING` while **not** streaming, `atBottomStateChangeCallback` used to treat **any** `isAtBottom === false` as a user scroll-up and transition to `USER_BROWSING_HISTORY`. Non-user causes (collapsing row, late-loading image, the plugin footer resizing) spuriously ejected the user from follow and flashed the scroll-to-bottom button.
 
 **Fix:** the non-streaming disengage branch now also requires `userIntentScrollUpRef.current` to be set. Genuine scroll-up gestures (`wheel-up`, `keyboard-nav-up`, `pointer-scroll-up`) set that flag and disengage via their own handlers, so the at-bottom callback only acts on a corroborated gesture and ignores bare layout-driven not-at-bottom blips.
 

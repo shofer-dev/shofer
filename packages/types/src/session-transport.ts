@@ -1,7 +1,6 @@
 import type { AgentApi, AskResponse, ServerEvent } from "./agent-api.js"
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { HostBridge } from "./host.js"
-import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 import { type HostRpcChannel, type RemoteHostCapability, dispatchHostCall } from "./host-rpc.js"
 
 /**
@@ -29,14 +28,8 @@ export type SessionClientFrame =
 	// Node-scoped config replication (config_sync §4a). `secrets` carries the
 	// allow-listed credential slice alongside the settings slice.
 	| { t: "cmd"; id: number; method: "applyConfig"; config: SyncedSettings; version: string; secrets: SyncedSecrets }
-	// Reverse data channel (Shofer Nodes L3): changed-files + plugin requests.
-	| { t: "cmd"; id: number; method: "getTaskChangedFiles"; taskId: string }
-	| { t: "cmd"; id: number; method: "getChangedFileDiff"; taskId: string; relPath: string }
-	| { t: "cmd"; id: number; method: "revertChangedFile"; taskId: string; relPath: string }
-	| { t: "cmd"; id: number; method: "revertAllChangedFiles"; taskId: string }
-	| { t: "cmd"; id: number; method: "acceptChangedFile"; taskId: string; relPath: string }
-	| { t: "cmd"; id: number; method: "acceptAllChangedFiles"; taskId: string }
-	// Generic plugin RPC: reach a plugin-owned feature on the task's own host.
+	// Reverse data channel (Shofer Nodes L3): reach a plugin-owned feature on the
+	// task's own host.
 	| {
 			t: "cmd"
 			id: number
@@ -113,13 +106,6 @@ export function serveSession({
 			else if (frame.method === "cancelTask") await api.cancelTask(frame.taskId)
 			else if (frame.method === "respondToAsk") await api.respondToAsk(frame.taskId, frame.response)
 			else if (frame.method === "applyConfig") await api.applyConfig(frame.config, frame.version, frame.secrets)
-			else if (frame.method === "getTaskChangedFiles") result = await api.getTaskChangedFiles(frame.taskId)
-			else if (frame.method === "getChangedFileDiff")
-				result = await api.getChangedFileDiff(frame.taskId, frame.relPath)
-			else if (frame.method === "revertChangedFile") await api.revertChangedFile(frame.taskId, frame.relPath)
-			else if (frame.method === "revertAllChangedFiles") await api.revertAllChangedFiles(frame.taskId)
-			else if (frame.method === "acceptChangedFile") await api.acceptChangedFile(frame.taskId, frame.relPath)
-			else if (frame.method === "acceptAllChangedFiles") await api.acceptAllChangedFiles(frame.taskId)
 			else if (frame.method === "pluginRequest")
 				result = await api.pluginRequest(frame.taskId, frame.plugin, frame.pluginMethod, frame.params)
 			send({ t: "result", id: frame.id, result })
@@ -179,25 +165,6 @@ export function connectSession({
 		},
 		applyConfig: async (config, version, secrets) => {
 			await command((id) => ({ t: "cmd", id, method: "applyConfig", config, version, secrets }))
-		},
-		getTaskChangedFiles: (taskId) =>
-			command((id) => ({ t: "cmd", id, method: "getTaskChangedFiles", taskId })) as Promise<ChangedFilesPayload>,
-		getChangedFileDiff: (taskId, relPath) =>
-			command((id) => ({ t: "cmd", id, method: "getChangedFileDiff", taskId, relPath })) as Promise<{
-				original: string | null
-				final: string | null
-			}>,
-		revertChangedFile: async (taskId, relPath) => {
-			await command((id) => ({ t: "cmd", id, method: "revertChangedFile", taskId, relPath }))
-		},
-		revertAllChangedFiles: async (taskId) => {
-			await command((id) => ({ t: "cmd", id, method: "revertAllChangedFiles", taskId }))
-		},
-		acceptChangedFile: async (taskId, relPath) => {
-			await command((id) => ({ t: "cmd", id, method: "acceptChangedFile", taskId, relPath }))
-		},
-		acceptAllChangedFiles: async (taskId) => {
-			await command((id) => ({ t: "cmd", id, method: "acceptAllChangedFiles", taskId }))
 		},
 		pluginRequest: (taskId, plugin, method, params) =>
 			command((id) => ({ t: "cmd", id, method: "pluginRequest", taskId, plugin, pluginMethod: method, params })),

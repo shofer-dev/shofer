@@ -258,10 +258,7 @@
 		"label": "Docs",
 		"url": "https://shofer.dev/docs"
 	},
-	"fileChanges": {
-		"blockedTaskRunning": "Cannot revert files while the task is still running. Stop the task first.",
-		"revertConfirmUserEdits": "{{path}} has changes you made after Shofer last touched it. Reverting will discard those edits. Continue?",
-		"revertConfirmYes": "Revert",
-		"revertAllConfirm": "Revert all files Shofer edited in this task back to their original state? Your manual changes to those files will be lost."
+	"plugins": {
+		"blockedTaskRunning": "Cannot revert files while the task is still running. Stop the task first."
 	}
 }

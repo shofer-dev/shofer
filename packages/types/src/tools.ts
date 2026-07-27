@@ -244,7 +244,6 @@ export type NativeToolArgs = {
 	file: { subcommand: "rm" | "mv"; path: string; destination?: string; recursive?: boolean | null }
 	fetch_web_page: { urls: string[]; query?: string | null }
 	find_files: { pattern: string; maxResults?: number }
-	get_changed_files: Record<string, never>
 	get_errors: { filePaths?: string[] | null }
 	get_project_setup_info: Record<string, never>
 	// get_search_results removed — merged into grep_search

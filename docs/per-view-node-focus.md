@@ -1,7 +1,7 @@
 # Per-view task focus (Shofer Nodes)
 
 When a remote-node task runs, the extension can show it in one webview view while
-another view (the sidebar, or a separate editor tab) shows a *different* task —
+another view (the sidebar, or a separate editor tab) shows a _different_ task —
 without the two swapping. This describes what focus is per-view versus global and
 how it works.
 
@@ -11,7 +11,7 @@ how it works.
 — the extension-side class that backs one webview view. There is one instance per
 webview surface: the sidebar, plus each editor tab opened via `openShoferInNewTab`.
 So "per-provider" == "**per-view / per-webview**". It is NOT an LLM provider and NOT
-a Shofer *node*.
+a Shofer _node_.
 
 ## What is per-view vs global
 
@@ -27,11 +27,11 @@ a Shofer *node*.
 - `NodeRegistry` holds `focusedShadows: Map<NodeProviderHost, taskId>` (the provider
   object reference is the key — no separate id). A view absent from the map renders
   the global local current task.
-- `ShoferProvider.getStateToPostToWebview` resolves the shadow override from *this*
+- `ShoferProvider.getStateToPostToWebview` resolves the shadow override from _this_
   view via `nodeRegistry.getFocusedShadow(this)`, so a full-state push from view A
   (no shadow) renders A's local task while view B (shadow) renders its shadow — the
   two never swap.
-- Shadow render deltas (message append/update, token usage, changed-files, restore
+- Shadow render deltas (message append/update, token usage, restore
   rebuild) **fan out** only to the view(s) focused on that shadow.
 - A view focuses a shadow by **starting** a remote task from it (the `routeNewTask`
   initiator). Closing a view (`detachProvider`) releases its shadow focus; the shadow
@@ -45,7 +45,7 @@ Bounded by the number of open **views**, not the number of tasks:
   background tasks' messages live extension-side in their `Task` objects (local) or in
   `RemoteTaskShadow` buffers inside `NodeRegistry` (remote). Streaming deltas reach the
   FE only for the focused task.
-- With per-view focus, each view holds *its own* focused task's array, and each view is
+- With per-view focus, each view holds _its own_ focused task's array, and each view is
   a separate webview with its own memory. So **N open views ⇒ N arrays** (N realistically
   1–3), independent of how many tasks run.
 - The real "hundreds of tasks" cost is **extension-side and already exists** independent

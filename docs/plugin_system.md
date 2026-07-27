@@ -463,6 +463,7 @@ render in designated Shofer UI regions:
 | `task-header`        | TaskHeader (expanded)             | Status badges, info rows, action buttons                                   |
 | `settings-tab`       | SettingsView (per-plugin panel)   | Full plugin settings panel                                                 |
 | `chat-message-addon` | A `plugin_marker` row in the chat | The plugin's own timeline row (see [§5.14](#514-timeline-markers-ctxtask)) |
+| `chat-footer`        | Between the chat and its input    | A per-task summary the user acts on (the file-changes panel)               |
 | `sidebar-panel`      | New panel in the Shofer sidebar   | Custom dashboard/view                                                      |
 
 **Loading model — dynamic `import()`, not iframe.** A plugin UI component loads
@@ -586,8 +587,26 @@ export interface LifecycleHooks {
 	): void | Promise<void>
 	/** A task was deleted from history — drop per-task state kept OUTSIDE its task dir. Observer. */
 	onTaskDeleted?(info: { taskId: string; workspacePath?: string }, context: PluginContext): void | Promise<void>
+	/**
+	 * A tool is about to mutate a workspace file, with the file's content as it is right
+	 * now (`before === undefined` ⇒ it does not exist yet). **Awaited** — a "before"
+	 * snapshot taken after the write is worthless.
+	 *
+	 * It exists because only the tool knows what it is about to touch: a path may be
+	 * embedded in a patch body, resolved by the language server (a rename hitting N
+	 * files), or be a move's destination. Deriving that from `beforeToolCall`'s arguments
+	 * would mean re-implementing every tool's semantics — and silently missing files when
+	 * one changes.
+	 */
+	beforeFileEdit?(edit: { path: string; before?: string }, context: PluginContext): void | Promise<void>
+	/** A tool finished mutating a workspace file; the new content is on disk. Observer. */
+	afterFileEdit?(edit: { path: string }, context: PluginContext): void | Promise<void>
 }
 ```
+
+The file-edit pair is what the bundled **file-changes** plugin
+([`plugins/file-changes.md`](./plugins/file-changes.md)) is built on: core publishes the
+edit, the plugin keeps the two copies that make a diff and a revert possible.
 
 **Per-plugin hook budget.** Hooks run under a **500 ms** default budget
 ({@link PLUGIN*HOOK_TIMEOUT_MS}); a plugin whose hook does work the agent must
@@ -785,6 +804,14 @@ implements `handleRequest(method, params, ctx)` and the caller awaits its result
 Unlike the observer hooks, a request is **not** timeout-guarded or error-isolated: a
 caller is waiting on the answer, so a throw (or an unknown plugin / missing
 `handleRequest`) propagates to it rather than becoming a silent `undefined`.
+
+**Broadcast requests.** Core sometimes needs a fact that a _feature_ owns without knowing
+which plugin — if any — provides it. `pluginRegistry.requestAll(method, params)` asks
+every plugin the same question and returns the answers; a plugin that does not recognise
+the method throws, which counts as "no answer" rather than an error. The one convention
+in use is **`"task-stats"`** → `{ insertions, deletions }`, which the file-changes plugin
+answers so a completed task gets its `+`/`−` badge; with no plugin answering there is
+simply no badge.
 
 **Routing.** A UI request is answered by the plugin instance on the host that OWNS the
 focused task — a remote executor when a shadow task is focused — because that is where

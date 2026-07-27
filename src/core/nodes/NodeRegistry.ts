@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import {
 	type AgentApi,
-	type ChangedFilesPayload,
 	type Event,
 	type GlobalSettings,
 	type LoadBalancerPolicy,
@@ -192,11 +191,6 @@ export class NodeRegistry {
 	 * reference, so no separate view id is needed.
 	 */
 	private readonly focusedShadows = new Map<NodeProviderHost, string>()
-	// Debounced changed-files refresh for the focused shadow (mirrors the local
-	// ShoferProvider.scheduleChangedFilesUpdate): coalesce a burst of remote Message
-	// deltas into one control-plane fetch + webview push.
-	private shadowChangedFilesTimer?: NodeJS.Timeout
-	private shadowChangedFilesPendingTaskId?: string
 	/** Disposes the `onDidChangeConfiguration` subscription for the LB policy. */
 	private readonly configDisposable: vscode.Disposable
 	/** Controller-authoritative settings source (config_sync §4c); undefined disables sync. */
@@ -447,88 +441,26 @@ export class NodeRegistry {
 	}
 
 	// ── remote reverse data channel (Shofer Nodes L3) ────────────────────────────
-	// Route changed-files ops and plugin requests for a shadow (remote) task
-	// over the pool to the owning executor. The webview shadow branches call these
-	// (guarded by `isShadow`/`getFocusedShadow`) instead of driving a local Task.
-
-	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
-		return this.pool.getTaskChangedFiles(taskId)
-	}
-
-	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
-		return this.pool.getChangedFileDiff(taskId, relPath)
-	}
+	// Route a plugin request for a shadow (remote) task over the pool to the owning
+	// executor — the one channel every plugin-owned per-task feature travels on.
 
 	/** Reach a plugin running on the executor that owns `taskId` (generic plugin RPC). */
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.pool.pluginRequest(taskId, plugin, method, params)
 	}
 
-	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.pool.revertChangedFile(taskId, relPath)
-	}
-
-	async revertAllChangedFiles(taskId: string): Promise<void> {
-		await this.pool.revertAllChangedFiles(taskId)
-	}
-
-	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.pool.acceptChangedFile(taskId, relPath)
-	}
-
-	async acceptAllChangedFiles(taskId: string): Promise<void> {
-		await this.pool.acceptAllChangedFiles(taskId)
-	}
-
 	/**
 	 * Rebuild a shadow after the executor rewound its task — e.g. a snapshot plugin
 	 * restoring an earlier point (Shofer Nodes L3).
 	 * The executor rewound + reinitialized its task, so its stale post-rewind
-	 * `Message` stream will repopulate the shadow: clear the buffered conversation,
-	 * re-post init state for the focused shadow, then re-fetch the changed-files
-	 * panel (a restore mutates the shared worktree).
+	 * `Message` stream will repopulate the shadow: clear the buffered conversation and
+	 * re-post init state for the focused shadow.
 	 */
 	async rebuildShadow(taskId: string): Promise<void> {
 		const shadow = this.shadows.get(taskId)
 		if (!shadow) return
 		shadow.clearMessages()
 		for (const view of this.viewsFocusedOn(taskId)) await view.postInitState()
-		await this.fetchShadowChangedFiles(taskId)
-	}
-
-	/**
-	 * Fetch the changed-files panel for a shadow over the control plane, store it on
-	 * the shadow, and — when it's the focused shadow — push a `changedFiles/update`
-	 * to the webview (mirrors the local `pushChangedFilesUpdate`). Best-effort: a
-	 * dead executor / ended task leaves the last-known panel in place.
-	 */
-	async fetchShadowChangedFiles(taskId: string): Promise<void> {
-		const shadow = this.shadows.get(taskId)
-		if (!shadow) return
-		try {
-			const payload = await this.pool.getTaskChangedFiles(taskId)
-			shadow.setChangedFiles(payload)
-			for (const view of this.viewsFocusedOn(taskId)) {
-				void view.postMessageToWebview({ type: "changedFiles/update", changedFiles: payload })
-			}
-		} catch {
-			// Executor unreachable or task ended — keep the last-known panel.
-		}
-	}
-
-	/**
-	 * Debounced changed-files refresh for a shadow (mirrors the local
-	 * `scheduleChangedFilesUpdate`). Coalesces a burst of remote `Message` deltas
-	 * into one control-plane fetch + webview push.
-	 */
-	private scheduleShadowChangedFiles(taskId: string): void {
-		this.shadowChangedFilesPendingTaskId = taskId
-		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
-		this.shadowChangedFilesTimer = setTimeout(() => {
-			this.shadowChangedFilesTimer = undefined
-			const id = this.shadowChangedFilesPendingTaskId
-			if (id) void this.fetchShadowChangedFiles(id)
-		}, NodeRegistry.SHADOW_CHANGED_FILES_DEBOUNCE_MS)
 	}
 
 	/** Focus a remote shadow IN A SINGLE VIEW and switch that view's webview to it. */
@@ -603,9 +535,6 @@ export class NodeRegistry {
 							? { type: "shoferMessageAppended", shoferMessage: payload.message }
 							: { type: "messageUpdated", shoferMessage: payload.message }
 					for (const view of focusedViews) void view.postMessageToWebview(post)
-					// A remote edit may have changed files — refresh the panel (debounced,
-					// mirroring the local FileContextTracker → scheduleChangedFilesUpdate).
-					this.scheduleShadowChangedFiles(shadow.taskId)
 				}
 				return
 			}
@@ -778,7 +707,6 @@ export class NodeRegistry {
 	}
 
 	dispose(): void {
-		if (this.shadowChangedFilesTimer) clearTimeout(this.shadowChangedFilesTimer)
 		this.configDisposable.dispose()
 		this.configChangeDisposable?.dispose()
 		for (const conn of this.connections.values()) conn.dispose()

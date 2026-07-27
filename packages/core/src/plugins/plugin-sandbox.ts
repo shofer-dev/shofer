@@ -27,6 +27,7 @@ import type {
 	HostDisposable,
 	HostEnv,
 	HostFileSystem,
+	NotifyChoiceOptions,
 	PluginEditor,
 	PluginFileDiff,
 	PluginHost,
@@ -252,6 +253,8 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 			info: (m: string) => host.notifier.info(m),
 			warn: (m: string) => host.notifier.warn(m),
 			error: (m: string) => host.notifier.error(m),
+			showChoice: (m: string, options: string[], opts?: NotifyChoiceOptions) =>
+				host.notifier.showChoice(m, options, opts),
 		},
 		// Plugin-scoped logger → its own `Plugin:<name>` Log category (Settings → Logging).
 		log,

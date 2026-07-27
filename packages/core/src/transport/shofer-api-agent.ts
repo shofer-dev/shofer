@@ -1,14 +1,6 @@
 import { type ShoferAPI, ShoferEventName } from "@shofer/types"
 
-import type {
-	AgentApi,
-	AskResponse,
-	ChangedFilesPayload,
-	CreateTaskInput,
-	ServerEvent,
-	SyncedSecrets,
-	SyncedSettings,
-} from "@shofer/types"
+import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
 
 /** Construction options for {@link ShoferApiAgent}. */
 export interface ShoferApiAgentOptions {
@@ -124,32 +116,8 @@ export class ShoferApiAgent implements AgentApi {
 
 	// ── Reverse data channel (Shofer Nodes L3) — delegate to the in-process API ──
 
-	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
-		return this.api.getTaskChangedFiles(taskId)
-	}
-
-	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }> {
-		return this.api.getChangedFileDiff(taskId, relPath)
-	}
-
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.api.pluginRequest(taskId, plugin, method, params)
-	}
-
-	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.api.revertChangedFile(taskId, relPath)
-	}
-
-	async revertAllChangedFiles(taskId: string): Promise<void> {
-		await this.api.revertAllChangedFiles(taskId)
-	}
-
-	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.api.acceptChangedFile(taskId, relPath)
-	}
-
-	async acceptAllChangedFiles(taskId: string): Promise<void> {
-		await this.api.acceptAllChangedFiles(taskId)
 	}
 
 	subscribe(listener: (event: ServerEvent) => void): () => void {

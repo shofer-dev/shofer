@@ -240,7 +240,7 @@ Twenty native tools are listed below — see [`native_tools.md`](../native_tools
 
 The file changes tracking infrastructure was built from the ground up.
 
-See [`file-change-tracking.md`](../file-change-tracking.md) for the complete tracking specification.
+See [`plugins/file-changes.md`](../plugins/file-changes.md) for the complete tracking specification.
 
 Removed the git-dependent shadow-repository backend in favor of a **working-directory snapshot system**. This eliminates all git-related edge cases (nested repos, worktrees, submodules, custom git configs) and makes the system more robust and universally compatible.
 

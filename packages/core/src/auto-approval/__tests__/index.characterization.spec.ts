@@ -35,7 +35,6 @@ describe("checkAutoApproval — tool path characterization", () => {
 			"findFiles",
 			"viewImage",
 			"getErrors",
-			"getChangedFiles",
 			"getProjectSetupInfo",
 			"readProjectStructure",
 			"listCodeUsages",

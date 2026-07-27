@@ -198,7 +198,7 @@ within the submodule directory are restored.
 
 ## Impact on File Changes Panel
 
-The File Changes Panel ([`ChangedFilesService`](../packages/core/src/file-changes/ChangedFilesService.ts))
+The File Changes panel ([`file-changes` plugin](../plugins/file-changes/))
 uses a single per-task working-directory backend with **no git dependency**. It stores
 verbatim file copies under `<taskDir>/base/<relPath>` (original state at first edit)
 and `<taskDir>/final/<relPath>` (last Shofer-produced state, for Redo).
@@ -227,7 +227,7 @@ bearing on the file-changes panel — it always used the working-directory backe
 
 - [`shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts) — checkpoint implementation
 - [`CheckpointServiceRegistry.ts`](../plugins/checkpoints/src/service-registry.ts) — per-task shadow git instance (extends `ShadowGitRepo`)
-- [`ChangedFilesService.ts`](../packages/core/src/file-changes/ChangedFilesService.ts) — file changes panel (working-directory backend, no git dependency)
+- [`plugins/file-changes/`](../plugins/file-changes/) — file changes panel (per-task file copies, no git dependency)
 - [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
 - [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
 

@@ -66,12 +66,6 @@ describe("createRequestHandler (§11)", () => {
 			cancelTask: vi.fn(async () => {}),
 			respondToAsk: vi.fn(async () => {}),
 			applyConfig: vi.fn(async () => {}),
-			getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
-			getChangedFileDiff: vi.fn(async () => ({ original: "base", final: "final" })),
-			revertChangedFile: vi.fn(async () => {}),
-			revertAllChangedFiles: vi.fn(async () => {}),
-			acceptChangedFile: vi.fn(async () => {}),
-			acceptAllChangedFiles: vi.fn(async () => {}),
 			pluginRequest: vi.fn(async () => ({ changes: [] })),
 			subscribe: vi.fn((l: (e: ServerEvent) => void) => {
 				events.push(l)
@@ -211,50 +205,6 @@ describe("createRequestHandler (§11)", () => {
 		await run(mockReq("POST", "/api/v1/task/t1/plugin-request", { params: {} }), res as unknown as ServerResponse)
 		expect(res.statusCode).toBe(400)
 		expect(api.pluginRequest).not.toHaveBeenCalled()
-	})
-
-	it("L3: GET changed-files returns 200 with the payload", async () => {
-		const res = mockRes()
-		await run(mockReq("GET", "/api/v1/task/t1/changed-files"), res as unknown as ServerResponse)
-		expect(res.statusCode).toBe(200)
-		expect(JSON.parse(res.body)).toEqual({ taskId: "t1", entries: [], backend: "none" })
-		expect(api.getTaskChangedFiles).toHaveBeenCalledWith("t1")
-	})
-
-	it("L3: changed-files/diff returns 200 { original, final }", async () => {
-		const res = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/changed-files/diff", { relPath: "a.ts" }),
-			res as unknown as ServerResponse,
-		)
-		expect(res.statusCode).toBe(200)
-		expect(JSON.parse(res.body)).toEqual({ original: "base", final: "final" })
-		expect(api.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")
-	})
-
-	it("L3: revert/accept route to per-file vs all by relPath presence, 202", async () => {
-		const r1 = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/changed-files/revert", { relPath: "a.ts" }),
-			r1 as unknown as ServerResponse,
-		)
-		expect(r1.statusCode).toBe(202)
-		expect(api.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
-
-		const r2 = mockRes()
-		await run(mockReq("POST", "/api/v1/task/t1/changed-files/revert", {}), r2 as unknown as ServerResponse)
-		expect(api.revertAllChangedFiles).toHaveBeenCalledWith("t1")
-
-		const a1 = mockRes()
-		await run(
-			mockReq("POST", "/api/v1/task/t1/changed-files/accept", { relPath: "a.ts" }),
-			a1 as unknown as ServerResponse,
-		)
-		expect(api.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
-
-		const a2 = mockRes()
-		await run(mockReq("POST", "/api/v1/task/t1/changed-files/accept", {}), a2 as unknown as ServerResponse)
-		expect(api.acceptAllChangedFiles).toHaveBeenCalledWith("t1")
 	})
 
 	it("streams events over SSE and unsubscribes on close", async () => {

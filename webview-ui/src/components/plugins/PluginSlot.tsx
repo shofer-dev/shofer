@@ -195,7 +195,7 @@ export function PluginSlot({
 	pluginName?: string
 	message?: PluginUiMessageSummary
 }) {
-	const { pluginUiContributions, mode, currentTaskItem } = useExtensionState()
+	const { pluginUiContributions, mode, currentTaskItem, shoferMessages } = useExtensionState()
 
 	const contributions = useMemo(
 		() =>
@@ -206,8 +206,8 @@ export function PluginSlot({
 	)
 
 	const task = useMemo<PluginUiTaskSummary>(
-		() => ({ taskId: currentTaskItem?.id, mode }),
-		[currentTaskItem?.id, mode],
+		() => ({ taskId: currentTaskItem?.id, mode, messageCount: shoferMessages?.length }),
+		[currentTaskItem?.id, mode, shoferMessages?.length],
 	)
 
 	return <PluginSlotView region={region} contributions={contributions} task={task} message={message} />

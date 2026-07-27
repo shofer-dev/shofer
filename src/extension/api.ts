@@ -17,7 +17,6 @@ import {
 	type TaskEvent,
 	type CreateTaskOptions,
 	type HistoryItem,
-	type ChangedFilesPayload,
 	SYNCED_SECRET_KEYS,
 	ShoferEventName,
 	TaskCommandName,
@@ -28,16 +27,7 @@ import {
 import { IpcServer } from "@shofer/ipc"
 
 import { Package } from "@shofer/core"
-import {
-	pluginRegistry,
-	getChangedFiles,
-	getOriginalContent,
-	getFinalContent,
-	restoreFile,
-	restoreAll,
-	acceptFile,
-	acceptAll,
-} from "@shofer/core"
+import { pluginRegistry } from "@shofer/core"
 import { ShoferProvider } from "../core/webview/ShoferProvider"
 import { openShoferInNewTab } from "../activate/registerCommands"
 import { getCommands } from "@shofer/core"
@@ -493,21 +483,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		return task
 	}
 
-	public async getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
-		const task = this.resolveTaskForL3(taskId, "getTaskChangedFiles")
-		if (!task) return { taskId, entries: [], backend: "none" }
-		return getChangedFiles(task)
-	}
-
-	public async getChangedFileDiff(
-		taskId: string,
-		relPath: string,
-	): Promise<{ original: string | null; final: string | null }> {
-		const task = this.resolveTaskForL3(taskId, "getChangedFileDiff")
-		if (!task) return { original: null, final: null }
-		return { original: await getOriginalContent(task, relPath), final: await getFinalContent(task, relPath) }
-	}
-
 	/**
 	 * Generic plugin RPC (`ShoferPlugin.handleRequest`) for a task on THIS host — how a
 	 * controller reaches a plugin-owned feature whose per-task state lives on the
@@ -523,30 +498,6 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 			taskId: task?.taskId ?? taskId,
 			cwd: task?.cwd,
 		})
-	}
-
-	public async revertChangedFile(taskId: string, relPath: string): Promise<void> {
-		const task = this.resolveTaskForL3(taskId, "revertChangedFile")
-		if (!task) return
-		await restoreFile(task, relPath)
-	}
-
-	public async revertAllChangedFiles(taskId: string): Promise<void> {
-		const task = this.resolveTaskForL3(taskId, "revertAllChangedFiles")
-		if (!task) return
-		await restoreAll(task)
-	}
-
-	public async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
-		const task = this.resolveTaskForL3(taskId, "acceptChangedFile")
-		if (!task) return
-		await acceptFile(task, relPath)
-	}
-
-	public async acceptAllChangedFiles(taskId: string): Promise<void> {
-		const task = this.resolveTaskForL3(taskId, "acceptAllChangedFiles")
-		if (!task) return
-		await acceptAll(task)
 	}
 
 	public deleteQueuedMessage(messageId: string) {

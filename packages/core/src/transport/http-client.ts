@@ -1,12 +1,4 @@
-import type {
-	AgentApi,
-	AskResponse,
-	ChangedFilesPayload,
-	CreateTaskInput,
-	ServerEvent,
-	SyncedSecrets,
-	SyncedSettings,
-} from "@shofer/types"
+import type { AgentApi, AskResponse, CreateTaskInput, ServerEvent, SyncedSecrets, SyncedSettings } from "@shofer/types"
 
 /**
  * Typed HTTP/SSE client SDK for the shofer server (v3 architecture §11).
@@ -61,20 +53,6 @@ export class ShoferHttpClient implements AgentApi {
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
 
-	async getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload> {
-		return (await this.get(`/task/${encodeURIComponent(taskId)}/changed-files`)) as ChangedFilesPayload
-	}
-
-	async getChangedFileDiff(
-		taskId: string,
-		relPath: string,
-	): Promise<{ original: string | null; final: string | null }> {
-		return (await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/diff`, { relPath })) as {
-			original: string | null
-			final: string | null
-		}
-	}
-
 	async pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		// Wrapped server-side (`{ result }`) so a plugin returning a bare value —
 		// `null`, a string, an array — still travels as a JSON object body.
@@ -84,22 +62,6 @@ export class ShoferHttpClient implements AgentApi {
 			params,
 		})) as { result: unknown }
 		return body?.result
-	}
-
-	async revertChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/revert`, { relPath })
-	}
-
-	async revertAllChangedFiles(taskId: string): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/revert`, {})
-	}
-
-	async acceptChangedFile(taskId: string, relPath: string): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/accept`, { relPath })
-	}
-
-	async acceptAllChangedFiles(taskId: string): Promise<void> {
-		await this.post(`/task/${encodeURIComponent(taskId)}/changed-files/accept`, {})
 	}
 
 	/** Subscribe to the SSE event stream; returns an unsubscribe fn (aborts the request). */

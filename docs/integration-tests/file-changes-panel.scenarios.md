@@ -1,14 +1,14 @@
 # File Changes Panel — Integration Test Scenarios
 
-Feature under test: The FileChangesPanel (collapsible panel above the chat
-input), ChangedFilesService (per-task working-directory backend),
-FileContextTracker (snapshot capture), and the `changedFiles/*` IPC channel.
+Feature under test: the bundled `file-changes` plugin — its panel (collapsible,
+above the chat input), its per-task `base`/`final` copies, the `beforeFileEdit` /
+`afterFileEdit` hooks that feed them, and the plugin-UI request channel.
 
 ## Prerequisites
 
 - Shofer extension running with a task active in Code mode.
 - At least one API profile configured and functional.
-- The FileChangesPanel is visible above the ChatTextArea.
+- The file-changes panel is visible above the ChatTextArea.
 - `alwaysAllowReadOnly` and `alwaysAllowWrite` enabled in auto-approval
   settings (to let Shofer freely read/write files).
 

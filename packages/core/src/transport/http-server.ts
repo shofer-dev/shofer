@@ -241,50 +241,20 @@ export function createRequestHandler(
 			return send(res, 202, { taskId, cancelled: true })
 		}
 
-		// ── Reverse data channel (Shofer Nodes L3) — changed-files + plugin requests ──
+		// ── Reverse data channel (Shofer Nodes L3) — plugin requests ────────────────
+		// One generic route carries every plugin-owned per-task feature (the file-changes
+		// panel, checkpoints, …): `plugin` + `method` + opaque `params` in, the plugin's
+		// JSON result out. Adding a feature never means adding a route.
 
-		// GET the task's changed-files panel payload.
-		const changedFilesGet = path.match(new RegExp(`^${base}/task/([^/]+)/changed-files$`))
-		if (method === "GET" && changedFilesGet) {
-			const taskId = decodeURIComponent(changedFilesGet[1]!)
-			return send(res, 200, await api.getTaskChangedFiles(taskId))
-		}
-
-		// POST-with-body for the remaining L3 routes (data + execute).
-		const l3Match = path.match(
-			new RegExp(
-				`^${base}/task/([^/]+)/(plugin-request|changed-files/diff|changed-files/revert|changed-files/accept)$`,
-			),
-		)
-		if (method === "POST" && l3Match) {
-			const taskId = decodeURIComponent(l3Match[1]!)
-			const action = l3Match[2]!
+		const pluginRequestMatch = path.match(new RegExp(`^${base}/task/([^/]+)/plugin-request$`))
+		if (method === "POST" && pluginRequestMatch) {
+			const taskId = decodeURIComponent(pluginRequestMatch[1]!)
 			const body = await readJson(req)
-
-			if (action === "plugin-request") {
-				// Generic plugin RPC — the transport stays feature-agnostic: `plugin` +
-				// `method` + opaque `params` in, the plugin's JSON result out.
-				if (typeof body.plugin !== "string" || typeof body.method !== "string") {
-					return send(res, 400, { error: "plugin and method are required" })
-				}
-				const result = await api.pluginRequest(taskId, body.plugin, body.method, body.params)
-				return send(res, 200, { result })
+			if (typeof body.plugin !== "string" || typeof body.method !== "string") {
+				return send(res, 400, { error: "plugin and method are required" })
 			}
-			if (action === "changed-files/diff") {
-				if (typeof body.relPath !== "string") return send(res, 400, { error: "relPath is required" })
-				return send(res, 200, await api.getChangedFileDiff(taskId, body.relPath))
-			}
-			// revert / accept: a `relPath` scopes to one file; its absence targets all.
-			const relPath = typeof body.relPath === "string" ? body.relPath : undefined
-			if (action === "changed-files/revert") {
-				if (relPath !== undefined) await api.revertChangedFile(taskId, relPath)
-				else await api.revertAllChangedFiles(taskId)
-				return send(res, 202, { taskId, reverted: true })
-			}
-			// changed-files/accept
-			if (relPath !== undefined) await api.acceptChangedFile(taskId, relPath)
-			else await api.acceptAllChangedFiles(taskId)
-			return send(res, 202, { taskId, accepted: true })
+			const result = await api.pluginRequest(taskId, body.plugin, body.method, body.params)
+			return send(res, 200, { result })
 		}
 
 		send(res, 404, { error: `no route for ${method} ${path}` })

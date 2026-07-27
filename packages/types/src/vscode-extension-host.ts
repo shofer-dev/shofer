@@ -213,7 +213,6 @@ export interface ExtensionMessage {
 		| "skillSearchResults"
 		| "fileContent"
 		| "addContextFiles"
-		| "changedFiles/update"
 		// Shofer Nodes (remote agents) — full nodes snapshot push
 		| "shoferNodes"
 		// Plugins (Settings → Plugins tab) — discovered plugins snapshot push
@@ -242,8 +241,6 @@ export interface ExtensionMessage {
 	fileContent?: { path: string; content: string | null; error?: string }
 	/** For addContextFiles: workspace-relative paths to append to chat context. */
 	contextFiles?: Array<{ path: string; isFile: boolean }>
-	/** For changedFiles/update: snapshot of files Shofer edited in the current Task. */
-	changedFiles?: ChangedFilesPayload
 	payload?: any // eslint-disable-line @typescript-eslint/no-explicit-any
 	action?:
 		| "chatButtonClicked"
@@ -650,36 +647,6 @@ export interface UpdateTodoListPayload {
 
 export type EditQueuedMessagePayload = Pick<QueuedMessage, "id" | "text" | "images">
 
-/**
- * Per-file entry describing a file Shofer edited in the current Task.
- *
- * The list is scoped to files Shofer touched at least once. Net state is
- * computed against the per-task working-directory base copy captured at
- * first edit. Files whose net state matches the base are excluded unless a
- * final snapshot exists (preserving the Redo action).
- */
-export interface ChangedFileEntry {
-	/** Workspace-relative POSIX path. */
-	path: string
-	insertions: number
-	deletions: number
-	binary: boolean
-	state: "modified" | "added" | "deleted" | "reverted"
-	/** Always "working" — the sole backend. */
-	source: "working"
-	/** Whether an original-content base copy is available for diff/revert. */
-	hasOriginalContent: boolean
-	/** Whether a final-content copy is available for redo. */
-	hasFinalContent: boolean
-}
-
-export interface ChangedFilesPayload {
-	taskId: string
-	entries: ChangedFileEntry[]
-	/** Always "working" when entries exist, "none" when no files were edited. */
-	backend: "working" | "none"
-}
-
 export interface WebviewMessage {
 	type:
 		| "updateTodoList"
@@ -771,12 +738,6 @@ export interface WebviewMessage {
 		| "deleteCustomMode"
 		| "setopenAiCustomModelInfo"
 		| "openCustomModesSettings"
-		| "changedFiles/get"
-		| "changedFiles/showDiff"
-		| "changedFiles/revert"
-		| "changedFiles/revertAll"
-		| "changedFiles/accept"
-		| "changedFiles/acceptAll"
 		| "deleteMcpServer"
 		| "codebaseIndexEnabled"
 		| "telemetrySetting"

@@ -17,12 +17,6 @@ function makeExecutorApi() {
 		cancelTask: vi.fn(async () => {}),
 		respondToAsk: vi.fn(async () => {}),
 		applyConfig: vi.fn(async () => {}),
-		getTaskChangedFiles: vi.fn(async () => ({ taskId: "t1", entries: [], backend: "none" as const })),
-		getChangedFileDiff: vi.fn(async () => ({ original: "base", final: "final" })),
-		revertChangedFile: vi.fn(async () => {}),
-		revertAllChangedFiles: vi.fn(async () => {}),
-		acceptChangedFile: vi.fn(async () => {}),
-		acceptAllChangedFiles: vi.fn(async () => {}),
 		pluginRequest: vi.fn(async () => ({ ok: true })),
 		subscribe: (listener) => {
 			emit = listener
@@ -61,26 +55,12 @@ describe("session transport (controller ↔ executor)", () => {
 		})
 	})
 
-	it("round-trips the L3 reverse-data-channel methods across the link", async () => {
+	it("round-trips the generic plugin RPC across the link", async () => {
 		const { api } = makeExecutorApi()
 		const { controller } = wire(createInMemoryHost(), api)
 
-		// Data method: the payload comes back as the command result.
-		const changed = await controller.api.getChangedFileDiff("t1", "a.ts")
-		expect(api.getChangedFileDiff).toHaveBeenCalledWith("t1", "a.ts")
-		expect(changed).toEqual({ original: "base", final: "final" })
-
-		// Execute methods resolve void and reach the executor.
-		await controller.api.revertChangedFile("t1", "a.ts")
-		expect(api.revertChangedFile).toHaveBeenCalledWith("t1", "a.ts")
-		await controller.api.revertAllChangedFiles("t1")
-		expect(api.revertAllChangedFiles).toHaveBeenCalledWith("t1")
-		await controller.api.acceptChangedFile("t1", "a.ts")
-		expect(api.acceptChangedFile).toHaveBeenCalledWith("t1", "a.ts")
-		await controller.api.acceptAllChangedFiles("t1")
-		expect(api.acceptAllChangedFiles).toHaveBeenCalledWith("t1")
-
-		// Generic plugin RPC round-trips the plugin's result over the session frames.
+		// The L3 reverse data channel is exactly one method: whatever plugin owns a
+		// per-task feature answers on the host that owns the task.
 		expect(await controller.api.pluginRequest("t1", "checkpoints", "diff", { hash: "abc" })).toEqual({ ok: true })
 		expect(api.pluginRequest).toHaveBeenCalledWith("t1", "checkpoints", "diff", { hash: "abc" })
 	})

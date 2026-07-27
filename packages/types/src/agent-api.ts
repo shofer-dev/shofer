@@ -13,7 +13,6 @@
 
 import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { ProviderSettings } from "./provider-settings.js"
-import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 
 /** A streamed agent event. `type` is the event name; other fields are event-specific. */
 export interface ServerEvent {
@@ -87,24 +86,11 @@ export interface AgentApi {
 	applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void>
 
 	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
-	// The changed-files panel — and any plugin-owned per-task feature, via
-	// `pluginRequest` — for a REMOTE (shadow) task: the controller fetches data /
-	// executes ops on the owning executor over the control plane, exactly like a local
-	// task drives its own in-process service. Data methods return a payload; execute
-	// methods run an op and resolve.
-
-	/** The task's changed-files panel payload (files the executor's task edited). */
-	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload>
-	/** The original (base) + final content for one changed file, for the diff editor. */
-	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }>
-	/** Revert one changed file to its base state on the executor. */
-	revertChangedFile(taskId: string, relPath: string): Promise<void>
-	/** Revert every changed file for the task on the executor. */
-	revertAllChangedFiles(taskId: string): Promise<void>
-	/** Accept one changed file (promote its current state to the new baseline). */
-	acceptChangedFile(taskId: string, relPath: string): Promise<void>
-	/** Accept every changed file for the task on the executor. */
-	acceptAllChangedFiles(taskId: string): Promise<void>
+	// A plugin-owned per-task feature for a REMOTE (shadow) task: the controller reads
+	// and mutates it on the owning executor over the control plane, exactly like a local
+	// task drives its own in-process plugin. One generic method carries all of them —
+	// the file-changes panel, checkpoints, anything a plugin ships — so adding a feature
+	// never means adding a wire method.
 
 	/**
 	 * Call a plugin running on the task's host and return its result — the generic

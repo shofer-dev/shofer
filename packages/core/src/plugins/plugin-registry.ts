@@ -5,6 +5,8 @@ import type {
 	LifecycleHooks,
 	PluginContext,
 	PluginEvent,
+	PluginFileEdit,
+	PluginFileEditResult,
 	ShoferPlugin,
 	TaskDeletedInfo,
 	TaskLifecycleContext,
@@ -423,6 +425,36 @@ export class PluginRegistry {
 	}
 
 	/**
+	 * Hand permitted plugins the content of a file **before** a tool mutates it
+	 * (design §6.9). Awaited: a "before" snapshot taken after the write is worthless,
+	 * so the tool waits — under each plugin's hook budget, and errors are isolated, so
+	 * a slow or broken plugin cannot block or fail the edit.
+	 */
+	async applyBeforeFileEdit(edit: PluginFileEdit, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"beforeFileEdit",
+			async (hook, _plugin, ctx) => {
+				await hook(edit, ctx)
+			},
+			context,
+		)
+	}
+
+	/**
+	 * Tell permitted plugins a tool finished mutating a file (design §6.9). The new
+	 * content is on disk; observer-only, so callers do not await it.
+	 */
+	async applyAfterFileEdit(edit: PluginFileEditResult, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"afterFileEdit",
+			async (hook, _plugin, ctx) => {
+				await hook(edit, ctx)
+			},
+			context,
+		)
+	}
+
+	/**
 	 * Tell permitted plugins a task was deleted from history (design §6.9), so a plugin
 	 * holding per-task state *outside* the task directory can drop it. Observer-only.
 	 */
@@ -460,6 +492,30 @@ export class PluginRegistry {
 	 * (which can decide) instead of being swallowed into a silent `undefined`. Unknown
 	 * plugin, or one declaring no `handleRequest`, throws for the same reason.
 	 */
+	/**
+	 * Ask **every** plugin that implements `handleRequest` the same question, and
+	 * collect the answers that came back.
+	 *
+	 * The broadcast counterpart of {@link request}, for the cases where core needs a
+	 * fact that a *feature* owns without knowing which plugin (if any) provides it —
+	 * e.g. `"task-stats"`, answered by whatever plugin is tracking this task's file
+	 * changes. A plugin that does not recognise the method throws, which is treated as
+	 * "no answer" rather than an error: not answering is the normal case.
+	 */
+	async requestAll(method: string, params: unknown, context: PluginContext = {}): Promise<unknown[]> {
+		const answers: unknown[] = []
+		for (const plugin of this.plugins) {
+			if (!plugin.handleRequest) continue
+			try {
+				const answer = await plugin.handleRequest(method, params, this.contextFor(plugin.name, context))
+				if (answer !== undefined) answers.push(answer)
+			} catch {
+				/* the plugin does not answer this question */
+			}
+		}
+		return answers
+	}
+
 	async request(pluginName: string, method: string, params: unknown, context: PluginContext = {}): Promise<unknown> {
 		const plugin = this.plugins.find((p) => p.name === pluginName)
 		if (!plugin) {

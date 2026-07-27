@@ -988,6 +988,12 @@ export class PluginManager {
 						onUserMessage: rawLifecycle.onUserMessage
 							? (info, ctx) => rawLifecycle.onUserMessage!(info, merge(ctx))
 							: undefined,
+						beforeFileEdit: rawLifecycle.beforeFileEdit
+							? (edit, ctx) => rawLifecycle.beforeFileEdit!(edit, merge(ctx))
+							: undefined,
+						afterFileEdit: rawLifecycle.afterFileEdit
+							? (edit, ctx) => rawLifecycle.afterFileEdit!(edit, merge(ctx))
+							: undefined,
 					}
 				: undefined,
 			// Forward the request/response entry (design §5.12) with this plugin's context.

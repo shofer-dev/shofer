@@ -1,7 +1,6 @@
 import type { EventEmitter } from "events"
 import type { Socket } from "net"
 
-import type { ChangedFilesPayload } from "./vscode-extension-host.js"
 import type { ShoferEvents } from "./events.js"
 import type { ShoferSettings, SyncedSecrets, SyncedSettings } from "./global-settings.js"
 import type { HistoryItem } from "./history.js"
@@ -86,22 +85,9 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 	): Promise<void>
 
 	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────
-	// Executor side of the remote changed-files panel (and plugin requests):
-	// each resolves the managed task by id and drives the same in-process service a
-	// local task uses, so a controller can render/operate a remote task's diffs.
-
-	/** Returns the managed task's changed-files panel payload. */
-	getTaskChangedFiles(taskId: string): Promise<ChangedFilesPayload>
-	/** Returns the base + final content for one changed file (for the diff editor). */
-	getChangedFileDiff(taskId: string, relPath: string): Promise<{ original: string | null; final: string | null }>
-	/** Reverts one changed file to its base state. */
-	revertChangedFile(taskId: string, relPath: string): Promise<void>
-	/** Reverts every changed file for the task. */
-	revertAllChangedFiles(taskId: string): Promise<void>
-	/** Accepts one changed file (promotes its current state to the new baseline). */
-	acceptChangedFile(taskId: string, relPath: string): Promise<void>
-	/** Accepts every changed file for the task. */
-	acceptAllChangedFiles(taskId: string): Promise<void>
+	// Executor side of a plugin-owned per-task feature: resolve the managed task by id
+	// and drive the same in-process plugin a local task uses, so a controller can
+	// render and operate a REMOTE task's diffs, snapshots or change list.
 
 	/**
 	 * Call a plugin running on the task's host and return its result — the generic
