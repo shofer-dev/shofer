@@ -32,6 +32,18 @@ class MemoryFs implements PluginFsHost {
 		}
 		return [...names]
 	}
+	/** Files directly in `dir` (locale bundles are read through this). */
+	async listFiles(dir: string): Promise<string[]> {
+		const prefix = `${dir}/`
+		const names = new Set<string>()
+		for (const f of this.files.keys()) {
+			if (f.startsWith(prefix)) {
+				const rest = f.slice(prefix.length)
+				if (!rest.includes("/")) names.add(rest)
+			}
+		}
+		return [...names]
+	}
 	async readFile(p: string): Promise<string> {
 		const c = this.files.get(p)
 		if (c === undefined) throw new Error(`ENOENT: ${p}`)

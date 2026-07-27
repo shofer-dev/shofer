@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import type { PluginUiRegion } from "@shofer/types"
+import type { PluginLocaleBundle, PluginUiRegion } from "@shofer/types"
 
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -76,7 +76,8 @@ export class PluginPanelManager {
 		// Resolve the plugin's UI bundle entry for `region` to a served `vscode-webview://`
 		// URI on THIS panel's webview (the source must be resolved against the document
 		// that will import it). Falls back to no panel content if the plugin contributes none.
-		const resolveSource = (absolutePath: string) => String(panel.webview.asWebviewUri(vscode.Uri.file(absolutePath)))
+		const resolveSource = (absolutePath: string) =>
+			String(panel.webview.asWebviewUri(vscode.Uri.file(absolutePath)))
 		const contributions = manager.getContributedUiContributions(resolveSource)
 		const contribution = contributions.find((c) => c.pluginName === pluginName && c.region === region)
 		const bundleUri = contribution?.source
@@ -87,14 +88,28 @@ export class PluginPanelManager {
 			)
 		}
 
-		const task = { taskId: this.provider.getCurrentTask()?.taskId, mode: (await this.provider.getState()).mode }
+		const state = await this.provider.getState()
+		const task = { taskId: this.provider.getCurrentTask()?.taskId, mode: state.mode }
+		// This panel is its own document with its own i18next instance, so it needs the
+		// plugin's strings and the display language injected — the sidebar's registration
+		// does not reach it.
+		const locales = (await manager.getContributedLocales()).filter((b) => b.pluginName === pluginName)
 
-		panel.webview.html = this.buildHtml(panel.webview, extensionUri, { bundleUri, pluginName, region, task })
+		panel.webview.html = this.buildHtml(panel.webview, extensionUri, {
+			bundleUri,
+			pluginName,
+			region,
+			task,
+			locales,
+			language: state.language,
+		})
 
 		// UI → plugin: route the panel's scoped channel messages through the SAME path the
 		// main sidebar webview uses (namespaced by pluginName inside the registry).
 		panel.webview.onDidReceiveMessage((message: unknown) => {
-			const data = message as { type?: string; pluginUiMessage?: { pluginName: string; message: unknown } } | undefined
+			const data = message as
+				| { type?: string; pluginUiMessage?: { pluginName: string; message: unknown } }
+				| undefined
 			if (data?.type === "pluginUiMessage" && data.pluginUiMessage) {
 				void this.provider.handlePluginUiMessage(data.pluginUiMessage)
 			}
@@ -141,7 +156,14 @@ export class PluginPanelManager {
 	private buildHtml(
 		webview: vscode.Webview,
 		extensionUri: vscode.Uri,
-		config: { bundleUri?: string; pluginName: string; region: string; task: unknown },
+		config: {
+			bundleUri?: string
+			pluginName: string
+			region: string
+			task: unknown
+			locales: PluginLocaleBundle[]
+			language?: string
+		},
 	): string {
 		const nonce = getNonce()
 		const scriptUri = getUri(webview, extensionUri, ["webview-ui", "build", "assets", "pluginPanel.js"])

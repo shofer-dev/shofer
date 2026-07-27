@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { createInMemoryHost, setHost, type Notifier } from "@shofer/types"
 
-import {
-	PluginManager,
-	type PluginDir,
-	type PluginFsHost,
-	type PluginStateStore,
-} from "../plugin-manager.js"
+import { PluginManager, type PluginDir, type PluginFsHost, type PluginStateStore } from "../plugin-manager.js"
 
 /** Notifier that records shown messages, for asserting warnings are surfaced. */
 interface RecordingNotifier extends Notifier {
@@ -29,6 +24,18 @@ class MemoryFs implements PluginFsHost {
 		for (const d of this.dirs) {
 			if (d.startsWith(prefix)) {
 				const rest = d.slice(prefix.length)
+				if (!rest.includes("/")) names.add(rest)
+			}
+		}
+		return [...names]
+	}
+	/** Files directly in `dir` (locale bundles are read through this). */
+	async listFiles(dir: string): Promise<string[]> {
+		const prefix = `${dir}/`
+		const names = new Set<string>()
+		for (const f of this.files.keys()) {
+			if (f.startsWith(prefix)) {
+				const rest = f.slice(prefix.length)
 				if (!rest.includes("/")) names.add(rest)
 			}
 		}
@@ -343,7 +350,12 @@ describe("PluginManager — fail-closed dependencies (design §14.3, Q3)", () =>
 		await pm.discover()
 		expect(pm.getPlugin("app")!.effectiveEnabled).toBe(true)
 		expect(pm.getPlugin("base")!.effectiveEnabled).toBe(true)
-		expect(pm.enabledPlugins().map((p) => p.name).sort()).toEqual(["app", "base"])
+		expect(
+			pm
+				.enabledPlugins()
+				.map((p) => p.name)
+				.sort(),
+		).toEqual(["app", "base"])
 		expect(shownWarnings()).toEqual([])
 	})
 
@@ -475,10 +487,7 @@ describe("PluginManager — private contributions (owner directive #4)", () => {
 				{ name: "public-skill", description: "d" },
 				{ name: "secret-skill", description: "d", private: true },
 			],
-			commands: [
-				{ name: "public-cmd" },
-				{ name: "secret-cmd", private: true },
-			],
+			commands: [{ name: "public-cmd" }, { name: "secret-cmd", private: true }],
 		},
 	}
 

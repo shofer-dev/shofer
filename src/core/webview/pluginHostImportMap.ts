@@ -8,16 +8,18 @@ import { getUri } from "./getUri"
  * webview ({@link import("./ShoferProvider").ShoferProvider.getHtmlContent}) and the
  * standalone plugin-panel webview ({@link import("./PluginPanelManager").PluginPanelManager}).
  *
- * A plugin bundle externalizes `react`/`react-dom`/`react/jsx-runtime`, so those bare
- * specifiers stay in its output; this map resolves them to the host-shim modules under
- * `webview-ui/build/plugin-host/*` (served as `vscode-webview://` resources), which
- * re-export the host document's already-running React instance. Importing same-origin
- * `cspSource` modules is permitted under the CSP's `strict-dynamic`.
+ * A plugin bundle externalizes `react`/`react-dom`/`react/jsx-runtime` and
+ * `@shofer/plugin-ui`, so those bare specifiers stay in its output; this map resolves
+ * them to the host-shim modules under `webview-ui/build/plugin-host/*` (served as
+ * `vscode-webview://` resources), which re-export the host document's already-running
+ * React instance and component kit. Importing same-origin `cspSource` modules is
+ * permitted under the CSP's `strict-dynamic`.
  *
  * @returns the JSON string to embed inside `<script type="importmap">…</script>`.
  */
 export function buildPluginHostImportMap(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-	const pluginHostUri = (file: string) => String(getUri(webview, extensionUri, ["webview-ui", "build", "plugin-host", file]))
+	const pluginHostUri = (file: string) =>
+		String(getUri(webview, extensionUri, ["webview-ui", "build", "plugin-host", file]))
 	return JSON.stringify({
 		imports: {
 			react: pluginHostUri("react.js"),
@@ -25,6 +27,7 @@ export function buildPluginHostImportMap(webview: vscode.Webview, extensionUri: 
 			"react-dom/client": pluginHostUri("react-dom-client.js"),
 			"react/jsx-runtime": pluginHostUri("jsx-runtime.js"),
 			"react/jsx-dev-runtime": pluginHostUri("jsx-dev-runtime.js"),
+			"@shofer/plugin-ui": pluginHostUri("plugin-ui.js"),
 		},
 	})
 }

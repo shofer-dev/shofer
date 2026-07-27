@@ -1,56 +1,18 @@
 // ui/row.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-var NOTICE_TEXT = {
-  "no-first": "No initial checkpoint found for this task.",
-  "no-previous": "No earlier checkpoint to compare against.",
-  "no-changes": "No changes between these checkpoints."
-};
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  StandardTooltip,
+  cn,
+  usePluginTranslation
+} from "@shofer/plugin-ui";
+import { jsx, jsxs } from "react/jsx-runtime";
 var ACCENT = "rgba(0, 188, 255, .65)";
-function iconButton(active) {
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 20,
-    height: 20,
-    padding: 0,
-    border: "none",
-    borderRadius: 3,
-    cursor: "pointer",
-    background: active ? "var(--vscode-toolbar-hoverBackground)" : "transparent",
-    color: "var(--vscode-foreground)"
-  };
-}
-var POPOVER = {
-  position: "absolute",
-  right: 0,
-  top: 24,
-  zIndex: 10,
-  minWidth: 240,
-  padding: 8,
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  borderRadius: 4,
-  background: "var(--vscode-editorWidget-background)",
-  border: "1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border))",
-  boxShadow: "0 2px 8px rgba(0,0,0,.3)",
-  fontSize: "0.9em"
-};
-function button(variant) {
-  return {
-    padding: "4px 8px",
-    borderRadius: 2,
-    border: "none",
-    cursor: "pointer",
-    textAlign: "center",
-    background: variant === "primary" ? "var(--vscode-button-background)" : "var(--vscode-button-secondaryBackground)",
-    color: variant === "primary" ? "var(--vscode-button-foreground)" : "var(--vscode-button-secondaryForeground)"
-  };
-}
-var MUTED = { color: "var(--vscode-descriptionForeground)" };
 function CheckpointRow({ api }) {
+  const t = usePluginTranslation();
   const marker = api.context.message;
   const [hovering, setHovering] = useState(false);
   const [restoreOpen, setRestoreOpen] = useState(false);
@@ -76,7 +38,7 @@ function CheckpointRow({ api }) {
       try {
         const result = await api.request("diff", { commitHash: marker.text, mode });
         if (result?.notice) {
-          flash(NOTICE_TEXT[result.notice] ?? "Nothing to show.");
+          flash(t(`notice.${result.notice}`));
           return;
         }
         await api.request("local:show-diff", { title: result.title, changes: result.changes });
@@ -84,7 +46,7 @@ function CheckpointRow({ api }) {
         flash(error instanceof Error ? error.message : String(error));
       }
     },
-    [api, marker?.text, flash]
+    [api, marker?.text, flash, t]
   );
   const restore = useCallback(
     async (mode) => {
@@ -104,102 +66,94 @@ function CheckpointRow({ api }) {
   return /* @__PURE__ */ jsxs(
     "div",
     {
-      style: { display: "flex", flexDirection: "column", gap: 2, paddingTop: 8, paddingBottom: 12 },
+      className: "flex flex-col gap-0.5 pt-2 pb-3",
       onMouseEnter: () => setHovering(true),
       onMouseLeave: () => setHovering(false),
       children: [
-        /* @__PURE__ */ jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, position: "relative" }, children: [
-          /* @__PURE__ */ jsxs(
-            "div",
-            {
-              style: {
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                whiteSpace: "nowrap",
-                color: "var(--vscode-charts-blue, #3794ff)"
-              },
-              children: [
-                /* @__PURE__ */ jsx("span", { className: "codicon codicon-git-commit" }),
-                /* @__PURE__ */ jsx("span", { style: { fontWeight: 600 }, children: "Checkpoint" })
-              ]
-            }
-          ),
+        /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-2", children: [
+          /* @__PURE__ */ jsxs("div", { className: "flex items-center gap-1.5 whitespace-nowrap text-vscode-charts-blue", children: [
+            /* @__PURE__ */ jsx("span", { className: "codicon codicon-git-commit" }),
+            /* @__PURE__ */ jsx("span", { className: "font-semibold", children: t("row.label") })
+          ] }),
           /* @__PURE__ */ jsx(
             "span",
             {
+              className: "flex-1 h-0.5 mt-0.5",
               style: {
-                flex: 1,
-                height: 2,
-                marginTop: 2,
                 backgroundImage: `linear-gradient(90deg, ${ACCENT}, ${ACCENT} 80%, rgba(0, 188, 255, 0) 99%)`
               }
             }
           ),
-          /* @__PURE__ */ jsxs("div", { style: { display: "flex", gap: 2, visibility: menuVisible ? "visible" : "hidden" }, children: [
-            /* @__PURE__ */ jsx(
-              "button",
+          /* @__PURE__ */ jsxs("div", { className: cn("flex gap-0.5", menuVisible ? "visible" : "invisible"), children: [
+            /* @__PURE__ */ jsx(StandardTooltip, { content: t("row.diffTooltip"), children: /* @__PURE__ */ jsx(
+              Button,
               {
-                style: iconButton(false),
-                title: "View changes in this checkpoint",
-                "aria-label": "View diff",
+                variant: "ghost",
+                size: "icon",
+                "aria-label": t("row.diff"),
                 onClick: () => void showDiff("checkpoint"),
                 children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-diff-single" })
               }
-            ),
-            /* @__PURE__ */ jsx(
-              "button",
+            ) }),
+            /* @__PURE__ */ jsxs(
+              Popover,
               {
-                style: iconButton(restoreOpen),
-                title: "Restore",
-                "aria-label": "Restore",
-                onClick: () => {
-                  setRestoreOpen((open) => !open);
-                  setConfirming(false);
-                  setMoreOpen(false);
+                open: restoreOpen,
+                onOpenChange: (open) => {
+                  setRestoreOpen(open);
+                  if (!open) setConfirming(false);
                 },
-                children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-history" })
+                children: [
+                  /* @__PURE__ */ jsx(StandardTooltip, { content: t("row.restore"), children: /* @__PURE__ */ jsx(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "icon", "aria-label": t("row.restore"), children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-history" }) }) }) }),
+                  /* @__PURE__ */ jsxs(PopoverContent, { align: "end", className: "flex flex-col gap-3 w-72", children: [
+                    /* @__PURE__ */ jsxs("div", { className: "flex flex-col gap-1", children: [
+                      /* @__PURE__ */ jsx(Button, { variant: "secondary", onClick: () => void restore("preview"), children: t("restore.filesOnly") }),
+                      /* @__PURE__ */ jsx("div", { className: "text-vscode-descriptionForeground text-sm", children: t("restore.filesOnlyHint") })
+                    ] }),
+                    /* @__PURE__ */ jsxs("div", { className: "flex flex-col gap-1", children: [
+                      !confirming ? /* @__PURE__ */ jsx(Button, { variant: "secondary", onClick: () => setConfirming(true), children: t("restore.filesAndTask") }) : /* @__PURE__ */ jsxs("div", { className: "flex flex-col gap-1", children: [
+                        /* @__PURE__ */ jsx(Button, { variant: "primary", onClick: () => void restore("restore"), children: t("restore.confirm") }),
+                        /* @__PURE__ */ jsx(Button, { variant: "secondary", onClick: () => setConfirming(false), children: t("restore.cancel") })
+                      ] }),
+                      /* @__PURE__ */ jsx(
+                        "div",
+                        {
+                          className: cn(
+                            "text-sm",
+                            confirming ? "text-vscode-errorForeground font-bold" : "text-vscode-descriptionForeground"
+                          ),
+                          children: confirming ? t("restore.irreversible") : t("restore.filesAndTaskHint")
+                        }
+                      )
+                    ] })
+                  ] })
+                ]
               }
             ),
-            /* @__PURE__ */ jsx(
-              "button",
-              {
-                style: iconButton(moreOpen),
-                title: "More",
-                "aria-label": "More checkpoint actions",
-                onClick: () => {
-                  setMoreOpen((open) => !open);
-                  setRestoreOpen(false);
-                },
-                children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-kebab-vertical" })
-              }
-            )
-          ] }),
-          restoreOpen && /* @__PURE__ */ jsxs("div", { style: POPOVER, children: [
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
-              /* @__PURE__ */ jsx("button", { style: button("secondary"), onClick: () => void restore("preview"), children: "Restore Files" }),
-              /* @__PURE__ */ jsx("div", { style: MUTED, children: "Restores your project's files back to a snapshot taken at this point." })
-            ] }),
-            /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
-              !confirming ? /* @__PURE__ */ jsx("button", { style: button("secondary"), onClick: () => setConfirming(true), children: "Restore Files & Task" }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-                /* @__PURE__ */ jsx("button", { style: button("primary"), onClick: () => void restore("restore"), children: "Confirm" }),
-                /* @__PURE__ */ jsx("button", { style: button("secondary"), onClick: () => setConfirming(false), children: "Cancel" })
-              ] }),
-              confirming ? /* @__PURE__ */ jsx("div", { style: { color: "var(--vscode-errorForeground)", fontWeight: 700 }, children: "This action cannot be undone." }) : /* @__PURE__ */ jsx("div", { style: MUTED, children: "Restores your project's files and deletes all messages after this point." })
-            ] })
-          ] }),
-          moreOpen && /* @__PURE__ */ jsxs("div", { style: { ...POPOVER, minWidth: 220 }, children: [
-            /* @__PURE__ */ jsxs("button", { style: button("secondary"), onClick: () => void showDiff("from-init"), children: [
-              /* @__PURE__ */ jsx("span", { className: "codicon codicon-versions", style: { marginRight: 6 } }),
-              "View changes since first checkpoint"
-            ] }),
-            /* @__PURE__ */ jsxs("button", { style: button("secondary"), onClick: () => void showDiff("to-current"), children: [
-              /* @__PURE__ */ jsx("span", { className: "codicon codicon-diff", style: { marginRight: 6 } }),
-              "View changes compared to current"
+            /* @__PURE__ */ jsxs(Popover, { open: moreOpen, onOpenChange: setMoreOpen, children: [
+              /* @__PURE__ */ jsx(StandardTooltip, { content: t("row.more"), children: /* @__PURE__ */ jsx(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "icon", "aria-label": t("row.more"), children: /* @__PURE__ */ jsx("span", { className: "codicon codicon-kebab-vertical" }) }) }) }),
+              /* @__PURE__ */ jsxs(PopoverContent, { align: "end", className: "flex flex-col gap-1 w-72", children: [
+                /* @__PURE__ */ jsxs(Button, { variant: "ghost", className: "justify-start", onClick: () => void showDiff("from-init"), children: [
+                  /* @__PURE__ */ jsx("span", { className: "codicon codicon-versions" }),
+                  t("more.sinceFirst")
+                ] }),
+                /* @__PURE__ */ jsxs(
+                  Button,
+                  {
+                    variant: "ghost",
+                    className: "justify-start",
+                    onClick: () => void showDiff("to-current"),
+                    children: [
+                      /* @__PURE__ */ jsx("span", { className: "codicon codicon-diff" }),
+                      t("more.againstCurrent")
+                    ]
+                  }
+                )
+              ] })
             ] })
           ] })
         ] }),
-        status && /* @__PURE__ */ jsx("div", { style: { ...MUTED, fontSize: "0.9em" }, children: status })
+        status && /* @__PURE__ */ jsx("div", { className: "text-sm text-vscode-descriptionForeground", children: status })
       ]
     }
   );

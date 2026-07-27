@@ -6,8 +6,9 @@
  * halves of this plugin:
  *
  *  1. `ui/row.tsx` → `ui/row.js` — the `chat-message-addon` bundle, ESM with `react`
- *     externalized (the host injects an import map so it resolves to the webview's
- *     single shared React; a second copy silently breaks hooks).
+ *     and `@shofer/plugin-ui` externalized (the host injects an import map so both
+ *     resolve to the webview's running instances; a second React copy silently breaks
+ *     hooks, and a re-implemented component kit drifts from the product).
  *
  *  2. `src/main.ts` → `main.mjs` — the plugin entry, with `simple-git` **bundled in**.
  *     (`.mjs`, not `.js`: the plugin dir has no `package.json`, so a `.js` bundle makes
@@ -43,7 +44,16 @@ await esbuild.build({
 	platform: "browser",
 	target: "es2020",
 	jsx: "automatic",
-	external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+	external: [
+		"react",
+		"react-dom",
+		"react-dom/client",
+		"react/jsx-runtime",
+		"react/jsx-dev-runtime",
+		// The host's component kit + translation hook — resolved by the webview's import
+		// map to the running instances, exactly like React.
+		"@shofer/plugin-ui",
+	],
 	legalComments: "none",
 })
 console.log("[checkpoints] built ui/row.js")

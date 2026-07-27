@@ -1,6 +1,8 @@
 import i18next from "i18next"
 import { initReactI18next } from "react-i18next"
 
+import type { PluginLocaleBundle } from "@shofer/types"
+
 // Build translations object
 const translations: Record<string, Record<string, any>> = {}
 
@@ -49,6 +51,27 @@ export function loadTranslations() {
 			console.warn(`Could not load ${lang} translations:`, error)
 		}
 	})
+}
+
+/**
+ * Register a plugin's shipped translations as the i18next namespace `plugin:<name>`,
+ * which is what `@shofer/plugin-ui`'s `usePluginTranslation` reads.
+ *
+ * A plugin's strings are its own — they are not in the host's catalogue — but a plugin
+ * UI should still follow the user's language and get real interpolation and plural
+ * rules, so its `locales/<lang>.json` files are folded into the same i18next instance
+ * rather than into a parallel mechanism.
+ */
+export function loadPluginTranslations(bundles: PluginLocaleBundle[]): void {
+	for (const { pluginName, resources } of bundles) {
+		for (const [lang, tree] of Object.entries(resources)) {
+			try {
+				i18next.addResourceBundle(lang, `plugin:${pluginName}`, tree, true, true)
+			} catch (error) {
+				console.warn(`Could not load translations for plugin "${pluginName}" (${lang}):`, error)
+			}
+		}
+	}
 }
 
 export default i18next

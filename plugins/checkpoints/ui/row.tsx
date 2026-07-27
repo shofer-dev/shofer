@@ -1,20 +1,30 @@
 /**
  * Checkpoints — the timeline row (`chat-message-addon` bundle).
  *
- * The plugin-native port of the built-in `CheckpointSaved` + `CheckpointMenu`: a
- * labelled divider that reveals a Diff button, a Restore popover (Restore Files /
- * Restore Files & Task, the latter behind a confirm) and a "more" popover (diff since
- * first checkpoint / diff against current) on hover.
+ * A labelled divider that reveals, on hover, a Diff button, a Restore popover
+ * (Restore Files / Restore Files & Task, the latter behind a confirm) and a "more"
+ * popover (diff since the first checkpoint / diff against the current workspace).
  *
- * A plugin UI bundle may import only the host-shared React — not the host's UI kit,
- * icons or i18n — so the popovers and layout are reimplemented inline with VS Code
- * theme variables and codicons, which the webview already loads.
+ * Built from the host's own components and translations (`@shofer/plugin-ui`), so the
+ * row is indistinguishable from a built-in one and follows the user's language. The
+ * bundle externalizes React and the kit; the webview's import map resolves both to the
+ * host's running instances.
  *
- * BUILD: compiled to `ui/row.js` (esbuild, ESM, react externalized — see `build-ui.mjs`,
- * run automatically by the extension bundle). NOT typechecked by the extension build.
+ * BUILD: compiled to `ui/row.js` (esbuild, ESM — see `build-ui.mjs`, run automatically
+ * by the extension bundle).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+
+import {
+	Button,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	StandardTooltip,
+	cn,
+	usePluginTranslation,
+} from "@shofer/plugin-ui"
 
 /** Scoped UI API (mirrors `@shofer/types` `PluginUIApi`; local so the bundle stands alone). */
 interface PluginUIApi {
@@ -36,63 +46,10 @@ interface DiffResult {
 	notice?: "no-first" | "no-previous" | "no-changes"
 }
 
-const NOTICE_TEXT: Record<string, string> = {
-	"no-first": "No initial checkpoint found for this task.",
-	"no-previous": "No earlier checkpoint to compare against.",
-	"no-changes": "No changes between these checkpoints.",
-}
-
 const ACCENT = "rgba(0, 188, 255, .65)"
 
-function iconButton(active: boolean): React.CSSProperties {
-	return {
-		display: "inline-flex",
-		alignItems: "center",
-		justifyContent: "center",
-		width: 20,
-		height: 20,
-		padding: 0,
-		border: "none",
-		borderRadius: 3,
-		cursor: "pointer",
-		background: active ? "var(--vscode-toolbar-hoverBackground)" : "transparent",
-		color: "var(--vscode-foreground)",
-	}
-}
-
-const POPOVER: React.CSSProperties = {
-	position: "absolute",
-	right: 0,
-	top: 24,
-	zIndex: 10,
-	minWidth: 240,
-	padding: 8,
-	display: "flex",
-	flexDirection: "column",
-	gap: 8,
-	borderRadius: 4,
-	background: "var(--vscode-editorWidget-background)",
-	border: "1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border))",
-	boxShadow: "0 2px 8px rgba(0,0,0,.3)",
-	fontSize: "0.9em",
-}
-
-function button(variant: "primary" | "secondary"): React.CSSProperties {
-	return {
-		padding: "4px 8px",
-		borderRadius: 2,
-		border: "none",
-		cursor: "pointer",
-		textAlign: "center",
-		background:
-			variant === "primary" ? "var(--vscode-button-background)" : "var(--vscode-button-secondaryBackground)",
-		color: variant === "primary" ? "var(--vscode-button-foreground)" : "var(--vscode-button-secondaryForeground)",
-	}
-}
-
-const MUTED: React.CSSProperties = { color: "var(--vscode-descriptionForeground)" }
-
 export default function CheckpointRow({ api }: { api: PluginUIApi }) {
+	const t = usePluginTranslation()
 	const marker = api.context.message
 	const [hovering, setHovering] = useState(false)
 	const [restoreOpen, setRestoreOpen] = useState(false)
@@ -108,7 +65,7 @@ export default function CheckpointRow({ api }: { api: PluginUIApi }) {
 		[],
 	)
 
-	/** Surface a transient inline message — the bundle has no access to host toasts. */
+	/** Surface a transient inline message — a timeline row has no toast of its own. */
 	const flash = useCallback((text: string) => {
 		setStatus(text)
 		if (statusTimer.current) window.clearTimeout(statusTimer.current)
@@ -124,7 +81,7 @@ export default function CheckpointRow({ api }: { api: PluginUIApi }) {
 				// that owns a remote task) …
 				const result = (await api.request("diff", { commitHash: marker.text, mode })) as DiffResult
 				if (result?.notice) {
-					flash(NOTICE_TEXT[result.notice] ?? "Nothing to show.")
+					flash(t(`notice.${result.notice}`))
 					return
 				}
 				// … then rendered HERE, because the viewer is this host's, not the executor's.
@@ -133,7 +90,7 @@ export default function CheckpointRow({ api }: { api: PluginUIApi }) {
 				flash(error instanceof Error ? error.message : String(error))
 			}
 		},
-		[api, marker?.text, flash],
+		[api, marker?.text, flash, t],
 	)
 
 	const restore = useCallback(
@@ -156,114 +113,111 @@ export default function CheckpointRow({ api }: { api: PluginUIApi }) {
 
 	return (
 		<div
-			style={{ display: "flex", flexDirection: "column", gap: 2, paddingTop: 8, paddingBottom: 12 }}
+			className="flex flex-col gap-0.5 pt-2 pb-3"
 			onMouseEnter={() => setHovering(true)}
 			onMouseLeave={() => setHovering(false)}>
-			<div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						gap: 6,
-						whiteSpace: "nowrap",
-						color: "var(--vscode-charts-blue, #3794ff)",
-					}}>
+			<div className="flex items-center gap-2">
+				<div className="flex items-center gap-1.5 whitespace-nowrap text-vscode-charts-blue">
 					<span className="codicon codicon-git-commit" />
-					<span style={{ fontWeight: 600 }}>Checkpoint</span>
+					<span className="font-semibold">{t("row.label")}</span>
 				</div>
 				<span
+					className="flex-1 h-0.5 mt-0.5"
 					style={{
-						flex: 1,
-						height: 2,
-						marginTop: 2,
 						backgroundImage: `linear-gradient(90deg, ${ACCENT}, ${ACCENT} 80%, rgba(0, 188, 255, 0) 99%)`,
 					}}
 				/>
 
-				<div style={{ display: "flex", gap: 2, visibility: menuVisible ? "visible" : "hidden" }}>
-					<button
-						style={iconButton(false)}
-						title="View changes in this checkpoint"
-						aria-label="View diff"
-						onClick={() => void showDiff("checkpoint")}>
-						<span className="codicon codicon-diff-single" />
-					</button>
-					<button
-						style={iconButton(restoreOpen)}
-						title="Restore"
-						aria-label="Restore"
-						onClick={() => {
-							setRestoreOpen((open) => !open)
-							setConfirming(false)
-							setMoreOpen(false)
-						}}>
-						<span className="codicon codicon-history" />
-					</button>
-					<button
-						style={iconButton(moreOpen)}
-						title="More"
-						aria-label="More checkpoint actions"
-						onClick={() => {
-							setMoreOpen((open) => !open)
-							setRestoreOpen(false)
-						}}>
-						<span className="codicon codicon-kebab-vertical" />
-					</button>
-				</div>
+				<div className={cn("flex gap-0.5", menuVisible ? "visible" : "invisible")}>
+					<StandardTooltip content={t("row.diffTooltip")}>
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label={t("row.diff")}
+							onClick={() => void showDiff("checkpoint")}>
+							<span className="codicon codicon-diff-single" />
+						</Button>
+					</StandardTooltip>
 
-				{restoreOpen && (
-					<div style={POPOVER}>
-						<div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-							<button style={button("secondary")} onClick={() => void restore("preview")}>
-								Restore Files
-							</button>
-							<div style={MUTED}>
-								Restores your project's files back to a snapshot taken at this point.
+					<Popover
+						open={restoreOpen}
+						onOpenChange={(open) => {
+							setRestoreOpen(open)
+							if (!open) setConfirming(false)
+						}}>
+						<StandardTooltip content={t("row.restore")}>
+							<PopoverTrigger asChild>
+								<Button variant="ghost" size="icon" aria-label={t("row.restore")}>
+									<span className="codicon codicon-history" />
+								</Button>
+							</PopoverTrigger>
+						</StandardTooltip>
+						<PopoverContent align="end" className="flex flex-col gap-3 w-72">
+							<div className="flex flex-col gap-1">
+								<Button variant="secondary" onClick={() => void restore("preview")}>
+									{t("restore.filesOnly")}
+								</Button>
+								<div className="text-vscode-descriptionForeground text-sm">
+									{t("restore.filesOnlyHint")}
+								</div>
 							</div>
-						</div>
-						<div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-							{!confirming ? (
-								<button style={button("secondary")} onClick={() => setConfirming(true)}>
-									Restore Files & Task
-								</button>
-							) : (
-								<>
-									<button style={button("primary")} onClick={() => void restore("restore")}>
-										Confirm
-									</button>
-									<button style={button("secondary")} onClick={() => setConfirming(false)}>
-										Cancel
-									</button>
-								</>
-							)}
-							{confirming ? (
-								<div style={{ color: "var(--vscode-errorForeground)", fontWeight: 700 }}>
-									This action cannot be undone.
+							<div className="flex flex-col gap-1">
+								{!confirming ? (
+									<Button variant="secondary" onClick={() => setConfirming(true)}>
+										{t("restore.filesAndTask")}
+									</Button>
+								) : (
+									<div className="flex flex-col gap-1">
+										<Button variant="primary" onClick={() => void restore("restore")}>
+											{t("restore.confirm")}
+										</Button>
+										<Button variant="secondary" onClick={() => setConfirming(false)}>
+											{t("restore.cancel")}
+										</Button>
+									</div>
+								)}
+								<div
+									className={cn(
+										"text-sm",
+										confirming
+											? "text-vscode-errorForeground font-bold"
+											: "text-vscode-descriptionForeground",
+									)}>
+									{confirming ? t("restore.irreversible") : t("restore.filesAndTaskHint")}
 								</div>
-							) : (
-								<div style={MUTED}>
-									Restores your project's files and deletes all messages after this point.
-								</div>
-							)}
-						</div>
-					</div>
-				)}
+							</div>
+						</PopoverContent>
+					</Popover>
 
-				{moreOpen && (
-					<div style={{ ...POPOVER, minWidth: 220 }}>
-						<button style={button("secondary")} onClick={() => void showDiff("from-init")}>
-							<span className="codicon codicon-versions" style={{ marginRight: 6 }} />
-							View changes since first checkpoint
-						</button>
-						<button style={button("secondary")} onClick={() => void showDiff("to-current")}>
-							<span className="codicon codicon-diff" style={{ marginRight: 6 }} />
-							View changes compared to current
-						</button>
-					</div>
-				)}
+					<Popover open={moreOpen} onOpenChange={setMoreOpen}>
+						<StandardTooltip content={t("row.more")}>
+							<PopoverTrigger asChild>
+								<Button variant="ghost" size="icon" aria-label={t("row.more")}>
+									<span className="codicon codicon-kebab-vertical" />
+								</Button>
+							</PopoverTrigger>
+						</StandardTooltip>
+						<PopoverContent align="end" className="flex flex-col gap-1 w-72">
+							<Button
+								variant="ghost"
+								className="justify-start"
+								onClick={() => void showDiff("from-init")}>
+								<span className="codicon codicon-versions" />
+								{t("more.sinceFirst")}
+							</Button>
+							<Button
+								variant="ghost"
+								className="justify-start"
+								onClick={() => void showDiff("to-current")}>
+								<span className="codicon codicon-diff" />
+								{t("more.againstCurrent")}
+							</Button>
+						</PopoverContent>
+					</Popover>
+				</div>
 			</div>
 
-			{status && <div style={{ ...MUTED, fontSize: "0.9em" }}>{status}</div>}
+			{status && <div className="text-sm text-vscode-descriptionForeground">{status}</div>}
 		</div>
 	)
 }

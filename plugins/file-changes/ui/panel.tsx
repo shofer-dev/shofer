@@ -1,20 +1,31 @@
 /**
  * File Changes — the panel above the chat input (`chat-footer` bundle).
  *
- * Plugin-native port of the built-in `FileChangesPanel`: a collapsible list of the
- * files this task changed, each row showing its net +/− and offering diff, revert and
- * accept, with accept-all / revert-all in the header. It renders nothing when the task
- * changed no files, so a task that only read code costs no chrome.
+ * A collapsible list of the files this task changed, each row showing its net +/− and
+ * offering diff, revert and accept, with accept-all / revert-all in the header. It
+ * renders nothing when the task changed no files, so a task that only read code costs no
+ * chrome.
  *
- * A plugin UI bundle may import only the host-shared React — not the host's UI kit,
- * icons or i18n — so the layout is inline styles over VS Code theme variables plus
- * codicons, which the webview already loads.
+ * Built from the host's own components and translations (`@shofer/plugin-ui`), so the
+ * panel is indistinguishable from a built-in one and follows the user's language. The
+ * bundle externalizes React and the kit; the webview's import map resolves both to the
+ * host's running instances.
  *
- * BUILD: compiled to `ui/panel.js` (esbuild, ESM, react externalized — see
- * `build-ui.mjs`, run automatically by the extension bundle).
+ * BUILD: compiled to `ui/panel.js` (esbuild, ESM — see `build-ui.mjs`, run automatically
+ * by the extension bundle).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
+
+import {
+	Button,
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+	StandardTooltip,
+	cn,
+	usePluginTranslation,
+} from "@shofer/plugin-ui"
 
 /** Scoped UI API (mirrors `@shofer/types` `PluginUIApi`; local so the bundle stands alone). */
 interface PluginUIApi {
@@ -46,32 +57,8 @@ interface ChangedFilesPayload {
 const MAX_VISIBLE_ROWS = 5
 const ROW_HEIGHT_PX = 28
 
-const ROW: React.CSSProperties = {
-	display: "flex",
-	alignItems: "center",
-	gap: 8,
-	padding: "2px 0",
-	fontSize: "0.95em",
-	borderRadius: 3,
-}
-
-function iconButton(): React.CSSProperties {
-	return {
-		display: "inline-flex",
-		alignItems: "center",
-		justifyContent: "center",
-		width: 20,
-		height: 20,
-		padding: 0,
-		border: "none",
-		borderRadius: 3,
-		cursor: "pointer",
-		background: "transparent",
-		color: "var(--vscode-foreground)",
-	}
-}
-
 export default function FileChangesPanel({ api }: { api: PluginUIApi }) {
+	const t = usePluginTranslation()
 	const taskId = api.context.task?.taskId
 	const messageCount = api.context.task?.messageCount
 	const [payload, setPayload] = useState<ChangedFilesPayload | undefined>()
@@ -174,124 +161,100 @@ export default function FileChangesPanel({ api }: { api: PluginUIApi }) {
 	)
 
 	return (
-		<div style={{ padding: "0 12px" }}>
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 8,
-					padding: "6px 0",
-					cursor: "pointer",
-					color: "var(--vscode-foreground)",
-				}}
-				onClick={() => setExpanded((open) => !open)}>
+		<Collapsible open={expanded} onOpenChange={setExpanded} className="px-3">
+			<CollapsibleTrigger className="flex items-center gap-2 w-full py-2 rounded-md text-left text-vscode-foreground hover:bg-vscode-list-hoverBackground">
 				<span className={`codicon codicon-chevron-${expanded ? "down" : "right"}`} />
 				<span className="codicon codicon-diff-multiple" />
-				<span style={{ fontWeight: 600 }}>
-					{entries.length} file{entries.length === 1 ? "" : "s"} changed
-				</span>
-				<span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+				<span className="text-sm font-medium">{t("panel.header", { count: entries.length })}</span>
+				<span className="flex items-center gap-2 ml-auto shrink-0">
 					{totals.added > 0 || totals.removed > 0 ? (
 						<>
-							<span style={{ color: "var(--vscode-charts-green)", fontSize: "0.9em" }}>
-								+{totals.added}
-							</span>
-							<span style={{ color: "var(--vscode-charts-red)", fontSize: "0.9em" }}>
-								-{totals.removed}
-							</span>
+							<span className="text-xs font-medium text-vscode-charts-green">+{totals.added}</span>
+							<span className="text-xs font-medium text-vscode-charts-red">-{totals.removed}</span>
 						</>
 					) : null}
 					{/* Bulk actions. Stop propagation so they don't toggle the list. */}
-					<span style={{ display: "flex", gap: 2 }} onClick={(event) => event.stopPropagation()}>
-						<button
-							style={iconButton()}
-							title="Accept all changes (keep them, stop tracking)"
-							aria-label="Accept all"
-							onClick={() => void act("accept-all")}>
-							<span className="codicon codicon-check-all" />
-						</button>
-						<button
-							style={iconButton()}
-							title="Revert all changes"
-							aria-label="Revert all"
-							onClick={() => void act("revert-all")}>
-							<span className="codicon codicon-discard" />
-						</button>
+					<span className="flex gap-0.5" onClick={(event) => event.stopPropagation()}>
+						<StandardTooltip content={t("panel.acceptAllTooltip")}>
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label={t("panel.acceptAll")}
+								onClick={() => void act("accept-all")}>
+								<span className="codicon codicon-check-all" />
+							</Button>
+						</StandardTooltip>
+						<StandardTooltip content={t("panel.revertAllTooltip")}>
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label={t("panel.revertAll")}
+								onClick={() => void act("revert-all")}>
+								<span className="codicon codicon-discard" />
+							</Button>
+						</StandardTooltip>
 					</span>
 				</span>
-			</div>
+			</CollapsibleTrigger>
 
-			{error ? (
-				<div style={{ color: "var(--vscode-errorForeground)", fontSize: "0.9em", paddingBottom: 4 }}>
-					{error}
-				</div>
-			) : null}
+			{error ? <div className="text-sm text-vscode-errorForeground pb-1">{error}</div> : null}
 
-			{expanded ? (
+			<CollapsibleContent>
 				<div
-					style={{
-						display: "flex",
-						flexDirection: "column",
-						paddingLeft: 18,
-						paddingBottom: 6,
-						maxHeight: MAX_VISIBLE_ROWS * ROW_HEIGHT_PX,
-						overflowY: "auto",
-					}}>
+					className="flex flex-col pb-2 pl-6 overflow-y-auto"
+					style={{ maxHeight: `${MAX_VISIBLE_ROWS * ROW_HEIGHT_PX}px` }}>
 					{entries.map((entry) => (
-						<div key={entry.path} style={ROW}>
-							<button
-								style={{
-									flex: 1,
-									textAlign: "left",
-									overflow: "hidden",
-									textOverflow: "ellipsis",
-									whiteSpace: "nowrap",
-									background: "transparent",
-									border: "none",
-									padding: 0,
-									cursor: entry.hasOriginalContent ? "pointer" : "default",
-									color: entry.hasOriginalContent
-										? "var(--vscode-foreground)"
-										: "var(--vscode-descriptionForeground)",
-								}}
-								title={
-									entry.hasOriginalContent
-										? entry.path
-										: `${entry.path} — no baseline was captured, so there is nothing to diff against`
-								}
-								onClick={() => void showDiff(entry)}>
-								{entry.path}
-							</button>
+						<div
+							key={entry.path}
+							className="flex items-center gap-2 py-1 text-sm rounded hover:bg-vscode-list-hoverBackground">
+							<StandardTooltip
+								content={entry.hasOriginalContent ? entry.path : t("panel.diffUnavailable")}>
+								<button
+									type="button"
+									className={cn(
+										"flex-1 text-left truncate bg-transparent border-none p-0",
+										entry.hasOriginalContent
+											? "cursor-pointer hover:underline text-vscode-foreground"
+											: "cursor-default text-vscode-descriptionForeground",
+									)}
+									onClick={() => void showDiff(entry)}>
+									{entry.path}
+								</button>
+							</StandardTooltip>
 							{entry.binary ? (
-								<span style={{ color: "var(--vscode-descriptionForeground)", fontSize: "0.9em" }}>
-									(binary)
+								<span className="text-xs text-vscode-descriptionForeground shrink-0">
+									{t("panel.binary")}
 								</span>
 							) : (
-								<span style={{ display: "flex", gap: 4, fontSize: "0.9em" }}>
-									<span style={{ color: "var(--vscode-charts-green)" }}>+{entry.insertions}</span>
-									<span style={{ color: "var(--vscode-charts-red)" }}>-{entry.deletions}</span>
+								<span className="text-xs shrink-0 flex items-center gap-1">
+									<span className="text-vscode-charts-green">+{entry.insertions}</span>
+									<span className="text-vscode-charts-red">-{entry.deletions}</span>
 								</span>
 							)}
-							<span style={{ display: "flex", gap: 2 }}>
-								<button
-									style={iconButton()}
-									title="Revert this file"
-									aria-label="Revert"
-									onClick={() => void act("revert", { path: entry.path })}>
-									<span className="codicon codicon-discard" />
-								</button>
-								<button
-									style={iconButton()}
-									title="Accept this file (keep it, stop tracking)"
-									aria-label="Accept"
-									onClick={() => void act("accept", { path: entry.path })}>
-									<span className="codicon codicon-check" />
-								</button>
+							<span className="flex gap-0.5 shrink-0">
+								<StandardTooltip content={t("panel.revertTooltip")}>
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label={t("panel.revert")}
+										onClick={() => void act("revert", { path: entry.path })}>
+										<span className="codicon codicon-discard" />
+									</Button>
+								</StandardTooltip>
+								<StandardTooltip content={t("panel.acceptTooltip")}>
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label={t("panel.accept")}
+										onClick={() => void act("accept", { path: entry.path })}>
+										<span className="codicon codicon-check" />
+									</Button>
+								</StandardTooltip>
 							</span>
 						</div>
 					))}
 				</div>
-			) : null}
-		</div>
+			</CollapsibleContent>
+		</Collapsible>
 	)
 }

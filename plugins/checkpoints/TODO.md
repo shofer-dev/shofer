@@ -10,17 +10,10 @@ What is knowingly not done, and what was traded away when checkpoints moved out 
   cannot render into the chat body, only into its own marker rows, and the first row
   only exists once a checkpoint has been taken. Fixing this properly means a generic
   "plugin status banner" region, not a checkpoint-specific message type.
-- **English-only strings.** The row labels, popover copy and diff titles are literal
-  English. A plugin bundle cannot reach the host's i18n catalogue, and shipping a
-  parallel catalogue inside the plugin would drift. Worth solving generically (a
-  `ctx.i18n` / manifest-declared locale files) rather than per plugin.
 - **No nested-repository diagnostic.** The built-in ran a ripgrep scan for `**/.git/HEAD`
   and logged what it found. It was log-only — `GIT_DIR` is what actually makes nested
   repos work — and ripgrep is not on the plugin's surface, so the scan was dropped
   rather than reimplemented.
-- **Menu is buttons, not the host's popover kit.** Same constraint as the strings: the
-  row reimplements the popovers inline with theme variables. Keyboard/focus behaviour is
-  therefore simpler than the host `Popover`'s.
 
 ## Known gaps
 

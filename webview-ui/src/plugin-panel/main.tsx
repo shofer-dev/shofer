@@ -25,11 +25,16 @@ import * as HostReactDom from "react-dom"
 import * as HostReactDomClient from "react-dom/client"
 import * as HostJsxRuntime from "react/jsx-runtime"
 import * as HostJsxDevRuntime from "react/jsx-dev-runtime"
+import * as HostPluginUi from "../plugin-ui"
+
+import i18next, { loadPluginTranslations } from "@/i18n/setup"
+import { PluginUiMountContext } from "@/components/plugins/PluginUiMountContext"
 
 import {
 	isPluginUiResponse,
 	type PluginUIApi,
 	type PluginUIContext,
+	type PluginLocaleBundle,
 	type PluginUiRegion,
 	type PluginUiTaskSummary,
 } from "@shofer/types"
@@ -45,6 +50,8 @@ import {
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostReactDomClient = HostReactDomClient
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxRuntime = HostJsxRuntime
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxDevRuntime = HostJsxDevRuntime
+// …and the component kit + translation hook the bundle imports as `@shofer/plugin-ui`.
+;(globalThis as unknown as Record<string, unknown>).__shoferPluginUi = HostPluginUi
 
 /** The config the extension injects onto the panel document before this script runs. */
 interface PluginPanelConfig {
@@ -56,6 +63,10 @@ interface PluginPanelConfig {
 	region: string
 	/** Read-only summary of the active task, if any. */
 	task?: PluginUiTaskSummary
+	/** This plugin's own translations (its `locales/<lang>.json` files). */
+	locales?: PluginLocaleBundle[]
+	/** The user's display language, so the panel matches the sidebar. */
+	language?: string
 }
 
 type PluginPanelComponent = (props: { api: PluginUIApi }) => ReactNode
@@ -155,6 +166,11 @@ async function boot(): Promise<void> {
 		return
 	}
 
+	// This panel is its own document with its own i18next instance: register the
+	// plugin's strings and follow the user's language, or its UI would render keys.
+	loadPluginTranslations(config.locales ?? [])
+	if (config.language) void i18next.changeLanguage(config.language)
+
 	const api = buildApi(config)
 	let Component: PluginPanelComponent | undefined
 	try {
@@ -175,7 +191,9 @@ async function boot(): Promise<void> {
 
 	createRoot(root).render(
 		<PluginErrorBoundary pluginName={config.pluginName}>
-			<Component api={api} />
+			<PluginUiMountContext.Provider value={{ pluginName: config.pluginName }}>
+				<Component api={api} />
+			</PluginUiMountContext.Provider>
 		</PluginErrorBoundary>,
 	)
 }

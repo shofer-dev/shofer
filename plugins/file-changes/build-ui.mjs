@@ -5,9 +5,10 @@
  * runs per plugin (`src/esbuild.mjs` → `buildBundledPluginUis`), but it builds two
  * things:
  *
- *  1. `ui/panel.tsx` → `ui/panel.js` — the `chat-footer` bundle, ESM with `react`
- *     externalized (the host injects an import map so it resolves to the webview's
- *     single shared React; a second copy silently breaks hooks).
+ *  1. `ui/panel.tsx` → `ui/panel.js` — the `chat-footer` bundle, ESM with `react` and
+ *     `@shofer/plugin-ui` externalized (the host injects an import map so both resolve
+ *     to the webview's running instances; a second React copy silently breaks hooks, and
+ *     a re-implemented component kit drifts from the product).
  *
  *  2. `src/vendor/diff.mjs` — the `diff` package, pre-bundled.
  *
@@ -43,7 +44,16 @@ await esbuild.build({
 	platform: "browser",
 	target: "es2020",
 	jsx: "automatic",
-	external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime"],
+	external: [
+		"react",
+		"react-dom",
+		"react-dom/client",
+		"react/jsx-runtime",
+		"react/jsx-dev-runtime",
+		// The host's component kit + translation hook — resolved by the webview's import
+		// map to the running instances, exactly like React.
+		"@shofer/plugin-ui",
+	],
 	legalComments: "none",
 })
 console.log("[file-changes] built ui/panel.js")

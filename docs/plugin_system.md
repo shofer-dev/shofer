@@ -466,6 +466,17 @@ render in designated Shofer UI regions:
 | `chat-footer`        | Between the chat and its input    | A per-task summary the user acts on (the file-changes panel)               |
 | `sidebar-panel`      | New panel in the Shofer sidebar   | Custom dashboard/view                                                      |
 
+**The kit — `@shofer/plugin-ui`.** The same import map that resolves a bundle's `react`
+also resolves `@shofer/plugin-ui` to the host's **component kit** (`Button`, `Dialog*`,
+`Popover*`, `SearchableSelect`, `cn`, …) and to `usePluginTranslation`, which reads the
+plugin's own `locales/<lang>.json` as the i18next namespace `plugin:<name>`. A plugin's
+UI is therefore built from the real components and follows the user's language, instead
+of hand-rolled look-alikes that drift from the product and behave differently under
+keyboard and focus. Surface: `webview-ui/src/plugin-ui/index.ts` (runtime),
+`webview-ui/public/plugin-host/plugin-ui.js` (the served shim),
+`plugins/plugin-ui.d.ts` (what plugins typecheck against) — a spec fails when the three
+stop agreeing.
+
 **Loading model — dynamic `import()`, not iframe.** A plugin UI component loads
 into the webview by dynamic `import()` with a restricted API surface
 (`PluginUIApi`). This is deliberate: sharing the host's React instance + theme is

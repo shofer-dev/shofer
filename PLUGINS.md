@@ -485,20 +485,22 @@ with `contributes.ui`:
   `localResourceRoots`) and the webview **dynamic-imports** it. A granted region _without_ a
   `contributes.ui` entry falls back to a first-party/co-bundled component (unchanged behavior).
 
-**The build contract — externalize React.** Your bundle must **not** bundle its own React: the host
-injects an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
+**The build contract — externalize React and the kit.** Your bundle must **not** bundle its own
+React: the host injects an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap)
 so that `react`, `react-dom`, `react/jsx-runtime` (and `react/jsx-dev-runtime`, `react-dom/client`)
 resolve to the **host's running React instance**. Sharing one instance is what keeps hooks and
-context working — a second copy silently breaks them. So build the entry as an **ES module** and mark
-those packages **external**. With esbuild:
+context working — a second copy silently breaks them. The same map resolves **`@shofer/plugin-ui`**
+(next section) to the host's component kit. So build the entry as an **ES module** and mark those
+packages **external**. With esbuild:
 
 ```sh
 esbuild ui/toolbar.jsx --bundle --format=esm --jsx=automatic \
   --external:react --external:react-dom --external:react/jsx-runtime \
+  --external:@shofer/plugin-ui \
   --outfile=ui/toolbar.js
 ```
 
-(or, with Vite/Rollup, `build.lib` + `rollupOptions.external: ["react", "react-dom", "react/jsx-runtime"]`).
+(or, with Vite/Rollup, `build.lib` + `rollupOptions.external: ["react", "react-dom", "react/jsx-runtime", "@shofer/plugin-ui"]`).
 
 The module must **default-export** a React component taking a single `{ api: PluginUIApi }` prop:
 
@@ -516,6 +518,64 @@ a nonce, so the nonced host script may dynamic-import your same-origin (`vscode-
 Arbitrary external hosts remain blocked — only files under the plugin dirs are served. If your
 component throws while rendering, it is caught by an error boundary and unmounted; the host UI keeps
 working.
+
+### `@shofer/plugin-ui` — the host's components and your translations
+
+Your UI shares more than React. Import the host's kit and render the **same** components the product
+does, instead of look-alikes that drift from it and behave differently under keyboard and focus:
+
+```jsx
+import {
+	Button,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+	StandardTooltip,
+	cn,
+	usePluginTranslation,
+} from "@shofer/plugin-ui"
+
+export default function Toolbar({ api }) {
+	const t = usePluginTranslation()
+	return (
+		<StandardTooltip content={t("toolbar.deployTooltip")}>
+			<Button variant="ghost" size="icon" onClick={() => api.postMessage({ deploy: true })}>
+				<span className="codicon codicon-rocket" />
+			</Button>
+		</StandardTooltip>
+	)
+}
+```
+
+Available: `Button`, `Badge`, `Checkbox`, `Input`, `Textarea`, `ToggleSwitch`, `Progress`,
+`Separator`, `StandardTooltip`, `Popover*`, `Dialog*`, `Collapsible*`, `SearchableSelect`,
+`useShoferPortal`, `cn`, `usePluginTranslation`. The full signature list is
+[`plugins/plugin-ui.d.ts`](plugins/plugin-ui.d.ts) — map it in your plugin's tsconfig `paths` to
+typecheck your UI:
+
+```json
+{ "compilerOptions": { "jsx": "react-jsx", "paths": { "@shofer/plugin-ui": ["../plugin-ui.d.ts"] } } }
+```
+
+Styling needs nothing: your component renders inside the host document, so its CSS and VS Code theme
+variables already apply (`text-vscode-descriptionForeground`, `codicon codicon-*`, …). Icons are not
+re-exported — bundle `lucide-react` yourself if you want them.
+
+**Translations.** Ship `locales/<lang>.json` in your plugin root and `usePluginTranslation()` reads
+them, with the host's interpolation, plural rules and language switching:
+
+```
+my-plugin/
+├── plugin.json
+├── locales/en.json      { "toolbar": { "deployTooltip": "Deploy this task" } }
+├── locales/de.json
+└── ui/toolbar.js
+```
+
+They are registered as the i18next namespace `plugin:<your-plugin-name>`, so your keys can never
+collide with the host's or another plugin's. A key with no translation renders as the key itself —
+visible, rather than silently blank. A plugin with no `locales/` directory simply gets no
+translations.
 
 ---
 

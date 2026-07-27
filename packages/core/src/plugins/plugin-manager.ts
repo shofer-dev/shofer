@@ -6,6 +6,7 @@ import {
 	type HostDisposable,
 	type ModeConfig,
 	type PluginContext,
+	type PluginLocaleBundle,
 	type PluginManifest,
 	type PluginSearch,
 	pluginManifestSchema,
@@ -94,6 +95,8 @@ export function resolvePluginConfig(
 export interface PluginFsHost {
 	/** Immediate subdirectory names of `dir`. Returns `[]` when `dir` is missing. */
 	listDirs(dir: string): Promise<string[]>
+	/** Immediate file names in `dir`. Returns `[]` when `dir` is missing. */
+	listFiles(dir: string): Promise<string[]>
 	/** Read a UTF-8 file. Rejects when the file is missing. */
 	readFile(filePath: string): Promise<string>
 	/** Whether a path exists (file or directory). */
@@ -1190,6 +1193,38 @@ export class PluginManager {
 	}
 
 	/**
+	 * Each enabled UI-contributing plugin's translations, read from the `locales/*.json`
+	 * files it ships (`locales/en.json`, `locales/de.json`, …).
+	 *
+	 * A plugin's UI bundle cannot reach the host's catalogue — its strings are its own —
+	 * so the host carries them to the webview, which registers each as an i18next
+	 * namespace (`plugin:<name>`). All shipped languages travel together: they are small
+	 * JSON files, and sending them once means switching the display language needs no
+	 * round-trip to the extension.
+	 *
+	 * A plugin with no `locales/` directory contributes nothing, and its UI falls back to
+	 * rendering the keys — visible, rather than silently blank.
+	 */
+	async getContributedLocales(): Promise<PluginLocaleBundle[]> {
+		const bundles: PluginLocaleBundle[] = []
+		for (const plugin of this.enabledPlugins()) {
+			if ((plugin.manifest.permissions?.ui?.length ?? 0) === 0) continue
+			const dir = path.join(plugin.root, "locales")
+			const resources: Record<string, Record<string, unknown>> = {}
+			for (const file of await this.fs.listFiles(dir)) {
+				if (!file.endsWith(".json")) continue
+				try {
+					resources[file.slice(0, -".json".length)] = JSON.parse(await this.fs.readFile(path.join(dir, file)))
+				} catch (error) {
+					warnPlugin(`[plugins] "${plugin.name}" has an unreadable locale file ${file}: ${String(error)}`)
+				}
+			}
+			if (Object.keys(resources).length > 0) bundles.push({ pluginName: plugin.name, resources })
+		}
+		return bundles
+	}
+
+	/**
 	 * Absolute directories the host must expose to the webview (`localResourceRoots`)
 	 * so enabled plugins' external UI bundles are servable as `vscode-webview://`
 	 * resources. Returns each enabled UI-bundle-shipping plugin's root; the extension
@@ -1213,6 +1248,14 @@ export function createNodePluginFs(): PluginFsHost {
 			try {
 				const entries = await nodeFs.readdir(dir, { withFileTypes: true })
 				return entries.filter((e) => e.isDirectory() || e.isSymbolicLink()).map((e) => e.name)
+			} catch {
+				return []
+			}
+		},
+		async listFiles(dir: string): Promise<string[]> {
+			try {
+				const entries = await nodeFs.readdir(dir, { withFileTypes: true })
+				return entries.filter((e) => e.isFile()).map((e) => e.name)
 			} catch {
 				return []
 			}

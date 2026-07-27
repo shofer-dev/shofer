@@ -11,10 +11,6 @@ of core.
   are now asked for once, when the task completes (core's broadcast `"task-stats"`
   question). Fixing it properly means a generic "a plugin contributes a fact about this
   task" seam, not a file-changes-shaped one.
-- **English-only strings.** The panel's labels and messages are literal English. A plugin
-  bundle cannot reach the host's i18n catalogue, and shipping a parallel catalogue inside
-  the plugin would drift. Worth solving generically (a `ctx.i18n`, or manifest-declared
-  locale files) rather than per plugin — the checkpoints plugin has the same gap.
 - **Diffs open in the multi-file diff viewer.** The built-in registered a
   `shofer-original:` document provider and opened a plain two-pane diff. The plugin surface
   offers `showMultiFileDiff`, so a single file opens as a one-entry multi-diff. Same

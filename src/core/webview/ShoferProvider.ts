@@ -2934,9 +2934,13 @@ export class ShoferProvider
 						.join(" | "),
 			)
 		}
+		// The plugins' own translations travel with the contributions: a bundle cannot
+		// reach the host's catalogue, and shipping them together means a mounted plugin
+		// component always has its strings by the time it renders.
+		const locales = await manager.getContributedLocales()
 		await this.postMessageToWebview({
 			type: "pluginUiContributions",
-			pluginUiContributions: { contributions },
+			pluginUiContributions: { contributions, locales },
 		})
 	}
 
@@ -3087,6 +3091,7 @@ export class ShoferProvider
 				"react-dom/client": `http://${localServerUrl}/plugin-host/react-dom-client.js`,
 				"react/jsx-runtime": `http://${localServerUrl}/plugin-host/jsx-runtime.js`,
 				"react/jsx-dev-runtime": `http://${localServerUrl}/plugin-host/jsx-dev-runtime.js`,
+				"@shofer/plugin-ui": `http://${localServerUrl}/plugin-host/plugin-ui.js`,
 			},
 		})
 

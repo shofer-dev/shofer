@@ -5,6 +5,7 @@ import * as HostReactDom from "react-dom"
 import * as HostReactDomClient from "react-dom/client"
 import * as HostJsxRuntime from "react/jsx-runtime"
 import * as HostJsxDevRuntime from "react/jsx-dev-runtime"
+import * as HostPluginUi from "./plugin-ui"
 
 import "./index.css"
 import App from "./App"
@@ -24,12 +25,17 @@ import { vscode } from "./utils/vscode"
 // dynamically-imported plugin bundle reuses THIS running React instance instead of
 // bundling its own (a second copy would break hooks/context). Published
 // synchronously at module-eval time, well before any plugin bundle is imported.
+//
+// `@shofer/plugin-ui` rides the same boundary: the host's component kit and the
+// per-plugin translation hook, so a plugin's UI is built from the real components
+// rather than a look-alike (see `src/plugin-ui/index.ts`).
 // ---------------------------------------------------------------------------
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostReact = HostReact
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostReactDom = HostReactDom
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostReactDomClient = HostReactDomClient
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxRuntime = HostJsxRuntime
 ;(globalThis as unknown as Record<string, unknown>).__shoferHostJsxDevRuntime = HostJsxDevRuntime
+;(globalThis as unknown as Record<string, unknown>).__shoferPluginUi = HostPluginUi
 
 // ---------------------------------------------------------------------------
 // Global error listeners — marshal uncaught exceptions back to the extension

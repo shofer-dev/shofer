@@ -1491,9 +1491,25 @@ export interface PluginUiContribution {
 	readonly source?: string
 }
 
+/**
+ * One plugin's translations, as shipped in its `locales/<lang>.json` files.
+ *
+ * Carried to the webview with the UI contributions and registered as the i18next
+ * namespace `plugin:<pluginName>`, which `@shofer/plugin-ui`'s `usePluginTranslation`
+ * reads. Every shipped language travels at once — the files are small, and it means
+ * switching the display language needs no round-trip to the extension.
+ */
+export interface PluginLocaleBundle {
+	readonly pluginName: string
+	/** language tag (`en`, `de`, …) → that language's key/value tree. */
+	readonly resources: Record<string, Record<string, unknown>>
+}
+
 /** Snapshot of plugin UI contributions pushed to the webview (`ExtensionMessage.pluginUiContributions`). */
 export interface PluginUiContributionsState {
 	contributions: PluginUiContribution[]
+	/** Translations for the contributing plugins (see {@link PluginLocaleBundle}). */
+	locales?: PluginLocaleBundle[]
 }
 
 /**

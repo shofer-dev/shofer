@@ -13,6 +13,7 @@ import { useExtensionState } from "@src/context/ExtensionStateContext"
 
 import { PluginUIComponent, resolvePluginComponent } from "./pluginComponentResolver"
 import { postPluginUiMessage, requestPluginUi, subscribePluginUiMessages } from "./pluginUiChannel"
+import { PluginUiMountContext } from "./PluginUiMountContext"
 
 /**
  * PluginSlot (design §6.8, §12; Phase 4 step 4.4).
@@ -107,6 +108,7 @@ function PluginContributionMount({
 }) {
 	const [Component, setComponent] = useState<PluginUIComponent | null>(null)
 	const api = usePluginUiApi(contribution.pluginName, region, task, message)
+	const mount = useMemo(() => ({ pluginName: contribution.pluginName }), [contribution.pluginName])
 
 	useEffect(() => {
 		let cancelled = false
@@ -139,7 +141,11 @@ function PluginContributionMount({
 
 	return (
 		<PluginErrorBoundary pluginName={contribution.pluginName}>
-			<Component api={api} />
+			{/* Tells the `@shofer/plugin-ui` hooks (translations) whose mount this is —
+			    the bundle shares the host's React, so it sees this context. */}
+			<PluginUiMountContext.Provider value={mount}>
+				<Component api={api} />
+			</PluginUiMountContext.Provider>
 		</PluginErrorBoundary>
 	)
 }
