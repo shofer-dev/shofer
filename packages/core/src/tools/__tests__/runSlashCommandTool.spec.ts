@@ -1,3 +1,4 @@
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { runSlashCommandTool } from "../RunSlashCommandTool.js"
 import { Task } from "../../task/Task.js"
@@ -467,7 +468,7 @@ Deploy application to production`,
 				experiments: {
 					runSlashCommand: true,
 				},
-				customModes: undefined,
+				customModes: BUILTIN_MODES,
 			}),
 			handleModeSwitch: mockHandleModeSwitch,
 		})
@@ -514,7 +515,7 @@ Start debugging the application`,
 				experiments: {
 					runSlashCommand: true,
 				},
-				customModes: undefined,
+				customModes: BUILTIN_MODES,
 			}),
 			handleModeSwitch: mockHandleModeSwitch,
 		})
@@ -551,7 +552,7 @@ Start debugging the application`,
 				experiments: {
 					runSlashCommand: true,
 				},
-				customModes: undefined,
+				customModes: BUILTIN_MODES,
 			}),
 			handleModeSwitch: vi.fn(),
 		})

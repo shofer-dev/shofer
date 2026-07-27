@@ -1,10 +1,4 @@
-import {
-	type GroupEntry,
-	type ModeConfig,
-	type CustomModePrompts,
-	type PromptComponent,
-	DEFAULT_MODES,
-} from "./mode.js"
+import { type GroupEntry, type ModeConfig, type PromptComponent } from "./mode.js"
 import { type ToolGroup, TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS } from "./tool.js"
 
 export type Mode = string
@@ -84,21 +78,51 @@ export function getToolsForMode(
 	return Array.from(toolSet)
 }
 
-// Main modes configuration as an ordered array
-export const modes = DEFAULT_MODES
+/**
+ * The slug of the mode a task falls back to when its own mode cannot be resolved.
+ *
+ * This is a **platform constant, not a lookup**: modes themselves are data — Shofer's
+ * own six ship in the bundled `builtin-modes` plugin, and a user, a project or an org
+ * can add, override or (by suppressing that plugin) replace all of them. What stays
+ * fixed is the *name* the platform reaches for first. If nothing defines `code`,
+ * resolution falls through to whatever modes do exist; see {@link resolveModeConfig}.
+ */
+export const defaultModeSlug = "code"
 
-// Export the default mode slug
-export const defaultModeSlug = modes[0]!.slug
+/**
+ * Look up a mode by slug.
+ *
+ * `modes` is the **effective** mode list — every mode the host knows about, which since
+ * the built-ins moved into a plugin means plugin-contributed ones too (they reach the
+ * host and the webview through the same `customModes` channel). There is no separate
+ * built-in list to fall back to.
+ */
+export function getModeBySlug(slug: string, modes?: ModeConfig[]): ModeConfig | undefined {
+	return modes?.find((mode) => mode.slug === slug)
+}
 
-// Helper functions
-export function getModeBySlug(slug: string, customModes?: ModeConfig[]): ModeConfig | undefined {
-	// Check custom modes first
-	const customMode = customModes?.find((mode) => mode.slug === slug)
-	if (customMode) {
-		return customMode
+/**
+ * Resolve a slug to a concrete mode, preferring the requested one, then
+ * {@link defaultModeSlug}, then the first mode that exists.
+ *
+ * Callers that build a system prompt need *some* mode; this is the one place that
+ * decides which. It throws when the list is empty rather than inventing a mode — an
+ * empty list means the built-in modes plugin is suppressed and nothing replaced it,
+ * which is a misconfiguration the user has to see.
+ */
+export function resolveModeConfig(slug: string, modes: readonly ModeConfig[] | undefined): ModeConfig {
+	const found = modes?.find((mode) => mode.slug === slug) ?? modes?.find((mode) => mode.slug === defaultModeSlug)
+	if (found) {
+		return found
 	}
-	// Then check built-in modes
-	return modes.find((mode) => mode.slug === slug)
+	const first = modes?.[0]
+	if (!first) {
+		throw new Error(
+			"No modes are available: the built-in modes are disabled and no custom modes are defined. " +
+				'Enable the "builtin-modes" plugin or define a mode in .shofer/shofermodes.',
+		)
+	}
+	return first
 }
 
 export function getModeConfig(slug: string, customModes?: ModeConfig[]): ModeConfig {
@@ -109,50 +133,50 @@ export function getModeConfig(slug: string, customModes?: ModeConfig[]): ModeCon
 	return mode
 }
 
-// Get all available modes, with custom modes overriding built-in modes.
-//
-// `opts.disableBuiltIn` (org governance — sourced host-side from the
-// `SHOFER_DISABLE_BUILTIN_MODES` env var; see `@shofer/core`'s
-// `builtInModesDisabled()`) suppresses the six built-in modes so that ONLY the
-// supplied `customModes` (user/project/bundle-provided) remain. This function
-// stays PURE: the flag is passed in, never read from env here, so it is safe in
-// the webview bundle. When the flag is set and `customModes` is empty the result
-// is an empty array — the built-ins are NOT silently re-added.
-export function getAllModes(customModes?: ModeConfig[], opts?: { disableBuiltIn?: boolean }): ModeConfig[] {
-	const builtIn = opts?.disableBuiltIn ? [] : [...modes]
-
-	if (!customModes?.length) {
-		return builtIn
+/**
+ * The effective, de-duplicated mode list.
+ *
+ * `modes` already carries every source merged in precedence order by the host's
+ * `CustomModesManager` — project, then global, then plugin-contributed (which is where
+ * Shofer's own six now come from). The earlier entry wins on a repeated slug, so a
+ * project mode named `code` still shadows the built-in one.
+ */
+export function getAllModes(modes?: ModeConfig[]): ModeConfig[] {
+	if (!modes?.length) {
+		return []
 	}
 
-	// Start from the (possibly empty) built-in set
-	const allModes = [...builtIn]
-
-	// Process custom modes
-	customModes.forEach((customMode) => {
-		const index = allModes.findIndex((mode) => mode.slug === customMode.slug)
-		if (index !== -1) {
-			// Override existing mode
-			allModes[index] = customMode
-		} else {
-			// Add new mode
-			allModes.push(customMode)
+	const bySlug = new Map<string, ModeConfig>()
+	for (const mode of modes) {
+		if (!bySlug.has(mode.slug)) {
+			bySlug.set(mode.slug, mode)
 		}
-	})
-
-	return allModes
+	}
+	return Array.from(bySlug.values())
 }
 
-// Check if a mode is custom or an override
-export function isCustomMode(slug: string, customModes?: ModeConfig[]): boolean {
-	return !!customModes?.some((mode) => mode.slug === slug)
+/** Whether the mode comes from the user's or the project's own definitions. */
+export function isCustomMode(slug: string, modes?: ModeConfig[]): boolean {
+	const mode = getModeBySlug(slug, modes)
+	return !!mode && mode.source !== "plugin"
+}
+
+/** Find a mode by its slug in an explicit list. */
+export function findModeBySlug(slug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined {
+	return modes?.find((mode) => mode.slug === slug)
 }
 
 /**
- * Find a mode by its slug, don't fall back to built-in modes
+ * The mode a **user or project** authored, if this slug names one.
+ *
+ * The Modes view uses this to decide what may be edited, renamed or deleted: a
+ * plugin-contributed mode (which is what Shofer's own six are) is read-only there —
+ * it is owned by the plugin, and overriding it means authoring a mode of the same
+ * slug, not mutating the plugin's copy.
  */
-export function findModeBySlug(slug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined {
-	return modes?.find((mode) => mode.slug === slug)
+export function findAuthoredMode(slug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined {
+	const mode = findModeBySlug(slug, modes)
+	return mode && mode.source !== "plugin" ? mode : undefined
 }
 
 /**
@@ -161,21 +185,20 @@ export function findModeBySlug(slug: string, modes: readonly ModeConfig[] | unde
  * If no custom mode is found, the built-in mode is used with partial merging from promptComponent.
  * If neither is found, the default mode is used.
  */
-export function getModeSelection(mode: string, promptComponent?: PromptComponent, customModes?: ModeConfig[]) {
-	const customMode = findModeBySlug(mode, customModes)
-	const builtInMode = findModeBySlug(mode, modes)
+export function getModeSelection(mode: string, promptComponent?: PromptComponent, modes?: ModeConfig[]) {
+	const authored = findAuthoredMode(mode, modes)
 
-	// If we have a custom mode, use it entirely
-	if (customMode) {
+	// A mode the user wrote is taken exactly as written — `customModePrompts` overrides
+	// exist to reshape modes the user did NOT write (the plugin-contributed ones).
+	if (authored) {
 		return {
-			roleDefinition: customMode.roleDefinition || "",
-			baseInstructions: customMode.customInstructions || "",
-			description: customMode.description || "",
+			roleDefinition: authored.roleDefinition || "",
+			baseInstructions: authored.customInstructions || "",
+			description: authored.description || "",
 		}
 	}
 
-	// Otherwise, use built-in mode as base and merge with promptComponent
-	const baseMode = builtInMode || modes[0]! // fallback to default mode
+	const baseMode = resolveModeConfig(mode, modes)
 
 	return {
 		roleDefinition: promptComponent?.roleDefinition || baseMode.roleDefinition || "",
@@ -194,21 +217,6 @@ export class FileRestrictionError extends Error {
 		this.name = "FileRestrictionError"
 	}
 }
-
-// Create the mode-specific default prompts
-export const defaultPrompts: Readonly<CustomModePrompts> = Object.freeze(
-	Object.fromEntries(
-		modes.map((mode) => [
-			mode.slug,
-			{
-				roleDefinition: mode.roleDefinition,
-				whenToUse: mode.whenToUse,
-				customInstructions: mode.customInstructions,
-				description: mode.description,
-			},
-		]),
-	),
-)
 
 // Helper function to safely get role definition
 export function getRoleDefinition(modeSlug: string, customModes?: ModeConfig[]): string {

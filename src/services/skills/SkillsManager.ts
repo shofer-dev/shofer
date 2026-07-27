@@ -8,7 +8,7 @@ import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDir
 import { directoryExists, fileExists } from "@shofer/core"
 import { getSharedPluginManager } from "@shofer/core"
 import { SkillMetadata, SkillContent, qualifiedSkillName } from "@shofer/types"
-import { modes, getAllModes, builtInModesDisabled } from "@shofer/core"
+import { getAllModes } from "@shofer/core"
 import {
 	validateSkillName as validateSkillNameShared,
 	SkillNameValidationError,
@@ -696,24 +696,22 @@ Add your skill instructions here.
 	}
 
 	/**
-	 * Get list of available modes (built-in + custom)
+	 * Slugs of every mode available here — the user's, the project's, and the
+	 * plugin-contributed ones (Shofer's own six included). Empty when there is no
+	 * provider to ask: mode-specific skill directories are then simply not watched,
+	 * rather than watched for a mode set that may not exist.
 	 */
 	private async getAvailableModes(): Promise<string[]> {
 		const provider = this.providerRef.deref()
-		// Org governance: when built-in modes are suppressed the fallback slug set
-		// is empty too — never re-introduce the built-ins through an error path.
-		const builtInModeSlugs = builtInModesDisabled() ? [] : modes.map((m) => m.slug)
-
 		if (!provider) {
-			return builtInModeSlugs
+			return []
 		}
 
 		try {
 			const customModes = await provider.customModesManager.getCustomModes()
-			const allModes = getAllModes(customModes, { disableBuiltIn: builtInModesDisabled() })
-			return allModes.map((m) => m.slug)
+			return getAllModes(customModes).map((m) => m.slug)
 		} catch {
-			return builtInModeSlugs
+			return []
 		}
 	}
 

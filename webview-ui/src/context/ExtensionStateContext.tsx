@@ -27,7 +27,7 @@ import {
 import { findLastIndex } from "@shofer/types"
 
 import { checkExistKey } from "@shofer/shared/checkExistApiConfig"
-import { Mode, defaultModeSlug, defaultPrompts } from "@shofer/types"
+import { Mode, defaultModeSlug } from "@shofer/types"
 import { CustomSupportPrompts } from "@shofer/types"
 import { experimentDefault } from "@shofer/types"
 
@@ -281,15 +281,13 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		currentApiConfigName: "default",
 		listApiConfigMeta: [],
 		mode: defaultModeSlug,
-		customModePrompts: defaultPrompts,
+		customModePrompts: {},
 		customSupportPrompts: {},
 		experiments: experimentDefault,
 		enhancementApiConfigId: "",
 		hasOpenedModeSelector: false, // Default to false (not opened yet)
 		autoApprovalEnabled: false,
 		customModes: [],
-		disableBuiltInModes: false,
-		disableBuiltInWorkflows: false,
 		maxOpenTabsContext: 20,
 		maxWorkspaceFiles: 200,
 		cwd: "",

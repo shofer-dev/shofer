@@ -35,7 +35,7 @@ import { CreateSkillDialog } from "./CreateSkillDialog"
 
 export const SkillsSettings: React.FC = () => {
 	const { t } = useAppTranslation()
-	const { cwd, skills: rawSkills, customModes, disableBuiltInModes } = useExtensionState()
+	const { cwd, skills: rawSkills, customModes } = useExtensionState()
 	const skills = useMemo(() => rawSkills ?? [], [rawSkills])
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -53,11 +53,11 @@ export const SkillsSettings: React.FC = () => {
 
 	// Get available modes for the checkboxes (built-in + custom modes)
 	const availableModes = useMemo(() => {
-		return getAllModes(customModes, { disableBuiltIn: disableBuiltInModes }).map((m) => ({
+		return getAllModes(customModes).map((m) => ({
 			slug: m.slug,
 			name: m.name,
 		}))
-	}, [customModes, disableBuiltInModes])
+	}, [customModes])
 
 	const handleRefresh = useCallback(() => {
 		vscode.postMessage({ type: "requestSkills" })

@@ -1,7 +1,7 @@
 // npx vitest run modes/__tests__/getFullModeDetails.test.ts
 
 import type { ModeConfig } from "@shofer/types"
-import { modes } from "@shofer/types"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 
 // `addCustomInstructions` is an intra-core sibling reached via a RELATIVE import;
 // only a relative mock (not the `@shofer/core` barrel) can intercept that call.
@@ -20,7 +20,7 @@ describe("getFullModeDetails", () => {
 	})
 
 	it("returns base mode when no overrides exist", async () => {
-		const result = await getFullModeDetails("debug")
+		const result = await getFullModeDetails("debug", BUILTIN_MODES)
 		expect(result).toMatchObject({
 			slug: "debug",
 			name: "🪲 Debug",
@@ -39,7 +39,7 @@ describe("getFullModeDetails", () => {
 			},
 		]
 
-		const result = await getFullModeDetails("debug", customModes)
+		const result = await getFullModeDetails("debug", [...customModes, ...BUILTIN_MODES])
 		expect(result).toMatchObject({
 			slug: "debug",
 			name: "Custom Debug",
@@ -56,7 +56,7 @@ describe("getFullModeDetails", () => {
 			},
 		}
 
-		const result = await getFullModeDetails("debug", undefined, customModePrompts)
+		const result = await getFullModeDetails("debug", BUILTIN_MODES, customModePrompts)
 		expect(result.roleDefinition).toBe("Overridden role")
 		expect(result.customInstructions).toBe("Overridden instructions")
 	})
@@ -68,7 +68,7 @@ describe("getFullModeDetails", () => {
 			language: "en",
 		}
 
-		await getFullModeDetails("debug", undefined, undefined, options)
+		await getFullModeDetails("debug", BUILTIN_MODES, undefined, options)
 
 		expect(addCustomInstructions).toHaveBeenCalledWith(
 			expect.any(String),
@@ -79,10 +79,8 @@ describe("getFullModeDetails", () => {
 		)
 	})
 
-	it("falls back to first mode for non-existent mode", async () => {
-		const result = await getFullModeDetails("non-existent")
-		expect(result).toMatchObject({
-			...modes[0],
-		})
+	it("falls back to the default mode for a slug nothing defines", async () => {
+		const result = await getFullModeDetails("non-existent", BUILTIN_MODES)
+		expect(result).toMatchObject({ ...BUILTIN_MODES[0] })
 	})
 })

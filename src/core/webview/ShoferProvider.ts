@@ -45,7 +45,6 @@ import {
 	openRouterDefaultModelId,
 	DEFAULT_WRITE_DELAY_MS,
 	ORGANIZATION_ALLOW_ALL,
-	DEFAULT_MODES,
 	getModelId,
 	isRetiredProvider,
 } from "@shofer/types"
@@ -58,7 +57,7 @@ import { findLast } from "@shofer/core"
 import { supportPrompt } from "@shofer/types"
 import { GlobalFileNames } from "@shofer/core"
 import { Mode, defaultModeSlug, getModeBySlug } from "@shofer/core"
-import { builtInModesDisabled, builtInWorkflowsDisabled, governanceDisabledPlugins } from "@shofer/core"
+import { governanceDisabledPlugins } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
@@ -5035,10 +5034,6 @@ export class ShoferProvider
 			// (owner directive #4). Private plugin modes stay switch-able by their
 			// qualified slug (getCustomModes still returns them for resolution).
 			customModes: (customModes ?? []).filter((m) => !m.private),
-			// Org governance (read-only): forward the built-in-suppression env flags
-			// to the webview, which cannot read process.env itself.
-			disableBuiltInModes: builtInModesDisabled(),
-			disableBuiltInWorkflows: builtInWorkflowsDisabled(),
 			experiments: experiments ?? experimentDefault,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
 			maxOpenTabsContext: maxOpenTabsContext ?? 20,
@@ -6071,10 +6066,11 @@ export class ShoferProvider
 
 	public async getModes(): Promise<{ slug: string; name: string }[]> {
 		try {
-			const customModes = await this.customModesManager.getCustomModes()
-			return [...DEFAULT_MODES, ...customModes].map(({ slug, name }) => ({ slug, name }))
+			const modes = await this.customModesManager.getCustomModes()
+			return modes.map(({ slug, name }) => ({ slug, name }))
 		} catch (error) {
-			return DEFAULT_MODES.map(({ slug, name }) => ({ slug, name }))
+			this.log(`Failed to list modes: ${error instanceof Error ? error.message : String(error)}`)
+			return []
 		}
 	}
 

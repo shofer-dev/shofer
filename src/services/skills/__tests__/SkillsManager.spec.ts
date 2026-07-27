@@ -1,3 +1,4 @@
+import { BUILTIN_MODES } from "@shofer/core/fixtures"
 import * as path from "path"
 
 // Use vi.hoisted to ensure mocks are available during hoisting
@@ -135,7 +136,10 @@ describe("SkillsManager", () => {
 		mockProvider = {
 			cwd: PROJECT_DIR,
 			customModesManager: {
-				getCustomModes: vi.fn().mockResolvedValue([]),
+				// The effective mode list, as a real host serves it: the built-ins come
+				// from the `builtin-modes` plugin, so mode-specific skill directories are
+				// only discovered when they are present.
+				getCustomModes: vi.fn().mockResolvedValue(BUILTIN_MODES),
 			} as any,
 		}
 
@@ -1772,9 +1776,7 @@ Instructions`)
 
 			mockDirectoryExists.mockImplementation(async (dir: string) => dir === pluginSkillsDir)
 			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
-			mockReaddir.mockImplementation(async (dir: string) =>
-				dir === pluginSkillsDir ? ["deploy-skill"] : [],
-			)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === pluginSkillsDir ? ["deploy-skill"] : []))
 			mockStat.mockImplementation(async (pathArg: string) => {
 				if (pathArg === deploySkillDir) return { isDirectory: () => true }
 				throw new Error("Not found")

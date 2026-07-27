@@ -88,10 +88,18 @@ vi.mock("@vscode/webview-ui-toolkit/react", () => ({
 }))
 
 // Mock window.postMessage to trigger state hydration
+const TEST_MODES = [
+	// The effective mode list the host pushes: the built-ins are plugin-contributed,
+	// and the ⌘. shortcut cycles through whatever is in it.
+	{ slug: "code", name: "💻 Code", roleDefinition: "code", tools: ["read"], source: "plugin" },
+	{ slug: "architect", name: "🏗️ Architect", roleDefinition: "architect", tools: ["read"], source: "plugin" },
+	{ slug: "debug", name: "🪲 Debug", roleDefinition: "debug", tools: ["read"], source: "plugin" },
+]
+
 const mockPostMessage = (state: any) => {
 	window.postMessage(
 		{
-			type: "state",
+			type: "stateInit",
 			state: {
 				version: "1.0.0",
 				shoferMessages: [],
@@ -102,7 +110,7 @@ const mockPostMessage = (state: any) => {
 				cloudIsAuthenticated: false,
 				telemetrySetting: "enabled",
 				mode: "code",
-				customModes: [],
+				customModes: TEST_MODES,
 				...state,
 			},
 		},
@@ -139,7 +147,7 @@ describe("ChatView - Keyboard Shortcut Fix for Dvorak", () => {
 		// Hydrate state
 		mockPostMessage({
 			mode: "code",
-			customModes: [],
+			customModes: TEST_MODES,
 		})
 
 		// Wait for component to be ready
@@ -192,7 +200,7 @@ describe("ChatView - Keyboard Shortcut Fix for Dvorak", () => {
 		// Hydrate state
 		mockPostMessage({
 			mode: "code",
-			customModes: [],
+			customModes: TEST_MODES,
 		})
 
 		// Create a keyboard event with preventDefault spy
@@ -221,7 +229,7 @@ describe("ChatView - Keyboard Shortcut Fix for Dvorak", () => {
 		// Hydrate state
 		mockPostMessage({
 			mode: "code",
-			customModes: [],
+			customModes: TEST_MODES,
 		})
 
 		// Wait for component to be ready
@@ -254,7 +262,7 @@ describe("ChatView - Keyboard Shortcut Fix for Dvorak", () => {
 		// Hydrate state
 		mockPostMessage({
 			mode: "code",
-			customModes: [],
+			customModes: TEST_MODES,
 		})
 
 		// Wait for component to be ready

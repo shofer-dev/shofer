@@ -1,61 +1,70 @@
 import type { ModeConfig } from "../mode.js"
 
-import { getAllModes, modes } from "../modes.js"
+import { getAllModes, resolveModeConfig, isCustomMode, defaultModeSlug } from "../modes.js"
 
-const bundleMode = (slug: string, name = slug): ModeConfig => ({
+/**
+ * Modes are **data**, not a constant: Shofer's own six arrive from the bundled
+ * `builtin-modes` plugin and reach these helpers through the same list as the user's
+ * and the project's. So the helpers below know nothing about "built-in" — they merge,
+ * de-duplicate and resolve whatever list the host assembled.
+ */
+
+const mode = (slug: string, source?: ModeConfig["source"], name = slug): ModeConfig => ({
 	slug,
 	name,
 	roleDefinition: `${name} role`,
 	tools: ["read"],
+	...(source ? { source } : {}),
 })
 
-describe("getAllModes governance flag (disableBuiltIn)", () => {
-	it("returns all built-in modes when no flag and no custom modes", () => {
-		expect(getAllModes()).toEqual([...modes])
-		expect(getAllModes([])).toEqual([...modes])
+const pluginModes = [mode("code", "plugin"), mode("architect", "plugin")]
+
+describe("getAllModes", () => {
+	it("returns an empty list when nothing defines a mode", () => {
+		expect(getAllModes()).toEqual([])
+		expect(getAllModes([])).toEqual([])
 	})
 
-	it("layers custom modes on top of built-ins when the flag is absent", () => {
-		const custom = [bundleMode("my-bundle-mode")]
-		const result = getAllModes(custom)
-		expect(result.length).toBe(modes.length + 1)
-		// built-ins preserved, custom appended
-		expect(result.slice(0, modes.length)).toEqual([...modes])
-		expect(result[result.length - 1]).toEqual(custom[0])
+	it("preserves the order the host merged in", () => {
+		const all = getAllModes([mode("mine", "project"), ...pluginModes])
+		expect(all.map((m) => m.slug)).toEqual(["mine", "code", "architect"])
 	})
 
-	it("overrides a built-in mode by slug when the flag is absent (unchanged behavior)", () => {
-		const override = bundleMode(modes[0]!.slug, "Overridden")
-		const result = getAllModes([override])
-		expect(result.length).toBe(modes.length)
-		expect(result.find((m) => m.slug === modes[0]!.slug)).toEqual(override)
+	it("keeps the first entry for a repeated slug, so a project mode shadows the plugin's", () => {
+		const override = mode("code", "project", "My Code")
+		const all = getAllModes([override, ...pluginModes])
+		expect(all).toHaveLength(2)
+		expect(all.find((m) => m.slug === "code")).toEqual(override)
+	})
+})
+
+describe("resolveModeConfig", () => {
+	it("prefers the requested mode", () => {
+		expect(resolveModeConfig("architect", pluginModes).slug).toBe("architect")
 	})
 
-	it("suppresses built-ins and returns ONLY custom modes when the flag is on", () => {
-		const custom = [bundleMode("only-a"), bundleMode("only-b")]
-		const result = getAllModes(custom, { disableBuiltIn: true })
-		expect(result).toEqual(custom)
-		// none of the built-in slugs leak through
-		for (const builtIn of modes) {
-			expect(result.some((m) => m.slug === builtIn.slug)).toBe(false)
-		}
+	it("falls back to the default mode when the slug is unknown", () => {
+		expect(resolveModeConfig("deleted-mode", pluginModes).slug).toBe(defaultModeSlug)
 	})
 
-	it("returns an empty array with the flag on and no custom modes — built-ins are NOT re-added", () => {
-		expect(getAllModes(undefined, { disableBuiltIn: true })).toEqual([])
-		expect(getAllModes([], { disableBuiltIn: true })).toEqual([])
+	it("falls back to the first available mode when even the default is gone", () => {
+		// An org that suppressed the built-ins and shipped its own set has no `code`.
+		const orgModes = [mode("org-one", "global"), mode("org-two", "global")]
+		expect(resolveModeConfig("deleted-mode", orgModes).slug).toBe("org-one")
 	})
 
-	it("with the flag on, a custom mode sharing a built-in slug is kept as-is (no duplicate built-in)", () => {
-		// A bundle may deliberately reuse the "code" slug; with built-ins off it
-		// must resolve to the bundle's version, and only once.
-		const override = bundleMode("code", "Bundle Code")
-		const result = getAllModes([override], { disableBuiltIn: true })
-		expect(result).toEqual([override])
+	it("throws rather than inventing a mode when no mode exists at all", () => {
+		// Misconfiguration the user has to see — a silent stub mode would produce a
+		// system prompt with no role definition and no tool restrictions.
+		expect(() => resolveModeConfig("code", [])).toThrow(/No modes are available/)
 	})
+})
 
-	it("is a no-op difference when disableBuiltIn is false vs absent", () => {
-		const custom = [bundleMode("x")]
-		expect(getAllModes(custom, { disableBuiltIn: false })).toEqual(getAllModes(custom))
+describe("isCustomMode", () => {
+	it("is true only for a mode the user or project authored", () => {
+		const all = [mode("mine", "project"), ...pluginModes]
+		expect(isCustomMode("mine", all)).toBe(true)
+		expect(isCustomMode("code", all)).toBe(false)
+		expect(isCustomMode("missing", all)).toBe(false)
 	})
 })

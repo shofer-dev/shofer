@@ -143,7 +143,7 @@ entirely (the schema requires _either_ `tools` or `tools_allowed`). This is the
 pattern for a tightly-scoped read-only custom mode — e.g. a `.shofer/shofermodes`
 mode that grants only `read_file`/`grep_search` and nothing else. (Note: the
 built-in `reviewer` mode is **not** such a mode — it uses `tools`; see
-[`built-in-modes.md`](built-in-modes.md).)
+[`plugins/builtin-modes.md`](plugins/builtin-modes.md).)
 
 ### `tools_denied`
 

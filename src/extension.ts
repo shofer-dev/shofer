@@ -338,6 +338,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Finish initializing the provider.
 	TelemetryService.instance.setProvider(provider)
 
+	// Discover plugins before anything reads a mode, a workflow or a skill. Shofer's
+	// built-in modes ship as the bundled `builtin-modes` plugin, so an enumeration that
+	// ran first would see — and `CustomModesManager` would then cache and persist — a
+	// mode list with no modes in it. Only declarative discovery is awaited here; code
+	// plugins keep loading in the background.
+	await provider.getPluginManager()
+
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(ShoferProvider.sideBarId, provider, {
 			webviewOptions: { retainContextWhenHidden: true },

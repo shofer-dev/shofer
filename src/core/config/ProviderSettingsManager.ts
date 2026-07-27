@@ -16,7 +16,7 @@ import {
 } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { Mode, modes } from "@shofer/core"
+import { Mode } from "@shofer/core"
 import { buildApiHandler } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
@@ -55,9 +55,14 @@ export class ProviderSettingsManager {
 	private static readonly SCOPE_PREFIX = "shofer_config_"
 	private readonly defaultConfigId = this.generateId()
 
-	private readonly defaultModeApiConfigs: Record<string, string> = Object.fromEntries(
-		modes.map((mode) => [mode.slug, this.defaultConfigId]),
-	)
+	/**
+	 * No mode starts out linked to a profile. Modes are plugin/user data resolved at
+	 * runtime, so there is no list to seed from here — and an unlinked mode needs no
+	 * seed: switching to one keeps the active profile and records it as that mode's
+	 * association (`ShoferProvider.handleUserModeSwitch`), which on a fresh install is
+	 * the same "default" profile the old seed named.
+	 */
+	private readonly defaultModeApiConfigs: Record<string, string> = {}
 
 	private readonly defaultProviderProfiles: ProviderProfiles = {
 		currentApiConfigName: "default",
@@ -110,15 +115,11 @@ export class ProviderSettingsManager {
 
 				let isDirty = false
 
-				// Migrate existing installs to have per-mode API config map
+				// Migrate existing installs to have a per-mode API config map. Starts
+				// empty: a mode records its association on the first switch, so there is
+				// nothing to seed and no mode list to seed it from.
 				if (!providerProfiles.modeApiConfigs) {
-					// Use the currently selected config for all modes initially
-					const currentName = providerProfiles.currentApiConfigName
-					const seedId =
-						providerProfiles.apiConfigs[currentName]?.id ??
-						Object.values(providerProfiles.apiConfigs)[0]?.id ??
-						this.defaultConfigId
-					providerProfiles.modeApiConfigs = Object.fromEntries(modes.map((m) => [m.slug, seedId]))
+					providerProfiles.modeApiConfigs = {}
 					isDirty = true
 				}
 

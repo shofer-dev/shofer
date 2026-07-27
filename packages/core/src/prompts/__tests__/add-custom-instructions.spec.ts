@@ -47,7 +47,9 @@ import { ModeConfig } from "@shofer/types"
 
 import { SYSTEM_PROMPT } from "../system.js"
 import type { McpHub } from "../../services/mcp/McpHub.js"
-import { defaultModeSlug, modes, Mode } from "@shofer/types"
+import { defaultModeSlug, Mode } from "@shofer/types"
+
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 import { addCustomInstructions } from "../sections/custom-instructions.js"
 
 // Mock the sections
@@ -176,7 +178,7 @@ describe("addCustomInstructions", () => {
 			undefined, // diffStrategy
 			"architect", // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -196,7 +198,7 @@ describe("addCustomInstructions", () => {
 			undefined, // diffStrategy
 			"code", // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -218,7 +220,7 @@ describe("addCustomInstructions", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes,
+			BUILTIN_MODES, // customModes,
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -236,12 +238,12 @@ describe("addCustomInstructions", () => {
 	})
 
 	it("should prioritize mode-specific rules for debug mode", async () => {
-		const instructions = await addCustomInstructions("", "", "/test/path", modes[2]!.slug)
+		const instructions = await addCustomInstructions("", "", "/test/path", "debug")
 		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/debug-mode-rules.snap")
 	})
 
 	it("should prioritize mode-specific rules for architect mode", async () => {
-		const instructions = await addCustomInstructions("", "", "/test/path", modes[1]!.slug)
+		const instructions = await addCustomInstructions("", "", "/test/path", "architect")
 		expect(instructions).toMatchFileSnapshot("./__snapshots__/add-custom-instructions/architect-mode-rules.snap")
 	})
 

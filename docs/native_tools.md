@@ -41,7 +41,7 @@ by the time `execute()` runs, the filter has already authorized the call.
 
 ## Mode Availability
 
-The six built-in modes (`DEFAULT_MODES` in [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)). See [`built-in-modes.md`](built-in-modes.md) for the authoritative source.
+The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json)). See [`plugins/builtin-modes.md`](plugins/builtin-modes.md) for the authoritative source.
 
 | Mode           | Groups                                                                              | Description                     |
 | -------------- | ----------------------------------------------------------------------------------- | ------------------------------- |
@@ -914,7 +914,7 @@ To read off availability for any tool:
 1. Find the tool's group in the per-group sections above (Read / Write / Execute /
    MCP / Mode / Subtasks / Questions), or note it as always-available.
 2. Look up the mode's `tools` in [§ Mode Availability](#mode-availability) (or the
-   authoritative [`built-in-modes.md`](built-in-modes.md) / `DEFAULT_MODES`).
+   authoritative [`plugins/builtin-modes.md`](plugins/builtin-modes.md)).
 3. The tool is available iff the group is present. Architect's `write` group is
    **`.md`-only** (`fileRegex`), enforced at execution time.
 
@@ -953,7 +953,7 @@ During a source-verification pass, the following factual inaccuracies were found
 
 - **`access_mcp_resource` feature gate**: Marked 🔒 ("Requires MCP resources") — this is a deployment dependency, not a code-level feature flag. The tool works whenever MCP servers expose resources. The gate indicator may overstate the restriction.
 - **`generate_image` parameters**: The feature-gated tools table lists `generate_image` but the detail section is omitted. If the tool is permanently gated, a brief parameter summary would still help readers understand its interface.
-- ~~**Orchestrator mode groups**~~: ✅ removed. There is **no** Orchestrator (or Ask) mode in `DEFAULT_MODES` — those rows were stale RooCode-isms. The six built-in modes are `code`, `architect`, `debug`, `code-search`, `web-search`, `reviewer` (see [§ Mode Availability](#mode-availability)). "Orchestrator" is a separate API-consumer **extension** (`extensions/orchestrator/`), not a mode.
+- ~~**Orchestrator mode groups**~~: ✅ removed. There is **no** Orchestrator (or Ask) mode among the built-ins — those rows were stale RooCode-isms. The six built-in modes are `code`, `architect`, `debug`, `code-search`, `web-search`, `reviewer` (see [§ Mode Availability](#mode-availability)). "Orchestrator" is a separate API-consumer **extension** (`extensions/orchestrator/`), not a mode.
 - **`new_task` `task_id` parameter**: Present in [`NewTaskParams`](../packages/core/src/tools/NewTaskTool.ts) but not documented in the parameter table. Used internally for resumption.
 - **`read_file` description text**: The File Operations summary table says "Read file contents with line range" — this under-sells the tool, which supports two reading modes (slice + indentation with full parameterization). Consider updating to reflect the richer capability.
 

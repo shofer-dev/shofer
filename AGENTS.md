@@ -219,7 +219,7 @@ code (webview, `ContextProxy`, activation, task/skill managers) stays under
   | Change | Update in lock-step |
   | --- | --- |
   | native tool added/renamed/reparametrized/regrouped | [`docs/native_tools.md`](docs/native_tools.md), `toolDescription()` in [`presentAssistantMessage.ts`](packages/core/src/assistant-message/presentAssistantMessage.ts), [`docs/terminology.md`](docs/terminology.md) §9 |
-  | `TOOL_GROUPS` / `ALWAYS_AVAILABLE_TOOLS` / `DEFAULT_MODES` in [`tool.ts`](packages/types/src/tool.ts) / [`mode.ts`](packages/types/src/mode.ts) | [`docs/tool-categories.md`](docs/tool-categories.md) |
+  | `TOOL_GROUPS` / `ALWAYS_AVAILABLE_TOOLS` in [`tool.ts`](packages/types/src/tool.ts), or the built-in modes in [`plugins/builtin-modes/plugin.json`](plugins/builtin-modes/plugin.json) | [`docs/tool-categories.md`](docs/tool-categories.md), [`docs/plugins/builtin-modes.md`](docs/plugins/builtin-modes.md) |
   | unconditional/toggle-gated tool in [`checkAutoApproval`](packages/core/src/auto-approval/index.ts) | [`docs/auto_approval.md`](docs/auto_approval.md) |
   | `MessageQueueService` public method / `QueueEvents` variant | [`docs/message_queue.md`](docs/message_queue.md) + `QueuedMessages.tsx` if it emits a webview event |
   | new `TaskLifecycle` / `@shofer/types` type | [`docs/terminology.md`](docs/terminology.md) §7/§12 |

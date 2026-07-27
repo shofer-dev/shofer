@@ -5,7 +5,8 @@ import type { ModeConfig, PromptComponent } from "@shofer/types"
 // Mock setup must come before imports
 vi.mock("vscode")
 
-import { FileRestrictionError, modes, getModeSelection } from "@shofer/core"
+import { FileRestrictionError, getModeSelection } from "@shofer/core"
+import { BUILTIN_MODES } from "@shofer/core/fixtures"
 import { isToolAllowedForMode } from "@shofer/core"
 
 describe("isToolAllowedForMode", () => {
@@ -102,7 +103,7 @@ describe("isToolAllowedForMode", () => {
 
 			// Should allow path-only for architect mode too
 			expect(
-				isToolAllowedForMode("write_to_file", "architect", [], undefined, {
+				isToolAllowedForMode("write_to_file", "architect", BUILTIN_MODES, undefined, {
 					path: "test.js",
 				}),
 			).toBe(true)
@@ -203,7 +204,7 @@ describe("isToolAllowedForMode", () => {
 		it("allows architect mode to edit markdown files only", () => {
 			// Should allow editing markdown files
 			expect(
-				isToolAllowedForMode("write_to_file", "architect", [], undefined, {
+				isToolAllowedForMode("write_to_file", "architect", BUILTIN_MODES, undefined, {
 					path: "test.md",
 					content: "# Test",
 				}),
@@ -211,7 +212,7 @@ describe("isToolAllowedForMode", () => {
 
 			// Should allow applying diffs to markdown files
 			expect(
-				isToolAllowedForMode("apply_diff", "architect", [], undefined, {
+				isToolAllowedForMode("apply_diff", "architect", BUILTIN_MODES, undefined, {
 					path: "readme.md",
 					diff: "- old\n+ new",
 				}),
@@ -219,21 +220,21 @@ describe("isToolAllowedForMode", () => {
 
 			// Should reject non-markdown files
 			expect(() =>
-				isToolAllowedForMode("write_to_file", "architect", [], undefined, {
+				isToolAllowedForMode("write_to_file", "architect", BUILTIN_MODES, undefined, {
 					path: "test.js",
 					content: "console.log('test')",
 				}),
 			).toThrow(FileRestrictionError)
 			expect(() =>
-				isToolAllowedForMode("write_to_file", "architect", [], undefined, {
+				isToolAllowedForMode("write_to_file", "architect", BUILTIN_MODES, undefined, {
 					path: "test.js",
 					content: "console.log('test')",
 				}),
 			).toThrow(/Markdown files only/)
 
 			// Should maintain read capabilities
-			expect(isToolAllowedForMode("read_file", "architect", [])).toBe(true)
-			expect(isToolAllowedForMode("use_mcp_tool", "architect", [])).toBe(true)
+			expect(isToolAllowedForMode("read_file", "architect", BUILTIN_MODES)).toBe(true)
+			expect(isToolAllowedForMode("use_mcp_tool", "architect", BUILTIN_MODES)).toBe(true)
 		})
 
 		it("applies restrictions to apply_diff", () => {
@@ -241,7 +242,7 @@ describe("isToolAllowedForMode", () => {
 
 			// Should allow markdown files in architect mode
 			expect(
-				isToolAllowedForMode("apply_diff", "architect", [], undefined, {
+				isToolAllowedForMode("apply_diff", "architect", BUILTIN_MODES, undefined, {
 					path: "test.md",
 					diff: "- old content\n+ new content",
 				}),
@@ -249,13 +250,13 @@ describe("isToolAllowedForMode", () => {
 
 			// Non-markdown file should throw
 			expect(() =>
-				isToolAllowedForMode("apply_diff", "architect", [], undefined, {
+				isToolAllowedForMode("apply_diff", "architect", BUILTIN_MODES, undefined, {
 					path: "test.py",
 					diff: "- old content\n+ new content",
 				}),
 			).toThrow(FileRestrictionError)
 			expect(() =>
-				isToolAllowedForMode("apply_diff", "architect", [], undefined, {
+				isToolAllowedForMode("apply_diff", "architect", BUILTIN_MODES, undefined, {
 					path: "test.py",
 					diff: "- old content\n+ new content",
 				}),
@@ -414,7 +415,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"apply_patch",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						patch: "*** Begin Patch\n*** Update File: test.md\n@@ \n-old\n+new\n*** End Patch",
@@ -428,7 +429,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"apply_patch",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						patch: "*** Begin Patch\n*** Update File: test.js\n@@ \n-old\n+new\n*** End Patch",
@@ -443,7 +444,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"search_replace",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						file_path: "test.md",
@@ -459,7 +460,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"search_replace",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						file_path: "test.js",
@@ -476,7 +477,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"edit_file",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						file_path: "test.md",
@@ -492,7 +493,7 @@ describe("isToolAllowedForMode", () => {
 				isToolAllowedForMode(
 					"edit_file",
 					"architect",
-					[],
+					BUILTIN_MODES,
 					undefined,
 					{
 						file_path: "test.js",
@@ -813,23 +814,6 @@ describe("FileRestrictionError", () => {
 		expect(error.name).toBe("FileRestrictionError")
 	})
 
-	describe("debug mode", () => {
-		it("is configured correctly", () => {
-			const debugMode = modes.find((mode) => mode.slug === "debug")
-			expect(debugMode).toBeDefined()
-			expect(debugMode).toMatchObject({
-				slug: "debug",
-				name: "🪲 Debug",
-				roleDefinition:
-					"You are Shofer, an expert software debugger specializing in systematic problem diagnosis and resolution.",
-				tools: ["read", "write", "execute", "browser", "mcp", "subtasks", "questions", "uncategorized"],
-			})
-			expect(debugMode?.customInstructions).toContain(
-				"Reflect on 5-7 different possible sources of the problem, distill those down to 1-2 most likely sources, and then add logs to validate your assumptions. Explicitly ask the user to confirm the diagnosis before fixing the problem.",
-			)
-		})
-	})
-
 	describe("getFullModeDetails", () => {
 		it("is tested in src/core/modes/__tests__/getFullModeDetails.test.ts (host-only)", () => {
 			// Moved to src/core/modes/__tests__/getFullModeDetails.test.ts (host-only)
@@ -864,7 +848,29 @@ describe("FileRestrictionError", () => {
 })
 
 describe("getModeSelection", () => {
-	const builtInDebugMode = modes.find((m) => m.slug === "debug")!
+	// Stands in for what the `builtin-modes` plugin contributes: same shape, same
+	// `source: "plugin"` tag, so the merge/override semantics under test are the real ones.
+	const pluginModes: ModeConfig[] = [
+		{
+			slug: "code",
+			name: "💻 Code",
+			roleDefinition: "Built-in Code Role",
+			customInstructions: "Built-in Code Instructions",
+			tools: ["read"],
+			source: "plugin",
+			pluginName: "builtin-modes",
+		},
+		{
+			slug: "debug",
+			name: "🪲 Debug",
+			roleDefinition: "Built-in Debug Role",
+			customInstructions: "Built-in Debug Instructions",
+			tools: ["read"],
+			source: "plugin",
+			pluginName: "builtin-modes",
+		},
+	]
+	const builtInDebugMode = pluginModes.find((m) => m.slug === "debug")!
 	const customModesList: ModeConfig[] = [
 		{
 			slug: "code", // Override
@@ -893,33 +899,33 @@ describe("getModeSelection", () => {
 	}
 
 	test("should return built-in mode details if no overrides", () => {
-		const selection = getModeSelection("debug")
+		const selection = getModeSelection("debug", undefined, pluginModes)
 		expect(selection.roleDefinition).toBe(builtInDebugMode.roleDefinition)
 		expect(selection.baseInstructions).toBe(builtInDebugMode.customInstructions || "")
 	})
 
 	test("should prioritize promptComponent for built-in mode if no custom mode exists for that slug", () => {
-		const selection = getModeSelection("debug", promptComponentDebug) // "debug" is not in customModesList
+		const selection = getModeSelection("debug", promptComponentDebug, pluginModes)
 		expect(selection.roleDefinition).toBe(promptComponentDebug.roleDefinition)
 		expect(selection.baseInstructions).toBe(promptComponentDebug.customInstructions)
 	})
 
 	test("should prioritize customMode over built-in mode", () => {
-		const selection = getModeSelection("code", undefined, customModesList)
+		const selection = getModeSelection("code", undefined, [...customModesList, ...pluginModes])
 		const customCode = customModesList.find((m) => m.slug === "code")!
 		expect(selection.roleDefinition).toBe(customCode.roleDefinition)
 		expect(selection.baseInstructions).toBe(customCode.customInstructions)
 	})
 
 	test("should prioritize customMode over promptComponent and built-in mode", () => {
-		const selection = getModeSelection("code", promptComponentCode, customModesList)
+		const selection = getModeSelection("code", promptComponentCode, [...customModesList, ...pluginModes])
 		const customCode = customModesList.find((m) => m.slug === "code")!
 		expect(selection.roleDefinition).toBe(customCode.roleDefinition)
 		expect(selection.baseInstructions).toBe(customCode.customInstructions)
 	})
 
 	test("should return new custom mode details if it exists", () => {
-		const selection = getModeSelection("new-custom", undefined, customModesList)
+		const selection = getModeSelection("new-custom", undefined, [...customModesList, ...pluginModes])
 		const newCustom = customModesList.find((m) => m.slug === "new-custom")!
 		expect(selection.roleDefinition).toBe(newCustom.roleDefinition)
 		expect(selection.baseInstructions).toBe(newCustom.customInstructions)
@@ -930,15 +936,16 @@ describe("getModeSelection", () => {
 			roleDefinition: "Prompt New Custom Role",
 			customInstructions: "Prompt New Custom Instructions",
 		}
-		const selection = getModeSelection("new-custom", promptComponentNew, customModesList)
+		const selection = getModeSelection("new-custom", promptComponentNew, [...customModesList, ...pluginModes])
 		const newCustomMode = customModesList.find((m) => m.slug === "new-custom")!
 		expect(selection.roleDefinition).toBe(newCustomMode.roleDefinition)
 		expect(selection.baseInstructions).toBe(newCustomMode.customInstructions)
 	})
 
 	test("should fall back to default mode if slug does not exist in custom, prompt, or built-in modes", () => {
-		const selection = getModeSelection("non-existent-mode", undefined, customModesList)
-		const defaultMode = modes[0] // First mode is the default
+		const selection = getModeSelection("non-existent-mode", undefined, [...customModesList, ...pluginModes])
+		// `code` is overridden by a custom mode here, so the default resolves to that one.
+		const defaultMode = customModesList.find((m) => m.slug === "code")!
 		expect(selection.roleDefinition).toBe(defaultMode.roleDefinition)
 		expect(selection.baseInstructions).toBe(defaultMode.customInstructions || "")
 	})
@@ -947,7 +954,7 @@ describe("getModeSelection", () => {
 		const selection = getModeSelection(
 			"code",
 			{ roleDefinition: "Prompt Role Only", customInstructions: "Prompt Instructions Only" },
-			customModesList,
+			[...customModesList, ...pluginModes],
 		)
 		const customCodeMode = customModesList.find((m) => m.slug === "code")!
 		expect(selection.roleDefinition).toBe(customCodeMode.roleDefinition) // Takes from customCodeMode
@@ -1050,21 +1057,21 @@ describe("getModeSelection", () => {
 	})
 
 	test("promptComponent is used if customMode for slug does not exist, even if customModesList is provided", () => {
-		// 'ask' is not in customModesList, but 'code' and 'new-custom' are.
-		const selection = getModeSelection("debug", promptComponentDebug, customModesList)
+		// "debug" is contributed by the plugin, not authored by the user, so the
+		// promptComponent override applies to it.
+		const selection = getModeSelection("debug", promptComponentDebug, [...customModesList, ...pluginModes])
 		expect(selection.roleDefinition).toBe(promptComponentDebug.roleDefinition)
 		expect(selection.baseInstructions).toBe(promptComponentDebug.customInstructions)
 	})
 
 	test("builtInMode is used if customMode for slug does not exist and promptComponent is not provided", () => {
-		// 'ask' is not in customModesList
-		const selection = getModeSelection("debug", undefined, customModesList)
+		const selection = getModeSelection("debug", undefined, [...customModesList, ...pluginModes])
 		expect(selection.roleDefinition).toBe(builtInDebugMode.roleDefinition)
 		expect(selection.baseInstructions).toBe(builtInDebugMode.customInstructions || "")
 	})
 
 	test("promptComponent is used if customMode is not provided (undefined customModesList)", () => {
-		const selection = getModeSelection("debug", promptComponentDebug, undefined)
+		const selection = getModeSelection("debug", promptComponentDebug, pluginModes)
 		expect(selection.roleDefinition).toBe(promptComponentDebug.roleDefinition)
 		expect(selection.baseInstructions).toBe(promptComponentDebug.customInstructions)
 	})

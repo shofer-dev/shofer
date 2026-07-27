@@ -5,7 +5,7 @@ import { formatResponse } from "../prompts/responses.js"
 import { getModeBySlug } from "@shofer/types"
 import { BaseTool, ToolCallbacks } from "./BaseTool.js"
 import { getManagedTaskTitle } from "./helpers/managedTaskTitle.js"
-import { type ToolUse } from "@shofer/types"
+import { type ModeConfig, type ToolUse } from "@shofer/types"
 
 interface SwitchModeParams {
 	mode_slug: string
@@ -31,7 +31,8 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 			task.consecutiveMistakeCount = 0
 
 			// Verify the mode exists
-			const targetMode = getModeBySlug(mode_slug, (await task.providerRef.deref()?.getState())?.customModes)
+			const allModes = (await task.providerRef.deref()?.getState())?.customModes
+			const targetMode = getModeBySlug(mode_slug, allModes)
 
 			if (!targetMode) {
 				task.recordToolError("switch_mode")
@@ -42,7 +43,7 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 
 			// --- Parent-switches-child path ---
 			if (task_id) {
-				return this.executeForChild(task_id, mode_slug, reason, task, targetMode, callbacks)
+				return this.executeForChild(task_id, mode_slug, reason, task, targetMode, callbacks, allModes)
 			}
 
 			// --- Self-switch path (existing behaviour) ---
@@ -69,7 +70,7 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 			await task.providerRef.deref()?.handleModeSwitch(mode_slug, task)
 
 			pushToolResult(
-				`Successfully switched from ${getModeBySlug(currentMode)?.name ?? currentMode} mode to ${
+				`Successfully switched from ${getModeBySlug(currentMode, allModes)?.name ?? currentMode} mode to ${
 					targetMode.name
 				} mode${reason ? ` because: ${reason}` : ""}.`,
 			)
@@ -91,6 +92,7 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 		parentTask: Task,
 		targetMode: { name: string },
 		callbacks: ToolCallbacks,
+		allModes: ModeConfig[] | undefined,
 	): Promise<void> {
 		const { askApproval, pushToolResult } = callbacks
 
@@ -143,7 +145,7 @@ export class SwitchModeTool extends BaseTool<"switch_mode"> {
 
 		pushToolResult(
 			`Successfully switched child task "${childTitle}" from ${
-				getModeBySlug(currentMode)?.name ?? currentMode
+				getModeBySlug(currentMode, allModes)?.name ?? currentMode
 			} mode to ${targetMode.name} mode${reason ? ` because: ${reason}` : ""}.`,
 		)
 	}

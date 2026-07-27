@@ -556,16 +556,6 @@ export type ExtensionState = Pick<
 
 	mode: string
 	customModes: ModeConfig[]
-	/**
-	 * Org governance (host-computed, read-only): built-in modes / workflows are
-	 * suppressed via the `SHOFER_DISABLE_BUILTIN_MODES` /
-	 * `SHOFER_DISABLE_BUILTIN_WORKFLOWS` pod env vars. The webview cannot read
-	 * `process.env`, so the host forwards the effect here for the webview's
-	 * `getAllModes(customModes, { disableBuiltIn })` calls and workflow UI. These
-	 * are NOT persisted settings — they never round-trip through Settings/Save.
-	 */
-	disableBuiltInModes?: boolean
-	disableBuiltInWorkflows?: boolean
 	toolRequirements?: Record<string, boolean> // Map of tool names to their requirements (e.g. {"apply_diff": true})
 
 	cwd?: string // Current working directory

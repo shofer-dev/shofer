@@ -18,7 +18,7 @@ import {
 	getDescription,
 	getCustomInstructions,
 	getAllModes,
-	findModeBySlug as findCustomModeBySlug,
+	findAuthoredMode,
 	defaultModeSlug,
 } from "@shofer/types"
 import { TOOL_GROUPS } from "@shofer/types"
@@ -108,7 +108,6 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		mode,
 		customInstructions,
 		customModes,
-		disableBuiltInModes,
 	} = useExtensionState()
 
 	// Staged per-mode API-config associations (mode slug → config id), edited via
@@ -145,10 +144,14 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// means "no edit; show live value".
 	const [globalCIOverride, setGlobalCIOverride] = useState<string | undefined>(undefined)
 
-	// Helper function to find a mode by slug (hoisted above useCallbacks that reference it).
+	// "Is this an editable mode?" — everything below gates rename/delete/export and the
+	// custom-vs-built-in branches on it. The list carries plugin-contributed modes too
+	// (Shofer's own six come from the `builtin-modes` plugin), and those are NOT
+	// editable here: a plugin owns its modes, and overriding one means authoring a mode
+	// of the same slug. Hoisted above the useCallbacks that reference it.
 	const findModeBySlug = useCallback(
 		(searchSlug: string, modes: readonly ModeConfig[] | undefined): ModeConfig | undefined => {
-			return findCustomModeBySlug(searchSlug, modes)
+			return findAuthoredMode(searchSlug, modes)
 		},
 		[],
 	)
@@ -265,7 +268,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 				const liveModes = customModesRefForCommit.current
 				const livePrompts = customModePromptsRefForCommit.current
 				for (const [slug, fields] of Object.entries(overrides)) {
-					const customMode = findCustomModeBySlug(slug, liveModes)
+					const customMode = findAuthoredMode(slug, liveModes)
 					if (customMode) {
 						// Custom mode: persist the merged ModeConfig.
 						const merged: ModeConfig = {
@@ -321,7 +324,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 				// Staged tool-group edits for slugs NOT already persisted by the
 				// overrides loop above (which folds them into its own post).
 				for (const [slug, tools] of Object.entries(pendingModeGroupsRef.current)) {
-					const customMode = findCustomModeBySlug(slug, liveModes)
+					const customMode = findAuthoredMode(slug, liveModes)
 					if (!customMode || overrides[slug]) continue
 					vscode.postMessage({
 						type: "updateCustomMode",
@@ -349,7 +352,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	)
 
 	// Build modes fresh each render so search reflects inline rename updates immediately
-	const modes = getAllModes(customModes, { disableBuiltIn: disableBuiltInModes })
+	const modes = getAllModes(customModes)
 
 	const [isDialogOpen, setIsDialogOpen] = useState(false)
 	const [selectedPromptContent, setSelectedPromptContent] = useState("")
@@ -423,7 +426,6 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	// Refs to track latest state/functions for message handler (which has no dependencies)
 	const handleModeSwitchRef = useRef(handleModeSwitch)
 	const customModesRef = useRef(customModes)
-	const disableBuiltInModesRef = useRef(disableBuiltInModes)
 
 	// Update refs when dependencies change
 	useEffect(() => {
@@ -433,10 +435,6 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 	useEffect(() => {
 		customModesRef.current = customModes
 	}, [customModes])
-
-	useEffect(() => {
-		disableBuiltInModesRef.current = disableBuiltInModes
-	}, [disableBuiltInModes])
 
 	// Track the active mode until the user picks an edit target of their own.
 	// After that the selection is pinned (see `editTargetPinned`).
@@ -761,9 +759,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 					const { slug } = message as ImportModeResult
 					if (slug) {
 						// Try switching using the freshest mode list available
-						const all = getAllModes(customModesRef.current, {
-							disableBuiltIn: disableBuiltInModesRef.current,
-						})
+						const all = getAllModes(customModesRef.current)
 						const importedMode = all.find((m) => m.slug === slug)
 						if (importedMode) {
 							handleModeSwitchRef.current(importedMode)

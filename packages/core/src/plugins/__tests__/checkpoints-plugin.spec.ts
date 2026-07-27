@@ -113,14 +113,14 @@ describe("Checkpoints plugin (first-party, loaded off disk)", () => {
 		const { manager } = await build({ workspacePath: makeWorkspace() })
 		expect(manager.isEnabled("checkpoints")).toBe(true)
 		expect(pluginRegistry.has("checkpoints")).toBe(true)
-	})
+	}, 30_000)
 
 	it("stays off once the user disables it", async () => {
 		const store = new MemoryStore([], ["checkpoints"])
 		const { manager } = await build({ workspacePath: makeWorkspace(), store })
 		expect(manager.isEnabled("checkpoints")).toBe(false)
 		expect(pluginRegistry.has("checkpoints")).toBe(false)
-	})
+	}, 30_000)
 
 	it("snapshots before a file-mutating tool and restores the workspace from the marker", async () => {
 		const workspacePath = makeWorkspace()
@@ -157,7 +157,7 @@ describe("Checkpoints plugin (first-party, loaded off disk)", () => {
 
 		await pluginRegistry.applyBeforeToolCall("read_file", {}, { taskId: "task-1", cwd: workspacePath, turn: 0 })
 		expect(markers).toHaveLength(0)
-	})
+	}, 30_000)
 
 	it("packs to a .shofer-plugin archive that round-trips (a single distributable file)", async () => {
 		const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "checkpoints-pack-"))

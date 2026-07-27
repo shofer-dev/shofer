@@ -952,6 +952,21 @@ export const pluginModeContributionSchema = modeConfigObjectSchema
 
 export type PluginModeContribution = z.infer<typeof pluginModeContributionSchema>
 
+/** Separates a plugin's name from an authored contribution name in a qualified slug. */
+export const PLUGIN_NAMESPACE_SEPARATOR = ":"
+
+/**
+ * Whether a mode slug is a plugin-namespaced one (`<plugin>:<authoredSlug>`).
+ *
+ * The complement — an unqualified slug on a plugin mode — means a bundled first-party
+ * plugin with the {@link pluginManifestSchema} `unqualifiedModes` exemption: Shofer's
+ * own defaults, which keep their canonical names. Mode slugs authored by a user or a
+ * project can never contain the separator, so this is an exact test.
+ */
+export function isNamespacedModeSlug(slug: string): boolean {
+	return slug.includes(PLUGIN_NAMESPACE_SEPARATOR)
+}
+
 /**
  * A skill a plugin declares. The physical `SKILL.md` lives under the plugin's
  * `skills/` directory; this entry is the manifest-level declaration (design §6.4).
@@ -1126,6 +1141,21 @@ export const pluginManifestSchema = z
 		 * can still disable it, and their choice always wins once recorded.
 		 */
 		defaultEnabled: z.boolean().optional(),
+		/**
+		 * Register this plugin's **modes** under their authored slugs instead of the
+		 * namespaced `<plugin>:<slug>` form.
+		 *
+		 * Honored **only for `bundled` (first-party) scope**, and it exists for exactly one
+		 * situation: a plugin that ships the *platform's own* defaults, whose names are a
+		 * public contract. Shofer's built-in modes are `code`, `architect`, `debug`, … in
+		 * every user setting, every mode link, every `switch_mode` call and every doc —
+		 * moving them into a plugin must not rename them to `builtin-modes:code`.
+		 *
+		 * It trades away the "collisions are impossible by construction" guarantee for
+		 * those slugs, so a third-party plugin can never have it: an unqualified slug from
+		 * a global/project plugin could silently shadow a built-in.
+		 */
+		unqualifiedModes: z.boolean().optional(),
 		/**
 		 * Per-hook time budget in ms for this plugin's lifecycle hooks, overriding the
 		 * shared default (`PLUGIN_HOOK_TIMEOUT_MS`, 500 ms). Raise it only when a hook

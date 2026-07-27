@@ -1,3 +1,4 @@
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 import { NewTaskTool } from "../NewTaskTool.js"
 
 /**
@@ -21,7 +22,7 @@ describe("NewTaskTool — peer_task_ids", () => {
 
 	function buildProvider(overrides: Record<string, any> = {}) {
 		return {
-			getState: vi.fn().mockResolvedValue({ customModes: [] }),
+			getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES }),
 			getTaskWithId: vi.fn().mockResolvedValue({
 				historyItem: { backgroundChildIds: [], childIds: [], peerIds: [] },
 			}),

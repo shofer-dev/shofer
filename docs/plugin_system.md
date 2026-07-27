@@ -305,13 +305,26 @@ the full `getHost()` `HostBridge`.
 ### 5.3 Modes (`contributes.modes`)
 
 A plugin ships mode definitions in its manifest; they merge into the mode
-resolution chain alongside `.shofer/shofermodes` and built-in modes. Each plugin
-mode is emitted with a **qualified `slug` of `<plugin>:<authoredSlug>`** and tagged
-`source: "plugin"` + `pluginName`. The authored slug in the manifest stays natural
-(no `:`); the qualified form is how the mode is addressed/switched-to. Namespacing
-makes plugin↔plugin and plugin↔built-in slug collisions impossible — there is no
-precedence tie-break. `ModeConfig.source` is `z.enum(["global", "project", "plugin"])`
-with a sibling `pluginName?`.
+resolution chain alongside `.shofer/shofermodes` — which is now the **only** source of
+modes, since Shofer's own six are themselves a plugin's contribution (the bundled
+`builtin-modes` plugin, [`plugins/builtin-modes.md`](./plugins/builtin-modes.md)).
+`effectiveModes()` in `packages/core/src/plugins/plugin-modes.ts` performs that merge.
+
+Each plugin mode is emitted with a **qualified `slug` of `<plugin>:<authoredSlug>`**
+and tagged `source: "plugin"` + `pluginName`. The authored slug in the manifest stays
+natural (no `:`); the qualified form is how the mode is addressed/switched-to.
+Namespacing makes plugin↔plugin slug collisions impossible — there is no precedence
+tie-break. `ModeConfig.source` is `z.enum(["global", "project", "plugin"])` with a
+sibling `pluginName?`.
+
+**The one exemption:** a **bundled** plugin may set `unqualifiedModes: true` in its
+manifest, and its modes then keep their authored slugs. It exists solely for a plugin
+shipping the platform's own defaults, whose names are a public contract — the
+built-ins must stay `code`/`architect`/…, not `builtin-modes:code`. Scope is enforced:
+a global or project plugin declaring it is ignored, because an unqualified
+third-party slug could silently shadow a built-in. A user or project mode of the same
+slug replaces the contributed one **in place**, so overriding a built-in neither
+duplicates it nor reorders the mode picker.
 
 A plugin mode may set **`private: true`**: it is switch-able by its qualified slug
 (the agent can enter it) but hidden from every user-facing surface (mode selector,
@@ -1327,7 +1340,7 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 | [`mcp.md`](./mcp.md)                                                | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
 | [`adding-new-tools.md`](./adding-new-tools.md)                      | Plugin tools follow the `CustomToolDefinition` contract.                         |
 | [`skills.md`](./skills.md)                                          | Plugin skills are discovered alongside `.shofer/skills/`.                        |
-| [`built-in-modes.md`](./built-in-modes.md)                          | Plugin modes merge into the mode resolution chain.                               |
+| [`plugins/builtin-modes.md`](./plugins/builtin-modes.md)            | Plugin modes merge into the mode resolution chain.                               |
 | [`host-boundary.md`](./host-boundary.md)                            | Plugins use `getHost()` — host-agnostic by construction.                         |
 | [`packages/types/src/plugin.ts`](../packages/types/src/plugin.ts)   | The `ShoferPlugin` interface and all plugin types.                               |
 | [`packages/core/src/plugins/`](../packages/core/src/plugins/)       | `PluginManager`, `PluginRegistry`, sandbox, and host-capability implementations. |

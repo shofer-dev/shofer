@@ -1,5 +1,6 @@
 // npx vitest core/tools/__tests__/newTaskTool.spec.ts
 
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 import type { AskApproval, HandleError, NativeToolArgs, ToolUse } from "@shofer/types"
 import { setHost, createInMemoryHost, InMemoryConfig, type HostBridge } from "@shofer/types"
 
@@ -54,7 +55,7 @@ const mockShofer = {
 	emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 	providerRef: {
 		deref: vi.fn(() => ({
-			getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),
+			getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES, mode: "code" }),
 			createTask: mockCreateTask,
 			registerBlockingChildResolver: mockRegisterBlockingChildResolver,
 			getTaskWithId: mockGetTaskWithId,
@@ -764,7 +765,7 @@ describe("newTaskTool delegation flow", () => {
 			emitTaskInteraction: vi.fn().mockResolvedValue(undefined),
 			providerRef: {
 				deref: vi.fn(() => ({
-					getState: vi.fn().mockResolvedValue({ customModes: [], mode: "code" }),
+					getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES, mode: "code" }),
 					createTask: localCreateTask,
 					registerBlockingChildResolver: localRegisterBlockingChildResolver,
 					getTaskWithId: localGetTaskWithId,

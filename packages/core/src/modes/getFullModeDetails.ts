@@ -1,7 +1,7 @@
 import type { ModeConfig, CustomModePrompts } from "@shofer/types"
 
 import { addCustomInstructions } from "../prompts/sections/custom-instructions.js"
-import { getModeBySlug, modes } from "@shofer/types"
+import { resolveModeConfig } from "@shofer/types"
 
 /**
  * Resolve a mode's full prompt-time details (role definition, when-to-use,
@@ -23,8 +23,7 @@ export async function getFullModeDetails(
 		language?: string
 	},
 ): Promise<ModeConfig> {
-	// First get the base mode config from custom modes or built-in modes
-	const baseMode = getModeBySlug(modeSlug, customModes) || modes.find((m) => m.slug === modeSlug) || modes[0]!
+	const baseMode = resolveModeConfig(modeSlug, customModes)
 
 	// Check for any prompt component overrides
 	const promptComponent = customModePrompts?.[modeSlug]

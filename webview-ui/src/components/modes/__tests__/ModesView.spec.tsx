@@ -13,6 +13,17 @@ vitest.mock("@src/utils/vscode", () => ({
 	},
 }))
 
+/**
+ * The modes the host pushes on `ExtensionState.customModes`. Shofer's own arrive from
+ * the bundled `builtin-modes` plugin, tagged `source: "plugin"` — which is also what
+ * makes them read-only in this view (a plugin owns its modes).
+ */
+const BUILT_IN_MODES = [
+	{ slug: "code", name: "💻 Code", roleDefinition: "Code role", tools: ["read"], source: "plugin" },
+	{ slug: "architect", name: "🏗️ Architect", roleDefinition: "Architect role", tools: ["read"], source: "plugin" },
+	{ slug: "debug", name: "🪲 Debug", roleDefinition: "Debug role", tools: ["read"], source: "plugin" },
+]
+
 const mockExtensionState = {
 	customModePrompts: {},
 	listApiConfigMeta: [
@@ -22,7 +33,7 @@ const mockExtensionState = {
 	enhancementApiConfigId: "",
 	setEnhancementApiConfigId: vitest.fn(),
 	mode: "code",
-	customModes: [],
+	customModes: BUILT_IN_MODES,
 	customSupportPrompts: [],
 	currentApiConfigName: "",
 	customInstructions: "Initial instructions",
@@ -220,7 +231,7 @@ describe("PromptsView", () => {
 		// Test with built-in mode (code)
 		const { unmount } = render(
 			<ExtensionStateContext.Provider
-				value={{ ...mockExtensionState, mode: "code", customModes: [customMode] } as any}>
+				value={{ ...mockExtensionState, mode: "code", customModes: [customMode, ...BUILT_IN_MODES] } as any}>
 				<ModesView />
 			</ExtensionStateContext.Provider>,
 		)
@@ -267,7 +278,7 @@ describe("PromptsView", () => {
 		// Test with built-in mode (code) - description section should be shown with reset button
 		const { unmount } = render(
 			<ExtensionStateContext.Provider
-				value={{ ...mockExtensionState, mode: "code", customModes: [customMode] } as any}>
+				value={{ ...mockExtensionState, mode: "code", customModes: [customMode, ...BUILT_IN_MODES] } as any}>
 				<ModesView />
 			</ExtensionStateContext.Provider>,
 		)

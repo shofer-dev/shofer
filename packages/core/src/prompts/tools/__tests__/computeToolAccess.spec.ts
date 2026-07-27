@@ -1,6 +1,8 @@
 // npx vitest run core/prompts/tools/__tests__/computeToolAccess.spec.ts
 
 import { getModeBySlug } from "@shofer/types"
+
+import { BUILTIN_MODES } from "../../../__fixtures__/builtin-modes.js"
 import { computeToolAccess, FEATURE_GATED_TOOLS, type ToolAccessGates } from "../filter-tools-for-mode.js"
 
 /**
@@ -10,7 +12,7 @@ import { computeToolAccess, FEATURE_GATED_TOOLS, type ToolAccessGates } from "..
  * the feature-gate table and disabled-tool removal.
  */
 
-const codeMode = getModeBySlug("code", [])!
+const codeMode = getModeBySlug("code", BUILTIN_MODES)!
 
 const allGatesOn: ToolAccessGates = {
 	ragSearch: true,
@@ -25,7 +27,7 @@ const run = (gates: ToolAccessGates, disabledTools?: string[]) =>
 	computeToolAccess({
 		modeSlug: "code",
 		modeConfig: codeMode,
-		customModes: [],
+		customModes: BUILTIN_MODES,
 		experiments: {},
 		gates,
 		disabledTools,

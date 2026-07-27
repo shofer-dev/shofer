@@ -1,6 +1,6 @@
 import type OpenAI from "openai"
 import type { ModeConfig, ToolName, ToolGroup, ModelInfo, McpTool } from "@shofer/types"
-import { getGroupName, getModeBySlug, getToolsForMode } from "@shofer/types"
+import { getGroupName, getModeBySlug, getToolsForMode, resolveModeConfig } from "@shofer/types"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types"
 import { defaultModeSlug } from "@shofer/types"
 import { resolveToolAlias } from "../../tools/tool-aliases.js"
@@ -270,15 +270,10 @@ export function filterNativeToolsForMode(
 	mcpHub?: McpHub,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	// Get mode configuration and all tools for this mode
-	const modeSlug = mode ?? defaultModeSlug
-	let modeConfig = getModeBySlug(modeSlug, customModes)
-
-	// Fallback to default mode if current mode config is not found
-	// This ensures the agent always has functional tools even if a custom mode is deleted
-	// or configuration becomes corrupted
-	if (!modeConfig) {
-		modeConfig = getModeBySlug(defaultModeSlug, customModes)!
-	}
+	// Falls back to the default mode, then to any mode that exists, so the agent keeps
+	// functional tools even if the mode it was started in has since been deleted.
+	const modeConfig = resolveModeConfig(mode ?? defaultModeSlug, customModes)
+	const modeSlug = modeConfig.slug
 
 	// Resolve the feature-gate booleans from the runtime managers/flags, then
 	// delegate the access decision to the single computeToolAccess source of truth.

@@ -254,32 +254,25 @@ Key globalState keys for modes:
 | Key                  | Contents                                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `customInstructions` | Global custom instructions (all modes)                                                                                         |
-| `customModes`        | Merged result of `.shofer/shofermodes` + settings file                                                                         |
+| `customModes`        | The effective mode list: `.shofer/shofermodes` + settings file + plugin-contributed modes                                      |
 | `customModePrompts`  | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse)                                                      |
 | `disabledTools`      | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
 
-### 2d. Built-in Modes — Compiled into extension
+### 2d. Built-in Modes — a bundled plugin
 
-| Property     | Value                                                                     |
-| ------------ | ------------------------------------------------------------------------- |
-| **Path**     | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts)             |
-| **Type**     | Read-only code constant                                                   |
-| **Scope**    | Per-extension version                                                     |
-| **Priority** | **Lowest** (fallback)                                                     |
-| **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer |
+| Property     | Value                                                                       |
+| ------------ | --------------------------------------------------------------------------- |
+| **Path**     | [`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json) |
+| **Type**     | Plugin manifest (`contributes.modes`), shipped in the extension bundle      |
+| **Scope**    | Per-extension version; removable (disable the plugin)                       |
+| **Priority** | **Lowest** (a user or project mode of the same slug replaces one)           |
+| **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer   |
 
-Built-in modes array (in order — see [`built-in-modes.md`](built-in-modes.md)):
-
-```typescript
-export const DEFAULT_MODES: readonly ModeConfig[] = [
-  { slug: "code",        ... },  // index 0 = default mode / ultimate fallback
-  { slug: "architect",   ... },
-  { slug: "debug",       ... },
-  { slug: "code-search", ... },
-  { slug: "web-search",  ... },
-  { slug: "reviewer",    ... },
-]
-```
+The six modes, in manifest order (see [`plugins/builtin-modes.md`](plugins/builtin-modes.md)):
+`code` (the default mode and ultimate fallback), `architect`, `debug`, `code-search`,
+`web-search`, `reviewer`. They reach every consumer through the same `customModes`
+list as user and project modes — merged by `effectiveModes()`, so there is no
+separate built-in list in code.
 
 ---
 
@@ -459,19 +452,19 @@ Changing the default profile is name-only: it must never touch a live
 flowchart LR
     PROJ["'.shofer/shofermodes' (workspace)<br/>source: project"]
     GLOB["custom_modes.yaml (global storage)<br/>source: global"]
-    BUILT["DEFAULT_MODES<br/>packages/types/src/mode.ts"]
+    BUILT["builtin-modes plugin<br/>contributes.modes"]
     S1["Stage 1 — CustomModesManager.getCustomModes()<br/>a global mode is kept only if its slug<br/>is not already a project mode"]
     CM["customModes[]"]
-    S2["Stage 2 — getAllModes(customModes)<br/>same slug overrides, new slug appends"]
+    S2["Stage 2 — effectiveModes()<br/>same slug overrides in place, new slug appends"]
     FINAL["final ModeConfig[]"]
     MAC["modeApiConfigs — resolved separately<br/>at task creation, from the profiles blob"]
 
     PROJ --> S1
     GLOB --> S1
-    S1 --> CM
-    CM --> S2
+    S1 --> S2
     BUILT --> S2
-    S2 --> FINAL
+    S2 --> CM
+    CM --> FINAL
     MAC -.->|"per-mode API profile, not a mode definition"| FINAL
 ```
 
@@ -1167,11 +1160,11 @@ live codebase. Each item includes the current state and a suggested remedy.
 ### 14a. Built-in Mode List — ✅ fixed
 
 §2d previously listed bogus modes (`ask`, `orchestrator`) and claimed `architect`
-was the default. The actual [`DEFAULT_MODES`](../packages/types/src/mode.ts) array
-defines **six** built-in modes, in order: `code` (index 0 = default/ultimate
+was the default. The [`builtin-modes` plugin](../plugins/builtin-modes/plugin.json)
+contributes **six** modes, in order: `code` (the default/ultimate
 fallback), `architect`, `debug`, `code-search`, `web-search`, `reviewer`. There is
 no `ask`, `orchestrator`, `search`, `opinion`, or `browser` mode. §2d's table and
-code example were corrected. (Authoritative source: [`built-in-modes.md`](built-in-modes.md).)
+code example were corrected. (Authoritative source: [`plugins/builtin-modes.md`](plugins/builtin-modes.md).)
 
 ### 14b. `custom_modes.yaml` Merge Logic Duplicate Code — ✅ fixed
 

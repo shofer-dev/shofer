@@ -6,7 +6,8 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./cli": "./src/cli.ts",
-		"./browser": "./src/browser.ts"
+		"./browser": "./src/browser.ts",
+		"./fixtures": "./src/__fixtures__/index.ts"
 	},
 	"scripts": {
 		"lint": "eslint src --ext=ts --max-warnings=0",

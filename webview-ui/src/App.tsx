@@ -72,30 +72,29 @@ const App = () => {
 		parallelTasks,
 		currentTaskItem,
 		customModes,
-		disableBuiltInModes,
 	} = useExtensionState()
 
 	// Merge built-in and custom modes into a flat slug→name lookup for
 	// the TaskSelector subtitle. Rebuild whenever customModes change.
 	const allModes = useMemo(
 		() =>
-			getAllModes(customModes, { disableBuiltIn: disableBuiltInModes }).map((m) => ({
+			getAllModes(customModes).map((m) => ({
 				slug: m.slug,
 				name: m.name,
 			})),
-		[customModes, disableBuiltInModes],
+		[customModes],
 	)
 
 	// Richer mode metadata for the launcher "New Task" stage — each card shows
 	// the mode name plus a short description so the user can pick intentionally.
 	const launcherModes = useMemo(
 		() =>
-			getAllModes(customModes, { disableBuiltIn: disableBuiltInModes }).map((m) => ({
+			getAllModes(customModes).map((m) => ({
 				slug: m.slug,
 				name: m.name,
 				description: m.description || m.whenToUse,
 			})),
-		[customModes, disableBuiltInModes],
+		[customModes],
 	)
 
 	// Worktree list — populated by worktreeList window messages from the

@@ -3,14 +3,17 @@
 import { describe, it, expect } from "vitest"
 import type { ModeConfig } from "@shofer/types"
 
-import { modes } from "@shofer/types"
 import { TOOL_GROUPS } from "@shofer/types"
+
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 
 import { validateToolUse, isToolAllowedForMode } from "../validateToolUse.js"
 
-const codeMode = modes.find((m) => m.slug === "code")?.slug || "code"
-const architectMode = modes.find((m) => m.slug === "architect")?.slug || "architect"
-const debugMode = modes.find((m) => m.slug === "debug")?.slug || "debug"
+// The mode list every `isToolAllowedForMode` call below resolves against — a default
+// install's modes, contributed by the bundled `builtin-modes` plugin.
+const codeMode = "code"
+const architectMode = "architect"
+const debugMode = "debug"
 
 describe("mode-validator", () => {
 	describe("isToolAllowedForMode", () => {
@@ -19,13 +22,13 @@ describe("mode-validator", () => {
 				// Code mode has all groups
 				Object.entries(TOOL_GROUPS).forEach(([_, config]) => {
 					config.tools.forEach((tool: string) => {
-						expect(isToolAllowedForMode(tool, codeMode, [])).toBe(true)
+						expect(isToolAllowedForMode(tool, codeMode, BUILTIN_MODES)).toBe(true)
 					})
 				})
 			})
 
 			it("disallows unknown tools", () => {
-				expect(isToolAllowedForMode("unknown_tool" as any, codeMode, [])).toBe(false)
+				expect(isToolAllowedForMode("unknown_tool" as any, codeMode, BUILTIN_MODES)).toBe(false)
 			})
 		})
 
@@ -34,7 +37,7 @@ describe("mode-validator", () => {
 				// Architect mode has read and mcp groups
 				const architectTools = [...TOOL_GROUPS.read.tools, ...TOOL_GROUPS.mcp.tools]
 				architectTools.forEach((tool) => {
-					expect(isToolAllowedForMode(tool, architectMode, [])).toBe(true)
+					expect(isToolAllowedForMode(tool, architectMode, BUILTIN_MODES)).toBe(true)
 				})
 			})
 		})
@@ -44,7 +47,7 @@ describe("mode-validator", () => {
 				// Debug mode has read and mcp groups
 				const debugTools = [...TOOL_GROUPS.read.tools, ...TOOL_GROUPS.mcp.tools]
 				debugTools.forEach((tool) => {
-					expect(isToolAllowedForMode(tool, debugMode, [])).toBe(true)
+					expect(isToolAllowedForMode(tool, debugMode, BUILTIN_MODES)).toBe(true)
 				})
 			})
 		})
@@ -206,8 +209,8 @@ describe("mode-validator", () => {
 		describe("dynamic MCP tools", () => {
 			it("allows dynamic MCP tools when mcp group is in mode groups", () => {
 				// Code mode has mcp group, so dynamic MCP tools should be allowed
-				expect(isToolAllowedForMode("mcp_context7_resolve-library-id", codeMode, [])).toBe(true)
-				expect(isToolAllowedForMode("mcp_serverName_toolName", codeMode, [])).toBe(true)
+				expect(isToolAllowedForMode("mcp_context7_resolve-library-id", codeMode, BUILTIN_MODES)).toBe(true)
+				expect(isToolAllowedForMode("mcp_serverName_toolName", codeMode, BUILTIN_MODES)).toBe(true)
 			})
 
 			it("disallows dynamic MCP tools when mcp group is not in mode groups", () => {
@@ -242,35 +245,35 @@ describe("mode-validator", () => {
 		describe("tool requirements", () => {
 			it("respects tool requirements when provided", () => {
 				const requirements = { apply_diff: false }
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], requirements)).toBe(false)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, requirements)).toBe(false)
 
 				const enabledRequirements = { apply_diff: true }
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], enabledRequirements)).toBe(true)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, enabledRequirements)).toBe(true)
 			})
 
 			it("allows tools when their requirements are not specified", () => {
 				const requirements = { some_other_tool: true }
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], requirements)).toBe(true)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, requirements)).toBe(true)
 			})
 
 			it("handles undefined and empty requirements", () => {
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], undefined)).toBe(true)
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], {})).toBe(true)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, undefined)).toBe(true)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, {})).toBe(true)
 			})
 
 			it("prioritizes requirements over mode configuration", () => {
 				const requirements = { apply_diff: false }
 				// Even in code mode which allows all tools, disabled requirement should take precedence
-				expect(isToolAllowedForMode("apply_diff", codeMode, [], requirements)).toBe(false)
+				expect(isToolAllowedForMode("apply_diff", codeMode, BUILTIN_MODES, requirements)).toBe(false)
 			})
 
 			it("prioritizes requirements over ALWAYS_AVAILABLE_TOOLS", () => {
 				// Tools in ALWAYS_AVAILABLE_TOOLS (switch_mode, new_task, etc.) should still
 				// be blockable via toolRequirements / disabledTools
 				const requirements = { switch_mode: false, new_task: false, attempt_completion: false }
-				expect(isToolAllowedForMode("switch_mode", codeMode, [], requirements)).toBe(false)
-				expect(isToolAllowedForMode("new_task", codeMode, [], requirements)).toBe(false)
-				expect(isToolAllowedForMode("attempt_completion", codeMode, [], requirements)).toBe(false)
+				expect(isToolAllowedForMode("switch_mode", codeMode, BUILTIN_MODES, requirements)).toBe(false)
+				expect(isToolAllowedForMode("new_task", codeMode, BUILTIN_MODES, requirements)).toBe(false)
+				expect(isToolAllowedForMode("attempt_completion", codeMode, BUILTIN_MODES, requirements)).toBe(false)
 			})
 		})
 	})
@@ -278,36 +281,36 @@ describe("mode-validator", () => {
 	describe("validateToolUse", () => {
 		it("throws error for unknown/invalid tools", () => {
 			// Unknown tools should throw with a specific "Unknown tool" error
-			expect(() => validateToolUse("unknown_tool" as any, "architect", [])).toThrow(
+			expect(() => validateToolUse("unknown_tool" as any, "architect", BUILTIN_MODES)).toThrow(
 				'Unknown tool "unknown_tool". This tool does not exist.',
 			)
 		})
 
 		it("throws error for disallowed tools in architect mode", () => {
 			// execute_command is a valid tool but not allowed in architect mode
-			expect(() => validateToolUse("execute_command", "architect", [])).toThrow(
+			expect(() => validateToolUse("execute_command", "architect", BUILTIN_MODES)).toThrow(
 				'Tool "execute_command" is not allowed in architect mode.',
 			)
 		})
 
 		it("does not throw for allowed tools in architect mode", () => {
-			expect(() => validateToolUse("read_file", "architect", [])).not.toThrow()
+			expect(() => validateToolUse("read_file", "architect", BUILTIN_MODES)).not.toThrow()
 		})
 
 		it("throws error when tool requirement is not met", () => {
 			const requirements = { apply_diff: false }
-			expect(() => validateToolUse("apply_diff", codeMode, [], requirements)).toThrow(
+			expect(() => validateToolUse("apply_diff", codeMode, BUILTIN_MODES, requirements)).toThrow(
 				'Tool "apply_diff" has been disabled',
 			)
 		})
 
 		it("does not throw when tool requirement is met", () => {
 			const requirements = { apply_diff: true }
-			expect(() => validateToolUse("apply_diff", codeMode, [], requirements)).not.toThrow()
+			expect(() => validateToolUse("apply_diff", codeMode, BUILTIN_MODES, requirements)).not.toThrow()
 		})
 
 		it("handles undefined requirements gracefully", () => {
-			expect(() => validateToolUse("apply_diff", codeMode, [], undefined)).not.toThrow()
+			expect(() => validateToolUse("apply_diff", codeMode, BUILTIN_MODES, undefined)).not.toThrow()
 		})
 
 		it("blocks tool when disabledTools is converted to toolRequirements", () => {
@@ -320,10 +323,10 @@ describe("mode-validator", () => {
 				{} as Record<string, boolean>,
 			)
 
-			expect(() => validateToolUse("execute_command", codeMode, [], toolRequirements)).toThrow(
+			expect(() => validateToolUse("execute_command", codeMode, BUILTIN_MODES, toolRequirements)).toThrow(
 				'Tool "execute_command" has been disabled',
 			)
-			expect(() => validateToolUse("grep_search", codeMode, [], toolRequirements)).toThrow(
+			expect(() => validateToolUse("grep_search", codeMode, BUILTIN_MODES, toolRequirements)).toThrow(
 				'Tool "grep_search" has been disabled',
 			)
 		})
@@ -338,8 +341,8 @@ describe("mode-validator", () => {
 				{} as Record<string, boolean>,
 			)
 
-			expect(() => validateToolUse("read_file", codeMode, [], toolRequirements)).not.toThrow()
-			expect(() => validateToolUse("write_to_file", codeMode, [], toolRequirements)).not.toThrow()
+			expect(() => validateToolUse("read_file", codeMode, BUILTIN_MODES, toolRequirements)).not.toThrow()
+			expect(() => validateToolUse("write_to_file", codeMode, BUILTIN_MODES, toolRequirements)).not.toThrow()
 		})
 
 		it("handles empty disabledTools array converted to toolRequirements", () => {
@@ -352,7 +355,7 @@ describe("mode-validator", () => {
 				{} as Record<string, boolean>,
 			)
 
-			expect(() => validateToolUse("execute_command", codeMode, [], toolRequirements)).not.toThrow()
+			expect(() => validateToolUse("execute_command", codeMode, BUILTIN_MODES, toolRequirements)).not.toThrow()
 		})
 	})
 })

@@ -36,6 +36,7 @@ import type {
 	NotifyChoiceOptions,
 } from "@shofer/types"
 import { DIFF_VIEW_URI_SCHEME } from "@shofer/types"
+import { effectiveModes } from "@shofer/core"
 
 import { ensureSettingsDirectoryExists } from "../utils/globalContext"
 import { ContextProxy } from "../core/config/ContextProxy"
@@ -163,7 +164,12 @@ class VsCodeState implements HostState {
 		}
 		// Preserve the original side effect: make sure the settings dir exists.
 		await ensureSettingsDirectoryExists(this.context)
-		const customModes = this.context.globalState.get<ModeConfig[]>("customModes") ?? undefined
+		// The persisted list is what `CustomModesManager` last merged; re-derive the
+		// plugin half here so the prompt's MODES section is right even on the first read
+		// of a session, before anything asked the manager for modes. Without this the
+		// built-in modes — plugin-contributed now — could be missing from the prompt.
+		const persisted = this.context.globalState.get<ModeConfig[]>("customModes")
+		const customModes = effectiveModes(persisted)
 		const customModePrompts = this.context.globalState.get<CustomModePrompts>("customModePrompts") ?? undefined
 		return { customModes, customModePrompts }
 	}

@@ -9,7 +9,7 @@ import {
 } from "@shofer/types"
 import { pluginRegistry } from "../plugins/plugin-registry.js"
 
-import { Mode, modes, defaultModeSlug, getModeBySlug, getGroupName, getModeSelection } from "@shofer/types"
+import { Mode, defaultModeSlug, getGroupName, getModeSelection, resolveModeConfig } from "@shofer/types"
 import { DiffStrategy } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { isEmpty } from "../utils/object.js"
@@ -70,7 +70,7 @@ async function generatePrompt(
 	}
 
 	// Get the full mode config to ensure we have the role definition (used for groups, etc.)
-	const modeConfig = getModeBySlug(mode, customModeConfigs) || modes.find((m) => m.slug === mode) || modes[0]!
+	const modeConfig = resolveModeConfig(mode, customModeConfigs)
 	const { roleDefinition, baseInstructions } = getModeSelection(mode, promptComponent, customModeConfigs)
 
 	// Effective capability groups: the mode's tools, optionally narrowed by a
@@ -168,8 +168,7 @@ export const SYSTEM_PROMPT = async (
 	// Check if it's a custom mode
 	const promptComponent = getPromptComponent(customModePrompts, mode)
 
-	// Get full mode config from custom modes or fall back to built-in modes
-	const currentMode = getModeBySlug(mode, customModes) || modes.find((m) => m.slug === mode) || modes[0]!
+	const currentMode = resolveModeConfig(mode, customModes)
 
 	const prompt = await generatePrompt(
 		context,

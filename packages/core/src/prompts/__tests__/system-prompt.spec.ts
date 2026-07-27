@@ -48,7 +48,9 @@ import { ModeConfig } from "@shofer/types"
 
 import { SYSTEM_PROMPT } from "../system.js"
 import type { McpHub } from "../../services/mcp/McpHub.js"
-import { defaultModeSlug, modes, Mode } from "@shofer/types"
+import { defaultModeSlug, Mode } from "@shofer/types"
+
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 
 // Mock the sections
 vi.mock("../sections/modes.js", () => ({
@@ -192,7 +194,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -213,7 +215,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes,
+			BUILTIN_MODES, // customModes,
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -232,7 +234,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes,
+			BUILTIN_MODES, // customModes,
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -254,7 +256,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -286,7 +288,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			"custom-mode", // mode
 			undefined, // customModePrompts
-			customModes, // customModes
+			[...customModes, ...BUILTIN_MODES], // customModes
 			"Global instructions", // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -320,7 +322,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug as Mode, // mode
 			customModePrompts, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -330,7 +332,7 @@ describe("SYSTEM_PROMPT", () => {
 		// Role definition from promptComponent should be at the top
 		expect(prompt.indexOf("Custom prompt role definition")).toBeLessThan(prompt.indexOf("TOOL USE"))
 		// Should not contain the default mode's role definition
-		expect(prompt).not.toContain(modes[0]!.roleDefinition)
+		expect(prompt).not.toContain(BUILTIN_MODES[0]!.roleDefinition)
 	})
 
 	it("should fallback to modeConfig roleDefinition when promptComponent has no roleDefinition", async () => {
@@ -349,7 +351,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug as Mode, // mode
 			customModePrompts, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			undefined, // experiments
 			undefined, // language
@@ -357,7 +359,7 @@ describe("SYSTEM_PROMPT", () => {
 		)
 
 		// Should use the default mode's role definition
-		expect(prompt.indexOf(modes[0]!.roleDefinition)).toBeLessThan(prompt.indexOf("TOOL USE"))
+		expect(prompt.indexOf(BUILTIN_MODES[0]!.roleDefinition)).toBeLessThan(prompt.indexOf("TOOL USE"))
 	})
 
 	it("should exclude update_todo_list tool when todoListEnabled is false", async () => {
@@ -375,7 +377,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -403,7 +405,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -430,7 +432,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -457,7 +459,7 @@ describe("SYSTEM_PROMPT", () => {
 			undefined, // diffStrategy
 			defaultModeSlug, // mode
 			undefined, // customModePrompts
-			undefined, // customModes
+			BUILTIN_MODES, // customModes
 			undefined, // globalCustomInstructions
 			experiments,
 			undefined, // language
@@ -487,7 +489,7 @@ describe("SYSTEM_PROMPT", () => {
 		expect(prompt).not.toContain("Examples:")
 
 		// Should still contain role definition and other non-XML sections
-		expect(prompt).toContain(modes[0]!.roleDefinition)
+		expect(prompt).toContain(BUILTIN_MODES[0]!.roleDefinition)
 		expect(prompt).toContain("CAPABILITIES")
 		expect(prompt).toContain("RULES")
 		expect(prompt).toContain("SYSTEM INFORMATION")

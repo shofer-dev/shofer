@@ -620,19 +620,18 @@ Every tool belongs to exactly one tool group (defined in [`tool.ts`](../packages
 
 ## 11. Modes
 
-Built-in modes (defined in [`mode.ts`](../packages/types/src/mode.ts) as `DEFAULT_MODES`, re-exported from [`shared/modes.ts`](../src/shared/modes.ts)):
+Built-in modes, contributed by the bundled `builtin-modes` plugin
+([`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json), see
+[`plugins/builtin-modes.md`](plugins/builtin-modes.md)):
 
-| Slug           | Display Name    | Description                                                   |
-| -------------- | --------------- | ------------------------------------------------------------- |
-| `code`         | 💻 Code         | Default mode. Write, modify, refactor code.                   |
-| `architect`    | 🏗️ Architect    | Plan, design, strategize before implementation.               |
-| `ask`          | ❓ Ask          | Explanations, documentation, technical questions.             |
-| `debug`        | 🪲 Debug        | Troubleshooting, diagnostics, root cause analysis.            |
-| `reviewer`     | 👀 Reviewer     | Code review without making changes.                           |
-| `search`       | 🔎 Search       | Search codebase for specific information.                     |
-| `opinion`      | 💭 Opinion      | Technology choices, architectural decisions, recommendations. |
-| `browser`      | 🌐 Browser      | Web browsing, research, data extraction.                      |
-| `orchestrator` | 🪃 Orchestrator | Complex multi-step coordination, fan-out to sub-tasks.        |
+| Slug          | Display Name   | Description                                        |
+| ------------- | -------------- | -------------------------------------------------- |
+| `code`        | 💻 Code        | Default mode. Write, modify, refactor code.        |
+| `architect`   | 🏗️ Architect   | Plan, design, strategize before implementation.    |
+| `debug`       | 🪲 Debug       | Troubleshooting, diagnostics, root cause analysis. |
+| `code-search` | 🔎 Code Search | Search the codebase for specific information.      |
+| `web-search`  | 🌐 Web Search  | Web browsing, research, data extraction.           |
+| `reviewer`    | 👀 Reviewer    | Code review without making changes.                |
 
 Custom modes can be defined via [`.shofer/shofermodes`](#13-special-files--directories) files.
 

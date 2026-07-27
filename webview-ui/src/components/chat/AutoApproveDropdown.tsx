@@ -1,7 +1,5 @@
 import React from "react"
 import { ListChecks, LayoutList, Settings, CheckCheck, X } from "lucide-react"
-import { DEFAULT_MODES } from "@shofer/types"
-
 import { vscode } from "@/utils/vscode"
 
 import { cn } from "@/lib/utils"
@@ -27,39 +25,21 @@ import { AutoApproveSetting, autoApproveSettingsConfig } from "../settings/AutoA
  * ({ read: { allowed: [...], denied: [...] } }).
  * This extracts just the group name from each entry.
  *
- * Derived from the canonical DEFAULT_MODES in @shofer/types rather than
- * a hard-coded copy, so the auto-approval dropdown stays in sync with
- * mode definitions automatically.
+ * `modes` is the effective mode list from extension state — the user's, the
+ * project's and the plugin-contributed ones (which is where Shofer's own modes come
+ * from). A slug that names no mode shows every toggle rather than hiding all of them.
  */
 function getModeAllowedGroups(
 	modeSlug: string | undefined,
-	customModes: Array<{ slug: string; tools?: Array<string | [string, unknown]> }> | undefined,
+	modes: Array<{ slug: string; tools?: Array<string | [string, unknown]> }> | undefined,
 ): Set<string> {
-	// Build the default-mode group map from the single source of truth.
-	const defaultModeGroups: Record<string, string[]> = {}
-	for (const m of DEFAULT_MODES) {
-		defaultModeGroups[m.slug] = (m.tools ?? []).map((g) =>
-			typeof g === "string" ? g : Array.isArray(g) ? g[0] : Object.keys(g)[0]!,
-		)
-	}
+	const mode = modeSlug ? modes?.find((m) => m.slug === modeSlug) : undefined
 
-	// Check custom modes first
-	if (customModes && modeSlug) {
-		const custom = customModes.find((m) => m.slug === modeSlug)
-		if (custom?.tools) {
-			return new Set(custom.tools.map((g) => (Array.isArray(g) ? g[0] : g)))
-		}
-	}
-
-	// Fall back to default mode groups.
-	// If the slug is unrecognised (e.g. a custom mode without groups in
-	// customModes), show all toggles rather than hiding everything.
-	const slug = modeSlug ?? "code"
-	const defaults = defaultModeGroups[slug]
-	if (!defaults) {
+	if (!mode?.tools) {
 		return new Set(Object.values(autoApproveSettingsConfig).map((c) => c.toolGroup))
 	}
-	return new Set(defaults)
+
+	return new Set(mode.tools.map((g) => (typeof g === "string" ? g : Array.isArray(g) ? g[0] : Object.keys(g)[0]!)))
 }
 
 interface AutoApproveDropdownProps {

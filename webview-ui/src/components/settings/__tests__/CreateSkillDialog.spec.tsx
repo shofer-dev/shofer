@@ -102,7 +102,13 @@ describe("CreateSkillDialog", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockExtensionState = {
-			customModes: [{ slug: "custom-mode", name: "Custom Mode" }],
+			// `customModes` is the effective mode list: the built-ins reach the webview
+			// through it too, contributed by the `builtin-modes` plugin.
+			customModes: [
+				{ slug: "code", name: "💻 Code", source: "plugin", pluginName: "builtin-modes" },
+				{ slug: "architect", name: "🏗️ Architect", source: "plugin", pluginName: "builtin-modes" },
+				{ slug: "custom-mode", name: "Custom Mode", source: "global" },
+			],
 		}
 	})
 

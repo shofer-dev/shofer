@@ -1,3 +1,4 @@
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
 // npx vitest run src/task/__tests__/Task.spec.ts
 
 import * as os from "os"
@@ -232,7 +233,7 @@ describe("Shofer", () => {
 				extensionUri: { fsPath: "/mock/extension/path" },
 				extension: { packageJSON: { version: "1.0.0" } },
 			},
-			getState: vi.fn().mockResolvedValue({ mode: "code", experiments: {} }),
+			getState: vi.fn().mockResolvedValue({ mode: "code", experiments: {}, customModes: BUILTIN_MODES }),
 			log: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),
@@ -619,6 +620,7 @@ describe("Shofer", () => {
 					requestDelaySeconds: baseDelay,
 					mcpEnabled: false,
 					apiConfiguration: mockApiConfig,
+					customModes: BUILTIN_MODES,
 				})
 
 				// Trigger API request
@@ -724,6 +726,7 @@ describe("Shofer", () => {
 					requestDelaySeconds: baseDelay,
 					mcpEnabled: false,
 					apiConfiguration: mockApiConfig,
+					customModes: BUILTIN_MODES,
 				})
 
 				// Trigger API request
@@ -865,6 +868,7 @@ describe("Shofer", () => {
 					getState: vi.fn().mockResolvedValue({
 						apiConfiguration: mockApiConfig,
 						mcpEnabled: false,
+						customModes: BUILTIN_MODES,
 					}),
 					getMcpHub: vi.fn().mockReturnValue(undefined),
 					getSkillsManager: vi.fn().mockReturnValue(undefined),
@@ -1123,6 +1127,7 @@ describe("Shofer", () => {
 				mockProvider.getState.mockResolvedValue({
 					apiConfiguration: mockApiConfig,
 					mcpEnabled: false,
+					customModes: BUILTIN_MODES,
 				})
 
 				// Create parent task
@@ -1734,7 +1739,7 @@ describe("Queued message processing after condense", () => {
 				extensionUri: { fsPath: "/mock/extension/path" },
 				extension: { packageJSON: { version: "1.0.0" } },
 			},
-			getState: vi.fn().mockResolvedValue({}),
+			getState: vi.fn().mockResolvedValue({ customModes: BUILTIN_MODES }),
 			log: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),
@@ -1848,7 +1853,7 @@ describe("pushToolResultToUserContent", () => {
 				extensionUri: { fsPath: "/mock/extension/path" },
 				extension: { packageJSON: { version: "1.0.0" } },
 			},
-			getState: vi.fn().mockResolvedValue({ mode: "code", experiments: {} }),
+			getState: vi.fn().mockResolvedValue({ mode: "code", experiments: {}, customModes: BUILTIN_MODES }),
 			log: vi.fn(),
 			on: vi.fn(),
 			off: vi.fn(),

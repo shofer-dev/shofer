@@ -5,18 +5,18 @@
  * The SaaS `resource-manager` sets these on the executor / code-server pod (the
  * same delivery channel as `SHOFER_GLOBAL_DIR`), letting an org fully define the
  * available mode / workflow set via a config bundle: when a flag is truthy the
- * corresponding built-ins are removed from every enumeration point so that ONLY
- * user/project/bundle-provided modes/workflows remain.
+ * corresponding built-ins are removed so that ONLY user/project/bundle-provided
+ * modes/workflows remain.
+ *
+ * The built-ins ship as **bundled plugins** (`builtin-modes`, `builtin-workflows`),
+ * so suppression has exactly one expression — {@link governanceDisabledPlugins},
+ * consumed by `PluginManager`'s `forceDisabledPlugins`. There is no second
+ * enumeration point to keep in sync, and nothing for the webview to learn: a
+ * suppressed plugin simply contributes nothing, so its modes never reach any list.
  *
  * These are read-only env flags, deliberately NOT persisted user settings: they
  * never appear in `globalSettingsSchema` or the Settings UI and cannot be
- * toggled from the webview. The webview learns their effect from the host, which
- * forwards the computed booleans on `ExtensionState`
- * (`disableBuiltInModes` / `disableBuiltInWorkflows`).
- *
- * `getAllModes()` (in `@shofer/types`) and the workflow discovery point stay
- * pure — they take the flag as an argument; this module is the single place the
- * env var is read and normalized so every host-side caller agrees on truthiness.
+ * toggled from the webview.
  */
 
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"])
@@ -31,7 +31,7 @@ function envFlagEnabled(name: string): boolean {
  * True when `SHOFER_DISABLE_BUILTIN_MODES` is set truthy — the six built-in
  * modes are suppressed and only bundle/user/project modes remain.
  */
-export function builtInModesDisabled(): boolean {
+function builtInModesDisabled(): boolean {
 	return envFlagEnabled("SHOFER_DISABLE_BUILTIN_MODES")
 }
 
@@ -40,7 +40,7 @@ export function builtInModesDisabled(): boolean {
  * `.slang` workflows are suppressed and only bundle/user/project workflows
  * remain.
  */
-export function builtInWorkflowsDisabled(): boolean {
+function builtInWorkflowsDisabled(): boolean {
 	return envFlagEnabled("SHOFER_DISABLE_BUILTIN_WORKFLOWS")
 }
 

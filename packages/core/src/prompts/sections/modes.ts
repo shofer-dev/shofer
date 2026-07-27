@@ -2,15 +2,14 @@ import { getHost } from "@shofer/types"
 import type { ModeConfig } from "@shofer/types"
 import { getAllModes } from "@shofer/types"
 
-import { builtInModesDisabled } from "../../config/governance.js"
-
-// Host-only helper: merges built-in + custom modes with their per-mode prompt
-// overrides read through the host `state` capability. The VS Code host reads
-// them from `globalState`; a headless host returns no overrides.
+// Host-only helper: the effective mode list (project + global + plugin-contributed,
+// which is where Shofer's own six come from) with their per-mode prompt overrides,
+// read through the host `state` capability. The VS Code host reads them from
+// `globalState`; a headless host returns no overrides.
 async function getAllModesWithPrompts(): Promise<ModeConfig[]> {
 	const { customModes = [], customModePrompts = {} } = await getHost().state.readModeOverrides()
 
-	const allModes = getAllModes(customModes, { disableBuiltIn: builtInModesDisabled() })
+	const allModes = getAllModes(customModes)
 	return allModes.map((mode) => ({
 		...mode,
 		roleDefinition: customModePrompts[mode.slug]?.roleDefinition ?? mode.roleDefinition,

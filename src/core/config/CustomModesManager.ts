@@ -17,7 +17,7 @@ import { GlobalFileNames } from "@shofer/core"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
-import { getSharedPluginManager } from "@shofer/core"
+import { effectiveModes } from "@shofer/core"
 
 const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
 
@@ -253,35 +253,7 @@ export class CustomModesManager {
 			}
 		}
 
-		this.appendPluginModes(merged, slugs)
-
-		return merged
-	}
-
-	/**
-	 * Modes contributed by enabled plugins (design §6.3). They arrive tagged
-	 * `source: "plugin"` + `pluginName` with a **namespaced** slug
-	 * (`<pluginName>:<authoredSlug>`, §14.7 → namespacing). Empty when no plugin
-	 * manager is wired or no plugins are enabled ⇒ behavior unchanged.
-	 */
-	private getPluginModes(): ModeConfig[] {
-		return getSharedPluginManager()?.getContributedModes() ?? []
-	}
-
-	/**
-	 * Append plugin-contributed modes to `merged`. Because plugin slugs are
-	 * namespaced (`<pluginName>:<slug>`), they can never collide with a built-in,
-	 * global, or project mode's natural slug, nor with another plugin's mode — so
-	 * there is no override/last-installed-wins tie-break here; each qualified mode is
-	 * simply appended. A `slugs`-guard is kept only as a defensive de-dup (a repeated
-	 * qualified slug would already have been reported upstream by the manager).
-	 */
-	private appendPluginModes(merged: ModeConfig[], slugs: Set<string>): void {
-		for (const mode of this.getPluginModes()) {
-			if (slugs.has(mode.slug)) continue
-			slugs.add(mode.slug)
-			merged.push(mode)
-		}
+		return effectiveModes(merged)
 	}
 
 	public async getCustomModesFilePath(): Promise<string> {
@@ -424,15 +396,16 @@ export class CustomModesManager {
 				.map((mode) => ({ ...mode, source: "global" as const })),
 		]
 
-		// Append plugin-contributed modes (design §6.3) at the top of the chain.
-		this.appendPluginModes(mergedModes, new Set(mergedModes.map((m) => m.slug)))
+		// Fold in plugin-contributed modes (design §6.3) — including Shofer's own six,
+		// which the bundled `builtin-modes` plugin contributes.
+		const allModes = effectiveModes(mergedModes)
 
-		await this.context.globalState.update("customModes", mergedModes)
+		await this.context.globalState.update("customModes", allModes)
 
-		this.cachedModes = mergedModes
+		this.cachedModes = allModes
 		this.cachedAt = now
 
-		return mergedModes
+		return allModes
 	}
 
 	public async updateCustomMode(slug: string, config: ModeConfig): Promise<void> {
@@ -749,16 +722,14 @@ export class CustomModesManager {
 	 */
 	public async exportModeWithRules(slug: string, customPrompts?: PromptComponent): Promise<ExportResult> {
 		try {
-			// Import modes from shared to check built-in modes
-			const { modes: builtInModes } = await import("@shofer/core")
-
-			// Get all current modes
+			// The effective mode list already carries plugin-contributed modes — Shofer's
+			// built-ins among them — so there is no separate built-in list to consult.
 			const allModes = await this.getCustomModes()
-			let mode = allModes.find((m) => m.slug === slug)
+			let mode: ModeConfig | undefined = allModes.find((m) => m.slug === slug)
 
-			// If mode not found in custom modes, check if it's a built-in mode that has been customized
+			// Not merged in yet: fall back to reading the project file directly, so a mode
+			// added to `.shofermodes` moments ago is still exportable.
 			if (!mode) {
-				// Only check workspace-based modes if workspace is available
 				const workspacePath = getWorkspacePath()
 				if (workspacePath) {
 					const shofermodesPath = path.join(workspacePath, SHOFERMODES_FILENAME)
@@ -767,25 +738,16 @@ export class CustomModesManager {
 						if (roomodesExists) {
 							const shofermodesContent = await fs.readFile(shofermodesPath, "utf-8")
 							const shofermodesData = yaml.parse(shofermodesContent)
-							const shofermodesModes = shofermodesData?.customModes || []
-
-							// Find the mode in .shofermodes
-							mode = shofermodesModes.find((m: any) => m.slug === slug)
+							const shofermodesModes: ModeConfig[] = shofermodesData?.customModes || []
+							mode = shofermodesModes.find((m) => m.slug === slug)
 						}
 					} catch (error) {
-						// Continue to check built-in modes
+						// Unreadable/invalid project file — fall through to "Mode not found".
 					}
 				}
 
-				// If still not found, check if it's a built-in mode
 				if (!mode) {
-					const builtInMode = builtInModes.find((m) => m.slug === slug)
-					if (builtInMode) {
-						// Use the built-in mode as the base
-						mode = { ...builtInMode }
-					} else {
-						return { success: false, error: "Mode not found" }
-					}
+					return { success: false, error: "Mode not found" }
 				}
 			}
 

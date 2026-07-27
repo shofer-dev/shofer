@@ -1,98 +1,120 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test fixtures cast partial prompt objects */
-import type { PromptComponent } from "../mode.js"
+import type { ModeConfig, PromptComponent } from "../mode.js"
 
-import { getModeSelection, modes } from "../modes.js"
+import { getModeSelection } from "../modes.js"
+
+/**
+ * `customModePrompts` overrides reshape modes the user did **not** author — which,
+ * since the six built-ins moved into the `builtin-modes` plugin, means every
+ * plugin-contributed mode. A mode the user wrote is used exactly as written.
+ */
+
+const architectMode: ModeConfig = {
+	slug: "architect",
+	name: "🏗️ Architect",
+	roleDefinition: "You are Shofer, an experienced technical leader.",
+	customInstructions: "Do some information gathering to get more context about the task.",
+	tools: ["read"],
+	source: "plugin",
+	pluginName: "builtin-modes",
+}
+
+const debugMode: ModeConfig = {
+	slug: "debug",
+	name: "🪲 Debug",
+	roleDefinition: "You are Shofer, an expert software debugger.",
+	customInstructions: "Reflect on 5-7 different possible sources of the problem.",
+	tools: ["read"],
+	source: "plugin",
+	pluginName: "builtin-modes",
+}
+
+// `code` first, so it is also the fallback target for an unknown slug.
+const allModes: ModeConfig[] = [
+	{ ...architectMode, slug: "code", name: "💻 Code", roleDefinition: "Code role", customInstructions: "Code CI" },
+	architectMode,
+	debugMode,
+]
 
 describe("getModeSelection with empty promptComponent", () => {
-	it("should use built-in mode instructions when promptComponent is undefined", () => {
-		const architectMode = modes.find((m) => m.slug === "architect")!
+	it("uses the mode's own instructions when promptComponent is undefined", () => {
+		const result = getModeSelection("architect", undefined, allModes)
 
-		// Test with undefined promptComponent (which is what getPromptComponent returns for empty objects)
-		const result = getModeSelection("architect", undefined, [])
-
-		// Should use built-in mode values
 		expect(result.roleDefinition).toBe(architectMode.roleDefinition)
 		expect(result.baseInstructions).toBe(architectMode.customInstructions)
-		expect(result.baseInstructions).toContain("Do some information gathering")
 	})
 
-	it("should use built-in mode instructions when promptComponent is null", () => {
-		const debugMode = modes.find((m) => m.slug === "debug")!
+	it("uses the mode's own instructions when promptComponent is null", () => {
+		const result = getModeSelection("debug", null as any, allModes)
 
-		// Test with null promptComponent
-		const result = getModeSelection("debug", null as any, [])
-
-		// Should use built-in mode values
 		expect(result.roleDefinition).toBe(debugMode.roleDefinition)
 		expect(result.baseInstructions).toBe(debugMode.customInstructions)
-		expect(result.baseInstructions).toContain("Reflect on 5-7 different possible sources")
 	})
 
-	it("should use promptComponent when it has actual content", () => {
-		// Test with promptComponent that has actual content
+	it("uses promptComponent when it has actual content", () => {
 		const validPromptComponent: PromptComponent = {
 			roleDefinition: "Custom role",
 			customInstructions: "Custom instructions",
 		}
-		const result = getModeSelection("architect", validPromptComponent, [])
+		const result = getModeSelection("architect", validPromptComponent, allModes)
 
-		// Should use promptComponent values
 		expect(result.roleDefinition).toBe("Custom role")
 		expect(result.baseInstructions).toBe("Custom instructions")
 	})
 
-	it("should merge promptComponent with built-in mode when it has partial content", () => {
-		const architectMode = modes.find((m) => m.slug === "architect")!
-
-		// Test with promptComponent that only has customInstructions
+	it("merges a partial promptComponent over the mode (instructions only)", () => {
 		const partialPromptComponent: PromptComponent = {
 			customInstructions: "Only custom instructions",
 		}
-		const result = getModeSelection("architect", partialPromptComponent, [])
+		const result = getModeSelection("architect", partialPromptComponent, allModes)
 
-		// Should merge: use promptComponent's customInstructions but fall back to built-in roleDefinition
-		expect(result.roleDefinition).toBe(architectMode.roleDefinition) // Falls back to built-in
-		expect(result.baseInstructions).toBe("Only custom instructions") // Uses promptComponent
+		expect(result.roleDefinition).toBe(architectMode.roleDefinition)
+		expect(result.baseInstructions).toBe("Only custom instructions")
 	})
 
-	it("should merge promptComponent with built-in mode when it only has roleDefinition", () => {
-		const debugMode = modes.find((m) => m.slug === "debug")!
-
-		// Test with promptComponent that only has roleDefinition
+	it("merges a partial promptComponent over the mode (role only)", () => {
 		const partialPromptComponent: PromptComponent = {
 			roleDefinition: "Custom debug role",
 		}
-		const result = getModeSelection("debug", partialPromptComponent, [])
+		const result = getModeSelection("debug", partialPromptComponent, allModes)
 
-		// Should merge: use promptComponent's roleDefinition but fall back to built-in customInstructions
-		expect(result.roleDefinition).toBe("Custom debug role") // Uses promptComponent
-		expect(result.baseInstructions).toBe(debugMode.customInstructions) // Falls back to built-in
+		expect(result.roleDefinition).toBe("Custom debug role")
+		expect(result.baseInstructions).toBe(debugMode.customInstructions)
 	})
 
-	it("should handle promptComponent with both roleDefinition and customInstructions", () => {
-		// Test with promptComponent that has both properties
+	it("handles a promptComponent with both fields", () => {
 		const fullPromptComponent: PromptComponent = {
 			roleDefinition: "Full custom role",
 			customInstructions: "Full custom instructions",
 		}
-		const result = getModeSelection("architect", fullPromptComponent, [])
+		const result = getModeSelection("architect", fullPromptComponent, allModes)
 
-		// Should use promptComponent values for both
 		expect(result.roleDefinition).toBe("Full custom role")
 		expect(result.baseInstructions).toBe("Full custom instructions")
 	})
 
-	it("should fall back to default mode when built-in mode is not found", () => {
-		const defaultMode = modes[0]! // First mode is the default
-
-		// Test with non-existent mode
+	it("falls back to the default mode when the slug names no mode", () => {
 		const partialPromptComponent: PromptComponent = {
 			customInstructions: "Custom instructions for unknown mode",
 		}
-		const result = getModeSelection("non-existent-mode", partialPromptComponent, [])
+		const result = getModeSelection("non-existent-mode", partialPromptComponent, allModes)
 
-		// Should merge with default mode
-		expect(result.roleDefinition).toBe(defaultMode.roleDefinition) // Falls back to default mode
-		expect(result.baseInstructions).toBe("Custom instructions for unknown mode") // Uses promptComponent
+		expect(result.roleDefinition).toBe("Code role")
+		expect(result.baseInstructions).toBe("Custom instructions for unknown mode")
+	})
+
+	it("takes a user-authored mode exactly as written, ignoring promptComponent", () => {
+		const authored: ModeConfig = {
+			slug: "mine",
+			name: "Mine",
+			roleDefinition: "Authored role",
+			customInstructions: "Authored instructions",
+			tools: ["read"],
+			source: "project",
+		}
+		const result = getModeSelection("mine", { roleDefinition: "override" }, [...allModes, authored])
+
+		expect(result.roleDefinition).toBe("Authored role")
+		expect(result.baseInstructions).toBe("Authored instructions")
 	})
 })

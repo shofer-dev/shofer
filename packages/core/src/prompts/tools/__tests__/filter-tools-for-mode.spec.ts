@@ -2,6 +2,7 @@
 
 import type OpenAI from "openai"
 
+import { BUILTIN_MODES } from "../../../__fixtures__/builtin-modes.js"
 import { filterNativeToolsForMode } from "../filter-tools-for-mode.js"
 
 function makeTool(name: string): OpenAI.Chat.ChatCompletionTool {
@@ -32,7 +33,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const result = filterNativeToolsForMode(
 			nativeTools,
 			"code",
-			undefined,
+			BUILTIN_MODES,
 			undefined,
 			undefined,
 			undefined,
@@ -54,7 +55,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const result = filterNativeToolsForMode(
 			nativeTools,
 			"code",
-			undefined,
+			BUILTIN_MODES,
 			undefined,
 			undefined,
 			undefined,
@@ -74,7 +75,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const result = filterNativeToolsForMode(
 			nativeTools,
 			"code",
-			undefined,
+			BUILTIN_MODES,
 			undefined,
 			undefined,
 			undefined,
@@ -94,7 +95,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const result = filterNativeToolsForMode(
 			nativeTools,
 			"code",
-			undefined,
+			BUILTIN_MODES,
 			undefined,
 			undefined,
 			undefined,
@@ -117,7 +118,7 @@ describe("filterNativeToolsForMode - disabledTools", () => {
 		const result = filterNativeToolsForMode(
 			nativeTools,
 			"code",
-			undefined,
+			BUILTIN_MODES,
 			undefined,
 			undefined,
 			undefined,
@@ -138,7 +139,15 @@ it("includes send_message_to_task in subtasks group for code mode", () => {
 		makeTool("write_to_file"),
 	]
 
-	const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, undefined, undefined)
+	const result = filterNativeToolsForMode(
+		nativeTools,
+		"code",
+		BUILTIN_MODES,
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+	)
 
 	const resultNames = result.map((t) => (t as any).function.name)
 	expect(resultNames).toContain("send_message_to_task")
@@ -157,7 +166,15 @@ it("includes subtasks tools by default (no model exclusions)", () => {
 		makeTool("answer_subtask_question"),
 	]
 
-	const result = filterNativeToolsForMode(nativeTools, "code", undefined, undefined, undefined, undefined, undefined)
+	const result = filterNativeToolsForMode(
+		nativeTools,
+		"code",
+		BUILTIN_MODES,
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+	)
 
 	const resultNames = result.map((t) => (t as any).function.name)
 	expect(resultNames).toHaveLength(7)

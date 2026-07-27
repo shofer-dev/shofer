@@ -29,6 +29,7 @@ export * from "./plugins/plugin-ai.js"
 export * from "./plugins/plugin-agent.js"
 export * from "./plugins/plugin-task.js"
 export * from "./plugins/plugin-search.js"
+export * from "./plugins/plugin-modes.js"
 export * from "./plugins/plugin-storage.js"
 export * from "./plugins/plugin-services.js"
 export * from "./plugins/ui-registry.js"
@@ -207,7 +208,6 @@ export {
 	type Mode,
 	getGroupName,
 	getToolsForMode,
-	modes,
 	defaultModeSlug,
 	getModeBySlug,
 	getModeConfig,
@@ -216,7 +216,6 @@ export {
 	findModeBySlug,
 	getModeSelection,
 	FileRestrictionError,
-	defaultPrompts,
 	getRoleDefinition,
 	getDescription,
 	getWhenToUse,

@@ -1023,16 +1023,20 @@ export class PluginManager {
 	getContributedModes(): ModeConfig[] {
 		const bySlug = new Map<string, ModeConfig>()
 		for (const plugin of this.enabledWithPermission("modes")) {
+			// A bundled first-party plugin may ship the platform's own modes under their
+			// authored slugs (`code`, `architect`, …) — see `unqualifiedModes`. Everything
+			// else is namespaced, so cross-plugin collisions stay impossible.
+			const unqualified = plugin.scope === "bundled" && plugin.manifest.unqualifiedModes === true
 			for (const mode of plugin.manifest.contributes?.modes ?? []) {
-				const qualifiedSlug = `${plugin.name}:${mode.slug}`
-				if (bySlug.has(qualifiedSlug)) {
-					// Same plugin declared this authored slug twice — a manifest bug, not a
-					// cross-plugin conflict (which namespacing prevents). Defensive only.
-					warnPluginConflict("mode", qualifiedSlug, `plugin "${plugin.name}"`, `plugin "${plugin.name}"`)
+				const slug = unqualified ? mode.slug : `${plugin.name}:${mode.slug}`
+				const prior = bySlug.get(slug)
+				if (prior) {
+					// Two exempt plugins claiming one slug, or one plugin declaring it twice.
+					warnPluginConflict("mode", slug, `plugin "${prior.pluginName}"`, `plugin "${plugin.name}"`)
 				}
-				bySlug.set(qualifiedSlug, {
+				bySlug.set(slug, {
 					...mode,
-					slug: qualifiedSlug,
+					slug,
 					source: "plugin",
 					pluginName: plugin.name,
 				})
