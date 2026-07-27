@@ -119,8 +119,7 @@ blocks.
 2. Note the embedding API call count (via output channel or telemetry).
 3. Edit one line in one method and save.
 4. Observe the file watcher processes the file.
-5. Verify via `CODE_INDEX_SEGMENT_DEDUP` telemetry event that:
-    - `totalBlocks` = original block count
+5. Verify via the plugin's `segment_dedup` telemetry event (a `Plugin Event` tagged `plugin: "rag-indexing"`) that:
     - `reused` > 0 (unchanged blocks skipped)
     - `embedded` = 1 (only the changed block)
     - `deleted` = 1 (the old version of the changed block)
@@ -184,7 +183,7 @@ the next start.
 1. With indexing complete, stop the Qdrant service.
 2. Restart VS Code.
 3. Observe: the badge shows **Error** with a message about Qdrant connectivity.
-4. Check `TelemetryService` for `CODE_INDEX_ERROR` event with location context.
+4. Check `TelemetryService` for a `Plugin Event` carrying `event: "indexing_error"` and its `subsystem`.
 5. Start Qdrant again.
 6. Click "Start Indexing" — confirm it recovers and transitions to Indexed.
 

@@ -54,13 +54,19 @@ export enum TelemetryEventName {
 	DIFF_APPLICATION_ERROR = "Diff Application Error",
 	SHELL_INTEGRATION_ERROR = "Shell Integration Error",
 	CONSECUTIVE_MISTAKE_ERROR = "Consecutive Mistake Error",
-	CODE_INDEX_ERROR = "Code Index Error",
-	LIVE_MEMORY_ERROR = "Live Memory Error",
+	/**
+	 * Anything a **plugin** reports (`ctx.host.telemetry`).
+	 *
+	 * One entry rather than one per plugin event, because the catalog is core's: a plugin
+	 * cannot add to it, and a plugin that could name its own top-level events could also
+	 * shadow one of core's. The plugin and its event name ride as properties
+	 * (`plugin`, `event`), so a query filters on them instead.
+	 */
+	PLUGIN_EVENT = "Plugin Event",
 	TELEMETRY_SETTINGS_CHANGED = "Telemetry Settings Changed",
 	MODEL_CACHE_EMPTY_RESPONSE = "Model Cache Empty Response",
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
 	BUDGET_EXCEEDED = "Budget Exceeded",
-	CODE_INDEX_SEGMENT_DEDUP = "Code Index Segment Dedup",
 
 	// Async MCP tool calls (`call_mcp_tool_async` / `wait_for_mcp_call`)
 	MCP_ASYNC_CALL_STARTED = "MCP Async Call Started",
@@ -211,10 +217,8 @@ export const shoferTelemetryEventSchema = z.discriminatedUnion("type", [
 			TelemetryEventName.DIFF_APPLICATION_ERROR,
 			TelemetryEventName.SHELL_INTEGRATION_ERROR,
 			TelemetryEventName.CONSECUTIVE_MISTAKE_ERROR,
-			TelemetryEventName.CODE_INDEX_ERROR,
-			TelemetryEventName.LIVE_MEMORY_ERROR,
+			TelemetryEventName.PLUGIN_EVENT,
 			TelemetryEventName.BUDGET_EXCEEDED,
-			TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP,
 			TelemetryEventName.MODEL_CACHE_EMPTY_RESPONSE,
 			TelemetryEventName.CONTEXT_CONDENSED,
 			TelemetryEventName.SLIDING_WINDOW_TRUNCATION,

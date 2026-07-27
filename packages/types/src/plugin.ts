@@ -330,6 +330,28 @@ export interface PluginMetrics {
 	observe(name: string, help: string, value: number, labels?: Record<string, string>): void
 }
 
+/**
+ * Telemetry seam handed to a plugin granted `permissions.telemetry` (`ctx.host.telemetry`).
+ *
+ * Unlike {@link PluginMetrics} — a number in a local registry — telemetry **leaves the
+ * machine**, so it is a grant rather than an always-on capability, and it still rides the
+ * user's global telemetry opt-in underneath: a granted plugin on a machine with telemetry
+ * off reports nothing.
+ *
+ * The plugin names its own events; the host namespaces them under the single
+ * `PLUGIN_EVENT` catalog entry with `plugin`/`event` properties, so a plugin can neither
+ * shadow a core event nor invent a top-level one. Properties are scrubbed to primitives —
+ * a plugin sees workspace content, and an error's `stack` or a file's text must not become
+ * an analytics payload.
+ */
+export interface PluginTelemetry {
+	/**
+	 * Report `event` (a short, stable name of the plugin's own choosing) with optional
+	 * primitive properties. Fire-and-forget: it never throws and never blocks.
+	 */
+	capture(event: string, properties?: Record<string, unknown>): void
+}
+
 export interface PluginHost {
 	/** Filesystem access, scoped to the plugin's `permissions.filesystem` allowlist. */
 	readonly fs: HostFileSystem
@@ -353,6 +375,12 @@ export interface PluginHost {
 	 * when the host wired one; absent on an embedding with no metrics at all.
 	 */
 	readonly metrics?: PluginMetrics
+	/**
+	 * Report product telemetry ({@link PluginTelemetry}), gated on `permissions.telemetry`:
+	 * granted ⇒ a live surface; ungranted ⇒ a stub that warns and drops the event (it
+	 * never throws — a metrics/telemetry call must not be able to break a code path).
+	 */
+	readonly telemetry: PluginTelemetry
 	/** HTTP access, scoped to the plugin's `permissions.network` origin allowlist. */
 	fetch(input: string | URL, init?: RequestInit): Promise<Response>
 	/**
@@ -1067,6 +1095,15 @@ export const pluginPermissionsSchema = z
 		 * on a host with no task seam.
 		 */
 		task: z.boolean().optional(),
+		/**
+		 * **Product telemetry** (`ctx.host.telemetry`). Unlike the always-on logger and
+		 * metrics, this leaves the machine: events reach the product's analytics backend
+		 * (subject to the user's telemetry opt-in, which still gates it). A plugin that
+		 * wants to know how its feature is doing in the field asks for this explicitly, so
+		 * the grant is visible in the Plugins panel next to the rest. Ungranted ⇒ a stub
+		 * that warns and drops.
+		 */
+		telemetry: z.boolean().optional(),
 		/**
 		 * **Editor actions** (`ctx.host.editor`) — currently the multi-file diff viewer.
 		 * Opening editors steals focus, so it is granted explicitly rather than being

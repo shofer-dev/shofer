@@ -9,6 +9,7 @@
 	"defaultEnabled": true,
 	"permissions": {
 		"tools": true,
+		"telemetry": true,
 		"systemPrompt": true,
 		"lifecycle": true,
 		"events": true,

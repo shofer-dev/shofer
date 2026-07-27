@@ -375,9 +375,9 @@ When [`FileWatcher.processFile()`](src/indexing/file-watcher.ts) handles a chang
     - **New / changed**: `b.segmentHash ∉ prev` → embed and upsert.
     - **Stale**: `h ∈ prev ∧ h ∉ new` → delete the corresponding point from Qdrant. Point IDs are derived from segment hashes via `uuidv5(segmentHash, QDRANT_CODE_BLOCK_NAMESPACE)`, so no extra lookup is needed.
 4. After [`processBatch`](src/indexing/file-watcher.ts) completes Phase 2 (per-file processing), it:
-    - Issues a single `vectorStore.deletePointsByIds(allStaleSegmentIds)` for the whole batch (Phase 3a). `deletePointsByIds` throws on failure so the error is surfaced via `overallBatchError` and the `CODE_INDEX_ERROR` telemetry event with `location: "deletePointsByIds"`.
+    - Issues a single `vectorStore.deletePointsByIds(allStaleSegmentIds)` for the whole batch (Phase 3a). `deletePointsByIds` throws on failure so the error is surfaced via `overallBatchError` and an `indexing_error` telemetry event tagged `subsystem: "deletePointsByIds"`.
     - If every file in the batch turned out to be all-reused (no points to upsert), an early-return path in `_executeBatchUpsertOperations` still updates the cache (so the new full-file hash + segment hashes are persisted) without contacting the embedder or issuing an upsert.
-    - Fires a single aggregated `CODE_INDEX_SEGMENT_DEDUP` telemetry event with `{ fileCount, totalBlocks, reused, embedded, deleted }` per batch (not per file, to keep cardinality bounded and avoid leaking file paths).
+    - Fires a single aggregated `segment_dedup` telemetry event with `{ reused, embedded, deleted }` per batch (not per file, to keep cardinality bounded and avoid leaking file paths).
 5. If the parser produces 0 blocks (file shrunk below `MIN_BLOCK_CHARS`, became empty, etc.) the file is still processed: the cache entry is refreshed and any previously-indexed segments are queued for deletion via the same `staleSegmentIds` path — no special "skip on empty" short-circuit.
 
 The scanner ([`scanner.ts`](src/indexing/scanner.ts)) writes `segmentHashes` at all three cache-update sites: the unchanged-file skip path preserves the existing list, the no-blocks path writes `[]`, and the successful batch-upsert path groups `batchBlocks` by `file_path` into a `Map<string, string[]>` so each file's full segment-hash list is recorded with one cache entry.
@@ -683,7 +683,7 @@ Two entry points wrap their operations with **exponential backoff retry** so tha
 
 `MAX_SERVICE_ATTEMPTS = 5` counts _total_ invocations — the helper sleeps 4 times between them: 2 s → 4 s → 8 s → 16 s (capped at 60 s), so worst-case sleep time before giving up is ≈ 30 s plus the cost of the 5 failed calls themselves. If the signal is aborted mid-backoff the retry loop exits immediately with an `AbortError`.
 
-The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back. `validateEmbedder` emits the analogous `"Embedder connection failed (attempt N/5), …"` message via a `notifyRetryStatus` callback injected by `CodeIndexManager`. Per-attempt telemetry is intentionally **not** emitted — only a single `CODE_INDEX_ERROR` event at the end of a fully-exhausted retry loop, carrying `retryAttempts: N`, so transient blips do not amplify telemetry volume 5×.
+The orchestrator also updates the UI status on each retry attempt: `"Qdrant connection failed (attempt N/5), retrying in Xs..."` so the user can see that indexing is not stuck — it is waiting for the infrastructure to come back. `validateEmbedder` emits the analogous `"Embedder connection failed (attempt N/5), …"` message via a `notifyRetryStatus` callback injected by `CodeIndexManager`. Per-attempt telemetry is intentionally **not** emitted — only a single `indexing_error` event at the end of a fully-exhausted retry loop, so transient blips do not amplify telemetry volume 5×.
 
 ### Batch-Level Retry
 
@@ -693,7 +693,7 @@ Failed embedding batches inside the scanner retry up to 3 times with a 500 ms in
 
 - **`recoverFromError()`** clears all service instances, forcing a clean re-initialization on next use. Protected against race conditions with `_isRecoveringFromError` flag.
 - **Cache preservation**: If Qdrant connection fails before any data is written, the cache is preserved for future incremental scans. If indexing fails mid-way (after connecting), the cache is cleared to avoid inconsistency.
-- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.CODE_INDEX_ERROR, {...})` with location context and `attemptNumber` when they occur inside a retry loop. The file watcher additionally fires `TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP` once per batch (`captureCodeIndexSegmentDedup({ fileCount, totalBlocks, reused, embedded, deleted })`) so the effectiveness of per-segment dedup can be tracked in production without per-file cardinality or path leakage.
+- **Telemetry**: errors go through `ctx.host.telemetry.capture("indexing_error", { subsystem })` (`incCodeIndexError` in [`src/plugin-runtime.ts`](./src/plugin-runtime.ts), which increments the matching metric in the same call), and the file watcher fires `segment_dedup` once per batch with `{ reused, embedded, deleted }` — so dedup effectiveness is measurable in production without per-file cardinality or path leakage. `subsystem` is always a call-site literal; the host scrubs properties to primitives regardless, and drops everything unless the user has opted in.
 
 ---
 

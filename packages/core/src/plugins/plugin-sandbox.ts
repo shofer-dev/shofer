@@ -29,6 +29,7 @@ import type {
 	HostFileSystem,
 	NotifyChoiceOptions,
 	PluginEditor,
+	PluginTelemetry,
 	PluginFileDiff,
 	PluginHost,
 	PluginPermissions,
@@ -38,6 +39,8 @@ import type {
 
 import { warnPlugin } from "./plugin-warnings.js"
 import { getPluginLogger } from "./plugin-log.js"
+import { TelemetryService } from "@shofer/telemetry"
+
 import { registry } from "../metrics/registry.js"
 
 export interface PluginSandboxOptions {
@@ -216,6 +219,31 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 	}
 
 	/**
+	 * Product telemetry (`permissions.telemetry`).
+	 *
+	 * Namespaced and scrubbed by {@link TelemetryService.capturePluginEvent}, and — unlike
+	 * every other gated capability — a **denied** call warns and returns instead of
+	 * throwing. An analytics call is not something a code path should have to guard: a
+	 * plugin that reports an error must not fail differently because reporting was
+	 * refused.
+	 */
+	const telemetry: PluginTelemetry = {
+		capture(event: string, properties?: Record<string, unknown>): void {
+			if (!permissions?.telemetry) {
+				warn(
+					`[plugin:${pluginName}] ctx.host.telemetry.capture("${event}") dropped — the plugin declares ` +
+						`no permissions.telemetry grant. Add "telemetry": true to the manifest permissions.`,
+				)
+				return
+			}
+			// A host with no telemetry service at all (a CLI embedding, a test) is not an
+			// error either — there is simply nowhere to send it.
+			if (!TelemetryService.hasInstance()) return
+			TelemetryService.instance.capturePluginEvent(pluginName, event, properties)
+		},
+	}
+
+	/**
 	 * Editor actions (`permissions.editor`). Unlike `ai`/`agent`/`task` this needs no
 	 * host provider seam — {@link HostBridge.editor} is already host-agnostic — so the
 	 * sandbox gates it directly: granted ⇒ delegate, ungranted ⇒ throw + warn.
@@ -281,6 +309,7 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 		watch,
 		// Already gated by the manager (live / denying stub / absent); surfaced as-is.
 		search: options.search,
+		telemetry,
 		editor,
 	}
 }

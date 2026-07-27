@@ -68,6 +68,7 @@ flowchart TD
 | `ShoferPlugin.handleRequest` | `search`/`git-search` (for `ctx.host.search`), `embed` (for `ctx.ai.embed`), the panel's actions |
 | `"node-config"`              | Pins a Shofer Node to search-only against the controller's collection (§4)                       |
 | `ctx.host.metrics`           | `shofer_code_index_*` counters/gauges — the plugin publishes its own numbers                     |
+| `ctx.host.telemetry`         | `indexing_error` / `segment_dedup`, namespaced under `Plugin Event` and scrubbed                 |
 | `ctx.host.watch`             | The file watcher and the `.gitignore` watcher                                                    |
 | `ctx.storage`                | The scan cache and per-workspace enablement                                                      |
 | `config` + `secret: true`    | Every setting and all seven provider credentials                                                 |

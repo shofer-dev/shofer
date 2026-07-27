@@ -57,6 +57,11 @@ export function setting<T>(key: string, fallback: T): T {
 // The indexer's numbers are the ones an operator watches: how many files are indexed, how
 // deep the embedder queue is, how long a cache write takes. They were core metrics while
 // the indexer was core; they are the plugin's now, published through `ctx.host.metrics`.
+//
+// Errors go to BOTH instruments and telemetry, as they did in core: the metric is what an
+// operator alerts on locally, the event is how a failing embedder in the field becomes
+// visible to whoever ships the plugin. Telemetry is namespaced, scrubbed and gated on the
+// user's opt-in by the host — this side only decides what is worth reporting.
 
 export function incCodeIndexError(subsystem: string, amount = 1): void {
 	context?.host?.metrics?.increment(
@@ -65,6 +70,8 @@ export function incCodeIndexError(subsystem: string, amount = 1): void {
 		{ subsystem },
 		amount,
 	)
+	// `subsystem` is a call-site literal (a class + method name), never user data.
+	context?.host?.telemetry.capture("indexing_error", { subsystem })
 }
 
 export function recordIndexLoadDuration(ms: number): void {
@@ -81,6 +88,7 @@ export function recordIndexWriteDuration(ms: number): void {
  * one that re-embeds the repository, so it is worth a number an operator can watch.
  */
 export function recordSegmentDedup(counts: { reused: number; embedded: number; deleted: number }): void {
+	context?.host?.telemetry.capture("segment_dedup", counts)
 	const metrics = context?.host?.metrics
 	if (!metrics) return
 	metrics.increment(

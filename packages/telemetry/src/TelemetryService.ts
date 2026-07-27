@@ -16,6 +16,34 @@ import {
  */
 const TELEMETRY_ENABLED = process.env.TELEMETRY_ENABLED === "true"
 
+/** Caps on what a plugin may attach to an event (see {@link TelemetryService.capturePluginEvent}). */
+const PLUGIN_PROPERTY_LIMIT = 20
+const PLUGIN_STRING_LIMIT = 256
+
+/**
+ * Reduce a plugin's event properties to something safe to send off the machine.
+ *
+ * Keeps primitives (a count, a provider name, a duration), truncates long strings, and
+ * drops objects and arrays outright — an error's `stack`, a file's contents or a prompt
+ * would otherwise reach the telemetry backend because a plugin author spread an object
+ * into the call. Reserved keys (`plugin`, `event`) are dropped so a plugin cannot
+ * misattribute its own events.
+ */
+function scrubPluginProperties(properties?: Record<string, unknown>): Record<string, string | number | boolean> {
+	if (!properties) return {}
+	const out: Record<string, string | number | boolean> = {}
+	for (const [key, value] of Object.entries(properties)) {
+		if (Object.keys(out).length >= PLUGIN_PROPERTY_LIMIT) break
+		if (key === "plugin" || key === "event") continue
+		if (typeof value === "number" || typeof value === "boolean") {
+			out[key] = value
+		} else if (typeof value === "string") {
+			out[key] = value.length > PLUGIN_STRING_LIMIT ? `${value.slice(0, PLUGIN_STRING_LIMIT)}…` : value
+		}
+	}
+	return out
+}
+
 /**
  * TelemetryService wrapper class that defers initialization.
  * This ensures that we only create the various clients after environment
@@ -427,14 +455,25 @@ export class TelemetryService {
 		this.captureEvent(TelemetryEventName.TOOL_REJECTED, { taskId, tool })
 	}
 
-	public captureCodeIndexSegmentDedup(properties: {
-		fileCount: number
-		totalBlocks: number
-		reused: number
-		embedded: number
-		deleted: number
-	}): void {
-		this.captureEvent(TelemetryEventName.CODE_INDEX_SEGMENT_DEDUP, properties)
+	/**
+	 * An event a **plugin** reported through `ctx.host.telemetry` (design §6.11).
+	 *
+	 * Plugins do not get to name top-level events — the catalog is core's — so everything
+	 * they report arrives as {@link TelemetryEventName.PLUGIN_EVENT} with the plugin and
+	 * its own event name as properties. A query filters on `plugin`/`event`; a plugin can
+	 * neither shadow a core event nor make one up.
+	 *
+	 * Properties are **scrubbed** on the way in: primitives only, strings truncated, and a
+	 * hard cap on how many there are. A plugin sees workspace content — file paths, code,
+	 * prompts — and telemetry leaves the machine, so the boundary refuses to carry a blob
+	 * rather than trusting each plugin author to remember that.
+	 */
+	public capturePluginEvent(plugin: string, event: string, properties?: Record<string, unknown>): void {
+		this.captureEvent(TelemetryEventName.PLUGIN_EVENT, {
+			plugin,
+			event,
+			...scrubPluginProperties(properties),
+		})
 	}
 
 	// ─── Captcha Solver ───────────────────────────────────────────────────

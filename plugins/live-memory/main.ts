@@ -429,6 +429,10 @@ Tokens: ${result.tokensUsed.prompt} prompt + ${result.tokensUsed.completion} com
 Cost: $${result.costSnapshot.sessionEstimatedCostUSD.toFixed(6)} (session total)
 Files in context: ${result.contextFiles.length}`
 					} catch (error) {
+						// The message is deliberately not sent: it can quote the workspace.
+						ctx.host?.telemetry.capture("agent_error", {
+							kind: error instanceof Error ? error.name : "unknown",
+						})
 						// A granted-but-not-consented plugin gets a denying ctx.ai stub whose
 						// buildHandler throws inside the loop — surfaced as a clear, non-billing error.
 						return `Live Memory error: ${error instanceof Error ? error.message : String(error)}`

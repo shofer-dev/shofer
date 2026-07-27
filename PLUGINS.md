@@ -136,25 +136,26 @@ error and the plugin is skipped with a warning. Fields:
 Every capability defaults to **denied**. A contribution is only surfaced, and a code capability only
 reachable, when its permission is present. All keys are optional:
 
-| Key            | Type     | Gates                                                                                                                                                       |
-| -------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tools`        | boolean  | `registerTools` contributions.                                                                                                                              |
-| `systemPrompt` | boolean  | `transformSystemPrompt`.                                                                                                                                    |
-| `modes`        | boolean  | `contributes.modes`.                                                                                                                                        |
-| `skills`       | boolean  | `contributes.skills`.                                                                                                                                       |
-| `commands`     | boolean  | `contributes.commands`.                                                                                                                                     |
-| `rules`        | boolean  | `contributes.rules`.                                                                                                                                        |
-| `mcpServers`   | boolean  | `contributes.mcpServers`.                                                                                                                                   |
-| `workflows`    | boolean  | `contributes.workflows` — `.slang` workflows under your `workflows/` dir.                                                                                   |
-| `ui`           | region[] | UI regions the plugin may render into. See [§6](#6-ui-contributions).                                                                                       |
-| `lifecycle`    | boolean  | The `lifecycle` hooks. Without it, none of them ever fire.                                                                                                  |
-| `events`       | boolean  | `onEvent` observation.                                                                                                                                      |
-| `network`      | string[] | Allowed network origins/prefixes for `ctx.host.fetch`.                                                                                                      |
-| `filesystem`   | string[] | Allowed paths for `ctx.host.fs` and `ctx.host.watch` (relative entries resolve to plugin root **and** workspace).                                           |
-| `ai`           | boolean  | Host LLM/embeddings via `ctx.ai`. **Necessary but not sufficient** — also needs the AI-billing consent (§7).                                                |
-| `agent`        | boolean  | Proactive agent-steering via `ctx.agent.notify` (inject a message into the running agent). Billed/behavioral.                                               |
-| `task`         | boolean  | Task control via `ctx.task`: timeline markers, rewind, `setCwd`, `openTask`. Each changes what a task IS (rewind destroys history), so it is its own grant. |
-| `editor`       | boolean  | The host's multi-file diff viewer via `ctx.host.editor`.                                                                                                    |
+| Key            | Type     | Gates                                                                                                                                                          |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools`        | boolean  | `registerTools` contributions.                                                                                                                                 |
+| `systemPrompt` | boolean  | `transformSystemPrompt`.                                                                                                                                       |
+| `modes`        | boolean  | `contributes.modes`.                                                                                                                                           |
+| `skills`       | boolean  | `contributes.skills`.                                                                                                                                          |
+| `commands`     | boolean  | `contributes.commands`.                                                                                                                                        |
+| `rules`        | boolean  | `contributes.rules`.                                                                                                                                           |
+| `mcpServers`   | boolean  | `contributes.mcpServers`.                                                                                                                                      |
+| `workflows`    | boolean  | `contributes.workflows` — `.slang` workflows under your `workflows/` dir.                                                                                      |
+| `ui`           | region[] | UI regions the plugin may render into. See [§6](#6-ui-contributions).                                                                                          |
+| `lifecycle`    | boolean  | The `lifecycle` hooks. Without it, none of them ever fire.                                                                                                     |
+| `events`       | boolean  | `onEvent` observation.                                                                                                                                         |
+| `network`      | string[] | Allowed network origins/prefixes for `ctx.host.fetch`.                                                                                                         |
+| `filesystem`   | string[] | Allowed paths for `ctx.host.fs` and `ctx.host.watch` (relative entries resolve to plugin root **and** workspace).                                              |
+| `ai`           | boolean  | Host LLM/embeddings via `ctx.ai`. **Necessary but not sufficient** — also needs the AI-billing consent (§7).                                                   |
+| `agent`        | boolean  | Proactive agent-steering via `ctx.agent.notify` (inject a message into the running agent). Billed/behavioral.                                                  |
+| `task`         | boolean  | Task control via `ctx.task`: timeline markers, rewind, `setCwd`, `openTask`. Each changes what a task IS (rewind destroys history), so it is its own grant.    |
+| `telemetry`    | boolean  | Report product events via `ctx.host.telemetry`. Telemetry LEAVES the machine, so it is a grant — the user's global telemetry opt-in still gates it underneath. |
+| `editor`       | boolean  | The host's multi-file diff viewer via `ctx.host.editor`.                                                                                                       |
 
 ### `config`
 
@@ -364,6 +365,23 @@ missing API.
     ```ts
     ctx.host?.log.info("reindexed", { files: 12 })
     // shows in Settings → Logging under the "Plugin:my-plugin" category
+    ```
+
+- **`host.metrics`** — `increment`/`gauge`/`observe`. **Always available** (a number in a local
+  registry is as harmless as a log line), and a no-op on a host with no metrics pipeline. Metric
+  names are yours: a plugin that owns a subsystem publishes the numbers an operator watches.
+- **`host.telemetry.capture(event, properties?)`** — report a product event, gated on
+  `permissions.telemetry`. Three things the host does for you, and none of them is optional:
+  your event name is **namespaced** under the single `Plugin Event` catalog entry with
+  `plugin`/`event` properties (a plugin cannot name a top-level event, or shadow a core one);
+  properties are **scrubbed** to primitives with strings truncated (you see workspace content, and
+  this leaves the machine — an `Error.stack` or a file's text must not become an analytics
+  payload); and the user's telemetry opt-in still applies, so a granted plugin on a machine with
+  telemetry off reports nothing. Ungranted ⇒ warns and drops. It never throws: reporting a failure
+  must not fail differently because reporting was refused.
+
+    ```ts
+    ctx.host?.telemetry.capture("indexing_error", { subsystem: "OpenAiEmbedder", attempts: 3 })
     ```
 
 - **`host.env`** — read-only host/environment metadata. Always available.

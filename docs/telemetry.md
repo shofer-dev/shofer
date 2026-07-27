@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-  <!-- /TOC -->
+      <!-- /TOC -->
 
 ---
 
@@ -141,7 +141,6 @@ The service provides typed convenience methods for every event type. Each method
 | [`captureMarketplaceItemRemoved`](packages/telemetry/src/TelemetryService.ts:290)   | `MARKETPLACE_ITEM_REMOVED`   | `itemId`, `itemType`, `itemName`, `target`                                        |
 | [`captureTitleButtonClicked`](packages/telemetry/src/TelemetryService.ts:303)       | `TITLE_BUTTON_CLICKED`       | `button`                                                                          |
 | [`captureTelemetrySettingsChanged`](packages/telemetry/src/TelemetryService.ts:312) | `TELEMETRY_SETTINGS_CHANGED` | `previousSetting`, `newSetting`                                                   |
-| [`captureCodeIndexSegmentDedup`](packages/telemetry/src/TelemetryService.ts:346)    | `CODE_INDEX_SEGMENT_DEDUP`   | `{fileCount, totalBlocks, reused, embedded, deleted}`                             |
 | [`capturePeerMessageSent`](packages/telemetry/src/TelemetryService.ts:346)          | `TASK_PEER_MESSAGE_SENT`     | `taskId`, peer-message metadata                                                   |
 | [`capturePeerMessageReceived`](packages/telemetry/src/TelemetryService.ts:350)      | `TASK_PEER_MESSAGE_RECEIVED` | `taskId`, peer-message metadata                                                   |
 | [`capturePeerDiscovery`](packages/telemetry/src/TelemetryService.ts:354)            | `TASK_PEER_DISCOVERY`        | `taskId`, discovery metadata                                                      |
@@ -300,13 +299,11 @@ enum TelemetryEventName {
 	DIFF_APPLICATION_ERROR = "Diff Application Error",
 	SHELL_INTEGRATION_ERROR = "Shell Integration Error",
 	CONSECUTIVE_MISTAKE_ERROR = "Consecutive Mistake Error",
-	CODE_INDEX_ERROR = "Code Index Error",
-	LIVE_MEMORY_ERROR = "Live Memory Error",
+	PLUGIN_EVENT = "Plugin Event",
 	TELEMETRY_SETTINGS_CHANGED = "Telemetry Settings Changed",
 	MODEL_CACHE_EMPTY_RESPONSE = "Model Cache Empty Response",
 	READ_FILE_LEGACY_FORMAT_USED = "Read File Legacy Format Used",
 	BUDGET_EXCEEDED = "Budget Exceeded",
-	CODE_INDEX_SEGMENT_DEDUP = "Code Index Segment Dedup",
 
 	// Async MCP tool calls
 	MCP_ASYNC_CALL_STARTED = "MCP Async Call Started",
@@ -537,7 +534,6 @@ flowchart TD
 | `CONTEXT_CONDENSED`         | Context condensation      | `taskId`, `isAutomaticTrigger`, `usedCustomPrompt?`                 |
 | `SLIDING_WINDOW_TRUNCATION` | Sliding window truncation | `taskId`                                                            |
 | `BUDGET_EXCEEDED`           | Cost limit enforcement    | `taskId`, `rootTaskId`, `limitUsd`, `spentUsd`, `action`, `modelId` |
-| `CODE_INDEX_SEGMENT_DEDUP`  | Code-index file watcher   | `{fileCount, totalBlocks, reused, embedded, deleted}`               |
 
 ### UI & Interaction Events
 
@@ -564,16 +560,15 @@ flowchart TD
 
 ### Error Events
 
-| Event                         | Where Emitted                  | Properties                                       |
-| ----------------------------- | ------------------------------ | ------------------------------------------------ |
-| `SCHEMA_VALIDATION_ERROR`     | Zod schema validation          | `schemaName`, `error` (formatted)                |
-| `DIFF_APPLICATION_ERROR`      | apply_diff tool                | `taskId`, `consecutiveMistakeCount`              |
-| `SHELL_INTEGRATION_ERROR`     | Shell integration              | `taskId`                                         |
-| `CONSECUTIVE_MISTAKE_ERROR`   | Mistake limit reached          | `taskId`                                         |
-| `CODE_INDEX_ERROR`            | Code indexing service          | `error` (message), plus service-specific context |
-| `LIVE_MEMORY_ERROR`           | Live Memory service            | `error` (message), service-specific context      |
-| `MODEL_CACHE_EMPTY_RESPONSE`  | Model cache                    | —                                                |
-| `error_boundary_caught_error` | React error boundary (webview) | `error` (message), `componentStack`              |
+| Event                         | Where Emitted                     | Properties                             |
+| ----------------------------- | --------------------------------- | -------------------------------------- |
+| `SCHEMA_VALIDATION_ERROR`     | Zod schema validation             | `schemaName`, `error` (formatted)      |
+| `DIFF_APPLICATION_ERROR`      | apply_diff tool                   | `taskId`, `consecutiveMistakeCount`    |
+| `SHELL_INTEGRATION_ERROR`     | Shell integration                 | `taskId`                               |
+| `CONSECUTIVE_MISTAKE_ERROR`   | Mistake limit reached             | `taskId`                               |
+| `PLUGIN_EVENT`                | Any plugin (`ctx.host.telemetry`) | `plugin`, `event`, scrubbed properties |
+| `MODEL_CACHE_EMPTY_RESPONSE`  | Model cache                       | —                                      |
+| `error_boundary_caught_error` | React error boundary (webview)    | `error` (message), `componentStack`    |
 
 ### MCP Async Call Events
 
@@ -747,14 +742,36 @@ if (!wasPreviouslyOptedIn && isOptedIn) {
 | [`core/tools/ApplyDiffTool.ts`](packages/core/src/tools/ApplyDiffTool.ts)                                             | Emits `DIFF_APPLICATION_ERROR`                                                                                                    |
 | [`core/tools/ExecuteCommandTool.ts`](packages/core/src/tools/ExecuteCommandTool.ts)                                   | Emits `SHELL_INTEGRATION_ERROR`                                                                                                   |
 
-### Code Indexing Service
+### Plugin events (`PLUGIN_EVENT`)
 
-The code indexer left core for the bundled `rag-indexing` plugin, and its
-`CODE_INDEX_ERROR` telemetry went with the feature rather than moving to the plugin: a
-plugin has no telemetry seam, and giving it one would let any plugin write into this
-catalog. Indexer failures are now visible as **metrics** instead
-(`shofer_code_index_errors_total`, published through `ctx.host.metrics`) — see
-[`plugins/rag-indexing/TODO.md`](../plugins/rag-indexing/TODO.md).
+Everything a **plugin** reports arrives as one catalog entry,
+`TelemetryEventName.PLUGIN_EVENT` ("Plugin Event"), with the plugin's name and its own
+event name as properties:
+
+| Property | Meaning                                          |
+| -------- | ------------------------------------------------ |
+| `plugin` | Which plugin sent it (`"rag-indexing"`)          |
+| `event`  | The plugin's own event name (`"indexing_error"`) |
+| …        | The plugin's properties, scrubbed to primitives  |
+
+One entry rather than one per plugin event, because **the catalog is core's**: a plugin
+cannot add to it, and a plugin that could name top-level events could also shadow one of
+core's. Queries filter on `plugin`/`event` instead.
+
+Plugins reach it through `ctx.host.telemetry.capture(event, properties?)`, gated on
+`permissions.telemetry` ([`plugin_system.md` §5.12](plugin_system.md)) and routed through
+the typed `TelemetryService.capturePluginEvent` wrapper — so the Telemetry Capture Rule
+holds: no caller passes a raw event name to `captureEvent`.
+
+**Properties are scrubbed at the boundary**: primitives only, strings truncated at 256
+characters, at most 20 keys, and the reserved `plugin`/`event` keys dropped. A plugin sees
+workspace content — paths, code, prompts — and telemetry leaves the machine, so an
+`Error.stack` or a spread object is refused rather than trusted to each plugin author.
+
+The bundled `rag-indexing` plugin is the current emitter (`indexing_error`,
+`segment_dedup`), which is where the old `CODE_INDEX_ERROR` /
+`CODE_INDEX_SEGMENT_DEDUP` events went when the indexer became a plugin. Those two
+catalog entries — and `LIVE_MEMORY_ERROR` — now have no emitter in core.
 
 ### AI Providers
 
@@ -864,7 +881,7 @@ This section identifies known gaps, drift risks, and areas where the telemetry s
 
 - **No `captureException` for non-PostHog clients.** `TelemetryService` delegates `captureException` to all registered clients, but only `PostHogTelemetryClient` implements meaningful exception capture. If a second client is registered, it must also implement `captureException`.
 
-- **The `shoferTelemetryEventSchema` union does not gate `captureEvent` at runtime, but enum↔union parity is now test-enforced.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is still no per-call compile-time safety net (a previous version of this doc wrongly claimed there was). However, the three events that were formerly absent from the union — `LIVE_MEMORY_ERROR`, `BUDGET_EXCEEDED`, and `CODE_INDEX_SEGMENT_DEDUP` — have been added, and a parity test in [`telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) now asserts that **every `TelemetryEventName` appears in the union and the union references no unknown names**, so future drift fails CI.
+- **The `shoferTelemetryEventSchema` union does not gate `captureEvent` at runtime, but enum↔union parity is now test-enforced.** `captureEvent(eventName: TelemetryEventName, properties?: Record<string, any>)` ([`TelemetryService.ts:75`](packages/telemetry/src/TelemetryService.ts:75)) takes a raw enum value plus an untyped property bag and **never validates against the union**, so there is still no per-call compile-time safety net (a previous version of this doc wrongly claimed there was). However, a parity test in [`telemetry.test.ts`](packages/types/src/__tests__/telemetry.test.ts) now asserts that **every `TelemetryEventName` appears in the union and the union references no unknown names**, so future drift fails CI.
 
 ### Coverage Gaps (features without telemetry)
 

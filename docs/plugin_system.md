@@ -702,12 +702,36 @@ the host is unchanged.
   (user-facing toasts) this goes only to the log/output channel. Lets a user
   isolate one plugin's logs from the rest.
 
+- **`ctx.host.metrics` — always-available instruments.** `increment`/`gauge`/`observe`
+  into the host's in-process registry (`metrics/registry.ts`). Ungated for the same reason
+  as the logger: a number that never leaves the machine is as harmless as a log line, and a
+  plugin that owns a subsystem has to be able to publish what an operator watches. A no-op
+  on a host with no metrics pipeline.
+
+- **`ctx.host.telemetry` — product events (`permissions.telemetry`).** Data **leaves the
+  machine**, which is what separates it from the logger and the metrics, so it is a grant.
+  Three host-side rules make it safe to expose:
+
+    - **The catalog stays core's.** Every plugin event arrives as the single
+      `TelemetryEventName.PLUGIN_EVENT` entry with `plugin`/`event` properties, so a plugin
+      can neither mint a top-level event nor shadow one of core's — and those two keys are
+      stripped from its own properties, so it cannot misattribute events either.
+    - **Properties are scrubbed** to primitives (strings truncated at 256 chars, at most 20
+      keys). A plugin sees paths, code and prompts; an `Error.stack` or a spread object is
+      dropped at the boundary rather than trusted to each plugin author.
+    - **The user's opt-in still applies** — the seam routes through `TelemetryService`,
+      behind the `TELEMETRY_ENABLED` build flag and the user's `TelemetrySetting`.
+
+    Ungranted it **warns and returns** rather than throwing (every other denied capability
+    throws): reporting an error must not fail differently because reporting was refused.
+    Emitted by the bundled `rag-indexing` plugin for indexing errors and segment reuse.
+
 - **`ctx.ai` — provider access.** `ctx.ai.buildHandler(profileRef?)` (**async** —
   profile resolution via `ProviderSettingsManager.getProfile` is async) resolves a
   host-configured provider profile (the default when `profileRef` is omitted) and
   returns the **same** `ApiHandler` `buildApiHandler` returns. `ctx.ai.embed(texts, profileRef?)`
-  returns `number[][]` from the configured Code Index embedder
-  (`CodeIndexServiceFactory.createEmbedder` — the thinnest seam that gives a plugin
+  returns `number[][]` from the embedder the bundled `rag-indexing` plugin has configured
+  (the host forwards to it — the thinnest seam that gives a plugin
   real vectors; `profileRef` is accepted for symmetry but embeddings follow the
   Code Index config). `ctx.ai.hasConsent()` is a read-only accessor for whether
   calls will actually run. The plugin **never sees raw API keys** — only the
@@ -1037,19 +1061,20 @@ Enabled state is persisted in `globalState` under
 
 ### Permission boundaries
 
-| Permission     | What it allows                             | Risk                                                                                                                                                                                                 |
-| -------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tools`        | Register model-callable tools              | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                                                          |
-| `systemPrompt` | Modify the system prompt                   | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                                                           |
-| `modes`        | Contribute mode definitions                | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                                                          |
-| `ui`           | Render React components                    | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                                                 |
-| `lifecycle`    | Hook into task lifecycle                   | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                                                         |
-| `network`      | HTTP to listed domains                     | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork).                             |
-| `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                                                        |
-| `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                                                 |
-| `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                                                      |
-| `task`         | Task control via `ctx.task`                | Writes rows into the conversation, can **destroy** conversation history (rewind restarts the task), move a task to another directory, and open new tasks. Dedicated grant; ungranted ⇒ denying stub. |
-| `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                                                         |
+| Permission     | What it allows                             | Risk                                                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools`        | Register model-callable tools              | Tool code runs in the host with `getHost()` access; gated by auto-approval.                                                                                                                                                                              |
+| `systemPrompt` | Modify the system prompt                   | Can inject behavior-changing instructions. User sees the diff in Settings.                                                                                                                                                                               |
+| `modes`        | Contribute mode definitions                | Can restrict or expand per-mode tool access. Subject to user mode-override.                                                                                                                                                                              |
+| `ui`           | Render React components                    | Components run with a restricted `PluginUIApi` (no direct `vscode` access); error-boundary isolated.                                                                                                                                                     |
+| `lifecycle`    | Hook into task lifecycle                   | `beforeToolCall` can block/modify calls; `beforeAsk` can auto-approve/deny. High trust. 500 ms per-hook cap.                                                                                                                                             |
+| `network`      | HTTP to listed domains                     | `fetch()` to listed domains only; others blocked. Non-HTTP (gRPC/socket) egress is a proposed generalization — [§14.3](#143-non-http-network-egress-permissionsnetwork).                                                                                 |
+| `filesystem`   | Read/write listed paths                    | `ctx.host.fs` + `ctx.host.watch` scoped to listed paths only.                                                                                                                                                                                            |
+| `ai`           | Host LLM/embeddings via `ctx.ai`           | **Billed model calls on the user's account.** Requires a separate consent (below). Only an `ApiHandler`, never keys.                                                                                                                                     |
+| `agent`        | Proactive steering via `ctx.agent`         | Injects messages into the running agent (queue/spawn/interrupt) — billed/behavioral. Dedicated grant; ungranted ⇒ denying stub.                                                                                                                          |
+| `task`         | Task control via `ctx.task`                | Writes rows into the conversation, can **destroy** conversation history (rewind restarts the task), move a task to another directory, and open new tasks. Dedicated grant; ungranted ⇒ denying stub.                                                     |
+| `telemetry`    | Product events via `ctx.host.telemetry`    | Data **leaves the machine**, unlike the always-on logger and metrics. Host-namespaced (`Plugin Event` + `plugin`/`event` properties) and scrubbed to primitives; the user's telemetry opt-in still gates it. Ungranted ⇒ warns and drops (never throws). |
+| `editor`       | `ctx.host.editor` (multi-file diff viewer) | Opens editors — focus-stealing, so granted explicitly rather than always-on like `notifier`.                                                                                                                                                             |
 
 ### Sandboxing
 

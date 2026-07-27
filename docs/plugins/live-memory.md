@@ -843,7 +843,7 @@ Integration point: `src/core/webview/the `sidebar-panel` UI bundle.ts` — manag
 - **Recovery**: `recoverFromError()` clears all service instances and the LLM provider, forcing a clean re-initialization on next `startAgent()`.
 - **Conversation preservation**: Conversation history is saved after every successful question/answer pair. If the agent crashes mid-question, the conversation state from before the question is preserved.
 - **Token overflow**: If the context window is exceeded, `ContextWindow.enforceLimit()` truncates oldest file contexts (by `lastReferencedAt`) and then oldest user/assistant turn pairs before failing the request. Truncated content is permanently lost — no summarization is retained.
-- **Telemetry**: All errors are captured via `TelemetryService.captureEvent(TelemetryEventName.LIVE_MEMORY_ERROR, {...})` with location context.
+- **Telemetry**: a failed `ask_live_memory` call reports `ctx.host.telemetry.capture("agent_error", { kind })` — the error's `name`, never its message, which can quote the workspace. It arrives as a `Plugin Event` tagged `plugin: "live-memory"`.
 
 ---
 

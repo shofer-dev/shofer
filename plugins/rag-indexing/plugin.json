@@ -11,6 +11,7 @@
 	"hookTimeoutMs": 60000,
 	"permissions": {
 		"tools": true,
+		"telemetry": true,
 		"filesystem": ["."],
 		"ui": ["settings-tab", "chat-input-toolbar"]
 	},

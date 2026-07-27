@@ -4,11 +4,12 @@ What this plugin knowingly does not do, and what the move out of core cost.
 
 ## Reduced from the built-in version
 
-- **No error telemetry.** The indexer used to send `CODE_INDEX_ERROR` events through the
-  product's typed telemetry catalog. A plugin has no telemetry seam, and adding one would
-  let any plugin write into that catalog — so the events are gone. The **metrics** remain
-  (`shofer_code_index_errors_total` and friends, through `ctx.host.metrics`), which is what
-  an operator actually watches; what is lost is the aggregated field signal.
+- **Telemetry is namespaced and scrubbed.** The indexer's errors and segment-reuse counts
+  still reach the product's analytics, but through `ctx.host.telemetry` — as
+  `Plugin Event` rows tagged `plugin: "rag-indexing"`, `event: "indexing_error"` rather
+  than the old top-level `CODE_INDEX_ERROR`, and with only primitive properties (the
+  error's `stack` no longer travels). Dashboards built on the old event names need
+  re-pointing; the metrics (`shofer_code_index_errors_total`) are unchanged.
 - **The settings form is the generic plugin one.** Provider, model, URLs and the seven
   credentials are rendered by the Plugins panel from the manifest schema, not by a bespoke
   990-line form. That means no provider-specific model dropdown and no "test connection"
