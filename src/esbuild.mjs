@@ -47,7 +47,14 @@ async function buildPluginSdk(srcDir, distDir) {
 	fs.writeFileSync(
 		path.join(sdkPkgDir, "package.json"),
 		JSON.stringify(
-			{ name: "@shofer/types", version: "0.0.0", type: "module", main: "index.js", module: "index.js", exports: { ".": "./index.js" } },
+			{
+				name: "@shofer/types",
+				version: "0.0.0",
+				type: "module",
+				main: "index.js",
+				module: "index.js",
+				exports: { ".": "./index.js" },
+			},
 			null,
 			2,
 		),
@@ -67,12 +74,29 @@ function copyBundledPlugins(srcRoot, dstRoot) {
 		return
 	}
 	let count = 0
-	const walk = (src, dst) => {
+	/**
+	 * A plugin whose manifest `main` is a BUILT entry (`main.mjs`) does not ship its
+	 * TypeScript: the built file already contains it, and copying the sources both bloats
+	 * the VSIX and drops files into `dist/` that the extension's own tsconfig then tries
+	 * to typecheck — with imports that only resolve inside the monorepo.
+	 */
+	const shipsBuiltEntry = (pluginRoot) => {
+		try {
+			const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, "plugin.json"), "utf8"))
+			return /\.(mjs|js)$/.test(String(manifest.main ?? ""))
+		} catch {
+			return false
+		}
+	}
+	const walk = (src, dst, pluginRoot) => {
 		fs.mkdirSync(dst, { recursive: true })
 		for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
 			if (entry.isDirectory()) {
 				if (PLUGIN_COPY_EXCLUDE_DIRS.has(entry.name)) continue
-				walk(path.join(src, entry.name), path.join(dst, entry.name))
+				// One level below the plugins root, each directory IS a plugin root.
+				const nextRoot = pluginRoot ?? path.join(src, entry.name)
+				if (entry.name === "src" && pluginRoot && shipsBuiltEntry(pluginRoot)) continue
+				walk(path.join(src, entry.name), path.join(dst, entry.name), nextRoot)
 			} else if (entry.isFile()) {
 				if (PLUGIN_COPY_EXCLUDE_FILES.has(entry.name)) continue
 				if (PLUGIN_COPY_EXCLUDE_EXT.has(path.extname(entry.name))) continue
@@ -81,7 +105,7 @@ function copyBundledPlugins(srcRoot, dstRoot) {
 			}
 		}
 	}
-	walk(srcRoot, dstRoot)
+	walk(srcRoot, dstRoot, undefined)
 	console.log(`[esbuild] Copied ${count} bundled-plugin files to ${dstRoot}`)
 }
 
@@ -178,16 +202,12 @@ async function main() {
 							stdio: "pipe",
 						})
 					} catch (err) {
-						console.error(
-							`[esbuild] ERROR: failed to build shofer-sandbox: ${err.message}`,
-						)
+						console.error(`[esbuild] ERROR: failed to build shofer-sandbox: ${err.message}`)
 						process.exit(1)
 					}
 
 					if (!fs.existsSync(sandboxBin)) {
-						console.error(
-							`[esbuild] ERROR: shofer-sandbox not found after build at ${sandboxBin}`,
-						)
+						console.error(`[esbuild] ERROR: shofer-sandbox not found after build at ${sandboxBin}`)
 						process.exit(1)
 					}
 
@@ -216,22 +236,13 @@ async function main() {
 					const esbuildWasmDir = path.join(srcDir, "node_modules", "esbuild-wasm")
 					const esbuildBinDest = path.join(distDir, "bin")
 					fs.mkdirSync(esbuildBinDest, { recursive: true })
-					fs.copyFileSync(
-						path.join(esbuildWasmDir, "bin", "esbuild"),
-						path.join(esbuildBinDest, "esbuild"),
-					)
-					fs.copyFileSync(
-						path.join(esbuildWasmDir, "esbuild.wasm"),
-						path.join(distDir, "esbuild.wasm"),
-					)
+					fs.copyFileSync(path.join(esbuildWasmDir, "bin", "esbuild"), path.join(esbuildBinDest, "esbuild"))
+					fs.copyFileSync(path.join(esbuildWasmDir, "esbuild.wasm"), path.join(distDir, "esbuild.wasm"))
 					fs.copyFileSync(
 						path.join(esbuildWasmDir, "wasm_exec_node.js"),
 						path.join(distDir, "wasm_exec_node.js"),
 					)
-					fs.copyFileSync(
-						path.join(esbuildWasmDir, "wasm_exec.js"),
-						path.join(distDir, "wasm_exec.js"),
-					)
+					fs.copyFileSync(path.join(esbuildWasmDir, "wasm_exec.js"), path.join(distDir, "wasm_exec.js"))
 					// Ship the first-party (bundled) plugins tree into dist/plugins so the
 					// runtime resolves it at `<extensionPath>/dist/plugins` (design §7 —
 					// bundled scope). Mirrors the tree-sitter-wasm copy above. The P2 code

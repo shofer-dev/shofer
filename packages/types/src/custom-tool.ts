@@ -1,6 +1,7 @@
 import type { ZodType, z } from "zod/v4"
 
 import { TaskLike } from "./task.js"
+import type { ToolGroup } from "./tool.js"
 
 // Re-export from Zod for convenience.
 
@@ -53,6 +54,18 @@ export interface CustomToolDefinition {
 	 */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	execute: (args: any, context: CustomToolContext) => Promise<string>
+
+	/**
+	 * Which {@link ToolGroup} this tool belongs to, for **auto-approval**.
+	 *
+	 * Auto-approval is per group (`alwaysAllowReadOnly`, `alwaysAllowWrite`, …), and a
+	 * tool that declares nothing lands in `uncategorized` — so a plugin's read-only
+	 * search would prompt a user who has already said "reads are fine", which reads as a
+	 * bug rather than a policy. Declaring the group is how a plugin tool participates in
+	 * the same policy a native tool does; it does not grant anything, because the group's
+	 * toggle still has to be on.
+	 */
+	group?: ToolGroup
 
 	/**
 	 * A **private** (internal) tool. Registered and callable in the contexts the

@@ -50,7 +50,6 @@ import { CommandExecutionError } from "./CommandExecutionError"
 import { AutoApprovedRequestLimitWarning } from "./AutoApprovedRequestLimitWarning"
 import { ToolInputSection, ToolOutputSection } from "./ToolInputOutput"
 import { InProgressRow, CondensationResultRow, CondensationErrorRow, TruncationResultRow } from "./context-management"
-import RagSearchResultsDisplay from "./RagSearchResultsDisplay"
 import { appendImages } from "@src/utils/imageUtils"
 import { McpExecution } from "./McpExecution"
 import { ChatTextArea } from "./ChatTextArea"
@@ -550,45 +549,6 @@ export const ChatRowContent = ({
 	// are called unconditionally (React rules-of-hooks).  Each is keyed on
 	// message.text or message.ts so it re-evaluates only when the data changes,
 	// skipping the JSON.parse / reverse-scan work on every parent re-render.
-	// These hooks run unconditionally on every message render (React rules-of-hooks),
-	// so message.text is only JSON for rag_search_result/git_search_result say types.
-	// safeJsonParse returns undefined for non-JSON text instead of throwing+logging.
-	const parsedRagSearch = useMemo(
-		() =>
-			safeJsonParse<{
-				content: {
-					query: string
-					results: Array<{
-						filePath: string
-						score: number
-						startLine: number
-						endLine: number
-						codeChunk: string
-					}>
-				}
-			}>(message.text),
-		[message.text],
-	)
-
-	const parsedGitSearch = useMemo(
-		() =>
-			safeJsonParse<{
-				content: {
-					query: string
-					results: Array<{
-						commit_hash: string
-						short_hash: string
-						author: string
-						author_date: string
-						subject: string
-						body: string
-						score: number
-					}>
-				}
-			}>(message.text),
-		[message.text],
-	)
-
 	const rateLimitWaitSeconds = useMemo(() => {
 		if (!message.text) return undefined
 		try {
@@ -702,48 +662,6 @@ export const ChatRowContent = ({
 						</div>
 					</>
 				)
-			case "ragSearch": {
-				return (
-					<>
-						<div style={headerStyle}>
-							{toolIcon("search")}
-							<span style={{ fontWeight: "bold" }}>
-								{tool.path ? (
-									<Trans
-										i18nKey="chat:ragSearch.wantsToSearchWithPath"
-										components={{ code: <code></code> }}
-										values={{ query: tool.query, path: tool.path }}
-									/>
-								) : (
-									<Trans
-										i18nKey="chat:ragSearch.wantsToSearch"
-										components={{ code: <code></code> }}
-										values={{ query: tool.query }}
-									/>
-								)}
-							</span>
-						</div>
-						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
-					</>
-				)
-			}
-			case "gitSearch": {
-				return (
-					<>
-						<div style={headerStyle}>
-							{toolIcon("search")}
-							<span style={{ fontWeight: "bold" }}>
-								<Trans
-									i18nKey="chat:gitSearch.wantsToSearch"
-									components={{ code: <code></code> }}
-									values={{ query: tool.query }}
-								/>
-							</span>
-						</div>
-						<ToolInputSection tool={tool} isExpanded={showToolInput} onToggle={handleToggleToolInput} />
-					</>
-				)
-			}
 			case "updateTodoList" as any: {
 				const todos = (tool as any).todos || []
 
@@ -1850,67 +1768,6 @@ export const ChatRowContent = ({
 						return <TruncationResultRow data={message.contextTruncation} />
 					}
 					return null
-				case "rag_search_result": {
-					if (parsedRagSearch && !parsedRagSearch?.content) {
-						console.error("Invalid ragSearch content structure:", parsedRagSearch.content)
-						return <div>Error displaying search results.</div>
-					}
-
-					const { results = [] } = parsedRagSearch?.content || {}
-
-					return <RagSearchResultsDisplay results={results} />
-				}
-				case "git_search_result": {
-					if (parsedGitSearch && !parsedGitSearch?.content) {
-						console.error("Invalid gitSearch content structure:", parsedGitSearch.content)
-						return <div>Error displaying search results.</div>
-					}
-
-					const gitResults = parsedGitSearch?.content?.results || []
-					const count = gitResults.length
-
-					return (
-						<div>
-							<div style={headerStyle}>
-								<span
-									className="codicon codicon-search"
-									style={{
-										color: "var(--vscode-foreground)",
-										marginBottom: "-1.5px",
-									}}
-								/>
-								<span style={{ fontWeight: "bold" }}>
-									{count === 1
-										? t("chat:gitSearch.didSearch_one")
-										: t("chat:gitSearch.didSearch_other", { count })}
-								</span>
-							</div>
-							<div className="border-l border-muted-foreground/30 ml-2 pl-4 pb-1 space-y-3">
-								{gitResults.map((result, idx) => (
-									<div key={idx} className="text-sm">
-										<div className="flex items-center gap-2 flex-wrap">
-											<code className="text-xs bg-vscode-textCodeBlock-background px-1 py-0.5 rounded">
-												{result.short_hash}
-											</code>
-											<span className="text-vscode-descriptionForeground">{result.subject}</span>
-										</div>
-										<div className="text-xs text-vscode-descriptionForeground mt-1">
-											{result.author} · {result.author_date}
-										</div>
-										{result.body && (
-											<div className="text-xs text-vscode-descriptionForeground/70 mt-1 whitespace-pre-wrap line-clamp-3">
-												{result.body}
-											</div>
-										)}
-										<div className="text-xs text-vscode-descriptionForeground/50 mt-1">
-											{t("chat:gitSearch.resultTooltip", { score: result.score.toFixed(3) })}
-										</div>
-									</div>
-								))}
-							</div>
-						</div>
-					)
-				}
 				case "tool_result": {
 					// Render raw tool output in an expandable section beneath the tool invocation.
 					const resultInfo = safeJsonParse<import("@shofer/types").ShoferSayToolResult>(message.text || "{}")

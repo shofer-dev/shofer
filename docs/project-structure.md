@@ -250,7 +250,7 @@ The tree shows a simplified subset of the monorepo. Missing from the diagram:
 - `packages/ipc/` — IPC client/server for CLI ↔ extension communication.
 - `packages/core/src/tools/` — `BaseTool` + the ~55 concrete native tool handlers (`ApplyDiffTool.ts`, `AttemptCompletionTool.ts`, …) plus the tool _infrastructure_ (`defineNativeTool`, the private/native tool registries, tool aliases, the repetition detector).
 - `packages/core/src/auto-approval/` — AutoApprovalHandler, per-group approval policies.
-- code-index — **split**: the engine (embedders/interfaces/vector-store/parser) is in `packages/core/src/services/code-index/`; the VS Code `CodeIndexManager`/orchestrator/scanner stay in `src/services/code-index/` behind a core-side registry.
+- code-index — **gone from core**: the whole indexer (engine, managers, git-history half, tools and UI) is the bundled `plugins/rag-indexing/` plugin.
 - live-memory — leaves in `packages/core/src/services/live-memory/`; the VS Code manager stays in `src` behind a registry.
 - MCP — `McpHub` is in `packages/core/src/services/mcp/`; `McpServerManager` (Category II) stays in `src/services/mcp/`.
 - skills — engine in `packages/core`; the VS Code manager stays in `src/services/skills/` behind a registry.

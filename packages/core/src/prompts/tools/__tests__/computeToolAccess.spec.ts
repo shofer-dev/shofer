@@ -15,8 +15,6 @@ import { computeToolAccess, FEATURE_GATED_TOOLS, type ToolAccessGates } from "..
 const codeMode = getModeBySlug("code", BUILTIN_MODES)!
 
 const allGatesOn: ToolAccessGates = {
-	ragSearch: true,
-	gitSearch: true,
 	generateImage: true,
 	runSlashCommand: true,
 	accessMcpResource: true,

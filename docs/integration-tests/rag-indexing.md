@@ -1,11 +1,11 @@
 # RAG Code Indexing — Integration Test Scenarios
 
-> Feature docs: [`docs/rag_indexing.md`](../docs/rag_indexing.md),
+> Feature docs: [`docs/plugins/rag-indexing.md`](../plugins/rag-indexing.md),
 > [`docs/user-manual/rag-indexing.md`](../docs/user-manual/rag-indexing.md)
-> Implementation: [`src/services/code-index/manager.ts`](../src/services/code-index/manager.ts),
-> [`src/services/code-index/orchestrator.ts`](../src/services/code-index/orchestrator.ts),
-> [`src/services/code-index/processors/scanner.ts`](../src/services/code-index/processors/scanner.ts),
-> [`src/services/code-index/processors/file-watcher.ts`](../src/services/code-index/processors/file-watcher.ts),
+> Implementation: [`plugins/rag-indexing/src/manager.ts`](../../plugins/rag-indexing/src/manager.ts),
+> [`plugins/rag-indexing/src/orchestrator.ts`](../../plugins/rag-indexing/src/orchestrator.ts),
+> [`plugins/rag-indexing/src/indexing/scanner.ts`](../../plugins/rag-indexing/src/indexing/scanner.ts),
+> [`plugins/rag-indexing/src/indexing/file-watcher.ts`](../../plugins/rag-indexing/src/indexing/file-watcher.ts),
 > [`packages/core/src/tools/RagSearchTool.ts`](../packages/core/src/tools/RagSearchTool.ts)
 
 ## Prerequisites

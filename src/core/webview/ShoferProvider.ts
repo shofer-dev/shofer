@@ -61,7 +61,6 @@ import { governanceDisabledPlugins } from "@shofer/core"
 import { experimentDefault, EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { formatLanguage } from "@shofer/types"
 import { WebviewMessage } from "@shofer/core"
-import { EMBEDDING_MODEL_PROFILES } from "@shofer/core"
 import { ProfileValidator } from "../../shared/ProfileValidator"
 
 import { Terminal } from "../../integrations/terminal/Terminal"
@@ -125,15 +124,8 @@ import type {
 } from "@shofer/core"
 import { getApiMetrics } from "@shofer/core"
 import { applyPluginSecretEdits, redactPluginSecretConfig, splitPluginConfigBySecrets } from "@shofer/core"
-import { getCodeIndexManagerFactory, getGitIndexManagerFactory } from "@shofer/core"
 import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
-import { CodeIndexManager } from "../../services/code-index/manager"
-import { CodeIndexConfigManager } from "../../services/code-index/config-manager"
-import { CacheManager } from "../../services/code-index/cache-manager"
-import { CodeIndexServiceFactory } from "../../services/code-index/service-factory"
-import type { IndexProgressUpdate } from "@shofer/core"
-import { GitIndexManager } from "../../services/git-index/git-index-manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { TaskManager } from "../../services/task-manager/TaskManager"
 
@@ -209,10 +201,6 @@ export class ShoferProvider
 	private _logFlushTimer?: ReturnType<typeof setTimeout>
 	private view?: vscode.WebviewView | vscode.WebviewPanel
 	private shoferStack: Task[] = []
-	private codeIndexStatusSubscription?: vscode.Disposable
-	private codeIndexManager?: CodeIndexManager
-	private gitIndexStatusSubscription?: vscode.Disposable
-	private gitIndexManager?: GitIndexManager
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -368,8 +356,6 @@ export class ShoferProvider
 		this.currentWorkspacePath = getWorkspacePath()
 
 		ShoferProvider.activeInstances.add(this)
-
-		this.updateGlobalState("codebaseIndexModels", EMBEDDING_MODEL_PROFILES)
 
 		// Initialize the per-task file-based history store.
 		// The globalState write-through is debounced separately (not on every mutation)
@@ -1532,17 +1518,13 @@ export class ShoferProvider
 		// liveness window and trigger an infinite reset loop.
 
 		// Initialize code index status subscription for the current workspace.
-		this.updateCodeIndexStatusSubscription()
 
 		// Initialize git index status subscription for the current workspace.
-		this.updateGitIndexStatusSubscription()
 
 		// Listen for active editor changes to update code index status for the
 		// current workspace.
 		const activeEditorSubscription = vscode.window.onDidChangeActiveTextEditor(() => {
 			// Update subscription when workspace might have changed.
-			this.updateCodeIndexStatusSubscription()
-			this.updateGitIndexStatusSubscription()
 		})
 		this.webviewDisposables.push(activeEditorSubscription)
 
@@ -1601,8 +1583,6 @@ export class ShoferProvider
 					this.log("Clearing webview resources for sidebar view")
 					this.clearWebviewResources()
 					// Reset current workspace manager reference when view is disposed
-					this.codeIndexManager = undefined
-					this.gitIndexManager = undefined
 					if (this.webviewInstanceId === instanceId) {
 						this.view = undefined
 						this.webviewInstanceId = undefined
@@ -2360,21 +2340,22 @@ export class ShoferProvider
 				return buildApiHandler(apiConfiguration, { taskId: PLUGIN_TASK_ID })
 			},
 			embed: async (texts: string[]): Promise<number[][]> => {
-				const configManager = new CodeIndexConfigManager(this.contextProxy)
-				await configManager.loadConfiguration()
-				if (!configManager.isFeatureConfigured) {
+				// The embedder — its provider, its model, its key — belongs to the plugin
+				// that owns the index; core keeps no second copy of that configuration. A
+				// plugin asking for embeddings gets whichever plugin provides them, or a
+				// clear error saying to configure one.
+				const embeddings = (await pluginRegistry
+					.request("rag-indexing", "embed", { texts }, { workspacePath: this.cwd, cwd: this.cwd })
+					.catch((error: unknown) => {
+						throw new Error(
+							`ctx.ai.embed: no embedder available — enable and configure the RAG Indexing plugin (${String(error)})`,
+						)
+					})) as number[][] | undefined
+				if (!embeddings) {
 					throw new Error(
-						"ctx.ai.embed: Code Index embeddings are not configured — enable and configure Code Index in Settings.",
+						"ctx.ai.embed: no embedder available — enable and configure the RAG Indexing plugin.",
 					)
 				}
-				const workspacePath = this.cwd ?? getGlobalShoferDirectory()
-				const factory = new CodeIndexServiceFactory({
-					configManager,
-					workspacePath,
-					cacheManager: new CacheManager(this.context, workspacePath),
-				})
-				const embedder = factory.createEmbedder()
-				const { embeddings } = await embedder.createEmbeddings(texts)
 				return embeddings
 			},
 		}
@@ -2693,8 +2674,10 @@ export class ShoferProvider
 	 * providers the built-in Live Memory reaches, mapped to plain DTOs (no `vscode` types
 	 * cross the boundary):
 	 *
-	 * - `ragSearch` ⇒ the code-index `searchIndex` (via {@link getCodeIndexManagerFactory}).
-	 * - `gitSearch` ⇒ the git-index `searchIndex` (via {@link getGitIndexManagerFactory}).
+	 * - `ragSearch` / `gitSearch` ⇒ the bundled `rag-indexing` plugin, asked over the
+	 *   plugin registry. Core has no index of its own any more, but the seam stays: a
+	 *   plugin that wants semantic search (Live Memory) should not have to know which
+	 *   other plugin provides it, or whether one is installed at all.
 	 * - `codeUsages` ⇒ `vscode.executeWorkspaceSymbolProvider`.
 	 * - `diagnostics` ⇒ `vscode.languages.getDiagnostics`.
 	 *
@@ -2706,12 +2689,23 @@ export class ShoferProvider
 	private buildPluginSearchProvider(): PluginSearchProvider {
 		return {
 			ragSearch: async (query, opts) => {
-				const mgr = getCodeIndexManagerFactory()?.(this.context, this.cwd)
-				// Guard both the missing manager and the enabled-but-uninitialized case
-				// (searchIndex asserts initialization) so we degrade to empty, never throw.
-				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
-				const results = await mgr.searchIndex(query, opts?.directoryPrefix, opts?.maxResults)
-				return results.map((r) => ({
+				// Absent plugin, disabled index, nothing configured: all the same answer —
+				// no results. `ctx.host.search` is documented fail-soft so a plugin can probe
+				// for a capability without special-casing its absence.
+				const results = (await pluginRegistry
+					.request(
+						"rag-indexing",
+						"search",
+						{ query, directoryPrefix: opts?.directoryPrefix, maxResults: opts?.maxResults },
+						{ workspacePath: this.cwd, cwd: this.cwd },
+					)
+					.catch(() => [])) as
+					| {
+							score?: number
+							payload?: { filePath?: string; startLine?: number; endLine?: number; codeChunk?: string }
+					  }[]
+					| undefined
+				return (results ?? []).map((r) => ({
 					filePath: r.payload?.filePath ?? "",
 					startLine: r.payload?.startLine ?? 0,
 					endLine: r.payload?.endLine ?? 0,
@@ -2720,10 +2714,27 @@ export class ShoferProvider
 				}))
 			},
 			gitSearch: async (query, opts) => {
-				const mgr = getGitIndexManagerFactory()?.(this.context, this.cwd)
-				if (!mgr || !mgr.isFeatureEnabled || !mgr.isInitialized) return []
-				const results = await mgr.searchIndex(query, opts?.maxResults)
-				return results.map((r) => ({
+				const results = (await pluginRegistry
+					.request(
+						"rag-indexing",
+						"git-search",
+						{ query, maxResults: opts?.maxResults },
+						{ workspacePath: this.cwd, cwd: this.cwd },
+					)
+					.catch(() => [])) as
+					| {
+							score: number
+							payload: {
+								commit_hash: string
+								short_hash: string
+								author: string
+								author_date: string
+								subject: string
+								body?: string
+							}
+					  }[]
+					| undefined
+				return (results ?? []).map((r) => ({
 					commitHash: r.payload.commit_hash,
 					shortHash: r.payload.short_hash,
 					author: r.payload.author,
@@ -4892,8 +4903,6 @@ export class ShoferProvider
 			organizationAllowList,
 			organizationSettingsVersion,
 			customCondensingPrompt,
-			codebaseIndexConfig,
-			codebaseIndexModels,
 			profileThresholds,
 			alwaysAllowFollowupQuestions,
 			followupAutoApproveTimeoutMs,
@@ -5119,28 +5128,6 @@ export class ShoferProvider
 			organizationAllowList,
 			organizationSettingsVersion,
 			customCondensingPrompt,
-			codebaseIndexModels: codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
-			codebaseIndexConfig: {
-				codebaseIndexEnabled: codebaseIndexConfig?.codebaseIndexEnabled ?? false,
-				codebaseIndexQdrantUrl: codebaseIndexConfig?.codebaseIndexQdrantUrl ?? "http://localhost:6333",
-				codebaseIndexEmbedderProvider: codebaseIndexConfig?.codebaseIndexEmbedderProvider ?? "openai",
-				codebaseIndexEmbedderBaseUrl: codebaseIndexConfig?.codebaseIndexEmbedderBaseUrl ?? "",
-				codebaseIndexEmbedderModelId: codebaseIndexConfig?.codebaseIndexEmbedderModelId ?? "",
-				codebaseIndexEmbedderModelDimension: codebaseIndexConfig?.codebaseIndexEmbedderModelDimension ?? 1536,
-				codebaseIndexOpenAiCompatibleBaseUrl: codebaseIndexConfig?.codebaseIndexOpenAiCompatibleBaseUrl,
-				codebaseIndexSearchMaxResults: codebaseIndexConfig?.codebaseIndexSearchMaxResults,
-				codebaseIndexSearchMinScore: codebaseIndexConfig?.codebaseIndexSearchMinScore,
-				codebaseIndexBedrockRegion: codebaseIndexConfig?.codebaseIndexBedrockRegion,
-				codebaseIndexBedrockProfile: codebaseIndexConfig?.codebaseIndexBedrockProfile,
-				codebaseIndexOpenRouterSpecificProvider: codebaseIndexConfig?.codebaseIndexOpenRouterSpecificProvider,
-				codebaseIndexGitEnabled: codebaseIndexConfig?.codebaseIndexGitEnabled ?? false,
-				codebaseIndexGitMaxHistoryDays: codebaseIndexConfig?.codebaseIndexGitMaxHistoryDays ?? 365,
-				codebaseIndexGitMaxCommits: codebaseIndexConfig?.codebaseIndexGitMaxCommits ?? 10000,
-				codebaseIndexGitPollIntervalMinutes: codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5,
-				codebaseIndexGitSearchMinScore: codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
-				codebaseIndexGitSearchMaxResults: codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
-				codebaseIndexGitBranch: codebaseIndexConfig?.codebaseIndexGitBranch ?? "master",
-			},
 			// Only set mdmCompliant if there's an actual MDM policy
 			// undefined means no MDM policy, true means compliant, false means non-compliant
 			mdmCompliant: undefined,
@@ -5366,35 +5353,6 @@ export class ShoferProvider
 			organizationAllowList,
 			organizationSettingsVersion,
 			customCondensingPrompt: stateValues.customCondensingPrompt,
-			codebaseIndexModels: stateValues.codebaseIndexModels ?? EMBEDDING_MODEL_PROFILES,
-			codebaseIndexConfig: {
-				codebaseIndexEnabled: stateValues.codebaseIndexConfig?.codebaseIndexEnabled ?? false,
-				codebaseIndexQdrantUrl:
-					stateValues.codebaseIndexConfig?.codebaseIndexQdrantUrl ?? "http://localhost:6333",
-				codebaseIndexEmbedderProvider:
-					stateValues.codebaseIndexConfig?.codebaseIndexEmbedderProvider ?? "openai",
-				codebaseIndexEmbedderBaseUrl: stateValues.codebaseIndexConfig?.codebaseIndexEmbedderBaseUrl ?? "",
-				codebaseIndexEmbedderModelId: stateValues.codebaseIndexConfig?.codebaseIndexEmbedderModelId ?? "",
-				codebaseIndexEmbedderModelDimension:
-					stateValues.codebaseIndexConfig?.codebaseIndexEmbedderModelDimension,
-				codebaseIndexOpenAiCompatibleBaseUrl:
-					stateValues.codebaseIndexConfig?.codebaseIndexOpenAiCompatibleBaseUrl,
-				codebaseIndexSearchMaxResults: stateValues.codebaseIndexConfig?.codebaseIndexSearchMaxResults,
-				codebaseIndexSearchMinScore: stateValues.codebaseIndexConfig?.codebaseIndexSearchMinScore,
-				codebaseIndexBedrockRegion: stateValues.codebaseIndexConfig?.codebaseIndexBedrockRegion,
-				codebaseIndexBedrockProfile: stateValues.codebaseIndexConfig?.codebaseIndexBedrockProfile,
-				codebaseIndexOpenRouterSpecificProvider:
-					stateValues.codebaseIndexConfig?.codebaseIndexOpenRouterSpecificProvider,
-				codebaseIndexGitEnabled: stateValues.codebaseIndexConfig?.codebaseIndexGitEnabled ?? false,
-				codebaseIndexGitMaxHistoryDays: stateValues.codebaseIndexConfig?.codebaseIndexGitMaxHistoryDays ?? 365,
-				codebaseIndexGitMaxCommits: stateValues.codebaseIndexConfig?.codebaseIndexGitMaxCommits ?? 10000,
-				codebaseIndexGitPollIntervalMinutes:
-					stateValues.codebaseIndexConfig?.codebaseIndexGitPollIntervalMinutes ?? 5,
-				codebaseIndexGitSearchMinScore: stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMinScore ?? 0.4,
-				codebaseIndexGitSearchMaxResults:
-					stateValues.codebaseIndexConfig?.codebaseIndexGitSearchMaxResults ?? 20,
-				codebaseIndexGitBranch: stateValues.codebaseIndexConfig?.codebaseIndexGitBranch ?? "master",
-			},
 			profileThresholds: stateValues.profileThresholds ?? {},
 			lockApiConfigAcrossModes: this.context.workspaceState.get("lockApiConfigAcrossModes", false),
 			includeDiagnosticMessages: stateValues.includeDiagnosticMessages ?? true,
@@ -5607,128 +5565,6 @@ export class ShoferProvider
 	 */
 	public checkMdmCompliance(): boolean {
 		return true
-	}
-
-	/**
-	 * Gets the CodeIndexManager for the current active workspace
-	 * @returns CodeIndexManager instance for the current workspace or the default one
-	 */
-	public getCurrentWorkspaceCodeIndexManager(): CodeIndexManager | undefined {
-		return CodeIndexManager.getInstance(this.context)
-	}
-
-	/**
-	 * Updates the code index status subscription to listen to the current workspace manager
-	 */
-	private updateCodeIndexStatusSubscription(): void {
-		// Get the current workspace manager
-		const currentManager = this.getCurrentWorkspaceCodeIndexManager()
-
-		// If the manager hasn't changed, no need to update subscription
-		if (currentManager === this.codeIndexManager) {
-			return
-		}
-
-		// Dispose the old subscription if it exists
-		if (this.codeIndexStatusSubscription) {
-			this.codeIndexStatusSubscription.dispose()
-			this.codeIndexStatusSubscription = undefined
-		}
-
-		// Update the current workspace manager reference
-		this.codeIndexManager = currentManager
-
-		// Subscribe to the new manager's progress updates if it exists
-		if (currentManager) {
-			this.codeIndexStatusSubscription = currentManager.onProgressUpdate((update: IndexProgressUpdate) => {
-				// Only send updates if this manager is still the current one
-				if (currentManager === this.getCurrentWorkspaceCodeIndexManager()) {
-					// Get the full status from the manager to ensure we have all fields correctly formatted
-					const fullStatus = currentManager.getCurrentStatus()
-					this.postMessageToWebview({
-						type: "indexingStatusUpdate",
-						values: fullStatus,
-					})
-				}
-			})
-
-			if (this.view) {
-				this.webviewDisposables.push(this.codeIndexStatusSubscription)
-			}
-
-			// Send initial status for the current workspace
-			this.postMessageToWebview({
-				type: "indexingStatusUpdate",
-				values: currentManager.getCurrentStatus(),
-			})
-		}
-	}
-
-	/**
-	 * Updates the git index status subscription to listen to the current workspace manager.
-	 * Follows the same pattern as updateCodeIndexStatusSubscription.
-	 */
-	private updateGitIndexStatusSubscription(): void {
-		const currentManager = GitIndexManager.getInstance(this.context)
-
-		if (currentManager === this.gitIndexManager) {
-			return
-		}
-
-		if (this.gitIndexStatusSubscription) {
-			this.gitIndexStatusSubscription.dispose()
-			this.gitIndexStatusSubscription = undefined
-		}
-
-		this.gitIndexManager = currentManager
-
-		if (currentManager) {
-			this.gitIndexStatusSubscription = currentManager.onProgressUpdate(
-				(update: {
-					systemStatus: string
-					message?: string
-					indexedCommitCount?: number
-					latestCommitHash?: string
-				}) => {
-					if (currentManager !== GitIndexManager.getInstance(this.context)) {
-						return
-					}
-					this.postMessageToWebview({
-						type: "gitIndexingStatusUpdate",
-						values: {
-							systemStatus: update.systemStatus,
-							message: update.message ?? "",
-							processedItems: 0,
-							totalItems: 0,
-							currentItemUnit: "commits",
-							workspacePath: currentManager.workspacePath,
-							indexedCommitCount: update.indexedCommitCount,
-							latestCommitHash: update.latestCommitHash,
-						},
-					})
-				},
-			)
-
-			if (this.view) {
-				this.webviewDisposables.push(this.gitIndexStatusSubscription)
-			}
-
-			// Send initial status
-			const status = currentManager.getCurrentStatus()
-			this.postMessageToWebview({
-				type: "gitIndexingStatusUpdate",
-				values: {
-					systemStatus: status.systemStatus,
-					message: status.message ?? "",
-					processedItems: 0,
-					totalItems: 0,
-					currentItemUnit: "commits",
-					workspacePath: currentManager.workspacePath,
-					indexedCommitCount: status.indexedCommitCount,
-					latestCommitHash: status.latestCommitHash,
-				},
-			})
-		}
 	}
 
 	/**

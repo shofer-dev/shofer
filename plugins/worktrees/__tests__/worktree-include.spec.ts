@@ -4,7 +4,7 @@ import * as os from "os"
 import { execFile } from "child_process"
 import { promisify } from "util"
 
-import { WorktreeIncludeService } from "../worktree-include.js"
+import { WorktreeIncludeService } from "../src/worktree-include.js"
 
 const execFileAsync = promisify(execFile)
 

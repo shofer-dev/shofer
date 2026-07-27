@@ -4,7 +4,6 @@ import { apply_diff } from "./apply_diff.js"
 import applyPatch from "./apply_patch.js"
 import askFollowupQuestion from "./ask_followup_question.js"
 import attemptCompletion from "./attempt_completion.js"
-import ragSearch from "./rag_search.js"
 
 /**
  * Return a copy of `attempt_completion` with its `result` parameter schema
@@ -55,7 +54,6 @@ function applyCompletionSchema(
 		},
 	}
 }
-import gitSearch from "./git_search.js"
 import lspSearch from "./lsp_search.js"
 import createDirectory from "./create_directory.js"
 import createNewWorkspace from "./create_new_workspace.js"
@@ -148,8 +146,6 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		completionSchema
 			? applyCompletionSchema(attemptCompletion as OpenAI.Chat.ChatCompletionFunctionTool, completionSchema)
 			: attemptCompletion,
-		ragSearch,
-		gitSearch,
 		lspSearch,
 		createDirectory,
 		createNewWorkspace,

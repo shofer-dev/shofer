@@ -34,7 +34,6 @@ import { SkillsButton } from "./SkillsButton"
 import { PluginSlot } from "../plugins/PluginSlot"
 import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
-import { IndexingStatusBadge } from "./IndexingStatusBadge"
 import { NodeStatus } from "./NodeStatus"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 // CloudAccountSwitcher removed
@@ -1611,7 +1610,6 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						    right-hand indicator cluster next to IndexingStatusBadge, matching where
 						    the built-in LiveMemoryStatusBadge sat. Renders nothing without a plugin. */}
 						{!isEditMode ? <PluginSlot region="chat-input-toolbar" /> : null}
-						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{/* CloudAccountSwitcher removed */}
 					</div>
 				</div>

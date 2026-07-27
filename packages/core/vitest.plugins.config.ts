@@ -21,7 +21,17 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@shofer/types": fileURLToPath(new URL("../types/src/index.ts", import.meta.url)),
+			// The runtime dependencies a plugin bundles at build time: they live in the
+			// workspace that owns them, and `plugins/` has no `node_modules` of its own.
 			"simple-git": fileURLToPath(new URL("./node_modules/simple-git", import.meta.url)),
+			openai: fileURLToPath(new URL("./node_modules/openai", import.meta.url)),
+			"@qdrant/js-client-rest": fileURLToPath(new URL("./node_modules/@qdrant/js-client-rest", import.meta.url)),
+			"async-mutex": fileURLToPath(new URL("./node_modules/async-mutex", import.meta.url)),
+			"serialize-error": fileURLToPath(new URL("./node_modules/serialize-error", import.meta.url)),
+			"p-limit": fileURLToPath(new URL("./node_modules/p-limit", import.meta.url)),
+			uuid: fileURLToPath(new URL("./node_modules/uuid", import.meta.url)),
+			"lodash.debounce": fileURLToPath(new URL("./node_modules/lodash.debounce", import.meta.url)),
+			ignore: fileURLToPath(new URL("./node_modules/ignore", import.meta.url)),
 		},
 	},
 	test: {
@@ -29,7 +39,9 @@ export default defineConfig({
 		environment: "node",
 		watch: false,
 		root: fileURLToPath(new URL("../../plugins", import.meta.url)),
-		include: ["*/__tests__/*.spec.ts"],
+		// A plugin's tests live at its root or beside the code they cover; the indexer
+		// keeps the engine's suites next to the engine.
+		include: ["*/__tests__/*.spec.ts", "*/src/**/__tests__/*.spec.ts"],
 		// The checkpoints suite drives real git over temp workspaces.
 		testTimeout: 30_000,
 		hookTimeout: 30_000,

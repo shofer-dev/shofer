@@ -1,0 +1,22 @@
+{
+	"panel": {
+		"title": "Semantic search",
+		"description": "Embeds your code (and, optionally, your commit messages) so the agent can search them by meaning. Configure the provider, model and credentials above.",
+		"codeIndex": "Code index",
+		"gitIndex": "Git history index",
+		"unknown": "Unknown",
+		"progress": "{{processed}} / {{total}} {{unit}} ({{percent}}%)",
+		"startIndexing": "Start indexing",
+		"stopIndexing": "Stop",
+		"clearIndex": "Clear index",
+		"workspaceEnabled": "Index this workspace",
+		"configureHint": "Settings and credentials are the fields above; the keys are kept in your OS keychain."
+	},
+	"chip": {
+		"aria": "Code index: {{state}}",
+		"indexing": "Indexing — {{processed}} of {{total}}",
+		"indexed": "Code index is up to date",
+		"standby": "Code index is idle",
+		"error": "Code index hit an error — open Settings → Plugins → RAG Indexing"
+	}
+}

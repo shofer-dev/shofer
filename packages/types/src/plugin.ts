@@ -309,6 +309,27 @@ export interface PluginLogger {
 	error(message: string | Error, ...extra: unknown[]): void
 }
 
+/**
+ * Instrument seam handed to every plugin (`ctx.host.metrics`).
+ *
+ * A plugin that owns a subsystem owns its observability too: the codebase indexer's file
+ * count and embedder queue depth are exactly the numbers an operator watches, and they
+ * stopped being core's to publish when the feature stopped being core's. Metric names are
+ * the plugin's — the host only supplies the registry, so a plugin cannot be made
+ * observable by a host that never heard of it.
+ *
+ * Always available (recording a number is as safe as logging one), and a no-op on a host
+ * with no metrics pipeline, so a call site never has to check.
+ */
+export interface PluginMetrics {
+	/** Add to a monotonically increasing counter (created on first use). */
+	increment(name: string, help: string, labels?: Record<string, string>, amount?: number): void
+	/** Set a gauge to an absolute value. */
+	gauge(name: string, help: string, value: number, labels?: Record<string, string>): void
+	/** Observe a value on a histogram (durations, sizes). */
+	observe(name: string, help: string, value: number, labels?: Record<string, string>): void
+}
+
 export interface PluginHost {
 	/** Filesystem access, scoped to the plugin's `permissions.filesystem` allowlist. */
 	readonly fs: HostFileSystem
@@ -327,6 +348,11 @@ export interface PluginHost {
 	readonly log: PluginLogger
 	/** Read-only host/environment metadata. */
 	readonly env: HostEnv
+	/**
+	 * Publish metrics through the host's pipeline ({@link PluginMetrics}). Present only
+	 * when the host wired one; absent on an embedding with no metrics at all.
+	 */
+	readonly metrics?: PluginMetrics
 	/** HTTP access, scoped to the plugin's `permissions.network` origin allowlist. */
 	fetch(input: string | URL, init?: RequestInit): Promise<Response>
 	/**

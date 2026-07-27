@@ -44,7 +44,6 @@ import { setTokenCounter } from "@shofer/core"
 import { setModelsCacheDirProvider } from "@shofer/core"
 import { registerNativeApiHandler } from "@shofer/core"
 import { setMcpHubFactory } from "@shofer/core"
-import { setCodeIndexManagerFactory, setGitIndexManagerFactory } from "@shofer/core"
 import { VsCodeLmHandler } from "./api/providers/vscode-lm"
 import { OpenAiCodexHandler } from "./api/providers/openai-codex"
 import { countTokens as countTokensWithWorker } from "./utils/countTokens"
@@ -64,9 +63,7 @@ import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "@shofer/core"
-import { CodeIndexManager } from "./services/code-index/manager"
 import { NodeRegistry } from "./core/nodes/NodeRegistry"
-import { GitIndexManager } from "./services/git-index/git-index-manager"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -157,21 +154,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			provider.context as Parameters<typeof McpServerManager.getInstance>[0],
 			provider as unknown as Parameters<typeof McpServerManager.getInstance>[1],
 		),
-	)
-
-	// Register the host accessors the portable Task core / FileContextTracker use to
-	// reach the Category II code-index and git-index managers (Chunk B).
-	// The concrete singletons need a vscode.ExtensionContext (cast back here at the
-	// boundary). Note this runs on headless hosts too: `shofer serve` loads this same
-	// extension bundle through ExtensionHost.activate(), so a served node DOES register
-	// these factories and construct a CodeIndexManager. What keeps a node from indexing
-	// is `codebaseIndexSearchOnly` on the controller-synced config, not the absence of a
-	// factory — see `docs/rag_indexing.md` §"Multi-node — search-only nodes".
-	setCodeIndexManagerFactory((context, workspacePath) =>
-		CodeIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
-	)
-	setGitIndexManagerFactory((context, workspacePath) =>
-		GitIndexManager.getInstance(context as vscode.ExtensionContext, workspacePath),
 	)
 
 	// Set VS Code context key for marketplace visibility
@@ -293,44 +275,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		const task = focusedTask()
 		if (task) r.observe(Buffer.byteLength(JSON.stringify(task.shoferMessages), "utf8"))
 	})
-
-	// Initialize code index managers for all workspace folders.
-	const codeIndexManagers: CodeIndexManager[] = []
-
-	if (vscode.workspace.workspaceFolders) {
-		for (const folder of vscode.workspace.workspaceFolders) {
-			const manager = CodeIndexManager.getInstance(context, folder.uri.fsPath)
-
-			if (manager) {
-				codeIndexManagers.push(manager)
-
-				// Initialize in background; do not block extension activation
-				void manager.initialize(contextProxy).catch((error) => {
-					const message = error instanceof Error ? error.message : String(error)
-					outputChannel.appendLine(
-						`[CodeIndexManager] Error during background CodeIndexManager configuration/indexing for ${folder.uri.fsPath}: ${message}`,
-					)
-				})
-
-				context.subscriptions.push(manager)
-			}
-
-			// Initialize git index manager for this workspace folder.
-			const gitIndexManager = GitIndexManager.getInstance(context, folder.uri.fsPath)
-
-			if (gitIndexManager) {
-				// Initialize in background; do not block extension activation
-				void gitIndexManager.initialize(contextProxy).catch((error) => {
-					const message = error instanceof Error ? error.message : String(error)
-					outputChannel.appendLine(
-						`[GitIndexManager] Error during background GitIndexManager initialization for ${folder.uri.fsPath}: ${message}`,
-					)
-				})
-
-				context.subscriptions.push(gitIndexManager)
-			}
-		}
-	}
 
 	// Initialize the provider.
 	const provider = new ShoferProvider(context, outputChannel, "sidebar", contextProxy, undefined)
@@ -535,7 +479,6 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
-	CodeIndexManager.disposeAll()
 	NodeRegistry.resetInstance()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()

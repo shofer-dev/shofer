@@ -20,7 +20,8 @@ A feature that ships as a **plugin** rather than as core keeps its doc in
 [`plugins/builtin-modes.md`](plugins/builtin-modes.md),
 [`plugins/file-changes.md`](plugins/file-changes.md),
 [`plugins/builtin-workflows.md`](plugins/builtin-workflows.md),
-[`plugins/worktrees.md`](plugins/worktrees.md) — while the plugin _substrate_
+[`plugins/worktrees.md`](plugins/worktrees.md),
+[`plugins/rag-indexing.md`](plugins/rag-indexing.md) — while the plugin _substrate_
 (seams, manifest, lifecycle) stays in [`plugin_system.md`](plugin_system.md) and the
 authoring guide in [`../PLUGINS.md`](../PLUGINS.md). Deeper per-plugin material that
 belongs next to its code (a `DESIGN.md`, `README.md`, `TODO.md`) lives in the plugin

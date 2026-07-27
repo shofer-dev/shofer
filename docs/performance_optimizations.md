@@ -115,7 +115,7 @@ the single-threaded event loop:
   `0` disables) are truncated on a UTF-8 boundary with a banner pointing the agent
   at the setting.
 - **Code-index batches.** `MAX_BATCH_BYTES` (2 MiB, in
-  [`code-index/constants`](../packages/core/src/services/code-index/constants/index.ts))
+  [`rag-indexing/src/engine/constants`](../plugins/rag-indexing/src/engine/constants/index.ts))
   caps in-flight scanner bytes so peak indexer memory is bounded regardless of
   repository shape.
 - **Streaming providers** push chunks into an array and emit a single

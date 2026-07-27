@@ -53,7 +53,6 @@ export const toolNames = [
 	"attempt_completion",
 	"switch_mode",
 	"new_task",
-	"rag_search",
 	"update_todo_list",
 	"run_slash_command",
 	"skills",
@@ -85,7 +84,6 @@ export const toolNames = [
 	"sleep",
 	"sed",
 	// Git History Search
-	"git_search",
 	// Async MCP tool calling
 	"call_mcp_tool_async",
 	"check_mcp_call_status",
@@ -133,7 +131,6 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	attempt_completion: "complete tasks",
 	switch_mode: "switch modes",
 	new_task: "create new task",
-	rag_search: "codebase search",
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
 	skills: "load skill",
@@ -163,7 +160,6 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	answer_subtask_question: "answer subtask question",
 	sleep: "wait / sleep",
 	sed: "regex find-and-replace on files",
-	git_search: "search git history",
 	call_mcp_tool_async: "call mcp tools asynchronously",
 	check_mcp_call_status: "check async mcp call status",
 	wait_for_mcp_call: "wait for async mcp calls",
@@ -182,7 +178,6 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"read_output_channel",
 			"grep_search",
 			"list_files",
-			"rag_search",
 			// New native tools
 			"find_files",
 			"read_project_structure",
@@ -193,7 +188,6 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 			"get_project_setup_info",
 			"lsp_search",
 			"fetch_web_page",
-			"git_search",
 		],
 	},
 	write: {
@@ -280,7 +274,6 @@ export const CROSS_ASSISTANT_ALIASES: Record<string, ToolName> = {
 	find_file: "find_files",
 	iterative_search: "grep_search",
 	internal_search: "grep_search",
-	codebase_search: "rag_search",
 	bash: "execute_command",
 } as const
 

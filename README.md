@@ -131,7 +131,7 @@ Build a **semantic search index** of your codebase and git history so the AI can
 
 Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in Settings → **RAG Indexing** — pick an embedding provider, point to your Qdrant instance, and click **Start Indexing**. A file watcher keeps the index up to date as you edit.
 
-[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/rag_indexing.md)
+[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/rag-indexing.md)
 
 ## Live Memory
 

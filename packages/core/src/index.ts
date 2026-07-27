@@ -6,8 +6,6 @@ export * from "./services/glob/constants.js"
 export * from "./services/glob/ignore-utils.js"
 // Category II manager registries (Task-cluster Chunk B) — host-agnostic seams the
 // core-resident tools / FileContextTracker use to reach the VS Code `src` managers.
-export * from "./services/code-index/code-index-registry.js"
-export * from "./services/git-index/git-index-registry.js"
 export * from "./services/skills/skills-registry.js"
 export * from "./custom-tools/index.js"
 export * from "./debug-log/index.js"
@@ -181,9 +179,7 @@ export {
 	type ExecuteCommandToolUse,
 	type ReadFileToolUse,
 	type WriteToFileToolUse,
-	type RagSearchToolUse,
 	type GrepSearchToolUse,
-	type GitSearchToolUse,
 	type ListFilesToolUse,
 	type UseMcpToolToolUse,
 	type AccessMcpResourceToolUse,
@@ -242,7 +238,6 @@ export {
 export * from "./task-history/index.js"
 export * from "./task-provider/index.js"
 // Portable code-index engine (embedders / interfaces / vector-store / parser).
-export * from "./services/code-index/index.js"
 // Embedding model profiles (browser-safe data + helpers) used by the code-index engine.
 export * from "./shared/embeddingModels.js"
 export * from "./services/mcp/McpHub.js"

@@ -325,37 +325,6 @@ export function incTaskErrored(mode: string, errorType: string): void {
 	registry.incCounter("shofer_tasks_errored_total", "Total tasks errored by errorType.", { mode, errorType })
 }
 
-// --- Code index ---
-
-export function incCodeIndexError(subsystem: string, amount = 1): void {
-	registry.incCounter(
-		"shofer_code_index_errors_total",
-		"Total code-index errors by subsystem.",
-		{ subsystem },
-		amount,
-	)
-}
-
-export function recordIndexLoadDuration(ms: number): void {
-	registry.observeHistogram("shofer_index_load_duration_ms", "Duration of _index.json load (ms).", ms, STD_BUCKETS_MS)
-}
-
-export function recordIndexWriteDuration(ms: number): void {
-	registry.observeHistogram(
-		"shofer_index_write_duration_ms",
-		"Duration of _index.json write (ms).",
-		ms,
-		STD_BUCKETS_MS,
-	)
-}
-
-export function updateCodeIndexMetrics(fileCount: number, embedderQueueDepth: number, provider: string): void {
-	registry.setGauge("shofer_code_index_files", "Number of indexed files.", fileCount)
-	registry.setGauge("shofer_embedder_queue_depth", "Embedder pending-queue depth per provider.", embedderQueueDepth, {
-		provider,
-	})
-}
-
 // --- Metrics-pipeline self-observation ---
 
 export function incWebviewPushError(): void {

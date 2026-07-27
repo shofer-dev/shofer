@@ -5,8 +5,6 @@ import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "@shofer/types
 import { defaultModeSlug } from "@shofer/types"
 import { resolveToolAlias } from "../../tools/tool-aliases.js"
 import { buildMcpToolName } from "../../utils/mcp-name.js"
-import type { CodeIndexManagerLike } from "../../services/code-index/code-index-registry.js"
-import type { GitIndexManagerLike } from "../../services/git-index/git-index-registry.js"
 import type { McpHub } from "../../services/mcp/McpHub.js"
 import { isToolAllowedForMode } from "../../tools/validateToolUse.js"
 
@@ -179,8 +177,6 @@ export function applyModelToolCustomization(
  * are conditional and why.
  */
 export const FEATURE_GATED_TOOLS = {
-	rag_search: "ragSearch",
-	git_search: "gitSearch",
 	generate_image: "generateImage",
 	run_slash_command: "runSlashCommand",
 	access_mcp_resource: "accessMcpResource",
@@ -253,7 +249,6 @@ export function computeToolAccess(params: ToolAccessParams): {
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering (includes modelInfo for model-specific customization)
  * @param mcpHub - MCP hub for checking available resources
  * @returns Filtered array of tools allowed for the mode
@@ -263,8 +258,6 @@ export function filterNativeToolsForMode(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManagerLike,
-	gitIndexManager?: GitIndexManagerLike,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
@@ -275,23 +268,10 @@ export function filterNativeToolsForMode(
 	const modeConfig = resolveModeConfig(mode ?? defaultModeSlug, customModes)
 	const modeSlug = modeConfig.slug
 
-	// Resolve the feature-gate booleans from the runtime managers/flags, then
-	// delegate the access decision to the single computeToolAccess source of truth.
-	const isCodeIndexReady = !!(
-		codeIndexManager &&
-		codeIndexManager.isFeatureEnabled &&
-		codeIndexManager.isFeatureConfigured &&
-		codeIndexManager.isInitialized
-	)
-	const isGitIndexReady = !!(
-		gitIndexManager &&
-		gitIndexManager.isFeatureEnabled &&
-		gitIndexManager.isFeatureConfigured &&
-		gitIndexManager.isInitialized
-	)
+	// Resolve the feature-gate booleans from the runtime flags, then delegate the access
+	// decision to the single computeToolAccess source of truth. Semantic search is NOT
+	// here: it is a plugin's tool now, registered only when its index can answer.
 	const gates: ToolAccessGates = {
-		ragSearch: isCodeIndexReady,
-		gitSearch: isGitIndexReady,
 		generateImage: !!experiments?.imageGeneration,
 		runSlashCommand: !!experiments?.runSlashCommand,
 		accessMcpResource: !!mcpHub && hasAnyMcpResources(mcpHub),
@@ -347,7 +327,6 @@ function hasAnyMcpResources(mcpHub: McpHub): boolean {
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering
  * @returns true if the tool is allowed in the mode, false otherwise
  */
@@ -356,7 +335,6 @@ export function isToolAllowedInMode(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManagerLike,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 ): boolean {
@@ -365,14 +343,6 @@ export function isToolAllowedInMode(
 	// Check if it's an always-available tool
 	if (ALWAYS_AVAILABLE_TOOLS.includes(toolName)) {
 		// But still check for conditional exclusions
-		if (toolName === "rag_search") {
-			return !!(
-				codeIndexManager &&
-				codeIndexManager.isFeatureEnabled &&
-				codeIndexManager.isFeatureConfigured &&
-				codeIndexManager.isInitialized
-			)
-		}
 		if (toolName === "update_todo_list") {
 			return settings?.todoListEnabled !== false
 		}
@@ -406,7 +376,6 @@ export function isToolAllowedInMode(
  * @param mode - Current mode slug
  * @param customModes - Custom mode configurations
  * @param experiments - Experiment flags
- * @param codeIndexManager - Code index manager for rag_search feature check
  * @param settings - Additional settings for tool filtering
  * @returns Array of tool names that are available from the group
  */
@@ -415,7 +384,6 @@ export function getAvailableToolsInGroup(
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
 	experiments: Record<string, boolean> | undefined,
-	codeIndexManager?: CodeIndexManagerLike,
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- settings is an open-ended bag of host-provided flags
 	settings?: Record<string, any>,
 ): ToolName[] {
@@ -425,7 +393,7 @@ export function getAvailableToolsInGroup(
 	}
 
 	return toolGroup.tools.filter((tool) =>
-		isToolAllowedInMode(tool as ToolName, mode, customModes, experiments, codeIndexManager, settings),
+		isToolAllowedInMode(tool as ToolName, mode, customModes, experiments, settings),
 	) as ToolName[]
 }
 

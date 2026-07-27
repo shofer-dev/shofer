@@ -208,26 +208,26 @@ describe("ContextProxy", () => {
 
 	describe("storeSecret", () => {
 		it("should store a cross-profile secret directly in original context", async () => {
-			// codeIndexQdrantApiKey is a global/cross-profile secret (SYNCED_SECRET_KEYS):
+			// pluginSecrets is a global/cross-profile secret (GLOBAL_SECRET_KEYS):
 			// it keeps its own individual SecretStorage entry.
-			await proxy.storeSecret("codeIndexQdrantApiKey", "new-secret")
+			await proxy.storeSecret("pluginSecrets", "new-secret")
 
 			// Should have called original context
-			expect(mockSecrets.store).toHaveBeenCalledWith("codeIndexQdrantApiKey", "new-secret")
+			expect(mockSecrets.store).toHaveBeenCalledWith("pluginSecrets", "new-secret")
 
 			// Should have stored the value in cache
-			const storedValue = await proxy.getSecret("codeIndexQdrantApiKey")
+			const storedValue = await proxy.getSecret("pluginSecrets")
 			expect(storedValue).toBe("new-secret")
 		})
 
 		it("should handle undefined value for a cross-profile secret deletion", async () => {
-			await proxy.storeSecret("codeIndexQdrantApiKey", undefined)
+			await proxy.storeSecret("pluginSecrets", undefined)
 
 			// Should have called delete on original context
-			expect(mockSecrets.delete).toHaveBeenCalledWith("codeIndexQdrantApiKey")
+			expect(mockSecrets.delete).toHaveBeenCalledWith("pluginSecrets")
 
 			// Should have stored undefined in cache
-			const storedValue = await proxy.getSecret("codeIndexQdrantApiKey")
+			const storedValue = await proxy.getSecret("pluginSecrets")
 			expect(storedValue).toBeUndefined()
 		})
 

@@ -77,3 +77,10 @@ scripts/video-builder/examples/*.mov
 # Local format-test renders of the demo backup (regenerable)
 media/demo-orig.mov
 media/demo-orig.mp4
+
+# The RAG-indexing plugin's built entry (4.5 MB: it bundles the OpenAI/Bedrock/Qdrant
+# clients). Every other bundled plugin commits its built `main.mjs` so the directory can
+# be copied into `~/.shofer/plugins` as-is, but a multi-megabyte blob per rebuild is the
+# wrong trade for git history — the extension bundle rebuilds it on every `pnpm bundle`
+# (`buildBundledPluginUis`), so the shipped VSIX always carries a current one.
+plugins/rag-indexing/main.mjs

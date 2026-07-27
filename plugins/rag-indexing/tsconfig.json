@@ -1,0 +1,38 @@
+{
+	"//": "Standalone tsconfig for the RAG Indexing plugin. Its entry is bundled by build-ui.mjs, so the sources sit OUTSIDE every extension/package tsc root. This config exists so a developer/CI can typecheck the plugin in isolation: `npx tsgo -p plugins/rag-indexing`. The `@shofer/core` paths cover the pure modules the plugin bundles at build time (see src/core-shared.ts).",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"module": "esnext",
+		"jsx": "react-jsx",
+		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
+		"typeRoots": [
+			"../../webview-ui/node_modules/@types",
+			"../../packages/core/node_modules/@types",
+			"../../node_modules/@types"
+		],
+		// The plugin bundles its runtime dependencies (they resolve from the workspace that
+		// owns them at BUILD time, exactly like the checkpoints plugin's `simple-git`).
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"],
+			"@shofer/telemetry": ["../../packages/telemetry/src/index.ts"],
+			"openai": ["../../packages/core/node_modules/openai"],
+			"@qdrant/js-client-rest": ["../../packages/core/node_modules/@qdrant/js-client-rest"],
+			"@aws-sdk/client-bedrock-runtime": ["../../packages/core/node_modules/@aws-sdk/client-bedrock-runtime"],
+			"@aws-sdk/credential-providers": ["../../packages/core/node_modules/@aws-sdk/credential-providers"],
+			"async-mutex": ["../../packages/core/node_modules/async-mutex"],
+			"serialize-error": ["../../packages/core/node_modules/serialize-error"],
+			"p-limit": ["../../packages/core/node_modules/p-limit"],
+			"uuid": ["../../packages/core/node_modules/uuid"],
+			"lodash.debounce": ["../../packages/core/node_modules/@types/lodash.debounce"],
+			"ignore": ["../../packages/core/node_modules/ignore"],
+			"@shofer/plugin-ui": ["../plugin-ui.d.ts"],
+			"react": ["../../webview-ui/node_modules/@types/react"],
+			"react/jsx-runtime": ["../../webview-ui/node_modules/@types/react/jsx-runtime"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.json", "ui/*.tsx"],
+	"exclude": ["node_modules", "**/__tests__/**", "vitest.config.ts"]
+}

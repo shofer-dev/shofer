@@ -31,7 +31,7 @@
     - [AI Providers](#ai-providers)
     - [Webview UI](#webview-ui)
 - [Testing](#testing)
-    <!-- /TOC -->
+  <!-- /TOC -->
 
 ---
 
@@ -749,19 +749,12 @@ if (!wasPreviouslyOptedIn && isOptedIn) {
 
 ### Code Indexing Service
 
-The entire code indexing subsystem (`services/code-index/`) uses telemetry for error tracking via `CODE_INDEX_ERROR`:
-
-| File                                                                                                                       | Context                                    |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| [`services/code-index/orchestrator.ts`](src/services/code-index/orchestrator.ts)                                           | Index startup errors, cleanup errors       |
-| [`services/code-index/cache-manager.ts`](src/services/code-index/cache-manager.ts)                                         | Cache read/write/clear errors              |
-| [`services/code-index/manager.ts`](src/services/code-index/manager.ts)                                                     | `.gitignore` loading, service recreation   |
-| [`services/code-index/search-service.ts`](src/services/code-index/search-service.ts)                                       | Search errors                              |
-| [`services/code-index/service-factory.ts`](src/services/code-index/service-factory.ts)                                     | Service creation errors                    |
-| [`services/code-index/processors/scanner.ts`](src/services/code-index/processors/scanner.ts)                               | File scanning errors                       |
-| [`services/code-index/processors/file-watcher.ts`](src/services/code-index/processors/file-watcher.ts)                     | File deletion, batch upsert errors         |
-| [`services/code-index/processors/parser.ts`](src/services/code-index/processors/parser.ts)                                 | Parser loading and file reading errors     |
-| All embedders (`bedrock`, `gemini`, `mistral`, `ollama`, `openai`, `openai-compatible`, `openrouter`, `vercel-ai-gateway`) | Embedding generation and validation errors |
+The code indexer left core for the bundled `rag-indexing` plugin, and its
+`CODE_INDEX_ERROR` telemetry went with the feature rather than moving to the plugin: a
+plugin has no telemetry seam, and giving it one would let any plugin write into this
+catalog. Indexer failures are now visible as **metrics** instead
+(`shofer_code_index_errors_total`, published through `ctx.host.metrics`) — see
+[`plugins/rag-indexing/TODO.md`](../plugins/rag-indexing/TODO.md).
 
 ### AI Providers
 

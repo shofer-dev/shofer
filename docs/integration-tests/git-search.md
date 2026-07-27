@@ -1,11 +1,11 @@
 # Git Commit History Search — Integration Test Scenarios
 
-> Feature docs: [`docs/git_search-tool.md`](../docs/git_search-tool.md),
+> Feature docs: [`plugins/rag-indexing/docs/git-history.md`](../../plugins/rag-indexing/docs/git-history.md),
 > [`docs/user-manual/git-search.md`](../docs/user-manual/git-search.md)
-> Implementation: [`src/services/git-index/git-index-manager.ts`](../src/services/git-index/git-index-manager.ts),
-> [`src/services/git-index/git-history-orchestrator.ts`](../src/services/git-index/git-history-orchestrator.ts),
-> [`src/services/git-index/processors/git-log-extractor.ts`](../src/services/git-index/processors/git-log-extractor.ts),
-> [`src/services/git-index/processors/git-watcher.ts`](../src/services/git-index/processors/git-watcher.ts),
+> Implementation: [`plugins/rag-indexing/src/git-index-service/git-index-manager.ts`](../../plugins/rag-indexing/src/git-index-service/git-index-manager.ts),
+> [`plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts`](../../plugins/rag-indexing/src/git-index-service/git-history-orchestrator.ts),
+> [`plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts`](../../plugins/rag-indexing/src/git-index-service/processors/git-log-extractor.ts),
+> [`plugins/rag-indexing/src/git-index-service/processors/git-watcher.ts`](../../plugins/rag-indexing/src/git-index-service/processors/git-watcher.ts),
 > [`packages/core/src/tools/GitSearchTool.ts`](../packages/core/src/tools/GitSearchTool.ts)
 
 ## Prerequisites

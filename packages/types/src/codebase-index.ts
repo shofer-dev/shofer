@@ -100,113 +100,15 @@ export const CODEBASE_INDEX_IGNORED_DIRS: readonly string[] = [
  * CodebaseIndexConfig
  */
 
-export const codebaseIndexConfigSchema = z.object({
-	codebaseIndexEnabled: z.boolean().optional(),
-	/**
-	 * Search-only mode: query the vector store but never run the indexing scan or
-	 * the file-watcher. Set by the controller on the slice it syncs to remote nodes
-	 * (never on its own state) — the controller is the sole indexer, so nodes read
-	 * the shared index without duplicating embedding work or racing as writers.
-	 * See `docs/rag_indexing.md` §"Multi-node — search-only nodes".
-	 */
-	codebaseIndexSearchOnly: z.boolean().optional(),
-	/**
-	 * Stable logical identity of the index, owned by the controller and synced to
-	 * nodes. The Qdrant collection name is derived from this rather than from the
-	 * host's workspace path: hosts that deliberately share an index agree on it,
-	 * while unrelated hosts that merely happen to mount the same container path
-	 * (e.g. every executor pod at `/home/node/workspace`) no longer collide on one
-	 * collection. Absent → falls back to the local path derivation.
-	 */
-	codebaseIndexKey: z.string().optional(),
-	codebaseIndexQdrantUrl: z.string().optional(),
-	codebaseIndexEmbedderProvider: z
-		.enum([
-			"openai",
-			"ollama",
-			"openai-compatible",
-			"gemini",
-			"mistral",
-			"vercel-ai-gateway",
-			"bedrock",
-			"openrouter",
-		])
-		.optional(),
-	codebaseIndexEmbedderBaseUrl: z.string().optional(),
-	codebaseIndexEmbedderModelId: z.string().optional(),
-	codebaseIndexEmbedderModelDimension: z.number().optional(),
-	codebaseIndexSearchMinScore: z.number().min(0).max(1).optional(),
-	codebaseIndexSearchMaxResults: z
-		.number()
-		.min(CODEBASE_INDEX_DEFAULTS.MIN_SEARCH_RESULTS)
-		.max(CODEBASE_INDEX_DEFAULTS.MAX_SEARCH_RESULTS)
-		.optional(),
-	// OpenAI Compatible specific fields
-	codebaseIndexOpenAiCompatibleBaseUrl: z.string().optional(),
-	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
-	// Bedrock specific fields
-	codebaseIndexBedrockRegion: z.string().optional(),
-	codebaseIndexBedrockProfile: z.string().optional(),
-	// OpenRouter specific fields
-	codebaseIndexOpenRouterSpecificProvider: z.string().optional(),
-	// Git history indexing fields
-	codebaseIndexGitEnabled: z.boolean().optional(),
-	codebaseIndexGitPollIntervalMinutes: z.number().optional(),
-	codebaseIndexGitMaxHistoryDays: z.number().optional(),
-	codebaseIndexGitMaxCommits: z.number().optional(),
-	codebaseIndexGitSearchMinScore: z.number().min(0).max(1).optional(),
-	codebaseIndexGitBranch: z.string().optional(),
-	codebaseIndexGitSearchMaxResults: z.number().optional(),
-})
-
-export type CodebaseIndexConfig = z.infer<typeof codebaseIndexConfigSchema>
-
 /**
- * CodebaseIndexModels
+ * The indexer's own settings (provider, model, store URL, credentials) are NOT here any
+ * more: they are the `rag-indexing` plugin's manifest `config`, declared in
+ * `plugins/rag-indexing/plugin.json`. What stays is what the rest of the product shares —
+ * the policy lists above (the glob service and tree-sitter re-export them) and the
+ * on-disk cache format below, which is the plugin's but is versioned like every other
+ * persisted snapshot.
  */
 
-export const codebaseIndexModelsSchema = z.object({
-	openai: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	ollama: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	"openai-compatible": z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	gemini: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	mistral: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	"vercel-ai-gateway": z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	openrouter: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-	bedrock: z.record(z.string(), z.object({ dimension: z.number() })).optional(),
-})
-
-export type CodebaseIndexModels = z.infer<typeof codebaseIndexModelsSchema>
-
-/**
- * CdebaseIndexProvider
- */
-
-export const codebaseIndexProviderSchema = z.object({
-	codeIndexOpenAiKey: z.string().optional(),
-	codeIndexQdrantApiKey: z.string().optional(),
-	codebaseIndexOpenAiCompatibleBaseUrl: z.string().optional(),
-	codebaseIndexOpenAiCompatibleApiKey: z.string().optional(),
-	codebaseIndexOpenAiCompatibleModelDimension: z.number().optional(),
-	codebaseIndexGeminiApiKey: z.string().optional(),
-	codebaseIndexMistralApiKey: z.string().optional(),
-	codebaseIndexVercelAiGatewayApiKey: z.string().optional(),
-	codebaseIndexOpenRouterApiKey: z.string().optional(),
-})
-
-export type CodebaseIndexProvider = z.infer<typeof codebaseIndexProviderSchema>
-
-/**
- * Codebase Index Cache (Phase 1: versioned mtime+size cache)
- *
- * Per the Versioned Snapshot Rule, the on-disk cache is wrapped in a
- * versioned container. On version mismatch or parse failure the cache
- * is discarded and a fresh full scan is triggered.
- *
- * CacheEntry stores the file hash, mtime (ms), and size (bytes) so the
- * scanner can skip files whose mtime+size match without reading or
- * hashing the contents.
- */
 export const codebaseIndexCacheEntrySchema = z.object({
 	hash: z.string(),
 	mtimeMs: z.number(),

@@ -11,7 +11,6 @@ import React, {
 } from "react"
 import {
 	CheckCheck,
-	Archive,
 	Database,
 	SquareTerminal,
 	FlaskConical,
@@ -79,7 +78,6 @@ import { ShoferNodesSettings, ShoferNodesSettingsRef } from "./ShoferNodesSettin
 import { PluginsSettings, type PluginsSettingsRef } from "./PluginsSettings"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
-import { RagIndexerSettings, type RagIndexerSettingsRef } from "./RagIndexerSettings"
 
 export const settingsTabsContainer = "flex flex-1 overflow-hidden [&.narrow_.tab-label]:hidden"
 export const settingsTabList =
@@ -100,7 +98,6 @@ export const sectionNames = [
 	"skills",
 	"contextManagement",
 	"terminal",
-	"codebaseIndex",
 	"modes",
 	"mcp",
 	"shoferNodes",
@@ -177,7 +174,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const toolsSettingsRef = useRef<ToolsSettingsRef>(null)
 	const pluginsSettingsRef = useRef<PluginsSettingsRef>(null)
 	const shoferNodesRef = useRef<ShoferNodesSettingsRef>(null)
-	const ragIndexerRef = useRef<RagIndexerSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
 
@@ -247,7 +243,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		defaultCostLimit,
 		archivedTaskRetentionDays,
 		maxParallelTasks,
-		codebaseIndexConfig,
 		logLevel,
 		logCategories,
 	} = cachedState
@@ -492,7 +487,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					experiments,
 					customSupportPrompts,
 					disabledTools: disabledTools ?? [],
-					codebaseIndexConfig,
 					logLevel,
 					logCategories,
 				},
@@ -538,10 +532,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// Apply staged node-pool edits (Shofer Nodes tab): load-balancer policy
 			// and per-node enable/disable.
 			shoferNodesRef.current?.commitNodeBuffers()
-
-			// Flush code-index secret fields (API keys) that are managed
-			// inside CodeIndexConfigForm via its own atomic-save path.
-			ragIndexerRef.current?.saveCodeIndexSecrets()
 
 			setChangeDetected(false)
 		}
@@ -661,7 +651,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "plugins", icon: Blocks },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
-			{ id: "codebaseIndex", icon: Archive },
 			{ id: "prompts", icon: MessageSquare },
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
@@ -1029,15 +1018,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								terminalZshP10k={terminalZshP10k}
 								terminalZdotdir={terminalZdotdir}
 								setCachedStateField={setCachedStateField}
-							/>
-						)}
-
-						{/* Codebase Index Section */}
-						{renderTab === "codebaseIndex" && (
-							<RagIndexerSettings
-								ref={ragIndexerRef}
-								codebaseIndexConfig={codebaseIndexConfig}
-								setCachedStateField={setCachedStateField as any}
 							/>
 						)}
 

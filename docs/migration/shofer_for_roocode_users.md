@@ -383,7 +383,7 @@ The indexer processes workspace files through tree-sitter parsing and embedding,
 
 The pipeline was substantially hardened in the Shofer fork to handle edge cases, submodules, and git-ignored files correctly.
 
-> See [`rag_indexing.md`](../rag_indexing.md) and [`git_search-tool.md`](../git_search-tool.md) for the full design.
+> See [`plugins/rag-indexing.md`](../plugins/rag-indexing.md) for the full design.
 
 ### What Was Built
 

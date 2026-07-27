@@ -8,7 +8,6 @@ import {
 	providerSettingsSchema,
 } from "./provider-settings.js"
 import { historyItemSchema, costLimitSchema } from "./history.js"
-import { codebaseIndexModelsSchema, codebaseIndexConfigSchema } from "./codebase-index.js"
 import { experimentsSchema } from "./experiment.js"
 import type { SyncedPluginState } from "./plugin.js"
 import { telemetrySettingsSchema } from "./telemetry.js"
@@ -177,9 +176,6 @@ export const globalSettingsSchema = z.object({
 
 	rateLimitSeconds: z.number().optional(),
 	experiments: experimentsSchema.optional(),
-
-	codebaseIndexModels: codebaseIndexModelsSchema.optional(),
-	codebaseIndexConfig: codebaseIndexConfigSchema.optional(),
 
 	language: languagesSchema.optional(),
 
@@ -443,11 +439,6 @@ export const SETTING_SYNC_SCOPE = {
 
 	// ── Codebase index (RAG) ──
 	// Synced so a remote node can answer `rag_search` against the controller's index.
-	// The controller forces `codebaseIndexSearchOnly: true` on the synced slice
-	// (NodeRegistry.currentSyncedSlice) — a node queries, only the controller writes.
-	// The embedder/Qdrant credentials travel separately as SYNCED_SECRET_KEYS.
-	codebaseIndexModels: "node", // embedding dimensions — the node needs them to embed a query
-	codebaseIndexConfig: "node",
 
 	language: "frontend",
 	telemetrySetting: "frontend",
@@ -598,13 +589,6 @@ export const SECRET_STATE_KEYS = [
 	"xaiApiKey",
 	"xiaomiApiKey",
 	"litellmApiKey",
-	"codeIndexOpenAiKey",
-	"codeIndexQdrantApiKey",
-	"codebaseIndexOpenAiCompatibleApiKey",
-	"codebaseIndexGeminiApiKey",
-	"codebaseIndexMistralApiKey",
-	"codebaseIndexVercelAiGatewayApiKey",
-	"codebaseIndexOpenRouterApiKey",
 	"sambaNovaApiKey",
 	"zaiApiKey",
 	"fireworksApiKey",
@@ -642,29 +626,19 @@ export const isSecretStateKey = (key: string): key is Keys<SecretState> =>
 	SECRET_STATE_KEYS.includes(key as ProviderSecretKey) || GLOBAL_SECRET_KEYS.includes(key as GlobalSecretKey)
 
 /**
- * Secrets replicated controller→node (config_sync §4a), the credential counterpart
- * of SETTING_SYNC_SCOPE.
+ * Secrets replicated controller→node (config_sync §4a), the credential counterpart of
+ * SETTING_SYNC_SCOPE.
  *
- * Deliberately a strict allow-list rather than "every secret": a node only receives
- * the credentials it cannot do its job without. Today that is the codebase-index
- * (RAG) pair — a search-only node must embed the query and authenticate to Qdrant,
- * and both keys are secrets rather than settings, so `codebaseIndexConfig` alone
- * would reach the node describing a store it cannot open.
+ * **Empty, deliberately.** The one entry this list ever had was the codebase-index (RAG)
+ * pair, and those credentials now belong to the `rag-indexing` plugin — they travel on
+ * the plugin channel (`syncConfig`, config_sync §4b-2), where the plugin decides what a
+ * node receives. LLM provider keys are not here either: they ride per-task on
+ * `CreateTaskInput.apiConfiguration`.
  *
- * LLM provider keys are NOT here: they already travel per-task on `CreateTaskInput.
- * apiConfiguration`, so replicating them globally would be a second, unversioned
- * source for the same credential. Adding a key here means the controller pushes it
- * to every managed node — justify it before extending this list.
+ * The mechanism stays because a future node-scoped credential that is genuinely core's
+ * belongs here; adding one means the controller pushes it to every managed node.
  */
-export const SYNCED_SECRET_KEYS = [
-	"codeIndexOpenAiKey",
-	"codeIndexQdrantApiKey",
-	"codebaseIndexOpenAiCompatibleApiKey",
-	"codebaseIndexGeminiApiKey",
-	"codebaseIndexMistralApiKey",
-	"codebaseIndexVercelAiGatewayApiKey",
-	"codebaseIndexOpenRouterApiKey",
-] as const satisfies readonly ProviderSecretKey[]
+export const SYNCED_SECRET_KEYS = [] as const satisfies readonly ProviderSecretKey[]
 
 /** The node-scoped, syncable subset of secrets replicated controller→node. */
 export type SyncedSecrets = Partial<Record<(typeof SYNCED_SECRET_KEYS)[number], string>>

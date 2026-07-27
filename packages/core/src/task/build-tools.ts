@@ -12,8 +12,6 @@ import { setPrivateToolInvokeMap } from "../tools/private-tool-registry.js"
 
 import { type TaskProviderLike } from "../task-provider/index.js"
 import { getRooDirectoriesForCwd } from "../services/shofer-config/index.js"
-import { getCodeIndexManagerFactory } from "../services/code-index/code-index-registry.js"
-import { getGitIndexManagerFactory } from "../services/git-index/git-index-registry.js"
 
 import { getNativeTools } from "../prompts/tools/native-tools/index.js"
 import { getMcpServerTools } from "../prompts/tools/native-tools/mcp_server.js"
@@ -321,8 +319,6 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 	// Category II managers are reached through their host registries (Chunk B): the
 	// concrete singletons live in VS Code `src`; a headless host leaves the registry
 	// unset and the features are simply off.
-	const codeIndexManager = getCodeIndexManagerFactory()?.(provider.context, cwd)
-	const gitIndexManager = getGitIndexManagerFactory()?.(provider.context, cwd)
 
 	const filterSettings = {
 		todoListEnabled: apiConfiguration?.todoListEnabled ?? true,
@@ -343,8 +339,6 @@ export async function buildNativeToolsArrayWithRestrictions(options: BuildToolsO
 		mode,
 		customModes,
 		experiments,
-		codeIndexManager,
-		gitIndexManager,
 		filterSettings,
 		mcpHub,
 	)

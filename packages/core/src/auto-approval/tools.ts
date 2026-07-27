@@ -1,5 +1,6 @@
 import type { ShoferSayTool } from "@shofer/types"
 import { TOOL_GROUPS } from "@shofer/types"
+import { customToolRegistry } from "../custom-tools/custom-tool-registry.js"
 
 /**
  * Map of ShoferSayTool.tool (camelCase) values to their snake_case tool names.
@@ -17,8 +18,6 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
 	listFilesTopLevel: "list_files",
 	listFilesRecursive: "list_files",
 	grepSearch: "grep_search",
-	ragSearch: "rag_search",
-	gitSearch: "git_search",
 	lspSearch: "lsp_search",
 	findFiles: "find_files",
 	viewImage: "view_image",
@@ -73,8 +72,9 @@ export const SAY_TOOL_TO_NATIVE_NAME: Record<string, string> = {
  *
  * Resolution order:
  *  1. Native tools — look up snake_case name in TOOL_GROUPS
- *  2. External LM tools — infer from naming prefix (browser_ → browser, ide_ → read/execute)
- *  3. Fallback to "uncategorized"
+ *  2. Custom/plugin tools — the `group` the definition declared
+ *  3. External LM tools — infer from naming prefix (browser_ → browser, ide_ → read/execute)
+ *  4. Fallback to "uncategorized"
  *
  * @param tool - The tool metadata from the approval payload
  * @returns The ToolGroup this tool belongs to
@@ -90,6 +90,14 @@ export function getToolGroupForSayTool(tool: ShoferSayTool): string {
 				return group
 			}
 		}
+	}
+
+	// Custom/plugin tools: the definition's own declaration. A plugin's read-only search
+	// must be auto-approvable by the same "reads are fine" toggle a native one obeys —
+	// otherwise moving a tool into a plugin silently changes the user's approval policy.
+	const declared = customToolRegistry.get(sayName)?.group
+	if (declared) {
+		return declared
 	}
 
 	// External LM tools: infer group from the tool name prefix

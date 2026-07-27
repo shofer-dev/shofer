@@ -1,0 +1,109 @@
+{
+	"name": "rag-indexing",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "Semantic search over your codebase and its git history. Embeds code segments and commit messages into a Qdrant vector store, keeps them current with an incremental scan and a file watcher, and answers the agent's `rag_search` and `git_search` tools from them.",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"main": "main.mjs",
+	"defaultEnabled": false,
+	"syncConfig": true,
+	"hookTimeoutMs": 60000,
+	"permissions": {
+		"tools": true,
+		"filesystem": ["."],
+		"ui": ["settings-tab", "chat-input-toolbar"]
+	},
+	"contributes": {
+		"ui": [
+			{ "region": "settings-tab", "entry": "ui/settings.js" },
+			{ "region": "chat-input-toolbar", "entry": "ui/status.js" }
+		]
+	},
+	"config": {
+		"type": "object",
+		"properties": {
+			"enabled": {
+				"type": "boolean",
+				"default": false,
+				"description": "Index this workspace and answer semantic searches from it."
+			},
+			"searchOnly": {
+				"type": "boolean",
+				"default": false,
+				"description": "Query the shared index but never scan or watch — what a Shofer Node runs, so only the controller writes."
+			},
+			"indexKey": {
+				"type": "string",
+				"description": "Identity of the index to use. Set by the controller so a node addresses the same collection instead of hashing its own workspace path."
+			},
+			"qdrantUrl": { "type": "string", "default": "http://localhost:6333", "description": "Vector store URL." },
+			"qdrantApiKey": { "type": "string", "secret": true, "description": "Vector store API key." },
+			"embedderProvider": {
+				"type": "string",
+				"default": "openai",
+				"enum": [
+					"openai",
+					"openai-compatible",
+					"openrouter",
+					"gemini",
+					"mistral",
+					"bedrock",
+					"ollama",
+					"vercel-ai-gateway"
+				],
+				"description": "Which embedding provider to use."
+			},
+			"embedderBaseUrl": { "type": "string", "default": "", "description": "Base URL (Ollama)." },
+			"embedderModelId": { "type": "string", "default": "", "description": "Embedding model id." },
+			"embedderModelDimension": {
+				"type": "number",
+				"description": "Vector size, when the model is not in the catalog."
+			},
+			"embeddingBatchSize": {
+				"type": "number",
+				"default": 60,
+				"description": "Code segments per embedding request."
+			},
+			"openAiApiKey": { "type": "string", "secret": true, "description": "OpenAI API key." },
+			"openAiCompatibleBaseUrl": {
+				"type": "string",
+				"default": "",
+				"description": "OpenAI-compatible base URL."
+			},
+			"openAiCompatibleApiKey": { "type": "string", "secret": true, "description": "OpenAI-compatible API key." },
+			"geminiApiKey": { "type": "string", "secret": true, "description": "Gemini API key." },
+			"mistralApiKey": { "type": "string", "secret": true, "description": "Mistral API key." },
+			"vercelAiGatewayApiKey": { "type": "string", "secret": true, "description": "Vercel AI Gateway API key." },
+			"openRouterApiKey": { "type": "string", "secret": true, "description": "OpenRouter API key." },
+			"openRouterSpecificProvider": {
+				"type": "string",
+				"default": "",
+				"description": "Pin OpenRouter to one upstream provider."
+			},
+			"bedrockRegion": { "type": "string", "default": "us-east-1", "description": "AWS region for Bedrock." },
+			"bedrockProfile": { "type": "string", "default": "", "description": "AWS shared-credentials profile." },
+			"searchMinScore": { "type": "number", "description": "Minimum similarity for a code hit." },
+			"searchMaxResults": { "type": "number", "description": "Maximum code hits returned." },
+			"gitIndexEnabled": {
+				"type": "boolean",
+				"default": false,
+				"description": "Also index commit messages, so `git_search` can answer 'when/why did this change'."
+			},
+			"gitMaxHistoryDays": { "type": "number", "default": 365, "description": "How far back to index commits." },
+			"gitMaxCommits": {
+				"type": "number",
+				"default": 10000,
+				"description": "Commit ceiling for the history index."
+			},
+			"gitBranch": { "type": "string", "default": "", "description": "Branch to index (empty = current)." },
+			"gitPollIntervalMinutes": {
+				"type": "number",
+				"default": 5,
+				"description": "How often to look for new commits."
+			},
+			"gitSearchMinScore": { "type": "number", "description": "Minimum similarity for a commit hit." },
+			"gitSearchMaxResults": { "type": "number", "description": "Maximum commit hits returned." }
+		}
+	}
+}

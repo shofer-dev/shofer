@@ -1,6 +1,6 @@
 import * as path from "path"
 
-import { WorktreeService } from "../worktree-service.js"
+import { WorktreeService } from "../src/worktree-service.js"
 
 describe("WorktreeService", () => {
 	describe("normalizePath", () => {

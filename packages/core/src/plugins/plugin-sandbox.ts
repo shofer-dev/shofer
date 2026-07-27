@@ -38,6 +38,7 @@ import type {
 
 import { warnPlugin } from "./plugin-warnings.js"
 import { getPluginLogger } from "./plugin-log.js"
+import { registry } from "../metrics/registry.js"
 
 export interface PluginSandboxOptions {
 	/** Plugin name — used in denial warnings for attribution. */
@@ -259,6 +260,14 @@ export function createPluginSandbox(options: PluginSandboxOptions): PluginHost {
 	return {
 		fs,
 		env,
+		// Instruments, namespaced by whatever the plugin calls its metrics. Ungated: a
+		// counter is as harmless as a log line, and a plugin that owns a subsystem has to
+		// be able to publish the numbers an operator watches.
+		metrics: {
+			increment: (name, help, labels, amount) => registry.incCounter(name, help, labels, amount ?? 1),
+			gauge: (name, help, value, labels) => registry.setGauge(name, help, value, labels),
+			observe: (name, help, value, labels) => registry.observeHistogram(name, help, value, undefined, labels),
+		},
 		notifier: {
 			info: (m: string) => host.notifier.info(m),
 			warn: (m: string) => host.notifier.warn(m),

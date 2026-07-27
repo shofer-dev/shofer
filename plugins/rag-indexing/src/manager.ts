@@ -1,0 +1,709 @@
+import { VectorStoreSearchResult } from "./engine/interfaces/index.js"
+import { IndexingState } from "./engine/interfaces/index.js"
+import { runtime, workspacePath as pluginWorkspacePath } from "./plugin-runtime.js"
+import {
+	getAutoEnableDefault,
+	isWorkspaceIndexingEnabled,
+	setAutoEnableDefault,
+	setWorkspaceIndexingEnabled,
+} from "./enablement.js"
+import { CodeIndexConfigManager } from "./config-manager"
+import { CodeIndexStateManager } from "./engine/state-manager.js"
+import { CodeIndexServiceFactory } from "./service-factory"
+import { CodeIndexSearchService } from "./search-service"
+import { CodeIndexOrchestrator } from "./orchestrator"
+import { CacheManager } from "./cache-manager"
+import { ShoferIgnoreController } from "./core-shared.js"
+import { GitIgnoreFilter, IIgnoreFilter } from "./engine/shared/git-ignore-filter.js"
+import fs from "fs/promises"
+import ignore from "ignore"
+import path from "path"
+import { t } from "./i18n.js"
+import { codeIndexLog } from "./logging.js"
+import { updateCodeIndexMetrics, incCodeIndexError } from "./plugin-runtime.js"
+import { getEmbedderLaneDepth } from "./engine/embedders/embedder-lane.js"
+/**
+ * Auto-recovery constants — when initialisation fails due to infrastructure
+ * being temporarily down (Ollama / Qdrant not available), the manager will
+ * retry {@link initialize} with ever-increasing backoff instead of staying in
+ * Error state forever. Mirrors the orchestrator-level auto-recovery in
+ * {@link CodeIndexOrchestrator} but covers the case where the orchestrator
+ * itself was never created (i.e. `_recreateServices()` threw).
+ */
+const MANAGER_REINIT_INITIAL_DELAY_MS = 30_000
+const MANAGER_REINIT_MAX_DELAY_MS = 300_000 // 5 minutes
+
+export class CodeIndexManager {
+	// --- Singleton Implementation ---
+	private static instances = new Map<string, CodeIndexManager>() // Map workspace path to instance
+
+	// Specialized class instances
+	private _configManager: CodeIndexConfigManager | undefined
+	private readonly _stateManager: CodeIndexStateManager
+	private _serviceFactory: CodeIndexServiceFactory | undefined
+	private _orchestrator: CodeIndexOrchestrator | undefined
+	private _searchService: CodeIndexSearchService | undefined
+	private _cacheManager: CacheManager | undefined
+	/** Last value returned by {@link _resolveIndexKeyPath}; see {@link resolvedIndexKey}. */
+	private _resolvedIndexKey: string | undefined
+	private _shoferIgnoreController: ShoferIgnoreController | undefined
+	private _gitIgnoreFilter: GitIgnoreFilter | undefined
+	private _gitIgnoreWatcher: { dispose(): void } | undefined
+	private _gitIgnoreRefreshTimer: NodeJS.Timeout | undefined
+
+	// Flag to prevent race conditions during error recovery
+	private _isRecoveringFromError = false
+
+	// ── Manager-level auto-recovery (covers _recreateServices failures) ──
+	/** Timer that retries {@link initialize} after a transient infrastructure outage. */
+	private _reinitializeTimer: NodeJS.Timeout | null = null
+	/** 1-based attempt counter; resets to 0 when initialization succeeds. */
+	private _reinitializeAttempt = 0
+	/** Whether a failed initialize should be retried (set when one fails). */
+	private _retryPending = false
+
+	/**
+	 * The manager for a workspace, created on first use.
+	 *
+	 * @param storageDir the plugin's private storage directory (where the cache lives)
+	 * @param workspacePath the workspace to index; the plugin's own when omitted
+	 */
+	public static getInstance(storageDir: string, workspacePath?: string): CodeIndexManager | undefined {
+		const root = workspacePath ?? pluginWorkspacePath()
+		if (!root) return undefined
+
+		if (!CodeIndexManager.instances.has(root)) {
+			CodeIndexManager.instances.set(root, new CodeIndexManager(root, storageDir))
+		}
+		return CodeIndexManager.instances.get(root)!
+	}
+
+	public static getAllInstances(): CodeIndexManager[] {
+		return Array.from(CodeIndexManager.instances.values())
+	}
+
+	public static disposeAll(): void {
+		for (const instance of CodeIndexManager.instances.values()) {
+			instance.dispose()
+		}
+		CodeIndexManager.instances.clear()
+	}
+
+	private readonly workspacePath: string
+	private readonly storageDir: string
+
+	// Private constructor for singleton pattern
+	private constructor(workspacePath: string, storageDir: string) {
+		this.workspacePath = workspacePath
+		this.storageDir = storageDir
+		this._stateManager = new CodeIndexStateManager()
+	}
+
+	// --- Public API ---
+
+	/**
+	 * Per-workspace "is indexing on here" and its default, kept in the plugin's own
+	 * key-value store (`enablement.ts`) rather than the editor's workspaceState — the
+	 * plugin has to answer the same question on a headless node, where there is no
+	 * workspaceState at all.
+	 */
+	public get isWorkspaceEnabled(): boolean {
+		return isWorkspaceIndexingEnabled(this.workspacePath)
+	}
+
+	public async setWorkspaceEnabled(enabled: boolean): Promise<void> {
+		await setWorkspaceIndexingEnabled(this.workspacePath, enabled)
+	}
+
+	public get autoEnableDefault(): boolean {
+		return getAutoEnableDefault()
+	}
+
+	public async setAutoEnableDefault(enabled: boolean): Promise<void> {
+		await setAutoEnableDefault(enabled)
+	}
+
+	public get onProgressUpdate() {
+		return this._stateManager.onProgressUpdate
+	}
+
+	private assertInitialized() {
+		if (!this._configManager || !this._orchestrator || !this._searchService || !this._cacheManager) {
+			throw new Error("CodeIndexManager not initialized. Call initialize() first.")
+		}
+	}
+
+	public get state(): IndexingState {
+		if (!this.isFeatureEnabled) {
+			return "Standby"
+		}
+		this.assertInitialized()
+		return this._orchestrator!.state
+	}
+
+	public get isFeatureEnabled(): boolean {
+		return this._configManager?.isFeatureEnabled ?? false
+	}
+
+	public get isFeatureConfigured(): boolean {
+		return this._configManager?.isFeatureConfigured ?? false
+	}
+
+	public get isInitialized(): boolean {
+		try {
+			this.assertInitialized()
+			return true
+		} catch (error) {
+			return false
+		}
+	}
+
+	/**
+	 * Initializes the manager with configuration and dependent services.
+	 * Must be called before using any other methods.
+	 * @returns Object indicating if a restart is needed
+	 */
+	public async initialize(): Promise<{ requiresRestart: boolean }> {
+		// 1. ConfigManager Initialization and Configuration Loading
+		if (!this._configManager) {
+			this._configManager = new CodeIndexConfigManager()
+		}
+		// Load configuration once to get current state and restart requirements
+		const { requiresRestart } = await this._configManager.loadConfiguration()
+
+		// 2. Check if feature is enabled
+		if (!this.isFeatureEnabled) {
+			if (this._orchestrator) {
+				this._orchestrator.stopWatcher()
+			}
+			this._cancelReinitialize()
+			return { requiresRestart }
+		}
+
+		// 3. Check if workspace is available
+		const workspacePath = this.workspacePath
+		if (!workspacePath) {
+			this._stateManager.setSystemState("Standby", "No workspace folder open")
+			this._cancelReinitialize()
+			return { requiresRestart }
+		}
+
+		// 4. Check workspace-level enablement (before creating expensive services)
+		if (!this.isWorkspaceEnabled) {
+			this._stateManager.setSystemState("Standby", "Indexing not enabled for this workspace")
+			this._cancelReinitialize()
+			return { requiresRestart }
+		}
+
+		// 5. CacheManager Initialization
+		if (!this._cacheManager) {
+			const indexKeyPath = await this._resolveIndexKeyPath()
+			this._cacheManager = new CacheManager(this.storageDir, this.workspacePath, indexKeyPath)
+			await this._cacheManager.initialize()
+			// Surface diagnostics in the popover: every time the cache is
+			// touched, refresh the cumulative file-count and the most-recent
+			// file path. This is the data path that lets users verify the
+			// Phase 1/2 fast-path didn't silently drop files.
+			this._cacheManager.onEntryUpdated((relPath) => {
+				this._stateManager.recordFileIndexed(relPath)
+				const count = this._cacheManager!.getEntryCount()
+				this._stateManager.setIndexedFileCount(count)
+				this._emitCodeIndexMetrics(count)
+			})
+			// Seed the cumulative count immediately on (re)load so the popover
+			// shows the persisted total even before any new file change fires.
+			const initialCount = this._cacheManager.getEntryCount()
+			this._stateManager.setIndexedFileCount(initialCount)
+			this._emitCodeIndexMetrics(initialCount)
+		}
+
+		// 6. Determine if Core Services Need Recreation
+		const needsServiceRecreation = !this._serviceFactory || requiresRestart
+
+		if (needsServiceRecreation) {
+			try {
+				await this._recreateServices()
+			} catch (error) {
+				// _recreateServices sets state to Error before throwing (see
+				// validateEmbedder failure path). Schedule a manager-level
+				// reinitialize retry so the badge recovers when the
+				// infrastructure (Ollama/Qdrant) comes back up.
+				codeIndexLog.error("Initialize failed during service recreation:", error)
+				this._retryPending = true
+				this._scheduleReinitialize()
+				throw error
+			}
+		}
+
+		// Made it through service creation — cancel any pending recovery.
+		this._cancelReinitialize()
+
+		// 7. Handle Indexing Start/Restart.
+		// A search-only host (a remote Shofer Node) stops here: the search service is
+		// already constructed above, so `rag_search` answers against the controller's
+		// index, but this host must never scan or watch. The controller is the sole
+		// writer — see `docs/rag_indexing.md` §"Multi-node — search-only nodes".
+		if (this._configManager.isSearchOnly) {
+			this._orchestrator?.stopWatcher()
+			return { requiresRestart }
+		}
+
+		const shouldStartOrRestartIndexing =
+			requiresRestart ||
+			(needsServiceRecreation && (!this._orchestrator || this._orchestrator.state !== "Indexing"))
+
+		if (shouldStartOrRestartIndexing) {
+			this._orchestrator?.startIndexing()
+		}
+
+		return { requiresRestart }
+	}
+
+	/**
+	 * Initiates the indexing process (initial scan and starts watcher).
+	 * Automatically recovers from error state if needed before starting.
+	 *
+	 * @important This method should NEVER be awaited as it starts a long-running background process.
+	 * The indexing will continue asynchronously and progress will be reported through events.
+	 */
+	public async startIndexing(): Promise<void> {
+		if (!this.isFeatureEnabled || !this.isWorkspaceEnabled) {
+			return
+		}
+
+		// Search-only hosts never index, even when asked directly (a settings-change
+		// handler or a manual re-index command reaches this path too).
+		if (this._configManager?.isSearchOnly) {
+			return
+		}
+
+		// Check if we're in error state and recover if needed
+		const currentStatus = this.getCurrentStatus()
+		if (currentStatus.systemStatus === "Error") {
+			await this.recoverFromError()
+
+			// After recovery, we need to reinitialize since recoverFromError clears all services
+			// This will be handled by the caller (webviewMessageHandler) checking isInitialized
+			return
+		}
+
+		this.assertInitialized()
+		await this._orchestrator!.startIndexing()
+	}
+
+	/**
+	 * Stops any in-progress indexing operation and the file watcher.
+	 */
+	public stopIndexing(): void {
+		if (this._orchestrator) {
+			this._orchestrator.stopIndexing()
+		}
+	}
+
+	/**
+	 * Stops the file watcher and potentially cleans up resources.
+	 */
+	public stopWatcher(): void {
+		if (!this.isFeatureEnabled) {
+			return
+		}
+		if (this._orchestrator) {
+			this._orchestrator.stopWatcher()
+		}
+	}
+
+	/**
+	 * Recovers from error state by clearing the error and resetting internal state.
+	 * This allows the manager to be re-initialized after a recoverable error.
+	 *
+	 * This method clears all service instances (configManager, serviceFactory, orchestrator, searchService)
+	 * to force a complete re-initialization on the next operation. This ensures a clean slate
+	 * after recovering from errors such as network failures or configuration issues.
+	 *
+	 * @remarks
+	 * - Safe to call even when not in error state (idempotent)
+	 * - Does not restart indexing automatically - call initialize() after recovery
+	 * - Service instances will be recreated on next initialize() call
+	 * - Prevents race conditions from multiple concurrent recovery attempts
+	 */
+	public async recoverFromError(): Promise<void> {
+		// Prevent race conditions from multiple rapid recovery attempts
+		if (this._isRecoveringFromError) {
+			return
+		}
+
+		this._isRecoveringFromError = true
+		try {
+			// Clear error state
+			this._stateManager.setSystemState("Standby", "")
+		} catch (error) {
+			// Log error but continue with recovery - clearing service instances is more important
+			codeIndexLog.error("Failed to clear error state during recovery:", error)
+		} finally {
+			// Force re-initialization by clearing service instances
+			// This ensures a clean slate even if state update failed
+			this._configManager = undefined
+			this._serviceFactory = undefined
+			this._orchestrator = undefined
+			this._searchService = undefined
+
+			// Reset the flag after recovery is complete
+			this._isRecoveringFromError = false
+		}
+	}
+
+	// ── Manager-Level Auto-Recovery ────────────────────────────────────
+
+	/**
+	 * Schedule an automatic retry of {@link initialize} when initialization
+	 * fails during service creation (e.g. Ollama/Qdrant unavailable). Uses
+	 * progressive backoff so the badge recovers without user interaction.
+	 *
+	 * Mirrors {@link CodeIndexOrchestrator._scheduleAutoRecovery} but covers
+	 * the case where the orchestrator was never created because
+	 * {@link _recreateServices} threw.
+	 */
+	private _scheduleReinitialize(): void {
+		const delay = Math.min(
+			MANAGER_REINIT_MAX_DELAY_MS,
+			MANAGER_REINIT_INITIAL_DELAY_MS * Math.pow(2, this._reinitializeAttempt),
+		)
+		this._reinitializeAttempt++
+		codeIndexLog.info(
+			`[CodeIndexManager] Scheduling reinitialize attempt ${this._reinitializeAttempt} ` +
+				`in ${Math.round(delay / 1000)}s...`,
+		)
+		// Clear only a stale TIMER here — do NOT call _cancelReinitialize(),
+		// which also resets _reinitializeAttempt and _retryPending.
+		// Resetting those would (a) pin the backoff at the initial delay forever
+		// (attempt is reset to 0 on every schedule) and (b) null the pending
+		// configuration before the timer fires, making the retry call
+		// initialize(undefined!).
+		if (this._reinitializeTimer) {
+			clearTimeout(this._reinitializeTimer)
+			this._reinitializeTimer = null
+		}
+		this._reinitializeTimer = setTimeout(() => {
+			this._reinitializeTimer = null
+			if (this._stateManager.state !== "Error") return // cancelled or already recovered
+			void this.initialize().catch((error) => {
+				codeIndexLog.error("[CodeIndexManager] Reinitialize attempt failed:", error)
+				// _scheduleReinitialize is called inside the initialize catch
+				// block itself (when _recreateServices fails), so we don't need
+				// to re-schedule here — it's already scheduled.
+			})
+		}, delay)
+	}
+
+	/**
+	 * Cancel any pending reinitialize timer and reset the attempt counter.
+	 * Safe to call even when no timer is active.
+	 */
+	private _cancelReinitialize(): void {
+		if (this._reinitializeTimer) {
+			clearTimeout(this._reinitializeTimer)
+			this._reinitializeTimer = null
+		}
+		this._reinitializeAttempt = 0
+		this._retryPending = false
+	}
+
+	/**
+	 * Cleans up the manager instance and removes it from the singleton map.
+	 */
+	public dispose(): void {
+		this.stopIndexing()
+		this._cancelReinitialize()
+		// Optional dispose: tolerate cacheManager mocks (and the small
+		// initialization window before _wireCacheDiagnostics has assigned a
+		// real CacheManager) that don't implement dispose().
+		this._cacheManager?.dispose?.()
+		this._stateManager.dispose()
+		this._disposeGitIgnoreWatcher()
+		CodeIndexManager.instances.delete(this.workspacePath)
+	}
+
+	/**
+	 * Lazily install (once per workspace) a watcher over every `.gitignore` in
+	 * the tree. On any change/create/delete we re-run `git ls-files` to refresh
+	 * the included-paths set used by {@link GitIgnoreFilter}. Refreshes are
+	 * debounced because batch operations (branch switches, merges, mass deletes)
+	 * fire many events back-to-back.
+	 */
+	private _ensureGitIgnoreWatcher(_workspacePath: string): void {
+		if (this._gitIgnoreWatcher) return
+		const watch = runtime()?.host?.watch
+		if (!watch) return
+		this._gitIgnoreWatcher = watch("**/.gitignore", () => {
+			if (this._gitIgnoreRefreshTimer) clearTimeout(this._gitIgnoreRefreshTimer)
+			this._gitIgnoreRefreshTimer = setTimeout(() => {
+				void this._gitIgnoreFilter?.refresh()
+			}, 500)
+		})
+	}
+
+	private _disposeGitIgnoreWatcher(): void {
+		if (this._gitIgnoreRefreshTimer) {
+			clearTimeout(this._gitIgnoreRefreshTimer)
+			this._gitIgnoreRefreshTimer = undefined
+		}
+		this._gitIgnoreWatcher?.dispose()
+		this._gitIgnoreWatcher = undefined
+		this._gitIgnoreFilter = undefined
+	}
+
+	/**
+	 * Clears all index data by stopping the watcher, clearing the Qdrant collection,
+	 * and deleting the cache file.
+	 */
+	public async clearIndexData(): Promise<void> {
+		if (!this.isFeatureEnabled) {
+			return
+		}
+		this.assertInitialized()
+		await this._orchestrator!.clearIndexData()
+		await this._cacheManager!.clearCacheFile()
+	}
+
+	// --- Private Helpers ---
+
+	public getCurrentStatus() {
+		const status = this._stateManager.getCurrentStatus()
+		return {
+			...status,
+			// Surface the feature-toggle as a first-class status so the UI can
+			// render "disabled" without a separate config lookup. The underlying
+			// state-machine value is preserved when enabled.
+			systemStatus: this.isFeatureEnabled ? status.systemStatus : ("Disabled" as const),
+			workspacePath: this.workspacePath,
+			workspaceEnabled: this.isWorkspaceEnabled,
+			autoEnableDefault: this.autoEnableDefault,
+		}
+	}
+
+	/**
+	 * An embedder for someone else's text (`ctx.ai.embed` → this plugin).
+	 *
+	 * Deliberately the SAME configured embedder the index uses: a caller embedding a query
+	 * against vectors this plugin wrote must use the same provider and model, or the
+	 * distances mean nothing. Undefined when nothing is configured.
+	 */
+	public createEmbedderForHost() {
+		if (!this._configManager?.isFeatureConfigured || !this._serviceFactory) return undefined
+		return this._serviceFactory.createEmbedder()
+	}
+
+	public async searchIndex(
+		query: string,
+		directoryPrefix?: string,
+		maxResults?: number,
+	): Promise<VectorStoreSearchResult[]> {
+		if (!this.isFeatureEnabled) {
+			return []
+		}
+		this.assertInitialized()
+		return this._searchService!.searchIndex(query, directoryPrefix, maxResults)
+	}
+
+	/**
+	 * Private helper method to recreate services with current configuration.
+	 * Used by both initialize() and handleSettingsChange().
+	 */
+	private async _recreateServices(): Promise<void> {
+		// Stop watcher if it exists
+		if (this._orchestrator) {
+			this.stopWatcher()
+		}
+		// Clear existing services to ensure clean state
+		this._orchestrator = undefined
+		this._searchService = undefined
+
+		// (Re)Initialize service factory — pass a status-update callback so
+		// validateEmbedder can surface Ollama/embedder retry progress to the UI.
+		const indexKeyPath = await this._resolveIndexKeyPath()
+		this._serviceFactory = new CodeIndexServiceFactory({
+			configManager: this._configManager!,
+			workspacePath: this.workspacePath,
+			cacheManager: this._cacheManager!,
+			notifyRetryStatus: (msg: string) => this._stateManager.setSystemState("Indexing", msg),
+			indexKeyPath,
+		})
+
+		const workspacePath = this.workspacePath
+
+		if (!workspacePath) {
+			this._stateManager.setSystemState("Standby", "")
+			return
+		}
+
+		// Prefer git itself as the .gitignore oracle: it honours nested .gitignore
+		// files, .git/info/exclude, the global core.excludesfile, and negations —
+		// all the things the flat `ignore` library does not. Fall back to a
+		// root-only `.gitignore` parse when the workspace is not a git repo (or
+		// the git binary is unavailable), so behaviour does not regress for
+		// non-git users. See shared/git-ignore-filter.ts.
+		let ignoreInstance: IIgnoreFilter
+		const gitFilter = await GitIgnoreFilter.create(workspacePath)
+		if (gitFilter) {
+			ignoreInstance = gitFilter
+			this._gitIgnoreFilter = gitFilter
+			this._ensureGitIgnoreWatcher(workspacePath)
+		} else {
+			const flat = ignore()
+			const ignorePath = path.join(workspacePath, ".gitignore")
+			try {
+				const content = await fs.readFile(ignorePath, "utf8")
+				flat.add(content)
+				flat.add(".gitignore")
+			} catch (error) {
+				// Workspace has no .gitignore at the root (or the read failed).
+				// Non-fatal: indexing proceeds with no git-derived filtering, with
+				// CODEBASE_INDEX_IGNORED_DIRS and .shoferignore still applied.
+				incCodeIndexError("gitignore")
+				codeIndexLog.error("Unexpected error loading .gitignore:", error)
+				incCodeIndexError("_recreateServices")
+			}
+			ignoreInstance = {
+				ignores: (p: string) => flat.ignores(p),
+				refresh: () => Promise.resolve(), // flat ignore has no snapshot to rebuild
+			}
+		}
+
+		// Create ShoferIgnoreController instance (cached — created only once per workspace)
+		if (!this._shoferIgnoreController) {
+			this._shoferIgnoreController = new ShoferIgnoreController(workspacePath)
+			await this._shoferIgnoreController.initialize()
+		}
+
+		// (Re)Create shared service instances
+		const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
+			this._cacheManager!,
+			ignoreInstance,
+			this._shoferIgnoreController,
+		)
+
+		// Validate embedder configuration before proceeding
+		const validationResult = await this._serviceFactory.validateEmbedder(embedder)
+		if (!validationResult.valid) {
+			const errorMessage = validationResult.error || "Embedder configuration validation failed"
+			this._stateManager.setSystemState("Error", errorMessage)
+			throw new Error(errorMessage)
+		}
+
+		// (Re)Initialize orchestrator
+		this._orchestrator = new CodeIndexOrchestrator(
+			this._configManager!,
+			this._stateManager,
+			this.workspacePath,
+			this._cacheManager!,
+			vectorStore,
+			scanner,
+			fileWatcher,
+		)
+
+		// (Re)Initialize search service
+		this._searchService = new CodeIndexSearchService(
+			this._configManager!,
+			this._stateManager,
+			embedder,
+			vectorStore,
+		)
+
+		// Clear any error state after successful recreation
+		this._stateManager.setSystemState("Standby", "")
+	}
+
+	/**
+	 * Handle code index settings changes.
+	 * This method should be called when code index settings are updated
+	 * to ensure the CodeIndexConfigManager picks up the new configuration.
+	 * If the configuration changes require a restart, the service will be restarted.
+	 */
+	public async handleSettingsChange(): Promise<void> {
+		if (this._configManager) {
+			const { requiresRestart } = await this._configManager.loadConfiguration()
+
+			const isFeatureEnabled = this.isFeatureEnabled
+			const isFeatureConfigured = this.isFeatureConfigured
+
+			// If feature is disabled, stop the service (including any active scan)
+			if (!isFeatureEnabled) {
+				this.stopIndexing()
+				this._stateManager.setSystemState("Standby", "Code indexing is disabled")
+				return
+			}
+
+			if (requiresRestart && isFeatureEnabled && isFeatureConfigured) {
+				try {
+					// Ensure cacheManager is initialized before recreating services
+					const indexKeyPath = await this._resolveIndexKeyPath()
+					if (!this._cacheManager) {
+						this._cacheManager = new CacheManager(this.storageDir, this.workspacePath, indexKeyPath)
+						await this._cacheManager.initialize()
+					}
+
+					// Recreate services with new configuration
+					await this._recreateServices()
+				} catch (error) {
+					// Error state already set in _recreateServices
+					incCodeIndexError("service-recreate")
+					codeIndexLog.error("Failed to recreate services:", error)
+					incCodeIndexError("handleSettingsChange")
+					// Re-throw the error so the caller knows validation failed
+					throw error
+				}
+			}
+		}
+	}
+
+	/**
+	 * Resolve the stable index key for this workspace — the value the Qdrant
+	 * collection name and the local cache filename are hashed from.
+	 *
+	 * A controller-assigned `codebaseIndexKey` wins when present: it is the
+	 * logical identity of the index, so a search-only node resolves the SAME
+	 * collection as the controller that indexed it, regardless of where each
+	 * host happens to mount the workspace. Deriving from the local path instead
+	 * would be wrong in both directions — a node mounting the shared workspace
+	 * at a different path would miss the controller's index, while unrelated
+	 * hosts that coincidentally share a path (every executor pod runs with
+	 * `--workspace /home/node/workspace`) would collide on one collection while
+	 * holding entirely different content.
+	 *
+	 * Absent a controller key, fall back to the local derivation: the main repo
+	 * path for a git worktree, so linked worktrees share one collection and
+	 * cache file; otherwise the workspace path unchanged.
+	 */
+	private async _resolveIndexKeyPath(): Promise<string> {
+		const assignedKey = this._configManager?.indexKey
+		if (assignedKey) {
+			this._resolvedIndexKey = assignedKey
+			return assignedKey
+		}
+		// Lazy import to avoid a circular dependency at the module level.
+		const { GitSource } = await import("./git/git-source")
+		const resolved = await GitSource.resolveWorktreeMainRepoPath(this.workspacePath)
+		this._resolvedIndexKey = resolved
+		return resolved
+	}
+
+	/**
+	 * The index key this host actually resolved, or undefined before the first
+	 * resolution. A controller publishes this to its nodes as `codebaseIndexKey`
+	 * so they address the very collection it indexed — reading it here is what
+	 * keeps the two sides from deriving different names from different paths.
+	 */
+	public get resolvedIndexKey(): string | undefined {
+		return this._resolvedIndexKey
+	}
+
+	/**
+	 * Push gauge snapshots for the code-index dashboard row. The embedder
+	 * queue depth is the live per-provider concurrency-lane depth (running +
+	 * queued `createEmbeddings` calls); it reads `0` when the lane is idle.
+	 */
+	private _emitCodeIndexMetrics(fileCount: number): void {
+		const provider = this._configManager?.currentEmbedderProvider ?? "unknown"
+		updateCodeIndexMetrics(fileCount, getEmbedderLaneDepth(provider), provider)
+	}
+}

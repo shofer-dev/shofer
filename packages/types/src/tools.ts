@@ -119,7 +119,7 @@ export const toolParamNames = [
 	"replacement",
 	"isRegex", // sed explicit regex/literal mode
 	"global",
-	"maxResults", // result cap for grep_search / git_search / rag_search (see helpers/searchCap.ts)
+	"maxResults", // result cap for grep_search (see helpers/searchCap.ts)
 	// attempt_completion rating (feedback already listed above for give_feedback)
 	"rating",
 	// grep_search parameters
@@ -216,7 +216,6 @@ export type NativeToolArgs = {
 		follow_up?: Array<{ text: string; mode?: string }> | null
 		form?: Array<import("./followup.js").ParamField> | null
 	}
-	rag_search: { query: string; path?: string; maxResults?: number | null }
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skills: { skill: string; args?: string }
@@ -255,7 +254,6 @@ export type NativeToolArgs = {
 	lsp_search: { query: string; maxResults?: number | null }
 	sleep: { seconds: number }
 	sed: { path: string; pattern: string; replacement: string; isRegex?: boolean | null; global?: boolean | null }
-	git_search: { query: string; maxResults?: number | null; since?: string | null; until?: string | null }
 	call_mcp_tool_async: {
 		server_name: string
 		tool_name: string
@@ -358,19 +356,9 @@ export interface WriteToFileToolUse extends ToolUse<"write_to_file"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "content">>
 }
 
-export interface RagSearchToolUse extends ToolUse<"rag_search"> {
-	name: "rag_search"
-	params: Partial<Pick<Record<ToolParamName, string>, "query" | "path" | "maxResults">>
-}
-
 export interface GrepSearchToolUse extends ToolUse<"grep_search"> {
 	name: "grep_search"
 	params: Partial<Pick<Record<ToolParamName, string>, "path" | "regex" | "file_pattern">>
-}
-
-export interface GitSearchToolUse extends ToolUse<"git_search"> {
-	name: "git_search"
-	params: Partial<Pick<Record<ToolParamName, string>, "query" | "maxResults">>
 }
 
 export interface ListFilesToolUse extends ToolUse<"list_files"> {

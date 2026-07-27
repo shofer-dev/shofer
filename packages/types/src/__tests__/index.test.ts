@@ -15,11 +15,12 @@ describe("GLOBAL_STATE_KEYS", () => {
 		expect(GLOBAL_STATE_KEYS).not.toContain("openRouterApiKey")
 	})
 
-	it("should contain OpenAI Compatible base URL setting", () => {
-		expect(GLOBAL_STATE_KEYS).toContain("codebaseIndexOpenAiCompatibleBaseUrl")
-	})
-
-	it("should not contain OpenAI Compatible API key (secret)", () => {
+	it("no longer contains the code-index settings — they are the rag-indexing plugin's", () => {
+		// The indexer's provider/model/URL settings and its seven credentials moved into
+		// the plugin's own `config` schema when the feature left core; neither half should
+		// reappear in the global settings surface.
+		expect(GLOBAL_STATE_KEYS).not.toContain("codebaseIndexConfig")
+		expect(GLOBAL_STATE_KEYS).not.toContain("codebaseIndexOpenAiCompatibleBaseUrl")
 		expect(GLOBAL_STATE_KEYS).not.toContain("codebaseIndexOpenAiCompatibleApiKey")
 	})
 })

@@ -1,6 +1,5 @@
 import { z } from "zod"
 
-import type { CodebaseIndexConfig } from "./codebase-index.js"
 import type { GlobalSettings, ShoferSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
 import type { HistoryItem, CostLimit, TaskState } from "./history.js"
@@ -167,17 +166,10 @@ export interface ExtensionMessage {
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
 		| "shoferCreditBalance"
-		| "indexingStatusUpdate"
-		| "gitIndexingStatusUpdate"
-		| "indexCleared"
-		| "gitIndexCleared"
-		| "codebaseIndexConfig"
 		| "marketplaceInstallResult"
 		| "marketplaceRemoveResult"
 		| "marketplaceData"
 		| "shareTaskSuccess"
-		| "codeIndexSettingsSaved"
-		| "codeIndexSecretStatus"
 		| "showDeleteMessageDialog"
 		| "showEditMessageDialog"
 		| "commands"
@@ -430,8 +422,6 @@ export type ExtensionState = Pick<
 	| "customSupportPrompts"
 	| "enhancementApiConfigId"
 	| "customCondensingPrompt"
-	| "codebaseIndexConfig"
-	| "codebaseIndexModels"
 	| "profileThresholds"
 	| "includeDiagnosticMessages"
 	| "maxDiagnosticMessages"
@@ -678,7 +668,6 @@ export interface WebviewMessage {
 		| "setopenAiCustomModelInfo"
 		| "openCustomModesSettings"
 		| "deleteMcpServer"
-		| "codebaseIndexEnabled"
 		| "telemetrySetting"
 		| "grepSearch"
 		| "toggleApiConfigPin"
@@ -697,8 +686,6 @@ export interface WebviewMessage {
 		| "clearIndexData"
 		| "clearGitIndexData"
 		| "requestGitIndexingStatus"
-		| "indexingStatusUpdate"
-		| "indexCleared"
 		| "toggleWorkspaceIndexing"
 		| "setAutoEnableDefault"
 		| "focusPanelRequest"
@@ -911,48 +898,6 @@ export interface WebviewMessage {
 	list?: string[] // For dismissedUpsells response
 	organizationId?: string | null // For organization switching
 	useProviderSignup?: boolean // For shoferCloudSignIn to use provider signup flow
-	codeIndexSettings?: {
-		// Global state settings
-		codebaseIndexEnabled: boolean
-		codebaseIndexQdrantUrl: string
-		codebaseIndexEmbedderProvider:
-			| "openai"
-			| "ollama"
-			| "openai-compatible"
-			| "gemini"
-			| "mistral"
-			| "vercel-ai-gateway"
-			| "bedrock"
-			| "openrouter"
-		codebaseIndexEmbedderBaseUrl?: string
-		codebaseIndexEmbedderModelId: string
-		codebaseIndexEmbedderModelDimension?: number // Generic dimension for all providers
-		codebaseIndexOpenAiCompatibleBaseUrl?: string
-		codebaseIndexBedrockRegion?: string
-		codebaseIndexBedrockProfile?: string
-		codebaseIndexSearchMaxResults?: number
-		codebaseIndexSearchMinScore?: number
-		codebaseIndexOpenRouterSpecificProvider?: string // OpenRouter provider routing
-
-		// Secret settings
-		codeIndexOpenAiKey?: string
-		codeIndexQdrantApiKey?: string
-		codebaseIndexOpenAiCompatibleApiKey?: string
-		codebaseIndexGeminiApiKey?: string
-		codebaseIndexMistralApiKey?: string
-		codebaseIndexVercelAiGatewayApiKey?: string
-		codebaseIndexOpenRouterApiKey?: string
-	}
-	/**
-	 * Partial codebase-index config patch.
-	 *
-	 * Used by `updateCodebaseIndexConfig` to merge a small subset of fields
-	 * (e.g. just `codebaseIndexGitEnabled` toggled from the popover) into the
-	 * persisted `codebaseIndexConfig` global state without touching unrelated
-	 * fields or rewriting any secrets — unlike `saveCodeIndexSettingsAtomic`
-	 * which expects the full settings object and reinitializes the manager.
-	 */
-	codebaseIndexConfigPartial?: Partial<CodebaseIndexConfig>
 	updatedSettings?: ShoferSettings
 	/** For `trustOutsideWorkspacePath`: the directory to task-scope trust (the pending file's parent dir). */
 	outsideWorkspacePath?: string

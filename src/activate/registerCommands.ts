@@ -15,8 +15,6 @@ import { ContextProxy } from "../core/config/ContextProxy"
 import { focusPanel } from "../utils/focusPanel"
 import { EXPERIMENT_IDS, experiments } from "@shofer/types"
 import { handleNewTask } from "./handleTask"
-import { CodeIndexManager } from "../services/code-index/manager"
-import { GitIndexManager } from "../services/git-index/git-index-manager"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 
 /**
@@ -231,28 +229,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		})
 	},
 
-	// ─── Git Index ────────────────────────────────────────────────────────
-	startGitIndexing: async () => {
-		const manager = GitIndexManager.getInstance(context)
-		if (!manager) {
-			getHost().notifier.error("Cannot start git indexing: No workspace folder open.")
-			return
-		}
-		if (manager.isFeatureEnabled && manager.isFeatureConfigured) {
-			await manager.initialize(provider.contextProxy)
-			manager.startIndexing()
-			getHost().notifier.info("Git history indexing started.")
-		} else {
-			getHost().notifier.warn("Git indexing is not enabled or not configured. Check Settings → RAG Indexer.")
-		}
-	},
-	stopGitIndexing: () => {
-		const manager = GitIndexManager.getInstance(context)
-		if (manager) {
-			manager.stopIndexing()
-			getHost().notifier.info("Git history indexing stopped.")
-		}
-	},
 	heapSnapshot: async () => {
 		const writeHeapSnapshot = (v8 as unknown as { writeHeapSnapshot: (filename?: string) => string })
 			.writeHeapSnapshot
@@ -267,16 +243,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 		const filePath = writeHeapSnapshot(targetPath)
 		outputChannel.appendLine(`[heapSnapshot] Heap snapshot written to: ${filePath}`)
 		getHost().notifier.info(`Heap snapshot written to ${filePath}`)
-	},
-
-	clearGitIndexData: async () => {
-		const manager = GitIndexManager.getInstance(context)
-		if (!manager) {
-			getHost().notifier.error("Cannot clear git index: No workspace folder open.")
-			return
-		}
-		await manager.clearIndexData()
-		getHost().notifier.info("Git history index cleared.")
 	},
 
 	// ─── Webview ──────────────────────────────────────────────────────────
@@ -371,7 +337,6 @@ export const openShoferInNewTab = async ({ context, outputChannel }: Omit<Regist
 	// don't need to use that event).
 	// https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
 	const contextProxy = await ContextProxy.getInstance(context)
-	const codeIndexManager = CodeIndexManager.getInstance(context)
 
 	const tabProvider = new ShoferProvider(context, outputChannel, "editor", contextProxy, undefined)
 	const lastCol = Math.max(...vscode.window.visibleTextEditors.map((editor) => editor.viewColumn || 0))

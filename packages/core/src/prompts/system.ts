@@ -15,7 +15,6 @@ import { formatLanguage } from "@shofer/types"
 import { isEmpty } from "../utils/object.js"
 
 import { McpHub } from "../services/mcp/McpHub.js"
-import { getCodeIndexManagerFactory } from "../services/code-index/code-index-registry.js"
 import type { SkillsManagerLike } from "../services/skills/skills-registry.js"
 
 import { listSubmodules } from "../utils/git-submodules.js"
@@ -89,9 +88,6 @@ async function generatePrompt(
 	// A `tools:` restriction that omits `mcp` also suppresses the MCP section.
 	const mcpAllowedByRestriction = capabilityGroups === undefined || capabilityGroups.has("mcp")
 	const shouldIncludeMcp = hasMcpGroup && hasMcpServers && mcpAllowedByRestriction
-
-	// Invoked for its registration side effect; the returned manager is not read here.
-	void getCodeIndexManagerFactory()?.(context, cwd)
 
 	// Per-task context overrides: each defaults to true (enabled) unless
 	// explicitly suppressed via a workflow agent's `.slang` `context { ... }`.

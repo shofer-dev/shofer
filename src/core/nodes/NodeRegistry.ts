@@ -33,7 +33,6 @@ import {
 } from "@shofer/types"
 import { NodeConnection, ShoferApiAgent, configLog } from "@shofer/core"
 
-import { CodeIndexManager } from "../../services/code-index/manager.js"
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
 /**
@@ -843,29 +842,13 @@ export class NodeRegistry {
 	/**
 	 * The controller-authoritative synced settings slice, resolved live from the source.
 	 *
-	 * The code-index config is rewritten on the way out — and ONLY on the way out. The
-	 * controller never imports its own outgoing slice, so it stays a full indexer while
-	 * every node it feeds is pinned to search-only:
-	 *
-	 * - `codebaseIndexSearchOnly: true` — nodes query the shared vector store but never
-	 *   scan or watch. The controller's own watcher already sees every change on the
-	 *   shared workspace, including node-made ones, so a second indexer would only
-	 *   duplicate embedding work and race it as a writer.
-	 * - `codebaseIndexKey` — the key the controller's own index actually resolved, so a
-	 *   node addresses that exact collection instead of hashing its own workspace path.
+	 * Nothing is rewritten on the way out any more. The one rule that used to live here —
+	 * "a node queries the shared code index but never writes to it" — belongs to the
+	 * plugin that owns the index, and it applies that itself when the controller asks it
+	 * for its node slice (`"node-config"`, `config_sync` §4b-2).
 	 */
 	private currentSyncedSlice(): SyncedSettings {
-		const slice = pickSyncedSettings(this.configSource?.getValues() ?? {})
-		if (slice.codebaseIndexConfig) {
-			slice.codebaseIndexConfig = {
-				...slice.codebaseIndexConfig,
-				codebaseIndexSearchOnly: true,
-				codebaseIndexKey:
-					CodeIndexManager.getInstance(this.context)?.resolvedIndexKey ??
-					slice.codebaseIndexConfig.codebaseIndexKey,
-			}
-		}
-		return slice
+		return pickSyncedSettings(this.configSource?.getValues() ?? {})
 	}
 
 	/**

@@ -183,15 +183,15 @@ describe("ContextProxy per-profile secrets (Part B)", () => {
 		const { context, secretStore } = createStatefulContext()
 
 		let { proxy } = await boot(context)
-		await proxy.storeSecret("codeIndexQdrantApiKey", "qdrant-key")
+		await proxy.storeSecret("pluginSecrets", "plugin-secret-blob")
 
 		// It IS persisted individually (unaffected by Part B).
-		expect(secretStore.get("codeIndexQdrantApiKey")).toBe("qdrant-key")
-		expect(proxy.getSecret("codeIndexQdrantApiKey")).toBe("qdrant-key")
+		expect(secretStore.get("pluginSecrets")).toBe("plugin-secret-blob")
+		expect(proxy.getSecret("pluginSecrets")).toBe("plugin-secret-blob")
 
 		// Survives a reload from its individual entry.
 		;({ proxy } = await boot(context))
-		expect(proxy.getSecret("codeIndexQdrantApiKey")).toBe("qdrant-key")
+		expect(proxy.getSecret("pluginSecrets")).toBe("plugin-secret-blob")
 	})
 
 	it("(e) import round-trips profiles + keys via the blob, not individual SecretStorage", async () => {

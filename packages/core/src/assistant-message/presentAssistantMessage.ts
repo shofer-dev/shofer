@@ -46,8 +46,6 @@ import { generateImageTool } from "../tools/GenerateImageTool.js"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool.js"
 import { NativeToolCallParser } from "./NativeToolCallParser.js"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse.js"
-import { ragSearchTool } from "../tools/RagSearchTool.js"
-import { gitSearchTool } from "../tools/GitSearchTool.js"
 import { lspSearchTool } from "../tools/LspSearchTool.js"
 import { createDirectoryTool } from "../tools/CreateDirectoryTool.js"
 import { createNewWorkspaceTool } from "../tools/CreateNewWorkspaceTool.js"
@@ -506,19 +504,6 @@ export async function presentAssistantMessage(shofer: Task) {
 						return `[${block.name} to '${block.params.title}']`
 					case "give_feedback":
 						return `[${block.name}]`
-					case "rag_search":
-						return `[${block.name} for '${block.params.query}']`
-					case "git_search": {
-						const range = [
-							block.params.since && `since=${block.params.since}`,
-							block.params.until && `until=${block.params.until}`,
-						]
-							.filter(Boolean)
-							.join(", ")
-						return range
-							? `[${block.name} for '${block.params.query}' (${range})]`
-							: `[${block.name} for '${block.params.query}']`
-					}
 					case "lsp_search":
 						return `[${block.name} for '${block.params.query}']`
 					case "read_command_output":
@@ -1106,20 +1091,6 @@ export async function presentAssistantMessage(shofer: Task) {
 					break
 				case "list_files":
 					await listFilesTool.handle(shofer, block as ToolUse<"list_files">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "rag_search":
-					await ragSearchTool.handle(shofer, block as ToolUse<"rag_search">, {
-						askApproval,
-						handleError,
-						pushToolResult,
-					})
-					break
-				case "git_search":
-					await gitSearchTool.handle(shofer, block as ToolUse<"git_search">, {
 						askApproval,
 						handleError,
 						pushToolResult,

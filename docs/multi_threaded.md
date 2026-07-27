@@ -778,7 +778,6 @@ notifies the main thread, which can trigger `_resetWebview()`.
 | [`src/core/webview/webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts) | Webview→Host message dispatch (4447 LOC)         |
 | [`packages/core/src/api/index.ts`](../packages/core/src/api/index.ts)                       | API handler factory                              |
 | [`src/services/mcp/McpHub.ts`](../src/services/mcp/McpHub.ts)                               | MCP tool execution                               |
-| [`src/services/code-index/manager.ts`](../src/services/code-index/manager.ts)               | Code indexing (query path)                       |
 
 ### New Worker Files (Phase 1)
 

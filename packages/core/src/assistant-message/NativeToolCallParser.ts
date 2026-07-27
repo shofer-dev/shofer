@@ -533,9 +533,6 @@ export class NativeToolCallParser {
 				if (args.path === undefined && args.filePath === undefined) missing.push("path")
 				if (args.query === undefined && args.pattern === undefined) missing.push("query")
 				break
-			case "rag_search":
-				if (args.query === undefined) missing.push("query")
-				break
 			case "read_file":
 				if (args.path === undefined && args.filePath === undefined) missing.push("path")
 				break
@@ -772,27 +769,6 @@ export class NativeToolCallParser {
 					nativeArgs = {
 						path,
 						diff,
-					}
-				}
-				break
-
-			case "rag_search":
-				if (partialArgs.query !== undefined) {
-					nativeArgs = {
-						query: partialArgs.query,
-						path: partialArgs.path,
-						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
-					}
-				}
-				break
-
-			case "git_search":
-				if (partialArgs.query !== undefined) {
-					nativeArgs = {
-						query: partialArgs.query,
-						maxResults: this.coerceOptionalNumber(partialArgs.maxResults),
-						since: partialArgs.since,
-						until: partialArgs.until,
 					}
 				}
 				break
@@ -1519,27 +1495,6 @@ export class NativeToolCallParser {
 							question: args.question,
 							follow_up: args.follow_up,
 							form: args.form,
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "rag_search":
-					if (args.query !== undefined) {
-						nativeArgs = {
-							query: args.query,
-							path: args.path,
-							maxResults: this.coerceOptionalNumber(args.maxResults),
-						} as NativeArgsFor<TName>
-					}
-					break
-
-				case "git_search":
-					if (args.query !== undefined) {
-						nativeArgs = {
-							query: args.query,
-							maxResults: this.coerceOptionalNumber(args.maxResults),
-							since: args.since,
-							until: args.until,
 						} as NativeArgsFor<TName>
 					}
 					break

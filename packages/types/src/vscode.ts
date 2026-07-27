@@ -51,9 +51,6 @@ export const commandIds = [
 	"toggleAutoApprove",
 
 	// Git Index
-	"startGitIndexing",
-	"stopGitIndexing",
-	"clearGitIndexData",
 
 	// Webview
 	"refreshWebview",
