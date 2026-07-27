@@ -2226,13 +2226,12 @@ export class ShoferProvider
 			// nodePaths points at the shipped self-contained plugin SDK so a plugin's
 			// bare `@shofer/types` import resolves in the installed extension (where no
 			// workspace node_modules exists); process.cwd() covers dev/test.
-			codeLoader: createNodePluginCodeLoader({
-				extensionPath: this.context.extensionPath,
-				nodePaths: [
-					path.join(this.context.extensionPath, "dist", "plugin-sdk", "node_modules"),
-					path.join(process.cwd(), "node_modules"),
-				],
-			}),
+			// Module-resolution roots are derived from `extensionPath` by the loader
+			// (`hostNodePaths`), which probes both host shapes: VS Code passes the
+			// extension ROOT, a headless node passes the bundle directory itself. Hard-coding
+			// `<extensionPath>/dist/plugin-sdk` here silently resolved to nothing on a
+			// headless node, so no plugin importing `@shofer/types` could load there.
+			codeLoader: createNodePluginCodeLoader({ extensionPath: this.context.extensionPath }),
 			// Base host for each code plugin's restricted, permission-checked sandbox (§8).
 			host: getHost(),
 			// Per-plugin config (merged with manifest defaults) from ContextProxy.

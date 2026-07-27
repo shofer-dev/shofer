@@ -178,6 +178,42 @@ function installedRuntimeDeps(pluginDir: string, pluginNodeModules: string): str
 }
 
 /**
+ * Module-resolution roots for transpiling a plugin entry.
+ *
+ * A plugin's TS entry routinely imports the plugin SDK (`@shofer/types` — `defineCustomTool`,
+ * the parameter-schema helper, the context types), and esbuild has to resolve it from
+ * somewhere. Walking up from the plugin's own directory only works when the plugin sits
+ * inside a tree that already has those packages installed — true for a repo checkout, false
+ * for a plugin installed at a standalone path, which is how a deployed node runs one
+ * (`/opt/shofer-plugins/<name>` symlinked into the global plugin scope). There the walk-up
+ * finds nothing and the plugin fails to load with "Could not resolve @shofer/types".
+ *
+ * So resolve from the HOST's own installation. `extensionPath` means different things in
+ * different hosts — in VS Code it is the extension ROOT (bundle at `<root>/dist`), while a
+ * headless host points it straight AT the bundle (`shofer serve --extension <…>/src/dist`) —
+ * so both shapes are probed rather than assuming one. Non-existent roots are dropped, so the
+ * list is only ever paths that can actually answer a resolution.
+ *
+ * `process.cwd()` stays last: it is right for a dev run from the repo, but it is merely the
+ * directory the process happened to start in, which is not a fact about where the host lives.
+ */
+export function hostNodePaths(extensionPath?: string): string[] {
+	const roots: string[] = []
+	for (const base of extensionPath ? [extensionPath, path.dirname(extensionPath)] : []) {
+		roots.push(
+			// The shipped plugin SDK: `<bundle>/plugin-sdk/node_modules`, reached either
+			// directly (headless: extensionPath IS the bundle) or via `dist` (VS Code).
+			path.join(base, "dist", "plugin-sdk", "node_modules"),
+			path.join(base, "plugin-sdk", "node_modules"),
+			// The host's own installed packages, for a source checkout.
+			path.join(base, "node_modules"),
+		)
+	}
+	roots.push(path.join(process.cwd(), "node_modules"))
+	return roots.filter((dir, index) => roots.indexOf(dir) === index && fs.existsSync(dir))
+}
+
+/**
  * Transpile (if TypeScript) and dynamic-import a plugin entry file, returning the
  * module namespace. Mirrors `CustomToolRegistry.import()`: TS is esbuild-bundled to
  * a content-addressed cache file (Node built-ins external, deps bundled with a
@@ -203,7 +239,7 @@ async function importEntry(entry: string, options: PluginCodeLoaderOptions): Pro
 	if (!fs.existsSync(bundle)) {
 		fs.mkdirSync(bundleDir, { recursive: true })
 		const pluginNodeModules = path.join(path.dirname(entry), "node_modules")
-		const defaultNodePaths = options.nodePaths ?? [path.join(process.cwd(), "node_modules")]
+		const defaultNodePaths = options.nodePaths ?? hostNodePaths(options.extensionPath)
 		const nodePaths = fs.existsSync(pluginNodeModules) ? [pluginNodeModules, ...defaultNodePaths] : defaultNodePaths
 
 		// Externalize the plugin's declared runtime dependencies that are actually installed in its

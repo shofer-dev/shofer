@@ -28,7 +28,13 @@ export function warnPlugin(message: string, pluginName?: string): void {
 	try {
 		getHost().notifier.warn(message)
 	} catch {
-		// A missing/partial host must never break the caller — logging already happened.
+		// No host yet (or a partial one). This is not a rare edge: code plugins load
+		// during activation, BEFORE the front-end adapter registers its notifier, so a
+		// plugin that fails to load would otherwise vanish — the log line goes to an
+		// output channel a headless node has no reader for, and the notification has
+		// nowhere to go. A plugin that does not load is the whole feature missing, so
+		// say it on stderr rather than let it be silent.
+		console.error(message)
 	}
 }
 
