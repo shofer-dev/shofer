@@ -382,7 +382,7 @@ executors. The governing principles:
   unrelated hosts that happen to share a container path. The embedder/Qdrant
   credentials ride the synced-secrets slice of the same `applyConfig` call, since
   the config alone would describe a store the node cannot open. Details:
-  [`plugins/rag-indexing.md`](./plugins/rag-indexing.md#4-shofer-nodes-one-writer-many-readers) and
+  [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md#multi-node--search-only-nodes) and
   [`config_sync.md`](./config_sync.md). (End state: extract the
   index/embeddings/memory into standalone services every node queries — at which
   point even the controller is just a client.)

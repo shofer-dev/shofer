@@ -95,7 +95,7 @@ Shofer ships with **two built-in multi-agent workflows** — formal, determinist
 
 Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
 
-Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](docs/plugins/builtin-workflows.md) • [Slang Language Spec](docs/slang_specs.md)
+Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](plugins/builtin-workflows/DESIGN.md) • [Slang Language Spec](docs/slang_specs.md)
 
 ## Parallel Tasks & Worktrees
 
@@ -116,7 +116,7 @@ Run parallel tasks on different branches — all in one VS Code window:
 - Each task can be scoped to a specific worktree for branch-isolated parallel work
 - No more stash/commit gymnastics or multiple VS Code windows for PRs
 
-[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/worktrees.md)
+[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/worktrees/DESIGN.md)
 
 ## RAG Indexing
 
@@ -131,7 +131,7 @@ Build a **semantic search index** of your codebase and git history so the AI can
 
 Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in Settings → **RAG Indexing** — pick an embedding provider, point to your Qdrant instance, and click **Start Indexing**. A file watcher keeps the index up to date as you edit.
 
-[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/rag-indexing.md)
+[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/rag-indexing/DESIGN.md)
 
 ## Live Memory
 
@@ -147,7 +147,7 @@ Requires a reachable **Qdrant v1.14.x** server (local or remote). Configure in S
 
 Enable in Settings and choose a lightweight model (e.g., Gemini Flash, GPT-4o-mini).
 
-[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/live-memory.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/live-memory/DESIGN.md)
 
 ## Special Files
 

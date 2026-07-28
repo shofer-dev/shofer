@@ -58,5 +58,5 @@ you turn it back on.
 ## Design
 
 See [DESIGN.md](DESIGN.md) for how the pieces fit together and why, and
-[`docs/plugins/file-changes.md`](../../docs/plugins/file-changes.md) for the
+[`plugins/file-changes/DESIGN.md`](DESIGN.md) for the
 source-of-truth chain in the wider system.

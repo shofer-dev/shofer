@@ -79,4 +79,4 @@ cd packages/core && npx vitest run --config vitest.plugins.config.ts rag-indexin
 
 - [`DESIGN.md`](./DESIGN.md) — how it is put together, and why
 - [`TODO.md`](./TODO.md) — what it does not do
-- [`docs/plugins/rag-indexing.md`](../../docs/plugins/rag-indexing.md) — the core-side view
+- [`plugins/rag-indexing/DESIGN.md`](DESIGN.md) — the core-side view

@@ -256,7 +256,7 @@ if it needs cross-worktree refactoring. (Note: the API here is `WorkspaceEdit.en
 
 ### Phase 4: Cleanup & Docs ✅ complete
 
-- [x] Update [`docs/plugins/worktrees.md`](extensions/shofer/docs/plugins/worktrees.md) — Known Limitation collapsed; sandboxing documented
+- [x] Update [`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md) — Known Limitation collapsed; sandboxing documented
 - [x] Update [`command-execution.md`](extensions/shofer/docs/command-execution.md) — execa-forcing for worktrees documented
 - [x] `getWorktreeCommandWarning()` repurposed for macOS/Windows-only (`worktreePathGuard.ts:152`)
 

@@ -35,4 +35,4 @@ The **Indexing Status Badge** in the Shofer sidebar shows progress and lets you 
 - **Understand code history** — find the commit that introduced a bug by describing _what_ changed, not searching for exact keywords
 - **Works offline** — index once, query forever (local Qdrant)
 
-[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/rag-indexing.md)
+[Read the full RAG indexing documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/rag-indexing/DESIGN.md)

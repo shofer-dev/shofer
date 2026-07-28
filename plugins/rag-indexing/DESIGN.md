@@ -8,15 +8,19 @@ It is a bundled plugin (`plugins/rag-indexing/`), off by default, and it contrib
 `rag_search` tool — and, with the git-history half, `git_search`. Core's `lsp_search` is
 the lighter companion that needs no infrastructure at all.
 
+Two indexes ship in one plugin because they are one feature wearing two hats — the **code
+index** (`rag_search`: find code by meaning) and the **git-history index** (`git_search`:
+find when and why something changed). They share the embedder, the vector store, the
+credentials and the settings panel.
+
 ## Why a plugin
 
 The indexer is a _deployment_ choice: it needs an embedding provider, a credential and a
 running vector store, and plenty of workspaces want none of that. As a plugin it can be
 absent entirely — no settings, no tools in the prompt, no background scan — instead of
-being a core subsystem that is merely switched off. What core keeps is listed in
-[`docs/plugins/rag-indexing.md`](../../docs/plugins/rag-indexing.md) §1; the short version
-is the tree-sitter grammars (shared with `list_code_definition_names`) and the file-type
-policy lists.
+being a core subsystem that is merely switched off. What core keeps is listed under
+[What core keeps](#what-core-keeps); the short version is the tree-sitter grammars (shared
+with the other consumers of the parse path) and the file-type policy lists.
 
 Everything the plugin needs from core it **bundles at build time** (`src/core-shared.ts`);
 nothing resolves `@shofer/core` at runtime.
@@ -494,9 +498,8 @@ User query string
 
 - Requires Qdrant + embedding provider configuration.
 - Uses vector cosine similarity search.
-- Tool implementation: `packages/core/src/tools/RagSearchTool.ts`.
-- Tool schema: `packages/core/src/prompts/tools/native-tools/rag_search.ts`.
-- Conditionally available only when `CodeIndexManager` is enabled + configured + initialized (see `filter-tools-for-mode.ts:271-277`).
+- Tool definition: the plugin's `registerTools()` in [`src/main.ts`](src/main.ts), declared `group: "read"` so "auto-approve reads" covers it.
+- Contributed only when `CodeIndexManager` reports `isFeatureEnabled && isInitialized` — see [Tools are registered, not gated](#tools-are-registered-not-gated).
 
 ### `lsp_search` — Symbol-based (LSP)
 
@@ -510,22 +513,80 @@ User query string
 
 ## Integration Points
 
+### What core keeps
+
+Almost nothing. There is no `CodeIndexManager`, no embedder, no vector store, no
+`rag_search`/`git_search` native tool, and no `codebaseIndex*` global setting in core. What
+remains is what the rest of the product shares:
+
+| Kept in core                                                                | Because                                                                                                                                |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| tree-sitter grammars + loader (`packages/core/src/services/tree-sitter/`)   | `parseSourceCodeDefinitionsForFile` (context condensing, via `condense/foldedFileContext.ts`) uses them; the grammars ship once        |
+| `CODEBASE_INDEX_FILE_EXTENSIONS` / `CODEBASE_INDEX_IGNORED_DIRS`            | the glob service (`services/glob/constants.ts`) and tree-sitter (`services/tree-sitter/index.ts`) re-export them (Indexer Policy rule) |
+| `codebaseIndexCacheSchema` (`packages/types/src/codebase-index.ts`)         | the plugin's on-disk cache format, versioned like every other snapshot                                                                 |
+| the embedding-model catalog (`packages/core/src/shared/embeddingModels.ts`) | the provider settings UI reads it too                                                                                                  |
+
+The plugin **bundles** those pure modules at build time (`src/core-shared.ts`); it has no
+runtime dependency on `@shofer/core`.
+
+```mermaid
+flowchart TD
+    subgraph core["core"]
+        SEARCH["ctx.host.search<br/>ragSearch · gitSearch"]
+        AI["ctx.ai.embed"]
+        TOOLS["custom-tool registry<br/>(group-aware auto-approval)"]
+        METRICS["ctx.host.metrics"]
+        SYNC["config_sync — plugin slice"]
+    end
+    subgraph plug["plugins/rag-indexing"]
+        REQ["handleRequest<br/>search · git-search · embed · node-config"]
+        REG["registerTools<br/>rag_search · git_search"]
+        IDX["managers · embedders · Qdrant"]
+    end
+
+    SEARCH -->|"pluginRegistry.request"| REQ
+    AI -->|"embed"| REQ
+    REG --> TOOLS
+    REQ --> IDX
+    IDX --> METRICS
+    SYNC -->|"node-config"| REQ
+```
+
+**`ctx.host.search` still exists.** Core no longer has an index, but the seam does not
+mention one: `ShoferProvider.buildPluginSearchProvider()` forwards `ragSearch`/`gitSearch`
+to this plugin over `pluginRegistry.request` and returns empty when the plugin is absent or
+its index is off. That is what keeps Live Memory ([`plugins/live-memory/`](../live-memory/),
+which searches through `ctx.host.search`) working whether or not the indexer is installed.
+
+#### Tools are registered, not gated
+
+Core does not consult a manager to decide whether the search tools are usable: the plugin
+simply does not contribute a tool until its index is enabled **and** initialised, so the
+model never sees a tool that cannot answer. Accordingly `FEATURE_GATED_TOOLS`
+([`filter-tools-for-mode.ts`](../../packages/core/src/prompts/tools/filter-tools-for-mode.ts))
+carries no `rag_search`/`git_search` entry — the gates it lists are for native tools only.
+
+The full seam catalogue these paragraphs draw on is
+[`docs/plugin_system.md`](../../docs/plugin_system.md).
+
 ### Host seams
 
 Nothing in core reaches into the indexer any more; the plugin reaches OUT through seams:
 
-| Seam                                      | Used for                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------- |
-| `initialize(ctx)`                         | Binds the runtime, starts both managers in the background                 |
-| `registerTools()`                         | Contributes `rag_search` / `git_search` — only when the index can answer  |
-| `handleRequest("search" \| "git-search")` | Answers `ctx.host.search` for other plugins (Live Memory)                 |
-| `handleRequest("embed")`                  | Answers `ctx.ai.embed` — the host has no embedder of its own              |
-| `handleRequest("node-config")`            | Shapes what a Shofer Node receives (search-only + the resolved index key) |
-| `handleRequest(status/start/stop/clear)`  | The settings panel's actions                                              |
-| `ctx.host.watch`                          | The file watcher and the `**/.gitignore` watcher                          |
-| `ctx.storage`                             | The scan cache, and per-workspace enablement                              |
-| `ctx.host.metrics`                        | `shofer_code_index_*` — the plugin publishes its own instruments          |
-| `ctx.config` (+ `secret: true`)           | Every setting and all seven credentials                                   |
+| Seam                                      | Used for                                                                                     |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `initialize(ctx)`                         | Binds the runtime, starts both managers in the background                                    |
+| `registerTools()`                         | Contributes `rag_search` / `git_search` — only when the index can answer                     |
+| `CustomToolDefinition.group`              | Declares both tools `read`, so "auto-approve reads" covers them                              |
+| `handleRequest("search" \| "git-search")` | Answers `ctx.host.search` for other plugins (Live Memory)                                    |
+| `handleRequest("embed")`                  | Answers `ctx.ai.embed` — the host has no embedder of its own                                 |
+| `handleRequest("node-config")`            | Shapes what a Shofer Node receives (search-only + the resolved index key)                    |
+| `handleRequest(status/start/stop/clear)`  | The settings panel's actions                                                                 |
+| `ctx.host.watch`                          | The file watcher and the `**/.gitignore` watcher                                             |
+| `ctx.storage`                             | The scan cache, and per-workspace enablement                                                 |
+| `ctx.host.metrics`                        | `shofer_code_index_*` — the plugin publishes its own instruments                             |
+| `ctx.host.telemetry`                      | `indexing_error` / `segment_dedup`, namespaced under `Plugin Event` and scrubbed by the host |
+| `ctx.config` (+ `secret: true`)           | Every setting and all seven credentials                                                      |
 
 The UI is two small bundles (`ui/settings.tsx`, `ui/status.tsx`) on the host component kit;
 the credential form is the generic one the Plugins panel renders from the manifest schema.
@@ -647,7 +708,7 @@ point can sneak past it:
 | `CodeIndexManager.initialize()`    | Step 7 calls `this._orchestrator?.stopWatcher()` and returns early. Steps 5–6 already ran, so the cache manager, embedder, vector store and **search service** exist — `rag_search` answers normally. |
 | `CodeIndexManager.startIndexing()` | Returns early. This is the path a settings change or a manual re-index command reaches, so a node cannot be talked into scanning after the fact.                                                      |
 
-Because service creation completes, `isInitialized` is true on a node and `rag_search` survives the `filterNativeToolsForMode` gate (enabled + configured + initialized). Nothing drives the orchestrator's state machine, though, so a search-only host's reported `systemStatus` stays `Standby`.
+Because service creation completes, `isInitialized` is true on a node, so `registerTools()` still contributes `rag_search` there. Nothing drives the orchestrator's state machine, though, so a search-only host's reported `systemStatus` stays `Standby`.
 
 `CodeIndexConfigManager` exposes the flag as the `isSearchOnly` getter (and the key below as `indexKey`).
 

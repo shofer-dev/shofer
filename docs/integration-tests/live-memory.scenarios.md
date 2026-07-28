@@ -1,6 +1,6 @@
 # Live Memory — Integration Test Scenarios
 
-> Design doc: [`docs/plugins/live-memory.md`](../plugins/live-memory.md)
+> Design doc: [`plugins/live-memory/DESIGN.md`](../../plugins/live-memory/DESIGN.md)
 > User manual: [`docs/user-manual/live-memory.md`](../docs/user-manual/live-memory.md)
 > Implementation: [`src/services/live-memory/manager.ts`](../src/services/live-memory/manager.ts),
 > [`src/services/live-memory/conversation-store.ts`](../src/services/live-memory/conversation-store.ts),

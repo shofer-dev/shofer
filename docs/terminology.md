@@ -615,7 +615,7 @@ Every tool belongs to exactly one tool group (defined in [`tool.ts`](../packages
 
 Built-in modes, contributed by the bundled `builtin-modes` plugin
 ([`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json), see
-[`plugins/builtin-modes.md`](plugins/builtin-modes.md)):
+[`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)):
 
 | Slug          | Display Name   | Description                                        |
 | ------------- | -------------- | -------------------------------------------------- |

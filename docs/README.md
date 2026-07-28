@@ -12,20 +12,23 @@ one rule:
 Future work belongs in a TODO (`todos/`) or an explicitly-labeled section, not as
 a spec masquerading as current state.
 
-## Per-plugin docs live in `plugins/`
+## Per-plugin docs live next to the plugin
 
-A feature that ships as a **plugin** rather than as core keeps its doc in
-[`docs/plugins/`](plugins/) — [`plugins/checkpoints.md`](plugins/checkpoints.md),
-[`plugins/live-memory.md`](plugins/live-memory.md),
-[`plugins/builtin-modes.md`](plugins/builtin-modes.md),
-[`plugins/file-changes.md`](plugins/file-changes.md),
-[`plugins/builtin-workflows.md`](plugins/builtin-workflows.md),
-[`plugins/worktrees.md`](plugins/worktrees.md),
-[`plugins/rag-indexing.md`](plugins/rag-indexing.md) — while the plugin _substrate_
-(seams, manifest, lifecycle) stays in [`plugin_system.md`](plugin_system.md) and the
-authoring guide in [`../PLUGINS.md`](../PLUGINS.md). Deeper per-plugin material that
-belongs next to its code (a `DESIGN.md`, `README.md`, `TODO.md`) lives in the plugin
-directory itself; the doc here is the entry point that says where.
+A feature that ships as a **plugin** rather than as core keeps its whole doc set in its
+own directory — `DESIGN.md` (design and reasoning, including the core-side seams the
+feature is built on), plus `README.md`/`TODO.md` where they exist:
+
+- [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)
+- [`plugins/builtin-workflows/DESIGN.md`](../plugins/builtin-workflows/DESIGN.md)
+- [`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md)
+- [`plugins/file-changes/DESIGN.md`](../plugins/file-changes/DESIGN.md)
+- [`plugins/live-memory/DESIGN.md`](../plugins/live-memory/DESIGN.md)
+- [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md)
+- [`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md)
+
+The plugin _substrate_ (seams, manifest, lifecycle) stays in
+[`plugin_system.md`](plugin_system.md), and the authoring guide in
+[`../PLUGINS.md`](../PLUGINS.md).
 
 ## Status banner convention
 
@@ -55,7 +58,7 @@ docs and their verdicts:
 | `parallelism.md`, `message_queue.md`, `task-export.md`, `summarization.md` | ✅ Shipped                                                                                                                                                                          |
 | `performance_optimizations.md`, `public_api.md`, `headless.md`             | ✅ Shipped (`performance_optimizations.md` rewritten to current-state characteristics for SQLite persistence + delta IPC)                                                           |
 | `otel-metrics.md`                                                          | ✅ Shipped — OpenTelemetry metrics catalog + instrument surface                                                                                                                     |
-| `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `worktrees` plugin — see `plugins/worktrees.md`)                                                                                      |
+| `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `worktrees` plugin — see `plugins/worktrees/DESIGN.md`)                                                                               |
 | `chatview-windowed-message-loading.md`                                     | ✅ Shipped (H2 reverted, re-shipped as tail-window cold load — doc already explains this)                                                                                           |
 | `multi_threaded.md`                                                        | 🚧 Phase 0–1 worker infrastructure built + unit-tested but **not wired into production** (no task currently runs in a worker); the four-runtime architecture is desired, not active |
 | `cloud.md`                                                                 | ⛔ Inherited from upstream; the described cloud package/services do not exist (doc already carries this banner)                                                                     |

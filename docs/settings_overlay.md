@@ -268,7 +268,7 @@ Key globalState keys for modes:
 | **Priority** | **Lowest** (a user or project mode of the same slug replaces one)           |
 | **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer   |
 
-The six modes, in manifest order (see [`plugins/builtin-modes.md`](plugins/builtin-modes.md)):
+The six modes, in manifest order (see [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)):
 `code` (the default mode and ultimate fallback), `architect`, `debug`, `code-search`,
 `web-search`, `reviewer`. They reach every consumer through the same `customModes`
 list as user and project modes — merged by `effectiveModes()`, so there is no
@@ -1164,7 +1164,7 @@ was the default. The [`builtin-modes` plugin](../plugins/builtin-modes/plugin.js
 contributes **six** modes, in order: `code` (the default/ultimate
 fallback), `architect`, `debug`, `code-search`, `web-search`, `reviewer`. There is
 no `ask`, `orchestrator`, `search`, `opinion`, or `browser` mode. §2d's table and
-code example were corrected. (Authoritative source: [`plugins/builtin-modes.md`](plugins/builtin-modes.md).)
+code example were corrected. (Authoritative source: [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md).)
 
 ### 14b. `custom_modes.yaml` Merge Logic Duplicate Code — ✅ fixed
 

@@ -41,7 +41,7 @@ by the time `execute()` runs, the filter has already authorized the call.
 
 ## Mode Availability
 
-The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json)). See [`plugins/builtin-modes.md`](plugins/builtin-modes.md) for the authoritative source.
+The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json)). See [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md) for the authoritative source.
 
 | Mode           | Groups                                                                              | Description                     |
 | -------------- | ----------------------------------------------------------------------------------- | ------------------------------- |
@@ -76,7 +76,7 @@ The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plu
 
 ## File Operations
 
-> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`plugins/worktrees.md §3`](plugins/worktrees.md#3-what-core-keeps-confinement).
+> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`plugins/worktrees/DESIGN.md` §5](../plugins/worktrees/DESIGN.md#5-what-core-keeps-confinement).
 
 | Tool                   | Origin | Group | Always Available | Status | Description                                    |
 | ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
@@ -370,7 +370,7 @@ Supported formats: PNG, JPG, JPEG, GIF, BMP, SVG, WEBP.
 
 ## Execution & System
 
-> **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`plugins/worktrees.md §3`](plugins/worktrees.md#3-what-core-keeps-confinement).
+> **Worktree isolation:** `execute_command` is **not sandboxed** — it can escape the worktree via `cd`, absolute paths, or redirects. When running in a worktree task, the approval prompt displays a ⚠️ warning showing the worktree context. See [`plugins/worktrees/DESIGN.md` §5](../plugins/worktrees/DESIGN.md#5-what-core-keeps-confinement).
 
 | Tool                  | Origin | Group   | Always Available | Status | Description                                 |
 | --------------------- | :----: | ------- | :--------------: | :----: | ------------------------------------------- |
@@ -905,7 +905,7 @@ To read off availability for any tool:
 1. Find the tool's group in the per-group sections above (Read / Write / Execute /
    MCP / Mode / Subtasks / Questions), or note it as always-available.
 2. Look up the mode's `tools` in [§ Mode Availability](#mode-availability) (or the
-   authoritative [`plugins/builtin-modes.md`](plugins/builtin-modes.md)).
+   authoritative [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)).
 3. The tool is available iff the group is present. Architect's `write` group is
    **`.md`-only** (`fileRegex`), enforced at execution time.
 

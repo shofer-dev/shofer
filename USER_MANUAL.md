@@ -465,7 +465,7 @@ outside their isolated checkout.
 
 Learn more:
 
-- [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/builtin-workflows.md) — the full pipeline from `.slang` → discovery → execution
+- [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/plugins/builtin-workflows/DESIGN.md) — the full pipeline from `.slang` → discovery → execution
 - [Slang Language Spec](https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md) — grammar, operations, control flow, output contracts
 - [Workflow Design](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_design.md) — architecture and design decisions
 - [Workflow Visualization](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md) — the three diagram views and runtime overlays
@@ -617,7 +617,7 @@ The **Live Memory Status** badge in the Shofer sidebar shows whether the agent i
 - **KV-cache friendly** — append-only context window keeps the provider's attention cache warm
 - **File-aware** — notified of file changes to keep its knowledge fresh
 
-[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/docs/plugins/live-memory.md)
+[Read the full Live Memory documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/live-memory/DESIGN.md)
 
 ---
 

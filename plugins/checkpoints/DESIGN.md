@@ -8,18 +8,37 @@ is the workspace, capturing every file Shofer could have touched — including f
 workspace's `.gitignore` excludes, and including workspaces with no git repository at
 all.
 
-Checkpoints are orthogonal to the **File Changes Panel** (`ChangedFilesService`), which
-tracks the individual files Shofer edited using verbatim copies and no git.
+Checkpoints are **not part of Shofer core**. They are a first-party plugin, bundled with
+the extension and enabled by default. They are also orthogonal to the **File Changes
+Panel** (`ChangedFilesService`), which tracks the individual files Shofer edited using
+verbatim copies and no git.
 
 ## Why a plugin
 
-Checkpoints used to live in Shofer core (`packages/core/src/checkpoints/`), wired into
-`Task`, `presentAssistantMessage`, the webview message handler, four UI components, two
-global settings and two `AgentApi` methods. That made it impossible to remove, and made
-core carry knowledge of shadow-git that nothing else needed.
+Shadow-git, commits and restore are knowledge nothing but this feature needs. Keeping
+them out of core makes the feature one directory and one archive: disabling the plugin
+removes checkpoints entirely, leaving nothing behind. Core carries only the _generic_
+seams the plugin rides on, each of which is useful to any plugin that owns a feature.
 
-As a plugin it is one directory and one archive. Core keeps only the _generic_ seams
-the plugin rides on, each of which is useful to any plugin that owns a feature.
+## What core provides instead — the seams this plugin uses
+
+Core knows nothing about shadow git, commits, or restore. It provides the generic plugin
+seams the feature is built from, all documented in
+[`plugin_system.md`](../../docs/plugin_system.md):
+
+| Seam                                                    | What checkpoints uses it for                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `lifecycle.beforeToolCall` (+ manifest `hookTimeoutMs`) | Snapshot before a file-mutating tool, awaited so it precedes the write |
+| `lifecycle.onUserMessage`                               | An anchor per user message                                             |
+| `ctx.task.marker` / `listMarkers`                       | The timeline row that IS a checkpoint, and its ordering                |
+| `ctx.task.rewind`                                       | The conversation half of a restore                                     |
+| `lifecycle.onTimelineRewind`                            | Roll the workspace back when a message delete/edit asks for it         |
+| `lifecycle.onTaskDeleted`                               | Drop the task's shadow repository                                      |
+| `ShoferPlugin.handleRequest` + `PluginUIApi.request`    | Diff/restore driven from the row's UI, including for a remote executor |
+| `ctx.host.editor.showMultiFileDiff`                     | Render a computed diff                                                 |
+
+Every one of those is feature-agnostic: another plugin could implement a different undo
+model on the same seams.
 
 ## Architecture
 
@@ -152,3 +171,14 @@ than no history because the user trusts it.
   and restoring one does not consult the other.
 - **Excluded files are not captured**, so restoring does not bring back a `node_modules`
   or a `.env` the exclude list drops.
+
+## Related
+
+- [`README.md`](./README.md) — usage, settings, packaging.
+- [`TODO.md`](./TODO.md) — known gaps.
+- [`plugins/file-changes/DESIGN.md`](../file-changes/DESIGN.md) — the File Changes
+  Panel, a separate per-file diff/revert system with no git dependency.
+- [`plugins/worktrees/DESIGN.md`](../worktrees/DESIGN.md) — how a per-task worktree
+  scopes its snapshots.
+- [`submodule-support.md`](../../docs/submodule-support.md) — the nested-repository
+  investigation behind this plugin's `GIT_DIR` isolation.

@@ -240,7 +240,7 @@ Twenty native tools are listed below — see [`native_tools.md`](../native_tools
 
 The file changes tracking infrastructure was built from the ground up.
 
-See [`plugins/file-changes.md`](../plugins/file-changes.md) for the complete tracking specification.
+See [`plugins/file-changes/DESIGN.md`](../../plugins/file-changes/DESIGN.md) for the complete tracking specification.
 
 Removed the git-dependent shadow-repository backend in favor of a **working-directory snapshot system**. This eliminates all git-related edge cases (nested repos, worktrees, submodules, custom git configs) and makes the system more robust and universally compatible.
 
@@ -331,7 +331,7 @@ This enables companion extensions to seamlessly contribute tools to Shofer's too
 
 No need to maintain separate VS Code windows per worktree anymore.
 
-See [`plugins/worktrees.md`](../plugins/worktrees.md) for the full architecture.
+See [`plugins/worktrees/DESIGN.md`](../../plugins/worktrees/DESIGN.md) for the full architecture.
 
 ### What Was Built
 
@@ -383,7 +383,7 @@ The indexer processes workspace files through tree-sitter parsing and embedding,
 
 The pipeline was substantially hardened in the Shofer fork to handle edge cases, submodules, and git-ignored files correctly.
 
-> See [`plugins/rag-indexing.md`](../plugins/rag-indexing.md) for the full design.
+> See [`plugins/rag-indexing/DESIGN.md`](../../plugins/rag-indexing/DESIGN.md) for the full design.
 
 ### What Was Built
 

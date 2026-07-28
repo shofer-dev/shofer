@@ -13,7 +13,7 @@ Embedded worktrees move from
 ```
 
 one level up, still inside the opened workspace folder. The embedded model
-([`docs/plugins/worktrees.md`](../docs/plugins/worktrees.md) §1) is unchanged:
+([`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md) §3) is unchanged:
 worktrees stay in the window the user already has open, which is what makes
 parallel agents, in-window task switching and merge-back work without a second
 window.
@@ -51,7 +51,7 @@ consumers is a safety property:
 The first three matter most: they fail **silently and open**. A task in a
 worktree at the new path would simply not be recognised, so confinement and the
 sandbox would be absent with no error — the exact outcome
-[`docs/plugins/worktrees.md`](../docs/plugins/worktrees.md) §3 keeps in core so
+[`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md) §5 keeps in core so
 that "a safety property a user can remove by disabling a plugin is not a safety
 property".
 
@@ -76,8 +76,8 @@ property".
 5. **`.gitignore` seeding** writes the new entry; the stale `.shofer/worktrees/`
    line in an existing repo is harmless and is not rewritten.
 6. **Docs** — this path appears in `README.md`, `USER_MANUAL.md`,
-   `docs/plugins/worktrees.md`, `docs/plugins/live-memory.md`,
-   `docs/plugins/checkpoints.md`, `docs/native_tools.md`,
+   `plugins/worktrees/DESIGN.md`, `plugins/live-memory/DESIGN.md`,
+   `plugins/checkpoints/DESIGN.md`, `docs/native_tools.md`,
    `docs/shofer_special_files.md`, `docs/worktree-shell-sandboxing.md`,
    `docs/v3_architecture.md` and `todos/worktree-sync.md`. All must move in the
    same change.

@@ -104,5 +104,5 @@ test that loads this plugin off disk with
 
 - [`DESIGN.md`](./DESIGN.md) — why the split with core looks the way it does
 - [`TODO.md`](./TODO.md) — what this does not do
-- [`docs/plugins/worktrees.md`](../../docs/plugins/worktrees.md) — the core-side view:
+- [`plugins/worktrees/DESIGN.md`](DESIGN.md) — the core-side view:
   the seams, and the safety properties core keeps regardless of this plugin
