@@ -2,7 +2,7 @@
  * Worktree Path Guard — prevents tasks running inside an embedded worktree
  * from writing to the master checkout or to another worktree.
  *
- * When a Task's `cwd` points into `.shofer/worktrees/<name>/`, it is an
+ * When a Task's `cwd` points into `<workspace>/.worktrees/<name>/`, it is an
  * "embedded worktree task". All mutating tools that accept file paths must
  * validate that the resolved absolute path stays within the task's assigned
  * worktree directory. Attempts to escape (via `..`, absolute paths, or
@@ -13,24 +13,34 @@
  * The detection is filesystem-level and synchronous — no git dependency:
  *
  * 1. Resolve `task.cwd` and `task.workspacePath` to absolute paths.
- * 2. If `task.cwd` starts with `<workspacePath>/.shofer/worktrees/`, the
- *    task is scoped to an embedded worktree.
- * 3. For any target path, resolve against `task.cwd` and verify it stays
- *    within `task.cwd` (or equals it exactly, for directory operations).
+ * 2. If `task.cwd` starts with `<workspacePath>/.worktrees/`, the task is
+ *    scoped to an embedded worktree.
+ * 3. For any target path, resolve against `task.cwd` — following symlinks on the
+ *    part of the path that already exists — and verify it stays within `task.cwd`
+ *    (or equals it exactly, for directory operations).
  *
  * Normal (non-worktree) tasks always pass validation — the guard is a no-op.
  */
 
 import * as fs from "fs"
 import * as path from "path"
+
+import { EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR } from "@shofer/types"
+
 import { type Task } from "../task/Task.js"
 
 /**
  * Determines whether a task is running inside an embedded worktree directory.
  *
- * An embedded worktree is a directory under `<workspace>/.shofer/worktrees/<name>/`
+ * An embedded worktree is a directory under `<workspace>/.worktrees/<name>/`
  * that serves as the task's `cwd`. This is the "new model" where worktree-scoped
  * tasks run in the same VS Code window.
+ *
+ * The previous location, `<workspace>/.shofer/worktrees/`, is recognised as well:
+ * this is a **transition shim, to be removed in a later release**. It exists
+ * because dropping it does not fail loudly — a worktree a user already has would
+ * simply stop being recognised, and both the path confinement below and the Linux
+ * shell sandbox would vanish with no error.
  *
  * @param task - The task to check
  * @returns true if the task is scoped to an embedded worktree
@@ -44,17 +54,47 @@ export function isEmbeddedWorktreeTask(task: Task): boolean {
 		return false
 	}
 
-	// Verify cwd is inside `.shofer/worktrees/` (not just any subdirectory).
-	const embeddedPrefix = path.join(normalizedWorkspace, ".shofer", "worktrees") + path.sep
-	return normalizedCwd.startsWith(embeddedPrefix)
+	// Verify cwd is inside the worktrees directory (not just any subdirectory).
+	return [EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR].some((dir) =>
+		normalizedCwd.startsWith(path.join(normalizedWorkspace, dir) + path.sep),
+	)
+}
+
+/**
+ * Resolves symlinks on the longest existing prefix of `target`, keeping the rest
+ * lexical.
+ *
+ * `fs.realpathSync` throws on a path that does not exist yet, which is the normal
+ * case here — the tools calling the guard are usually about to CREATE the file. So
+ * walk up to the deepest ancestor that does exist, resolve that, and re-append the
+ * remaining segments. A symlink anywhere in the existing part is therefore followed,
+ * which is what makes `<worktree>/link -> /etc` fail containment instead of passing
+ * it lexically.
+ */
+function resolveThroughSymlinks(target: string): string {
+	let current = path.resolve(target)
+	const remainder: string[] = []
+
+	for (;;) {
+		try {
+			return path.join(fs.realpathSync(current), ...remainder)
+		} catch {
+			const parent = path.dirname(current)
+			// Reached the filesystem root without finding an existing ancestor.
+			if (parent === current) return path.resolve(target)
+			remainder.unshift(path.basename(current))
+			current = parent
+		}
+	}
 }
 
 /**
  * Validates that a target path stays within the task's assigned worktree directory.
  *
  * For non-worktree tasks, this always returns null (no restriction).
- * For worktree tasks, this resolves the path against `task.cwd` and checks
- * that it does not escape the worktree directory.
+ * For worktree tasks, this resolves the path against `task.cwd` — following
+ * symlinks, so a link planted inside the worktree cannot be used as a door out —
+ * and checks that it does not escape the worktree directory.
  *
  * @param task - The task instance
  * @param relPath - The relative or absolute path to validate
@@ -65,8 +105,11 @@ export function validateWorktreePath(task: Task, relPath: string): string | null
 		return null
 	}
 
-	const normalizedCwd = path.resolve(task.cwd)
-	const absTarget = path.resolve(task.cwd, relPath)
+	// Both sides go through the same resolution, so a worktree that is itself
+	// reached via a symlink (e.g. macOS `/tmp` → `/private/tmp`) still compares equal.
+	const normalizedCwd = resolveThroughSymlinks(task.cwd)
+	const lexicalTarget = path.resolve(task.cwd, relPath)
+	const absTarget = resolveThroughSymlinks(lexicalTarget)
 
 	// Allow exact match on the worktree directory itself (e.g., create_directory on cwd).
 	if (absTarget === normalizedCwd) {
@@ -77,7 +120,7 @@ export function validateWorktreePath(task: Task, relPath: string): string | null
 	if (!absTarget.startsWith(normalizedCwd + path.sep)) {
 		return (
 			`Worktree isolation: cannot write outside the current worktree. ` +
-			`Path '${relPath}' resolves to '${absTarget}', which is outside '${normalizedCwd}'. ` +
+			`Path '${relPath}' resolves to '${lexicalTarget}', which is outside '${normalizedCwd}'. ` +
 			`Use a task scoped to the master checkout or the target worktree to make changes there.`
 		)
 	}

@@ -3,7 +3,7 @@
 Parallel work on branches, without juggling windows.
 
 A git worktree is a second checkout of the same repository on another branch. This
-plugin puts them **inside** the workspace — `<workspace>/.shofer/worktrees/<name>/` —
+plugin puts them **inside** the workspace — `<workspace>/.worktrees/<name>/` —
 and gives every task its own, so two agents working at once never edit the same files.
 
 Bundled with Shofer and **enabled by default**: it is a shipped feature, not an add-on.

@@ -8,6 +8,8 @@ import { EventEmitter } from "events"
 
 import { simpleGit, SimpleGit } from "simple-git"
 
+import { EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR } from "../../../packages/types/src/worktrees.js"
+
 import { fileExistsAtPath } from "../src/fs-util.js"
 import { ShadowGitRepo } from "../src/shadow-git.js"
 
@@ -1038,7 +1040,7 @@ describe("worktree path comparison", () => {
 	it("scopes core.worktree to scopedWorktreeDir when provided", async () => {
 		const shadowDir = path.join(tmpDir, `scoped-${Date.now()}`)
 		const workspaceDir = path.join(tmpDir, `workspace-scoped-${Date.now()}`)
-		const scopedDir = path.join(workspaceDir, ".shofer", "worktrees", "embedded-1")
+		const scopedDir = path.join(workspaceDir, EMBEDDED_WORKTREES_DIR, "embedded-1")
 
 		try {
 			await fs.mkdir(workspaceDir, { recursive: true })
@@ -1072,10 +1074,10 @@ describe("worktree path comparison", () => {
 		}
 	})
 
-	// Non-scoped (main) shadow git instances must add `/.shofer/worktrees/` to
-	// the exclude file so embedded worktree directories do not contaminate
-	// the main task's checkpoints.
-	it("excludes /.shofer/worktrees/ for non-scoped shadow gits", async () => {
+	// Non-scoped (main) shadow git instances must exclude the embedded-worktree
+	// directories so they do not contaminate the main task's checkpoints. The
+	// legacy location is excluded too while the transition shim stands.
+	it("excludes the embedded-worktree directories for non-scoped shadow gits", async () => {
 		const shadowDir = path.join(tmpDir, `exclude-main-${Date.now()}`)
 		const workspaceDir = path.join(tmpDir, `workspace-exclude-${Date.now()}`)
 
@@ -1099,7 +1101,8 @@ describe("worktree path comparison", () => {
 
 			const excludePath = path.join(shadowDir, ".git", "info", "exclude")
 			const excludeContent = await fs.readFile(excludePath, "utf-8")
-			expect(excludeContent).toContain("/.shofer/worktrees/")
+			expect(excludeContent).toContain(`/${EMBEDDED_WORKTREES_DIR}/`)
+			expect(excludeContent).toContain(`/${LEGACY_EMBEDDED_WORKTREES_DIR}/`)
 		} finally {
 			vitest.restoreAllMocks()
 			await fs.rm(shadowDir, { recursive: true, force: true })

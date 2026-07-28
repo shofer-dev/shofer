@@ -12,9 +12,9 @@ and the bundled `worktrees` plugin enabled (its default).
 1. Open a single-folder git workspace.
 2. Click the branch chip in the chat input → "Create new worktree…".
 3. Accept auto-generated branch and path. Click **Create**.
-4. **Assert:** The new worktree directory exists at `<workspace>/.shofer/worktrees/<name>/`.
+4. **Assert:** The new worktree directory exists at `<workspace>/.worktrees/<name>/`.
 5. **Assert:** `git worktree list` shows both the main tree and the new worktree.
-6. **Assert:** `.gitignore` contains `.shofer/worktrees/`.
+6. **Assert:** `.gitignore` contains `.worktrees/`.
 7. Send a message.
 8. **Assert:** The task appears in the TaskSelector badged with the worktree's directory name.
 9. **Assert:** The task's `cwd` is the worktree subdirectory (verify via `execute_command pwd`).
@@ -44,8 +44,10 @@ and the bundled `worktrees` plugin enabled (its default).
 
 ### 4. Worktree path enforcement
 
-1. Attempt to create a worktree with a path outside `.shofer/worktrees/` (e.g. by calling the plugin's `create` request with an absolute path elsewhere).
-2. **Assert:** The path is normalized to `.shofer/worktrees/<dirname>/` by the plugin.
+1. Attempt to create a worktree with a path outside `.worktrees/` (e.g. by calling the plugin's `create` request with an absolute path elsewhere).
+2. **Assert:** The path is normalized to `.worktrees/<dirname>/` by the plugin.
+3. Create a worktree by hand at the legacy `.shofer/worktrees/<name>/` (`git worktree add`).
+4. **Assert:** It is still listed in Settings → Plugins → Worktrees and can still be deleted there (the transition shim).
 
 ### 5. List worktrees and availability constraints
 
@@ -55,13 +57,13 @@ and the bundled `worktrees` plugin enabled (its default).
 4. **Assert:** The `.shofer/worktreeinclude` status footer shows correct status.
 5. Open a multi-root workspace.
 6. **Assert:** The panel explains that multi-root workspaces are not supported.
-7. Open a subfolder of a git repo (not under `.shofer/worktrees/`).
+7. Open a subfolder of a git repo (not under `.worktrees/`).
 8. **Assert:** The panel explains that the workspace is a subfolder of a repository.
 
 ### 6. Embedded worktree exemption for subfolder restriction
 
 1. Create an embedded worktree via the UI.
-2. Open that worktree as a VS Code workspace (`code .shofer/worktrees/<name>/`).
+2. Open that worktree as a VS Code workspace (`code .worktrees/<name>/`).
 3. Open Settings → Plugins → Worktrees.
 4. **Assert:** Worktrees ARE available (the subfolder restriction is bypassed for embedded worktrees).
 
@@ -104,7 +106,7 @@ and the bundled `worktrees` plugin enabled (its default).
 1. Create a worktree task.
 2. Make file changes in the main task.
 3. Make different file changes in the worktree task.
-4. **Assert:** The main task's shadow git excludes `.shofer/worktrees/`.
+4. **Assert:** The main task's shadow git excludes `.worktrees/`.
 5. **Assert:** The worktree task's shadow git has `core.worktree` scoped to the worktree subdirectory.
 6. **Assert:** Checkpoint diffs in each task only show changes from that task's working tree (no cross-contamination).
 

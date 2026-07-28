@@ -2,7 +2,7 @@
 	"name": "worktrees",
 	"version": "0.1.0",
 	"shoferPluginApiVersion": "1.0.0",
-	"description": "Parallel work on branches. Each task gets its own git worktree under .shofer/worktrees/, created on send unless you pick one — so two agents never edit the same checkout. Includes the branch picker in the chat input, worktree management in Settings, .shofer/worktreeinclude seeding, and the merge/rebase/cleanup slash commands.",
+	"description": "Parallel work on branches. Each task gets its own git worktree under .worktrees/, created on send unless you pick one — so two agents never edit the same checkout. Includes the branch picker in the chat input, worktree management in Settings, .shofer/worktreeinclude seeding, and the merge/rebase/cleanup slash commands.",
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"main": "src/main.ts",

@@ -1,8 +1,10 @@
 # Proposal: move embedded worktrees out of `.shofer/`
 
-> **Status: proposed, nothing implemented.** Written for review. It changes a
-> **user-visible path** and touches a **safety property**, so it should not be
-> started before the two decisions at the end are made.
+> **Status: implemented.** Both decisions were taken as proposed: the new
+> top-level `<workspace>/.worktrees/` (not the "exempt from `PROTECTED_PATTERNS`"
+> alternative), and the old-path shim stays for one release. What remains is
+> removing that shim — tracked in
+> [`plugins/worktrees/TODO.md`](../../plugins/worktrees/TODO.md).
 
 ## The change
 
@@ -13,7 +15,7 @@ Embedded worktrees move from
 ```
 
 one level up, still inside the opened workspace folder. The embedded model
-([`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md) §3) is unchanged:
+([`plugins/worktrees/DESIGN.md`](../../plugins/worktrees/DESIGN.md) §3) is unchanged:
 worktrees stay in the window the user already has open, which is what makes
 parallel agents, in-window task switching and merge-back work without a second
 window.
@@ -51,17 +53,17 @@ consumers is a safety property:
 The first three matter most: they fail **silently and open**. A task in a
 worktree at the new path would simply not be recognised, so confinement and the
 sandbox would be absent with no error — the exact outcome
-[`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md) §5 keeps in core so
+[`plugins/worktrees/DESIGN.md`](../../plugins/worktrees/DESIGN.md) §5 keeps in core so
 that "a safety property a user can remove by disabling a plugin is not a safety
 property".
 
 ## Shape of the change
 
-1. **One constant, exported from core.** The path is a copy-pasted string
-   literal in at least five places today; that is the real defect and the rename
-   is the occasion to fix it. Introduce `EMBEDDED_WORKTREES_DIR` (`.worktrees`)
-   in core, consume it from `worktreePathGuard.ts` and `FindFilesTool.ts`, and
-   export it so the bundled plugins stop spelling it themselves.
+1. **One constant, shared.** The path was a copy-pasted string literal in at
+   least five places; that is the real defect and the rename was the occasion to
+   fix it. `EMBEDDED_WORKTREES_DIR` (`.worktrees`) lives in `@shofer/types`,
+   consumed by `worktreePathGuard.ts` and `FindFilesTool.ts` and by the bundled
+   plugins, which no longer spell it themselves.
 2. **The guard recognises both paths for one release.** Normally
    `AGENTS.md` → "No Backward Compatibility Unless Asked" would say change it and
    move on. It does not apply cleanly here: what breaks for an existing user is
@@ -75,12 +77,13 @@ property".
    live-memory) with the constant.
 5. **`.gitignore` seeding** writes the new entry; the stale `.shofer/worktrees/`
    line in an existing repo is harmless and is not rewritten.
-6. **Docs** — this path appears in `README.md`, `USER_MANUAL.md`,
-   `plugins/worktrees/DESIGN.md`, `plugins/live-memory/DESIGN.md`,
-   `plugins/checkpoints/DESIGN.md`, `docs/native_tools.md`,
-   `docs/shofer_special_files.md`, `docs/worktree-shell-sandboxing.md`,
-   `docs/v3_architecture.md` and `todos/worktree-sync.md`. All must move in the
-   same change.
+6. **Docs** — the path appears in `README.md`, `USER_MANUAL.md`,
+   `plugins/worktrees/{README,DESIGN,TODO}.md`, `plugins/live-memory/DESIGN.md`,
+   `docs/native_tools.md`, `docs/shofer_special_files.md`,
+   `docs/terminology.md`, `docs/worktree-shell-sandboxing.md`,
+   `docs/v3_architecture.md`, `docs/integration-tests/{worktrees,special-files.scenarios}.md`,
+   `src/media/walkthrough/worktrees.md` and `todos/worktree-sync.md`; all moved
+   in the same change.
 
 ## Testing
 
@@ -90,16 +93,30 @@ property".
 - `find_files` does not return worktree contents.
 - An existing `.shofer/worktrees/<name>` is still listed and deletable.
 
-## Two decisions this needs
+## The two decisions, as taken
 
-1. **Is a new top-level `.worktrees/` in every user's repository acceptable?**
-   This is a product call. The counter-argument for the status quo is real:
-   `.shofer/` is one directory for everything Shofer, and a second dot-directory
-   in the repo root is a visible change for every existing user. If the answer is
-   no, the alternative is to keep the path and instead exempt
-   `.shofer/worktrees/` from `PROTECTED_PATTERNS`, which fixes reason 2 alone.
-2. **How long does the old-path shim live?** Suggested: recognised by the guard
-   for one minor release, named in the comment, removed in the next.
+1. **A new top-level `.worktrees/` is acceptable** — the proposal's preferred
+   option. The alternative (keep the path, exempt `.shofer/worktrees/` from
+   `PROTECTED_PATTERNS`) was rejected: it fixes reason 2 only and leaves the
+   lifecycle mismatch of reason 1 in place.
+2. **The old-path shim stays for one release.** `isEmbeddedWorktreeTask()`, the
+   `find_files` exclusion, the checkpoints exclusion and the plugin's
+   listing/deletion all still recognise `.shofer/worktrees/`; nothing creates
+   there any more.
+
+## What shipped, against the shape above
+
+- `EMBEDDED_WORKTREES_DIR` / `LEGACY_EMBEDDED_WORKTREES_DIR` live in
+  [`packages/types/src/worktrees.ts`](../../packages/types/src/worktrees.ts), not
+  `@shofer/core`: the bundled plugins resolve `@shofer/types` at runtime and
+  `@shofer/core` never. The checkpoints plugin, whose entry is a pre-built bundle,
+  imports the module by source path so its 200 KB bundle does not swallow the
+  `@shofer/types` barrel.
+- The consumer table was right about core and the `worktrees` / `checkpoints`
+  plugins. Two corrections: **live-memory** filtered worktrees only incidentally
+  (via its `.shofer` prefix skip), so it needed a new `.worktrees` entry in
+  `SKIP_PARTS` and in `notifyFileModified`; and **`plugins/checkpoints/DESIGN.md`**
+  never named the path, so there was nothing to update there.
 
 ## Why it is being raised now
 

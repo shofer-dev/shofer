@@ -32,6 +32,8 @@ import { randomUUID, createHash } from "node:crypto"
 import { readFile as nodeReadFile } from "node:fs/promises"
 import { resolve as resolvePath } from "node:path"
 
+import { EMBEDDED_WORKTREES_DIR } from "@shofer/types"
+
 import {
 	DEFAULT_MAX_CONTEXT_TOKENS,
 	DEFAULT_CONTEXT_FILL_THRESHOLD,
@@ -56,6 +58,13 @@ import {
 } from "./memory-llm.js"
 import { LiveMemoryToolExecutor, LIVE_MEMORY_PLUGIN_READ_TOOLS } from "./tool-executor.js"
 import type { ConversationSnapshot } from "./memory-store.js"
+
+/**
+ * Workspace-relative prefixes whose edits never become a "recently modified" hint:
+ * Shofer's own config directory, and the embedded worktrees (a task's own checkout,
+ * not a change to the workspace the memory describes).
+ */
+const IGNORED_MODIFICATION_PREFIXES = [".shofer/", `${EMBEDDED_WORKTREES_DIR}/`]
 
 /** Lifecycle states, mirroring the built-in `LiveMemoryState` (minus `Stopping`, unused here). */
 export type LiveMemoryAgentState = "Standby" | "Initializing" | "Ready" | "Busy" | "Error"
@@ -253,10 +262,15 @@ export class LiveMemoryAgent {
 	 * Notify the agent that a file was modified by a task tool. The path is accumulated
 	 * and surfaced as a hint on the next question (no eviction → preserves the provider's
 	 * KV cache). Mirrors `LiveMemoryManager.notifyFileModified`.
+	 *
+	 * Edits inside an embedded worktree are dropped: the memory describes the workspace,
+	 * and a per-task worktree's churn is not a change to it until the branch merges back.
+	 * The legacy `.shofer/worktrees/` location is covered by the `.shofer/` prefix, which
+	 * is filtered anyway.
 	 */
 	notifyFileModified(filePath: string): void {
 		if (!filePath) return
-		if (filePath.startsWith(".shofer/")) return
+		if (IGNORED_MODIFICATION_PREFIXES.some((prefix) => filePath.startsWith(prefix))) return
 		this._recentlyModifiedFiles.add(filePath)
 	}
 

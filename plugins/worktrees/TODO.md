@@ -49,12 +49,11 @@ What this plugin knowingly does not do, and what the move out of core cost.
   once a workflow has started. There is no way to move a task that has already written
   files, and there should not be.
 
-## Proposed
+## Transition shims
 
-- **Move worktrees out of `.shofer/`** — to `<workspace>/.worktrees/`, because
-  `.shofer/` is committed configuration and `.shofer/**` is write-protected, so a
-  workspace-root task treats every other worktree's files as protected. Not a
-  plugin-local change: the prefix is a core constant that gates confinement and the
-  shell sandbox, and it would fail silently-open if only the plugin moved. Full
-  consumer list, migration shape and the two open decisions:
-  [`todos/worktrees-path-move.md`](../../todos/worktrees-path-move.md).
+- **The legacy `.shofer/worktrees/` prefix is still recognised** — by core's
+  `isEmbeddedWorktreeTask()` and by this plugin's `list`/`delete` — so worktrees created
+  before the move to `<workspace>/.worktrees/` keep their confinement and stay
+  manageable. Nothing creates them there. Remove the legacy branch (here, in
+  `packages/types/src/worktrees.ts`, in `worktreePathGuard.ts`, in `FindFilesTool` and in
+  the checkpoints exclusion) in a later release.

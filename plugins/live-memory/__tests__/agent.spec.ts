@@ -162,7 +162,10 @@ describe("LiveMemoryAgent (Stage-C agent loop)", () => {
 
 	it("does tool round-trips then terminates when the model answers with no tool calls", async () => {
 		const { ai, callCount } = makeScriptedAi([
-			{ toolCalls: [{ id: "t1", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }], usage: { input: 10, output: 2 } },
+			{
+				toolCalls: [{ id: "t1", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }],
+				usage: { input: 10, output: 2 },
+			},
 			{ text: "The file defines `foo`.", usage: { input: 8, output: 5 } },
 		])
 		const fs = makeFs({ [`${CWD}/a.ts`]: "export const foo = 1\n" })
@@ -181,7 +184,10 @@ describe("LiveMemoryAgent (Stage-C agent loop)", () => {
 
 	it("caps the loop at MAX_AGENT_ITERATIONS (25) when the model never stops calling tools", async () => {
 		const { ai, callCount } = makeScriptedAi([
-			{ toolCalls: [{ id: "loop", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }], usage: { input: 1, output: 1 } },
+			{
+				toolCalls: [{ id: "loop", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }],
+				usage: { input: 1, output: 1 },
+			},
 		])
 		const fs = makeFs({ [`${CWD}/a.ts`]: "x" })
 		const agent = makeAgent(ai, fs)
@@ -214,7 +220,10 @@ describe("LiveMemoryAgent (Stage-C agent loop)", () => {
 
 	it("accumulates cost across iterations", async () => {
 		const { ai } = makeScriptedAi([
-			{ toolCalls: [{ id: "t1", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }], usage: { input: 100, output: 50 } },
+			{
+				toolCalls: [{ id: "t1", name: "read_file", args: JSON.stringify({ path: "a.ts" }) }],
+				usage: { input: 100, output: 50 },
+			},
 			{ text: "answer", usage: { input: 80, output: 40 } },
 		])
 		const fs = makeFs({ [`${CWD}/a.ts`]: "x" })
@@ -269,12 +278,14 @@ describe("LiveMemoryAgent (Stage-C agent loop)", () => {
 		const agent = makeAgent(ai, makeFs())
 		agent.notifyFileModified("src/changed.ts")
 		agent.notifyFileModified(".shofer/ignored.ts") // filtered out (.shofer/ prefix)
+		agent.notifyFileModified(".worktrees/wt-1/also-ignored.ts") // filtered out (embedded worktree)
 
 		await agent.askQuestion("did anything change?")
 		// The hint rides the trailing question turn (cache-friendly), naming the changed file.
 		expect(userTurns[0]).toContain("src/changed.ts")
 		expect(userTurns[0]).toContain("modified since you last read them")
 		expect(userTurns[0]).not.toContain(".shofer/ignored.ts")
+		expect(userTurns[0]).not.toContain(".worktrees/wt-1/also-ignored.ts")
 
 		// The set was drained — a second question carries no stale hint.
 		await agent.askQuestion("anything else?")

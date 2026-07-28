@@ -475,7 +475,7 @@ Learn more:
 
 ## 9. Git Worktrees
 
-Shofer manages git worktrees for parallel tasks, letting multiple tasks run on different branches simultaneously in the same VS Code window. Worktrees live under `.shofer/worktrees/`.
+Shofer manages git worktrees for parallel tasks, letting multiple tasks run on different branches simultaneously in the same VS Code window. Worktrees live under `.worktrees/`.
 
 <img src="src/media/walkthrough/images/WorktreeSelector.png" alt="Worktree Selector Dropdown" width="280" />
 

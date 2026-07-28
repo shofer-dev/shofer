@@ -46,13 +46,13 @@ describe("ShoferAPI.startNewTask — plugin task placement", () => {
 		await pluginRegistry.register({
 			name: "placer",
 			handleRequest: async (method) =>
-				method === "resolve-task-cwd" ? { cwd: "/test/workspace/.shofer/worktrees/shofer-ab12c" } : undefined,
+				method === "resolve-task-cwd" ? { cwd: "/test/workspace/.worktrees/shofer-ab12c" } : undefined,
 		})
 
 		await api.startNewTask({ text: "hello" })
 
 		expect(createTask).toHaveBeenCalledTimes(1)
-		expect(createTask.mock.calls[0]![5]).toBe("/test/workspace/.shofer/worktrees/shofer-ab12c")
+		expect(createTask.mock.calls[0]![5]).toBe("/test/workspace/.worktrees/shofer-ab12c")
 	})
 
 	it("runs it in the workspace when no plugin answers", async () => {

@@ -5768,6 +5768,10 @@ import os from "os";
 import * as path from "path";
 import EventEmitter from "events";
 
+// ../../packages/types/src/worktrees.ts
+var EMBEDDED_WORKTREES_DIR = ".worktrees";
+var LEGACY_EMBEDDED_WORKTREES_DIR = ".shofer/worktrees";
+
 // src/fs-util.ts
 import fs from "fs/promises";
 async function fileExistsAtPath(filePath) {
@@ -6099,7 +6103,7 @@ var ShadowGitRepo = class extends EventEmitter {
     await fs3.mkdir(path.join(this.dotGitDir, "info"), { recursive: true });
     const patterns = await getExcludePatterns(this.workspaceDir);
     if (!this.scopedWorktreeDir) {
-      patterns.push("/.shofer/worktrees/");
+      patterns.push(`/${EMBEDDED_WORKTREES_DIR}/`, `/${LEGACY_EMBEDDED_WORKTREES_DIR}/`);
     }
     patterns.push(...this.extraExcludePatterns);
     await fs3.writeFile(path.join(this.dotGitDir, "info", "exclude"), patterns.join("\n"));

@@ -20,15 +20,22 @@
 
 import { relative as relativePath } from "node:path"
 
-import type { HostFileSystem } from "@shofer/types"
+import { EMBEDDED_WORKTREES_DIR, type HostFileSystem } from "@shofer/types"
 
 import { DIRECTORY_TREE_MAX_CONTEXT_FRACTION } from "./types.js"
 
-/** Directories to skip during scanning (mirrors the built-in `SKIP_PARTS`). */
+/**
+ * Directories to skip during scanning (mirrors the built-in `SKIP_PARTS`).
+ *
+ * `.worktrees` is here because a per-task worktree is a whole second checkout of the
+ * repository: including it would repeat the entire tree once per worktree. The legacy
+ * location needs no entry — it is inside `.shofer`, which is already skipped.
+ */
 export const SKIP_PARTS = new Set([
 	"node_modules",
 	".git",
 	".shofer",
+	EMBEDDED_WORKTREES_DIR,
 	"__pycache__",
 	".cache",
 	"dist",

@@ -140,18 +140,16 @@ describe("plugin-task — createPluginTaskControl / createDeniedPluginTaskContro
 		const control = createPluginTaskControl("p", provider)
 		await control.marker({ kind: "checkpoint", text: "abc123", restorable: true })
 		await control.rewind(42, { includeTargetMessage: true })
-		await control.setCwd("/repo/.shofer/worktrees/shofer-ab12c", "task-1")
-		const openedId = await control.openTask({ cwd: "/repo/.shofer/worktrees/shofer-ab12c", name: "worktree" })
+		await control.setCwd("/repo/.worktrees/shofer-ab12c", "task-1")
+		const openedId = await control.openTask({ cwd: "/repo/.worktrees/shofer-ab12c", name: "worktree" })
 
 		expect(provider.markers).toEqual([
 			{ plugin: "p", input: { kind: "checkpoint", text: "abc123", restorable: true } },
 		])
 		expect(provider.rewinds).toEqual([{ plugin: "p", ts: 42, opts: { includeTargetMessage: true } }])
-		expect(provider.cwdChanges).toEqual([
-			{ plugin: "p", cwd: "/repo/.shofer/worktrees/shofer-ab12c", taskId: "task-1" },
-		])
+		expect(provider.cwdChanges).toEqual([{ plugin: "p", cwd: "/repo/.worktrees/shofer-ab12c", taskId: "task-1" }])
 		expect(provider.opened).toEqual([
-			{ plugin: "p", opts: { cwd: "/repo/.shofer/worktrees/shofer-ab12c", name: "worktree" } },
+			{ plugin: "p", opts: { cwd: "/repo/.worktrees/shofer-ab12c", name: "worktree" } },
 		])
 		expect(openedId).toBe("task-1")
 		expect(Object.keys(control)).toEqual(["marker", "listMarkers", "rewind", "setCwd", "openTask"])

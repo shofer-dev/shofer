@@ -15,7 +15,7 @@ so the **happy path is covered**. This feature is only needed for repair/refresh
 
 In rough order of likelihood:
 
-1. **CLI-created worktrees.** Anyone who runs `git worktree add …/.shofer/worktrees/foo`
+1. **CLI-created worktrees.** Anyone who runs `git worktree add …/.worktrees/foo`
    (or migrates an existing worktree from before the copy mechanism existed) gets a
    worktree with no `.shofer/`, no `.vscode/`, no `node_modules/`, no `.env`. Symptom:
    the agent in that worktree has **zero skills, zero custom modes, zero commands**,
@@ -40,7 +40,7 @@ In rough order of likelihood:
 
 - The default workflow (UI-created worktree, used for the duration of one feature)
   **never trips this**.
-- Workaround is trivial: `cp -r .shofer .shofer/worktrees/<id>/` from master.
+- Workaround is trivial: `cp -r .shofer .worktrees/<id>/` from master.
 - No data loss, no security impact — only "agent is missing capabilities" or
   "build is stale".
 
@@ -69,7 +69,7 @@ silent-stale-skills failure mode starts costing debugging time.
 
 ## Problem
 
-When a task runs in a non-master embedded worktree (`<repo>/.shofer/worktrees/<id>`), Shofer
+When a task runs in a non-master embedded worktree (`<repo>/.worktrees/<id>`), Shofer
 skills, commands, modes, and other `.worktreeinclude`-listed items (`.shofer/`, `node_modules/`,
 `.vscode/`, `.env`, `.docker/`) may be missing or stale because the copy mechanism only fires
 once, at worktree-creation time.
@@ -94,7 +94,7 @@ Both `.shofer/` and the other entries are present in **both** `.worktreeinclude`
 Note for anyone updating this design: separate-window worktrees were dropped in commit
 `097b4d911` ("Drop separate-window worktree mode; document native worktree tool"). Today:
 
-- All worktrees live at `<repoRoot>/.shofer/worktrees/<id>` (not `~/.shofer/worktrees/...`).
+- All worktrees live at `<repoRoot>/.worktrees/<id>` (not `~/.shofer/worktrees/...`).
 - A single VS Code window hosts every worktree; tasks are scoped to a worktree via
   `task.cwd`. There is **no** `handleSwitchWorktree` and no per-worktree window activation
   hook to piggy-back on.
@@ -152,7 +152,7 @@ embedded model:
   subcommand) so the agent can repair existing worktrees. CLI-created worktrees benefit from
   this too.
 - **Optional: extension activation.** On extension activation, enumerate
-  `<repoRoot>/.shofer/worktrees/*` and warn (don't auto-copy) when any are missing
+  `<repoRoot>/.worktrees/*` and warn (don't auto-copy) when any are missing
   `.worktreeinclude` items, with a "Sync now" action.
 
 ### Phase 4 — UI Integration

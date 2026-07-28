@@ -1090,7 +1090,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			: (workspacePath ?? getWorkspacePath(path.join(os.homedir(), "Desktop")))
 
 		// Per-task working directory. For embedded worktree tasks this is the
-		// worktree subdirectory (e.g. .shofer/worktrees/repo-hl911/); for
+		// worktree subdirectory (e.g. .worktrees/repo-hl911/); for
 		// regular tasks it defaults to workspacePath.
 		this._cwd = cwd ?? historyItem?.cwd ?? this.workspacePath
 
@@ -7786,7 +7786,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 	/**
 	 * Working directory for this task. When this task is scoped to an
-	 * embedded worktree (e.g. `.shofer/worktrees/repo-hl911/`), `_cwd` is the
+	 * embedded worktree (e.g. `.worktrees/repo-hl911/`), `_cwd` is the
 	 * worktree subdirectory. Otherwise it defaults to `workspacePath`.
 	 *
 	 * Tools resolve paths relative to this directory, git operations use it

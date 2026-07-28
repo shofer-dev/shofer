@@ -359,7 +359,7 @@ workspace filesystem and serves that whole slice executor-locally.
   so per-task state (message queue, plugin state, file-change snapshots, cost
   aggregation) is never shared between machines.
 - **Per-task working isolation.** Concurrent root tasks on different executors each
-  operate in their own `.shofer/worktrees/<name>/` branch, so they don't collide on
+  operate in their own `.worktrees/<name>/` branch, so they don't collide on
   the shared working tree.
 
 ### Shared-resource reconciliation

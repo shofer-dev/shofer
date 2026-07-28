@@ -65,6 +65,7 @@ const PATHS = [
 	"/ws/node_modules/dep/index.js",
 	"/ws/dist/out.js",
 	"/ws/.hidden/secret.txt",
+	"/ws/.worktrees/wt-1/src/c.ts",
 ]
 
 describe("LiveMemoryDirectoryTree (plugin port)", () => {
@@ -92,6 +93,11 @@ describe("LiveMemoryDirectoryTree (plugin port)", () => {
 		// SKIP_PARTS is the documented set the built-in also prunes.
 		expect(SKIP_PARTS.has("node_modules")).toBe(true)
 		expect(SKIP_PARTS.has(".turbo")).toBe(true)
+		// A per-task worktree is a whole second checkout — including it would repeat
+		// the tree once per worktree.
+		expect(out).not.toContain(".worktrees")
+		expect(out).not.toContain("c.ts")
+		expect(SKIP_PARTS.has(".worktrees")).toBe(true)
 	})
 
 	it("truncates when the tree exceeds ~10% of the context budget", async () => {

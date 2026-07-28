@@ -22,6 +22,15 @@ import EventEmitter from "events"
 
 import { simpleGit, type SimpleGit, type SimpleGitOptions } from "simple-git"
 
+// Build-time borrow, not a runtime dependency: `build-ui.mjs` inlines these two string
+// constants into `main.mjs` exactly as it inlines `simple-git`. Imported by source path
+// rather than from `@shofer/types` deliberately — the package entry is a barrel of zod
+// schemas that would add ~600 KB to an otherwise ~200 KB bundle, and every other
+// `@shofer/types` use in this plugin is type-only and erases. The constants must be
+// shared all the same: core's worktree guard keys its path confinement off the same
+// directory, and a private copy here would drift silently.
+import { EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR } from "../../../packages/types/src/worktrees.js"
+
 import { fileExistsAtPath } from "./fs-util.js"
 import { getExcludePatterns } from "./excludes.js"
 import type { CheckpointDiff, CheckpointDiffStat, CheckpointEventMap, CheckpointResult } from "./types.js"
@@ -219,9 +228,10 @@ export class ShadowGitRepo extends EventEmitter {
 		const patterns = await getExcludePatterns(this.workspaceDir)
 
 		// A main-workspace shadow repo must not swallow sibling embedded worktrees;
-		// each worktree task checkpoints its own scoped tree.
+		// each worktree task checkpoints its own scoped tree. The legacy location is
+		// excluded too while the transition shim stands.
 		if (!this.scopedWorktreeDir) {
-			patterns.push("/.shofer/worktrees/")
+			patterns.push(`/${EMBEDDED_WORKTREES_DIR}/`, `/${LEGACY_EMBEDDED_WORKTREES_DIR}/`)
 		}
 
 		patterns.push(...this.extraExcludePatterns)

@@ -28,7 +28,7 @@ export class FileContextTracker {
 
 	/**
 	 * The working directory this task operates in. For ordinary tasks this is the
-	 * workspace root; for embedded-worktree tasks (`.shofer/worktrees/<name>/`)
+	 * workspace root; for embedded-worktree tasks (`.worktrees/<name>/`)
 	 * it is the worktree subdirectory. All file reads/writes in this tracker
 	 * resolve relative to this path — NOT to the VS Code workspace folder, which
 	 * for a worktree task points at the main checkout and would read the wrong

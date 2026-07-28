@@ -6,7 +6,7 @@
 
 import * as path from "path"
 
-import { type ShoferSayTool } from "@shofer/types"
+import { EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR, type ShoferSayTool } from "@shofer/types"
 
 import { Task } from "../task/Task.js"
 import { getHost } from "@shofer/types"
@@ -56,7 +56,9 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 			}
 
 			// Find files matching the glob pattern via the host file index.
-			// Exclude node_modules, .git, bazel artifacts, and .shofer/worktrees (git clones that produce 4-5x noise)
+			// Exclude node_modules, .git, bazel artifacts, and the embedded worktrees
+			// (git checkouts that produce 4-5x noise). The legacy worktrees directory is
+			// excluded too while the transition shim stands.
 			const files = await getHost().fs.findFiles(pattern, {
 				cwd: task.cwd,
 				exclude: [
@@ -65,7 +67,8 @@ export class FindFilesTool extends BaseTool<"find_files"> {
 					"**/bazel-bin/**",
 					"**/bazel-out/**",
 					"**/bazel-testlogs/**",
-					".shofer/worktrees/**",
+					`${EMBEDDED_WORKTREES_DIR}/**`,
+					`${LEGACY_EMBEDDED_WORKTREES_DIR}/**`,
 				],
 				maxResults: maxResults + 1,
 			})

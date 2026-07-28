@@ -67,7 +67,7 @@ trade a user should be able to make by accident.
 
 ## 3. The embedded model
 
-A worktree lives at `<workspace>/.shofer/worktrees/<name>/`, inside the window the user
+A worktree lives at `<workspace>/.worktrees/<name>/`, inside the window the user
 already has open, and tasks scoped to different worktrees run concurrently in it. That is
 what makes parallel agents, in-window task switching and merge-back possible without a
 second VS Code window.
@@ -75,16 +75,24 @@ second VS Code window.
 A worktree created by hand outside the workspace (`git worktree add ../foo`) still works
 as an ordinary Shofer workspace when opened on its own; it is simply not one of these.
 
-The location is a **core** constant, not a plugin convention: `isEmbeddedWorktreeTask()`
-tests for this prefix literally, and §6's confinement and shell sandbox are gated on it.
-The plugin therefore cannot relocate worktrees on its own — it only enforces the prefix:
-a create request whose path is not under `<workspace>/.shofer/worktrees/` is rewritten so
-that it is, and when a branch is being created the directory basename is forced to match
-the branch. One name across branch, directory and label is what makes a worktree
-followable.
+The location is a **shared** constant, not a plugin convention: it is
+`EMBEDDED_WORKTREES_DIR` in [`packages/types/src/worktrees.ts`](../../packages/types/src/worktrees.ts),
+which `isEmbeddedWorktreeTask()` tests for and §6's confinement and shell sandbox are
+gated on. The plugin therefore cannot relocate worktrees on its own — it only enforces
+the prefix: a create request whose path is not under `<workspace>/.worktrees/` is
+rewritten so that it is, and when a branch is being created the directory basename is
+forced to match the branch. One name across branch, directory and label is what makes a
+worktree followable.
 
-Moving the prefix is a coordinated core + plugins change — proposed, with the full
-consumer list, in [`todos/worktrees-path-move.md`](../../todos/worktrees-path-move.md).
+It is deliberately **not** inside `.shofer/`: that directory is committed configuration
+and `.shofer/**` is write-protected wholesale, so a task running at the workspace root
+would see every sibling worktree's files as protected and raise an approval on each one.
+
+Worktrees created before the move, at `<workspace>/.shofer/worktrees/<name>/`, are still
+**recognised** — by core's guard, and by this plugin's listing and deletion — so they
+keep their confinement and stay manageable. Nothing creates them there any more. That
+recognition is a **transition shim, to be removed in a later release**; it exists because
+dropping it fails silently-open rather than loudly.
 
 ## 4. Placement: the one question core asks
 
@@ -161,7 +169,7 @@ core's, not a plugin's.
 
 ```mermaid
 flowchart TD
-    T["Task whose cwd is<br/>workspace/.shofer/worktrees/name/"]
+    T["Task whose cwd is<br/>workspace/.worktrees/name/"]
     TOOL["mutating native tool — write_to_file · apply_diff ·<br/>create_directory · file rm/mv · insert_edit · sed ·<br/>rename_symbol · create_new_workspace"]
     V{"validateWorktreePath&#40;&#41; resolves the target<br/>against task.cwd — does it stay inside?"}
     BLOCK["blocked — catches .. traversal,<br/>absolute paths pointing outside,<br/>and symlinks that resolve elsewhere"]
@@ -265,15 +273,16 @@ unqualified name from an unknown author could shadow a built-in.
 
 ## 10. Conventions the plugin enforces
 
-- **Location.** Every create is rewritten under `<workspace>/.shofer/worktrees/`, with
+- **Location.** Every create is rewritten under `<workspace>/.worktrees/`, with
   the directory basename matched to the branch — see §3 for why the prefix is core's.
-- **Ignoring.** Creating the first worktree appends `.shofer/worktrees/` to `.gitignore`
-  (never `.shofer/` itself — the rest of it is meant to be committed). Embedded worktrees
-  are inside the repository, so without this they are untracked noise that can be
-  committed by accident.
+- **Ignoring.** Creating the first worktree appends `.worktrees/` to `.gitignore`.
+  Embedded worktrees are inside the repository, so without this they are untracked noise
+  that can be committed by accident. A repository still carrying the old
+  `.shofer/worktrees/` line keeps it — it is harmless, and rewriting a user's
+  `.gitignore` is not the plugin's business.
 - **Detection.** Whether a subfolder workspace _is_ one of our worktrees is a containment
   check anchored at the git root (`path.relative`), never a substring match — an
-  unrelated directory whose name contains `.shofer/worktrees` cannot pass.
+  unrelated directory whose name contains `.worktrees` cannot pass.
 - **Seeding is all-or-nothing for submodules.** A failed `git submodule update --init`
   tears the worktree down: empty submodule directories look like success and fail much
   later. A failed `worktreeinclude` copy only warns — an inconvenient checkout beats no
@@ -283,7 +292,7 @@ unqualified name from an unknown author could shadow a built-in.
 
 The bundled [`checkpoints`](../checkpoints/) plugin scopes its shadow git to `task.cwd`,
 so a worktree task snapshots only its own checkout, and a workspace-root task excludes
-`.shofer/worktrees/` from its snapshots — a second task's files never land in its
+`.worktrees/` from its snapshots — a second task's files never land in its
 snapshots. Neither plugin knows about the other: both key off the task's directory,
 which is core's.
 

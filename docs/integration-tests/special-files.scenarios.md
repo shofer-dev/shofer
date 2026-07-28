@@ -151,10 +151,12 @@ These should pass on every build.
 - Create a different skill of the same name in `~/.agents/skills/example/SKILL.md`.
 - **Assert**: The `.shofer/skills/` version takes priority.
 
-### E6 — `.shofer/worktrees/` is inside `.shofer/` so write-protected
+### E6 — `.worktrees/` is outside `.shofer/` so NOT write-protected
 
-- Ask the AI to `write_to_file .shofer/worktrees/tmp/file.txt` with content.
-- **Assert**: The write requires approval (`.shofer/**` is a protected pattern).
+- Ask the AI to `write_to_file .worktrees/tmp/file.txt` with content.
+- **Assert**: The write is treated like any other workspace write — no `SHIELD_SYMBOL`, no
+  protected-file approval. Worktrees are deliberately outside `PROTECTED_PATTERNS`: a task at
+  the workspace root would otherwise raise the shield on every sibling worktree's files.
 
 ### E7 — Duplicate `.shoferrules*` in `PROTECTED_PATTERNS` (known code issue)
 

@@ -2,7 +2,7 @@
  * Worktrees — parallel work on branches, as a first-party Shofer plugin.
  *
  * A worktree is a second checkout of the same repository, and Shofer's embedded model
- * puts them inside the workspace (`<workspace>/.shofer/worktrees/<name>/`) so several
+ * puts them inside the workspace (`<workspace>/.worktrees/<name>/`) so several
  * tasks can work on different branches in one window without the user juggling windows.
  * This plugin owns all of that: the git operations, the `.shofer/worktreeinclude` copy,
  * the picker in the chat input, the management view in Settings, the merge/rebase slash
@@ -30,7 +30,12 @@
 import fs from "fs/promises"
 import path from "path"
 
-import type { PluginContext, ShoferPlugin } from "@shofer/types"
+import {
+	EMBEDDED_WORKTREES_DIR,
+	LEGACY_EMBEDDED_WORKTREES_DIR,
+	type PluginContext,
+	type ShoferPlugin,
+} from "@shofer/types"
 
 import { worktreeService } from "./worktree-service.js"
 import { worktreeIncludeService, type CopyProgressCallback } from "./worktree-include.js"
@@ -47,8 +52,13 @@ import { getWorktreeStatus } from "./worktree-status.js"
 
 const PLUGIN_NAME = "worktrees"
 
-/** Where an embedded worktree must live, relative to the workspace root. */
-const EMBEDDED_PREFIX = path.join(".shofer", "worktrees")
+/**
+ * The prefixes a worktree is *recognised* under, relative to the repository root: the
+ * current one plus the legacy `.shofer/worktrees/`, so worktrees a user already has stay
+ * listed and deletable rather than being orphaned. **Transition shim — drop the legacy
+ * entry in a later release.** Creation only ever uses `EMBEDDED_WORKTREES_DIR`.
+ */
+const RECOGNISED_PREFIXES = [EMBEDDED_WORKTREES_DIR, path.normalize(LEGACY_EMBEDDED_WORKTREES_DIR)]
 
 interface PluginState {
 	ctx?: PluginContext
@@ -94,14 +104,16 @@ async function isSubfolderOfRepo(cwd: string): Promise<boolean> {
 }
 
 /**
- * Whether `cwd` is itself one of our embedded worktrees.
+ * Whether `cwd` is itself one of our embedded worktrees — at the current path or the
+ * legacy one, since an existing worktree must stay manageable.
  *
  * Anchored to the resolved git root via `path.relative`, not a substring match, so an
- * unrelated directory whose name merely contains `.shofer/worktrees` cannot pass.
+ * unrelated directory whose name merely contains `.worktrees` cannot pass.
  */
 function isEmbeddedWorktree(gitRootPath: string, cwd: string): boolean {
 	const rel = path.relative(path.resolve(gitRootPath), path.resolve(cwd))
-	return !rel.startsWith("..") && !path.isAbsolute(rel) && rel.startsWith(EMBEDDED_PREFIX + path.sep)
+	if (rel.startsWith("..") || path.isAbsolute(rel)) return false
+	return RECOGNISED_PREFIXES.some((prefix) => rel.startsWith(prefix + path.sep))
 }
 
 async function listWorktrees(ctx: PluginContext): Promise<WorktreeListResponse> {
@@ -182,16 +194,16 @@ interface CreateRequest extends CreateWorktreeOptions {
 }
 
 /**
- * Keep `.shofer/worktrees/` out of the repository's own history.
+ * Keep `.worktrees/` out of the repository's own history.
  *
  * The worktrees live INSIDE the workspace, so without this every checkout the plugin
  * creates shows up as untracked noise in the main one — and can be committed by
- * accident. Only the worktrees directory is ignored, never `.shofer/` itself: the rest
- * of it (modes, rules, commands, `worktreeinclude`) is meant to be committed.
+ * accident. A repository that still carries the old `.shofer/worktrees/` line keeps it:
+ * it is harmless, and rewriting a user's `.gitignore` is not this plugin's business.
  */
 async function ensureGitignored(cwd: string): Promise<void> {
 	const gitignorePath = path.join(cwd, ".gitignore")
-	const entry = ".shofer/worktrees/"
+	const entry = `${EMBEDDED_WORKTREES_DIR}/`
 	let content = ""
 	try {
 		content = await fs.readFile(gitignorePath, "utf-8")
@@ -265,11 +277,14 @@ async function createWorktree(ctx: PluginContext, request: CreateRequest): Promi
 
 /**
  * Force the two conventions this feature rests on: a worktree lives under
- * `<workspace>/.shofer/worktrees/`, and when a branch is being created the directory
+ * `<workspace>/.worktrees/`, and when a branch is being created the directory
  * basename matches it — so branch, directory and badge are one name the user can track.
+ *
+ * Creation is deliberately NOT tolerant of the legacy prefix: a request pointing at
+ * `.shofer/worktrees/` is rewritten to the current one like any other stray path.
  */
 function enforceConventions(cwd: string, request: CreateRequest): string {
-	const prefix = path.join(cwd, EMBEDDED_PREFIX)
+	const prefix = path.join(cwd, EMBEDDED_WORKTREES_DIR)
 	let target = path.resolve(cwd, request.path)
 	if (!target.startsWith(prefix + path.sep) && target !== prefix) {
 		target = path.join(prefix, path.basename(request.path))
@@ -284,7 +299,7 @@ function enforceConventions(cwd: string, request: CreateRequest): string {
 async function defaults(ctx: PluginContext): Promise<WorktreeDefaultsResponse> {
 	const cwd = workspaceOf(ctx) ?? ""
 	const name = `shofer-${randomSuffix()}`
-	return { suggestedBranch: name, suggestedPath: path.join(cwd, EMBEDDED_PREFIX, name) }
+	return { suggestedBranch: name, suggestedPath: path.join(cwd, EMBEDDED_WORKTREES_DIR, name) }
 }
 
 /**

@@ -146,6 +146,29 @@ VS Code workspace files are write-protected.
 
 ---
 
+### `.worktrees/`
+
+| Property            | Details                                                  |
+| ------------------- | -------------------------------------------------------- |
+| **Purpose**         | Embedded git worktrees — one full checkout per task      |
+| **Write-protected** | No                                                       |
+| **Visible to LLM**  | Yes, but excluded from `find_files` and from checkpoints |
+
+Created by the bundled [`worktrees`](../plugins/worktrees/DESIGN.md) plugin at
+`<workspace>/.worktrees/<name>/`, and added to the workspace's `.gitignore` on first
+use. Deliberately **outside** `.shofer/`: that directory is committed configuration and
+is write-protected wholesale, whereas a worktree is a bulky, machine-local, throwaway
+checkout — and a task at the workspace root would otherwise see every sibling worktree's
+files as protected.
+
+The directory name is `EMBEDDED_WORKTREES_DIR` in
+[`packages/types/src/worktrees.ts`](../packages/types/src/worktrees.ts); a task whose
+`cwd` is under it is path-confined and, on Linux, shell-sandboxed by
+[`worktreePathGuard.ts`](../packages/core/src/utils/worktreePathGuard.ts). The guard
+also still recognises the previous location, `.shofer/worktrees/`, as a transition shim.
+
+---
+
 ## The `.shofer/` Directory (Project-Local)
 
 ```
@@ -394,19 +417,6 @@ global content.
 Reserved filename for future write-protection overrides. Currently defined in
 the [`ShoferProtectedController`](../packages/core/src/protect/ShoferProtectedController.ts)
 protected patterns list but not yet loaded or used by any subsystem.
-
----
-
-### `.shofer/worktrees/`
-
-| Property           | Details                                                  |
-| ------------------ | -------------------------------------------------------- |
-| **Purpose**        | Internal — stores embedded worktree task state           |
-| **Visible to LLM** | Yes (readable, but inside `.shofer/` so write-protected) |
-
-Used by the bundled checkpoints plugin to scope shadow git repos for worktree tasks.
-Each embedded worktree gets a subdirectory here. Excluded from non-scoped
-shadow git tracking so sibling worktrees don't contaminate each other.
 
 ---
 

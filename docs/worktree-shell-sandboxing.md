@@ -22,7 +22,7 @@
 
 ## Goal
 
-When an agent runs inside an embedded worktree (`task.cwd` → `<workspace>/.shofer/worktrees/<name>/`),
+When an agent runs inside an embedded worktree (`task.cwd` → `<workspace>/.worktrees/<name>/`),
 shell commands executed via `execute_command` must be unable to **write** outside the task's assigned
 worktree directory. The current [`getWorktreeCommandWarning()`](extensions/shofer/src/utils/worktreePathGuard.ts:97)
 advisory warning is a best-effort placeholder that does not prevent escape.

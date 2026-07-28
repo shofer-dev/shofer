@@ -6,7 +6,7 @@ Shofer supports **git worktrees** natively — run parallel tasks on different b
 
 ## How It Works
 
-- Worktrees live at `.shofer/worktrees/<name>/` inside your workspace
+- Worktrees live at `.worktrees/<name>/` inside your workspace
 - Each worktree is a full checkout on its own branch
 - Switch between worktrees via the **Worktree Selector** in the Task Header
 - Create, delete, and select worktrees directly from Shofer's UI

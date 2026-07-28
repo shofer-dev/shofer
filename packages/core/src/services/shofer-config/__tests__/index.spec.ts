@@ -425,13 +425,13 @@ describe("ShoferConfigService", () => {
 
 		it("should not be starved by a large root .shofer containing many files", async () => {
 			// Regression: previously executeRipgrep capped results at 500 and
-			// the root .shofer/worktrees/* snapshots ate the entire window,
+			// a large root .shofer/ ate the entire window,
 			// so subfolder .shofer/ never surfaced. With the dedicated
 			// streaming + anchored exclusion, this scenario must still find
 			// the subfolder hit even when followed by thousands of other lines.
 			const lines = [
 				"/project/path/extensions/shofer/.shofer/rules/rule.md",
-				...Array.from({ length: 5000 }, (_, i) => `/project/path/.shofer/worktrees/snap-${i}/file.go`),
+				...Array.from({ length: 5000 }, (_, i) => `/project/path/.shofer/skills/snap-${i}/file.go`),
 			]
 			mockRipgrepLines(lines)
 

@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- test constructs binary fixtures via dynamic require(os)/require(fs) */
 import * as path from "path"
+import { EMBEDDED_WORKTREES_DIR, LEGACY_EMBEDDED_WORKTREES_DIR } from "@shofer/types"
+
 import {
 	isEmbeddedWorktreeTask,
 	validateWorktreePath,
@@ -20,14 +22,30 @@ function mockTask(cwd: string, workspacePath: string) {
 }
 
 const WORKSPACE = "/home/user/project"
-const WORKTREE = path.join(WORKSPACE, ".shofer", "worktrees", "repo-hl911")
-const OTHER_WORKTREE = path.join(WORKSPACE, ".shofer", "worktrees", "repo-abc42")
+const WORKTREE = path.join(WORKSPACE, EMBEDDED_WORKTREES_DIR, "repo-hl911")
+const OTHER_WORKTREE = path.join(WORKSPACE, EMBEDDED_WORKTREES_DIR, "repo-abc42")
+const LEGACY_WORKTREE = path.join(WORKSPACE, LEGACY_EMBEDDED_WORKTREES_DIR, "repo-old42")
 const SUBDIR = path.join(WORKSPACE, "src")
 
 describe("isEmbeddedWorktreeTask", () => {
 	it("returns true for a task scoped to an embedded worktree", () => {
 		const task = mockTask(WORKTREE, WORKSPACE)
 		expect(isEmbeddedWorktreeTask(task)).toBe(true)
+	})
+
+	// Transition shim: a worktree created before the move still has to be recognised,
+	// or it silently loses both path confinement and the Linux shell sandbox.
+	it("returns true for a task scoped to a worktree at the legacy path", () => {
+		const task = mockTask(LEGACY_WORKTREE, WORKSPACE)
+		expect(isEmbeddedWorktreeTask(task)).toBe(true)
+	})
+
+	it("confines a task at the legacy path just like one at the current path", () => {
+		const task = mockTask(LEGACY_WORKTREE, WORKSPACE)
+		expect(validateWorktreePath(task, "src/main.ts")).toBeNull()
+		expect(validateWorktreePath(task, path.join(WORKSPACE, "master-file.txt"))).toContain(
+			"cannot write outside the current worktree",
+		)
 	})
 
 	it("returns false for a task at the workspace root", () => {
@@ -45,13 +63,18 @@ describe("isEmbeddedWorktreeTask", () => {
 		expect(isEmbeddedWorktreeTask(task)).toBe(false)
 	})
 
-	it("returns false when cwd matches a deep path that coincidentally contains '.shofer/worktrees/'", () => {
+	it("returns false when cwd matches a deep path that coincidentally contains the worktrees dir", () => {
 		// The guard uses startsWith on the resolved absolute path — it won't
-		// match a path like /foo/.shofer/worktrees/bar/baz that isn't under
+		// match a path like /foo/.worktrees/bar/baz that isn't under
 		// the actual workspacePath.
-		const impostor = path.join(WORKSPACE, "lib", ".shofer", "worktrees", "nested")
+		const impostor = path.join(WORKSPACE, "lib", EMBEDDED_WORKTREES_DIR, "nested")
 		const task = mockTask(impostor, WORKSPACE)
-		// lib/.shofer/worktrees/ nested is NOT under workspacePath/.shofer/worktrees/
+		// lib/.worktrees/nested is NOT under workspacePath/.worktrees/
+		expect(isEmbeddedWorktreeTask(task)).toBe(false)
+	})
+
+	it("returns false for a task in a directory merely named like the worktrees dir", () => {
+		const task = mockTask(path.join(WORKSPACE, `${EMBEDDED_WORKTREES_DIR}-backup`, "x"), WORKSPACE)
 		expect(isEmbeddedWorktreeTask(task)).toBe(false)
 	})
 })
@@ -111,6 +134,49 @@ describe("validateWorktreePath", () => {
 		const err = validateWorktreePath(task, target)
 		expect(err).toContain(target)
 		expect(err).toContain(path.resolve(task.cwd, target))
+	})
+})
+
+// Symlink escapes need a real filesystem: the check follows links on the part of the
+// path that exists, which a purely in-memory path cannot exercise.
+describe("validateWorktreePath — symlink escapes", () => {
+	const fs = require("fs")
+	const os = require("os")
+
+	let root: string
+	let workspace: string
+	let worktree: string
+
+	beforeEach(() => {
+		root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "worktree-guard-")))
+		workspace = path.join(root, "project")
+		worktree = path.join(workspace, EMBEDDED_WORKTREES_DIR, "repo-hl911")
+		fs.mkdirSync(worktree, { recursive: true })
+		fs.writeFileSync(path.join(workspace, "master-file.txt"), "master")
+	})
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true })
+	})
+
+	it("blocks writing through a symlinked directory that points outside the worktree", () => {
+		fs.symlinkSync(workspace, path.join(worktree, "escape"), "dir")
+		const task = mockTask(worktree, workspace)
+		expect(validateWorktreePath(task, "escape/master-file.txt")).toContain(
+			"cannot write outside the current worktree",
+		)
+	})
+
+	it("blocks a symlinked file inside the worktree whose target is outside it", () => {
+		fs.symlinkSync(path.join(workspace, "master-file.txt"), path.join(worktree, "linked.txt"), "file")
+		const task = mockTask(worktree, workspace)
+		expect(validateWorktreePath(task, "linked.txt")).toContain("cannot write outside the current worktree")
+	})
+
+	it("still allows a real path inside the worktree", () => {
+		fs.mkdirSync(path.join(worktree, "src"))
+		const task = mockTask(worktree, workspace)
+		expect(validateWorktreePath(task, "src/new-file.ts")).toBeNull()
 	})
 })
 

@@ -442,7 +442,7 @@ This approach:
 - **Informs without forcing** — the model knows which files are stale and decides for itself
   whether re-reading them is relevant to the current question.
 - **Aligns with worktree practice** — tasks normally operate in worktrees under
-  `.shofer/worktrees/`, so main-workspace files change mostly after a merge back. The
+  `.worktrees/`, so main-workspace files change mostly after a merge back. The
   memory does not consult git; it only ever sees "file X was modified".
 - **Clears on use** — the set is drained after each question, so stale notifications do not
   accumulate.
@@ -778,12 +778,15 @@ profile.
 
 ## Worktree interaction
 
-Shofer runs tasks in per-task git worktrees under `.shofer/worktrees/`. The memory treats
+Shofer runs tasks in per-task git worktrees under `.worktrees/`. The memory treats
 them as invisible:
 
-- `SKIP_PARTS` includes `.shofer`, so worktree files never enter the directory tree.
-- `notifyFileModified` ignores any path starting with `.shofer/`, so a worktree edit never
-  produces a recently-modified hint.
+- `SKIP_PARTS` includes `.worktrees` (and `.shofer`), so worktree files never enter the
+  directory tree.
+- `notifyFileModified` ignores any path under `.worktrees/` or `.shofer/`
+  (`IGNORED_MODIFICATION_PREFIXES`), so a worktree edit never produces a
+  recently-modified hint. The legacy `.shofer/worktrees/` location is covered by the
+  `.shofer/` prefix.
 - One memory serves all tasks in the workspace regardless of which worktree they run in; its
   knowledge represents the **main workspace**, not a task branch. Worktree creation and
   deletion are simply not interesting to it.

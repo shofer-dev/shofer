@@ -76,7 +76,7 @@ The six built-in modes, contributed by the bundled `builtin-modes` plugin ([`plu
 
 ## File Operations
 
-> **Worktree isolation:** When a task runs inside `.shofer/worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`plugins/worktrees/DESIGN.md` §5](../plugins/worktrees/DESIGN.md#5-what-core-keeps-confinement).
+> **Worktree isolation:** When a task runs inside `.worktrees/<name>/`, all mutating tools (`write_to_file`, `apply_diff`, `create_directory`, `file`, `insert_edit`, `sed`) validate that the target path stays within the assigned worktree. Attempts to write to the master checkout or another worktree are blocked. See [`plugins/worktrees/DESIGN.md` §5](../plugins/worktrees/DESIGN.md#5-what-core-keeps-confinement).
 
 | Tool                   | Origin | Group | Always Available | Status | Description                                    |
 | ---------------------- | :----: | ----- | :--------------: | :----: | ---------------------------------------------- |
@@ -244,7 +244,7 @@ Unified search using VS Code's indexed `workspace.findTextInFiles` API. Supports
 
 ### `find_files`
 
-Find files matching a glob pattern using VS Code's `workspace.findFiles`. Patterns are resolved relative to the workspace root — prepend `**/` when unsure of the exact directory prefix. Excludes `node_modules`, `.git`, `bazel-*`, and `.shofer/worktrees/` automatically.
+Find files matching a glob pattern using VS Code's `workspace.findFiles`. Patterns are resolved relative to the workspace root — prepend `**/` when unsure of the exact directory prefix. Excludes `node_modules`, `.git`, `bazel-*`, and `.worktrees/` automatically.
 
 | Param        | Type   | Required | Description                                                                  |
 | ------------ | ------ | :------: | ---------------------------------------------------------------------------- |

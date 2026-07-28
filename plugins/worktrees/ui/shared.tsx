@@ -154,7 +154,7 @@ export function useCreationProgress(api: PluginUIApi): {
  * Create a worktree: pick a base branch, name the new branch, choose whether to seed it.
  *
  * The directory is derived from the branch name and shown read-only — the embedded
- * convention (`<workspace>/.shofer/worktrees/<branch>`) is what makes branch, directory
+ * convention (`<workspace>/.worktrees/<branch>`) is what makes branch, directory
  * and badge one name the user can follow, and the plugin re-imposes it server-side
  * anyway.
  */

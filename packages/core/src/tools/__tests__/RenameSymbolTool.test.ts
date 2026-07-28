@@ -1,11 +1,14 @@
 import * as path from "path"
+
+import { EMBEDDED_WORKTREES_DIR } from "@shofer/types"
+
 import { RenameSymbolTool } from "../RenameSymbolTool.js"
 import { validateWorktreePath } from "../../utils/worktreePathGuard.js"
 
 describe("RenameSymbolTool", () => {
 	const WORKSPACE = "/home/user/project"
-	const WORKTREE = path.join(WORKSPACE, ".shofer", "worktrees", "repo-hl911")
-	const OTHER_WORKTREE = path.join(WORKSPACE, ".shofer", "worktrees", "repo-abc42")
+	const WORKTREE = path.join(WORKSPACE, EMBEDDED_WORKTREES_DIR, "repo-hl911")
+	const OTHER_WORKTREE = path.join(WORKSPACE, EMBEDDED_WORKTREES_DIR, "repo-abc42")
 
 	let renameSymbolTool: RenameSymbolTool
 

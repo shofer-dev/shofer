@@ -5,7 +5,12 @@ import os from "os"
 import path from "path"
 import { fileURLToPath } from "url"
 
-import { createInMemoryHost, type HostBridge } from "@shofer/types"
+import {
+	createInMemoryHost,
+	EMBEDDED_WORKTREES_DIR,
+	LEGACY_EMBEDDED_WORKTREES_DIR,
+	type HostBridge,
+} from "@shofer/types"
 
 import { PluginManager, createNodePluginFs, type PluginStateStore } from "../plugin-manager.js"
 import { pluginRegistry } from "../plugin-registry.js"
@@ -180,7 +185,7 @@ describe("Worktrees plugin (first-party, loaded off disk)", () => {
 			undefined,
 			cwd,
 		)
-		expect(suggestedPath.startsWith(path.join(cwd, ".shofer", "worktrees"))).toBe(true)
+		expect(suggestedPath.startsWith(path.join(cwd, EMBEDDED_WORKTREES_DIR))).toBe(true)
 
 		const result = await call<{ success: boolean; message: string; worktree?: { path: string; branch: string } }>(
 			"create",
@@ -190,10 +195,10 @@ describe("Worktrees plugin (first-party, loaded off disk)", () => {
 		expect(result.success).toBe(true)
 		expect(result.worktree?.branch).toBe(suggestedBranch)
 		expect(fs.existsSync(path.join(suggestedPath, "README.md"))).toBe(true)
-		expect(fs.readFileSync(path.join(cwd, ".gitignore"), "utf8")).toContain(".shofer/worktrees/")
+		expect(fs.readFileSync(path.join(cwd, ".gitignore"), "utf8")).toContain(`${EMBEDDED_WORKTREES_DIR}/`)
 	}, 60_000)
 
-	it("forces a request that points outside .shofer/worktrees back inside it", async () => {
+	it("forces a request that points outside the worktrees directory back inside it", async () => {
 		const cwd = makeRepo()
 		await build({ workspacePath: cwd })
 
@@ -203,7 +208,25 @@ describe("Worktrees plugin (first-party, loaded off disk)", () => {
 			cwd,
 		)
 		expect(result.success).toBe(true)
-		expect(result.worktree?.path).toBe(path.join(cwd, ".shofer", "worktrees", "escapee"))
+		expect(result.worktree?.path).toBe(path.join(cwd, EMBEDDED_WORKTREES_DIR, "escapee"))
+	}, 60_000)
+
+	// Transition shim: worktrees created before the move live under `.shofer/worktrees/`.
+	// Nothing creates them there any more, but leaving them unlistable would orphan a
+	// user's existing checkouts.
+	it("still lists and deletes a worktree at the legacy .shofer/worktrees path", async () => {
+		const cwd = makeRepo()
+		await build({ workspacePath: cwd })
+
+		const legacy = path.join(cwd, LEGACY_EMBEDDED_WORKTREES_DIR, "old-one")
+		execFileSync("git", ["worktree", "add", "-b", "old-one", legacy], { cwd, stdio: "pipe" })
+
+		const listing = await call<Listing>("list", undefined, cwd)
+		expect(listing.worktrees.some((wt) => path.resolve(wt.path) === path.resolve(legacy))).toBe(true)
+
+		const removed = await call<{ success: boolean; message: string }>("delete", { path: legacy }, cwd)
+		expect(removed.success).toBe(true)
+		expect(fs.existsSync(legacy)).toBe(false)
 	}, 60_000)
 
 	describe("where a new task runs (`resolve-task-cwd`)", () => {
@@ -213,14 +236,14 @@ describe("Worktrees plugin (first-party, loaded off disk)", () => {
 
 			const answer = await placement(cwd)
 			expect(answer?.error).toBeUndefined()
-			expect(answer?.cwd?.startsWith(path.join(cwd, ".shofer", "worktrees"))).toBe(true)
+			expect(answer?.cwd?.startsWith(path.join(cwd, EMBEDDED_WORKTREES_DIR))).toBe(true)
 			expect(fs.existsSync(path.join(answer!.cwd!, "README.md"))).toBe(true)
 		}, 60_000)
 
 		it("honours the worktree the user picked, and consumes the pick", async () => {
 			const cwd = makeRepo()
 			await build({ workspacePath: cwd })
-			const chosen = path.join(cwd, ".shofer", "worktrees", "picked")
+			const chosen = path.join(cwd, EMBEDDED_WORKTREES_DIR, "picked")
 			await call("create", { path: chosen, branch: "picked", createNewBranch: true, initSubmodules: false }, cwd)
 
 			await call("select", { cwd: chosen }, cwd)

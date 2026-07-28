@@ -111,7 +111,7 @@ Shofer supports **true parallel tasks** organized in a tree hierarchy. Start mul
 
 Run parallel tasks on different branches — all in one VS Code window:
 
-- Worktrees live at `.shofer/worktrees/<name>/` inside your workspace
+- Worktrees live at `.worktrees/<name>/` inside your workspace
 - Create, switch, and delete worktrees from the **Worktree Selector** in the Task Header
 - Each task can be scoped to a specific worktree for branch-isolated parallel work
 - No more stash/commit gymnastics or multiple VS Code windows for PRs
