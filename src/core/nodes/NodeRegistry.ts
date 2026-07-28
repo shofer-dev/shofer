@@ -31,7 +31,10 @@ import {
 	pickSyncedSecrets,
 	pickSyncedSettings,
 } from "@shofer/types"
-import { NodeConnection, ShoferApiAgent, configLog } from "@shofer/core"
+import { NodeConnection, ShoferApiAgent, configLog, type NodeDeclarationEntry } from "@shofer/core"
+
+import { loadNodeDeclaration, readNodeToken } from "../config/nodeDeclarationLoader.js"
+import type { ScopeRoots } from "../config/layeredSettingsLoader.js"
 
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
@@ -167,6 +170,24 @@ export interface NodeRegistryOptions {
 	 * plugin manager lives; omitted in tests that do not exercise plugin sync.
 	 */
 	pluginSyncSource?: PluginSyncSource
+	/**
+	 * Where `.shofer/nodes.json` is read from and how a change to it is announced
+	 * (docs/workspace_agent_pool.md §4). Satisfied by `ContextProxy`. Absent ⇒ declared
+	 * nodes are not supported and only UI-created nodes exist, which is the pre-Phase-2
+	 * behaviour.
+	 */
+	scopeSource?: ScopeDeclarationSource
+}
+
+/**
+ * The minimal scope-file surface the registry needs to keep the declared node set in
+ * sync with disk: where the three `.shofer/` roots are, and a signal when one of their
+ * files changed. Declared locally (rather than importing `ContextProxy`) for the same
+ * reason as {@link SyncedConfigSource} — no import cycle, and tests inject a fake.
+ */
+export interface ScopeDeclarationSource {
+	getScopeRoots(): ScopeRoots
+	onDidChangeScopeFiles: Event<{ files: string[] }>
 }
 
 export interface NodeRegistryDeps {
@@ -178,6 +199,10 @@ export interface NodeRegistryDeps {
 
 const DEFS_KEY = "shoferNodes.defs"
 const tokenKey = (id: string): string => `shoferNode.token.${id}`
+
+/** The scope files this registry reconciles from (see {@link ScopeDeclarationSource}). */
+const NODES_FILE = "nodes.json"
+const LOCKED_FILE = "locked.json"
 
 /** VS Code setting selecting the ExecutorPool's new-task load-balancing policy. */
 const LOAD_BALANCER_SETTING = "shofer.nodes.loadBalancer"
@@ -230,6 +255,10 @@ export class NodeRegistry {
 	private pluginChangeDisposable?: { dispose(): void }
 	/** Disposes the `configSource.onDidChange` subscription for config-sync broadcasts. */
 	private configChangeDisposable?: { dispose(): void }
+	/** Where `.shofer/nodes.json` lives + its change signal; undefined ⇒ no declared nodes. */
+	private readonly scopeSource?: ScopeDeclarationSource
+	/** Disposes the `scopeSource.onDidChangeScopeFiles` subscription. */
+	private scopeChangeDisposable?: { dispose(): void }
 	/** The controller's current desired config-sync version (config_sync §6). */
 	private desiredConfigVersion?: string
 	private static readonly SHADOW_CHANGED_FILES_DEBOUNCE_MS = 500
@@ -272,6 +301,7 @@ export class NodeRegistry {
 		this.controllerVersion = opts.controllerVersion
 		this.configSource = opts.configSource
 		this.pluginSyncSource = opts.pluginSyncSource
+		this.scopeSource = opts.scopeSource
 		this.localAgent = deps.localAgent ?? new ShoferApiAgent(opts.localApi)
 		this.createConnection = deps.createConnection ?? ((o) => new NodeConnection(o))
 
@@ -360,12 +390,123 @@ export class NodeRegistry {
 	 * `onChange`. Safe to call once.
 	 */
 	async init(): Promise<void> {
+		// Declared nodes first: a `.shofer/nodes.json` entry may add a node, re-point one
+		// this host persisted, or withdraw one — resolving that before connecting avoids
+		// dialling a host the declaration has already moved.
+		await this.reconcileDeclaredNodes({ connect: false })
+
 		for (const def of this.defs) {
 			if (def.kind !== "remote") continue
 			if (await this.context.secrets.get(tokenKey(def.id))) this.hasTokenCache.add(def.id)
 			if (def.autoConnect && !def.disabled) await this.startConnection(def)
 		}
+
+		this.scopeChangeDisposable = this.scopeSource?.onDidChangeScopeFiles(({ files }) => {
+			// `locked.json` too: locking `nodes/<id>` changes which scope's entry wins,
+			// so a lock change re-points a node exactly as an edit to the entry would.
+			if (files.includes(NODES_FILE) || files.includes(LOCKED_FILE)) {
+				void this.reconcileDeclaredNodes({ connect: true })
+			}
+		})
+
 		this.fireChange()
+	}
+
+	/**
+	 * Bring the declared node set in line with `.shofer/nodes.json`
+	 * (docs/workspace_agent_pool.md §4) — the mechanism that lets a pool be provisioned
+	 * by *writing a file*: resource-manager rewrites it, every running host reconciles.
+	 *
+	 * Rules, in the order they matter:
+	 *  - **A corrupt file changes nothing.** The last good declared set stands (§5). A
+	 *    typo must not empty a project's pool.
+	 *  - **The declaration owns identity, the user owns runtime flags.** `host`/`tls`/
+	 *    `tokenFile`/`label` come from the file each time; `disabled` and `autoConnect`
+	 *    come from the file only when it states them, so a node someone disabled in the
+	 *    UI stays disabled across reconciles.
+	 *  - **Withdrawn ⇒ gone.** A def marked `declared` that the merged declaration no
+	 *    longer names is disconnected and dropped. Nodes the user created by hand are
+	 *    never touched.
+	 *  - **Re-pointed ⇒ reconnected.** A changed `host`/`tls`/`tokenFile` tears the
+	 *    existing connection down, because it now points somewhere else.
+	 *
+	 * `connect: false` (start-up) leaves connecting to {@link init}'s own pass, so a
+	 * node is not dialled twice.
+	 */
+	private async reconcileDeclaredNodes(opts: { connect: boolean }): Promise<void> {
+		if (!this.scopeSource) return
+
+		let loaded
+		try {
+			loaded = await loadNodeDeclaration(this.scopeSource.getScopeRoots())
+		} catch (e) {
+			configLog.warn(`node declaration load failed: ${e instanceof Error ? e.message : String(e)}`)
+			return
+		}
+
+		for (const error of loaded.errors) configLog.warn(`node declaration: ${error}`)
+		if (!loaded.ok) return // Keep the last good set.
+
+		const declared = loaded.declaration.nodes
+		let changed = false
+		const toConnect: ShoferNodeDef[] = []
+
+		// Withdrawn declarations.
+		for (const def of [...this.defs]) {
+			if (!def.declared || declared[def.id]) continue
+			configLog.info(`node ${def.id} withdrawn from .shofer/nodes.json — removing`)
+			this.teardownConnection(def.id)
+			this.defs = this.defs.filter((d) => d.id !== def.id)
+			changed = true
+		}
+
+		for (const [id, entry] of Object.entries(declared)) {
+			if (id === LOCAL_NODE_ID) {
+				configLog.warn(`.shofer/nodes.json declares the reserved id "${LOCAL_NODE_ID}" — ignored`)
+				continue
+			}
+
+			const existing = this.getDef(id)
+			const next = this.declaredDef(id, entry, existing)
+			if (existing && JSON.stringify(existing) === JSON.stringify(next)) continue
+
+			this.setDef(next)
+			changed = true
+
+			const repointed =
+				existing?.host !== next.host || existing?.tls !== next.tls || existing?.tokenFile !== next.tokenFile
+			if (repointed && this.connections.has(id)) this.teardownConnection(id)
+			if (next.autoConnect && !next.disabled) toConnect.push(next)
+		}
+
+		if (!changed) return
+
+		await this.persist()
+		if (opts.connect) {
+			for (const def of toConnect) {
+				if (this.connections.has(def.id)) continue
+				await this.startConnection(def)
+			}
+		}
+		this.fireChange()
+	}
+
+	/** Build the def a declaration entry implies, preserving the user's runtime flags. */
+	private declaredDef(id: string, entry: NodeDeclarationEntry, existing?: ShoferNodeDef): ShoferNodeDef {
+		const def: ShoferNodeDef = {
+			id,
+			kind: "remote",
+			declared: true,
+			label: entry.label ?? existing?.label ?? id,
+			host: entry.host,
+			autoConnect: entry.autoConnect ?? existing?.autoConnect ?? true,
+		}
+		const tls = entry.tls ?? existing?.tls
+		if (tls !== undefined) def.tls = tls
+		if (entry.tokenFile !== undefined) def.tokenFile = entry.tokenFile
+		const disabled = entry.disabled ?? existing?.disabled
+		if (disabled !== undefined) def.disabled = disabled
+		return def
 	}
 
 	/** Subscribe to any registry/connection status change. Returns an unsubscribe. */
@@ -690,6 +831,13 @@ export class NodeRegistry {
 
 	async remove(id: string): Promise<void> {
 		if (id === LOCAL_NODE_ID) return // Local is non-removable.
+		if (this.getDef(id)?.declared) {
+			// A declared node is a projection of `.shofer/nodes.json`; deleting the
+			// projection would resurrect it on the next reconcile. Disabling is the
+			// runtime control the user has here; withdrawing it is an edit to the file.
+			configLog.warn(`node ${id} is declared in .shofer/nodes.json — not removable from the UI`)
+			return
+		}
 		this.teardownConnection(id)
 		this.defs = this.defs.filter((d) => d.id !== id)
 		await this.context.secrets.delete(tokenKey(id))
@@ -776,6 +924,7 @@ export class NodeRegistry {
 		this.configDisposable.dispose()
 		this.configChangeDisposable?.dispose()
 		this.pluginChangeDisposable?.dispose()
+		this.scopeChangeDisposable?.dispose()
 		for (const conn of this.connections.values()) conn.dispose()
 		this.connections.clear()
 		this.listeners.clear()
@@ -801,7 +950,12 @@ export class NodeRegistry {
 	private async startConnection(def: ShoferNodeDef): Promise<void> {
 		if (def.kind !== "remote" || !def.host) return
 		this.teardownConnection(def.id)
-		const token = (await this.context.secrets.get(tokenKey(def.id))) ?? undefined
+		// A declared node names its token by file (a projected Secret), so it is read at
+		// connect time and a rotation lands on the next connection with no state of ours
+		// to invalidate. UI-created nodes keep their SecretStorage entry.
+		const token = def.tokenFile
+			? await readNodeToken(def.tokenFile)
+			: ((await this.context.secrets.get(tokenKey(def.id))) ?? undefined)
 		const baseUrl = `${def.tls ? "https" : "http"}://${def.host}`
 		const conn = this.createConnection({ baseUrl, token, controllerVersion: this.controllerVersion })
 		this.connections.set(def.id, conn)

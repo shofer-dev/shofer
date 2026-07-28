@@ -50,8 +50,8 @@
 - **Index identity is controller-scoped, not globally unique.** `_resolveIndexKeyPath`
   prefers the controller-assigned `codebaseIndexKey`, which fixes the case that bit us
   (executor pods all running `--workspace /home/node/workspace` colliding on one Qdrant
-  collection despite unshared filesystems). It does NOT cover two *independent
-  controllers* that both sit at an identical path and share one Qdrant — they still
+  collection despite unshared filesystems). It does NOT cover two _independent
+  controllers_ that both sit at an identical path and share one Qdrant — they still
   derive the same collection name from different content. Closing that means deriving
   the key from something globally stable (git remote URL + repo root, or an explicit
   operator-assigned index id) rather than a path. Deferred: today every deployment has
@@ -63,3 +63,10 @@
   becomes just another query client and the sole-writer invariant moves into the
   service. Don't build more machinery on top of "the controller is special" than the
   sole-writer rule already requires.
+
+- **A withdrawn node is cut off, not drained.** `NodeRegistry` reconciles
+  `.shofer/nodes.json` by disconnecting a node the declaration no longer names (or has
+  re-pointed) immediately, so a task running on it dies with the connection. Fine while
+  pools are sized at workspace creation and resized by hand; not fine once scale-down is
+  automatic, which is when this needs a drain: stop assigning, wait for in-flight tasks
+  (bounded), then disconnect. Design: `docs/workspace_agent_pool.md` §5.

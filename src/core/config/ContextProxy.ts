@@ -36,7 +36,16 @@ import {
 	writeScopeSetting,
 	type ScopeRoots,
 } from "./layeredSettingsLoader"
+import { ScopeWatcher } from "./scopeWatcher"
 import type { ProviderSettingsManager } from "./ProviderSettingsManager"
+
+/**
+ * The `.shofer/` filenames whose change must reach a running host: the settings
+ * layers, the global scope's lock manifest (unlocking a key changes the effective
+ * value of a file this host already read), and the node declaration (owned by
+ * `NodeRegistry`, watched here because the scope roots and the watcher live here).
+ */
+const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "nodes.json"] as const
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -96,6 +105,22 @@ export class ContextProxy {
 	// or secret value is written through ContextProxy.
 	private readonly _onDidChangeEmitter = new TypedEmitter<{ key: string }>()
 	public readonly onDidChange = this._onDidChangeEmitter.event
+
+	// Fires when the layered overlay was re-read because a `.shofer/` file changed on
+	// disk (never on this host's own `setValue`). Views subscribe to this to re-render
+	// an external edit; subscribing to `onDidChange` instead would re-render on every
+	// write this host makes, which is most of them.
+	private readonly _onDidRefreshOverlayEmitter = new TypedEmitter<{ keys: string[] }>()
+	public readonly onDidRefreshOverlay = this._onDidRefreshOverlayEmitter.event
+
+	// Fires with the watched `.shofer/` filenames a change touched, whatever they hold.
+	// This is the seam for the scope files ContextProxy does not itself own — today
+	// `nodes.json`, which NodeRegistry reconciles from (docs/workspace_agent_pool.md §4).
+	private readonly _onDidChangeScopeFilesEmitter = new TypedEmitter<{ files: string[] }>()
+	public readonly onDidChangeScopeFiles = this._onDidChangeScopeFilesEmitter.event
+
+	// Watches the three `.shofer/` scopes; undefined until startScopeWatcher().
+	private scopeWatcher?: ScopeWatcher
 
 	constructor(context: vscode.ExtensionContext) {
 		this.originalContext = context
@@ -255,7 +280,8 @@ export class ContextProxy {
 	 *
 	 * This never writes to disk; writes still flow to `globalState`/`setValue`.
 	 */
-	public async refreshLayeredOverlay(): Promise<void> {
+	public async refreshLayeredOverlay(): Promise<string[]> {
+		const previous = this.layeredOverlay
 		try {
 			this.layeredOverlay = await loadLayeredOverlay(this.resolveScopeRoots())
 		} catch (error) {
@@ -264,6 +290,74 @@ export class ContextProxy {
 			)
 			this.layeredOverlay = {}
 		}
+
+		const changed: string[] = []
+		for (const key of new Set([...Object.keys(previous), ...Object.keys(this.layeredOverlay)])) {
+			const before = previous[key as keyof LayeredSettings]
+			const after = this.layeredOverlay[key as keyof LayeredSettings]
+			if (JSON.stringify(before) !== JSON.stringify(after)) {
+				changed.push(key)
+			}
+		}
+		return changed
+	}
+
+	/**
+	 * Start watching the three `.shofer/` scopes so a change made **outside this host**
+	 * — by a person editing `~/.shofer/settings.json`, by another pod sharing the
+	 * volume, or by a ConfigMap rewrite — is applied without a restart
+	 * (docs/workspace_agent_pool.md §5).
+	 *
+	 * Idempotent. Each applied change fires {@link onDidChange} per changed key (so the
+	 * existing consumers — config-sync broadcast to nodes, and anything else keyed off a
+	 * settings write — see a file edit exactly as they see a `setValue`) and
+	 * {@link onDidRefreshOverlay} once with the whole set, which is the event a view
+	 * should re-render from.
+	 *
+	 * The overlay only ever *narrows* to `globalState` on failure, so a watcher that
+	 * cannot start (or a file that disappears) degrades to the pre-watcher behaviour
+	 * rather than to wrong values.
+	 */
+	public startScopeWatcher(): void {
+		if (this.scopeWatcher) {
+			return
+		}
+		this.scopeWatcher = new ScopeWatcher({
+			roots: this.resolveScopeRoots(),
+			files: WATCHED_SCOPE_FILES,
+			onChange: (files) => {
+				this._onDidChangeScopeFilesEmitter.fire({ files })
+				void this.applyExternalScopeChange()
+			},
+		})
+	}
+
+	/**
+	 * The three `.shofer/` scope roots this host reads. Exposed so a component that
+	 * owns its own scope file (NodeRegistry and `nodes.json`) resolves the same roots
+	 * rather than re-deriving them and drifting.
+	 */
+	public getScopeRoots(): ScopeRoots {
+		return this.resolveScopeRoots()
+	}
+
+	/** Re-read the overlay after a watched file changed, and announce what moved. */
+	private async applyExternalScopeChange(): Promise<void> {
+		const changed = await this.refreshLayeredOverlay()
+		if (changed.length === 0) {
+			return
+		}
+		logger.info(`Layered .shofer settings changed on disk: ${changed.join(", ")}`)
+		for (const key of changed) {
+			this._onDidChangeEmitter.fire({ key })
+		}
+		this._onDidRefreshOverlayEmitter.fire({ keys: changed })
+	}
+
+	/** Stop the scope watcher (extension deactivation / test isolation). */
+	public dispose(): void {
+		this.scopeWatcher?.dispose()
+		this.scopeWatcher = undefined
 	}
 
 	/**

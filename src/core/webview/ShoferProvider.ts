@@ -444,6 +444,21 @@ export class ShoferProvider
 			},
 		})
 
+		// A `.shofer/` settings file changed underneath this host (another pod on the
+		// shared volume, a ConfigMap rewrite, a hand edit). The overlay is already
+		// refreshed by the time this fires; re-push state so the UI shows the effective
+		// values rather than what they were at load (docs/workspace_agent_pool.md §5).
+		//
+		// A full init rather than per-key `postConfigUpdate`s: one file rewrite can move
+		// any number of keys, and several of them (a locked key taking over, a provider
+		// profile name) change derived state the webview computes from the whole
+		// snapshot. External edits are rare, so the escape-hatch cost is not paid often.
+		this.disposables.push(
+			this.contextProxy.onDidRefreshOverlay(() => {
+				void this.postInitState()
+			}),
+		)
+
 		// Start configuration loading (which might trigger indexing) in the background.
 		// Don't await, allowing activation to continue immediately.
 
@@ -2095,6 +2110,9 @@ export class ShoferProvider
 				currentPluginSlice: () => this.buildSyncedPluginSlice(),
 				onDidChange: this.pluginSyncChanged.event,
 			},
+			// Nodes declared in `.shofer/nodes.json` — how a platform-provisioned pool
+			// reaches this host, and how it changes while it is running (§4).
+			scopeSource: this.contextProxy,
 		})!
 		this.attachNodeRegistry(registry)
 		void registry.init()

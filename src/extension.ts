@@ -214,6 +214,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const contextProxy = await ContextProxy.getInstance(context)
 
+	// Apply `.shofer/` edits made outside this host without a restart — the mechanism a
+	// multi-host workspace converges on (docs/workspace_agent_pool.md §5). Started here
+	// rather than in getInstance so a unit test that builds a proxy watches nothing.
+	contextProxy.startScopeWatcher()
+	context.subscriptions.push({ dispose: () => contextProxy.dispose() })
+
 	// Restore persisted logging settings onto the live transport so they
 	// survive a VS Code restart.  bootstrapLogging() started the transport
 	// with defaults; the ContextProxy now has the user's saved values.

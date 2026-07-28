@@ -7,7 +7,8 @@
  * HTTP/SSE control plane (`AgentApi`; see `transport/http-client.ts`, `docs/agentapi.md`).
  * These types are the contract
  * between the webview UI (Settings → Shofer Nodes, the Nodes header button) and
- * the extension. Design: `docs/remote-agents.md` (§4, §4b).
+ * the extension. Design: `docs/v3_architecture.md` §Distributed execution;
+ * platform-declared nodes: `docs/configuration.md` §`nodes.json`.
  *
  * Secrets never live here: the per-node connection token is kept in VS Code
  * SecretStorage and only its *presence* (`hasToken`) is surfaced to the webview.
@@ -53,6 +54,20 @@ export interface ShoferNodeDef {
 	 * connected or used for tasks (applies to Local too) until re-enabled.
 	 */
 	disabled?: boolean
+	/**
+	 * This node came from a `.shofer/nodes.json` declaration rather than from the UI
+	 * (docs/workspace_agent_pool.md §4). The declaration is its source of truth: it is
+	 * re-applied on every reconcile and disappears when the file stops declaring it, so
+	 * the UI offers no delete — only disable, which is a runtime flag the reconcile
+	 * preserves.
+	 */
+	declared?: boolean
+	/**
+	 * Absolute path to the file holding this node's bearer token (declared nodes; a
+	 * projected Kubernetes Secret, typically). Read at connect time so rotating the
+	 * secret needs no declaration change. Never carries the token itself.
+	 */
+	tokenFile?: string
 }
 
 /** A node definition plus its live status — pushed to the webview (no secrets). */

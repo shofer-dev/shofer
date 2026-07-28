@@ -48,6 +48,7 @@ Each scope's `.shofer/` holds the same file set:
 ├── settings.json        # the globalSettings keys (JSON)
 ├── locked.json          # (global scope only) org-policy lock manifest
 ├── plugins.json         # plugin declarations (see PLUGINS.md)
+├── nodes.json           # Shofer Node declarations (below)
 ├── mcp.json             # MCP servers
 ├── shofermodes          # custom modes (YAML)
 ├── commands/            # slash commands (*.md)
@@ -141,6 +142,65 @@ keyed by `slug`) and `providers` (→ `listApiConfigMeta`, keyed by `name`); `pl
 is governed by the same manifest for `.shofer/plugins.json` (see
 [`PLUGINS.md`](../PLUGINS.md)). A corrupt or version-mismatched manifest is
 discarded as "nothing locked" rather than throwing.
+
+### `nodes.json` — Shofer Node declarations
+
+`.shofer/nodes.json` declares the **remote executors** this host should be talking to
+(see [`v3_architecture.md` §Distributed execution](v3_architecture.md) for what a node is). Its schema and merge
+are in [`node-declaration.ts`](../packages/core/src/config/node-declaration.ts):
+
+```json
+{
+	"version": 1,
+	"nodes": {
+		"pool-0": {
+			"label": "runner-0",
+			"host": "ws-42-runner-0.ws-42-runner.proj-ns.svc.cluster.local:30099",
+			"tokenFile": "/var/run/secrets/arkware/node-token",
+			"autoConnect": true
+		}
+	}
+}
+```
+
+It exists so a node set can be **provisioned by writing a file** rather than only
+through the Settings UI — which is the only way a headless host (which has no UI at
+all) can have nodes, and the only way a platform can provision a pool.
+
+- **Per-entity merge**, keyed by node id, exactly like `plugins.json`: locking
+  `nodes/<id>` makes the global scope's entry final while the user may still add
+  nodes of their own. A node _list_ under a `settings.json` key could not do this —
+  arrays are replaced wholesale, so any user entry would destroy the platform's.
+- **No secrets.** The bearer token is named by reference (`tokenFile`, typically a
+  projected Kubernetes Secret) and read at connect time, so rotating it needs no
+  edit here. A `token` field is rejected by the schema.
+- **Declared nodes are reconciled live.** `NodeRegistry` re-reads the file whenever
+  it changes (below): an added entry appears and connects, a withdrawn one
+  disconnects and disappears, a changed `host` reconnects. The declaration owns
+  identity (`host`/`tls`/`tokenFile`/`label`); the user still owns the runtime flags
+  (`disabled`, `autoConnect`) unless the entry states them. Such a node carries
+  `declared: true` and the UI offers no Edit/Remove for it — the file is its source
+  of truth — but Disable still applies.
+- **A corrupt `nodes.json` changes nothing.** The last good node set stands, which is
+  a deliberate deviation from the fail-closed rule everywhere else here: emptying a
+  project's pool over a typo is worse than running on a stale list.
+
+### Live reload — the scope watcher
+
+The overlay is not only read at start. Every host watches the three scopes'
+`.shofer/` directories ([`scopeWatcher.ts`](../src/core/config/scopeWatcher.ts)) and
+re-reads `settings.json`, `locked.json` and `nodes.json` when they change, so an edit
+made by a person, by another host sharing the volume, or by a ConfigMap rewrite takes
+effect **without a restart**. `ContextProxy` refreshes the merged overlay and
+announces the keys that actually moved (`onDidRefreshOverlay`); `NodeRegistry`
+reconciles its declared nodes.
+
+Directories are watched rather than files, because both writers that matter replace
+rather than mutate: settings are written to a temp file and renamed over the target,
+and a Kubernetes ConfigMap update swaps the `..data` symlink under the mount. A file
+watch would see neither. `vscode.workspace.createFileSystemWatcher` is deliberately
+not used — two of the three scopes live outside the workspace, and the headless
+host's shim implements it as an emitter that never fires.
 
 ### Export / import = a scope's `.shofer/` as a `.tar.gz`
 

@@ -272,8 +272,11 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 											)}
 										</Button>
 
-										{/* Edit / Remove — remote only */}
-										{n.kind === "remote" && (
+										{/* Edit / Remove — remote only, and never for a node declared in
+										    `.shofer/nodes.json`: the file is its source of truth, so an
+										    edit here would be overwritten and a delete would come back on
+										    the next reconcile. Disable, above, still applies. */}
+										{n.kind === "remote" && !n.declared && (
 											<>
 												<Button
 													variant="ghost"
@@ -304,6 +307,8 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 													.join(" · ")
 											: [
 													n.host,
+													// Explains why the row carries no Edit/Remove.
+													n.declared ? "declared" : null,
 													effectiveDisabled ? "disabled" : n.status,
 													n.latencyMs != null ? `${n.latencyMs}ms` : null,
 													n.agentVersion ? `v${n.agentVersion}` : null,
