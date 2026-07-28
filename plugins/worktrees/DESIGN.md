@@ -154,7 +154,11 @@ unqualified name from an unknown author could shadow a built-in.
 - **Location.** A create request whose path is not under `<workspace>/.shofer/worktrees/`
   is rewritten so that it is; when a branch is being created, the directory basename is
   forced to match the branch. One name across branch, directory and label is what makes a
-  worktree followable.
+  worktree followable. The prefix itself is **core's**, not this plugin's — core's
+  `isEmbeddedWorktreeTask()` tests for it literally, and confinement plus the shell
+  sandbox are gated on the result, so the plugin cannot relocate worktrees on its own.
+  A move out of `.shofer/` is proposed in
+  [`todos/worktrees-path-move.md`](../../todos/worktrees-path-move.md).
 - **Ignoring.** Creating the first worktree appends `.shofer/worktrees/` to `.gitignore`
   (never `.shofer/` itself — the rest of it is meant to be committed). Embedded worktrees
   are inside the repository, so without this they are untracked noise that can be

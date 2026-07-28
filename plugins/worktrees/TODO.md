@@ -48,3 +48,13 @@ What this plugin knowingly does not do, and what the move out of core cost.
 - **`ctx.task.setCwd` is the only way to move an existing task**, and the host refuses
   once a workflow has started. There is no way to move a task that has already written
   files, and there should not be.
+
+## Proposed
+
+- **Move worktrees out of `.shofer/`** — to `<workspace>/.worktrees/`, because
+  `.shofer/` is committed configuration and `.shofer/**` is write-protected, so a
+  workspace-root task treats every other worktree's files as protected. Not a
+  plugin-local change: the prefix is a core constant that gates confinement and the
+  shell sandbox, and it would fail silently-open if only the plugin moved. Full
+  consumer list, migration shape and the two open decisions:
+  [`todos/worktrees-path-move.md`](../../todos/worktrees-path-move.md).

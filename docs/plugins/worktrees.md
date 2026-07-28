@@ -25,6 +25,11 @@ second VS Code window.
 A worktree created by hand outside the workspace (`git worktree add ../foo`) still works
 as an ordinary Shofer workspace when opened on its own; it is simply not one of these.
 
+The location is a **core** constant, not a plugin convention: `isEmbeddedWorktreeTask()`
+tests for this prefix literally, and §3's confinement and shell sandbox are gated on it.
+Moving it is therefore a coordinated core + plugins change — proposed, with the full
+consumer list, in [`todos/worktrees-path-move.md`](../../todos/worktrees-path-move.md).
+
 ## 2. Where a task runs
 
 ```mermaid
