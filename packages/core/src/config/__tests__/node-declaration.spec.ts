@@ -28,7 +28,7 @@ describe("node declaration", () => {
 				}),
 			)
 			expect(result.ok).toBe(true)
-			expect(result.declaration.nodes["pool-0"].host).toBe("runner-0.ws.svc:30099")
+			expect(result.declaration.nodes["pool-0"]?.host).toBe("runner-0.ws.svc:30099")
 		})
 
 		it("reports corrupt JSON rather than pretending the scope declares nothing", () => {
@@ -70,7 +70,7 @@ describe("node declaration", () => {
 				user: decl({ a: { host: "user:1" } }),
 				project: decl({ a: { host: "project:1" } }),
 			})
-			expect(merged.nodes.a.host).toBe("project:1")
+			expect(merged.nodes.a?.host).toBe("project:1")
 		})
 
 		it("makes a locked global node final", () => {
@@ -79,7 +79,7 @@ describe("node declaration", () => {
 				{ global: decl({ a: { host: "global:1" } }), user: decl({ a: { host: "user:1" } }) },
 				manifest,
 			)
-			expect(merged.nodes.a.host).toBe("global:1")
+			expect(merged.nodes.a?.host).toBe("global:1")
 		})
 
 		it("still lets the user ADD nodes when another id is locked", () => {
@@ -90,14 +90,14 @@ describe("node declaration", () => {
 				{ global: decl({ a: { host: "global:1" } }), user: decl({ b: { host: "user:1" } }) },
 				manifest,
 			)
-			expect(merged.nodes.a.host).toBe("global:1")
-			expect(merged.nodes.b.host).toBe("user:1")
+			expect(merged.nodes.a?.host).toBe("global:1")
+			expect(merged.nodes.b?.host).toBe("user:1")
 		})
 
 		it("ignores a lock on an id the global scope never declared", () => {
 			const manifest = parseLockedManifest({ version: 1, locked: ["nodes/a"] })
 			const merged = mergeNodeDeclarations({ user: decl({ a: { host: "user:1" } }) }, manifest)
-			expect(merged.nodes.a.host).toBe("user:1")
+			expect(merged.nodes.a?.host).toBe("user:1")
 		})
 
 		it("is pure — the input layers are not mutated", () => {
