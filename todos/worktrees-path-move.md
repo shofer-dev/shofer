@@ -25,11 +25,12 @@ window.
    machine-local, throwaway checkouts. The only thing keeping them out of git is
    an entry the plugin appends to `.gitignore`; the two kinds of content have
    opposite lifecycles and do not belong in one directory.
-2. **`.shofer/**`is write-protected.**`PROTECTED_PATTERNS`in`ShoferProtectedController` matches it. The controller is rooted at the
-   _task's_ cwd, so a task inside a worktree is unaffected — but a task running
-   at the workspace root sees every other worktree's files as protected, and
-   every write to them raises the shield marker and an approval. Moving one
-   level up removes that entirely.
+2. **Everything under `.shofer/` is write-protected.** `PROTECTED_PATTERNS` in
+   `ShoferProtectedController` covers the whole directory. The controller is
+   rooted at the _task's_ cwd, so a task inside a worktree is unaffected — but a
+   task running at the workspace root sees every other worktree's files as
+   protected, and every write to them raises the shield marker and an approval.
+   Moving one level up removes that entirely.
 3. **It removes a coincidence.** `.shofer/worktrees/` reads as "Shofer config
    about worktrees" when it is in fact "N complete checkouts of this repository".
 
