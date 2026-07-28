@@ -474,7 +474,10 @@ export class NodeRegistry {
 			changed = true
 
 			const repointed =
-				existing?.host !== next.host || existing?.tls !== next.tls || existing?.tokenFile !== next.tokenFile
+				existing?.host !== next.host ||
+				existing?.tls !== next.tls ||
+				existing?.tokenFile !== next.tokenFile ||
+				existing?.tokenEnv !== next.tokenEnv
 			if (repointed && this.connections.has(id)) this.teardownConnection(id)
 			if (next.autoConnect && !next.disabled) toConnect.push(next)
 		}
@@ -504,6 +507,7 @@ export class NodeRegistry {
 		const tls = entry.tls ?? existing?.tls
 		if (tls !== undefined) def.tls = tls
 		if (entry.tokenFile !== undefined) def.tokenFile = entry.tokenFile
+		if (entry.tokenEnv !== undefined) def.tokenEnv = entry.tokenEnv
 		const disabled = entry.disabled ?? existing?.disabled
 		if (disabled !== undefined) def.disabled = disabled
 		return def
@@ -950,12 +954,14 @@ export class NodeRegistry {
 	private async startConnection(def: ShoferNodeDef): Promise<void> {
 		if (def.kind !== "remote" || !def.host) return
 		this.teardownConnection(def.id)
-		// A declared node names its token by file (a projected Secret), so it is read at
-		// connect time and a rotation lands on the next connection with no state of ours
-		// to invalidate. UI-created nodes keep their SecretStorage entry.
-		const token = def.tokenFile
-			? await readNodeToken(def.tokenFile)
-			: ((await this.context.secrets.get(tokenKey(def.id))) ?? undefined)
+		// A declared node names its token by reference (a projected Secret file, or the
+		// env var a secretKeyRef fills), so it is resolved at connect time and a rotation
+		// lands on the next connection with no state of ours to invalidate. UI-created
+		// nodes keep their SecretStorage entry.
+		const token =
+			def.tokenFile || def.tokenEnv
+				? await readNodeToken(def)
+				: ((await this.context.secrets.get(tokenKey(def.id))) ?? undefined)
 		const baseUrl = `${def.tls ? "https" : "http"}://${def.host}`
 		const conn = this.createConnection({ baseUrl, token, controllerVersion: this.controllerVersion })
 		this.connections.set(def.id, conn)

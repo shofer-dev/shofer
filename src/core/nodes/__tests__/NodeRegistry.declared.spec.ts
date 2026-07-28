@@ -251,6 +251,19 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		expect(conns[0].opts.token).toBe("s3cret")
 	})
 
+	it("reads the bearer token from the env var the declaration names", async () => {
+		// The k8s shape: a `secretKeyRef` puts the value in the environment, so the
+		// declaration names the variable rather than a path.
+		process.env.TEST_NODE_TOKEN = " env-s3cret "
+		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", tokenEnv: "TEST_NODE_TOKEN" } })
+		const { registry, conns } = makeRegistry()
+
+		await registry.init()
+
+		expect(conns[0].opts.token).toBe("env-s3cret")
+		delete process.env.TEST_NODE_TOKEN
+	})
+
 	it("still connects when the token file is missing, so the failure is the node's to report", async () => {
 		await writeNodes(globalDir, {
 			"pool-0": { host: "runner-0.ws.svc:30099", tokenFile: path.join(tmp, "absent") },

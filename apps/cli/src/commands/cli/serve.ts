@@ -25,6 +25,12 @@ export interface ServeOptions {
 	/** Suppress the live per-task activity log on stderr (on by default). */
 	quiet?: boolean
 	/**
+	 * Where this node keeps its own state (default `$HOME/.vscode-mock`). Falls back
+	 * to `SHOFER_STATE_DIR`. Give each node a private directory when several share a
+	 * filesystem — the store is SQLite (docs/workspace_agent_pool.md §7).
+	 */
+	stateDir?: string
+	/**
 	 * Interactive approvals. Default (false) is **non-interactive**: the node
 	 * auto-approves every tool (there is no local user to ask). With `--interactive`
 	 * the node instead surfaces approvals — `autoApprovalEnabled` is off, so
@@ -88,6 +94,7 @@ export async function serve(options: ServeOptions = {}): Promise<void> {
 		// surface); followup questions are brokered in either mode.
 		brokerInteractiveAsks: true,
 		ephemeral: false,
+		storageDir: options.stateDir ?? process.env.SHOFER_STATE_DIR,
 		debug: options.debug ?? false,
 		exitOnComplete: false,
 		exitOnError: false,

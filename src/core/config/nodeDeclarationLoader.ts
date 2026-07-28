@@ -84,23 +84,30 @@ export async function loadNodeDeclaration(roots: ScopeRoots): Promise<LoadedNode
 }
 
 /**
- * Read a declared node's bearer token from the file it names.
+ * Resolve a declared node's bearer token from whichever indirection the declaration
+ * named: a file (`tokenFile` — a projected Kubernetes Secret, typically) or an
+ * environment variable (`tokenEnv` — the shape a `secretKeyRef` produces).
  *
- * Kept out of the declaration itself so `nodes.json` stays committable and mountable:
- * the file names a path (a projected Kubernetes Secret, typically) and the token is
- * read at connect time, so rotating the secret takes effect on the next connection
- * without rewriting any declaration. Returns `undefined` when the file is absent or
- * unreadable — the connection is then attempted unauthenticated and fails at the node,
- * which is the honest failure and visible in the node's status.
+ * The token is kept out of `nodes.json` itself so the file stays committable and
+ * mountable, and it is resolved at connect time, so rotating the secret takes effect
+ * on the next connection with no declaration to rewrite. Returns `undefined` when
+ * neither reference resolves — the connection is then attempted unauthenticated and
+ * refused at the node, which is the honest failure and visible in the node's status.
  */
-export async function readNodeToken(tokenFile: string | undefined): Promise<string | undefined> {
-	if (!tokenFile) {
-		return undefined
+export async function readNodeToken(source: { tokenFile?: string; tokenEnv?: string }): Promise<string | undefined> {
+	if (source.tokenFile) {
+		try {
+			const token = (await fs.readFile(source.tokenFile, "utf8")).trim()
+			if (token.length > 0) {
+				return token
+			}
+		} catch {
+			// Fall through to the env reference, if the declaration named one.
+		}
 	}
-	try {
-		const token = (await fs.readFile(tokenFile, "utf8")).trim()
-		return token.length > 0 ? token : undefined
-	} catch {
-		return undefined
+	if (source.tokenEnv) {
+		const token = process.env[source.tokenEnv]?.trim()
+		return token && token.length > 0 ? token : undefined
 	}
+	return undefined
 }

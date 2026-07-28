@@ -58,6 +58,14 @@ export const nodeDeclarationEntrySchema = z
 		 * us and never surfaced to the webview.
 		 */
 		tokenFile: z.string().min(1).optional(),
+		/**
+		 * Name of an environment variable holding this node's bearer token. The same
+		 * indirection as {@link tokenFile} for a host whose secret arrives as env
+		 * rather than as a file — which is the common k8s shape, since a `secretKeyRef`
+		 * puts the value in the environment without either side naming it. Read at
+		 * connect time; `tokenFile` wins if both are set.
+		 */
+		tokenEnv: z.string().min(1).optional(),
 	})
 	.strict()
 

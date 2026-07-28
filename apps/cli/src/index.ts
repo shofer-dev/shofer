@@ -162,6 +162,10 @@ program
 	.option("--base-url <url>", "Base URL for the API provider (e.g., http://localhost:30081/v1 for llm-router)")
 	.option("-m, --model <model>", "Model to use")
 	.option("-t, --token <token>", "Bearer token required on /api/v1/* (falls back to SHOFER_NODE_TOKEN)")
+	.option(
+		"--state-dir <path>",
+		"Where this node keeps its own state (default $HOME/.vscode-mock; falls back to SHOFER_STATE_DIR). Required per node when several share a filesystem",
+	)
 	.option("-q, --quiet", "Suppress the live per-task activity log on stderr", false)
 	.option("-d, --debug", "Enable debug output", false)
 	.option(
@@ -180,6 +184,7 @@ program
 			baseUrl?: string
 			model?: string
 			token?: string
+			stateDir?: string
 			quiet?: boolean
 			debug?: boolean
 			interactive?: boolean

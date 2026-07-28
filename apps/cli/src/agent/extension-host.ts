@@ -90,6 +90,17 @@ export interface ExtensionHostOptions {
 	 * When true, uses a temporary storage directory that is cleaned up on exit.
 	 */
 	ephemeral: boolean
+	/**
+	 * Where this host keeps its own state — task store, global state, machine id
+	 * (defaults to `$HOME/.vscode-mock`).
+	 *
+	 * Set it when several hosts share a filesystem, which is exactly the shape a
+	 * workspace agent pool has: N pods mounting one volume
+	 * (docs/workspace_agent_pool.md §7). The state store is SQLite, so pods sharing
+	 * one directory would be N writers on one database; each pod needs its own.
+	 * Ignored when {@link ephemeral} is set — that already implies a private dir.
+	 */
+	storageDir?: string
 	debug: boolean
 	exitOnComplete: boolean
 	terminalShell?: string
@@ -419,7 +430,7 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 			throw new Error(`Extension bundle not found at: ${bundlePath}`)
 		}
 
-		let storageDir: string | undefined
+		let storageDir: string | undefined = this.options.storageDir
 
 		if (this.options.ephemeral) {
 			this.ephemeralStorageDir = await createEphemeralStorageDir()
@@ -438,7 +449,12 @@ export class ExtensionHost extends EventEmitter implements ExtensionHostInterfac
 		// physically resolve it. In-memory cache entries and _load monkey-patches
 		// do not survive the ESM loader used by tsx — only a real on-disk file
 		// works reliably across both CJS and ESM module resolution paths.
-		const mockDir = this.ephemeralStorageDir ?? path.join(this.options.workspacePath, ".shofer", "tmp")
+		// Under the workspace only when this host has no private state dir: hosts that
+		// share a workspace (a pool) would otherwise race each other rewriting one file.
+		const mockDir =
+			this.ephemeralStorageDir ??
+			this.options.storageDir ??
+			path.join(this.options.workspacePath, ".shofer", "tmp")
 		fs.mkdirSync(mockDir, { recursive: true })
 		const mockFilePath = path.join(mockDir, "vscode-mock.js")
 

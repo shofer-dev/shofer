@@ -68,6 +68,12 @@ export interface ShoferNodeDef {
 	 * secret needs no declaration change. Never carries the token itself.
 	 */
 	tokenFile?: string
+	/**
+	 * Name of an environment variable holding this node's bearer token — the same
+	 * indirection as {@link tokenFile}, for the k8s shape where a `secretKeyRef`
+	 * delivers the value as env. `tokenFile` wins when both are set.
+	 */
+	tokenEnv?: string
 }
 
 /** A node definition plus its live status — pushed to the webview (no secrets). */

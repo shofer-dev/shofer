@@ -171,9 +171,10 @@ all) can have nodes, and the only way a platform can provision a pool.
   `nodes/<id>` makes the global scope's entry final while the user may still add
   nodes of their own. A node _list_ under a `settings.json` key could not do this —
   arrays are replaced wholesale, so any user entry would destroy the platform's.
-- **No secrets.** The bearer token is named by reference (`tokenFile`, typically a
-  projected Kubernetes Secret) and read at connect time, so rotating it needs no
-  edit here. A `token` field is rejected by the schema.
+- **No secrets.** The bearer token is named by reference — `tokenFile` (typically a
+  projected Kubernetes Secret) or `tokenEnv` (the name of an environment variable,
+  which is the shape a k8s `secretKeyRef` produces) — and resolved at connect time,
+  so rotating it needs no edit here. A `token` field is rejected by the schema.
 - **Declared nodes are reconciled live.** `NodeRegistry` re-reads the file whenever
   it changes (below): an added entry appears and connects, a withdrawn one
   disconnects and disappears, a changed `host` reconnects. The declaration owns
