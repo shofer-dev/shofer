@@ -166,4 +166,21 @@ describe("ContextProxy — layered .shofer overlay (Part E3)", () => {
 		await proxy.updateGlobalState("writeDelayMs", 999)
 		expect(proxy.getValue("writeDelayMs")).toBe(999)
 	})
+
+	it("(e) getValues() resolves the overlay too, so bulk readers agree with getValue", async () => {
+		// Not a cosmetic consistency point: `NodeRegistry.currentSyncedSlice()` builds the
+		// controller→node config slice from getValues(), so an overlay-only value that this
+		// snapshot omitted would reach the IDE and never reach the pool — file-based
+		// settings would silently stop at the controller.
+		const homeDir = await tmpDir()
+		hoisted.home = homeDir
+		await writeSettings(path.join(homeDir, ".shofer"), { writeDelayMs: 321 })
+
+		const proxy = new ContextProxy(mockContext)
+		await proxy.initialize()
+		await proxy.updateGlobalState("writeDelayMs", 999)
+
+		expect(proxy.getValues().writeDelayMs).toBe(321)
+		expect(proxy.getValues().writeDelayMs).toBe(proxy.getValue("writeDelayMs"))
+	})
 })

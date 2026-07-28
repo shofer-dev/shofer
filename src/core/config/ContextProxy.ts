@@ -904,8 +904,13 @@ export class ContextProxy {
 		const globalState = this.getAllGlobalState()
 		const secretState = this.getAllSecretState()
 
-		// Simply merge all states - no nested secrets to handle
-		return { ...globalState, ...secretState }
+		// The layered `.shofer/` overlay wins over globalState here for the same reason
+		// it does in getValue — otherwise the two disagree, and every consumer that reads
+		// the whole snapshot rather than a key silently ignores file-based settings. That
+		// is not academic: `NodeRegistry.currentSyncedSlice()` builds the controller→node
+		// config slice from this, so a settings file would reach the IDE and never reach
+		// the pool. Secrets stay last: they are never in the overlay by construction.
+		return { ...globalState, ...this.layeredOverlay, ...secretState }
 	}
 
 	public async setValues(values: ShoferSettings) {
