@@ -74,6 +74,7 @@ vi.mock("../../config/ContextProxy", () => ({
 	ContextProxy: {
 		getInstance: vi.fn(() => ({
 			onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+			onDidRefreshOverlay: vi.fn(() => ({ dispose: vi.fn() })),
 			getValue: vi.fn(),
 			setValue: vi.fn(),
 			getSecret: vi.fn(),
@@ -197,6 +198,7 @@ describe("ShoferProvider flicker-free cancel", () => {
 			getProviderSettings: vi.fn().mockReturnValue(mockApiConfig),
 			attachProviderSettingsManager: vi.fn().mockResolvedValue(undefined),
 			onDidChange: vi.fn(() => ({ dispose: vi.fn() })),
+			onDidRefreshOverlay: vi.fn(() => ({ dispose: vi.fn() })),
 			extensionUri: mockContext.extensionUri,
 			globalStorageUri: mockContext.globalStorageUri,
 		}
