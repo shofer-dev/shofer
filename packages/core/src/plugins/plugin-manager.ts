@@ -1362,3 +1362,35 @@ export function setSharedPluginManager(manager: PluginManager | undefined): void
 export function getSharedPluginManager(): PluginManager | undefined {
 	return sharedPluginManager
 }
+
+/**
+ * Install `manager` as the shared one **only if the slot is empty** — the "I am alive
+ * and nobody is serving contributions" claim.
+ *
+ * A host can own more than one live manager at a time (VS Code runs a second provider
+ * for "Shofer in a new tab"), and the slot holds whichever installed last. When that
+ * one goes away the slot can end up empty while a perfectly good manager is still
+ * running, so every path that hands out an existing manager should re-assert it rather
+ * than assume the slot still points somewhere.
+ */
+export function adoptSharedPluginManager(manager: PluginManager): void {
+	if (!sharedPluginManager) sharedPluginManager = manager
+}
+
+/**
+ * Retract `manager` from the shared slot as it is disposed, handing the slot to
+ * `successor` when the host still has one.
+ *
+ * Clearing unconditionally is the bug this exists to prevent: the disposing owner is
+ * not necessarily the last live one, and every subsystem reads contributions through
+ * the slot ({@link getContributedModes} via `effectiveModes`, workflow dirs, skills,
+ * MCP servers, commands). Emptying it while another manager is alive makes the whole
+ * platform behave as if no plugin were installed — which, because Shofer's own modes
+ * ship as the bundled `builtin-config` plugin, silently removes the built-in modes.
+ *
+ * A no-op when the slot points at someone else: whoever installed after us owns it.
+ */
+export function releaseSharedPluginManager(manager: PluginManager, successor?: PluginManager): void {
+	if (sharedPluginManager !== manager) return
+	sharedPluginManager = successor
+}

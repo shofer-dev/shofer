@@ -92,6 +92,8 @@ import {
 	createNodePluginFs,
 	createNodePluginCodeLoader,
 	setSharedPluginManager,
+	adoptSharedPluginManager,
+	releaseSharedPluginManager,
 	getGlobalShoferDirectory,
 	pluginRegistry,
 	unpackPlugin,
@@ -1257,7 +1259,19 @@ export class ShoferProvider
 		await this.skillsManager?.dispose()
 		this.skillsManager = undefined
 		if (this.pluginManager) {
-			setSharedPluginManager(undefined)
+			// Hand the shared slot to a surviving provider rather than emptying it. A
+			// "Shofer in a new tab" provider is a SECOND provider over the same window and
+			// installs ITS manager as the shared one; closing that tab disposes it (the tab
+			// branch of `onDidDispose`) while the sidebar provider and its manager are
+			// still alive and correct. `activeInstances` still contains `this` here — it is
+			// removed at the end of dispose — hence the self-exclusion.
+			releaseSharedPluginManager(
+				this.pluginManager,
+				findLast(
+					Array.from(ShoferProvider.activeInstances),
+					(instance) => instance !== this && !!instance.pluginManager,
+				)?.pluginManager,
+			)
 			// Unregister this provider's code plugins from the process-wide registry so a
 			// freshly built manager (e.g. after a reload) re-registers without colliding.
 			await this.pluginManager.dispose()
@@ -2156,7 +2170,13 @@ export class ShoferProvider
 	 * state is persisted in globalState.
 	 */
 	public getPluginManager(): Promise<PluginManager> {
-		if (this.pluginManager) return Promise.resolve(this.pluginManager)
+		if (this.pluginManager) {
+			// Re-assert the shared slot instead of assuming it still points somewhere: a
+			// second provider over this window may have installed its own manager and then
+			// released it on dispose with no successor to hand it to.
+			adoptSharedPluginManager(this.pluginManager)
+			return Promise.resolve(this.pluginManager)
+		}
 		// Memoize the in-flight build so concurrent callers share ONE manager. Building
 		// is async (discovery), and `this.pluginManager` is only assigned at the end;
 		// without this, two concurrent callers each build a manager and both register the
