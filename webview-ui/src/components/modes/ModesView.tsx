@@ -146,7 +146,7 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 
 	// "Is this an editable mode?" — everything below gates rename/delete/export and the
 	// custom-vs-built-in branches on it. The list carries plugin-contributed modes too
-	// (Shofer's own six come from the `builtin-modes` plugin), and those are NOT
+	// (Shofer's own six come from the `builtin-config` plugin), and those are NOT
 	// editable here: a plugin owns its modes, and overriding one means authoring a mode
 	// of the same slug. Hoisted above the useCallbacks that reference it.
 	const findModeBySlug = useCallback(

@@ -307,7 +307,7 @@ the full `getHost()` `HostBridge`.
 A plugin ships mode definitions in its manifest; they merge into the mode
 resolution chain alongside `.shofer/shofermodes` — which is now the **only** source of
 modes, since Shofer's own six are themselves a plugin's contribution (the bundled
-`builtin-modes` plugin, [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)).
+`builtin-config` plugin, [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md)).
 `effectiveModes()` in `packages/core/src/plugins/plugin-modes.ts` performs that merge.
 
 Each plugin mode is emitted with a **qualified `slug` of `<plugin>:<authoredSlug>`**
@@ -321,7 +321,7 @@ sibling `pluginName?`.
 its manifest, and its modes — and its slash commands — then keep their authored names,
 registered at the built-in precedence tier. It exists solely for a plugin shipping the
 platform's own defaults, whose names are a public contract — the built-ins must stay
-`code`/`architect`/…, not `builtin-modes:code`, and `/merge-worktree` must not become
+`code`/`architect`/…, not `builtin-config:code`, and `/merge-worktree` must not become
 `/worktrees:merge-worktree`. Scope is enforced: a global or project plugin declaring it
 is ignored, because an unqualified third-party name could silently shadow a built-in. A user or project mode of the same
 slug replaces the contributed one **in place**, so overriding a built-in neither
@@ -446,7 +446,7 @@ That is deliberate: forking a shipped workflow by copying it into `.shofer/workf
 is the intended way to adapt it, and namespacing would break it.
 
 Shofer's own **Debug** and **Implement a Feature** workflows are exactly this: the
-bundled `builtin-workflows` plugin ([`plugins/builtin-workflows/DESIGN.md`](../plugins/builtin-workflows/DESIGN.md)).
+bundled `builtin-config` plugin ([`plugins/builtin-config/docs/workflows.md`](../plugins/builtin-config/docs/workflows.md)).
 
 ### 5.8 Rules (`contributes.rules`)
 
@@ -617,13 +617,13 @@ export interface LifecycleHooks {
 ```
 
 The file-edit pair is what the bundled **file-changes** plugin
-([`plugins/file-changes/DESIGN.md`](../plugins/file-changes/DESIGN.md)) is built on: core publishes the
+([`plugins/basics/docs/file-changes.md`](../plugins/basics/docs/file-changes.md)) is built on: core publishes the
 edit, the plugin keeps the two copies that make a diff and a revert possible.
 
 **Per-plugin hook budget.** Hooks run under a **500 ms** default budget
 ({@link PLUGIN*HOOK_TIMEOUT_MS}); a plugin whose hook does work the agent must
 genuinely \_wait* for declares a manifest **`hookTimeoutMs`** (capped at 60 s) that
-overrides it for that plugin only. The bundled checkpoints plugin is the motivating
+overrides it for that plugin only. The bundled basics plugin (its checkpoints feature) is the motivating
 case: snapshotting a large workspace inside `beforeToolCall` takes seconds, and
 finishing late is useless because the file has already been written.
 
@@ -845,7 +845,7 @@ caller is waiting on the answer, so a throw (or an unknown plugin / missing
 which plugin — if any — provides it. `pluginRegistry.requestAll(method, params)` asks
 every plugin the same question and returns the answers; a plugin that does not recognise
 the method throws, which counts as "no answer" rather than an error. The one convention
-in use is **`"task-stats"`** → `{ insertions, deletions }`, which the file-changes plugin
+in use is **`"task-stats"`** → `{ insertions, deletions }`, which the basics plugin's file-changes feature
 answers so a completed task gets its `+`/`−` badge; with no plugin answering there is
 simply no badge.
 
@@ -901,7 +901,7 @@ interface PluginTaskControl {
 - **`openTask`** opens and focuses a NEW task, optionally in another directory, and
   resolves with its id. Without `text` the task is idle and waits for the user — the
   distinction from `ctx.agent.spawn`, which starts an agent _run_ (prompt in, awaitable
-  result out, `permissions.agent` because it bills). The bundled `worktrees` plugin uses
+  result out, `permissions.agent` because it bills). The `basics` plugin's worktrees feature uses
   it to put the user inside a checkout it just created.
 
 Gated like the other capabilities: ungranted ⇒ a denying stub, no host seam ⇒ absent.
@@ -912,7 +912,7 @@ where the _host_ is rewinding and the plugin follows.
 diff viewer, for a plugin that computes a set of before/after contents and needs it
 rendered rather than reinvented.
 
-The bundled **checkpoints** plugin ([`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md))
+The bundled `basics` plugin's **checkpoints** feature ([`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md))
 is built entirely from §5.10 + §5.13 + §5.14 — it is the worked example of a _feature_,
 not just a tool, living outside core.
 
@@ -993,9 +993,10 @@ independent** consent (billed AI calls — see [§7](#7-security-model)).
 
 **Organization suppression (`forceDisabledPlugins`).** A deployment can suppress
 plugins outright — `PluginManager.forceDisabledPlugins`, fed from env by
-`governanceDisabledPlugins()` (`SHOFER_DISABLED_PLUGINS`, plus the legacy
-`SHOFER_DISABLE_BUILTIN_{MODES,WORKFLOWS}` flags which now name the bundled plugins
-that carry those built-ins). It is **not** a preference: a suppressed plugin never
+`governanceDisabledPlugins()` (`SHOFER_DISABLED_PLUGINS`, comma-separated —
+`builtin-config` is the entry that removes the built-in modes and workflows; a
+`basics:<feature>` entry is ignored here and read by the `basics` plugin itself as a
+feature switch). It is **not** a preference: a suppressed plugin never
 loads, `setEnabled` refuses to switch it on, and the user's recorded intent only takes
 effect if the org lifts it. This is what lets an org define the entire mode/workflow set
 from a config bundle.
@@ -1219,7 +1220,7 @@ optionally add a UI status badge — no MCP protocol changes needed.
 - **`CustomModesManager`** — `getAllModes()` includes plugin modes from `contributes.modes`, emitted under the namespaced slug `<plugin>:<authoredSlug>` with `source: "plugin"`; `private` modes are agent-switchable but hidden from the picker.
 - **`McpHub`** reads MCP configs from plugin manifests (`contributes.mcpServers`), merged with `.shofer/mcp.json` and `mcp_settings.json`.
 - **Marketplace** installs plugins (`.shofer-plugin` archives) in addition to mode/MCP YAML items; a plugin can contain modes and MCP configs as declarative contributions, so a plugin install is a superset of the current mode/MCP install.
-- **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `checkpoints` plugin, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
+- **Checkpoints** are no longer a core subsystem: per-task undo history is the bundled `basics` plugin's checkpoints feature, built on `beforeToolCall` + `ctx.task` + `onTimelineRewind` + `handleRequest` ([`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md)). Core keeps only those generic seams — no shadow-git, no `enableCheckpoints` setting, no checkpoint-specific wire methods.
 
 ---
 
@@ -1436,18 +1437,18 @@ observe; `ctx.config` / `ctx.storage` back config + idempotency state. So a runn
 
 ## Related documents
 
-| Document                                                                | Relationship                                                                     |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [`../PLUGINS.md`](../PLUGINS.md)                                        | Author-facing how-to: manifest fields, build invocations, walkthroughs.          |
-| [`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)     | First consumer of the §14 agent-control additions: the Temporal runner plugin.   |
-| [`agentapi.md`](./agentapi.md)                                          | The programmatic agent API surface plugins run alongside.                        |
-| [`acp.md`](./acp.md)                                                    | Agent Client Protocol — an external control surface complementary to plugins.    |
-| [`v3_architecture.md`](./v3_architecture.md)                            | The host-agnostic carve-out the plugin substrate is built on.                    |
-| [`marketplace.md`](./marketplace.md)                                    | Marketplace is the plugin distribution/curation layer.                           |
-| [`mcp.md`](./mcp.md)                                                    | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
-| [`adding-new-tools.md`](./adding-new-tools.md)                          | Plugin tools follow the `CustomToolDefinition` contract.                         |
-| [`skills.md`](./skills.md)                                              | Plugin skills are discovered alongside `.shofer/skills/`.                        |
-| [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md) | Plugin modes merge into the mode resolution chain.                               |
-| [`host-boundary.md`](./host-boundary.md)                                | Plugins use `getHost()` — host-agnostic by construction.                         |
-| [`packages/types/src/plugin.ts`](../packages/types/src/plugin.ts)       | The `ShoferPlugin` interface and all plugin types.                               |
-| [`packages/core/src/plugins/`](../packages/core/src/plugins/)           | `PluginManager`, `PluginRegistry`, sandbox, and host-capability implementations. |
+| Document                                                                          | Relationship                                                                     |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`../PLUGINS.md`](../PLUGINS.md)                                                  | Author-facing how-to: manifest fields, build invocations, walkthroughs.          |
+| [`temporal-runner/DESIGN.md`](../plugins/temporal-runner/DESIGN.md)               | First consumer of the §14 agent-control additions: the Temporal runner plugin.   |
+| [`agentapi.md`](./agentapi.md)                                                    | The programmatic agent API surface plugins run alongside.                        |
+| [`acp.md`](./acp.md)                                                              | Agent Client Protocol — an external control surface complementary to plugins.    |
+| [`v3_architecture.md`](./v3_architecture.md)                                      | The host-agnostic carve-out the plugin substrate is built on.                    |
+| [`marketplace.md`](./marketplace.md)                                              | Marketplace is the plugin distribution/curation layer.                           |
+| [`mcp.md`](./mcp.md)                                                              | MCP servers are one kind of plugin contribution (`contributes.mcpServers`).      |
+| [`adding-new-tools.md`](./adding-new-tools.md)                                    | Plugin tools follow the `CustomToolDefinition` contract.                         |
+| [`skills.md`](./skills.md)                                                        | Plugin skills are discovered alongside `.shofer/skills/`.                        |
+| [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md) | Plugin modes merge into the mode resolution chain.                               |
+| [`host-boundary.md`](./host-boundary.md)                                          | Plugins use `getHost()` — host-agnostic by construction.                         |
+| [`packages/types/src/plugin.ts`](../packages/types/src/plugin.ts)                 | The `ShoferPlugin` interface and all plugin types.                               |
+| [`packages/core/src/plugins/`](../packages/core/src/plugins/)                     | `PluginManager`, `PluginRegistry`, sandbox, and host-capability implementations. |

@@ -600,7 +600,7 @@ For `read` / `write` / `execute` / `browser` groups the chain is symbolic (group
 
 The Step 4 handler example is intentionally minimal, but real tool implementations also need:
 
-- **File Change Tracking**: Tools that mutate workspace files must call `task.fileContextTracker.captureOriginal(relPath, content)` before mutation and `task.fileContextTracker.trackFileContext(relPath, "shofer_edited")` after. The pair publishes the edit to the plugin hooks that back the file-changes panel; without them the file is missing from it. See [`plugins/file-changes/DESIGN.md`](../plugins/file-changes/DESIGN.md).
+- **File Change Tracking**: Tools that mutate workspace files must call `task.fileContextTracker.captureOriginal(relPath, content)` before mutation and `task.fileContextTracker.trackFileContext(relPath, "shofer_edited")` after. The pair publishes the edit to the plugin hooks that back the file-changes panel; without them the file is missing from it. See [`plugins/basics/docs/file-changes.md`](../plugins/basics/docs/file-changes.md).
 
 - **Pre-tool plugin hook**: before any tool's `.handle()` runs, `presentAssistantMessage.ts` calls `pluginRegistry.applyBeforeToolCall(...)`, which is where a snapshot plugin (the bundled `checkpoints` one) takes its pre-mutation snapshot. Tool handlers need no snapshot code of their own — and no new tool needs registering anywhere for it, though a tool that mutates files in a NEW way should be added to that plugin's `FILE_MUTATING_TOOLS`.
 

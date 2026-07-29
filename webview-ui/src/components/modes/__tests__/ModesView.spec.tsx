@@ -15,7 +15,7 @@ vitest.mock("@src/utils/vscode", () => ({
 
 /**
  * The modes the host pushes on `ExtensionState.customModes`. Shofer's own arrive from
- * the bundled `builtin-modes` plugin, tagged `source: "plugin"` — which is also what
+ * the bundled `builtin-config` plugin, tagged `source: "plugin"` — which is also what
  * makes them read-only in this view (a plugin owns its modes).
  */
 const BUILT_IN_MODES = [

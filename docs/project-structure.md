@@ -291,5 +291,5 @@ The doc describes completed/idle tasks as "gray indicator" but the actual `LIFEC
 1. **Tool architecture overview** — how native tools, MCP tools, and private LM tools are dispatched.
 2. **Auto-approval flow** — how `checkAutoApproval` gates tool execution.
 3. **Message persistence layout** — where `ui_messages.json`, `api_conversation_history.json`, and `history_item.json` live on disk.
-4. **Checkpoint (shadow-git) model** — how the bundled `checkpoints` plugin provides undo/redo (`plugins/checkpoints/DESIGN.md`).
+4. **Checkpoint (shadow-git) model** — how the bundled `basics` plugin's checkpoints feature provides undo/redo (`plugins/basics/docs/checkpoints.md`).
 5. **Context management** — condense, truncation, FileContextTracker.

@@ -315,7 +315,7 @@ Distributing execution uses two boundaries that the v3 split already defines:
     Category I, and the boundary is already drawn.
 
 3. **Reverse data channel (controller → executor): one generic method.**
-   A plugin-owned per-task feature — the file-changes panel, the checkpoints plugin's
+   A plugin-owned per-task feature — the file-changes panel, the checkpoints feature's
    shadow-git history — operates on state that lives on the **owning executor**. For a
    remote (shadow) task the controller therefore does not touch a local `Task`; it calls
    `pluginRequest(taskId, plugin, method, params)`, which round-trips to the executor

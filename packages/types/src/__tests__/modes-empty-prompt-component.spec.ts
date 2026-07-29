@@ -5,7 +5,7 @@ import { getModeSelection } from "../modes.js"
 
 /**
  * `customModePrompts` overrides reshape modes the user did **not** author — which,
- * since the six built-ins moved into the `builtin-modes` plugin, means every
+ * since the six built-ins moved into the `builtin-config` plugin, means every
  * plugin-contributed mode. A mode the user wrote is used exactly as written.
  */
 
@@ -16,7 +16,7 @@ const architectMode: ModeConfig = {
 	customInstructions: "Do some information gathering to get more context about the task.",
 	tools: ["read"],
 	source: "plugin",
-	pluginName: "builtin-modes",
+	pluginName: "builtin-config",
 }
 
 const debugMode: ModeConfig = {
@@ -26,7 +26,7 @@ const debugMode: ModeConfig = {
 	customInstructions: "Reflect on 5-7 different possible sources of the problem.",
 	tools: ["read"],
 	source: "plugin",
-	pluginName: "builtin-modes",
+	pluginName: "builtin-config",
 }
 
 // `code` first, so it is also the fallback target for an unknown slug.

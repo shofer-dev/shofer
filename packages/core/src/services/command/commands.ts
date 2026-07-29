@@ -236,7 +236,7 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 
 	// …and, at that same tier, the authored names a bundled plugin claimed with
 	// `unqualifiedContributions` — the reason `/merge-worktree` still resolves after the
-	// worktree commands moved out of core into `plugins/worktrees`.
+	// worktree commands moved out of core into the `basics` plugin (`plugins/basics`).
 	if (pluginManager) {
 		for (const contribution of pluginManager.getContributedCommandDirs()) {
 			if (!contribution.unqualified) continue

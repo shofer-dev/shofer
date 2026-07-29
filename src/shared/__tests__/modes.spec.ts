@@ -848,7 +848,7 @@ describe("FileRestrictionError", () => {
 })
 
 describe("getModeSelection", () => {
-	// Stands in for what the `builtin-modes` plugin contributes: same shape, same
+	// Stands in for what the `builtin-config` plugin contributes: same shape, same
 	// `source: "plugin"` tag, so the merge/override semantics under test are the real ones.
 	const pluginModes: ModeConfig[] = [
 		{
@@ -858,7 +858,7 @@ describe("getModeSelection", () => {
 			customInstructions: "Built-in Code Instructions",
 			tools: ["read"],
 			source: "plugin",
-			pluginName: "builtin-modes",
+			pluginName: "builtin-config",
 		},
 		{
 			slug: "debug",
@@ -867,7 +867,7 @@ describe("getModeSelection", () => {
 			customInstructions: "Built-in Debug Instructions",
 			tools: ["read"],
 			source: "plugin",
-			pluginName: "builtin-modes",
+			pluginName: "builtin-config",
 		},
 	]
 	const builtInDebugMode = pluginModes.find((m) => m.slug === "debug")!

@@ -6,7 +6,7 @@ import { getSharedPluginManager } from "./plugin-manager.js"
  * The **effective mode list**: what the user's and the project's own mode files define,
  * merged with what enabled plugins contribute.
  *
- * Shofer's own six modes are plugin data now (the bundled `builtin-modes` plugin), so
+ * Shofer's own six modes are plugin data now (the bundled `builtin-config` plugin), so
  * this is the one place that decides what "all modes" means. Two groups of contributed
  * modes behave differently, and the ordering below is the behaviour users had when the
  * built-ins were a constant in `@shofer/types`:

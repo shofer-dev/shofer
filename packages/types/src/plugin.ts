@@ -1345,7 +1345,7 @@ export const pluginManifestSchema = z
 		 * every user setting, every mode link and every `switch_mode` call; its worktree
 		 * commands are `/merge-worktree`, `/rebase-worktree`, … in every doc and every
 		 * `run_slash_command` the agent makes. Moving them into a plugin must not rename
-		 * them to `builtin-modes:code` or `worktrees:merge-worktree`.
+		 * them to `builtin-config:code` or `basics:merge-worktree`.
 		 *
 		 * It trades away the "collisions are impossible by construction" guarantee for
 		 * those names, so a third-party plugin can never have it: an unqualified name from

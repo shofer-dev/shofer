@@ -1,0 +1,84 @@
+{
+	"name": "basics",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "Shofer's workspace basics in one plugin, each feature independently switchable: Checkpoints (per-task undo history in a shadow git repository, with diff and restore from the chat timeline), File Changes (a copy of every file the agent edits — before and after — with per-file diff, revert and accept above the chat input, plus the `get_changed_files` tool), and Worktrees (a git worktree per task under .worktrees/, the branch picker in the chat input, worktree management in Settings, .shofer/worktreeinclude seeding, and the merge/rebase/cleanup slash commands).",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"main": "src/main.ts",
+	"defaultEnabled": true,
+	"unqualifiedContributions": true,
+	"hookTimeoutMs": 60000,
+	"permissions": {
+		"lifecycle": true,
+		"task": true,
+		"tools": true,
+		"commands": true,
+		"editor": true,
+		"ui": ["chat-message-addon", "chat-footer", "chat-input-toolbar", "settings-tab"]
+	},
+	"contributes": {
+		"ui": [
+			{ "region": "chat-message-addon", "entry": "ui/row.js" },
+			{ "region": "chat-footer", "entry": "ui/panel.js" },
+			{ "region": "chat-input-toolbar", "entry": "ui/indicator.js" },
+			{ "region": "settings-tab", "entry": "ui/settings.js" }
+		],
+		"commands": [
+			{
+				"name": "merge-worktree",
+				"description": "Merge this worktree's branch into the base branch with a merge commit."
+			},
+			{
+				"name": "merge-worktree-cleanup",
+				"description": "Merge this worktree's branch into the base branch, then delete the branch and the worktree."
+			},
+			{
+				"name": "rebase-worktree",
+				"description": "Rebase this worktree's branch onto the base branch and fast-forward merge it."
+			},
+			{
+				"name": "rebase-worktree-cleanup",
+				"description": "Rebase and fast-forward merge this worktree's branch, then delete the branch and the worktree."
+			},
+			{
+				"name": "dryrun-rebase-worktree",
+				"description": "Preview the conflicts a rebase onto the base branch would produce, without changing anything."
+			},
+			{
+				"name": "worktree-status",
+				"description": "Report this worktree's branch status: ahead/behind, uncommitted changes and merge readiness."
+			}
+		]
+	},
+	"config": {
+		"type": "object",
+		"properties": {
+			"checkpoints": {
+				"type": "boolean",
+				"default": true,
+				"description": "Per-task undo history: snapshot the workspace into a shadow git repository before every file-mutating turn."
+			},
+			"file-changes": {
+				"type": "boolean",
+				"default": true,
+				"description": "Per-task file-change tracking: the changed-files panel above the chat input and the get_changed_files tool."
+			},
+			"worktrees": {
+				"type": "boolean",
+				"default": true,
+				"description": "Per-task git worktrees: each task runs in its own worktree under .worktrees/ unless you pick a branch."
+			},
+			"checkpointInitTimeoutSeconds": {
+				"type": "number",
+				"default": 15,
+				"description": "How long to wait for a task's shadow repository to initialize before giving up and disabling checkpoints for that task."
+			},
+			"checkpointExcludePatterns": {
+				"type": "string",
+				"default": "",
+				"description": "Extra newline-separated .gitignore-style patterns to exclude from checkpoints, on top of the built-in build-artifact/media/cache/LFS patterns."
+			}
+		}
+	}
+}

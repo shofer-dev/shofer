@@ -95,7 +95,7 @@ Shofer ships with **two built-in multi-agent workflows** — formal, determinist
 
 Launch a workflow via **New… → New Workflow** in the chat toolbar. Create your own custom workflows as `.slang` files under `.shofer/workflows/` (project) or `~/.shofer/workflows/` (global).
 
-Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](plugins/builtin-workflows/DESIGN.md) • [Slang Language Spec](docs/slang_specs.md)
+Learn more: [User Manual → Workflows](USER_MANUAL.md#9-workflows) • [Built-in Workflows SoT](plugins/builtin-config/docs/workflows.md) • [Slang Language Spec](docs/slang_specs.md)
 
 ## Parallel Tasks & Worktrees
 
@@ -116,7 +116,7 @@ Run parallel tasks on different branches — all in one VS Code window:
 - Each task can be scoped to a specific worktree for branch-isolated parallel work
 - No more stash/commit gymnastics or multiple VS Code windows for PRs
 
-[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/worktrees/DESIGN.md)
+[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/basics/docs/worktrees.md)
 
 ## RAG Indexing
 

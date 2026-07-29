@@ -2134,7 +2134,7 @@ export const TERMINAL_FLOW_STATUSES: ReadonlySet<FlowStatus> = new Set<FlowStatu
 /**
  * Priority order for workflow discovery (lowest to highest):
  *   1. Plugin   — `workflows/` dirs of enabled plugins that contribute them
- *                 (the `builtin-workflows` plugin ships Debug + Implement a Feature)
+ *                 (the `builtin-config` plugin ships Debug + Implement a Feature)
  *   2. Global   — ~/.shofer/workflows/
  *   3. Project  — .shofer/workflows/ (highest priority, overrides lower layers)
  *

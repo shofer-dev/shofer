@@ -18,11 +18,11 @@ import { Button, usePluginTranslation } from "../index"
  * integrity is covered elsewhere: esbuild fails on an unresolvable import,
  * `plugin-ui-shim.spec.ts` pins the exported surface, and `PluginSlot.external.spec.tsx`
  * pins the load-and-mount path. The strings used here are a real plugin's
- * (`plugins/file-changes/locales/en.json`), so a key renamed there fails this spec.
+ * (`plugins/basics/locales/en.json`), so a key renamed there fails this spec.
  */
 
 const PLUGIN = "file-changes"
-const locales = JSON.parse(readFileSync(resolve(process.cwd(), "../plugins/file-changes/locales/en.json"), "utf8"))
+const locales = JSON.parse(readFileSync(resolve(process.cwd(), "../plugins/basics/locales/en.json"), "utf8"))
 
 /** A stand-in for a plugin's UI bundle: kit components + `usePluginTranslation`. */
 function PluginComponent({ count }: { count: number }) {

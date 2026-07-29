@@ -3,7 +3,7 @@
 ## Setup
 
 Each scenario assumes a git repository with at least one commit and a clean working tree,
-and the bundled `worktrees` plugin enabled (its default).
+and the `basics` plugin's worktrees feature enabled (its default).
 
 ## Scenarios
 

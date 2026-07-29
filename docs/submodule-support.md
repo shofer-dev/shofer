@@ -16,7 +16,7 @@ operate correctly in the presence of nested git repositories.
 ## How Checkpoints Work
 
 Shofer implements checkpoints via a **shadow git repository**
-([`ShadowGitRepo`](../plugins/checkpoints/src/shadow-git.ts)):
+([`ShadowGitRepo`](../plugins/basics/src/checkpoints/shadow-git.ts)):
 
 1. A separate `.git` directory is created **outside** the workspace (in a checkpoints directory)
 2. The shadow git's `core.worktree` is set to the user's actual workspace directory
@@ -148,7 +148,7 @@ prevent submodule detection during the filesystem walk.
 ## Implemented Fix: `GIT_DIR` without `GIT_WORK_TREE`
 
 The working solution sets `GIT_DIR` to the shadow repo's `.git` directory in
-[`createSanitizedGit`](../plugins/checkpoints/src/shadow-git.ts), but does
+[`createSanitizedGit`](../plugins/basics/src/checkpoints/shadow-git.ts), but does
 **not** set `GIT_WORK_TREE`.
 
 `core.worktree` (set during `init`) overrides `GIT_WORK_TREE` during normal
@@ -178,10 +178,10 @@ flowchart TD
 
 ### Changes
 
-| File                                                                        | Change                                                                  |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts)                 | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `init` |
-| [`shadow-git.spec.ts`](../plugins/checkpoints/__tests__/shadow-git.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)     |
+| File                                                                   | Change                                                                  |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`shadow-git.ts`](../plugins/basics/src/checkpoints/shadow-git.ts)     | Set `GIT_DIR` in `createSanitizedGit`; replace throw with log in `init` |
+| [`shadow-git.spec.ts`](../plugins/basics/__tests__/shadow-git.spec.ts) | Test "throws error" → "succeeds" (nested git no longer blocks init)     |
 
 ## Known Limitations
 
@@ -198,7 +198,7 @@ within the submodule directory are restored.
 
 ## Impact on File Changes Panel
 
-The File Changes panel ([`file-changes` plugin](../plugins/file-changes/))
+The File Changes panel (the `basics` plugin's file-changes feature, [`plugins/basics/docs/file-changes.md`](../plugins/basics/docs/file-changes.md))
 uses a single per-task working-directory backend with **no git dependency**. It stores
 verbatim file copies under `<taskDir>/base/<relPath>` (original state at first edit)
 and `<taskDir>/final/<relPath>` (last Shofer-produced state, for Redo).
@@ -225,9 +225,9 @@ bearing on the file-changes panel — it always used the working-directory backe
 
 ## References
 
-- [`shadow-git.ts`](../plugins/checkpoints/src/shadow-git.ts) — checkpoint implementation
-- [`CheckpointServiceRegistry.ts`](../plugins/checkpoints/src/service-registry.ts) — per-task shadow git instance (extends `ShadowGitRepo`)
-- [`plugins/file-changes/`](../plugins/file-changes/) — file changes panel (per-task file copies, no git dependency)
+- [`shadow-git.ts`](../plugins/basics/src/checkpoints/shadow-git.ts) — checkpoint implementation
+- [`CheckpointServiceRegistry.ts`](../plugins/basics/src/checkpoints/service-registry.ts) — per-task shadow git instance (extends `ShadowGitRepo`)
+- [`plugins/basics/src/file-changes/`](../plugins/basics/src/file-changes/) — file changes panel (per-task file copies, no git dependency)
 - [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
 - [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
 
@@ -239,7 +239,7 @@ bearing on the file-changes panel — it always used the working-directory backe
 `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
 `GIT_ALTERNATE_OBJECT_DIRECTORIES`, and `GIT_TEMPLATE_DIR`). Why stripping
 `GIT_CEILING_DIRECTORIES` matters is not discussed in this doc or in
-[`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md).
+[`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md).
 
 ### 2. ~~Spec describe block name mismatch~~ — ✅ fixed
 

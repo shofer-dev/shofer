@@ -1,6 +1,6 @@
 // npx vitest core/tools/__tests__/newTaskTool.spec.ts
 
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 import type { AskApproval, HandleError, NativeToolArgs, ToolUse } from "@shofer/types"
 import { setHost, createInMemoryHost, InMemoryConfig, type HostBridge } from "@shofer/types"
 

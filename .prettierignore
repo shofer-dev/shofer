@@ -4,6 +4,7 @@
 # unit; they must NOT be hand-formatted, or the pre-commit Prettier pass would fight the
 # build and leave the tree perpetually dirty.
 plugins/*/ui/*.js
-# Same for a plugin's pre-bundled entry point (checkpoints ships `main.js` with its
-# runtime dependency inlined, so the packaged plugin needs no `node_modules`).
-plugins/*/main.mjs
+# Same for a plugin's pre-bundled (vendored) runtime dependencies, so the packaged
+# plugin needs no `node_modules` (e.g. basics ships `diff`, `simple-git` and `ignore`
+# under `src/vendor/`).
+plugins/*/src/vendor/*.mjs

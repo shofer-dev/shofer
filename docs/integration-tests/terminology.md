@@ -140,11 +140,11 @@ Tests that verify the canonical terminology, naming, and concepts described in [
 - **Action**: Monitor the `ExtensionMessage.type` values received by the webview.
 - **Assert**: All types match the `ExtensionMessage["type"]` union in `vscode-extension-host.ts`.
 
-### IPC3 — the file-changes plugin's panel push
+### IPC3 — the basics plugin's file-changes panel push
 
 - **Setup**: Use `apply_diff` to modify a file.
 - **Action**: Observe the `pluginUiMessage` addressed to `file-changes`.
-- **Assert**: The message is `{ type: "changedFiles", payload }` where `payload` is `{ taskId: string, entries: [...] }`; each entry has `path`, `insertions`, `deletions`, `binary`, `state`, `hasOriginalContent`, `hasFinalContent` (the plugin's own shape — see `plugins/file-changes/src/types.ts`).
+- **Assert**: The message is `{ type: "changedFiles", payload }` where `payload` is `{ taskId: string, entries: [...] }`; each entry has `path`, `insertions`, `deletions`, `binary`, `state`, `hasOriginalContent`, `hasFinalContent` (the plugin's own shape — see `plugins/basics/src/file-changes/types.ts`).
 
 ### IPC4 — Message Queue Drain
 

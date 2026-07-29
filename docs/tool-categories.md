@@ -202,7 +202,7 @@ This section tracks known deficiencies in this document and in the tool-group sy
 ### Source-of-truth risks
 
 - **Fragile `#L141` line anchor**: The link to [`TOOL_GROUPS`](../packages/types/src/tool.ts#L141) points to line 141, but the constant is at line 175. Line-number anchors in documentation are inherently fragile. Consider linking to the symbol name only.
-- **No version pin in the doc**: The doc says "Last Updated: 2026-05-04" but has no version number that can be correlated with the extension version that last changed `TOOL_GROUPS` or the `builtin-modes` plugin's mode definitions. Consider adding a `Version` field that matches the extension version at the time of last verification.
+- **No version pin in the doc**: The doc says "Last Updated: 2026-05-04" but has no version number that can be correlated with the extension version that last changed `TOOL_GROUPS` or the `builtin-config` plugin's mode definitions. Consider adding a `Version` field that matches the extension version at the time of last verification.
 
 ### Tool-group system design observations
 

@@ -6,4 +6,4 @@
  * hand-copied duplicate that drifts.
  */
 
-export { BUILTIN_MODES } from "./builtin-modes.js"
+export { BUILTIN_MODES } from "./builtin-config.js"

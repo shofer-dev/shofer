@@ -4,7 +4,7 @@ import { getAllModes, resolveModeConfig, isCustomMode, defaultModeSlug } from ".
 
 /**
  * Modes are **data**, not a constant: Shofer's own six arrive from the bundled
- * `builtin-modes` plugin and reach these helpers through the same list as the user's
+ * `builtin-config` plugin and reach these helpers through the same list as the user's
  * and the project's. So the helpers below know nothing about "built-in" — they merge,
  * de-duplicate and resolve whatever list the host assembled.
  */

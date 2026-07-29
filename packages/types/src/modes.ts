@@ -82,7 +82,7 @@ export function getToolsForMode(
  * The slug of the mode a task falls back to when its own mode cannot be resolved.
  *
  * This is a **platform constant, not a lookup**: modes themselves are data — Shofer's
- * own six ship in the bundled `builtin-modes` plugin, and a user, a project or an org
+ * own six ship in the bundled `builtin-config` plugin, and a user, a project or an org
  * can add, override or (by suppressing that plugin) replace all of them. What stays
  * fixed is the *name* the platform reaches for first. If nothing defines `code`,
  * resolution falls through to whatever modes do exist; see {@link resolveModeConfig}.
@@ -119,7 +119,7 @@ export function resolveModeConfig(slug: string, modes: readonly ModeConfig[] | u
 	if (!first) {
 		throw new Error(
 			"No modes are available: the built-in modes are disabled and no custom modes are defined. " +
-				'Enable the "builtin-modes" plugin or define a mode in .shofer/shofermodes.',
+				'Enable the "builtin-config" plugin or define a mode in .shofer/shofermodes.',
 		)
 	}
 	return first

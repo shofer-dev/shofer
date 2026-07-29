@@ -5,12 +5,12 @@ import type { ModeConfig } from "@shofer/types"
 
 import { TOOL_GROUPS } from "@shofer/types"
 
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 
 import { validateToolUse, isToolAllowedForMode } from "../validateToolUse.js"
 
 // The mode list every `isToolAllowedForMode` call below resolves against — a default
-// install's modes, contributed by the bundled `builtin-modes` plugin.
+// install's modes, contributed by the bundled `builtin-config` plugin.
 const codeMode = "code"
 const architectMode = "architect"
 const debugMode = "debug"

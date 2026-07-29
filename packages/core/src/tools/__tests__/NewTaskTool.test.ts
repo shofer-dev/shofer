@@ -1,4 +1,4 @@
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 import { NewTaskTool } from "../NewTaskTool.js"
 
 /**

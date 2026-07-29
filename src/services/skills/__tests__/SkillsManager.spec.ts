@@ -137,7 +137,7 @@ describe("SkillsManager", () => {
 			cwd: PROJECT_DIR,
 			customModesManager: {
 				// The effective mode list, as a real host serves it: the built-ins come
-				// from the `builtin-modes` plugin, so mode-specific skill directories are
+				// from the `builtin-config` plugin, so mode-specific skill directories are
 				// only discovered when they are present.
 				getCustomModes: vi.fn().mockResolvedValue(BUILTIN_MODES),
 			} as any,

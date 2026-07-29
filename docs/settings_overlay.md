@@ -260,15 +260,15 @@ Key globalState keys for modes:
 
 ### 2d. Built-in Modes — a bundled plugin
 
-| Property     | Value                                                                       |
-| ------------ | --------------------------------------------------------------------------- |
-| **Path**     | [`plugins/builtin-modes/plugin.json`](../plugins/builtin-modes/plugin.json) |
-| **Type**     | Plugin manifest (`contributes.modes`), shipped in the extension bundle      |
-| **Scope**    | Per-extension version; removable (disable the plugin)                       |
-| **Priority** | **Lowest** (a user or project mode of the same slug replaces one)           |
-| **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer   |
+| Property     | Value                                                                         |
+| ------------ | ----------------------------------------------------------------------------- |
+| **Path**     | [`plugins/builtin-config/plugin.json`](../plugins/builtin-config/plugin.json) |
+| **Type**     | Plugin manifest (`contributes.modes`), shipped in the extension bundle        |
+| **Scope**    | Per-extension version; removable (disable the plugin)                         |
+| **Priority** | **Lowest** (a user or project mode of the same slug replaces one)             |
+| **Purpose**  | Built-in modes: Code, Architect, Debug, Code Search, Web Search, Reviewer     |
 
-The six modes, in manifest order (see [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)):
+The six modes, in manifest order (see [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md)):
 `code` (the default mode and ultimate fallback), `architect`, `debug`, `code-search`,
 `web-search`, `reviewer`. They reach every consumer through the same `customModes`
 list as user and project modes — merged by `effectiveModes()`, so there is no
@@ -452,7 +452,7 @@ Changing the default profile is name-only: it must never touch a live
 flowchart LR
     PROJ["'.shofer/shofermodes' (workspace)<br/>source: project"]
     GLOB["custom_modes.yaml (global storage)<br/>source: global"]
-    BUILT["builtin-modes plugin<br/>contributes.modes"]
+    BUILT["builtin-config plugin<br/>contributes.modes"]
     S1["Stage 1 — CustomModesManager.getCustomModes()<br/>a global mode is kept only if its slug<br/>is not already a project mode"]
     CM["customModes[]"]
     S2["Stage 2 — effectiveModes()<br/>same slug overrides in place, new slug appends"]
@@ -1160,11 +1160,11 @@ live codebase. Each item includes the current state and a suggested remedy.
 ### 14a. Built-in Mode List — ✅ fixed
 
 §2d previously listed bogus modes (`ask`, `orchestrator`) and claimed `architect`
-was the default. The [`builtin-modes` plugin](../plugins/builtin-modes/plugin.json)
+was the default. The [`builtin-config` plugin](../plugins/builtin-config/plugin.json)
 contributes **six** modes, in order: `code` (the default/ultimate
 fallback), `architect`, `debug`, `code-search`, `web-search`, `reviewer`. There is
 no `ask`, `orchestrator`, `search`, `opinion`, or `browser` mode. §2d's table and
-code example were corrected. (Authoritative source: [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md).)
+code example were corrected. (Authoritative source: [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md).)
 
 ### 14b. `custom_modes.yaml` Merge Logic Duplicate Code — ✅ fixed
 

@@ -39,4 +39,4 @@ The **Worktree Indicator** in the Task Header shows which worktree the current t
 2. Choose an existing worktree or create a new one
 3. Start a task — it will use the selected worktree's branch
 
-[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/worktrees/DESIGN.md)
+[Read the full worktree documentation](https://github.com/shofer-dev/shofer/blob/master/plugins/basics/docs/worktrees.md)

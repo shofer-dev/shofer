@@ -18,13 +18,13 @@ A feature that ships as a **plugin** rather than as core keeps its whole doc set
 own directory — `DESIGN.md` (design and reasoning, including the core-side seams the
 feature is built on), plus `README.md`/`TODO.md` where they exist:
 
-- [`plugins/builtin-modes/DESIGN.md`](../plugins/builtin-modes/DESIGN.md)
-- [`plugins/builtin-workflows/DESIGN.md`](../plugins/builtin-workflows/DESIGN.md)
-- [`plugins/checkpoints/DESIGN.md`](../plugins/checkpoints/DESIGN.md)
-- [`plugins/file-changes/DESIGN.md`](../plugins/file-changes/DESIGN.md)
+- [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md)
+- [`plugins/builtin-config/docs/workflows.md`](../plugins/builtin-config/docs/workflows.md)
+- [`plugins/basics/docs/checkpoints.md`](../plugins/basics/docs/checkpoints.md)
+- [`plugins/basics/docs/file-changes.md`](../plugins/basics/docs/file-changes.md)
 - [`plugins/live-memory/DESIGN.md`](../plugins/live-memory/DESIGN.md)
 - [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md)
-- [`plugins/worktrees/DESIGN.md`](../plugins/worktrees/DESIGN.md)
+- [`plugins/basics/docs/worktrees.md`](../plugins/basics/docs/worktrees.md)
 
 The plugin _substrate_ (seams, manifest, lifecycle) stays in
 [`plugin_system.md`](plugin_system.md), and the authoring guide in
@@ -58,7 +58,7 @@ docs and their verdicts:
 | `parallelism.md`, `message_queue.md`, `task-export.md`, `summarization.md` | ✅ Shipped                                                                                                                                                                          |
 | `performance_optimizations.md`, `public_api.md`, `headless.md`             | ✅ Shipped (`performance_optimizations.md` rewritten to current-state characteristics for SQLite persistence + delta IPC)                                                           |
 | `otel-metrics.md`                                                          | ✅ Shipped — OpenTelemetry metrics catalog + instrument surface                                                                                                                     |
-| `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `worktrees` plugin — see `plugins/worktrees/DESIGN.md`)                                                                               |
+| `worktree-shell-sandboxing.md`                                             | ✅ Shipped (the feature itself is the bundled `basics` plugin's worktrees feature — see `plugins/basics/docs/worktrees.md`)                                                         |
 | `chatview-windowed-message-loading.md`                                     | ✅ Shipped (H2 reverted, re-shipped as tail-window cold load — doc already explains this)                                                                                           |
 | `multi_threaded.md`                                                        | 🚧 Phase 0–1 worker infrastructure built + unit-tested but **not wired into production** (no task currently runs in a worker); the four-runtime architecture is desired, not active |
 | `cloud.md`                                                                 | ⛔ Inherited from upstream; the described cloud package/services do not exist (doc already carries this banner)                                                                     |

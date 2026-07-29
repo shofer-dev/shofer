@@ -12,7 +12,7 @@ import { parseSlang, validateSlangAST } from "@shofer/core"
 
 describe("slang file parse smoke test", () => {
 	it("parses implement-feature.slang with zero parse errors", () => {
-		// implement-feature.slang ships in the bundled `builtin-workflows` plugin
+		// implement-feature.slang ships in the bundled `builtin-config` plugin
 		const src = readFileSync(
 			resolve(
 				__dirname,
@@ -21,7 +21,7 @@ describe("slang file parse smoke test", () => {
 				"..",
 				"..",
 				"plugins",
-				"builtin-workflows",
+				"builtin-config",
 				"workflows",
 				"implement-feature.slang",
 			),

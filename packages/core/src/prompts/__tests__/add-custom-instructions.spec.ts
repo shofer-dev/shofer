@@ -49,7 +49,7 @@ import { SYSTEM_PROMPT } from "../system.js"
 import type { McpHub } from "../../services/mcp/McpHub.js"
 import { defaultModeSlug, Mode } from "@shofer/types"
 
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 import { addCustomInstructions } from "../sections/custom-instructions.js"
 
 // Mock the sections

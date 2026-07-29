@@ -4,15 +4,20 @@
  *
  * The SaaS `resource-manager` sets these on the executor / code-server pod (the
  * same delivery channel as `SHOFER_GLOBAL_DIR`), letting an org fully define the
- * available mode / workflow set via a config bundle: when a flag is truthy the
- * corresponding built-ins are removed so that ONLY user/project/bundle-provided
- * modes/workflows remain.
+ * available mode / workflow set via a config bundle: naming `builtin-config` in
+ * `SHOFER_DISABLED_PLUGINS` removes the built-in modes and workflows so that ONLY
+ * user/project/bundle-provided ones remain.
  *
- * The built-ins ship as **bundled plugins** (`builtin-modes`, `builtin-workflows`),
- * so suppression has exactly one expression — {@link governanceDisabledPlugins},
- * consumed by `PluginManager`'s `forceDisabledPlugins`. There is no second
- * enumeration point to keep in sync, and nothing for the webview to learn: a
- * suppressed plugin simply contributes nothing, so its modes never reach any list.
+ * The built-ins ship as a **bundled plugin** (`builtin-config`), so suppression has
+ * exactly one expression — {@link governanceDisabledPlugins}, consumed by
+ * `PluginManager`'s `forceDisabledPlugins`. There is no second enumeration point to
+ * keep in sync, and nothing for the webview to learn: a suppressed plugin simply
+ * contributes nothing, so its modes never reach any list.
+ *
+ * The `basics` plugin additionally honors **feature-scoped** entries of the form
+ * `basics:<feature>` (e.g. `basics:worktrees`): the manager ignores them (they match
+ * no plugin name) and the plugin reads the same variable to switch one feature off —
+ * one variable, two granularities (see `plugins/basics/DESIGN.md`).
  *
  * The mirror of suppression is {@link governanceEnabledPlugins}: a deployment that
  * PROVISIONS a plugin — drops it into the node's global plugin dir because the pod
@@ -26,44 +31,14 @@
  * toggled from the webview.
  */
 
-const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"])
-
-/** Normalize an env var to a boolean: truthy for "1"/"true"/"yes"/"on" (case-insensitive). */
-function envFlagEnabled(name: string): boolean {
-	const raw = process.env[name]
-	return raw !== undefined && TRUTHY_VALUES.has(raw.trim().toLowerCase())
-}
-
 /**
- * True when `SHOFER_DISABLE_BUILTIN_MODES` is set truthy — the six built-in
- * modes are suppressed and only bundle/user/project modes remain.
- */
-function builtInModesDisabled(): boolean {
-	return envFlagEnabled("SHOFER_DISABLE_BUILTIN_MODES")
-}
-
-/**
- * True when `SHOFER_DISABLE_BUILTIN_WORKFLOWS` is set truthy — the built-in
- * `.slang` workflows are suppressed and only bundle/user/project workflows
- * remain.
- */
-function builtInWorkflowsDisabled(): boolean {
-	return envFlagEnabled("SHOFER_DISABLE_BUILTIN_WORKFLOWS")
-}
-
-/**
- * Bundled plugin names the org env flags suppress. The built-ins ship as plugins now,
- * so "remove the built-ins" is "do not load these plugins" — enforced by
- * `PluginManager` (`forceDisabledPlugins`), which ignores the user's enable state for
- * them, exactly as the flags did when the built-ins lived in core.
- *
- * `SHOFER_DISABLED_PLUGINS` (comma-separated) is the general form: an org can suppress
- * any bundled plugin, not just the two the original flags knew about.
+ * Plugin names the deployment has suppressed (`SHOFER_DISABLED_PLUGINS`,
+ * comma-separated) — enforced by `PluginManager` (`forceDisabledPlugins`), which
+ * ignores the user's enable state for them. "Remove the built-in modes/workflows" is
+ * `builtin-config` here; any bundled plugin can be named.
  */
 export function governanceDisabledPlugins(): string[] {
 	const disabled = new Set<string>()
-	if (builtInWorkflowsDisabled()) disabled.add("builtin-workflows")
-	if (builtInModesDisabled()) disabled.add("builtin-modes")
 	for (const name of (process.env.SHOFER_DISABLED_PLUGINS ?? "").split(",")) {
 		const trimmed = name.trim()
 		if (trimmed) disabled.add(trimmed)

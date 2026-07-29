@@ -66,9 +66,9 @@ reads and mutates it on the owning executor exactly like a local task drives its
 in-process plugin. One generic method carries all of them, so a new feature never means a
 new wire method:
 
-| Method                                                       | Purpose                                                                                                                                                                                                                                               |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pluginRequest(taskId, plugin, method, params?)` → `unknown` | Call a plugin's `handleRequest` on the executor that owns the task — how the file-changes panel's list/revert/accept and the checkpoints plugin's diff/restore reach their per-task state. `params`/result are plugin-defined JSON; errors propagate. |
+| Method                                                       | Purpose                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pluginRequest(taskId, plugin, method, params?)` → `unknown` | Call a plugin's `handleRequest` on the executor that owns the task — how the file-changes panel's list/revert/accept and the checkpoints feature's diff/restore reach their per-task state. `params`/result are plugin-defined JSON; errors propagate. |
 
 ### Event model
 

@@ -397,7 +397,7 @@ export class CustomModesManager {
 		]
 
 		// Fold in plugin-contributed modes (design §6.3) — including Shofer's own six,
-		// which the bundled `builtin-modes` plugin contributes.
+		// which the bundled `builtin-config` plugin contributes.
 		const allModes = effectiveModes(mergedModes)
 
 		await this.context.globalState.update("customModes", allModes)

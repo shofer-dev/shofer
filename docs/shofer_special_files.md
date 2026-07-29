@@ -154,7 +154,7 @@ VS Code workspace files are write-protected.
 | **Write-protected** | No                                                       |
 | **Visible to LLM**  | Yes, but excluded from `find_files` and from checkpoints |
 
-Created by the bundled [`worktrees`](../plugins/worktrees/DESIGN.md) plugin at
+Created by the bundled [`worktrees`](../plugins/basics/docs/worktrees.md) plugin at
 `<workspace>/.worktrees/<name>/`, and added to the workspace's `.gitignore` on first
 use. Deliberately **outside** `.shofer/`: that directory is committed configuration and
 is write-protected wholesale, whereas a worktree is a bulky, machine-local, throwaway

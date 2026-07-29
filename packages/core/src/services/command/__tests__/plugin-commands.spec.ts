@@ -80,7 +80,7 @@ describe("Plugin-contributed slash commands (Phase 1)", () => {
 	describe("the bundled-plugin exemption (`unqualifiedContributions`)", () => {
 		// A first-party plugin shipping the platform's own commands keeps their authored
 		// names — `/merge-worktree` must not become `/worktrees:merge-worktree` just
-		// because the worktree feature moved out of core into `plugins/worktrees`.
+		// because the worktree feature moved out of core into the `basics` plugin.
 		beforeEach(() => {
 			setSharedPluginManager({
 				getContributedCommandDirs: () => [{ pluginName: "my-plugin", dir: PLUGIN_DIR, unqualified: true }],

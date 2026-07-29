@@ -1,4 +1,4 @@
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 // npx vitest run src/task/__tests__/Task.spec.ts
 
 import * as os from "os"

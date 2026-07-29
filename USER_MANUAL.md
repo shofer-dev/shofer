@@ -465,7 +465,7 @@ outside their isolated checkout.
 
 Learn more:
 
-- [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/plugins/builtin-workflows/DESIGN.md) — the full pipeline from `.slang` → discovery → execution
+- [Built-in Workflows SoT](https://github.com/shofer-dev/shofer/blob/master/plugins/builtin-config/docs/workflows.md) — the full pipeline from `.slang` → discovery → execution
 - [Slang Language Spec](https://github.com/shofer-dev/shofer/blob/master/docs/slang_specs.md) — grammar, operations, control flow, output contracts
 - [Workflow Design](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_design.md) — architecture and design decisions
 - [Workflow Visualization](https://github.com/shofer-dev/shofer/blob/master/docs/workflow_visualization.md) — the three diagram views and runtime overlays

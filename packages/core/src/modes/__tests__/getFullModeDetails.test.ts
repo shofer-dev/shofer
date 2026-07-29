@@ -1,7 +1,7 @@
 // npx vitest run modes/__tests__/getFullModeDetails.test.ts
 
 import type { ModeConfig } from "@shofer/types"
-import { BUILTIN_MODES } from "../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../__fixtures__/builtin-config.js"
 
 // `addCustomInstructions` is an intra-core sibling reached via a RELATIVE import;
 // only a relative mock (not the `@shofer/core` barrel) can intercept that call.

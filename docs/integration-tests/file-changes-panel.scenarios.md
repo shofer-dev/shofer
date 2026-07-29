@@ -1,6 +1,6 @@
 # File Changes Panel — Integration Test Scenarios
 
-Feature under test: the bundled `file-changes` plugin — its panel (collapsible,
+Feature under test: the `basics` plugin's file-changes feature — its panel (collapsible,
 above the chat input), its per-task `base`/`final` copies, the `beforeFileEdit` /
 `afterFileEdit` hooks that feed them, and the plugin-UI request channel.
 

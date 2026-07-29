@@ -289,7 +289,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	TelemetryService.instance.setProvider(provider)
 
 	// Discover plugins before anything reads a mode, a workflow or a skill. Shofer's
-	// built-in modes ship as the bundled `builtin-modes` plugin, so an enumeration that
+	// built-in modes ship as the bundled `builtin-config` plugin, so an enumeration that
 	// ran first would see — and `CustomModesManager` would then cache and persist — a
 	// mode list with no modes in it. Only declarative discovery is awaited here; code
 	// plugins keep loading in the background.

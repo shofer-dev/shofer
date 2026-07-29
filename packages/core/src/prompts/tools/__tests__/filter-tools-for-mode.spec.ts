@@ -2,7 +2,7 @@
 
 import type OpenAI from "openai"
 
-import { BUILTIN_MODES } from "../../../__fixtures__/builtin-modes.js"
+import { BUILTIN_MODES } from "../../../__fixtures__/builtin-config.js"
 import { filterNativeToolsForMode } from "../filter-tools-for-mode.js"
 
 function makeTool(name: string): OpenAI.Chat.ChatCompletionTool {
