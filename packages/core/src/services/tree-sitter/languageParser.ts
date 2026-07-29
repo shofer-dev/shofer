@@ -1,3 +1,4 @@
+import * as fs from "fs"
 import * as path from "path"
 import { Parser, Language, Query } from "web-tree-sitter"
 import { utilLog } from "../../logging/subsystems.js"
@@ -31,6 +32,9 @@ import {
 	elixirQuery,
 	scalaQuery,
 } from "./queries/index.js"
+
+/** The tree-sitter runtime itself, distinct from the per-language grammar wasms. */
+const RUNTIME_WASM = "tree-sitter.wasm"
 
 export interface LanguageParser {
 	[key: string]: {
@@ -79,7 +83,24 @@ Sources:
 export async function loadRequiredLanguageParsers(filesToParse: string[], sourceDirectory?: string) {
 	if (!isParserInitialized) {
 		try {
-			await Parser.init()
+			// Point the runtime's own `tree-sitter.wasm` at `sourceDirectory` — but only
+			// when it is actually there. Left to itself the Emscripten glue resolves that
+			// file beside whatever bundle it was compiled into, which is right for the
+			// extension host (esbuild aims `import.meta.url` at `dist/`, where the wasm
+			// ships) and wrong for a caller running from somewhere else: the bundled
+			// `rag-indexing` plugin loads from `dist/plugins/rag-indexing/` and keeps no
+			// copy of its own.
+			//
+			// The existence check is not defensive padding — `sourceDirectory` says where
+			// the per-language GRAMMARS are, and that is not always where the runtime is.
+			// `tree-sitter-wasms/out/` (what the tests point at) holds the grammars only,
+			// so overriding unconditionally would send the glue looking for a file that
+			// package never had.
+			const runtimeWasmDir =
+				sourceDirectory && fs.existsSync(path.join(sourceDirectory, RUNTIME_WASM)) ? sourceDirectory : undefined
+			await Parser.init(
+				runtimeWasmDir ? { locateFile: (name: string) => path.join(runtimeWasmDir, name) } : undefined,
+			)
 			isParserInitialized = true
 		} catch (error) {
 			utilLog.error(`Error initializing parser: ${error instanceof Error ? error.message : error}`)

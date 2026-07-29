@@ -13,9 +13,15 @@
  *  2. `ui/settings.tsx` + `ui/status.tsx` → `.js` — the two webview bundles, ESM with
  *     `react` and `@shofer/plugin-ui` external (the host's import map supplies both).
  *
- * **The tree-sitter grammars are NOT bundled.** They are 62 MB of `.wasm` that ship with
- * the extension already, for `list_code_definition_names`; the plugin loads them from the
- * host's asset directory instead of shipping a second copy (`src/engine/processors/parser.ts`).
+ * **The tree-sitter grammars are NOT bundled, but the `web-tree-sitter` package IS.**
+ * The grammars are 62 MB of `.wasm` that ship with the extension already, for
+ * `list_code_definition_names`; the plugin borrows them from the host's asset directory
+ * rather than shipping a second copy (`src/grammars.ts` finds it,
+ * `src/engine/processors/parser.ts` passes it down). The package itself is a different
+ * thing — a plain module import that has to resolve when `main.mjs` loads. Marking it
+ * external saved none of those 62 MB and made the plugin unloadable: a bundled plugin
+ * ships without `node_modules`, so the host reported
+ * `Cannot find package 'web-tree-sitter'` and disabled it.
  *
  * Run from this directory (esbuild is a workspace dependency):
  *
@@ -60,10 +66,18 @@ await esbuild.build({
 		"https",
 		"url",
 		"zlib",
-		// Loaded from the host's asset directory at runtime, never bundled (62 MB of
-		// grammars the extension already ships).
-		"web-tree-sitter",
 	],
+	// Give the bundle a real `require`. Several bundled dependencies are CJS and call
+	// `require("path")` / `require("fs")` at runtime (proper-lockfile is one). In ESM
+	// output esbuild routes those through a `__require` shim that throws
+	// `Dynamic require of "path" is not supported` — unless a `require` is in scope, which
+	// the shim prefers. `createRequire(import.meta.url)` is that scope.
+	banner: {
+		js: [
+			'import { createRequire as __pluginCreateRequire } from "node:module"',
+			"const require = __pluginCreateRequire(import.meta.url)",
+		].join("\n"),
+	},
 	loader: { ".json": "json" },
 	legalComments: "none",
 })
