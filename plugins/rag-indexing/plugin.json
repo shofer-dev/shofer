@@ -6,7 +6,7 @@
 	"author": "Shofer",
 	"license": "Apache-2.0",
 	"main": "main.mjs",
-	"defaultEnabled": false,
+	"defaultEnabled": true,
 	"syncConfig": true,
 	"hookTimeoutMs": 60000,
 	"permissions": {

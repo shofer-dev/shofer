@@ -4,7 +4,8 @@
 
 Semantic code search (RAG — Retrieval-Augmented Generation): **vector embeddings** in a
 **Qdrant** collection let the agent search a codebase by meaning rather than by keyword.
-It is a bundled plugin (`plugins/rag-indexing/`), off by default, and it contributes the
+It is a bundled plugin (`plugins/rag-indexing/`), enabled by default (inert until an
+embedding provider and Qdrant are configured), and it contributes the
 `rag_search` tool — and, with the git-history half, `git_search`. Core's `lsp_search` is
 the lighter companion that needs no infrastructure at all.
 

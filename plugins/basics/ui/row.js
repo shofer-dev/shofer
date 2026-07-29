@@ -54,7 +54,11 @@ function CheckpointRow({ api }) {
       setRestoreOpen(false);
       setConfirming(false);
       try {
-        await api.request("checkpoints:restore", { ts: marker.ts, commitHash: marker.text, mode }, { mutates: true });
+        await api.request(
+          "checkpoints:restore",
+          { ts: marker.ts, commitHash: marker.text, mode },
+          { mutates: true }
+        );
       } catch (error) {
         flash(error instanceof Error ? error.message : String(error));
       }

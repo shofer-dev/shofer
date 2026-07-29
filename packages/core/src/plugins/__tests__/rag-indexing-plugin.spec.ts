@@ -76,9 +76,7 @@ describe("RAG Indexing plugin (first-party, loaded off disk)", () => {
 		const manager = new PluginManager({
 			fs: createNodePluginFs(),
 			pluginDirs: [{ dir: PLUGINS_PARENT, scope: "bundled" }],
-			// Enabled explicitly: unlike every other bundled plugin this one is opt-in,
-			// because it needs an embedder, a credential and a running vector store.
-			stateStore: opts.store ?? new MemoryStore(["rag-indexing"]),
+			stateStore: opts.store ?? new MemoryStore(),
 			codeLoader: createNodePluginCodeLoader({ nodePaths: [path.join(process.cwd(), "node_modules")] }),
 			host,
 			workspacePath: opts.workspacePath,
@@ -90,16 +88,19 @@ describe("RAG Indexing plugin (first-party, loaded off disk)", () => {
 		return { manager }
 	}
 
-	it("is off until the user enables it (it needs infrastructure, unlike the other bundled plugins)", async () => {
-		const { manager } = await build({ workspacePath: makeWorkspace(), store: new MemoryStore([]) })
-		expect(manager.isEnabled("rag-indexing")).toBe(false)
-		expect(pluginRegistry.has("rag-indexing")).toBe(false)
-	}, 60_000)
-
-	it("loads once enabled", async () => {
+	it("is enabled out of the box, inert until an embedder and a vector store are configured", async () => {
 		const { manager } = await build({ workspacePath: makeWorkspace() })
 		expect(manager.isEnabled("rag-indexing")).toBe(true)
 		expect(pluginRegistry.has("rag-indexing")).toBe(true)
+	}, 60_000)
+
+	it("stays off once the user disables it", async () => {
+		const { manager } = await build({
+			workspacePath: makeWorkspace(),
+			store: new MemoryStore([], ["rag-indexing"]),
+		})
+		expect(manager.isEnabled("rag-indexing")).toBe(false)
+		expect(pluginRegistry.has("rag-indexing")).toBe(false)
 	}, 60_000)
 
 	it("declares its credentials as secrets, so they never reach plain state", async () => {

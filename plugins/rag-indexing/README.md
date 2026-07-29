@@ -9,8 +9,9 @@ The agent gets two tools:
 | `rag_search` | "where is the code that does X" — by meaning, not by literal text                 |
 | `git_search` | "when and why did this change" — commit messages the current tree cannot tell you |
 
-Bundled with Shofer but **off by default**: it needs an embedding provider, a credential
-and a reachable [Qdrant](https://qdrant.tech). Turn it on in Settings → Plugins → RAG
+Bundled with Shofer and **enabled by default**, but inert until configured: it needs an
+embedding provider, a credential and a reachable [Qdrant](https://qdrant.tech) before it
+indexes anything or contributes its tools. Configure it in Settings → Plugins → RAG
 Indexing.
 
 ## Setting it up
