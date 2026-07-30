@@ -1,4 +1,4 @@
-// plugins/second-brain/ui/badge.tsx
+// ui/badge.tsx
 import { useEffect, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 function SecondBrainBadge({ api }) {

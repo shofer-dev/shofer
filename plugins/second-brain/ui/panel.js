@@ -1,4 +1,4 @@
-// plugins/second-brain/ui/panel.tsx
+// ui/panel.tsx
 import { useCallback, useEffect, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var box = {
@@ -36,8 +36,7 @@ function SecondBrainPanel({ api }) {
           Math.round(t.windowChars / 1e3),
           "k chars \xB7 observed ",
           Math.round(t.spoolChars / 1e3),
-          "k \xB7",
-          " ",
+          "k \xB7 ",
           t.advisoriesDelivered,
           " advisories \xB7 $",
           t.costUsd.toFixed(3)
