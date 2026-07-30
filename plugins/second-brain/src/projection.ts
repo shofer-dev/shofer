@@ -221,7 +221,7 @@ export function projectSubtaskFinal(childTaskId: string, result: string): Omit<O
 	}
 }
 
-/** Render one observation as a window line (stable format — part of the cached prefix). */
+/** Render one observation as a digest line (stable format — part of the cached prefix). */
 export function renderObservation(o: Observation): string {
 	const when = new Date(o.at).toISOString().slice(11, 19)
 	return `[${when}] ${o.kind}: ${o.text}`

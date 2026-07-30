@@ -17,11 +17,12 @@ and the evaluation record — is in [`DESIGN.md`](DESIGN.md). Known gaps are in
 
 ## How it works
 
-Lifecycle hooks project each task's events into an append-only observation window
-(deterministic, no model, no I/O). A supervised background service periodically
-**forks that window across the enabled detectors** — each detector is a **private
+Lifecycle hooks project each task's events into the **digest — a stripped-down
+version of the complete conversation** (deterministic, no model, no I/O; nothing is
+ever evicted or summarized away). A supervised background service periodically
+**forks that digest across the enabled detectors** — each detector is a **private
 mode** (`second-brain:<name>`) carrying its own system prompt and tool grant — all
-sharing one byte-identical prefix so the provider's cache pays for the window once per
+sharing one byte-identical prefix so the provider's cache pays for the digest once per
 pass. Almost every fork returns _silent_. What does not gets gated hard (evidence
 required, deduplicated, rate-limited, re-checked for staleness at delivery), and what
 survives is delivered **twice with the same words at the same moment**: injected

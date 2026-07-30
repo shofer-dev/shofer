@@ -11,10 +11,15 @@ file knows is missing.
   hosts, and (b) `mode: "queue"` re-triggering a just-completed task (the
   queue-after-abort path). Until verified, treat the finish gate as experimental; it
   degrades to user-only surfaces on failure by design.
-- **Model-backed neutral compaction.** Window compaction currently distils the evicted
-  span deterministically (kept lines: user prompts, pass verdicts, advisories) instead
-  of a neutral model summary. Cheaper and replayable, but lossier than the design's
-  summarization; revisit when real windows hit the threshold in practice.
+- **Digest-overflow fallback.** The digest is the complete conversation and is never
+  truncated (owner directive); past `DIGEST_HARD_CAP_CHARS` passes skip with a visible
+  "(digest exceeds the observer's practical context)" verdict. A graceful fallback for
+  very long tasks (e.g. switching to a larger-context profile) is not built.
+- **A resumed/reloaded task's digest starts at attach.** Hooks only fire live, and no
+  plugin seam reads a task's persisted messages, so "the complete conversation" means
+  everything since the observer attached — a task resumed from history (or a plugin
+  reload) loses the earlier stretch. Rebuilding the digest from the task's persisted
+  conversation would need a read seam that does not exist today.
 - **`second-brain-run` with a detector argument spawning the private mode** is
   documented in the skill as `new_task` guidance; there is no dedicated handleRequest
   that spawns via `ctx.agent.spawn(prompt, { mode })` yet.
@@ -39,9 +44,9 @@ file knows is missing.
 - **Tool-result error detection is heuristic** (`looksLikeError` over the head):
   shofer tool results carry no is_error flag through `afterToolCall`. Ambiguity drops
   the result (a lost error costs an observation; a false error costs noise).
-- **A plugin reload (any Settings edit) drops in-memory windows** — the ledger
+- **A plugin reload (any Settings edit) drops in-memory digests** — the ledger
   survives in storage, so a reload costs the warm prefix, not judgment. Same trade as
-  the reference design's worker restart.
+  the reference design's worker restart (and see the resumed-task item above).
 - **Cross-HOST collision awareness is out of scope**: one plugin instance sees one
   host's tasks; tasks on remote Shofer Nodes are invisible to the index.
 - **Uptake is self-reported** (evidence-required, `no_evidence` default) — it measures

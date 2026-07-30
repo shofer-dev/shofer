@@ -6,7 +6,7 @@
  * feedback / advisory shapes are the plugin's own — zero footprint in `@shofer/types`.
  */
 
-/** One projected observation — the unit the window accumulates. */
+/** One projected observation — the unit the digest accumulates. */
 export interface Observation {
 	/** Unix ms when observed. */
 	at: number
@@ -17,7 +17,7 @@ export interface Observation {
 	locators?: string[]
 }
 
-/** A detector fork's structured return — the only thing merged back into the window. */
+/** A detector fork's structured return — the only fork output merged back into the digest. */
 export interface DetectorFeedback {
 	verdict: "silent" | "advise" | "resolved" | "still_open"
 	headline?: string
@@ -134,8 +134,6 @@ export interface TaskLedger {
 	updatedAt: number
 	/** One-line goal, from the task's initial prompt. */
 	goal?: string
-	/** Neutral compaction output — what left the window, distilled. */
-	notes: string[]
 	/** Delivered advisories with their adjudicated outcomes. */
 	advisories: Advisory[]
 	/** Gate refusals, newest last, capped. */
@@ -159,7 +157,7 @@ export interface StatusSnapshot {
 	tasks: {
 		taskId: string
 		passes: number
-		windowChars: number
+		digestChars: number
 		spoolChars: number
 		advisoriesDelivered: number
 		lastPassAt?: number
@@ -186,13 +184,14 @@ export const DISABLE_AFTER_TIMEOUTS = 4
 export const DEMOTE_RETRY_S = 1800
 /** Salient events (errors, user prompts) may fire an early pass this often per hour. */
 export const SALIENCE_PER_HOUR = 6
-/** Window budget in characters; compaction trigger and floor as fractions of it. */
-export const WINDOW_BUDGET_CHARS = 400_000
-export const COMPACTION_THRESHOLD = 0.85
-export const COMPACTION_FLOOR = 0.6
+/**
+ * Practical ceiling on the digest (chars). The digest is the complete conversation and
+ * is never truncated; past this, passes are SKIPPED with a visible note instead of
+ * silently feeding a request the observer model's context cannot hold.
+ */
+export const DIGEST_HARD_CAP_CHARS = 2_000_000
 /** Ledger GC. */
 export const LEDGER_TTL_DAYS = 7
-export const LEDGER_MAX_NOTES = 60
 export const LEDGER_MAX_DROPS = 40
 /** Advisory shape caps (enforced at the gate; also stated to the fork). */
 export const BODY_CAP = 700
@@ -205,8 +204,6 @@ export const FINISH_GATE_PER_TASK_CAP = 3
 /** Adjudication window: an outcome record self-closes as no_evidence after either. */
 export const ADJUDICATION_WINDOW_OBSERVATIONS = 60
 export const ADJUDICATION_WINDOW_S = 1800
-/** Episode coalescing cap — beyond it the least salient middles are dropped. */
-export const EPISODE_CAP_CHARS = 60_000
 /** Cap on a single fork tool result fed back to the model. */
 export const MAX_TOOL_OUTPUT_CHARS = 4_000
 /** Max output tokens requested per fork call (advisory-sized answers). */

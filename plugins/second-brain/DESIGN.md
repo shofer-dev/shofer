@@ -16,7 +16,7 @@ Its three defining properties survive the port unchanged:
    arguments, asks, user prompts — never its _intake_ (successful tool results). Measured on
    the original corpus that is ~27 % of conversation volume, which is what makes it
    affordable to leave running on every task.
-2. **A continuously running, fully decoupled loop.** Its own window, its own (cheap) model,
+2. **A continuously running, fully decoupled loop.** Its own digest, its own (cheap) model,
    its own tools. The primary never waits for it, never calls it, and does not know when it
    is thinking.
 3. **Advisory only, and ignorable.** Advice arrives as one-way injected context framed as
@@ -122,7 +122,7 @@ the right tool for the one case it fits — a human explicitly asking one detect
 ## The seams this plugin uses
 
 Everything comes through the public plugin surface (`PLUGINS.md`,
-`docs/plugin_system.md`); core knows nothing about detectors, windows, or advisories.
+`docs/plugin_system.md`); core knows nothing about detectors, digests, or advisories.
 
 | Seam                                                                               | What Second Brain uses it for                                                                                                                                                                                                                |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +132,7 @@ Everything comes through the public plugin surface (`PLUGINS.md`,
 | `lifecycle.onUserMessage` / `beforeTaskStart`                                      | The goal, and mid-task user prompts                                                                                                                                                                                                          |
 | `lifecycle.afterTaskComplete`                                                      | The turn/task-end pass trigger; subtask conclusions                                                                                                                                                                                          |
 | `lifecycle.onAssistantMessage`                                                     | **new core hook, §Required core changes** — the narration, the highest-value segment per byte                                                                                                                                                |
-| `lifecycle.onTaskDeleted` / `onTimelineRewind`                                     | Ledger GC; rewinding the window past a restored point                                                                                                                                                                                        |
+| `lifecycle.onTaskDeleted` / `onTimelineRewind`                                     | Ledger GC; noting a timeline rewind in the digest                                                                                                                                                                                            |
 | `ctx.registerService` (`permissions.lifecycle`)                                    | The supervised observer service hosting the pass loop (the monitor's replacement)                                                                                                                                                            |
 | `ctx.ai.buildHandler(profileRef)` / `hasConsent()` (`permissions.ai`)              | The detector forks' model; the consent gate                                                                                                                                                                                                  |
 | `ctx.agent.notify(text, { mode: "notify", taskId, source })` (`permissions.agent`) | **The advisory channel**: one-way, system-prompt-injected beside the next request, delivered exactly once, dropped if no live task — the `additionalContext` analog, with the "no response is required or possible" frame already host-owned |
@@ -187,12 +187,12 @@ else is plugin-local.
    the observer sees what the agent _did_ but never what it _said it was doing_ — drift
    and intent are largely invisible.
 3. **`parentTaskId` on the lifecycle contexts** (`TaskLifecycleContext`, and the tool-call
-   context), if absent. The observer scopes a window per **root** task; a subtask's
+   context), if absent. The observer scopes a digest per **root** task; a subtask's
    `new_task` spawn and its conclusion (`attempt_completion` args, seen via
    `beforeToolCall` on the child) must be attributable to the root it belongs to. This is
    how the port keeps the original's "conclusion, not the conversation" subagent contract:
    child activity is dropped, the child's final result (capped) is appended to the root's
-   window.
+   digest.
 4. **Advisory notifications must not be user-invisible.** `mode: "notify"` deliberately
    renders nothing in chat. The design's transparency invariant — _nothing is said to the
    agent that is not shown to the user, verbatim, at the same moment_ — is met plugin-side
@@ -238,8 +238,8 @@ flowchart TD
     subgraph PLUGIN["plugins/second-brain"]
         MAIN["main.ts — the ShoferPlugin"]
         PROJ["projection.ts<br/>event → observation, deterministic"]
-        OBS["task-observer.ts — per root task:<br/>spool · window · trigger policy · passes"]
-        WIN["window.ts — append-only,<br/>compaction into the ledger"]
+        OBS["task-observer.ts — per root task:<br/>spool · digest · trigger policy · passes"]
+        WIN["digest.ts — the complete conversation,<br/>stripped; append-only, never evicted"]
         FORK["fork.ts — one detector fork:<br/>shared prefix + private tail + tool loop"]
         CAT["catalogue.ts — modes + .shofer JSON<br/>merged detector definitions"]
         GATE["gate.ts — evidence · dedup ·<br/>rate · staleness · mute"]
@@ -279,7 +279,7 @@ sequenceDiagram
     H-)O: append to spool (in-memory, no I/O)
     H-->>T: return in under 1 ms — primary never waits
     Note over O: trigger policy decides<br/>(volume × clock, salience, turn end)
-    O->>O: append episode to window
+    O->>O: append episode to digest
     O->>F: pilot fork first, then fan out<br/>(shared prefix, per-detector tail)
     F-->>O: second_brain_detector_feedback<br/>(usually: silent)
     O->>G: the rare advise
@@ -294,8 +294,8 @@ sequenceDiagram
 | `src/main.ts`                                     | The `ShoferPlugin`: hooks (feed only), the supervised service tick, delivery seams, `handleRequest`, the status snapshot                              |
 | `src/types.ts`                                    | Domain types (Observation, DetectorFeedback, Advisory, TaskLedger, …) and every named tunable/constant                                                |
 | `src/projection.ts`                               | The observation contract as a pure function: event in, observation out — golden-tested                                                                |
-| `src/task-observer.ts`                            | Per-root-task state: spool, window, trigger policy, single-flight passes, pilot-then-fan-out, demotion ladder, adjudication, budgets, the finish gate |
-| `src/window.ts`                                   | Append-only window; hysteresis compaction into the ledger (deterministic distillation — see TODO.md for the model-backed variant)                     |
+| `src/task-observer.ts`                            | Per-root-task state: spool, digest, trigger policy, single-flight passes, pilot-then-fan-out, demotion ladder, adjudication, budgets, the finish gate |
+| `src/digest.ts`                                   | The digest: the complete conversation's projected stream, append-only, never evicted or compacted                                                     |
 | `src/fork.ts`                                     | One detector fork: prefix + tail, the small tool loop, the feedback tool schema, deadlines                                                            |
 | `src/detectors.ts`                                | Single in-code source for the detector modes + catalogue defaults; a spec asserts `plugin.json` `contributes.modes` equals it byte-for-byte           |
 | `src/catalogue.ts`                                | Layers `.shofer/second-brain/catalogue.json` over the bundled defaults into effective detector definitions; fail-closed parse; pilot fallback chain   |
@@ -324,7 +324,7 @@ The **projection rules survive verbatim** — they are the economics:
 | tool errors                              | `afterToolCall` (result classified as error)                    | head, capped (`error_head`)                                                                                              |
 | successful tool results                  | `afterToolCall`                                                 | **dropped** — observed, projected away                                                                                   |
 | asks (proposals, questions, completions) | `beforeAsk`                                                     | headline projected — a new, high-signal segment the original could not see                                               |
-| subtask final message                    | child's `beforeToolCall("attempt_completion")` + `parentTaskId` | capped, appended to the root's window; child activity otherwise dropped                                                  |
+| subtask final message                    | child's `beforeToolCall("attempt_completion")` + `parentTaskId` | capped, appended to the root's digest; child activity otherwise dropped                                                  |
 | the primary's reasoning                  | —                                                               | still unobservable; unchanged                                                                                            |
 
 Two fidelity **gains** over the original, both structural:
@@ -351,10 +351,17 @@ Ported intact; only the substrate changes. Per root task, single-flight:
   its own unconditional trigger**: in Shofer that is the task going idle (an idle-class
   ask observed via `beforeAsk`) or completing (`afterTaskComplete`), and the pass's
   verdicts reach the _user only_ — badge + a claim-once turn report.
-- **Window discipline** — append-only between compactions; compaction is the one
-  sanctioned prefix rebuild, hysteresis-scheduled (`compaction_threshold` 0.85 →
-  `compaction_floor` 0.60), distilling the evicted span into the ledger by neutral
-  summarization. Nothing already in the window is ever rewritten.
+- **The digest is the complete conversation, stripped — not a window** (owner
+  directive). Nothing is ever evicted, compacted or summarized away: the digest is the
+  full projected stream from the moment the observer attached, append-only and never
+  rewritten, so every detector sees the whole story every pass. That is also the cache
+  economics: an append-only byte-stable prefix re-reads at cached rates and pays full
+  price only for the increment. The cost ceilings are the token budgets and, ultimately,
+  the observer model's context: a digest past `DIGEST_HARD_CAP_CHARS` skips passes with
+  a visible "(digest exceeds the observer's practical context)" verdict — loud, never a
+  silent truncation. Judgment (advisories, suppression, outcomes) lives in the ledger in
+  storage and rides each fork's private TAIL — the mutable ledger is deliberately NOT in
+  the prefix, which would bust its bytes on every delivery.
 - **The ledger is per task and expires** — and in Shofer a "task" is first-class:
   `taskId` replaces the original's session/task-identity heuristics outright (a real
   simplification; `/clear`-style epoch guessing is gone). Dormant ledgers TTL-sweep
@@ -368,15 +375,15 @@ Ported intact; only the substrate changes. Per root task, single-flight:
   advisory). Scope limitation, stated: tasks running on _other_ hosts (remote Shofer
   Nodes) are invisible to this instance; cross-host collision awareness is out of scope.
 
-### Fork fan-out — one window, N detector forks
+### Fork fan-out — one digest, N detector forks
 
-A pass snapshots the window and runs one fork per enabled detector, all on the cheap
+A pass snapshots the digest and runs one fork per enabled detector, all on the cheap
 model, sharing one byte-identical prefix:
 
 ```
 [ shared system prompt + workspace block ]   ← stable for the task's lifetime
-[ task ledger ]                              ← changes only at compaction
-[ observations + prior detector feedback ]   ← append-only
+[ the digest: every observation + prior     ← append-only, the complete
+  detector feedback line ]                     conversation, stripped
 ────────────────── prefix ends here ──────────────────
 [ per-fork tail: the detector mode's roleDefinition + customInstructions,
   its grant, its open advisories, its stated time/length budget ]
@@ -397,7 +404,7 @@ model, sharing one byte-identical prefix:
 - **Forks return through `second_brain_detector_feedback`** — verdict
   (`silent | advise | resolved | still_open`), headline, body, evidence, confidence,
   `dedup_key`, `stale_if[]`, `finish_gate`, `outcomes[]` (the self-adjudication of its
-  own prior advisories). Only the compact feedback record merges back into the window, in
+  own prior advisories). Only the compact feedback record merges back into the digest, in
   detector-name order. A prose reply with no call coerces to `silent`; the final
   iteration forces the call.
 - **Two-tier deadlines and the demotion ladder** port unchanged: soft deadline stated in
@@ -483,7 +490,7 @@ defaults, per the Schema-First Persistence Rule — a broken catalogue must degr
 shipped one, never to no observer), watched via `ctx.host.watch`, and re-read at pass
 boundaries — except `mute`, honored immediately. A Settings edit reloads the plugin
 (host behavior); state survives because ledgers and status live in `ctx.storage`, and
-the window is rebuilt lazily (a reload costs the warm prefix, not judgment — same trade
+the digest restarts from attach (a reload costs the warm prefix, not judgment — same trade
 as the original's worker restart). Detector _prompts and grants_ are overridden by
 editing the catalogue's `system`/`tools` fields, which shadow the mode's — the modes UI
 never sees private modes, so the catalogue is deliberately the only override surface.
@@ -515,7 +522,7 @@ what it costs **the primary**.
 | --------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Badge** (`chat-input-toolbar`)        | plugin UI channel                                   | `🧠 watching · N passes · $cost · last turn: all silent` — and _nothing_ when unconsented/muted/idle beyond the honest state; the "needs approval" affordance                                                                               |
 | **Advisory row** (`chat-message-addon`) | `ctx.task.marker`                                   | every advisory, verbatim, attributed, with its mute affordance — the user half of "say it to both"                                                                                                                                          |
-| **Panel** (`sidebar-panel`)             | plugin UI channel                                   | why (advisories + evidence + verdicts + what the gate dropped and why), stats (volume per segment, pass latency, window fill, tokens + $, uptake per detector, demotions), turn-end reports                                                 |
+| **Panel** (`sidebar-panel`)             | plugin UI channel                                   | why (advisories + evidence + verdicts + what the gate dropped and why), stats (volume per segment, pass latency, digest size, tokens + $, uptake per detector, demotions), turn-end reports                                                 |
 | **Skills/commands**                     | `contributes.skills` / `commands` → `handleRequest` | `second-brain-stats`, `second-brain-run` (one pass now — bypasses the cost limits, not mute or budget; with a detector argument, spawns that private mode as a real task), `second-brain-why`, `second-brain-config`, `second-brain-forget` |
 
 Costs the model nothing: badge and panel are model-free reads of `status.json`; skills
@@ -554,13 +561,13 @@ anything, and no attempt to be right often — only right cheaply, and quiet oth
 
 ## Implementation status
 
-| Piece                                                                                                       | State                                                                                                          |
-| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Core seams (`private` enumeration gaps, `onAssistantMessage`, `parentTaskId`, default consent)              | **landed**, with host-side specs                                                                               |
-| Observation → projection → window → passes → forks → gate → delivery                                        | **built**, offline-tested (projection goldens, gate sims, fork against a scripted client, observer end-to-end) |
-| The catalogue (bundled defaults + `.shofer/second-brain/catalogue.json` layering, manifest↔code sync spec) | **built**                                                                                                      |
-| Adjudication → suppression/uptake, demotion ladder, budgets, cross-task collisions, ledger TTL sweep        | **built**                                                                                                      |
-| Surfaces: badge, advisory row, panel, skills, commands, `handleRequest`                                     | **built**                                                                                                      |
-| Finish gate (queue-wake on a completed task) and `notify` rendering in both hosts                           | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |
-| Model-backed neutral compaction; per-detector cache accounting; spawn-based deep runs                       | **not built** — recorded in TODO.md                                                                            |
-| Detector calibration against real sessions                                                                  | **not started** — the tool-less three ship enabled deliberately                                                |
+| Piece                                                                                                           | State                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Core seams (`private` enumeration gaps, `onAssistantMessage`, `parentTaskId`, default consent)                  | **landed**, with host-side specs                                                                               |
+| Observation → projection → digest → passes → forks → gate → delivery                                            | **built**, offline-tested (projection goldens, gate sims, fork against a scripted client, observer end-to-end) |
+| The catalogue (bundled defaults + `.shofer/second-brain/catalogue.json` layering, manifest↔code sync spec)     | **built**                                                                                                      |
+| Adjudication → suppression/uptake, demotion ladder, budgets, cross-task collisions, ledger TTL sweep            | **built**                                                                                                      |
+| Surfaces: badge, advisory row, panel, skills, commands, `handleRequest`                                         | **built**                                                                                                      |
+| Finish gate (queue-wake on a completed task) and `notify` rendering in both hosts                               | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |
+| Digest-overflow fallback (past the hard cap, passes skip); per-detector cache accounting; spawn-based deep runs | **not built** — recorded in TODO.md                                                                            |
+| Detector calibration against real sessions                                                                      | **not started** — the tool-less three ship enabled deliberately                                                |

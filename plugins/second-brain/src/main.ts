@@ -213,7 +213,7 @@ const plugin: ShoferPlugin = {
 	initialize(ctx: PluginContext) {
 		// A config edit reloads the plugin with a fresh ctx: reset the process-lived
 		// pieces that captured the old one. Observers persist judgment in ledgers, so
-		// dropping the in-memory set costs the warm windows, not the durable state.
+		// dropping the in-memory set costs the warm digests, not the durable state.
 		state.ctx = ctx
 		state.clients.clear()
 		state.observers.clear()

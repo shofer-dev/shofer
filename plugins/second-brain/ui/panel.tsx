@@ -49,7 +49,7 @@ interface StatsResult {
 	tasks: {
 		taskId: string
 		passes: number
-		windowChars: number
+		digestChars: number
 		spoolChars: number
 		advisoriesDelivered: number
 		costUsd: number
@@ -97,8 +97,8 @@ export default function SecondBrainPanel({ api }: { api: PluginUIApi }) {
 					{stats.tasks.map((t) => (
 						<div key={t.taskId} style={{ marginTop: 6 }}>
 							<div>
-								task {t.taskId.slice(0, 8)} — {t.passes} passes · window{" "}
-								{Math.round(t.windowChars / 1000)}k chars · observed {Math.round(t.spoolChars / 1000)}k
+								task {t.taskId.slice(0, 8)} — {t.passes} passes · digest{" "}
+								{Math.round(t.digestChars / 1000)}k chars · observed {Math.round(t.spoolChars / 1000)}k
 								· {t.advisoriesDelivered} advisories · ${t.costUsd.toFixed(3)}
 							</div>
 							{Object.entries(t.uptake).map(([detector, u]) => (

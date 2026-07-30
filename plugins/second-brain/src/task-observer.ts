@@ -1,6 +1,6 @@
 /**
  * task-observer — everything the Second Brain holds for ONE root task: the spool the
- * hooks feed, the append-only window, the trigger policy, single-flight passes with
+ * hooks feed, the append-only conversation digest, the trigger policy, single-flight passes with
  * pilot-then-fan-out, the demotion ladder, adjudication, budgets, the gate, and
  * delivery. One instance per root task, owned by main.ts, driven by the service tick.
  *
@@ -18,6 +18,7 @@ import {
 	DEMOTE_AFTER_TIMEOUTS,
 	DEMOTE_RETRY_S,
 	DEMOTE_STRIDE,
+	DIGEST_HARD_CAP_CHARS,
 	DISABLE_AFTER_TIMEOUTS,
 	FINISH_GATE_CONFIDENCE_FLOOR,
 	FINISH_GATE_PER_TASK_CAP,
@@ -31,8 +32,8 @@ import {
 	type TaskLedger,
 } from "./types.js"
 import { BODY_CAP } from "./types.js"
-import { ObserverWindow } from "./window.js"
-import { LedgerStore, recordAdvisory, recordDrop, renderLedger } from "./ledger.js"
+import { ConversationDigest } from "./digest.js"
+import { LedgerStore, recordAdvisory, recordDrop } from "./ledger.js"
 import { Gate, type GateConfig } from "./gate.js"
 import { renderForAgent, renderForUser } from "./advice.js"
 import { buildForkTail, FEEDBACK_TOOL, runFork, type ForkOutcome } from "./fork.js"
@@ -89,10 +90,10 @@ interface DetectorRuntime {
 }
 
 export class TaskObserver {
-	/** Every projected observation, in order — the source the window/gate read from. */
+	/** Every projected observation, in order — the source the digest/gate read from. */
 	private spool: Observation[] = []
 	private spoolChars = 0
-	private window = new ObserverWindow()
+	private digest = new ConversationDigest()
 	private gate = new Gate()
 	private ledger?: TaskLedger
 	private runtime = new Map<string, DetectorRuntime>()
@@ -125,7 +126,7 @@ export class TaskObserver {
 		this.spool.push(o)
 		this.spoolChars += o.text.length
 		this.charsSinceLastPass += o.text.length
-		this.window.appendObservation(o)
+		this.digest.appendObservation(o)
 		if (o.kind === "error" || o.kind === "user") this.saliencePending = true
 	}
 
@@ -153,7 +154,7 @@ export class TaskObserver {
 		return {
 			taskId: this.taskId,
 			passes: this.passCount,
-			windowChars: this.window.chars,
+			digestChars: this.digest.chars,
 			spoolChars: this.spoolChars,
 			advisoriesDelivered: this.ledger?.advisories.filter((a) => !a.humanOnly).length ?? 0,
 			lastPassAt: this.lastPass?.at,
@@ -225,6 +226,29 @@ export class TaskObserver {
 				return result
 			}
 
+			// The digest is the complete conversation and is never truncated; a digest
+			// past the practical cap skips passes LOUDLY instead of feeding a request
+			// the observer model cannot hold.
+			if (this.digest.chars > DIGEST_HARD_CAP_CHARS) {
+				const result: PassResult = {
+					pass: this.passCount,
+					at: startedAt,
+					trigger,
+					verdicts: [
+						{
+							detector: "*",
+							verdict: "skipped",
+							note: "(digest exceeds the observer's practical context)",
+						},
+					],
+					tokens: { prompt: 0, completion: 0 },
+					costUsd: 0,
+					durationMs: 0,
+				}
+				this.lastPass = result
+				return result
+			}
+
 			const defs = await this.seams.loadDetectors()
 			const running = this.selectDetectors(defs, startedAt)
 			if (running.length === 0) return undefined
@@ -232,10 +256,13 @@ export class TaskObserver {
 			// The pass union goes on the wire for every fork; grants enforce per detector.
 			const tools = [...passToolUnion(running), FEEDBACK_TOOL]
 			const systemPrompt = `${SHARED_SYSTEM_PROMPT}\n\nWorkspace: ${this.cwd ?? "(unknown)"}`
+			// The prefix is the digest alone. Judgment (advisories, suppression) stays in
+			// storage and rides each fork's private tail — putting the mutable ledger in
+			// the prefix would bust the byte-stable prefix on every delivery.
 			const prefix: ChatMessage[] = [
 				{
 					role: "user",
-					content: `TASK LEDGER\n${renderLedger(ledger)}\n\n====\n\nOBSERVATION LOG\n${this.window.render()}`,
+					content: `OBSERVATION DIGEST (the complete conversation, stripped)\n${this.digest.render()}`,
 				},
 			]
 
@@ -290,8 +317,7 @@ export class TaskObserver {
 
 			// Only the compact feedback merges back — append-only, detector-name order.
 			verdicts.sort((a, b) => a.detector.localeCompare(b.detector))
-			this.window.appendFeedback(this.passCount, startedAt, verdicts)
-			this.maybeCompact(ledger)
+			this.digest.appendFeedback(this.passCount, startedAt, verdicts)
 
 			// Self-close stale outcome records: ambiguity resolves against the observer.
 			this.closeLapsedOutcomes(ledger, startedAt)
@@ -485,21 +511,6 @@ export class TaskObserver {
 			`🧠 Second Brain finish gate: the task stopped, but "${candidate.headline}" (${candidate.detector}) is evidenced as unfinished.`,
 		)
 		await this.seams.queueAgent(renderForAgent(candidate))
-	}
-
-	private maybeCompact(ledger: TaskLedger): void {
-		if (!this.window.isOverThreshold) return
-		// Neutral distillation without a model call: the evicted span's pass-feedback
-		// lines and first-line-per-observation survive as ledger notes. (A model-backed
-		// neutral summary is a recorded TODO — this keeps compaction deterministic.)
-		const evicted = this.window.evictForCompaction()
-		const keep = evicted
-			.split("\n")
-			.filter((line) => line.includes("] user:") || line.startsWith("[pass ") || line.includes("→ advise"))
-			.slice(-20)
-		const note = `window compacted; kept: ${keep.join(" | ").slice(0, 1500)}`
-		ledger.notes.push(note)
-		this.window.appendCompactionNote(note)
 	}
 
 	private closeLapsedOutcomes(ledger: TaskLedger, now: number): void {

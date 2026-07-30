@@ -2,7 +2,7 @@
  * fork — one detector on the shared prefix: private tail, small tool loop, feedback.
  *
  * A fork is N independent provider requests sharing one message prefix — the shape of
- * the data, not a runtime object. The prefix (shared system prompt + rendered window)
+ * the data, not a runtime object. The prefix (shared system prompt + rendered digest)
  * is byte-identical across every fork of a pass and across passes (append-only), which
  * is what makes the fan-out cache-cheap; the detector's own instructions, grant, open
  * advisories and stated budgets ride in its PRIVATE tail, after the prefix. A fork's

@@ -8,7 +8,7 @@
  * profile — detector modes may carry their own profile, so the observer holds a small
  * cache keyed by profileRef.
  *
- * Caching note: the plugin controls PREFIX BYTES (append-only window, identical
+ * Caching note: the plugin controls PREFIX BYTES (append-only digest, identical
  * systemPrompt and message prefix across forks and passes); breakpoint placement is
  * the provider handler's own. Byte-stability is what earns the hits.
  */

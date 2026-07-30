@@ -1,4 +1,4 @@
-// ui/advisory.tsx
+// plugins/second-brain/ui/advisory.tsx
 import { jsx } from "react/jsx-runtime";
 var KIND_BORDER = {
   advisory: "var(--vscode-charts-purple, #b180d7)",

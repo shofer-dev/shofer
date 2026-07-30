@@ -2,7 +2,7 @@
  * advice — the advisory envelope: the fixed security frame, caps and sanitization.
  *
  * The threat is concrete: repository content and tool arguments flow into the
- * observer's window, and the observer's output lands in a running agent's context. So
+ * observer's digest, and the observer's output lands in a running agent's context. So
  * every advisory is wrapped in a fixed data-not-instructions frame, hard-capped, and
  * stripped of anything resembling tool-call or hook syntax before either copy (agent
  * or user) leaves the gate. The Second Brain has no channel that can act — its maximum

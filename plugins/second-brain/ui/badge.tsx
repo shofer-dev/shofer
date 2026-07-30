@@ -22,7 +22,7 @@ interface PluginUIApi {
 interface TaskStats {
 	taskId: string
 	passes: number
-	windowChars: number
+	digestChars: number
 	advisoriesDelivered: number
 	lastVerdicts?: { detector: string; verdict: string; note?: string }[]
 	costUsd: number

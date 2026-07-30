@@ -1,8 +1,7 @@
 /**
  * ledger — per-task durable judgment, persisted in the plugin's private storage.
  *
- * The ledger holds what the observer has concluded about ONE task: its goal, the
- * neutral compaction notes, delivered advisories with their adjudicated outcomes, the
+ * The ledger holds what the observer has concluded about ONE task: its goal, delivered advisories with their adjudicated outcomes, the
  * gate's refusals, suppressed dedup keys and budget spend. It is task-scoped by design
  * (workspace scope would accumulate confidently stale claims this plugin has no
  * machinery to invalidate) and it is DERIVED state: deleting one is always safe — a
@@ -11,14 +10,7 @@
 
 import type { PluginStorage } from "@shofer/types"
 
-import {
-	LEDGER_MAX_DROPS,
-	LEDGER_MAX_NOTES,
-	LEDGER_TTL_DAYS,
-	type Advisory,
-	type GateDrop,
-	type TaskLedger,
-} from "./types.js"
+import { LEDGER_MAX_DROPS, LEDGER_TTL_DAYS, type Advisory, type GateDrop, type TaskLedger } from "./types.js"
 
 const LEDGER_DIR = "ledgers"
 
@@ -32,7 +24,6 @@ export function emptyLedger(taskId: string, now: number): TaskLedger {
 		version: 1,
 		taskId,
 		updatedAt: now,
-		notes: [],
 		advisories: [],
 		drops: [],
 		suppressed: [],
@@ -68,7 +59,6 @@ export class LedgerStore {
 	/** Write-through save with the caps applied (notes/drops are bounded, FIFO). */
 	async save(ledger: TaskLedger, now: number): Promise<void> {
 		ledger.updatedAt = now
-		if (ledger.notes.length > LEDGER_MAX_NOTES) ledger.notes = ledger.notes.slice(-LEDGER_MAX_NOTES)
 		if (ledger.drops.length > LEDGER_MAX_DROPS) ledger.drops = ledger.drops.slice(-LEDGER_MAX_DROPS)
 		try {
 			await this.storage.writeFile(ledgerPath(ledger.taskId), JSON.stringify(ledger))
@@ -126,17 +116,4 @@ export function recordAdvisory(ledger: TaskLedger, advisory: Advisory): void {
 /** Record a gate refusal — a silent drop is indistinguishable from a bug. */
 export function recordDrop(ledger: TaskLedger, drop: GateDrop): void {
 	ledger.drops.push(drop)
-}
-
-/** Render the ledger as the window's stable mid-prefix block. */
-export function renderLedger(ledger: TaskLedger): string {
-	const lines: string[] = []
-	if (ledger.goal) lines.push(`Goal: ${ledger.goal}`)
-	for (const note of ledger.notes) lines.push(`Note: ${note}`)
-	for (const a of ledger.advisories.slice(-10)) {
-		const outcome = a.outcome ? ` → ${a.outcome.verdict}` : " → open"
-		lines.push(`Advised [${a.detector}] "${a.headline}"${outcome}`)
-	}
-	if (ledger.suppressed.length) lines.push(`Suppressed keys: ${ledger.suppressed.join(", ")}`)
-	return lines.length ? lines.join("\n") : "(empty ledger — the task just started)"
 }
