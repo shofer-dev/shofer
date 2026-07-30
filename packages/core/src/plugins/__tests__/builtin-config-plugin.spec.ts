@@ -54,7 +54,11 @@ async function build(opts: { forceDisabled?: string[]; disabled?: string[] } = {
 		fs: createNodePluginFs(),
 		pluginDirs: [{ dir: PLUGINS_PARENT, scope: "bundled" }],
 		stateStore: new MemoryStore([], opts.disabled ?? []),
-		forceDisabledPlugins: opts.forceDisabled,
+		// These specs pin builtin-config's contribution in isolation; second-brain is
+		// the other bundled MODE-contributing plugin (nine private detector modes) and
+		// would otherwise appear in every exact mode-list assertion below. Its own
+		// contract is pinned in second-brain-plugin.spec.ts.
+		forceDisabledPlugins: ["second-brain", ...(opts.forceDisabled ?? [])],
 	})
 	await manager.discover()
 	setSharedPluginManager(manager)
