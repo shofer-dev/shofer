@@ -40,10 +40,13 @@ Brain **falls silent**, which is its expected state anyway.
 
 Same argument as Live Memory, and the Core Self-Sufficiency Rule makes it binding: this
 feature costs the user money, needs a provider profile, and injects text into running
-tasks — as a plugin it can be absent entirely. It ships `defaultEnabled: true` but **inert
-until the billed-AI consent** (`ctx.ai.hasConsent()`): unconsented, every hook returns
-after appending nothing, no service runs, no mode is spawnable into anything, and the badge
-renders the "needs your approval" state exactly as Live Memory does.
+tasks — as a plugin it can be absent entirely. It ships `defaultEnabled: true`, and
+**`defaultEnabled` implies the billed-AI consent** (§Required core changes): a bundled
+plugin the product ships on is on, consent included — the user's control is the same
+Settings → Plugins toggle either way, and revoking consent there still renders the
+"needs your approval" badge state and makes every hook return early
+(`ctx.ai.hasConsent()` stays the single gate the code checks). A default-on observer
+that then sat inert behind a second approval would be default-off with extra steps.
 
 ---
 
@@ -196,9 +199,17 @@ because they are the review-critical part. Everything else is plugin-local.
    this region reliably in both hosts; if the headless CLI surface cannot show markers, a
    core-side rendering of `kind: "notification"` queue entries becomes necessary. Verify
    in Phase 0.
+5. **`defaultEnabled: true` implies billed-AI consent.** Today enablement and AI consent
+   are two separate gates, and a bundled default-enabled plugin still waits for the
+   consent click (`aiConsentedPlugins`). Change the consent resolution so a **bundled**
+   plugin with `defaultEnabled: true` is AI-consented by default, with the user's explicit
+   revocation (the Settings → Plugins consent toggle) still winning — the same
+   explicit-OFF-beats-default shape `resolveEnabled` already has. Applies to Live Memory
+   as much as to this plugin; `ctx.ai.hasConsent()` remains the only thing plugin code
+   checks.
 
 Each lands with its own tests (the partition/enumeration tests for 1, a `Task` spec for 2
-and 3) and a minor version bump.
+and 3, a consent-resolution spec for 5) and a minor version bump.
 
 ---
 
