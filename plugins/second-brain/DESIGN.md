@@ -158,8 +158,10 @@ scope here; the allowlist-of-exact-strings posture is the control.
 
 ## Required core changes
 
-The port needs four small changes in `@shofer/types` / `@shofer/core` / host, listed here
-because they are the review-critical part. Everything else is plugin-local.
+The port needed five small changes in `@shofer/types` / `@shofer/core` / host — **all
+landed** (`feat(plugins): the four core seams the second-brain observer needs` and the
+consent commit). Recorded here because they are the load-bearing seams; everything
+else is plugin-local.
 
 1. **Honor `private` on the three enumeration surfaces that miss it today.** The flag
    exists (`modeConfigObjectSchema.private`, `packages/types/src/mode.ts`) and the webview
@@ -287,23 +289,24 @@ sequenceDiagram
 
 ### Key source files
 
-| File                                              | Role                                                                                                                                                                 |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`                                         | The `ShoferPlugin`: hooks (feed only), the service, UI channel, `handleRequest`                                                                                      |
-| `projection.ts`                                   | The observation contract as a pure function: event in, observation out — golden-tested                                                                               |
-| `task-observer.ts`                                | Per-root-task state: spool, window, trigger policy, single-flight passes, budgets                                                                                    |
-| `window.ts`                                       | Append-only window; hysteresis compaction (neutral summarization) into the ledger                                                                                    |
-| `fork.ts`                                         | One detector fork: prefix + tail, the ~50-line tool loop, deadlines, demotion ladder                                                                                 |
-| `catalogue.ts`                                    | Merges the plugin's own mode definitions with `.shofer/second-brain/catalogue.json` overrides into effective detector definitions                                    |
-| `gate.ts`                                         | Evidence → mute → suppression → dedup → confidence floors → rate/cooldown → staleness; the two expiry clocks                                                         |
-| `ledger.ts`                                       | Per-task durable judgment; TTL sweep; dropped on `onTaskDeleted`                                                                                                     |
-| `collisions.ts`                                   | Paths touched per live task, in-process; the structural `cross-task-collision` trigger                                                                               |
-| `tool-executor.ts`                                | Dispatches exactly the granted tool names over `ctx.host.fs`/`search` + the exec allowlist; re-checks the calling detector's grant                                   |
-| `advice.ts`                                       | The advisory envelope, the fixed security frame, caps and sanitization                                                                                               |
-| `adjudication.ts`                                 | Outcome records, self-adjudicated uptake, per-detector calibration                                                                                                   |
-| `status.ts`                                       | The status snapshot the badge/panel/skills read                                                                                                                      |
-| `ui/badge.tsx`, `ui/panel.tsx`, `ui/advisory.tsx` | Statusline badge, why/stats panel, the advisory chat row                                                                                                             |
-| `modes.ts`                                        | Single source for the detector mode definitions — imported by `main.ts` **and** used to generate the `contributes.modes` block, so manifest and runtime cannot drift |
+| File                                              | Role                                                                                                                                                  |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`                                     | The `ShoferPlugin`: hooks (feed only), the supervised service tick, delivery seams, `handleRequest`, the status snapshot                              |
+| `src/types.ts`                                    | Domain types (Observation, DetectorFeedback, Advisory, TaskLedger, …) and every named tunable/constant                                                |
+| `src/projection.ts`                               | The observation contract as a pure function: event in, observation out — golden-tested                                                                |
+| `src/task-observer.ts`                            | Per-root-task state: spool, window, trigger policy, single-flight passes, pilot-then-fan-out, demotion ladder, adjudication, budgets, the finish gate |
+| `src/window.ts`                                   | Append-only window; hysteresis compaction into the ledger (deterministic distillation — see TODO.md for the model-backed variant)                     |
+| `src/fork.ts`                                     | One detector fork: prefix + tail, the small tool loop, the feedback tool schema, deadlines                                                            |
+| `src/detectors.ts`                                | Single in-code source for the detector modes + catalogue defaults; a spec asserts `plugin.json` `contributes.modes` equals it byte-for-byte           |
+| `src/catalogue.ts`                                | Layers `.shofer/second-brain/catalogue.json` over the bundled defaults into effective detector definitions; fail-closed parse; pilot fallback chain   |
+| `src/gate.ts`                                     | Evidence → mute → suppression → dedup → confidence floors → rate/cooldown → staleness; the two delivery-time expiry clocks                            |
+| `src/ledger.ts`                                   | Per-task durable judgment; TTL sweep; dropped on `onTaskDeleted`                                                                                      |
+| `src/collisions.ts`                               | Paths touched per live task, in-process; the structural `cross-task-collision` trigger                                                                |
+| `src/llm.ts`                                      | The fork's provider adapter over `ctx.ai.buildHandler` (tool-call chunk accumulation, usage, cost); `ForkClient` is the scriptable interface          |
+| `src/tool-executor.ts`                            | Dispatches exactly the granted tool names over `ctx.host.fs`/`search` + the exec allowlist; re-checks the calling detector's grant                    |
+| `src/advice.ts`                                   | The advisory envelope, the fixed security frame, caps and sanitization, both renderings                                                               |
+| `ui/badge.tsx`, `ui/panel.tsx`, `ui/advisory.tsx` | Statusline badge, why/stats panel, the advisory chat row (built by `build-ui.mjs`)                                                                    |
+| `__tests__/`                                      | Projection goldens, gate simulations, fork behavior against a scripted client, catalogue/manifest sync, the observer end-to-end                       |
 
 ---
 
@@ -549,13 +552,15 @@ Non-goals, restated so they are not re-litigated: no edits, no repo writes, no b
 or vetoing, no permission decisions, no tool the _agent_ can call to ask the Second Brain
 anything, and no attempt to be right often — only right cheaply, and quiet otherwise.
 
-## Implementation phases
+## Implementation status
 
-| Phase                  | Contents                                                                                                                                                                               | Proves                                                  |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| 0 — verify seams       | `notify` one-shot injection + marker rendering in both hosts; queue-wake on a completed task; the three `private` gaps closed; `onAssistantMessage` + `parentTaskId` landed with tests | every load-bearing seam, before anything is built on it |
-| 1 — plumbing, no model | hooks → projection → spool → window; a stub advisor ("advise every 20th observation") through gate → notify + marker                                                                   | the whole path, zero tokens, primary undisturbed        |
-| 2 — the observer       | forks over `ctx.ai`, pilot-then-fan-out, feedback merge, trigger policy, ledger + compaction, budgets — `second-brain:default` alone                                                   | the execution model                                     |
-| 3 — gate + surfaces    | full gate, adjudication + calibration, badge, panel, skills, catalogue loading from `.shofer/`                                                                                         | the product is quiet and inspectable                    |
-| 4 — detectors          | the catalogue in shipping order (`repeat-failure` → `standard-questions` → `git-log`/`prior-art` → `static-analysis`), uptake visible from day one                                     | each new capability separately                          |
-| 5 — hardening          | finish gate (behind its Phase-0 verdict), cross-task collisions, TTL sweeps, demotion ladder tuning, `TODO.md` honesty pass                                                            | the long tail                                           |
+| Piece                                                                                                       | State                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Core seams (`private` enumeration gaps, `onAssistantMessage`, `parentTaskId`, default consent)              | **landed**, with host-side specs                                                                               |
+| Observation → projection → window → passes → forks → gate → delivery                                        | **built**, offline-tested (projection goldens, gate sims, fork against a scripted client, observer end-to-end) |
+| The catalogue (bundled defaults + `.shofer/second-brain/catalogue.json` layering, manifest↔code sync spec) | **built**                                                                                                      |
+| Adjudication → suppression/uptake, demotion ladder, budgets, cross-task collisions, ledger TTL sweep        | **built**                                                                                                      |
+| Surfaces: badge, advisory row, panel, skills, commands, `handleRequest`                                     | **built**                                                                                                      |
+| Finish gate (queue-wake on a completed task) and `notify` rendering in both hosts                           | built, **live verification pending** — see TODO.md; degrades to user-only surfaces on failure                  |
+| Model-backed neutral compaction; per-detector cache accounting; spawn-based deep runs                       | **not built** — recorded in TODO.md                                                                            |
+| Detector calibration against real sessions                                                                  | **not started** — the tool-less three ship enabled deliberately                                                |

@@ -1,0 +1,225 @@
+{
+	"name": "second-brain",
+	"version": "0.1.0",
+	"shoferPluginApiVersion": "1.0.0",
+	"description": "A cheap background model that watches each task over its shoulder and, rarely, injects one short gated advisory — asynchronously, without blocking, interrupting, or being asked. Detectors are private modes; silence is the success metric.",
+	"author": "Shofer",
+	"license": "Apache-2.0",
+	"main": "src/main.ts",
+	"defaultEnabled": true,
+	"permissions": {
+		"modes": true,
+		"lifecycle": true,
+		"ai": true,
+		"agent": true,
+		"task": true,
+		"telemetry": true,
+		"filesystem": ["."],
+		"search": true,
+		"skills": true,
+		"commands": true,
+		"ui": ["chat-input-toolbar", "chat-message-addon", "sidebar-panel"]
+	},
+	"contributes": {
+		"modes": [
+			{
+				"slug": "repeat-failure",
+				"name": "Second Brain: repeat-failure",
+				"private": true,
+				"whenToUse": "Second Brain detector — a session burning time on a loop it cannot see. The pilot fork.",
+				"roleDefinition": "You watch for a session burning time on a loop it cannot see.\nAdvise only when the SAME command or approach has failed three or more times with cosmetic variations, or when the agent is retrying something that already failed the same way. Cite the failing observations. Everything else is silence.",
+				"tools": []
+			},
+			{
+				"slug": "standard-questions",
+				"name": "Second Brain: standard-questions",
+				"private": true,
+				"whenToUse": "Second Brain detector — checklist items the observation stream never answers.",
+				"roleDefinition": "You are checking whether the work has answered a fixed set of questions.\nAsk only about a question the observation stream does not already answer — if the agent ran the tests, the question is answered and you say nothing. If the task looks close to done and nothing in the stream ever answers one, that silence is the finding.\nYou cannot see tool results, only what was run, so ask whether an ACTION occurred — never whether it succeeded.\nAn explicit user instruction waiving a check ('no tests', 'skip the docs') ANSWERS that question: the user decided, and advising about work they deliberately waived is noise, not vigilance. A question the stream already answers — including by such a waiver — is settled; do not re-open it on a later pass.",
+				"tools": []
+			},
+			{
+				"slug": "default",
+				"name": "Second Brain: default",
+				"private": true,
+				"whenToUse": "Second Brain detector — anything a competent watcher would flag.",
+				"roleDefinition": "You are watching, not participating.\nSpeak only when you have something genuinely useful: a mistake about to compound, a constraint stated earlier and now contradicted, prior art the agent should see, a decision whose cost will only become visible later.\nThe expected steady state is silence. Do not summarise, do not encourage, do not restate what the agent just said, and never advise something it has already done.",
+				"tools": [{ "read": { "allowed": ["read_file", "grep_search", "list_files", "find_files"] } }]
+			},
+			{
+				"slug": "goal-drift",
+				"name": "Second Brain: goal-drift",
+				"private": true,
+				"whenToUse": "Second Brain detector — the user asked for A, the work is now B.",
+				"roleDefinition": "You watch for the work drifting off the goal.\nThe user asked for A; several turns later the work is about B, with no acknowledgment that the goal changed. Advise only with both halves cited: what was asked, and what is now being done. A user who redirected mid-task is not drift.",
+				"tools": []
+			},
+			{
+				"slug": "git-log",
+				"name": "Second Brain: git-log",
+				"private": true,
+				"whenToUse": "Second Brain detector — the area being edited was changed recently, and that history contradicts the work.",
+				"roleDefinition": "You check whether the area being edited was changed recently, and whether that history contradicts what is being done now.\nUse the git commands you have on the files in the observation stream. The finding worth sending is specific: 'this was rewritten two days ago in <sha>; the thing being re-added was deliberately removed'. A file simply having history is not a finding.",
+				"tools": [{ "read": { "allowed": ["read_file"] } }, { "execute": { "allowed": ["execute_command"] } }]
+			},
+			{
+				"slug": "prior-art",
+				"name": "Second Brain: prior-art",
+				"private": true,
+				"whenToUse": "Second Brain detector — what is being built already exists in this repository.",
+				"roleDefinition": "You check whether what is being built already exists in this repository.\nSearch for an existing helper, shared library or sibling implementation before the agent finishes rebuilding it. Cite the path. Silence unless you have actually found the thing.",
+				"tools": [{ "read": { "allowed": ["read_file", "grep_search", "list_files", "find_files"] } }],
+				"tools_allowed": ["rag_search", "git_search"]
+			},
+			{
+				"slug": "constraint-drift",
+				"name": "Second Brain: constraint-drift",
+				"private": true,
+				"whenToUse": "Second Brain detector — work contradicting a rule the project writes down.",
+				"roleDefinition": "You check the work against the rules this project writes down — AGENTS.md, CLAUDE.md, and constraints the user stated earlier in the task.\nQuote the rule and the observation that contradicts it. This detector is the most false-positive-prone one there is: if you are inferring a rule rather than reading one, stay silent.",
+				"tools": [{ "read": { "allowed": ["read_file", "grep_search", "list_files", "find_files"] } }]
+			},
+			{
+				"slug": "static-analysis",
+				"name": "Second Brain: static-analysis",
+				"private": true,
+				"whenToUse": "Second Brain detector — does the edited tree still build / type-check. Ships with an EMPTY command allowlist.",
+				"roleDefinition": "You determine whether the tree the agent just edited still builds and type-checks.\nRun the command you are allowed to run, once, and report only a real failure with the compiler's own first error line as evidence. A build you could not run is silence, not a finding.",
+				"tools": [{ "execute": { "allowed": ["execute_command"] } }]
+			},
+			{
+				"slug": "cross-task-collision",
+				"name": "Second Brain: cross-task-collision",
+				"private": true,
+				"whenToUse": "Second Brain detector — another live task is editing the same files. Structurally triggered.",
+				"roleDefinition": "Another live task is editing files this task is also editing. The collision itself is already established — you are not asked to judge whether it is real, only to write one clear line about it.\nSay which file, which other task, and which case it is: the same working directory (both agents write the same file, later writer wins silently — urgent) or separate worktrees (two branches diverging, git will report it at merge time — lower).",
+				"tools": []
+			}
+		],
+		"ui": [
+			{ "region": "chat-input-toolbar", "entry": "ui/badge.js" },
+			{ "region": "chat-message-addon", "entry": "ui/advisory.js" },
+			{ "region": "sidebar-panel", "entry": "ui/panel.js" }
+		],
+		"skills": [
+			{
+				"name": "second-brain-stats",
+				"description": "Show what the Second Brain has observed, spent and said — observed volume per segment, pass latency, window fill, token use and cost, advisories generated / gated / delivered, and uptake per detector."
+			},
+			{
+				"name": "second-brain-run",
+				"description": "Ask the Second Brain to look now — runs one pass immediately over the focused task and reports each detector's verdict plus any advisory. Bypasses the pass throttle, not the mute or the budget."
+			},
+			{
+				"name": "second-brain-why",
+				"description": "Show the Second Brain's recent advisories with their evidence and adjudicated verdicts, plus the ones the gate dropped and why."
+			},
+			{
+				"name": "second-brain-forget",
+				"description": "Drop the Second Brain's task ledger — one task's, or all of them. A ledger is derived state, so deleting one is always safe."
+			}
+		],
+		"commands": [
+			{ "name": "stats", "description": "Second Brain: observed/spent/said summary for the focused task." },
+			{
+				"name": "run",
+				"description": "Second Brain: run one pass now over the focused task and print every detector's verdict."
+			},
+			{
+				"name": "why",
+				"description": "Second Brain: recent advisories with evidence, verdicts, and gate drops."
+			},
+			{ "name": "forget", "description": "Second Brain: drop a task ledger (or all)." }
+		]
+	},
+	"config": {
+		"type": "object",
+		"properties": {
+			"profileRef": {
+				"type": "string",
+				"default": "",
+				"description": "Provider-profile name/id the detector forks use (ctx.ai.buildHandler). Empty ⇒ the host default profile. A detector mode's own provider link overrides this per detector."
+			},
+			"minIntervalS": {
+				"type": "number",
+				"default": 90,
+				"description": "Clock floor between passes (seconds) — the hard ceiling on how often the observer thinks. Bounds COST."
+			},
+			"triggerChars": {
+				"type": "number",
+				"default": 6000,
+				"description": "Projected characters accumulated since the last pass that make a pass due (within the clock floor)."
+			},
+			"maxIntervalS": {
+				"type": "number",
+				"default": 900,
+				"description": "Liveness ceiling: a pass at least this often (seconds) while input is pending."
+			},
+			"ratePerHour": {
+				"type": "number",
+				"default": 4,
+				"description": "Advisory budget per hour — the hard ceiling on how often the observer speaks to the agent. Bounds the PRIMARY'S ATTENTION."
+			},
+			"cooldownS": {
+				"type": "number",
+				"default": 300,
+				"description": "Minimum seconds between two delivered advisories."
+			},
+			"humanFloor": {
+				"type": "number",
+				"default": 0.35,
+				"description": "Confidence floor for user-only advisories (shown as a marker, never injected into the model)."
+			},
+			"adviceTtlS": {
+				"type": "number",
+				"default": 900,
+				"description": "Validity TTL (seconds) from generation — an older advisory is dropped, never delivered late."
+			},
+			"queueTimeoutS": {
+				"type": "number",
+				"default": 1800,
+				"description": "Queue timeout (seconds) from enqueue — an advisory nobody drained is dropped."
+			},
+			"finishGateEnabled": {
+				"type": "boolean",
+				"default": true,
+				"description": "Whether the task-end pass may deliver evidenced unfinished work back into a just-completed task."
+			},
+			"finishGateMinIntervalS": {
+				"type": "number",
+				"default": 3600,
+				"description": "At most one finish-gate intervention per task per this many seconds."
+			},
+			"tokensPerTask": {
+				"type": "number",
+				"default": 2000000,
+				"description": "Observer token budget per task. Exhaustion degrades to silence, never to cheaper advice."
+			},
+			"tokensPerHour": {
+				"type": "number",
+				"default": 600000,
+				"description": "Observer token budget per hour."
+			},
+			"forkDeadlineS": {
+				"type": "number",
+				"default": 20,
+				"description": "Soft per-fork deadline (seconds), stated in the fork's prompt; the hard cancel follows a few seconds later."
+			},
+			"turnEndReport": {
+				"type": "boolean",
+				"default": true,
+				"description": "Show the turn-end pass's per-detector verdicts to the user (never to the agent)."
+			},
+			"mute": {
+				"type": "boolean",
+				"default": false,
+				"description": "Silence: no passes, no delivery, nothing sent. Observation continues locally, so unmuting resumes with full context."
+			},
+			"debug": {
+				"type": "boolean",
+				"default": false,
+				"description": "Capture each pass's shared prefix and every fork's whole loop under the plugin's storage (debug/<taskId>/<pass>/)."
+			}
+		}
+	}
+}

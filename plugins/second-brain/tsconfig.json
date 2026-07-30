@@ -1,0 +1,25 @@
+{
+	"//": "Standalone tsconfig for the Second Brain plugin. Its entry is TypeScript the host bundles at load time, so the sources sit OUTSIDE every extension/package tsc root. This config exists so a developer/CI can typecheck the plugin against the public @shofer/types surface in isolation: `npx tsgo -p plugins/second-brain`.",
+	"extends": "@shofer/config-typescript/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"types": ["node"],
+		"jsx": "react-jsx",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"typeRoots": [
+			"../../webview-ui/node_modules/@types",
+			"../../packages/core/node_modules/@types",
+			"../../node_modules/@types"
+		],
+		"paths": {
+			"@shofer/types": ["../../packages/types/src/index.ts"],
+			"@shofer/plugin-ui": ["../plugin-ui.d.ts"],
+			"react": ["../../webview-ui/node_modules/@types/react"],
+			"react/jsx-runtime": ["../../webview-ui/node_modules/@types/react/jsx-runtime"],
+			"react-dom": ["../../webview-ui/node_modules/@types/react-dom"]
+		}
+	},
+	"include": ["src/**/*.ts", "ui/*.tsx"],
+	"exclude": ["node_modules", "__tests__", "vitest.config.ts"]
+}

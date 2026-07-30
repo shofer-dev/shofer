@@ -1,0 +1,331 @@
+// TaskObserver end-to-end against scripted seams: the trigger policy, a pass fanning
+// out over the enabled detectors (pilot first), the gate wiring, "say it to both"
+// delivery (notify + marker with the SAME words), the turn-end report reaching the
+// user only, adjudication → suppression, and budget exhaustion degrading to silence.
+
+import type { PluginStorage } from "@shofer/types"
+
+import { FEEDBACK_TOOL_NAME, type DetectorDef, type Observation } from "../src/types.js"
+import type { ChatMessage, ForkChatResult, ForkClient } from "../src/llm.js"
+import type { ToolDispatcher } from "../src/tool-executor.js"
+import { LedgerStore } from "../src/ledger.js"
+import { TaskObserver, type DeliverySeams, type ObserverTunables } from "../src/task-observer.js"
+
+const T0 = 1_700_000_000_000
+
+class MemoryStorage implements PluginStorage {
+	files = new Map<string, string>()
+	readonly dir = "/mem"
+	async readFile(p: string): Promise<string> {
+		const c = this.files.get(p)
+		if (c === undefined) throw new Error("ENOENT")
+		return c
+	}
+	async writeFile(p: string, content: string): Promise<void> {
+		this.files.set(p, content)
+	}
+	async exists(p: string): Promise<boolean> {
+		return this.files.has(p)
+	}
+	async delete(p: string): Promise<void> {
+		this.files.delete(p)
+	}
+	async list(prefix?: string): Promise<string[]> {
+		return [...this.files.keys()]
+			.filter((f) => !prefix || f.startsWith(`${prefix}/`))
+			.map((f) => (prefix ? f.slice(prefix.length + 1) : f))
+	}
+}
+
+function detectors(overrides: Partial<Record<string, Partial<DetectorDef>>> = {}): DetectorDef[] {
+	const base: DetectorDef[] = [
+		{
+			slug: "repeat-failure",
+			enabled: true,
+			system: "loop watcher",
+			tools: [],
+			exec: [],
+			cadenceNth: 1,
+			confidenceFloor: 0.6,
+			deadlineS: 0,
+			pilot: true,
+			structural: false,
+		},
+		{
+			slug: "standard-questions",
+			enabled: true,
+			system: "checklist",
+			tools: [],
+			exec: [],
+			cadenceNth: 1,
+			confidenceFloor: 0.6,
+			deadlineS: 0,
+			pilot: false,
+			structural: false,
+		},
+	]
+	return base.map((d) => ({ ...d, ...(overrides[d.slug] ?? {}) }))
+}
+
+interface Script {
+	/** detector slug (matched against the tail) → the scripted reply */
+	bySlug: Record<string, ForkChatResult>
+}
+
+function scriptedClient(script: Script): ForkClient & { calls: { slug: string; messages: ChatMessage[] }[] } {
+	const calls: { slug: string; messages: ChatMessage[] }[] = []
+	return {
+		calls,
+		async chat(opts) {
+			const text = opts.messages
+				.map((m) =>
+					typeof m.content === "string"
+						? m.content
+						: m.content.map((b) => ("text" in b ? b.text : "")).join("\n"),
+				)
+				.join("\n")
+			const slug = Object.keys(script.bySlug).find((s) => text.includes(`"${s}" detector`)) ?? "?"
+			calls.push({ slug, messages: opts.messages })
+			return (
+				script.bySlug[slug] ?? {
+					text: "",
+					toolCalls: [{ id: "f", name: FEEDBACK_TOOL_NAME, arguments: '{"verdict":"silent"}' }],
+					tokens: { prompt: 5, completion: 2 },
+					costUsd: 0,
+				}
+			)
+		},
+	}
+}
+
+const silentReply: ForkChatResult = {
+	text: "",
+	toolCalls: [{ id: "f", name: FEEDBACK_TOOL_NAME, arguments: '{"verdict":"silent"}' }],
+	tokens: { prompt: 5, completion: 2 },
+	costUsd: 0.0001,
+}
+
+function adviseReply(args: Record<string, unknown> = {}): ForkChatResult {
+	return {
+		text: "",
+		toolCalls: [
+			{
+				id: "f",
+				name: FEEDBACK_TOOL_NAME,
+				arguments: JSON.stringify({
+					verdict: "advise",
+					headline: "No test run observed since the first edit",
+					body: "Three edits, no test command.",
+					evidence: ["write_to_file services/foo/health.go"],
+					confidence: 0.8,
+					...args,
+				}),
+			},
+		],
+		tokens: { prompt: 5, completion: 3 },
+		costUsd: 0.0002,
+	}
+}
+
+interface Harness {
+	observer: TaskObserver
+	notifies: string[]
+	queues: string[]
+	markers: { kind: string; text: string }[]
+	storage: MemoryStorage
+	client: ReturnType<typeof scriptedClient>
+	tunables: ObserverTunables
+}
+
+function makeHarness(script: Script, defs: DetectorDef[] = detectors()): Harness {
+	const storage = new MemoryStorage()
+	const notifies: string[] = []
+	const queues: string[] = []
+	const markers: { kind: string; text: string }[] = []
+	const client = scriptedClient(script)
+	const tunables: ObserverTunables = {
+		minIntervalS: 90,
+		triggerChars: 100,
+		maxIntervalS: 900,
+		forkDeadlineS: 5,
+		tokensPerTask: 1_000_000,
+		tokensPerHour: 1_000_000,
+		finishGateEnabled: true,
+		finishGateMinIntervalS: 3600,
+		turnEndReport: true,
+		gate: { ratePerHour: 10, cooldownS: 0, humanFloor: 0.35, adviceTtlS: 900, queueTimeoutS: 1800, muted: false },
+	}
+	const seams: DeliverySeams = {
+		async notifyAgent(text) {
+			notifies.push(text)
+		},
+		async queueAgent(text) {
+			queues.push(text)
+		},
+		async marker(kind, text) {
+			markers.push({ kind, text })
+		},
+		async loadDetectors() {
+			return defs
+		},
+		clientFor() {
+			return client
+		},
+		executor(): ToolDispatcher {
+			return {
+				async execute() {
+					return { content: "n/a", isError: false }
+				},
+			}
+		},
+		tunables() {
+			return tunables
+		},
+		async debugCapture() {},
+		log() {},
+	}
+	const observer = new TaskObserver("task-1", "/ws", new LedgerStore(storage), seams)
+	return { observer, notifies, queues, markers, storage, client, tunables }
+}
+
+function feed(observer: TaskObserver, texts: string[], kind: Observation["kind"] = "tool"): void {
+	for (const [i, text] of texts.entries()) observer.observe({ at: T0 + i, kind, text })
+}
+
+describe("trigger policy", () => {
+	it("volume within the clock floor; the floor binds unconditionally", () => {
+		const h = makeHarness({ bySlug: {} })
+		feed(h.observer, ["x".repeat(200)])
+		// Volume met but the clock floor not yet elapsed since construction epoch 0…
+		expect(h.observer.dueTrigger(T0 + 1000)).toBe("volume") // first pass: lastPassStartedAt=0 ⇒ floor long passed
+	})
+
+	it("nothing pending ⇒ never due", () => {
+		const h = makeHarness({ bySlug: {} })
+		expect(h.observer.dueTrigger(T0)).toBeUndefined()
+	})
+
+	it("turn end is exempt from every limit", async () => {
+		const h = makeHarness({ bySlug: {} })
+		feed(h.observer, ["small"])
+		await h.observer.runPass("manual", () => T0) // consume the pending spool
+		feed(h.observer, ["tiny"])
+		h.observer.noteTurnEnd(false)
+		expect(h.observer.dueTrigger(T0 + 1000)).toBe("turn_end") // floor NOT elapsed, still due
+	})
+})
+
+describe("a pass", () => {
+	it("runs the pilot first, then the rest; all silent ⇒ nothing delivered", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		feed(h.observer, ["execute_command\ngo build ./..."])
+		const result = await h.observer.runPass("manual", () => T0)
+		expect(result?.verdicts.map((v) => `${v.detector}:${v.verdict}`)).toEqual([
+			"repeat-failure:silent",
+			"standard-questions:silent",
+		])
+		expect(h.client.calls[0]!.slug).toBe("repeat-failure") // the pilot went first
+		expect(h.notifies).toEqual([])
+		expect(h.markers.filter((m) => m.kind === "advisory")).toEqual([])
+	})
+
+	it("an advise says it to BOTH: notify and marker carry the same words", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": adviseReply() } })
+		feed(h.observer, ["write_to_file services/foo/health.go"])
+		await h.observer.runPass("manual", () => T0)
+		expect(h.notifies.length).toBe(1)
+		const advisoryMarkers = h.markers.filter((m) => m.kind === "advisory")
+		expect(advisoryMarkers.length).toBe(1)
+		// Identical substance, twice-addressed.
+		expect(h.notifies[0]).toContain("No test run observed since the first edit")
+		expect(advisoryMarkers[0]!.text).toContain("No test run observed since the first edit")
+		// The agent copy is framed as data-not-instructions.
+		expect(h.notifies[0]).toContain("no user authority")
+		// The user copy is attributed with the mute affordance.
+		expect(advisoryMarkers[0]!.text).toContain("standard-questions")
+		expect(advisoryMarkers[0]!.text).toContain("catalogue.json")
+	})
+
+	it("a human-only advisory reaches the marker but never the agent", async () => {
+		const h = makeHarness({
+			bySlug: { "repeat-failure": silentReply, "standard-questions": adviseReply({ confidence: 0.45 }) },
+		})
+		feed(h.observer, ["edit"])
+		await h.observer.runPass("manual", () => T0)
+		expect(h.notifies).toEqual([])
+		expect(h.markers.filter((m) => m.kind === "advisory").length).toBe(1)
+	})
+
+	it("turn-end verdicts reach the user only, as a report marker", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		feed(h.observer, ["something"])
+		h.observer.noteTurnEnd(false)
+		await h.observer.runPass("turn_end", () => T0)
+		const report = h.markers.find((m) => m.kind === "turn-report")
+		expect(report?.text).toContain("not shown to the agent")
+		expect(report?.text).toContain("repeat-failure → silent")
+		expect(h.notifies).toEqual([])
+	})
+
+	it("adjudicated rejection suppresses the key for the task", async () => {
+		const script: Script = { bySlug: { "repeat-failure": silentReply, "standard-questions": adviseReply() } }
+		const h = makeHarness(script)
+		feed(h.observer, ["edit one"])
+		await h.observer.runPass("manual", () => T0)
+		const advisoryId = h.observer.currentLedger!.advisories[0]!.id
+
+		// Next pass: the detector adjudicates its advisory as rejected, with evidence.
+		script.bySlug["standard-questions"] = {
+			text: "",
+			toolCalls: [
+				{
+					id: "f",
+					name: FEEDBACK_TOOL_NAME,
+					arguments: JSON.stringify({
+						verdict: "silent",
+						outcomes: [{ advice_id: advisoryId, verdict: "rejected", evidence: ["user said no tests"] }],
+					}),
+				},
+			],
+			tokens: { prompt: 5, completion: 2 },
+			costUsd: 0,
+		}
+		feed(h.observer, ["more work"])
+		await h.observer.runPass("manual", () => T0 + 100_000)
+		const ledger = h.observer.currentLedger!
+		expect(ledger.advisories[0]!.outcome?.verdict).toBe("rejected")
+		expect(ledger.suppressed).toContain(ledger.advisories[0]!.dedupKey)
+	})
+
+	it("budget exhaustion degrades to silence and says so", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		h.tunables.tokensPerHour = 1 // exhausted after any pass
+		feed(h.observer, ["work"])
+		await h.observer.runPass("manual", () => T0)
+		feed(h.observer, ["more"])
+		const second = await h.observer.runPass("manual", () => T0 + 1000)
+		expect(second?.verdicts).toEqual([{ detector: "*", verdict: "skipped", note: "(budget exhausted)" }])
+		expect(h.client.calls.filter((c) => c.slug !== "?").length).toBe(2) // only the first pass forked
+	})
+
+	it("the finish gate queue-wakes a completed task, once, with a visible marker", async () => {
+		const h = makeHarness({
+			bySlug: {
+				"repeat-failure": silentReply,
+				"standard-questions": adviseReply({ finish_gate: true, confidence: 0.9 }),
+			},
+		})
+		feed(h.observer, ["version bumped"])
+		h.observer.noteTurnEnd(true) // completed
+		await h.observer.runPass("turn_end", () => T0)
+		expect(h.queues.length).toBe(1)
+		expect(h.queues[0]).toContain("No test run observed")
+		expect(h.markers.some((m) => m.kind === "finish-gate")).toBe(true)
+
+		// A second completion inside the interval must NOT fire again.
+		feed(h.observer, ["still bumped"])
+		h.observer.noteTurnEnd(true)
+		await h.observer.runPass("turn_end", () => T0 + 60_000)
+		expect(h.queues.length).toBe(1)
+	})
+})

@@ -1,0 +1,224 @@
+// Fork behavior against a scripted client: the feedback call ends the fork; prose
+// with no call coerces to silent (never an invented finding); tool rounds dispatch
+// through the executor with the grant re-checked per call; the prefix is never
+// mutated; a hung provider is cancelled and reported as a timeout.
+
+import { FEEDBACK_TOOL_NAME, type DetectorDef } from "../src/types.js"
+import type { ChatMessage, ForkChatResult, ForkClient } from "../src/llm.js"
+import type { ToolDispatcher } from "../src/tool-executor.js"
+import { buildForkTail, parseFeedback, runFork } from "../src/fork.js"
+
+function detector(overrides: Partial<DetectorDef> = {}): DetectorDef {
+	return {
+		slug: "default",
+		enabled: true,
+		system: "You are watching.",
+		tools: ["read_file"],
+		exec: [],
+		cadenceNth: 1,
+		confidenceFloor: 0.65,
+		deadlineS: 0,
+		pilot: false,
+		structural: false,
+		...overrides,
+	}
+}
+
+function feedbackCall(args: Record<string, unknown>): ForkChatResult {
+	return {
+		text: "",
+		toolCalls: [{ id: "t1", name: FEEDBACK_TOOL_NAME, arguments: JSON.stringify(args) }],
+		tokens: { prompt: 10, completion: 5 },
+		costUsd: 0.001,
+	}
+}
+
+function scriptedClient(replies: ForkChatResult[]): ForkClient & { requests: ChatMessage[][] } {
+	const requests: ChatMessage[][] = []
+	let i = 0
+	return {
+		requests,
+		async chat(opts) {
+			requests.push(opts.messages)
+			const reply = replies[Math.min(i, replies.length - 1)]!
+			i++
+			return reply
+		},
+	}
+}
+
+const noTools: ToolDispatcher = {
+	async execute() {
+		return { content: "unused", isError: false }
+	},
+}
+
+const basePrefix: readonly ChatMessage[] = [{ role: "user", content: "OBSERVATION LOG\n[1] user: hi" }]
+
+describe("runFork", () => {
+	it("returns the parsed feedback when the model calls the tool", async () => {
+		const client = scriptedClient([
+			feedbackCall({ verdict: "advise", headline: "h", evidence: ["e"], confidence: 0.8 }),
+		])
+		const outcome = await runFork({
+			detector: detector(),
+			systemPrompt: "sys",
+			prefix: basePrefix,
+			tail: "tail",
+			tools: [],
+			client,
+			executor: noTools,
+			deadlineS: 5,
+		})
+		expect(outcome.verdictKind).toBe("ok")
+		expect(outcome.feedback).toMatchObject({ verdict: "advise", headline: "h", confidence: 0.8 })
+		expect(outcome.tokens).toEqual({ prompt: 10, completion: 5 })
+	})
+
+	it("prose with no tool call coerces to silent", async () => {
+		const client = scriptedClient([
+			{ text: "everything looks fine to me!", toolCalls: [], tokens: { prompt: 1, completion: 1 }, costUsd: 0 },
+		])
+		const outcome = await runFork({
+			detector: detector(),
+			systemPrompt: "sys",
+			prefix: basePrefix,
+			tail: "tail",
+			tools: [],
+			client,
+			executor: noTools,
+			deadlineS: 5,
+		})
+		expect(outcome.feedback.verdict).toBe("silent")
+	})
+
+	it("dispatches tool rounds through the executor and feeds results back", async () => {
+		const executed: string[] = []
+		const executor: ToolDispatcher = {
+			async execute(_d, name, args) {
+				executed.push(`${name}:${args}`)
+				return { content: "package health", isError: false }
+			},
+		}
+		const client = scriptedClient([
+			{
+				text: "",
+				toolCalls: [{ id: "r1", name: "read_file", arguments: '{"path":"a.go"}' }],
+				tokens: { prompt: 1, completion: 1 },
+				costUsd: 0,
+			},
+			feedbackCall({ verdict: "silent" }),
+		])
+		const outcome = await runFork({
+			detector: detector(),
+			systemPrompt: "sys",
+			prefix: basePrefix,
+			tail: "tail",
+			tools: [],
+			client,
+			executor,
+			deadlineS: 5,
+		})
+		expect(executed).toEqual(['read_file:{"path":"a.go"}'])
+		expect(outcome.verdictKind).toBe("ok")
+		// The second request carries the tool round-trip after the merged tail.
+		const second = client.requests[1]!
+		expect(second.length).toBe(3) // merged user, assistant tool_use, user tool_result
+	})
+
+	it("never mutates the shared prefix (the cache economics rest on this)", async () => {
+		const prefix: ChatMessage[] = [{ role: "user", content: "OBSERVATION LOG" }]
+		const snapshot = JSON.stringify(prefix)
+		const client = scriptedClient([feedbackCall({ verdict: "silent" })])
+		await runFork({
+			detector: detector(),
+			systemPrompt: "sys",
+			prefix,
+			tail: "tail",
+			tools: [],
+			client,
+			executor: noTools,
+			deadlineS: 5,
+		})
+		expect(JSON.stringify(prefix)).toBe(snapshot)
+		// The merged tail rode the request, not the prefix.
+		expect(client.requests[0]![0]!.content).toContain("tail")
+	})
+
+	it("a hung provider is cancelled at the hard deadline and reported as timeout", async () => {
+		const client: ForkClient = {
+			chat(opts) {
+				return new Promise((_resolve, reject) => {
+					opts.signal?.addEventListener("abort", () => {
+						const err = new Error("aborted")
+						err.name = "AbortError"
+						reject(err)
+					})
+				})
+			},
+		}
+		const outcome = await runFork({
+			detector: detector(),
+			systemPrompt: "sys",
+			prefix: basePrefix,
+			tail: "tail",
+			tools: [],
+			client,
+			executor: noTools,
+			// deadline -8 + grace 8 ⇒ aborts almost immediately, keeping the test fast.
+			deadlineS: -7.9,
+		})
+		expect(outcome.verdictKind).toBe("timeout")
+		expect(outcome.feedback.verdict).toBe("silent")
+	})
+})
+
+describe("parseFeedback", () => {
+	it("accepts the full envelope with outcomes", () => {
+		const parsed = parseFeedback(
+			JSON.stringify({
+				verdict: "silent",
+				outcomes: [{ advice_id: "a1", verdict: "adopted", evidence: ["go test @ 14:22"] }],
+			}),
+		)
+		expect(parsed.outcomes).toEqual([{ adviceId: "a1", verdict: "adopted", evidence: ["go test @ 14:22"] }])
+	})
+
+	it("malformed json / unknown verdicts coerce to silent", () => {
+		expect(parseFeedback("{oops").verdict).toBe("silent")
+		expect(parseFeedback('{"verdict":"panic"}').verdict).toBe("silent")
+	})
+})
+
+describe("buildForkTail", () => {
+	it("states budgets, grant, config and open advisories", () => {
+		const tail = buildForkTail(
+			detector({ exec: ["git status --short"], tools: ["read_file", "execute_command"], config: { q: 1 } }),
+			[
+				{
+					id: "a1",
+					taskId: "t",
+					detector: "default",
+					headline: "old advice",
+					body: "",
+					confidence: 0.7,
+					evidence: [],
+					dedupKey: "k",
+					staleIf: [],
+					humanOnly: false,
+					finishGate: false,
+					generatedAt: 0,
+					deliveredAt: 1,
+				},
+			],
+			12,
+			700,
+		)
+		expect(tail).toContain("~12s")
+		expect(tail).toContain("~700 characters")
+		expect(tail).toContain("read_file, execute_command")
+		expect(tail).toContain("git status --short")
+		expect(tail).toContain('{"q":1}')
+		expect(tail).toContain('a1: "old advice"')
+	})
+})
