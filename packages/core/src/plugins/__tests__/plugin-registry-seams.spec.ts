@@ -155,6 +155,31 @@ describe("PluginRegistry — onTimelineRewind / onTaskDeleted", () => {
 		expect(fired).toEqual([])
 	})
 
+	it("delivers onAssistantMessage to granted plugins with the task context merged", async () => {
+		const reg = new PluginRegistry()
+		const seen: unknown[] = []
+		await reg.register(
+			{
+				name: "observer",
+				lifecycle: {
+					onAssistantMessage: (info, ctx) => {
+						seen.push({ info, taskId: ctx.taskId, turn: ctx.turn })
+					},
+				},
+			},
+			{},
+			{ lifecycle: true },
+		)
+		await reg.register(
+			{ name: "ungranted", lifecycle: { onAssistantMessage: () => void seen.push("never") } },
+			{},
+			{},
+		)
+
+		await reg.notifyAssistantMessage({ taskId: "t1", text: "let me run the tests", turn: 3 }, { turn: 3 })
+		expect(seen).toEqual([{ info: { taskId: "t1", text: "let me run the tests", turn: 3 }, taskId: "t1", turn: 3 }])
+	})
+
 	it("isolates a throwing rewind hook so the rewind still proceeds", async () => {
 		const reg = new PluginRegistry()
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})

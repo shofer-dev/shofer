@@ -308,16 +308,17 @@ Plugins run in registration order. Each hook is bounded by a **500 ms** per-hook
 per-plugin error isolation: a hook that throws or exceeds the budget is skipped with a shown+logged
 warning — it can never stall or crash the agent loop, and its would-be mutation is not applied.
 
-| Hook                | Return                              | Effect                                                                                                                                                                                      |
-| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `beforeToolCall`    | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`).             |
-| `afterToolCall`     | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                                     |
-| `beforeAsk`         | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.                |
-| `beforeTaskStart`   | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                                     |
-| `afterTaskComplete` | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                                 |
-| `onUserMessage`     | ignored                             | **Observer.** The user sent a message into a running task — the step boundary the tool hooks cannot see.                                                                                    |
-| `onTimelineRewind`  | ignored (**awaited**)               | The chat is about to be rewound to `info.ts`. Runs BEFORE the messages go, so state anchored to them can be rolled back. `info.restoreState: false` ⇒ chat-only, don't touch the workspace. |
-| `onTaskDeleted`     | ignored                             | **Observer.** A task was deleted — drop per-task state kept outside its task dir.                                                                                                           |
+| Hook                 | Return                              | Effect                                                                                                                                                                                      |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `beforeToolCall`     | `{ allow, modifiedArgs?, reason? }` | **Allow / modify / block.** `modifiedArgs` threads into later hooks and the tool; the first `allow:false` short-circuits the tool (surfaced like a denied tool, with `reason`).             |
+| `afterToolCall`      | `string \| void`                    | **Observe / transform** the result string. A returned string replaces it for later hooks and the model.                                                                                     |
+| `beforeAsk`          | `{ decision?, text? } \| void`      | **Modify / auto-answer** an ask. `text` edits the surfaced ask; `decision` of `"approve"`/`"deny"` auto-answers (short-circuit); `"ask"`/absent lets it proceed to the user.                |
+| `beforeTaskStart`    | ignored                             | **Observer.** Fire-and-forget (off the latency-critical path). `ctx.prompt` carries the initial prompt.                                                                                     |
+| `afterTaskComplete`  | ignored                             | **Observer.** `ctx.reason` is `"completed"` or `"aborted"`.                                                                                                                                 |
+| `onUserMessage`      | ignored                             | **Observer.** The user sent a message into a running task — the step boundary the tool hooks cannot see.                                                                                    |
+| `onAssistantMessage` | ignored                             | **Observer.** The agent completed a narration text block — its prose between tool calls, which no other hook carries. Never fired for streaming partials.                                   |
+| `onTimelineRewind`   | ignored (**awaited**)               | The chat is about to be rewound to `info.ts`. Runs BEFORE the messages go, so state anchored to them can be rolled back. `info.restoreState: false` ⇒ chat-only, don't touch the workspace. |
+| `onTaskDeleted`      | ignored                             | **Observer.** A task was deleted — drop per-task state kept outside its task dir.                                                                                                           |
 
 `ctx.turn` (a per-task turn counter) lets a hook that fires per _tool call_ act once per
 turn. A hook that legitimately needs longer than 500 ms declares `hookTimeoutMs` in its
@@ -335,6 +336,8 @@ plugin's grants:
 | `workspacePath`        | Active workspace path, if any.                                                                                  |
 | `mode`                 | Current mode slug.                                                                                              |
 | `taskId`               | Id of the task the hook runs for, if applicable.                                                                |
+| `parentTaskId`         | The spawning parent's task id, when the task is a subtask — how an observer attributes a child's events.        |
+| `rootTaskId`           | The delegation tree's root task id, when the task is a subtask.                                                 |
 | `cwd`                  | Current working directory.                                                                                      |
 | `config`               | This plugin's validated, default-merged settings.                                                               |
 | `host`                 | The restricted host surface (below). Present when the host wired its bridge.                                    |
@@ -672,7 +675,10 @@ put its own name in either list.
 **AI billing is a third, separate consent.** `permissions.ai` alone is not enough: `ctx.ai` only
 becomes live after the user grants the **"uses AI (billed)"** consent in the Plugins panel (a
 distinct toggle from enable). Granted-but-unconsented gives a denying `ctx.ai` stub; consent can be
-revoked at any time. Plugins never receive raw API keys.
+revoked at any time. Plugins never receive raw API keys. One exception to the default: a **bundled**
+plugin declaring `defaultEnabled: true` is **consented by default** — a plugin the product ships on
+should not sit inert behind a second approval — and the user's explicit revocation in the Plugins
+panel still wins, exactly like the explicit-off that beats `defaultEnabled` itself.
 
 The plugin-API version is also enforced: a plugin whose `shoferPluginApiVersion` is incompatible with
 the host (major mismatch, or the host is older than the minor/patch it needs) is refused at load,

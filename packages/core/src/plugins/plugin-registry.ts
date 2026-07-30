@@ -2,6 +2,7 @@ import type {
 	BeforeAskResult,
 	BeforeToolCallResult,
 	CustomToolDefinition,
+	AssistantMessageInfo,
 	LifecycleHooks,
 	PluginContext,
 	PluginEvent,
@@ -476,6 +477,22 @@ export class PluginRegistry {
 	async notifyUserMessage(info: UserMessageInfo, context: PluginContext = {}): Promise<void> {
 		await this.applyLifecycleHook(
 			"onUserMessage",
+			async (hook, _plugin, ctx) => {
+				await hook(info, ctx)
+			},
+			{ taskId: info.taskId, ...context },
+		)
+	}
+
+	/**
+	 * Tell permitted plugins the agent completed a narration text block (design §6.9)
+	 * — the assistant's prose between tool calls, which no other hook carries.
+	 * Observer-only; callers invoke it **without awaiting** so a plugin never sits
+	 * inside the streaming path.
+	 */
+	async notifyAssistantMessage(info: AssistantMessageInfo, context: PluginContext = {}): Promise<void> {
+		await this.applyLifecycleHook(
+			"onAssistantMessage",
 			async (hook, _plugin, ctx) => {
 				await hook(info, ctx)
 			},

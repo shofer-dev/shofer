@@ -288,6 +288,8 @@ export interface PluginContext {
 	readonly workspacePath?: string
 	readonly mode?: string
 	readonly taskId?: string
+	readonly parentTaskId?: string // spawning parent's id, when the task is a subtask
+	readonly rootTaskId?: string // the delegation tree's root, when the task is a subtask
 	readonly cwd?: string
 	readonly config?: Record<string, unknown> // validated, default-merged plugin settings
 	readonly host?: PluginHost // RESTRICTED, permission-checked host surface (NOT the full getHost())
@@ -584,6 +586,11 @@ export interface LifecycleHooks {
 	/** The user sent a message into a running task (a step the tool hooks cannot see). Observer. */
 	onUserMessage?(
 		info: { taskId: string; text?: string; imageCount?: number },
+		context: PluginContext,
+	): void | Promise<void>
+	/** The agent completed a narration text block (its prose between tool calls). Observer. */
+	onAssistantMessage?(
+		info: { taskId: string; text: string; turn?: number },
 		context: PluginContext,
 	): void | Promise<void>
 	/**

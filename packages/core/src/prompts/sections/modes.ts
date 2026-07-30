@@ -9,7 +9,12 @@ import { getAllModes } from "@shofer/types"
 async function getAllModesWithPrompts(): Promise<ModeConfig[]> {
 	const { customModes = [], customModePrompts = {} } = await getHost().state.readModeOverrides()
 
-	const allModes = getAllModes(customModes)
+	// Private modes (plugin-internal, e.g. a detector mode an observer plugin spawns)
+	// are hidden from every user-facing surface AND from the model: advertising them
+	// here would spend prompt bytes on modes the agent is never meant to pick. They
+	// stay switch-able by their qualified slug — switch_mode/new_task validate
+	// against the unfiltered list.
+	const allModes = getAllModes(customModes).filter((mode) => !mode.private)
 	return allModes.map((mode) => ({
 		...mode,
 		roleDefinition: customModePrompts[mode.slug]?.roleDefinition ?? mode.roleDefinition,

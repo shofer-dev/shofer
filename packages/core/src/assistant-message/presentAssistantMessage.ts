@@ -403,6 +403,25 @@ export async function presentAssistantMessage(shofer: Task) {
 			await shofer.say("text", content, undefined, block.partial, undefined, {
 				streamBlockId: (block as TextContent).id,
 			})
+			// Lifecycle `onAssistantMessage` (design §6.9): observer plugins hear the
+			// completed narration block — the prose between tool calls that no other
+			// hook carries. Never for partials, never awaited: nothing may sit inside
+			// the streaming path.
+			if (!block.partial && content?.trim() && pluginRegistry.hasLifecycleHook("onAssistantMessage")) {
+				void pluginRegistry
+					.notifyAssistantMessage(
+						{ taskId: shofer.taskId, text: content, turn: shofer.turnCount },
+						{
+							parentTaskId: shofer.parentTaskId,
+							rootTaskId: shofer.rootTaskId,
+							cwd: shofer.cwd,
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							mode: (shofer as any)._taskMode || defaultModeSlug,
+							turn: shofer.turnCount,
+						},
+					)
+					.catch(() => {})
+			}
 			break
 		}
 		case "tool_use": {
@@ -1001,6 +1020,8 @@ export async function presentAssistantMessage(shofer: Task) {
 			// whole block is skipped and the tool path is byte-for-byte unchanged.
 			const pluginCtx: PluginContext = {
 				taskId: shofer.taskId,
+				parentTaskId: shofer.parentTaskId,
+				rootTaskId: shofer.rootTaskId,
 				cwd: shofer.cwd,
 				mode: mode ?? defaultModeSlug,
 				// A turn can issue several tool calls; `turn` lets a hook act once per turn.

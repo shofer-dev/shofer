@@ -143,6 +143,16 @@ export interface PluginAiConsentStore {
 	getAiConsentedPlugins(): string[] | Promise<string[]>
 	/** Persist the new AI-consented set. */
 	setAiConsentedPlugins(names: string[]): void | Promise<void>
+	/**
+	 * Names of plugins whose **default** consent the user explicitly revoked. Needed
+	 * because a bundled plugin declaring `defaultEnabled` is consented when it appears
+	 * in NEITHER list — `defaultEnabled` implies billed-AI consent (a default-on
+	 * plugin sitting inert behind a second approval would be default-off with extra
+	 * steps) — so "not consented" alone cannot express "the user said no".
+	 */
+	getAiConsentRevokedPlugins?(): string[] | Promise<string[]>
+	/** Persist the explicitly-revoked set. */
+	setAiConsentRevokedPlugins?(names: string[]): void | Promise<void>
 }
 
 /**
@@ -388,6 +398,10 @@ export class PluginManager {
 	private readonly storageBaseDir?: string
 	/** Plugins the user has AI-consented (billed calls). Loaded in {@link discover}. */
 	private aiConsented = new Set<string>()
+	/** Plugins whose default consent the user explicitly revoked — see {@link isAiConsented}. */
+	private aiConsentRevoked = new Set<string>()
+	/** Whether the consent store can record an explicit revoke (gates default consent). */
+	private canRecordConsentRevoke = false
 	/** Plugins the user explicitly turned off — see {@link PluginStateStore.getDisabledPlugins}. */
 	private explicitlyDisabled = new Set<string>()
 	/** Whether the state store can record an explicit "off" (gates `defaultEnabled`). */
@@ -444,6 +458,8 @@ export class PluginManager {
 		this.canRecordDisable = typeof this.stateStore.setDisabledPlugins === "function"
 		// Load the billed-AI consent set (design §8) — an independent gate on `ctx.ai`.
 		this.aiConsented = new Set((await this.aiConsentStore?.getAiConsentedPlugins()) ?? [])
+		this.aiConsentRevoked = new Set((await this.aiConsentStore?.getAiConsentRevokedPlugins?.()) ?? [])
+		this.canRecordConsentRevoke = typeof this.aiConsentStore?.setAiConsentRevokedPlugins === "function"
 		const byName = new Map<string, DiscoveredPlugin>()
 
 		for (const { dir, scope } of this.pluginDirs) {
@@ -706,7 +722,16 @@ export class PluginManager {
 
 	/** Whether the user has AI-consented (billed calls) for `name` (design §8). */
 	isAiConsented(name: string): boolean {
-		return this.aiConsented.has(name)
+		if (this.aiConsented.has(name)) return true
+		// `defaultEnabled` implies billed-AI consent for a BUNDLED plugin: a
+		// default-on plugin sitting inert behind a second approval would be
+		// default-off with extra steps. The user's explicit revocation (Settings →
+		// Plugins) wins — same explicit-OFF-beats-default shape as resolveEnabled —
+		// and default consent applies only when the store can actually record such
+		// a revoke, so it can always be turned off.
+		if (!this.canRecordConsentRevoke || this.aiConsentRevoked.has(name)) return false
+		const plugin = this.plugins.find((p) => p.name === name)
+		return plugin?.scope === "bundled" && plugin.manifest.defaultEnabled === true
 	}
 
 	/**
@@ -722,6 +747,14 @@ export class PluginManager {
 		const next = [...current]
 		await this.aiConsentStore?.setAiConsentedPlugins(next)
 		this.aiConsented = current
+		// Keep the explicit-revocation record in step: revoking records the "no" (so
+		// default consent from `defaultEnabled` cannot resurrect it), consenting
+		// clears it.
+		const revoked = new Set(this.aiConsentRevoked)
+		if (consented) revoked.delete(name)
+		else revoked.add(name)
+		await this.aiConsentStore?.setAiConsentRevokedPlugins?.([...revoked])
+		this.aiConsentRevoked = revoked
 		// Force the affected code plugin to rebuild its context (and thus `ctx.ai`) on the
 		// next activation pass. No-op for a declarative/unloaded plugin.
 		if (this.loadedCodePlugins.has(name)) {
@@ -946,7 +979,7 @@ export class PluginManager {
 	private buildPluginAi(plugin: DiscoveredPlugin): PluginContext["ai"] {
 		if (plugin.manifest.permissions?.ai !== true) return undefined
 		if (!this.aiProvider) return undefined
-		if (!this.aiConsented.has(plugin.name)) return createDeniedPluginAi(plugin.name)
+		if (!this.isAiConsented(plugin.name)) return createDeniedPluginAi(plugin.name)
 		return createPluginAi(plugin.name, this.aiProvider)
 	}
 

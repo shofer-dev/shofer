@@ -175,6 +175,17 @@ export interface LifecycleHooks {
 	onUserMessage?(info: UserMessageInfo, context: PluginContext): void | Promise<void>
 
 	/**
+	 * Called when the agent finishes a narration text block — the assistant's prose
+	 * between tool calls, which no other hook carries (`beforeToolCall` sees what it
+	 * *did*, this sees what it *said it was doing*). The seam an observer plugin
+	 * needs to judge intent and drift; fired once per completed block, never for
+	 * streaming partials.
+	 *
+	 * Fire-and-forget observer: it must never sit inside the streaming path.
+	 */
+	onAssistantMessage?(info: AssistantMessageInfo, context: PluginContext): void | Promise<void>
+
+	/**
 	 * Called just **before** a tool mutates a workspace file, with the file's content
 	 * as it is right now (`before === undefined` ⇒ it does not exist yet).
 	 *
@@ -206,6 +217,15 @@ export interface UserMessageInfo {
 	readonly text?: string
 	/** How many images the message carried. */
 	readonly imageCount?: number
+}
+
+/** What a {@link LifecycleHooks.onAssistantMessage} hook is being told (design §5.9). */
+export interface AssistantMessageInfo {
+	readonly taskId: string
+	/** The completed narration block's text. */
+	readonly text: string
+	/** The task's turn counter when the block completed. */
+	readonly turn?: number
 }
 
 /** What a {@link LifecycleHooks.onTimelineRewind} hook is being told (design §5.9). */
@@ -926,6 +946,14 @@ export interface PluginContext {
 	readonly mode?: string
 	/** Id of the task the hook is running for, if applicable (design §6.2). */
 	readonly taskId?: string
+	/**
+	 * The spawning parent's task id, when the task is a subtask. An observer plugin
+	 * uses this to attribute a child's events (its spawn, its conclusion) to the
+	 * delegation it belongs to instead of treating the child as unrelated work.
+	 */
+	readonly parentTaskId?: string
+	/** The delegation tree's root task id, when the task is a subtask. */
+	readonly rootTaskId?: string
 	/** Current working directory (design §6.2). */
 	readonly cwd?: string
 	/**

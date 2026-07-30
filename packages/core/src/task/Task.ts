@@ -2574,6 +2574,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (partial !== true && pluginRegistry.hasLifecycleHook("beforeAsk")) {
 			const hookResult = await pluginRegistry.applyBeforeAsk(type, text, {
 				taskId: this.taskId,
+				parentTaskId: this.parentTaskId,
+				rootTaskId: this.rootTaskId,
 				cwd: this.cwd,
 				mode: this._taskMode,
 				turn: this.turnCount,
@@ -3067,7 +3069,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			void pluginRegistry
 				.notifyUserMessage(
 					{ taskId: this.taskId, text, imageCount: images?.length },
-					{ cwd: this.cwd, mode: this._taskMode, turn: this.turnCount },
+					{
+						parentTaskId: this.parentTaskId,
+						rootTaskId: this.rootTaskId,
+						cwd: this.cwd,
+						mode: this._taskMode,
+						turn: this.turnCount,
+					},
 				)
 				.catch(() => {})
 		}
@@ -3662,7 +3670,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// inside the registry, so a plugin can never delay or block task start. No-op when
 		// no permitted plugin declares it.
 		void pluginRegistry
-			.notifyBeforeTaskStart({ taskId: this.taskId, cwd: this.cwd, mode: this._taskMode, prompt: task })
+			.notifyBeforeTaskStart({
+				taskId: this.taskId,
+				parentTaskId: this.parentTaskId,
+				rootTaskId: this.rootTaskId,
+				cwd: this.cwd,
+				mode: this._taskMode,
+				prompt: task,
+			})
 			.catch(() => {})
 
 		try {
@@ -4284,6 +4299,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		void pluginRegistry
 			.notifyAfterTaskComplete({
 				taskId: this.taskId,
+				parentTaskId: this.parentTaskId,
+				rootTaskId: this.rootTaskId,
 				cwd: this.cwd,
 				mode: this._taskMode,
 				turn: this.turnCount,

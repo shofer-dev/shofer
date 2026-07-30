@@ -75,6 +75,22 @@ class MemoryConsentStore implements PluginAiConsentStore {
 	}
 }
 
+/** A consent store that can also record explicit revocations (default-consent capable). */
+class RevocableConsentStore extends MemoryConsentStore {
+	constructor(
+		names: string[] = [],
+		public revoked: string[] = [],
+	) {
+		super(names)
+	}
+	getAiConsentRevokedPlugins(): string[] {
+		return [...this.revoked]
+	}
+	setAiConsentRevokedPlugins(names: string[]): void {
+		this.revoked = [...names]
+	}
+}
+
 /** A codeLoader whose plugin captures the context it is initialized with. */
 function makeCapturingLoader(): { loader: PluginCodeLoader; captured: () => PluginContext | undefined } {
 	let captured: PluginContext | undefined
@@ -231,5 +247,84 @@ describe("PluginManager — ctx.ai gating (P6.G1)", () => {
 		// After the reload the captured context is rebuilt with a live ctx.ai.
 		expect(await captured()?.ai?.buildHandler()).toBe(FAKE_HANDLER)
 		expect(provider.buildCalls).toEqual([undefined])
+	})
+})
+
+describe("PluginManager — defaultEnabled implies billed-AI consent (bundled)", () => {
+	beforeEach(() => {
+		setHost(createInMemoryHost())
+		for (const name of pluginRegistry.list()) pluginRegistry.unregister(name)
+	})
+	afterEach(() => {
+		for (const name of pluginRegistry.list()) pluginRegistry.unregister(name)
+	})
+
+	const bundledManifest = (name: string) => ({
+		name,
+		version: "1.0.0",
+		main: "index.js",
+		permissions: { ai: true },
+		defaultEnabled: true,
+	})
+
+	async function build(opts: {
+		scope?: "bundled" | "global"
+		consentStore: PluginAiConsentStore
+		manifest?: unknown
+	}) {
+		const fs = new MemoryFs()
+		fs.addManifest("/plugins/p", opts.manifest ?? bundledManifest("p"))
+		const { loader, captured } = makeCapturingLoader()
+		const provider = makeAiProvider()
+		const manager = new PluginManager({
+			fs,
+			pluginDirs: [{ dir: "/plugins", scope: opts.scope ?? "bundled" }],
+			// Enabled via the user toggle so enablement never interferes with what
+			// these tests exercise: the consent default.
+			stateStore: new MemoryStore(["p"]),
+			codeLoader: loader,
+			host: createInMemoryHost(),
+			aiProvider: provider,
+			aiConsentStore: opts.consentStore,
+		})
+		await manager.discover()
+		await manager.activateCodePlugins()
+		return { manager, captured, provider }
+	}
+
+	it("a bundled defaultEnabled plugin is consented by default (revocable store)", async () => {
+		const { manager, captured } = await build({ consentStore: new RevocableConsentStore() })
+		expect(manager.isAiConsented("p")).toBe(true)
+		expect(captured()?.ai?.hasConsent()).toBe(true)
+	})
+
+	it("an explicit revocation beats the default", async () => {
+		const { manager, captured } = await build({ consentStore: new RevocableConsentStore([], ["p"]) })
+		expect(manager.isAiConsented("p")).toBe(false)
+		expect(captured()?.ai?.hasConsent()).toBe(false)
+	})
+
+	it("default consent does NOT apply when the store cannot record a revoke", async () => {
+		const { manager } = await build({ consentStore: new MemoryConsentStore() })
+		expect(manager.isAiConsented("p")).toBe(false)
+	})
+
+	it("default consent does NOT apply to a non-bundled plugin", async () => {
+		const { manager } = await build({ scope: "global", consentStore: new RevocableConsentStore() })
+		expect(manager.isAiConsented("p")).toBe(false)
+	})
+
+	it("setAiConsent(false) records the revocation and (true) clears it", async () => {
+		const store = new RevocableConsentStore()
+		const { manager } = await build({ consentStore: store })
+		expect(manager.isAiConsented("p")).toBe(true)
+
+		await manager.setAiConsent("p", false)
+		expect(store.revoked).toEqual(["p"])
+		expect(manager.isAiConsented("p")).toBe(false)
+
+		await manager.setAiConsent("p", true)
+		expect(store.revoked).toEqual([])
+		expect(manager.isAiConsented("p")).toBe(true)
 	})
 })

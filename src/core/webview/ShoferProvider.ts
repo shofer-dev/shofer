@@ -487,7 +487,13 @@ export class ShoferProvider
 
 		this.customModesManager = new CustomModesManager(this.context, async () => {
 			const modes = await this.customModesManager.getCustomModes()
-			this.postConfigUpdate("customModes", modes)
+			// Same private-mode filter as getStateToPostToWebview(): this incremental
+			// push feeds the mode picker too, and an unfiltered push would leak
+			// private plugin modes into it whenever a modes file changes.
+			this.postConfigUpdate(
+				"customModes",
+				modes.filter((m) => !m.private),
+			)
 		})
 
 		// Initialize MCP Hub through the singleton manager
@@ -2193,6 +2199,8 @@ export class ShoferProvider
 		// cannot express "the user turned this off".
 		const disabledKey = "shofer.plugins.disabledPlugins"
 		const aiConsentKey = "shofer.plugins.aiConsentedPlugins"
+		// Explicit consent revocations — see the aiConsentStore comment below.
+		const aiConsentRevokedKey = "shofer.plugins.aiConsentRevokedPlugins"
 		const cwd = this.cwd
 		const pluginDirs: PluginDir[] = [
 			// First-party bundled plugins shipped inside the extension (design §7 —
@@ -2337,10 +2345,17 @@ export class ShoferProvider
 			// P6.G2 — per-plugin private storage base (`<globalStorage>/plugins/<name>`).
 			storageBaseDir: path.join(this.contextProxy.globalStorageUri.fsPath, "plugins"),
 			// P6.G1 — billed-AI consent (design §8), persisted independently of enable.
+			// The revoked list records an explicit "no": a bundled `defaultEnabled`
+			// plugin is consented by default, so absence from the consented list alone
+			// cannot express a revocation.
 			aiConsentStore: {
 				getAiConsentedPlugins: () => this.context.globalState.get<string[]>(aiConsentKey) ?? [],
 				setAiConsentedPlugins: async (names) => {
 					await this.context.globalState.update(aiConsentKey, names)
+				},
+				getAiConsentRevokedPlugins: () => this.context.globalState.get<string[]>(aiConsentRevokedKey) ?? [],
+				setAiConsentRevokedPlugins: async (names) => {
+					await this.context.globalState.update(aiConsentRevokedKey, names)
 				},
 			},
 		})
@@ -6000,7 +6015,10 @@ export class ShoferProvider
 	public async getModes(): Promise<{ slug: string; name: string }[]> {
 		try {
 			const modes = await this.customModesManager.getCustomModes()
-			return modes.map(({ slug, name }) => ({ slug, name }))
+			// Feeds the CLI's /mode autocomplete and the GetModes API — user-facing
+			// enumerations, so private modes are hidden here like everywhere else.
+			// They remain switch-able by slug (mode resolution uses the full list).
+			return modes.filter((m) => !m.private).map(({ slug, name }) => ({ slug, name }))
 		} catch (error) {
 			this.log(`Failed to list modes: ${error instanceof Error ? error.message : String(error)}`)
 			return []
