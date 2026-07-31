@@ -9,7 +9,7 @@ that must be read before `ContextProxy` exists remain as `shofer.*` VS Code
 `settings.json` entries: `shofer.customStoragePath`, `shofer.autoImportSettingsPath`
 (plus `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist` /
 `shofer.preventCompletionWithOpenTodos` / `shofer.codeIndex.embeddingBatchSize` /
-`shofer.nodes.loadBalancer`, pending migration). Non-secret configuration has a
+`shofer.workers.loadBalancer`, pending migration). Non-secret configuration has a
 single file-based source of truth under `.shofer/` — see
 [Layered `.shofer/` configuration](#layered-shofer-configuration) below.
 
@@ -48,7 +48,7 @@ Each scope's `.shofer/` holds the same file set:
 ├── settings.json        # the globalSettings keys (JSON)
 ├── locked.json          # (global scope only) org-policy lock manifest
 ├── plugins.json         # plugin declarations (see PLUGINS.md)
-├── nodes.json           # Shofer Node declarations (below)
+├── workers.json           # Shofer Worker declarations (below)
 ├── mcp.json             # MCP servers
 ├── shofermodes          # custom modes (YAML)
 ├── commands/            # slash commands (*.md)
@@ -143,16 +143,16 @@ is governed by the same manifest for `.shofer/plugins.json` (see
 [`PLUGINS.md`](../PLUGINS.md)). A corrupt or version-mismatched manifest is
 discarded as "nothing locked" rather than throwing.
 
-### `nodes.json` — Shofer Node declarations
+### `workers.json` — Shofer Worker declarations
 
-`.shofer/nodes.json` declares the **remote executors** this host should be talking to
-(see [`v3_architecture.md` §Distributed execution](v3_architecture.md) for what a node is). Its schema and merge
-are in [`node-declaration.ts`](../packages/core/src/config/node-declaration.ts):
+`.shofer/workers.json` declares the **remote executors** this host should be talking to
+(see [`v3_architecture.md` §Distributed execution](v3_architecture.md) for what a worker is). Its schema and merge
+are in [`worker-declaration.ts`](../packages/core/src/config/worker-declaration.ts):
 
 ```json
 {
 	"version": 1,
-	"nodes": {
+	"workers": {
 		"pool-0": {
 			"label": "runner-0",
 			"host": "ws-42-runner-0.ws-42-runner.proj-ns.svc.cluster.local:30099",
@@ -163,26 +163,26 @@ are in [`node-declaration.ts`](../packages/core/src/config/node-declaration.ts):
 }
 ```
 
-It exists so a node set can be **provisioned by writing a file** rather than only
+It exists so a worker set can be **provisioned by writing a file** rather than only
 through the Settings UI — which is the only way a headless host (which has no UI at
-all) can have nodes, and the only way a platform can provision a pool.
+all) can have workers, and the only way a platform can provision a pool.
 
-- **Per-entity merge**, keyed by node id, exactly like `plugins.json`: locking
-  `nodes/<id>` makes the global scope's entry final while the user may still add
-  nodes of their own. A node _list_ under a `settings.json` key could not do this —
+- **Per-entity merge**, keyed by worker id, exactly like `plugins.json`: locking
+  `workers/<id>` makes the global scope's entry final while the user may still add
+  workers of their own. A worker _list_ under a `settings.json` key could not do this —
   arrays are replaced wholesale, so any user entry would destroy the platform's.
 - **No secrets.** The bearer token is named by reference — `tokenFile` (typically a
   projected Kubernetes Secret) or `tokenEnv` (the name of an environment variable,
   which is the shape a k8s `secretKeyRef` produces) — and resolved at connect time,
   so rotating it needs no edit here. A `token` field is rejected by the schema.
-- **Declared nodes are reconciled live.** `NodeRegistry` re-reads the file whenever
+- **Declared workers are reconciled live.** `WorkerRegistry` re-reads the file whenever
   it changes (below): an added entry appears and connects, a withdrawn one
   disconnects and disappears, a changed `host` reconnects. The declaration owns
   identity (`host`/`tls`/`tokenFile`/`label`); the user still owns the runtime flags
-  (`disabled`, `autoConnect`) unless the entry states them. Such a node carries
+  (`disabled`, `autoConnect`) unless the entry states them. Such a worker carries
   `declared: true` and the UI offers no Edit/Remove for it — the file is its source
   of truth — but Disable still applies.
-- **A corrupt `nodes.json` changes nothing.** The last good node set stands, which is
+- **A corrupt `workers.json` changes nothing.** The last good worker set stands, which is
   a deliberate deviation from the fail-closed rule everywhere else here: emptying a
   project's pool over a typo is worse than running on a stale list.
 
@@ -190,11 +190,22 @@ all) can have nodes, and the only way a platform can provision a pool.
 
 The overlay is not only read at start. Every host watches the three scopes'
 `.shofer/` directories ([`scopeWatcher.ts`](../src/core/config/scopeWatcher.ts)) and
-re-reads `settings.json`, `locked.json` and `nodes.json` when they change, so an edit
+re-reads `settings.json`, `locked.json` and `workers.json` when they change, so an edit
 made by a person, by another host sharing the volume, or by a ConfigMap rewrite takes
 effect **without a restart**. `ContextProxy` refreshes the merged overlay and
-announces the keys that actually moved (`onDidRefreshOverlay`); `NodeRegistry`
-reconciles its declared nodes.
+announces the keys that actually moved (`onDidRefreshOverlay`); `WorkerRegistry`
+reconciles its declared workers; and `ShoferProvider` **reloads any plugin whose
+`pluginConfigs` entry changed**, because a plugin holds the `config` object it was
+handed at load — without the reload the overlay would report the new value while the
+plugin kept running on the old one. Only the plugins whose own entry moved are
+reloaded: `pluginConfigs` merges whole-value, so one plugin's edit re-reports the
+whole map and reloading all of them would tear down unrelated services for nothing.
+
+A key served by the overlay is **not editable in the UI**. The overlay wins in
+`getValue`, so a local write would be silently shadowed; surfaces ask
+`ContextProxy.isManagedByFileLayer(key)` and render the value read-only with its
+source instead of offering an edit that does nothing (the Plugins panel does this for
+`pluginConfigs`).
 
 Directories are watched rather than files, because both writers that matter replace
 rather than mutate: settings are written to a temp file and renamed over the target,
@@ -220,27 +231,43 @@ provisions org policy by unpacking a bundle into the **global** (RO) location; t
 workspace's own user/project `.shofer/` still override anything the global scope
 does not lock.
 
+## Settings reference
+
+Two different things are documented below, and they are set in different places:
+
+- **`globalSettings` keys** (most of them) live in the layered
+  `.shofer/settings.json` described above, and are edited through the Settings UI or
+  delivered as org policy. They are **not** VS Code settings — putting
+  `"shofer.allowedCommands"` in VS Code's `settings.json` does nothing.
+- **VS Code settings** (`shofer.*`, seven of them) are real
+  `contributes.configuration` entries in `src/package.json`, set in VS Code's own
+  settings UI/JSON. They are the ones that must be readable _before_ the extension's
+  own config layer exists, or that VS Code itself consumes.
+
+Headings below use each setting's real identity: a bare name is a `globalSettings`
+key, a `shofer.`-prefixed name is a VS Code setting.
+
 ## Command Execution
 
-### `shofer.allowedCommands`
+### `allowedCommands`
 
-|         |                                       |
-| ------- | ------------------------------------- |
-| Type    | `string[]`                            |
-| Default | `["git log", "git diff", "git show"]` |
-| Scope   | window                                |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `string[]`                                      |
+| Default | `["git log", "git diff", "git show"]`           |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Commands that can be automatically executed when "Always approve
 execute operations" is enabled. Each entry is matched as a **prefix** —
 `"git"` allows all git commands.
 
-### `shofer.deniedCommands`
+### `deniedCommands`
 
-|         |            |
-| ------- | ---------- |
-| Type    | `string[]` |
-| Default | `[]`       |
-| Scope   | window     |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `string[]`                                      |
+| Default | `[]`                                            |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Command prefixes that are automatically denied without asking for
 approval. When conflicting with `allowedCommands`, the **longest
@@ -284,13 +311,13 @@ these prefixes run without time restrictions.
 When enabled, `attempt_completion` is refused if the task has
 incomplete todo items.
 
-### `shofer.newTaskRequireTodos`
+### `newTaskRequireTodos`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `false`                                         |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 When enabled, the `new_task` tool requires a `todos` parameter.
 
@@ -298,25 +325,25 @@ When enabled, the `new_task` tool requires a `todos` parameter.
 
 ## API & Providers
 
-### `shofer.apiRequestTimeout`
+### `apiRequestTimeout`
 
-|         |                    |
-| ------- | ------------------ |
-| Type    | `number`           |
-| Default | `600` (10 minutes) |
-| Range   | 0–3600 seconds     |
-| Scope   | window             |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `number`                                        |
+| Default | `600` (10 minutes)                              |
+| Range   | 0–3600 seconds                                  |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Maximum time to wait for API responses. Higher values recommended for
 local providers (LM Studio, Ollama).
 
-### `shofer.vsCodeLmModelSelector`
+### `vsCodeLmModelSelector`
 
-|         |          |
-| ------- | -------- |
-| Type    | `object` |
-| Default | `{}`     |
-| Scope   | window   |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `object`                                        |
+| Default | `{}`                                            |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Model selector for the VS Code Language Model API. Configures which
 `vendor` and `family` the `vscode-lm` provider connects to.
@@ -326,14 +353,14 @@ Model selector for the VS Code Language Model API. Configures which
 | `vendor`  | `string` | Provider vendor (e.g., `"copilot"`) |
 | `family`  | `string` | Model family (e.g., `"gpt-4"`)      |
 
-### `shofer.enableLlmProviderIntegration`
+### `enableLlmProviderIntegration`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
-| Since   | 3.56.x    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `false`                                         |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
+| Since   | 3.56.x                                          |
 
 Enable the companion-extension integration. When enabled, the `vscode-lm`
 provider queries well-known commands for:
@@ -381,13 +408,13 @@ Custom storage path for task history, plugin storage, and other
 persistent data. Supports absolute paths (e.g.,
 `"D:\\ShoferStorage"`).
 
-### `shofer.enableCodeActions`
+### `enableCodeActions`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `true`    |
-| Scope   | window    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `true`                                          |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Enable Shofer Quick Fix code actions in the editor.
 
@@ -407,14 +434,14 @@ extension startup. Supports absolute paths and home-relative paths
 
 ## Code Index & Search
 
-### `shofer.maximumIndexedFilesForFileSearch`
+### `maximumIndexedFilesForFileSearch`
 
-|         |             |
-| ------- | ----------- |
-| Type    | `number`    |
-| Default | `10000`     |
-| Range   | 5000–500000 |
-| Scope   | window      |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `number`                                        |
+| Default | `10000`                                         |
+| Range   | 5000–500000                                     |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Maximum number of files to index for the `@`-file search feature.
 Higher values improve search in large projects but consume more memory.
@@ -434,46 +461,46 @@ match your API provider's limits.
 
 ## Debug & Diagnostics
 
-### `shofer.debug`
+### `debug`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `false`                                         |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Enable debug mode. Shows additional buttons for viewing the API
 conversation history and UI messages as formatted JSON in temporary
 files.
 
-### `shofer.debugProxy.enabled`
+### `debugProxyEnabled`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `false`                                         |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Route all outgoing network requests through a proxy for MITM
 debugging. Only active in debug mode (F5).
 
-### `shofer.debugProxy.serverUrl`
+### `debugProxyServerUrl`
 
-|         |                           |
-| ------- | ------------------------- |
-| Type    | `string`                  |
-| Default | `"http://127.0.0.1:8888"` |
-| Scope   | window                    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `string`                                        |
+| Default | `"http://127.0.0.1:8888"`                       |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Proxy URL. Only used when `debugProxy.enabled` is `true`.
 
-### `shofer.debugProxy.tlsInsecure`
+### `debugProxyTlsInsecure`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
+|         |                                                 |
+| ------- | ----------------------------------------------- |
+| Type    | `boolean`                                       |
+| Default | `false`                                         |
+| Where   | layered `.shofer/settings.json` (+ Settings UI) |
 
 Accept self-signed certificates from the proxy. Required for MITM
 inspection. Use only for local debugging.
@@ -486,18 +513,18 @@ These settings are stored via `contextProxy.getValue()` and are
 available in `globalSettingsSchema` but do not have settings-panel
 rows yet. Configure them directly in `settings.json`.
 
-### `shofer.defaultCostLimit`
+### `defaultCostLimit`
 
 ```jsonc
 {
 	// Cost limiting ON: maxUsd must be a POSITIVE number (the schema is
 	// z.number().positive() — 0 is rejected by Zod validation).
-	"shofer.defaultCostLimit": {
+	"defaultCostLimit": {
 		"maxUsd": 5.0, // cap in USD (must be > 0)
 		"action": "pause", // "pause" | "abort" | "kill"
 	},
 	// Cost limiting OFF: use null (not 0).
-	// "shofer.defaultCostLimit": null,
+	// "defaultCostLimit": null,
 }
 ```
 
@@ -506,22 +533,22 @@ cost limiting, set `defaultCostLimit` to `null` — **not** `maxUsd: 0`, which t
 `z.number().positive()` schema rejects. See
 [`cost-calculation-and-limits.md`](cost-calculation-and-limits.md) for details.
 
-### `shofer.disabledTools`
+### `disabledTools`
 
 ```jsonc
 {
-	"shofer.disabledTools": ["tool_name_1", "tool_name_2"],
+	"disabledTools": ["tool_name_1", "tool_name_2"],
 }
 ```
 
 List of native tool names to globally disable. Tools in this list are
 excluded from prompt generation and rejected at execution time.
 
-### `shofer.useAgentRules`
+### `useAgentRules`
 
 ```jsonc
 {
-	"shofer.useAgentRules": true,
+	"useAgentRules": true,
 }
 ```
 
