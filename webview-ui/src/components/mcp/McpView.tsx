@@ -242,6 +242,11 @@ const McpView = () => {
 }
 
 const ServerRow = ({ server }: { server: McpServer }) => {
+	const { orgLockedResources } = useExtensionState()
+	// Org-locked global server: the org scope's locked.json makes it final —
+	// the host refuses delete/disable/timeout changes, so disable them up front.
+	const isOrgLocked =
+		(server.source || "global") === "global" && (orgLockedResources?.mcp ?? []).includes(server.name)
 	const { t } = useAppTranslation()
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 	const [timeoutValue, setTimeoutValue] = useState(() => {
@@ -320,6 +325,14 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 				}}>
 				<span style={{ flex: 1 }}>
 					{server.name}
+					{isOrgLocked && (
+						<span
+							className="codicon codicon-lock"
+							title={t("mcp:orgLocked")}
+							data-testid="mcp-org-locked-icon"
+							style={{ marginLeft: "6px", fontSize: "12px", verticalAlign: "middle" }}
+						/>
+					)}
 					{server.source && (
 						<span
 							style={{
@@ -341,6 +354,7 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 						variant="ghost"
 						size="icon"
 						onClick={() => setShowDeleteConfirm(true)}
+						disabled={isOrgLocked}
 						style={{ marginRight: "8px" }}>
 						<span className="codicon codicon-trash" style={{ fontSize: "14px" }}></span>
 					</Button>
@@ -365,6 +379,7 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 				<div style={{ marginLeft: "8px" }}>
 					<ToggleSwitch
 						checked={!server.disabled}
+						disabled={isOrgLocked}
 						onChange={() => {
 							vscode.postMessage({
 								type: "toggleMcpServer",
@@ -534,6 +549,7 @@ const ServerRow = ({ server }: { server: McpServer }) => {
 						<select
 							value={timeoutValue}
 							onChange={handleTimeoutChange}
+							disabled={isOrgLocked}
 							style={{
 								flex: 1,
 								padding: "4px",

@@ -18,6 +18,8 @@ import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 import { effectiveModes } from "@shofer/core"
 
+import { isPathLocked, type LockedManifest } from "@shofer/core"
+
 import { ContextProxy } from "./ContextProxy"
 import { loadLockedManifest, resolveScopeRoots, type ScopeRoots } from "./layeredSettingsLoader"
 
@@ -60,6 +62,8 @@ export class CustomModesManager {
 	private isWriting = false
 	private writeQueue: Array<() => Promise<void>> = []
 	private cachedModes: ModeConfig[] | null = null
+	/** Slugs the org scope defines AND locks — final against user/project edits. */
+	private cachedLockedSlugs: string[] | null = null
 	private cachedAt: number = 0
 
 	constructor(
@@ -343,6 +347,12 @@ export class CustomModesManager {
 			manifest,
 		).customModes ?? []) as ModeConfig[]
 
+		// The org-locked slug set: org-defined modes the manifest makes final.
+		// Cached beside the merge so the Settings UI can mark them read-only.
+		this.cachedLockedSlugs = orgModes
+			.filter((m) => CustomModesManager.isModeLocked(m.slug, manifest))
+			.map((m) => m.slug)
+
 		// Fold in plugin-contributed modes (design §6.3) — including Shofer's own six,
 		// which the bundled `builtin-config` plugin contributes.
 		const allModes = effectiveModes(mergedModes)
@@ -355,7 +365,39 @@ export class CustomModesManager {
 		return allModes
 	}
 
+	/** True when `locked.json` names the mode (or the whole collection). */
+	private static isModeLocked(slug: string, manifest: LockedManifest): boolean {
+		return (
+			isPathLocked("modes", manifest) ||
+			isPathLocked("customModes", manifest) ||
+			isPathLocked(`modes/${slug}`, manifest) ||
+			isPathLocked(`customModes/${slug}`, manifest)
+		)
+	}
+
+	/**
+	 * The org-locked mode slugs (org-defined + named by the org `locked.json`).
+	 * Fresh as of the last merge; used by the Settings UI to mark those modes
+	 * read-only and by the mutation guards below.
+	 */
+	public async getLockedModeSlugs(): Promise<string[]> {
+		await this.getCustomModes()
+		return this.cachedLockedSlugs ?? []
+	}
+
+	/** Refuse a mutation of an org-locked mode loudly instead of letting the
+	 *  write land in a weaker scope where the merge silently shadows it. */
+	private async assertModeNotLocked(slug: string): Promise<void> {
+		const locked = await this.getLockedModeSlugs()
+		if (locked.includes(slug)) {
+			const message = t("common:customModes.errors.orgLocked", { slug })
+			getHost().notifier.error(message)
+			throw new Error(message)
+		}
+	}
+
 	public async updateCustomMode(slug: string, config: ModeConfig): Promise<void> {
+		await this.assertModeNotLocked(slug)
 		try {
 			// Validate the mode configuration before saving
 			const validationResult = modeConfigSchema.safeParse(config)
@@ -464,6 +506,7 @@ export class CustomModesManager {
 
 	public async deleteCustomMode(slug: string, fromMarketplace = false): Promise<void> {
 		try {
+			await this.assertModeNotLocked(slug)
 			// Only the user and project scopes are writable — an org-global mode
 			// cannot be deleted from here (and if it exists, deleting a user/project
 			// override simply reverts to the org version on the next merge).
@@ -948,6 +991,7 @@ export class CustomModesManager {
 
 	private clearCache(): void {
 		this.cachedModes = null
+		this.cachedLockedSlugs = null
 		this.cachedAt = 0
 	}
 

@@ -62,7 +62,10 @@ Every file in the tree is read from **all three scopes**: `settings.json`,
 `mcp.json` and `providers.json` per named entity (slug / server name / profile
 name) through the same locked-vs-default rule, and `commands/`, `skills*/`,
 `rules*/` by directory order (org, then user, then project — later wins per
-filename). Provider profiles are the one split store: non-secret fields in
+filename). Skills are the one directory namespace that additionally honors the
+lock manifest: a skill name the org scope defines and `locked.json` names
+(`skills` / `skills/<name>`) is org-final — `SkillsManager` purges same-name
+entries from every other scope and refuses create/delete/move of that name. Provider profiles are the one split store: non-secret fields in
 `providers.json`, locally-entered API keys in `SecretStorage` (the local key
 wins over an org-supplied file default) — see
 [`settings_overlay.md`](settings_overlay.md) §1.
@@ -154,8 +157,21 @@ Each `locked` entry is one of:
 Named-entity collections known to the settings engine are `modes` (→ `customModes`,
 keyed by `slug`) and `providers` (→ `listApiConfigMeta`, keyed by `name`); `plugins`
 is governed by the same manifest for `.shofer/plugins.json` (see
-[`PLUGINS.md`](../PLUGINS.md)). A corrupt or version-mismatched manifest is
-discarded as "nothing locked" rather than throwing.
+[`PLUGINS.md`](../PLUGINS.md)), `mcp` for `mcp.json` (per server name, in
+`McpHub`) and `skills` for the skill directories (in `SkillsManager`). A corrupt
+or version-mismatched manifest is discarded as "nothing locked" rather than
+throwing.
+
+Locked entities are also **surfaced**: the host assembles the org-locked mode
+slugs, MCP server names, provider profile names and skill names into
+`ExtensionState.orgLockedResources`, and the Settings UI disables their
+edit/rename/delete affordances (ModesView, the MCP panel, `ApiConfigManager`).
+The managers additionally refuse mutations of locked entities loudly
+(`CustomModesManager`, `McpHub`, `ProviderSettingsManager.deleteConfig`,
+`SkillsManager`) instead of letting the write land in a weaker scope where the
+merge would silently shadow it. The one deliberate exception: a locked provider
+profile still accepts a locally-entered API key (the secret overlay), so a user
+can supply their own credential for an org-shipped keyless profile.
 
 ### `workers.json` — Shofer Worker declarations
 

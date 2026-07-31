@@ -8,6 +8,7 @@ import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDir
 import { getOrgShoferDirectory } from "@shofer/core"
 import { directoryExists, fileExists } from "@shofer/core"
 import { getSharedPluginManager } from "@shofer/core"
+import { isPathLocked, loadLockedManifestFromDisk } from "@shofer/core"
 import { SkillMetadata, SkillContent, qualifiedSkillName } from "@shofer/types"
 import { getAllModes } from "@shofer/core"
 import {
@@ -23,6 +24,10 @@ export type { SkillMetadata, SkillContent }
 
 export class SkillsManager {
 	private skills: Map<string, SkillMetadata> = new Map()
+	/** Org-scope skill entries recorded during discovery (same keys as `skills`). */
+	private orgSkillEntries: Map<string, SkillMetadata> = new Map()
+	/** Names of org-defined skills the org `locked.json` makes final. */
+	private lockedOrgSkillNames: Set<string> = new Set()
 	private providerRef: WeakRef<ShoferProvider>
 	private disposables: vscode.Disposable[] = []
 	private isDisposed = false
@@ -45,10 +50,69 @@ export class SkillsManager {
 	 */
 	async discoverSkills(): Promise<void> {
 		this.skills.clear()
+		this.orgSkillEntries.clear()
 		const skillsDirs = await this.getSkillsDirectories()
 
-		for (const { dir, source, mode, pluginName, privateNames } of skillsDirs) {
-			await this.scanSkillsDirectory(dir, source, mode, pluginName, privateNames)
+		for (const { dir, source, mode, pluginName, privateNames, org } of skillsDirs) {
+			await this.scanSkillsDirectory(dir, source, mode, pluginName, privateNames, org)
+		}
+
+		await this.enforceOrgSkillLocks()
+	}
+
+	/**
+	 * Enforce the org scope's skill locks: skills are a directory-merged
+	 * namespace (no engine merge), so locks are applied here — a skill name the
+	 * org scope defines AND `locked.json` names (`skills` / `skills/<name>`) is
+	 * org-final. Every same-name entry from any other scope (user, project,
+	 * `.agents`, plugins) is purged and the org entries restored, regardless of
+	 * scan order. Skills are identity digest inputs (hierarchical_rbac.md §6),
+	 * so a shadowed org skill would change the hands under the org's identity.
+	 */
+	private async enforceOrgSkillLocks(): Promise<void> {
+		this.lockedOrgSkillNames = new Set()
+		const orgDir = getOrgShoferDirectory()
+		if (!orgDir || this.orgSkillEntries.size === 0) {
+			return
+		}
+		const manifest = await loadLockedManifestFromDisk(orgDir)
+		const allLocked = isPathLocked("skills", manifest)
+		for (const meta of this.orgSkillEntries.values()) {
+			if (allLocked || isPathLocked(`skills/${meta.name}`, manifest)) {
+				this.lockedOrgSkillNames.add(meta.name)
+			}
+		}
+		if (this.lockedOrgSkillNames.size === 0) {
+			return
+		}
+		for (const [key, meta] of [...this.skills.entries()]) {
+			if (this.lockedOrgSkillNames.has(meta.name) && !this.orgSkillEntries.has(key)) {
+				skillsLog.warn(
+					`Skill "${meta.name}" (${meta.path}) is shadowed by the org-locked skill of the same name and was ignored`,
+				)
+				this.skills.delete(key)
+			}
+		}
+		for (const [key, meta] of this.orgSkillEntries.entries()) {
+			if (this.lockedOrgSkillNames.has(meta.name)) {
+				this.skills.set(key, meta)
+			}
+		}
+	}
+
+	/**
+	 * The org-locked skill names (org-defined + named by the org `locked.json`),
+	 * as of the last discovery. The Settings UI marks these read-only; the
+	 * lifecycle methods refuse mutations of them.
+	 */
+	public getLockedSkillNames(): string[] {
+		return [...this.lockedOrgSkillNames].sort()
+	}
+
+	/** Refuse a mutation touching an org-locked skill name loudly. */
+	private assertSkillNotLocked(name: string): void {
+		if (this.lockedOrgSkillNames.has(name)) {
+			throw new Error(t("skills:errors.org_locked", { name }))
 		}
 	}
 
@@ -64,6 +128,7 @@ export class SkillsManager {
 		mode?: string,
 		pluginName?: string,
 		privateNames: string[] = [],
+		org = false,
 	): Promise<void> {
 		if (!(await directoryExists(dirPath))) {
 			return
@@ -84,7 +149,7 @@ export class SkillsManager {
 				if (!stats?.isDirectory()) continue
 
 				// Load skill metadata - the skill name comes from the entry name (symlink name if symlinked)
-				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName, privateNames)
+				await this.loadSkillMetadata(entryPath, source, mode, entryName, pluginName, privateNames, org)
 			}
 		} catch {
 			// Directory doesn't exist or can't be read - this is fine
@@ -105,6 +170,7 @@ export class SkillsManager {
 		skillName?: string,
 		pluginName?: string,
 		privateNames: string[] = [],
+		org = false,
 	): Promise<void> {
 		const skillMdPath = path.join(skillDir, "SKILL.md")
 		if (!(await fileExists(skillMdPath))) return
@@ -173,7 +239,7 @@ export class SkillsManager {
 			const primaryMode = modeSlugs?.[0]
 			const skillKey = this.getSkillKey(effectiveSkillName, source, primaryMode, pluginName)
 
-			this.skills.set(skillKey, {
+			const metadata: SkillMetadata = {
 				name: effectiveSkillName,
 				description,
 				path: skillMdPath,
@@ -184,7 +250,13 @@ export class SkillsManager {
 				private: source === "plugin" && privateNames.includes(effectiveSkillName) ? true : undefined,
 				mode: primaryMode, // Deprecated: kept for backward compatibility
 				modeSlugs, // New: array of mode slugs, undefined = any mode
-			})
+			}
+			this.skills.set(skillKey, metadata)
+			if (org) {
+				// Remembered separately so enforceOrgSkillLocks can restore the
+				// org version after a later-scanned scope replaces the same key.
+				this.orgSkillEntries.set(skillKey, metadata)
+			}
 		} catch (error) {
 			skillsLog.error(`Failed to load skill at ${skillDir}:`, error)
 		}
@@ -413,6 +485,10 @@ export class SkillsManager {
 			throw new Error(validation.error)
 		}
 
+		// A locked org skill cannot be shadowed by creating a same-name skill in
+		// a writable scope — the org version would win anyway; refuse loudly.
+		this.assertSkillNotLocked(name)
+
 		// Validate description
 		const trimmedDescription = description.trim()
 		if (trimmedDescription.length < 1 || trimmedDescription.length > 1024) {
@@ -486,6 +562,7 @@ Add your skill instructions here.
 	 * @param mode - Optional mode (to locate in skills-{mode}/ directory)
 	 */
 	async deleteSkill(name: string, source: "global" | "project", mode?: string): Promise<void> {
+		this.assertSkillNotLocked(name)
 		// Find the skill
 		const skill = this.getSkill(name, source, mode)
 		if (!skill) {
@@ -516,6 +593,7 @@ Add your skill instructions here.
 		currentMode: string | undefined,
 		newMode: string | undefined,
 	): Promise<void> {
+		this.assertSkillNotLocked(name)
 		// Don't move if source and destination are the same
 		if (currentMode === newMode) {
 			return
@@ -627,6 +705,7 @@ Add your skill instructions here.
 			mode?: string
 			pluginName?: string
 			privateNames?: string[]
+			org?: boolean
 		}>
 	> {
 		const dirs: Array<{
@@ -635,6 +714,8 @@ Add your skill instructions here.
 			mode?: string
 			pluginName?: string
 			privateNames?: string[]
+			/** True for the org-global scope's dirs (the lock authority). */
+			org?: boolean
 		}> = []
 		const globalShoferDir = getGlobalShoferDirectory()
 		const globalAgentsDir = getGlobalAgentsDirectory()
@@ -671,9 +752,9 @@ Add your skill instructions here.
 		// Org-global .shofer directories (below the user scope: later dirs override)
 		const orgShoferDir = getOrgShoferDirectory()
 		if (orgShoferDir) {
-			dirs.push({ dir: path.join(orgShoferDir, "skills"), source: "global" })
+			dirs.push({ dir: path.join(orgShoferDir, "skills"), source: "global", org: true })
 			for (const mode of modesList) {
-				dirs.push({ dir: path.join(orgShoferDir, `skills-${mode}`), source: "global", mode })
+				dirs.push({ dir: path.join(orgShoferDir, `skills-${mode}`), source: "global", mode, org: true })
 			}
 		}
 

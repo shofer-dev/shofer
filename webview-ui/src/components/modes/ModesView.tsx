@@ -108,7 +108,16 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 		mode,
 		customInstructions,
 		customModes,
+		orgLockedResources,
 	} = useExtensionState()
+
+	// Whether a mode is org-locked (final by the org scope's locked.json): its
+	// definition is read-only here — the host refuses mutations, so disable the
+	// affordances up front instead of letting an edit fail on Save.
+	const isModeOrgLocked = useCallback(
+		(slug: string) => (orgLockedResources?.modes ?? []).includes(slug),
+		[orgLockedResources],
+	)
 
 	// Staged per-mode API-config associations (mode slug → config id), edited via
 	// the "API Configuration" dropdown. Save-gated: committed on Save via
@@ -1071,14 +1080,16 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 									</Button>
 								</StandardTooltip>
 
-								{/* Edit (rename) mode - only enabled for custom modes */}
+								{/* Edit (rename) mode - only enabled for custom, non-org-locked modes */}
 								<StandardTooltip content={t("settings:providers.renameProfile")}>
 									<Button
 										variant="ghost"
 										size="icon"
 										onClick={handleStartRenameMode}
 										data-testid="rename-mode-button"
-										disabled={!findModeBySlug(visualMode, customModes)}>
+										disabled={
+											!findModeBySlug(visualMode, customModes) || isModeOrgLocked(visualMode)
+										}>
 										<span className="codicon codicon-edit" />
 									</Button>
 								</StandardTooltip>
@@ -1104,7 +1115,9 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 											}
 										}}
 										data-testid="delete-mode-button"
-										disabled={!findModeBySlug(visualMode, customModes)}>
+										disabled={
+											!findModeBySlug(visualMode, customModes) || isModeOrgLocked(visualMode)
+										}>
 										<span className="codicon codicon-trash" />
 									</Button>
 								</StandardTooltip>
@@ -1133,6 +1146,17 @@ const ModesView = forwardRef<ModesViewRef, ModesViewProps>(({ onModesDirty }, re
 							</>
 						)}
 					</div>
+
+					{/* Org-locked banner: the mode's definition is final by org policy;
+					    field edits below would be refused by the host on Save. */}
+					{isModeOrgLocked(visualMode) && (
+						<div
+							className="flex items-center gap-2 mb-3 px-3 py-2 rounded border border-vscode-inputValidation-warningBorder bg-vscode-inputValidation-warningBackground text-sm"
+							data-testid="mode-org-locked-banner">
+							<span className="codicon codicon-lock" />
+							{t("prompts:modes.orgLocked")}
+						</div>
+					)}
 
 					{/* API Configuration - Moved Here */}
 					<div className="mb-3">

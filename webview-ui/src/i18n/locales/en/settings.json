@@ -760,7 +760,8 @@
 			"placeholder": "Default: claude",
 			"maxTokensLabel": "Max Output Tokens",
 			"maxTokensDescription": "Maximum number of output tokens for Claude Code responses. Default is 8000."
-		}
+		},
+		"orgLockedProfile": "This profile is locked by org policy — its settings are read-only here (you can still enter your own API key)."
 	},
 	"notifications": {
 		"sound": {

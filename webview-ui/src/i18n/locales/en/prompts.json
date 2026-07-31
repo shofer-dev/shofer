@@ -10,7 +10,8 @@
 		"editProjectModes": "Edit Project Modes (.shofermodes)",
 		"createModeHelpText": "Modes are specialized personas that tailor Shofer's behavior. <0>Learn about Using Modes</0> or <1>Customizing Modes.</1>",
 		"selectMode": "Search modes",
-		"noMatchFound": "No modes found"
+		"noMatchFound": "No modes found",
+		"orgLocked": "This mode is locked by org policy — its definition is read-only here."
 	},
 	"apiConfiguration": {
 		"title": "API Configuration",

@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react"
 import type { ProviderSettingsEntry, OrganizationAllowList } from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
+import { useExtensionState } from "@src/context/ExtensionStateContext"
 import {
 	type SearchableSelectOption,
 	Button,
@@ -45,6 +46,12 @@ const ApiConfigManager = ({
 	onUpsertConfig,
 }: ApiConfigManagerProps) => {
 	const { t } = useAppTranslation()
+	const { orgLockedResources } = useExtensionState()
+
+	// Org-locked profiles (final by the org scope's locked.json): non-secret
+	// fields are read-only and the host refuses rename/delete, so disable those
+	// affordances up front. Entering a local API key stays allowed.
+	const isEditingConfigLocked = (orgLockedResources?.providers ?? []).includes(editingConfigName)
 
 	const [isRenaming, setIsRenaming] = useState(false)
 	const [isCreating, setIsCreating] = useState(false)
@@ -243,30 +250,45 @@ const ApiConfigManager = ({
 					</StandardTooltip>
 					{editingConfigName && (
 						<>
-							<StandardTooltip content={t("settings:providers.renameProfile")}>
+							<StandardTooltip
+								content={
+									isEditingConfigLocked
+										? t("settings:providers.orgLockedProfile")
+										: t("settings:providers.renameProfile")
+								}>
 								<Button
 									variant="ghost"
 									size="icon"
 									onClick={handleStartRename}
-									data-testid="rename-profile-button">
+									data-testid="rename-profile-button"
+									disabled={isEditingConfigLocked}>
 									<span className="codicon codicon-edit" />
 								</Button>
 							</StandardTooltip>
 							<StandardTooltip
 								content={
-									isOnlyProfile
-										? t("settings:providers.cannotDeleteOnlyProfile")
-										: t("settings:providers.deleteProfile")
+									isEditingConfigLocked
+										? t("settings:providers.orgLockedProfile")
+										: isOnlyProfile
+											? t("settings:providers.cannotDeleteOnlyProfile")
+											: t("settings:providers.deleteProfile")
 								}>
 								<Button
 									variant="ghost"
 									size="icon"
 									onClick={handleDelete}
 									data-testid="delete-profile-button"
-									disabled={isOnlyProfile}>
+									disabled={isOnlyProfile || isEditingConfigLocked}>
 									<span className="codicon codicon-trash" />
 								</Button>
 							</StandardTooltip>
+							{isEditingConfigLocked && (
+								<span
+									className="codicon codicon-lock text-vscode-descriptionForeground"
+									title={t("settings:providers.orgLockedProfile")}
+									data-testid="org-locked-profile-icon"
+								/>
+							)}
 						</>
 					)}
 				</div>

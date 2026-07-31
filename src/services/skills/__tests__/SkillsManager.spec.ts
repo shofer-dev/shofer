@@ -1918,4 +1918,99 @@ Deploy instructions`
 			expect(await skillsManager.getSkillContent("deploy-skill")).toBeNull()
 		})
 	})
+	describe("org-locked skills", () => {
+		// The org scope's locked.json is read from the REAL filesystem
+		// (@shofer/core's fs is externalized — the fs/promises mock above does
+		// not intercept it), so the org root is a real tmpdir; the skill
+		// directories themselves stay mocked like every other test here.
+		let orgDir: string
+		let realFs: typeof import("node:fs")
+
+		beforeEach(async () => {
+			realFs = await vi.importActual<typeof import("node:fs")>("node:fs")
+			const realOs = await vi.importActual<typeof import("node:os")>("node:os")
+			orgDir = realFs.mkdtempSync(p(realOs.tmpdir(), "org-scope-"))
+			realFs.writeFileSync(
+				p(orgDir, "locked.json"),
+				JSON.stringify({ version: 1, locked: ["skills/locked-skill"] }),
+			)
+			process.env.SHOFER_GLOBAL_DIR = orgDir
+		})
+
+		afterEach(() => {
+			delete process.env.SHOFER_GLOBAL_DIR
+			realFs.rmSync(orgDir, { recursive: true, force: true })
+		})
+
+		const setupShadowedSkill = () => {
+			const orgSkillsDir = p(orgDir, "skills")
+			const orgSkillMd = p(orgSkillsDir, "locked-skill", "SKILL.md")
+			const userSkillMd = p(globalSkillsDir, "locked-skill", "SKILL.md")
+			const projectSkillMd = p(projectSkillsDir, "locked-skill", "SKILL.md")
+
+			mockDirectoryExists.mockImplementation(
+				async (dir: string) => dir === orgSkillsDir || dir === globalSkillsDir || dir === projectSkillsDir,
+			)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) =>
+				dir === orgSkillsDir || dir === globalSkillsDir || dir === projectSkillsDir ? ["locked-skill"] : [],
+			)
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg.endsWith("locked-skill")) {
+					return { isDirectory: () => true }
+				}
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(
+				async (file: string) => file === orgSkillMd || file === userSkillMd || file === projectSkillMd,
+			)
+			mockReadFile.mockImplementation(async (file: string) => {
+				const origin =
+					file === orgSkillMd ? "org version" : file === userSkillMd ? "user shadow" : "project shadow"
+				if (file === orgSkillMd || file === userSkillMd || file === projectSkillMd) {
+					return `---\nname: locked-skill\ndescription: ${origin}\n---\n\nBody`
+				}
+				throw new Error("File not found")
+			})
+
+			return { orgSkillMd }
+		}
+
+		it("the org version wins over user and project shadows", async () => {
+			const { orgSkillMd } = setupShadowedSkill()
+
+			await skillsManager.discoverSkills()
+
+			const matches = skillsManager.getAllSkills().filter((s) => s.name === "locked-skill")
+			expect(matches).toHaveLength(1)
+			expect(matches[0].path).toBe(orgSkillMd)
+			expect(matches[0].description).toBe("org version")
+			expect(skillsManager.getLockedSkillNames()).toEqual(["locked-skill"])
+		})
+
+		it("mutations of a locked skill are refused", async () => {
+			setupShadowedSkill()
+			await skillsManager.discoverSkills()
+
+			await expect(skillsManager.deleteSkill("locked-skill", "global")).rejects.toThrow(
+				"skills:errors.org_locked",
+			)
+			await expect(skillsManager.createSkill("locked-skill", "project", "a shadow")).rejects.toThrow(
+				"skills:errors.org_locked",
+			)
+		})
+
+		it("an unlocked org skill is still overridable and nothing is reported locked", async () => {
+			setupShadowedSkill()
+			realFs.writeFileSync(p(orgDir, "locked.json"), JSON.stringify({ version: 1, locked: [] }))
+
+			await skillsManager.discoverSkills()
+
+			const matches = skillsManager.getAllSkills().filter((s) => s.name === "locked-skill")
+			// user shadow replaces the org entry (same key), project adds its own
+			expect(matches.length).toBeGreaterThanOrEqual(1)
+			expect(matches.some((s) => s.description === "org version")).toBe(false)
+			expect(skillsManager.getLockedSkillNames()).toEqual([])
+		})
+	})
 })

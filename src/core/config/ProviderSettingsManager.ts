@@ -482,6 +482,14 @@ export class ProviderSettingsManager {
 					throw new Error(`Config '${name}' not found`)
 				}
 
+				// An org-locked profile cannot be deleted: the delete would only
+				// drop local secret overlays and the profile would reappear on the
+				// next merge. Refuse loudly instead of appearing to succeed.
+				const merged = await loadMergedProvidersFile(this.resolveRoots())
+				if (merged.lockedNames.has(name)) {
+					throw new Error(`Config '${name}' is locked by org policy and cannot be deleted`)
+				}
+
 				if (Object.keys(providerProfiles.apiConfigs).length === 1) {
 					throw new Error(`Cannot delete the last remaining configuration`)
 				}
@@ -492,6 +500,18 @@ export class ProviderSettingsManager {
 		} catch (error) {
 			throw new Error(`Failed to delete config: ${error}`)
 		}
+	}
+
+	/**
+	 * The org-locked profile names (org-defined + named by the org
+	 * `locked.json`). The Settings UI marks these read-only: their non-secret
+	 * fields are org-final (a save persists only locally-entered secret fields,
+	 * which deliberately remain writable so a user can supply their own key for
+	 * an org-shipped keyless profile).
+	 */
+	public async getLockedProfileNames(): Promise<string[]> {
+		const merged = await loadMergedProvidersFile(this.resolveRoots())
+		return [...merged.lockedNames].sort()
 	}
 
 	/**

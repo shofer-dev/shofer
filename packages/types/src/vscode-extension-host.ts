@@ -549,6 +549,23 @@ export type ExtensionState = Pick<
 	debug?: boolean
 	/** Shofer Workers registry + live status (Local + remotes) for cold-load render. */
 	shoferWorkers?: ShoferWorkersState
+	/** Entity names the org scope's `locked.json` makes final — the Settings UI
+	 *  renders them read-only (edits would be accepted and silently shadowed by
+	 *  the layered merge otherwise). Absent when nothing is locked. */
+	orgLockedResources?: OrgLockedResources
+}
+
+/**
+ * The org-locked entity sets, one per lockable collection. Each array holds the
+ * ids (mode slug, MCP server name, provider profile name, skill name) that the
+ * org-global scope both defines and locks — i.e. the org version is final and
+ * user/project edits cannot take effect.
+ */
+export interface OrgLockedResources {
+	modes: string[]
+	mcp: string[]
+	providers: string[]
+	skills: string[]
 }
 
 export interface Command {

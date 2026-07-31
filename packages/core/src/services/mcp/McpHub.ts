@@ -168,6 +168,8 @@ const McpSettingsSchema = z.object({
 export class McpHub {
 	private providerRef: WeakRef<TaskProviderLike>
 	private disposables: HostDisposable[] = []
+	/** Org-defined global servers the org `locked.json` makes final. */
+	private lockedGlobalServerNames: string[] = []
 	private settingsWatchers: HostFileWatcher[] = []
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
 	private projectMcpWatcher?: HostFileWatcher
@@ -697,6 +699,12 @@ export class McpHub {
 			loadLockedManifestFromDisk(roots.global),
 		])
 
+		// The org-locked server-name set: org-defined servers the manifest makes
+		// final. Cached beside the merge for the Settings UI and mutation guards.
+		this.lockedGlobalServerNames = Object.keys(orgServers).filter((name) =>
+			this.isMcpServerLocked(name, manifest),
+		)
+
 		const merged: Record<string, any> = { ...orgServers }
 		for (const [name, config] of Object.entries(userServers)) {
 			if (name in orgServers && this.isMcpServerLocked(name, manifest)) {
@@ -705,6 +713,23 @@ export class McpHub {
 			merged[name] = config
 		}
 		return merged
+	}
+
+	/**
+	 * The org-locked "global"-source server names (org-defined + named by the
+	 * org `locked.json`), as of the last global-scope merge. The Settings UI
+	 * marks these read-only; {@link assertServerNotLocked} refuses mutations.
+	 */
+	public getLockedServerNames(): string[] {
+		return [...this.lockedGlobalServerNames]
+	}
+
+	/** Refuse a mutation of an org-locked global server loudly instead of
+	 *  writing to the user file where the org merge silently shadows it. */
+	private assertServerNotLocked(serverName: string, source: "global" | "project"): void {
+		if (source === "global" && this.lockedGlobalServerNames.includes(serverName)) {
+			throw new Error(t("mcp:errors.org_locked", { serverName }))
+		}
 	}
 
 	/** True when the org-global scope locks this server name (or all of `mcp`). */
@@ -1707,6 +1732,7 @@ export class McpHub {
 			}
 
 			const serverSource = connection.server.source || "global"
+			this.assertServerNotLocked(serverName, serverSource)
 			// Update the server config in the appropriate file
 			await this.updateServerConfig(serverName, { disabled }, serverSource)
 
@@ -1892,6 +1918,7 @@ export class McpHub {
 				throw new Error(`Server ${serverName}${source ? ` with source ${source}` : ""} not found`)
 			}
 
+			this.assertServerNotLocked(serverName, connection.server.source || "global")
 			// Update the server config in the appropriate file
 			await this.updateServerConfig(serverName, { timeout }, connection.server.source || "global")
 
@@ -1964,6 +1991,7 @@ export class McpHub {
 			}
 
 			const serverSource = connection.server.source || "global"
+			this.assertServerNotLocked(serverName, serverSource)
 			// Determine config file based on server source
 			const isProjectServer = serverSource === "project"
 			let configPath: string

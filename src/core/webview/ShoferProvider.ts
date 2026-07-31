@@ -37,6 +37,7 @@ import {
 	type ToolUsage,
 	type ExtensionMessage,
 	type ExtensionState,
+	type OrgLockedResources,
 	type ShoferAPI,
 	type ShoferWorkersState,
 	type MarketplaceInstalledMetadata,
@@ -4969,6 +4970,27 @@ export class ShoferProvider
 		}
 	}
 
+	/**
+	 * Assemble the org-locked entity sets (mode slugs, MCP server names,
+	 * provider profile names, skill names) from the four managers, for the
+	 * Settings UI to mark those entities read-only. Never throws — a manager
+	 * failure degrades to an empty set rather than blocking the state push.
+	 */
+	private async getOrgLockedResources(): Promise<OrgLockedResources> {
+		// Optional calls throughout: test doubles (and older mocks) may not
+		// implement the lock accessors — degrade to "nothing locked".
+		const [modes, providers] = await Promise.all([
+			Promise.resolve(this.customModesManager.getLockedModeSlugs?.()).catch(() => []),
+			Promise.resolve(this.providerSettingsManager.getLockedProfileNames?.()).catch(() => []),
+		])
+		return {
+			modes: modes ?? [],
+			mcp: this.mcpHub?.getLockedServerNames?.() ?? [],
+			providers: providers ?? [],
+			skills: this.skillsManager?.getLockedSkillNames?.() ?? [],
+		}
+	}
+
 	async getStateToPostToWebview(): Promise<ExtensionState> {
 		// Ensure the store is initialized before reading task history
 		await this.taskHistoryStore.initialized
@@ -5118,6 +5140,7 @@ export class ShoferProvider
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
 			shoferWorkers: this.nodeRegistry?.getState(),
+			orgLockedResources: await this.getOrgLockedResources(),
 			apiConfiguration,
 			// editingApiConfiguration is intentionally NOT seeded here: it's a
 			// webview-only edit buffer set via a targeted configUpdate when the

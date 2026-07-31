@@ -85,5 +85,6 @@
 		"running": "Running",
 		"completed": "Completed",
 		"error": "Error"
-	}
+	},
+	"orgLocked": "Locked by org policy — this server's configuration is read-only here."
 }

@@ -219,7 +219,8 @@
 			"resetFailed": "Failed to reset custom modes: {{error}}",
 			"modeNotFound": "Write error: Mode not found",
 			"noWorkspaceForProject": "No workspace folder found for project-specific mode",
-			"rulesCleanupFailed": "Mode deleted successfully, but failed to delete rules folder at {{rulesFolderPath}}. You may need to delete it manually."
+			"rulesCleanupFailed": "Mode deleted successfully, but failed to delete rules folder at {{rulesFolderPath}}. You may need to delete it manually.",
+			"orgLocked": "Mode \"{{slug}}\" is locked by org policy and cannot be modified here."
 		},
 		"scope": {
 			"project": "project",

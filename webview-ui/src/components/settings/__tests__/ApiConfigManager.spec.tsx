@@ -2,6 +2,13 @@
 
 import { render, screen, fireEvent, within } from "@/utils/test-utils"
 
+// ApiConfigManager reads orgLockedResources from the extension state; the spec
+// renders it standalone, so stub the hook (nothing locked by default).
+vi.mock("@src/context/ExtensionStateContext", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@src/context/ExtensionStateContext")>()),
+	useExtensionState: () => ({ orgLockedResources: undefined }) as any,
+}))
+
 import ApiConfigManager from "../ApiConfigManager"
 
 // Mock VSCode components
