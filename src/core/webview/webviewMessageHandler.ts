@@ -1182,7 +1182,6 @@ export const webviewMessageHandler = async (
 		}
 		case "importSettings": {
 			await importSettingsWithFeedback({
-				providerSettingsManager: provider.providerSettingsManager,
 				contextProxy: provider.contextProxy,
 				customModesManager: provider.customModesManager,
 				provider: provider,
@@ -1191,10 +1190,7 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "exportSettings":
-			await exportSettings({
-				providerSettingsManager: provider.providerSettingsManager,
-				contextProxy: provider.contextProxy,
-			})
+			await exportSettings({ contextProxy: provider.contextProxy })
 
 			break
 		case "resetState":

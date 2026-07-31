@@ -813,157 +813,82 @@ Approve/Deny buttons (see [`ChatView.tsx`](../webview-ui/src/components/chat/Cha
 
 ## 10. Export / Import
 
-### 10a. What Gets Exported
+### 10a. Export = a scope archive
 
 **This section covers the full-settings Export (Settings → About).** The Modes tab has a
 separate per-mode Export that saves individual mode definitions as YAML — see §10g.
 
 Export (Settings → About → `Export` button) calls
-[`exportSettings()`](../src/core/config/importExport.ts:247) and writes a single JSON file
-(`shofer-code-settings.json`) containing two top-level sections:
+[`exportSettings()`](../src/core/config/importExport.ts) and writes a **gzipped tar of
+the user scope's `.shofer/` tree** (default name `shofer-settings.tgz`) via
+`exportScopeArchive` ([`scope-archive.ts`](../packages/core/src/config/scope-archive.ts)).
+The archive carries everything the layered file model owns:
 
-```json
-{
-  "providerProfiles": {
-    "currentApiConfigName": "default",
-    "apiConfigs": { ... },
-    "modeApiConfigs": { ... },
-    "cloudProfileIds": [...],
-    "migrations": { ... }
-  },
-  "globalSettings": {
-    "mode": "architect",
-    "customModes": [...],
-    "customInstructions": "...",
-    "customModePrompts": {...},
-    "customSupportPrompts": {...},
-    "autoApprovalEnabled": false,
-    "alwaysAllowReadOnly": true,
-    ... (see globalSettingsSchema for full list)
-  }
-}
 ```
-
-#### `providerProfiles` — Full API Configuration
-
-Exported from [`ProviderSettingsManager.export()`](../src/core/config/ProviderSettingsManager.ts:512).
-Contains ALL provider profiles including:
-
-- **API keys** — included in each profile's `apiKey`, `openRouterApiKey`, etc. fields
-- **Model IDs** — `apiModelId` for each profile
-- **Base URLs** — custom endpoints per provider
-- **Model parameters** — `modelMaxTokens`, `modelMaxThinkingTokens`, `temperature`
-- **Rate limiting** — `rateLimitSeconds`, `consecutiveMistakeLimit`
-- **Headers** — `openAiHeaders`, custom provider headers
-- **Retired provider profiles** — preserved as-is (not filtered out)
-- **Profile-to-mode assignments** — `modeApiConfigs`
-
-Token fields (`modelMaxTokens`, `modelMaxThinkingTokens`) are stripped for models
-that don't support reasoning budgets during export.
-
-#### `globalSettings` — Global Configuration
-
-Exported from [`ContextProxy.export()`](../src/core/config/ContextProxy.ts:532).
-Based on [`globalSettingsExportSchema`](../src/core/config/ContextProxy.ts:34) which is
-`globalSettingsSchema` with these exclusions:
-
-- `taskHistory` — excluded (per-task data, not portable)
-- `listApiConfigMeta` — excluded (derived from providerProfiles)
-- `currentApiConfigName` — excluded (derived from providerProfiles)
-
-Includes:
-
-- **Mode:** `mode` (default mode slug)
-- **Custom modes:** `customModes` — only `source: "global"` entries (project `.shofer/shofermodes` modes are excluded)
-- **Mode prompts:** `customModePrompts`, `customSupportPrompts`
-- **Custom instructions:** `customInstructions` (global, all modes)
-- **Auto-approval:** `autoApprovalEnabled`, all `alwaysAllow*` toggles, `followupAutoApproveTimeoutMs`
-- **Command permissions:** `allowedCommands`, `deniedCommands`, `commandTimeoutAllowlist`, `commandExecutionTimeout`
-- **Cost/rate limits:** `allowedMaxRequests`, `allowedMaxCost`
-- **Context management:** `autoCondenseContext`, `autoCondenseContextPercent`, `writeDelayMs`
-- **Code indexing:** `codebaseIndexConfig`, `codebaseIndexEnabled`
-- **Experiments:** `experiments` (feature flags)
-- **Telemetry:** `telemetrySetting`
-- **UI preferences:** `includeCurrentTime`, `includeCurrentCost`, `includeDiagnosticMessages`, `maxDiagnosticMessages`, `maxGitStatusFiles`
-- **Image generation:** `imageGenerationProvider`, `openRouterImageGenerationSelectedModel`
-- **Storage:** `customStoragePath`, `preventCompletionWithOpenTodos`
-- **Other:** `lastShownAnnouncementId`, `dismissedUpsells`, `pinnedApiConfigs`
+.shofer/
+├── settings.json      # globalSettings keys
+├── providers.json     # provider profiles (non-secret fields)
+├── shofermodes        # the user's custom modes
+├── mcp.json           # the user's MCP servers
+├── commands/  rules*/  skills*/
+└── plugins.json  workers.json
+```
 
 ### 10b. What Is NOT Exported
 
-| Item                                             | Reason                                                                                          |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| **MCP server configs** (`mcp.json`)              | Managed independently by `McpHub`; stored per `.shofer/` scope                                  |
-| **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })` |
-| **Project `.shofer/shofermodes` modes**          | File-based, per-workspace; only `source: "global"` custom modes are exported                    |
-| **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                  |
+| Item                     | Reason                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| **API keys / secrets**   | By construction: they live in `SecretStorage`, outside `.shofer/`                              |
+| **Task history**         | Per-task data under `<globalStorage>/tasks/`, not configuration                                |
+| **Org / project scopes** | Only the user scope is archived — org policy travels via its own mount, project config via git |
+
+This is what makes the archive safe to hand around: it cannot contain a credential
+(an org-supplied key default in an org `providers.json` would only exist in the org
+scope, which is not archived).
 
 ### 10c. Import Flow
 
-**This section covers the full-settings Import (Settings → About).** The Modes tab has a
-separate per-mode Import that loads individual mode definitions from YAML — see §10g.
-
-Import (Settings → About → `Import` button) calls
-[`importSettingsWithFeedback()`](../src/core/config/importExport.ts:299) and reads a
-`shofer-code-settings.json` file, applying both sections:
+Import (Settings → About → `Import` button, or the `importSettings` command with a
+path) calls [`importSettingsWithFeedback()`](../src/core/config/importExport.ts):
+the chosen archive is unpacked **into the user scope** (`~/.shofer`), then the live
+consumers refresh — the settings overlay re-merges immediately, the modes cache is
+invalidated and re-read, and MCP/provider changes follow the scope watchers and
+per-call file reads.
 
 ```mermaid
 flowchart TD
-    F["shofer-code-settings.json"]
-    PP["providerProfiles"]
-    GSJ["globalSettings"]
-    PSM["ProviderSettingsManager.import()"]
-    CPX["ContextProxy.setValues()<br/>routes each key by kind"]
-    BLOB[("providers.json + secrets blob<br/>split by saveConfig")]
-    GST[("globalState<br/>non-secret settings")]
-    KEYS[("SecretStorage<br/>global secret keys")]
+    F["shofer-settings.tgz"]
+    UNPACK["importScopeArchive → ~/.shofer"]
+    OV["ContextProxy.refreshLayeredOverlay"]
+    MODES["CustomModesManager re-merge"]
+    WATCH["scope watchers: mcp.json, providers.json"]
 
-    F --> PP
-    F --> GSJ
-    PP --> PSM --> BLOB
-    GSJ --> CPX
-    CPX --> GST
-    CPX --> KEYS
+    F --> UNPACK
+    UNPACK --> OV
+    UNPACK --> MODES
+    UNPACK -.-> WATCH
 ```
 
-Import is handled by [`importSettingsFromPath`](../src/core/config/importExport.ts:76) which:
-
-1. Validates and sanitizes each provider profile (handles retired/invalid providers gracefully)
-2. Merges profiles with existing ones (does not delete existing profiles unless IDs conflict)
-3. Merges `modeApiConfigs` with existing assignments
-4. Imports `customModes` via `CustomModesManager.updateCustomMode()`
-5. Sets all global settings via `ContextProxy.setValues()`
-
-**Import is additive** for provider profiles — existing profiles not in the import file
-are preserved. API keys in the import file overwrite existing ones for matching profiles.
+Import **overwrites** same-named files in the user scope (it is a tree unpack, not a
+per-key merge); the layered merge above it still applies, so org-locked values keep
+winning regardless of what the archive carried.
 
 ### 10d. Auto-Import on Startup
 
-Shofer supports automatic import on extension activation via the VS Code setting
-`shofer.autoImportSettingsPath`. When set to a file path, the extension will
-automatically import settings from that file on startup.
-
-Implementation: [`autoImportSettings`](../src/utils/autoImportSettings.ts:16), called
-from [`extension.ts:233`](../src/extension.ts:233).
-
-```
-Extension activation
-  └── autoImportSettings()
-       ├── Read shofer.autoImportSettingsPath from VS Code config
-       ├── Check if file exists
-       └── importSettingsFromPath(filePath)
-            ├── ProviderSettingsManager.import(providerProfiles)  → SecretStorage
-            └── ContextProxy.setValues(globalSettings)            → globalState
-```
-
-This is the recommended mechanism for pre-configuring code-server or other automated
-deployments. The setting can be pre-seeded in VS Code's `settings.json`:
+`shofer.autoImportSettingsPath` (one of the two remaining bootstrap VS Code settings)
+names a **scope archive** to pre-seed a fresh install from. On activation, when the
+user scope has no `settings.json` yet, the archive is unpacked into `~/.shofer` — a
+one-time seed, never an overwrite of a materialized scope
+([`autoImportSettings`](../src/utils/autoImportSettings.ts)).
 
 ```json
 {
-	"shofer.autoImportSettingsPath": "/etc/shofer/settings.json"
+	"shofer.autoImportSettingsPath": "/etc/shofer/seed.tgz"
 }
 ```
+
+For org policy delivery use the `SHOFER_GLOBAL_DIR` mount instead — that is the
+standing, centrally-updatable channel; auto-import is only the fresh-install seed.
 
 ### 10e. Reset State (Settings → About)
 
@@ -1008,14 +933,14 @@ User clicks Reset
 
 ### 10f. Export / Import / Reset Comparison
 
-| Operation           | API Profiles & Keys  | Global Settings  | Custom Modes             | MCP Configs  | Task History | Destructive?   |
-| ------------------- | -------------------- | ---------------- | ------------------------ | ------------ | ------------ | -------------- |
-| **Export**          | ✅ Included          | ✅ Included      | Only `source:"global"`   | ❌           | ❌           | No (read-only) |
-| **Import**          | ✅ Merged additively | ✅ Applied       | ✅ Imported              | ❌           | ❌           | No (additive)  |
-| **Auto-Import**     | ✅ On activation     | ✅ On activation | ✅ On activation         | ❌           | ❌           | No (additive)  |
-| **Reset**           | ❌ Wiped             | ❌ Wiped         | ❌ Reset to defaults     | ❌ Untouched | ❌ Wiped     | **Yes**        |
-| **Per-mode Export** | ❌                   | ❌               | ✅ Single mode → YAML    | ❌           | ❌           | No (read-only) |
-| **Per-mode Import** | ❌                   | ❌               | ✅ Single mode from YAML | ❌           | ❌           | No (additive)  |
+| Operation           | API Profiles & Keys              | Global Settings  | Custom Modes             | MCP Configs      | Task History | Destructive?                |
+| ------------------- | -------------------------------- | ---------------- | ------------------------ | ---------------- | ------------ | --------------------------- |
+| **Export**          | Non-secret fields only (no keys) | ✅ Included      | User-scope modes         | ✅ User scope    | ❌           | No (read-only)              |
+| **Import**          | Non-secret fields only           | ✅ Applied       | ✅ User-scope file       | ✅ User scope    | ❌           | Overwrites user-scope files |
+| **Auto-Import**     | Non-secret fields only           | ✅ One-time seed | ✅ One-time seed         | ✅ One-time seed | ❌           | No (fresh installs only)    |
+| **Reset**           | ❌ Wiped                         | ❌ Wiped         | ❌ Reset to defaults     | ❌ Untouched     | ❌ Wiped     | **Yes**                     |
+| **Per-mode Export** | ❌                               | ❌               | ✅ Single mode → YAML    | ❌               | ❌           | No (read-only)              |
+| **Per-mode Import** | ❌                               | ❌               | ✅ Single mode from YAML | ❌               | ❌           | No (additive)               |
 
 ### 10g. Per-Mode Export / Import (Settings → Modes)
 
@@ -1074,42 +999,33 @@ exists, it is **overwritten**.
 
 ## 11. Code-Server Pre-Configuration
 
-When deploying Shofer in a code-server environment, the following strategies ensure
-API configurations are available:
+When deploying Shofer in a code-server environment:
 
-### Primary Approach: Auto-Import
+### Primary Approach: the org-global mount
 
-1. Export settings from a configured Shofer instance (creates `shofer-code-settings.json`)
-2. Place the file at a known path on the code-server image (e.g., `/etc/shofer/settings.json`)
-3. Set the VS Code setting `shofer.autoImportSettingsPath` to point to it
-4. On extension activation, all API profiles and global settings are automatically imported
+Mount a `.shofer/` tree (a materialized config bundle) at a read-only path and set
+`SHOFER_GLOBAL_DIR` to it. Every layered consumer — settings, provider profiles,
+modes, MCP servers, commands/skills/rules, plugin and worker declarations — reads
+that scope directly, and updating the mount updates the fleet. This is how the
+SaaS injects configuration (`shared/shoferbundle` in the parent repo).
 
-### SecretStorage Persistence Caveat
+### Fresh-install seed: Auto-Import
 
-VS Code `SecretStorage` delegates to the OS credential store. In Docker containers,
-this typically falls back to an **in-memory store** that does NOT survive restarts.
-Mitigations:
+1. Export from a configured Shofer instance (Settings → Export, a `.tgz` scope archive)
+2. Place it on the image (e.g. `/etc/shofer/seed.tgz`)
+3. Set `shofer.autoImportSettingsPath` to that path
+4. On first activation the archive unpacks into `~/.shofer`; once the user scope is
+   materialized it never runs again
 
-- **Re-import on restart:** Keep the auto-import path configured so API keys are
-  re-imported on each activation
-- **Mount a persistent volume:** for the code-server data directory
-  (`~/.local/share/code-server/`) so the SecretStorage backend can persist
-- **Use environment variables:** Set API keys via environment variables that the
-  provider handlers check (e.g., `OPENAI_API_KEY`)
+### Secrets
 
-### Additional File Pre-Seeding
+The archive and the mounts carry **no Shofer-written secrets**. Options:
 
-| File                        | Path                                              | Contents                                             |
-| --------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
-| `.shofer/shofermodes`       | `<workspace>/.shofer/shofermodes`                 | Project-specific mode overrides (YAML)               |
-| `shofermodes`               | `~/.shofer/shofermodes` (or any scope root)       | Mode customizations (YAML)                           |
-| `mcp.json`                  | `~/.shofer/mcp.json` (or any scope root)          | MCP server definitions (JSON)                        |
-| `shofer-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
-
-> **Note:** MCP servers are NOT covered by the export/import flow. To pre-configure
-> them, place an `mcp.json` in the target scope's `.shofer/` directory.
-
----
+- an org `providers.json` in the mount **may** carry default `apiKey` values (the
+  admin's deliberate choice; a locally-entered key overrides them)
+- set provider keys via environment variables the provider handlers check
+- persist the code-server data directory so `SecretStorage` (which falls back to an
+  in-memory store in containers) survives restarts
 
 ## 12. All GlobalFileNames Constants
 

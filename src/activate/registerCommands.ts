@@ -180,7 +180,6 @@ const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOpt
 
 		await importSettingsWithFeedback(
 			{
-				providerSettingsManager: visibleProvider.providerSettingsManager,
 				contextProxy: visibleProvider.contextProxy,
 				customModesManager: visibleProvider.customModesManager,
 				provider: visibleProvider,

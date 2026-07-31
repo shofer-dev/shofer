@@ -29,6 +29,7 @@ describe("About", () => {
 	const defaultProps = {
 		telemetrySetting: "enabled" as const,
 		setTelemetrySetting: vi.fn(),
+		setCachedStateField: vi.fn(),
 	}
 
 	beforeEach(() => {

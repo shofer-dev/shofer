@@ -179,6 +179,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 	const {
 		autoApprovalEnabled,
+		settingsWriteScope,
 		alwaysAllowReadOnly,
 		alwaysAllowReadOnlyOutsideWorkspace,
 		allowedCommands,
@@ -433,6 +434,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					alwaysAllowModeSwitch,
 					allowedCommands: allowedCommands ?? [],
 					deniedCommands: deniedCommands ?? [],
+					settingsWriteScope: settingsWriteScope ?? undefined,
 					allowedReadPaths: allowedReadPaths ?? [],
 					allowedWritePaths: allowedWritePaths ?? [],
 					// Note that we use `null` instead of `undefined` since `JSON.stringify`
@@ -1111,6 +1113,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								setTelemetrySetting={setTelemetrySetting}
 								debug={cachedState.debug}
 								setDebug={setDebug}
+								settingsWriteScope={settingsWriteScope}
+								setCachedStateField={setCachedStateField}
 							/>
 						)}
 					</SearchIndexProvider>

@@ -29,6 +29,13 @@ vi.mock("vscode", () => ({
 	},
 }))
 
+// getWorkspacePath() drives the project scope root; per-test override.
+const wsHoisted = vi.hoisted(() => ({ ws: "" }))
+vi.mock("@shofer/core", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/core")>()),
+	getWorkspacePath: () => wsHoisted.ws,
+}))
+
 // os.homedir() drives the user scope root; make it point at a per-test temp dir.
 const hoisted = vi.hoisted(() => ({ home: "/nonexistent-home" }))
 vi.mock("os", async (importOriginal) => {
@@ -72,6 +79,7 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 		vi.clearAllMocks()
 		delete process.env.SHOFER_GLOBAL_DIR
 		hoisted.home = "/nonexistent-home"
+		wsHoisted.ws = ""
 
 		const store: Record<string, unknown> = {}
 		mockGlobalState = {
@@ -184,6 +192,31 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 		// The user file was NOT given a shadowed entry for the locked key.
 		const onDisk = await readUserSettings(homeDir)
 		expect(onDisk).not.toHaveProperty("writeDelayMs")
+	})
+
+	it("(b') settingsWriteScope routes writes to the project scope; the selector itself stays user-scoped", async () => {
+		const homeDir = await tmpDir()
+		const wsDir = await tmpDir()
+		hoisted.home = homeDir
+		wsHoisted.ws = wsDir
+
+		const proxy = new ContextProxy(mockContext)
+		await proxy.initialize()
+
+		// Selecting the project scope persists the selector at the USER scope —
+		// routing it into the project file would commit one user's preference.
+		await proxy.setValue("settingsWriteScope", "project")
+		const userFile = await readUserSettings(homeDir)
+		expect(userFile.settingsWriteScope).toBe("project")
+
+		// Subsequent writes land in the workspace's .shofer/settings.json.
+		await proxy.setValue("writeDelayMs", 42)
+		const projectFile = JSON.parse(await fs.readFile(path.join(wsDir, ".shofer", "settings.json"), "utf8"))
+		expect(projectFile.writeDelayMs).toBe(42)
+		expect((await readUserSettings(homeDir)).writeDelayMs).toBeUndefined()
+
+		// And the overlay serves the project value.
+		expect(proxy.getValue("writeDelayMs")).toBe(42)
 	})
 
 	it("(c) a bulk setValues does not lose keys to a read-modify-write race", async () => {

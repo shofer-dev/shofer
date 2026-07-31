@@ -121,7 +121,7 @@ After Phase 1, every key the bundle can carry is a key the mount can deliver.
 > are deleted. `providers.json` is in `WATCHED_SCOPE_FILES`; ShoferProvider
 > re-activates the current profile and re-pushes state on an external change.
 
-### Phase 3 — `globalState` stops being a source of truth — DONE except the scope selector
+### Phase 3 — `globalState` stops being a source of truth — DONE
 
 7. **Unconditional write-through.** `ContextProxy.setValue` currently mirrors to
    `~/.shofer/settings.json` only when that file already exists (E4 made it opt-in).
@@ -148,14 +148,24 @@ After Phase 1, every key the bundle can carry is a key the mount can deliver.
 > (the real knob is the rag-indexing plugin's config) and is deleted. Only the
 > two bootstrap keys remain in `contributes.configuration`. The vestigial
 > VS Code-config dual-writes for allowedCommands/deniedCommands/debug are
-> deleted too. **Open: item 10** (the per-write scope selector — writes always
-> target the user scope today).
+> deleted too. Item 10: the `settingsWriteScope` globalSettings key routes
+> every write-through to the user or project scope (Settings → About dropdown);
+> the selector itself always persists at the user scope.
 
-### Phase 4 — delete the parallel paths
+### Phase 4 — delete the parallel paths — DONE
 
 11. Remove the JSON `exportSettings` / `importSettingsFromPath` path in favour of the
     scope archives (E5 left it in place for callers).
 12. Subsume `autoImportSettingsPath` into "read the global root" (E6).
+
+> **Status: implemented.** Settings Export/Import and the `importSettings`
+> command operate on **scope archives** (a `.tgz` of the user scope's
+> `.shofer/`, via the E5 machinery); the JSON
+> `exportSettings`/`importSettingsFromPath` path and its
+> `shofer-code-settings.json` format are deleted. `autoImportSettingsPath`
+> now names a scope archive used as a one-time fresh-install seed (skipped
+> once `~/.shofer/settings.json` exists); standing org policy is the
+> `SHOFER_GLOBAL_DIR` mount's job.
 
 ## Net effect on the codebase
 

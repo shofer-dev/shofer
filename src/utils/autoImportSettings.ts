@@ -1,26 +1,31 @@
-import type { OutputChannelLike } from "@shofer/core"
-import { getHost } from "@shofer/types"
 import * as path from "path"
 import * as os from "os"
 
+import type { OutputChannelLike } from "@shofer/core"
+import { getHost } from "@shofer/types"
+
 import { Package } from "@shofer/core"
-import { fileExistsAtPath } from "./fs"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
-import { importSettingsFromPath, ImportOptions } from "../core/config/importExport"
+import { fileExistsAtPath } from "./fs"
+import { importScopeSettingsArchive, type ImportOptions } from "../core/config/importExport"
 
 /**
- * Automatically imports Shofer settings from a specified path if it exists.
- * This function is called during extension activation to allow users to pre-configure
- * their settings by placing a settings file at a predefined location.
+ * Pre-seed a fresh install from a **scope archive** (config-cleanup Part E6).
+ *
+ * `shofer.autoImportSettingsPath` — one of the two remaining bootstrap VS Code
+ * settings — names a `.tgz` scope archive (as produced by Settings → Export). On
+ * activation, when the user scope has no `settings.json` yet, the archive is
+ * unpacked into `~/.shofer` and the layered loaders pick everything up from
+ * there. Once the user scope is materialized the import never runs again — org
+ * policy delivery is the `SHOFER_GLOBAL_DIR` mount's job, not this seam's.
  */
 export async function autoImportSettings(
 	outputChannel: OutputChannelLike,
-	{ providerSettingsManager, contextProxy, customModesManager }: ImportOptions,
+	{ contextProxy, customModesManager }: ImportOptions,
 ): Promise<void> {
 	try {
-		// Get the auto-import settings path from VSCode settings
 		const settingsPath = getHost().config.get<string | undefined>(Package.name, "autoImportSettingsPath", undefined)
 
 		if (!settingsPath || settingsPath.trim() === "") {
@@ -30,32 +35,26 @@ export async function autoImportSettings(
 
 		// Resolve the path (handle ~ for home directory and relative paths)
 		const resolvedPath = resolvePath(settingsPath.trim())
-		outputChannel.appendLine(`[AutoImport] Checking for settings file at: ${resolvedPath}`)
+		outputChannel.appendLine(`[AutoImport] Checking for settings archive at: ${resolvedPath}`)
 
-		// Check if the file exists
 		if (!(await fileExistsAtPath(resolvedPath))) {
-			outputChannel.appendLine(`[AutoImport] Settings file not found at ${resolvedPath}, skipping auto-import`)
+			outputChannel.appendLine(`[AutoImport] Archive not found at ${resolvedPath}, skipping auto-import`)
 			return
 		}
 
-		// Attempt to import the configuration
-		const result = await importSettingsFromPath(resolvedPath, {
-			providerSettingsManager,
-			contextProxy,
-			customModesManager,
-		})
-
-		if (result.success) {
-			outputChannel.appendLine(`[AutoImport] Successfully imported settings from ${resolvedPath}`)
-
-			// Show a notification to the user
-			getHost().notifier.info(t("common:info.auto_import_success", { filename: path.basename(resolvedPath) }))
-		} else {
-			outputChannel.appendLine(`[AutoImport] Failed to import settings: ${result.error}`)
-
-			// Show a warning but don't fail the extension activation
-			getHost().notifier.warn(t("common:warnings.auto_import_failed", { error: result.error }))
+		// One-time seed: an already-materialized user scope is never overwritten.
+		const userSettings = path.join(os.homedir(), ".shofer", "settings.json")
+		if (await fileExistsAtPath(userSettings)) {
+			outputChannel.appendLine(`[AutoImport] User scope already materialized (${userSettings}), skipping`)
+			return
 		}
+
+		await importScopeSettingsArchive(resolvedPath)
+		await contextProxy.refreshLayeredOverlay()
+		customModesManager.invalidateCache()
+
+		outputChannel.appendLine(`[AutoImport] Unpacked settings archive from ${resolvedPath}`)
+		getHost().notifier.info(t("common:info.auto_import_success", { filename: path.basename(resolvedPath) }))
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error)
 		outputChannel.appendLine(`[AutoImport] Unexpected error during auto-import: ${errorMessage}`)

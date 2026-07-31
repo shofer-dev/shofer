@@ -1,209 +1,104 @@
-// Mock dependencies
-vi.mock("vscode", () => ({
-	workspace: {
-		getConfiguration: vi.fn(() => ({
-			get: vi.fn(),
-		})),
-	},
-	window: {
-		showInformationMessage: vi.fn(),
-		showWarningMessage: vi.fn(),
-		createOutputChannel: vi.fn(() => ({
-			appendLine: vi.fn(),
-			append: vi.fn(),
-			clear: vi.fn(),
-			show: vi.fn(),
-			dispose: vi.fn(),
-		})),
-	},
-	TreeItem: class {},
-	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-	ThemeIcon: class {
-		constructor(_id: string) {}
-	},
-	EventEmitter: class {
-		event = vi.fn()
-		fire = vi.fn()
-	},
+// npx vitest src/utils/__tests__/autoImportSettings.spec.ts
+
+import type { OutputChannelLike } from "@shofer/core"
+
+const hoisted = vi.hoisted(() => ({
+	configuredPath: undefined as string | undefined,
+	existingFiles: new Set<string>(),
+	notifier: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock("fs/promises", () => ({
-	__esModule: true,
-	default: {
-		readFile: vi.fn(),
-	},
-	readFile: vi.fn(),
+vi.mock("@shofer/types", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@shofer/types")>()),
+	getHost: () => ({
+		config: { get: (_section: string, _key: string, def: unknown) => hoisted.configuredPath ?? def },
+		notifier: hoisted.notifier,
+	}),
 }))
-
-vi.mock("path", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("path")>()
-	return {
-		...actual,
-		default: {
-			...actual,
-			join: vi.fn((...args: string[]) => args.join("/")),
-			isAbsolute: vi.fn((p: string) => p.startsWith("/")),
-			basename: vi.fn((p: string) => p.split("/").pop() || ""),
-		},
-		join: vi.fn((...args: string[]) => args.join("/")),
-		isAbsolute: vi.fn((p: string) => p.startsWith("/")),
-		basename: vi.fn((p: string) => p.split("/").pop() || ""),
-	}
-})
 
 vi.mock("os", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("os")>()
 	return {
 		...actual,
-		default: {
-			...actual,
-			homedir: vi.fn(() => "/home/user"),
-		},
-		homedir: vi.fn(() => "/home/user"),
+		default: { ...actual, homedir: () => "/home/user" },
+		homedir: () => "/home/user",
 	}
 })
 
 vi.mock("../fs", () => ({
-	fileExistsAtPath: vi.fn(),
-}))
-
-vi.mock("../../core/config/ProviderSettingsManager", () => ({
-	ProviderSettingsManager: vi.fn().mockImplementation(() => ({
-		export: vi.fn().mockResolvedValue({
-			apiConfigs: {},
-			modeApiConfigs: {},
-			currentApiConfigName: "default",
-		}),
-		import: vi.fn().mockResolvedValue({ success: true }),
-		listConfig: vi.fn().mockResolvedValue([]),
-	})),
-}))
-
-vi.mock("../../core/config/ContextProxy", () => ({
-	ContextProxy: {
-		getInstance: vi.fn(() => ({
-			getValue: vi.fn(),
-		})),
-	},
-}))
-
-vi.mock("../../core/config/CustomModesManager", () => ({
-	CustomModesManager: {
-		getInstance: vi.fn(),
-	},
-}))
-
-vi.mock("../../extension", () => ({}))
-
-vi.mock("@shofer/core", async (importOriginal) => ({
-	...((await importOriginal()) as Record<string, unknown>),
-	configLog: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
-	t: vi.fn((key: string) => key),
-	Package: { name: "arkware" },
+	fileExistsAtPath: vi.fn(async (p: string) => hoisted.existingFiles.has(p)),
 }))
 
 vi.mock("../../core/config/importExport", () => ({
-	importSettingsFromPath: vi.fn().mockResolvedValue({ success: true }),
+	importScopeSettingsArchive: vi.fn(async () => {}),
 }))
 
 import { autoImportSettings } from "../autoImportSettings"
-import * as vscode from "vscode"
-import fsPromises from "fs/promises"
-import { fileExistsAtPath } from "../fs"
-import { ProviderSettingsManager } from "../../core/config/ProviderSettingsManager"
-import { ContextProxy } from "../../core/config/ContextProxy"
-import { CustomModesManager } from "../../core/config/CustomModesManager"
-import { importSettingsFromPath } from "../../core/config/importExport"
-import { installVsCodeForwardingHost } from "../../host/__tests__/forwarding-host"
+import { importScopeSettingsArchive } from "../../core/config/importExport"
 
-describe("autoImportSettings", () => {
-	let mockOutputChannel: any
-	let mockProviderSettingsManager: any
-	let mockContextProxy: any
-	let mockCustomModesManager: any
+const outputChannel: OutputChannelLike = { appendLine: vi.fn() } as unknown as OutputChannelLike
 
+const contextProxy = { refreshLayeredOverlay: vi.fn(async () => []) }
+const customModesManager = { invalidateCache: vi.fn() }
+const options = { contextProxy, customModesManager } as never
+
+describe("autoImportSettings (scope-archive seed)", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
-		installVsCodeForwardingHost()
-		mockOutputChannel = {
-			appendLine: vi.fn(),
-			append: vi.fn(),
-			clear: vi.fn(),
-			show: vi.fn(),
-			dispose: vi.fn(),
-		}
-		mockProviderSettingsManager = new (vi.mocked(ProviderSettingsManager) as any)()
-		mockContextProxy = (vi.mocked(ContextProxy) as any).getInstance()
-		mockCustomModesManager = (vi.mocked(CustomModesManager) as any).getInstance()
+		hoisted.configuredPath = undefined
+		hoisted.existingFiles.clear()
 	})
 
-	it("should skip when no settings path is configured", async () => {
-		const getConfigMock = vi.mocked(vscode.workspace.getConfiguration)
-		getConfigMock.mockReturnValue({
-			get: vi.fn().mockReturnValue(""),
-		} as any)
-
-		await autoImportSettings(mockOutputChannel, {
-			providerSettingsManager: mockProviderSettingsManager,
-			contextProxy: mockContextProxy,
-			customModesManager: mockCustomModesManager,
-		})
-
-		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-			expect.stringContaining("No auto-import settings path specified"),
-		)
+	it("skips when no path is configured", async () => {
+		await autoImportSettings(outputChannel, options)
+		expect(importScopeSettingsArchive).not.toHaveBeenCalled()
 	})
 
-	it("should skip when settings file does not exist", async () => {
-		const getConfigMock = vi.mocked(vscode.workspace.getConfiguration)
-		getConfigMock.mockReturnValue({
-			get: vi.fn().mockReturnValue("/some/path/to/settings.json"),
-		} as any)
-		vi.mocked(fileExistsAtPath).mockResolvedValue(false)
+	it("skips when the archive does not exist", async () => {
+		hoisted.configuredPath = "/etc/shofer/seed.tgz"
 
-		await autoImportSettings(mockOutputChannel, {
-			providerSettingsManager: mockProviderSettingsManager,
-			contextProxy: mockContextProxy,
-			customModesManager: mockCustomModesManager,
-		})
+		await autoImportSettings(outputChannel, options)
 
-		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining("Settings file not found"))
+		expect(importScopeSettingsArchive).not.toHaveBeenCalled()
 	})
 
-	it("should import settings when file exists and contains valid JSON", async () => {
-		const getConfigMock = vi.mocked(vscode.workspace.getConfiguration)
-		getConfigMock.mockReturnValue({
-			get: vi.fn().mockReturnValue("/some/path/to/settings.json"),
-		} as any)
-		vi.mocked(fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(importSettingsFromPath).mockResolvedValue({ success: true } as any)
+	it("unpacks the archive into the user scope and refreshes consumers", async () => {
+		hoisted.configuredPath = "/etc/shofer/seed.tgz"
+		hoisted.existingFiles.add("/etc/shofer/seed.tgz")
 
-		await autoImportSettings(mockOutputChannel, {
-			providerSettingsManager: mockProviderSettingsManager,
-			contextProxy: mockContextProxy,
-			customModesManager: mockCustomModesManager,
-		})
+		await autoImportSettings(outputChannel, options)
 
-		expect(importSettingsFromPath).toHaveBeenCalled()
-		expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-			expect.stringContaining("Successfully imported settings"),
-		)
+		expect(importScopeSettingsArchive).toHaveBeenCalledWith("/etc/shofer/seed.tgz")
+		expect(contextProxy.refreshLayeredOverlay).toHaveBeenCalled()
+		expect(customModesManager.invalidateCache).toHaveBeenCalled()
+		expect(hoisted.notifier.info).toHaveBeenCalled()
 	})
 
-	it("should show warning when import fails", async () => {
-		const getConfigMock = vi.mocked(vscode.workspace.getConfiguration)
-		getConfigMock.mockReturnValue({
-			get: vi.fn().mockReturnValue("/some/path/to/settings.json"),
-		} as any)
-		vi.mocked(fileExistsAtPath).mockResolvedValue(true)
-		vi.mocked(importSettingsFromPath).mockResolvedValue({ success: false, error: "Import failed" })
+	it("never overwrites an already-materialized user scope", async () => {
+		hoisted.configuredPath = "/etc/shofer/seed.tgz"
+		hoisted.existingFiles.add("/etc/shofer/seed.tgz")
+		hoisted.existingFiles.add("/home/user/.shofer/settings.json")
 
-		await autoImportSettings(mockOutputChannel, {
-			providerSettingsManager: mockProviderSettingsManager,
-			contextProxy: mockContextProxy,
-			customModesManager: mockCustomModesManager,
-		})
+		await autoImportSettings(outputChannel, options)
 
-		expect(vscode.window.showWarningMessage).toHaveBeenCalled()
+		expect(importScopeSettingsArchive).not.toHaveBeenCalled()
+	})
+
+	it("expands ~ against the home directory", async () => {
+		hoisted.configuredPath = "~/seed.tgz"
+		hoisted.existingFiles.add("/home/user/seed.tgz")
+
+		await autoImportSettings(outputChannel, options)
+
+		expect(importScopeSettingsArchive).toHaveBeenCalledWith("/home/user/seed.tgz")
+	})
+
+	it("does not throw on an unpack failure (activation must survive)", async () => {
+		hoisted.configuredPath = "/etc/shofer/seed.tgz"
+		hoisted.existingFiles.add("/etc/shofer/seed.tgz")
+		vi.mocked(importScopeSettingsArchive).mockRejectedValueOnce(new Error("corrupt archive"))
+
+		await expect(autoImportSettings(outputChannel, options)).resolves.toBeUndefined()
+		expect(hoisted.notifier.info).not.toHaveBeenCalled()
 	})
 })

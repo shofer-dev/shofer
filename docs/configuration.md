@@ -436,6 +436,19 @@ persistent data. Supports absolute paths (e.g.,
 
 Enable Shofer Quick Fix code actions in the editor.
 
+### `settingsWriteScope`
+
+|         |                                                         |
+| ------- | ------------------------------------------------------- |
+| Type    | `"user"` \| `"project"`                                 |
+| Default | `"user"`                                                |
+| Where   | layered `.shofer/settings.json` (+ Settings UI → About) |
+
+Which writable `.shofer/` scope Settings edits persist to: the user scope
+(`~/.shofer`, this machine only) or the project scope (the workspace's
+committed `.shofer/`, shared via git). The selector itself always persists at
+the user scope, and org-locked keys are never persisted downstream either way.
+
 ### `shofer.autoImportSettingsPath`
 
 |         |                 |
@@ -444,9 +457,12 @@ Enable Shofer Quick Fix code actions in the editor.
 | Default | `""` (disabled) |
 | Scope   | window          |
 
-Path to a Shofer configuration file to automatically import on
-extension startup. Supports absolute paths and home-relative paths
-(e.g., `"~/Documents/shofer-code-settings.json"`).
+Path to a **scope archive** (`.tgz`, as produced by Settings → Export) to
+pre-seed a fresh install from: on activation, when the user scope has no
+`settings.json` yet, the archive is unpacked into `~/.shofer`. A materialized
+user scope is never overwritten. Supports absolute and home-relative paths
+(e.g., `"~/seed.tgz"`). For standing org policy use the `SHOFER_GLOBAL_DIR`
+mount instead.
 
 ---
 

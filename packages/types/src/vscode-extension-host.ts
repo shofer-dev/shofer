@@ -390,6 +390,7 @@ export type ExtensionState = Pick<
 	| "alwaysAllowWriteProtected"
 	| "alwaysAllowBrowser"
 	| "alwaysAllowMcp"
+	| "settingsWriteScope"
 	| "alwaysAllowUncategorized"
 	| "alwaysAllowModeSwitch"
 	| "alwaysAllowSubtasks"

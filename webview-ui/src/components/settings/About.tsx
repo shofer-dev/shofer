@@ -13,6 +13,9 @@ import { vscode } from "@/utils/vscode"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui"
 
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@src/components/ui"
+
+import { SetCachedStateField } from "./types"
 import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 import { SearchableSetting } from "./SearchableSetting"
@@ -22,9 +25,20 @@ type AboutProps = HTMLAttributes<HTMLDivElement> & {
 	setTelemetrySetting: (setting: TelemetrySetting) => void
 	debug?: boolean
 	setDebug?: (debug: boolean) => void
+	settingsWriteScope?: "user" | "project"
+	setCachedStateField: SetCachedStateField<"settingsWriteScope">
 }
 
-export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, className, ...props }: AboutProps) => {
+export const About = ({
+	telemetrySetting,
+	setTelemetrySetting,
+	debug,
+	setDebug,
+	settingsWriteScope,
+	setCachedStateField,
+	className,
+	...props
+}: AboutProps) => {
 	const { t } = useAppTranslation()
 
 	return (
@@ -32,6 +46,32 @@ export const About = ({ telemetrySetting, setTelemetrySetting, debug, setDebug, 
 			<SectionHeader>{t("settings:sections.about")}</SectionHeader>
 
 			<Section>
+				<SearchableSetting
+					settingId="settings-write-scope"
+					section="about"
+					label={t("settings:about.settingsWriteScope.label")}>
+					<label className="block font-medium mb-1">{t("settings:about.settingsWriteScope.label")}</label>
+					<Select
+						value={settingsWriteScope ?? "user"}
+						onValueChange={(value) =>
+							setCachedStateField("settingsWriteScope", value as "user" | "project")
+						}>
+						<SelectTrigger className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								<SelectItem value="user">{t("settings:about.settingsWriteScope.user")}</SelectItem>
+								<SelectItem value="project">
+									{t("settings:about.settingsWriteScope.project")}
+								</SelectItem>
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+					<p className="text-vscode-descriptionForeground text-sm mt-1">
+						{t("settings:about.settingsWriteScope.description")}
+					</p>
+				</SearchableSetting>
 				<p>
 					{Package.sha
 						? `Version: ${Package.version} (${Package.sha.slice(0, 8)})`

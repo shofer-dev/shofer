@@ -105,6 +105,8 @@ export const globalSettingsSchema = z.object({
 	preventCompletionWithOpenTodos: z.boolean().optional(),
 	/** WorkerPool new-task load-balancing policy (was `shofer.workers.loadBalancer`). */
 	workersLoadBalancer: z.enum(["round-robin", "least-load-1m", "least-load-5m", "least-load-15m"]).optional(),
+	/** Which `.shofer/` scope Settings writes persist to (default: the user scope). */
+	settingsWriteScope: z.enum(["user", "project"]).optional(),
 	// Migrated from `shofer.*` VS Code config into ContextProxy/globalState — the
 	// single source of truth (todos/config-cleanup.md Part A). The `package.json`
 	// `contributes.configuration` rows are removed as each consumer is repointed.
@@ -385,6 +387,7 @@ export const SETTING_SYNC_SCOPE = {
 	commandTimeoutAllowlist: "node",
 	preventCompletionWithOpenTodos: "node",
 	workersLoadBalancer: "frontend", // WorkerPool policy — the pool lives on the controller, nodes never read it
+	settingsWriteScope: "frontend", // write routing is a controller/UI concern; nodes never persist settings
 	// Migrated from `shofer.*` VS Code config (config-cleanup.md Part A).
 	newTaskRequireTodos: "node", // gates the new_task tool on the executor
 	apiRequestTimeout: "node", // API timeout where the executor makes LLM calls

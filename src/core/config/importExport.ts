@@ -1,37 +1,49 @@
-import { safeWriteJson, exportScopeArchive, importScopeArchive } from "@shofer/core"
 import os from "os"
 import * as path from "path"
 import fs from "fs/promises"
 
 import * as vscode from "vscode"
 import { getHost } from "@shofer/types"
-import { z, ZodError } from "zod"
 
-import {
-	globalSettingsSchema,
-	providerSettingsWithIdSchema,
-	isProviderName,
-	type ProviderSettingsWithId,
-} from "@shofer/types"
-import { TelemetryService } from "@shofer/telemetry"
-
-import { ProviderSettingsManager, providerProfilesSchema } from "./ProviderSettingsManager"
-import { ContextProxy } from "./ContextProxy"
-import { CustomModesManager } from "./CustomModesManager"
-import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
+import { exportScopeArchive, importScopeArchive } from "@shofer/core"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 
+import { ContextProxy } from "./ContextProxy"
+import { CustomModesManager } from "./CustomModesManager"
+import { resolveDefaultSaveUri, saveLastExportPath } from "../../utils/export"
+
+/**
+ * importExport — settings export/import as a **scope archive** (config-cleanup
+ * Part E5): a gzipped tar of a `.shofer/` scope tree.
+ *
+ * The archive carries everything the layered file model owns — `settings.json`,
+ * `providers.json`, `shofermodes`, `mcp.json`, `commands/`, `rules(-mode)/`,
+ * `skills(-mode)/` — and **no secrets by construction**: provider keys live in
+ * `SecretStorage`, outside `.shofer/`. This replaced the legacy JSON
+ * (`shofer-code-settings.json`) path, which hand-assembled
+ * `{ providerProfiles, globalSettings }` from two stores and embedded secret
+ * material; with the file scopes as the single source of truth there is nothing
+ * for a bespoke JSON format to add.
+ *
+ * Import unpacks into the writable **user** scope and refreshes the live
+ * consumers (settings overlay, modes cache); everything else reads the files
+ * per call or follows the scope watchers.
+ */
+
+/** The archive filename suggested by the save dialog. */
+const DEFAULT_ARCHIVE_NAME = "shofer-settings.tgz"
+
+/** The default (user) scope's `.shofer/` root — `~/.shofer`. */
+function defaultUserScopeRoot(): string {
+	return path.join(os.homedir(), ".shofer")
+}
+
 export type ImportOptions = {
-	providerSettingsManager: ProviderSettingsManager
 	contextProxy: ContextProxy
 	customModesManager: CustomModesManager
 }
 
-type ExportOptions = {
-	providerSettingsManager: ProviderSettingsManager
-	contextProxy: ContextProxy
-}
 type ImportWithProviderOptions = ImportOptions & {
 	provider: {
 		settingsImportedAt?: number
@@ -39,226 +51,35 @@ type ImportWithProviderOptions = ImportOptions & {
 	}
 }
 
+export type ImportResult = { success: boolean; error?: string }
+
 /**
- * Sanitizes a provider config by resetting invalid/removed apiProvider values.
- * Returns the sanitized config and a warning message if the provider was invalid.
+ * Export = archive a scope's `.shofer/` tree (default: the user scope) to a
+ * caller-chosen path. Secrets are not in the archive by construction.
  */
-function sanitizeProviderConfig(configName: string, apiConfig: unknown): { config: unknown; warning?: string } {
-	if (typeof apiConfig !== "object" || apiConfig === null) {
-		return { config: apiConfig }
-	}
-
-	const config = apiConfig as Record<string, unknown>
-
-	// Check if apiProvider is set and if it's still valid
-	if (config.apiProvider !== undefined && !isProviderName(config.apiProvider)) {
-		const invalidProvider = config.apiProvider
-		// Return a new config object without the invalid apiProvider
-		const { apiProvider, ...restConfig } = config
-		return {
-			config: restConfig,
-			warning: `Profile "${configName}": Invalid provider "${invalidProvider}" was removed. Please reconfigure this profile.`,
-		}
-	}
-
-	return { config: apiConfig }
+export async function exportScopeSettingsArchive(destPath: string, scopeRoot: string = defaultUserScopeRoot()) {
+	const dirname = path.dirname(destPath)
+	await fs.mkdir(dirname, { recursive: true })
+	await exportScopeArchive(scopeRoot, destPath)
 }
 
 /**
- * Imports configuration from a specific file path
- * Shares base functionality for import settings for both the manual
- * and automatic settings importing.
- *
- * Uses lenient parsing to handle invalid/removed providers gracefully:
- * - Invalid apiProvider values are removed (profile is kept but needs reconfiguration)
- * - Completely invalid profiles are skipped
- * - Warnings are returned for any issues encountered
+ * Import = unpack a scope archive into a scope root (default: the user scope).
+ * Any secrets are applied out of band, never from the archive.
  */
-export async function importSettingsFromPath(
-	filePath: string,
-	{ providerSettingsManager, contextProxy, customModesManager }: ImportOptions,
-) {
-	// Use a lenient schema that accepts any apiConfigs, then validate each individually
-	const lenientProviderProfilesSchema = providerProfilesSchema.extend({
-		apiConfigs: z.record(z.string(), z.any()),
-	})
-
-	const lenientSchema = z.object({
-		providerProfiles: lenientProviderProfilesSchema,
-		globalSettings: globalSettingsSchema.optional(),
-	})
-
-	try {
-		const previousProviderProfiles = await providerSettingsManager.export()
-
-		const rawData = JSON.parse(await fs.readFile(filePath, "utf-8"))
-		const { providerProfiles: rawProviderProfiles, globalSettings = {} } = lenientSchema.parse(rawData)
-
-		// Track warnings for profiles that had issues
-		const warnings: string[] = []
-		const validApiConfigs: Record<string, ProviderSettingsWithId> = {}
-
-		// Process each apiConfig individually with sanitization
-		for (const [configName, rawConfig] of Object.entries(rawProviderProfiles.apiConfigs)) {
-			// First sanitize to handle invalid apiProvider values
-			const { config: sanitizedConfig, warning } = sanitizeProviderConfig(configName, rawConfig)
-			if (warning) {
-				warnings.push(warning)
-			}
-
-			// Then validate the sanitized config
-			const result = providerSettingsWithIdSchema.safeParse(sanitizedConfig)
-			if (result.success) {
-				validApiConfigs[configName] = result.data
-			} else {
-				// Profile is completely invalid - skip it
-				const issues = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")
-				warnings.push(`Profile "${configName}" was skipped: ${issues}`)
-			}
-		}
-
-		// If no valid configs were imported and there were issues, report them
-		if (Object.keys(validApiConfigs).length === 0 && warnings.length > 0) {
-			return {
-				success: false,
-				error: `No valid profiles could be imported:\n${warnings.join("\n")}`,
-			}
-		}
-
-		// Determine the currentApiConfigName:
-		// 1. If the imported currentApiConfigName exists in validApiConfigs, use it
-		// 2. Otherwise, fall back to the first valid imported profile
-		// 3. If no valid profiles were imported, keep the previous currentApiConfigName
-		let currentApiConfigName = rawProviderProfiles.currentApiConfigName
-		const validProfileNames = Object.keys(validApiConfigs)
-		if (!validApiConfigs[currentApiConfigName]) {
-			if (validProfileNames.length > 0) {
-				currentApiConfigName = validProfileNames[0]
-				warnings.push(
-					`Profile "${rawProviderProfiles.currentApiConfigName}" was not available; defaulting to "${currentApiConfigName}".`,
-				)
-			} else {
-				// No valid imported profiles; keep the existing currentApiConfigName
-				currentApiConfigName = previousProviderProfiles.currentApiConfigName
-			}
-		}
-
-		const providerProfiles = {
-			currentApiConfigName,
-			apiConfigs: {
-				...previousProviderProfiles.apiConfigs,
-				...validApiConfigs,
-			},
-			modeApiConfigs: {
-				...previousProviderProfiles.modeApiConfigs,
-				...rawProviderProfiles.modeApiConfigs,
-			},
-		}
-
-		await Promise.all(
-			(globalSettings.customModes ?? []).map((mode) => customModesManager.updateCustomMode(mode.slug, mode)),
-		)
-
-		// OpenAI Compatible settings are now correctly stored in codebaseIndexConfig
-		// They will be imported automatically with the config - no special handling needed
-
-		await providerSettingsManager.import(providerProfiles)
-		await contextProxy.setValues(globalSettings)
-
-		// Set the current provider.
-		const currentProviderName = providerProfiles.currentApiConfigName
-		const currentProvider = providerProfiles.apiConfigs[currentProviderName]
-		contextProxy.setValue("currentApiConfigName", currentProviderName)
-
-		// The profile keys land in the profiles blob via
-		// `providerSettingsManager.import(providerProfiles)` above; this call loads the
-		// current profile into the live `apiConfiguration` and records it as the live
-		// profile so a later restart re-sources its secrets from the blob (Part B).
-		if (currentProvider) {
-			contextProxy.setProviderSettings(currentProvider, currentProviderName)
-		}
-
-		contextProxy.setValue("listApiConfigMeta", await providerSettingsManager.listConfig())
-
-		return {
-			providerProfiles,
-			globalSettings,
-			success: true,
-			warnings: warnings.length > 0 ? warnings : undefined,
-		}
-	} catch (e) {
-		let error = "Unknown error"
-
-		if (e instanceof ZodError) {
-			error = e.issues.map((issue) => `[${issue.path.join(".")}]: ${issue.message}`).join("\n")
-			TelemetryService.instance.captureSchemaValidationError({ schemaName: "ImportExport", error: e })
-		} else if (e instanceof Error) {
-			error = e.message
-		}
-
-		return { success: false, error }
-	}
+export async function importScopeSettingsArchive(archivePath: string, scopeRoot: string = defaultUserScopeRoot()) {
+	await importScopeArchive(archivePath, scopeRoot)
 }
 
-/**
- * Import settings from a file using a file dialog
- * @param options - Import options containing managers and proxy
- * @returns Promise resolving to import result
- */
-export const importSettings = async ({ providerSettingsManager, contextProxy, customModesManager }: ImportOptions) => {
-	// Use the last export path as a sensible default, falling back to Downloads
-	const defaultUri = resolveDefaultSaveUri(contextProxy, "lastSettingsExportPath", "shofer-code-settings.json", {
+/** Export the user scope's `.shofer/` via a save dialog. */
+export const exportSettings = async ({ contextProxy }: { contextProxy: ContextProxy }) => {
+	const defaultUri = await resolveDefaultSaveUri(contextProxy, "lastSettingsExportPath", DEFAULT_ARCHIVE_NAME, {
 		useWorkspace: false,
 		fallbackDir: path.join(os.homedir(), "Downloads"),
 	})
 
-	const uris = await vscode.window.showOpenDialog({
-		filters: { JSON: ["json"] },
-		canSelectMany: false,
-		defaultUri,
-	})
-
-	if (!uris) {
-		return { success: false, error: "User cancelled file selection" }
-	}
-
-	return importSettingsFromPath(uris[0].fsPath, {
-		providerSettingsManager,
-		contextProxy,
-		customModesManager,
-	})
-}
-
-/**
- * Import settings from a specific file
- * @param options - Import options containing managers and proxy
- * @param fileUri - URI of the file to import from
- * @returns Promise resolving to import result
- */
-export const importSettingsFromFile = async (
-	{ providerSettingsManager, contextProxy, customModesManager }: ImportOptions,
-	fileUri: vscode.Uri,
-) => {
-	return importSettingsFromPath(fileUri.fsPath, {
-		providerSettingsManager,
-		contextProxy,
-		customModesManager,
-	})
-}
-
-export const exportSettings = async ({ providerSettingsManager, contextProxy }: ExportOptions) => {
-	const defaultUri = await resolveDefaultSaveUri(
-		contextProxy,
-		"lastSettingsExportPath",
-		"shofer-code-settings.json",
-		{
-			useWorkspace: false,
-			fallbackDir: path.join(os.homedir(), "Downloads"),
-		},
-	)
-
 	const uri = await vscode.window.showSaveDialog({
-		filters: { JSON: ["json"] },
+		filters: { Archive: ["tgz", "gz"] },
 		defaultUri,
 	})
 
@@ -269,23 +90,7 @@ export const exportSettings = async ({ providerSettingsManager, contextProxy }: 
 	await saveLastExportPath(contextProxy, "lastSettingsExportPath", uri)
 
 	try {
-		const providerProfiles = await providerSettingsManager.export()
-		const globalSettings = await contextProxy.export()
-
-		// It's okay if there are no global settings, but if there are no
-		// provider profile configured then don't export. If we wanted to
-		// support this case then the `importSettings` function would need to
-		// be updated to handle the case where there are no provider profiles.
-		if (typeof providerProfiles === "undefined") {
-			return
-		}
-
-		// OpenAI Compatible settings are now correctly stored in codebaseIndexConfig
-		// No workaround needed - they will be exported automatically with the config
-
-		const dirname = path.dirname(uri.fsPath)
-		await fs.mkdir(dirname, { recursive: true })
-		await safeWriteJson(uri.fsPath, { providerProfiles, globalSettings })
+		await exportScopeSettingsArchive(uri.fsPath)
 	} catch (e) {
 		configLog.error("Failed to export settings:", e)
 		// Don't re-throw - the UI will handle showing error messages
@@ -293,67 +98,61 @@ export const exportSettings = async ({ providerSettingsManager, contextProxy }: 
 }
 
 /**
- * The default (user) scope's `.shofer/` root — `~/.shofer`, the writable
- * per-user scope. Kept in sync with `resolveScopeRoots` in
- * {@link file://./layeredSettingsLoader.ts}.
+ * Import a scope archive into the user scope and refresh the live consumers.
+ * The settings overlay is re-read immediately; modes re-merge on next read;
+ * MCP servers and provider profiles follow their scope watchers / per-call
+ * file reads.
  */
-function defaultUserScopeRoot(): string {
-	return path.join(os.homedir(), ".shofer")
+async function applyScopeArchive(
+	archivePath: string,
+	{ contextProxy, customModesManager }: ImportOptions,
+): Promise<ImportResult> {
+	try {
+		await importScopeSettingsArchive(archivePath)
+		await contextProxy.refreshLayeredOverlay()
+		customModesManager.invalidateCache()
+		await customModesManager.getCustomModes()
+		return { success: true }
+	} catch (error) {
+		return { success: false, error: error instanceof Error ? error.message : String(error) }
+	}
+}
+
+/** Import a scope archive chosen via a file dialog. */
+export const importSettings = async (options: ImportOptions): Promise<ImportResult> => {
+	// Use the last export path as a sensible default, falling back to Downloads
+	const defaultUri = resolveDefaultSaveUri(options.contextProxy, "lastSettingsExportPath", DEFAULT_ARCHIVE_NAME, {
+		useWorkspace: false,
+		fallbackDir: path.join(os.homedir(), "Downloads"),
+	})
+
+	const uris = await vscode.window.showOpenDialog({
+		filters: { Archive: ["tgz", "gz"] },
+		canSelectMany: false,
+		defaultUri,
+	})
+
+	if (!uris) {
+		return { success: false, error: "User cancelled file selection" }
+	}
+
+	return applyScopeArchive(uris[0].fsPath, options)
 }
 
 /**
- * Part E5 — export = archive a scope's `.shofer/` tree.
- *
- * Zips (gzipped tar) the chosen scope's `.shofer/` directory into `destPath`,
- * defaulting to the writable **user** scope (`~/.shofer`). Secrets are **not** in
- * the archive: provider keys live in `SecretStorage` (outside `.shofer/`) and
- * `settings.json` references profiles by name only — see
- * {@link file://../../../packages/core/src/config/scope-archive.ts}.
- *
- * This supersedes the JSON {@link exportSettings} path (which hand-assembles
- * `{ providerProfiles, globalSettings }` and embeds secret material). The JSON
- * variants are kept for now because existing commands still call them.
- */
-export async function exportScopeSettingsArchive(destPath: string, scopeRoot: string = defaultUserScopeRoot()) {
-	const dirname = path.dirname(destPath)
-	await fs.mkdir(dirname, { recursive: true })
-	await exportScopeArchive(scopeRoot, destPath)
-}
-
-/**
- * Part E5 — import = unpack a scope archive into a scope root.
- *
- * Extracts an archive produced by {@link exportScopeSettingsArchive} into the
- * chosen scope's `.shofer/` directory (default: the user scope). Any secrets are
- * applied out of band, never from the archive. Supersedes
- * {@link importSettingsFromPath}.
- */
-export async function importScopeSettingsArchive(archivePath: string, scopeRoot: string = defaultUserScopeRoot()) {
-	await importScopeArchive(archivePath, scopeRoot)
-}
-
-/**
- * Import settings with complete UI feedback and provider state updates
- * @param options - Import options with provider instance
- * @param filePath - Optional file path to import from. If not provided, a file dialog will be shown.
- * @returns Promise that resolves when import is complete
+ * Import a scope archive with complete UI feedback and provider state updates.
+ * @param filePath - Optional archive path. Without it, a file dialog is shown.
  */
 export const importSettingsWithFeedback = async (
-	{ providerSettingsManager, contextProxy, customModesManager, provider }: ImportWithProviderOptions,
+	{ contextProxy, customModesManager, provider }: ImportWithProviderOptions,
 	filePath?: string,
 ) => {
-	let result
+	let result: ImportResult
 
 	if (filePath) {
-		// Validate file path and check if file exists
 		try {
-			// Check if file exists and is readable
 			await fs.access(filePath, fs.constants.F_OK | fs.constants.R_OK)
-			result = await importSettingsFromPath(filePath, {
-				providerSettingsManager,
-				contextProxy,
-				customModesManager,
-			})
+			result = await applyScopeArchive(filePath, { contextProxy, customModesManager })
 		} catch (error) {
 			result = {
 				success: false,
@@ -361,28 +160,13 @@ export const importSettingsWithFeedback = async (
 			}
 		}
 	} else {
-		result = await importSettings({ providerSettingsManager, contextProxy, customModesManager })
+		result = await importSettings({ contextProxy, customModesManager })
 	}
 
 	if (result.success) {
 		provider.settingsImportedAt = Date.now()
 		await provider.postInitState()
-
-		// Show warnings if any profiles had issues but were still imported (with modifications)
-		if (result.warnings && result.warnings.length > 0) {
-			// Log full details to the console for debugging
-			configLog.warn("Settings import completed with warnings:", result.warnings)
-
-			// Show a short summary in the toast notification
-			const count = result.warnings.length
-			const summary =
-				count === 1 ? `1 profile had issues during import.` : `${count} profiles had issues during import.`
-			getHost().notifier.warn(
-				`${t("common:info.settings_imported")} ${summary} See Developer Tools console for details.`,
-			)
-		} else {
-			getHost().notifier.info(t("common:info.settings_imported"))
-		}
+		getHost().notifier.info(t("common:info.settings_imported"))
 	} else if (result.error) {
 		getHost().notifier.error(t("common:errors.settings_import_failed", { error: result.error }))
 	}

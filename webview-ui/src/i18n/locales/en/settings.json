@@ -112,6 +112,12 @@
 		"debugMode": {
 			"label": "Enable debug mode",
 			"description": "Enable debug mode to show additional buttons in the task header for viewing API conversation history and UI messages as prettified JSON in temporary files."
+		},
+		"settingsWriteScope": {
+			"label": "Settings save scope",
+			"description": "Which .shofer/ scope settings edits persist to: your user scope (~/.shofer, this machine only) or the project scope (committed with the repository, shared via git). Values set by org policy stay read-only either way.",
+			"user": "User (~/.shofer)",
+			"project": "Project (workspace .shofer/)"
 		}
 	},
 	"slashCommands": {

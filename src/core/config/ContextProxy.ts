@@ -416,18 +416,27 @@ export class ContextProxy {
 	): Promise<void> {
 		try {
 			const roots = this.resolveScopeRoots()
-			if (!roots.user) {
+
+			// The scope this write lands in: the user's `settingsWriteScope`
+			// selection ("project" persists into the workspace's committed
+			// `.shofer/settings.json`), defaulting to the user scope. The selector
+			// itself always persists at the user scope — routing it into the
+			// project file would commit one user's preference for everyone.
+			const targetProject =
+				key !== "settingsWriteScope" && this.getValue("settingsWriteScope") === "project" && !!roots.project
+			const root = targetProject ? roots.project : roots.user
+			if (!root) {
 				return
 			}
 
 			const manifest = await loadLockedManifest(roots.global)
-			const result = await writeScopeSetting(roots.user, key as string, value, manifest)
+			const result = await writeScopeSetting(root, key as string, value, manifest)
 			if (result.persisted) {
 				await this.refreshLayeredOverlay()
 			}
 		} catch (error) {
 			logger.error(
-				`Failed to write-through ${String(key)} to ~/.shofer/settings.json: ${error instanceof Error ? error.message : String(error)}`,
+				`Failed to write-through ${String(key)} to the scope settings file: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
