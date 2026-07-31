@@ -103,6 +103,8 @@ export const globalSettingsSchema = z.object({
 	commandExecutionTimeout: z.number().optional(),
 	commandTimeoutAllowlist: z.array(z.string()).optional(),
 	preventCompletionWithOpenTodos: z.boolean().optional(),
+	/** WorkerPool new-task load-balancing policy (was `shofer.workers.loadBalancer`). */
+	workersLoadBalancer: z.enum(["round-robin", "least-load-1m", "least-load-5m", "least-load-15m"]).optional(),
 	// Migrated from `shofer.*` VS Code config into ContextProxy/globalState — the
 	// single source of truth (todos/config-cleanup.md Part A). The `package.json`
 	// `contributes.configuration` rows are removed as each consumer is repointed.
@@ -382,6 +384,7 @@ export const SETTING_SYNC_SCOPE = {
 	commandExecutionTimeout: "node",
 	commandTimeoutAllowlist: "node",
 	preventCompletionWithOpenTodos: "node",
+	workersLoadBalancer: "frontend", // WorkerPool policy — the pool lives on the controller, nodes never read it
 	// Migrated from `shofer.*` VS Code config (config-cleanup.md Part A).
 	newTaskRequireTodos: "node", // gates the new_task tool on the executor
 	apiRequestTimeout: "node", // API timeout where the executor makes LLM calls

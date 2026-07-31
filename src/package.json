@@ -3,7 +3,7 @@
 	"displayName": "Shofer",
 	"description": "%extension.description%",
 	"publisher": "Shoferdev",
-	"version": "2.39.0",
+	"version": "2.40.0",
 	"icon": "assets/icons/icon128x128.png",
 	"galleryBanner": {
 		"color": "#1e293b",
@@ -455,26 +455,6 @@
 		"configuration": {
 			"title": "%configuration.title%",
 			"properties": {
-				"shofer.commandExecutionTimeout": {
-					"type": "number",
-					"default": 0,
-					"minimum": 0,
-					"maximum": 600,
-					"description": "%commands.commandExecutionTimeout.description%"
-				},
-				"shofer.commandTimeoutAllowlist": {
-					"type": "array",
-					"items": {
-						"type": "string"
-					},
-					"default": [],
-					"description": "%commands.commandTimeoutAllowlist.description%"
-				},
-				"shofer.preventCompletionWithOpenTodos": {
-					"type": "boolean",
-					"default": false,
-					"description": "%commands.preventCompletionWithOpenTodos.description%"
-				},
 				"shofer.customStoragePath": {
 					"type": "string",
 					"default": "",
@@ -484,31 +464,6 @@
 					"type": "string",
 					"default": "",
 					"description": "%settings.autoImportSettingsPath.description%"
-				},
-				"shofer.codeIndex.embeddingBatchSize": {
-					"type": "number",
-					"default": 60,
-					"minimum": 1,
-					"maximum": 200,
-					"description": "%settings.codeIndex.embeddingBatchSize.description%"
-				},
-				"shofer.workers.loadBalancer": {
-					"type": "string",
-					"enum": [
-						"round-robin",
-						"least-load-1m",
-						"least-load-5m",
-						"least-load-15m"
-					],
-					"enumDescriptions": [
-						"%settings.nodes.loadBalancer.roundRobin%",
-						"%settings.nodes.loadBalancer.leastLoad1m%",
-						"%settings.nodes.loadBalancer.leastLoad5m%",
-						"%settings.nodes.loadBalancer.leastLoad15m%"
-					],
-					"default": "round-robin",
-					"description": "%settings.nodes.loadBalancer.description%",
-					"markdownDescription": "%settings.nodes.loadBalancer.description%"
 				}
 			}
 		},

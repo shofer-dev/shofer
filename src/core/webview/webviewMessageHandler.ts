@@ -891,20 +891,12 @@ export const webviewMessageHandler = async (
 						newValue = Array.isArray(commands)
 							? commands.filter((cmd) => typeof cmd === "string" && cmd.trim().length > 0)
 							: []
-
-						await vscode.workspace
-							.getConfiguration(Package.name)
-							.update("allowedCommands", newValue, vscode.ConfigurationTarget.Global)
 					} else if (key === "deniedCommands") {
 						const commands = value ?? []
 
 						newValue = Array.isArray(commands)
 							? commands.filter((cmd) => typeof cmd === "string" && cmd.trim().length > 0)
 							: []
-
-						await vscode.workspace
-							.getConfiguration(Package.name)
-							.update("deniedCommands", newValue, vscode.ConfigurationTarget.Global)
 					} else if (key === "ttsEnabled") {
 						newValue = value ?? true
 						setTtsEnabled(newValue as boolean)
@@ -1546,11 +1538,6 @@ export const webviewMessageHandler = async (
 
 			await updateGlobalState("allowedCommands", validCommands)
 
-			// Also update workspace settings.
-			await vscode.workspace
-				.getConfiguration(Package.name)
-				.update("allowedCommands", validCommands, vscode.ConfigurationTarget.Global)
-
 			break
 		}
 		case "deniedCommands": {
@@ -1561,11 +1548,6 @@ export const webviewMessageHandler = async (
 				: []
 
 			await updateGlobalState("deniedCommands", validCommands)
-
-			// Also update workspace settings.
-			await vscode.workspace
-				.getConfiguration(Package.name)
-				.update("deniedCommands", validCommands, vscode.ConfigurationTarget.Global)
 
 			break
 		}
@@ -2633,9 +2615,8 @@ export const webviewMessageHandler = async (
 			break
 		}
 		case "debugSetting": {
-			await vscode.workspace
-				.getConfiguration(Package.name)
-				.update("debug", message.bool ?? false, vscode.ConfigurationTarget.Global)
+			// `debug` is a globalSettings key (not a VS Code setting) — persist it there.
+			await provider.contextProxy.setValue("debug", message.bool ?? false)
 			provider.postConfigUpdate("debug", message.bool ?? false)
 			break
 		}

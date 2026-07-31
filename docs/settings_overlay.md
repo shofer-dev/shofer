@@ -1237,7 +1237,7 @@ not a hard-coded string.
 
 ### 14j. VS Code Settings Editor Only Exposes a Small Minority of Settings — and Cannot Replace the Webview
 
-Only **7 of ~175 settings** are reachable from the VS Code Settings editor, and
+Only **2 of ~180 settings** — the bootstrap pair `customStoragePath` / `autoImportSettingsPath` — are reachable from the VS Code Settings editor, and
 the rich Shofer webview Settings UI cannot be replaced by `package.json`
 `contributes.configuration.properties` for fundamental expressivity reasons.
 Anyone reading a `shofer.`-prefixed key as "a VS Code setting" will be wrong
@@ -1249,8 +1249,8 @@ which.
 
 | Backend                                | Count | Visible in VS Code Settings Editor? |
 | -------------------------------------- | ----- | ----------------------------------- |
-| `contributes.configuration.properties` | 7     | ✅ Yes                              |
-| `globalSettingsSchema` (`globalState`) | 108   | ❌ No                               |
+| `contributes.configuration.properties` | 2     | ✅ Yes                              |
+| `globalSettingsSchema` (`globalState`) | 109   | ❌ No                               |
 | `ProviderSettings` (`globalState`)     | ~30   | ❌ No                               |
 | `SecretStorage` (API keys)             | 30+   | ❌ No                               |
 
@@ -1298,7 +1298,7 @@ Schema with static rendering**, while the Shofer Settings UI is a **full
 React application** with async data fetching, conditional rendering, CRUD
 operations, and custom widget composition. These are not different backends
 for the same data — they are different capability tiers. Simple key-value
-settings already live in `package.json` (the 7 that fit). Everything else
+settings already live in `package.json` (the 2 bootstrap keys). Everything else
 lives in the webview because it _must_.
 
 ### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob — ✅ resolved

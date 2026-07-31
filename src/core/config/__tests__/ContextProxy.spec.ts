@@ -6,6 +6,30 @@ import { GLOBAL_STATE_KEYS, SECRET_STATE_KEYS, GLOBAL_SECRET_KEYS } from "@shofe
 
 import { ContextProxy } from "../ContextProxy"
 
+// Point homedir at a per-run temp dir so the (now unconditional) user-scope
+// write-through lands in an isolated `~/.shofer`, never the real home.
+const hoisted = vi.hoisted(() => ({ home: "/nonexistent-home-context-proxy" }))
+vi.mock("os", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("os")>()
+	return {
+		...actual,
+		default: { ...actual, homedir: () => hoisted.home },
+		homedir: () => hoisted.home,
+	}
+})
+
+beforeAll(async () => {
+	const { mkdtemp } = await import("fs/promises")
+	const { tmpdir } = await vi.importActual<typeof import("os")>("os")
+	const { join } = await import("path")
+	hoisted.home = await mkdtemp(join(tmpdir(), "context-proxy-home-"))
+})
+
+afterAll(async () => {
+	const { rm } = await import("fs/promises")
+	await rm(hoisted.home, { recursive: true, force: true })
+})
+
 vi.mock("vscode", () => ({
 	Uri: {
 		file: vi.fn((path) => ({ path })),

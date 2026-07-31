@@ -121,7 +121,7 @@ After Phase 1, every key the bundle can carry is a key the mount can deliver.
 > are deleted. `providers.json` is in `WATCHED_SCOPE_FILES`; ShoferProvider
 > re-activates the current profile and re-pushes state on an external change.
 
-### Phase 3 — `globalState` stops being a source of truth
+### Phase 3 — `globalState` stops being a source of truth — DONE except the scope selector
 
 7. **Unconditional write-through.** `ContextProxy.setValue` currently mirrors to
    `~/.shofer/settings.json` only when that file already exists (E4 made it opt-in).
@@ -136,6 +136,20 @@ After Phase 1, every key the bundle can carry is a key the mount can deliver.
    stay.
 10. **Scope selector in the Settings UI** (the skipped half of E4), so a user can
     target project instead of always writing to user scope.
+
+> **Status: 7–9 implemented.** `ContextProxy.setValue` write-through is
+> unconditional (file created on first write, failure degrades to cache-only);
+> `initialize` seeds `~/.shofer/settings.json` once from pre-file `globalState`
+> values (`seedScopeSettingsFile`, create-only); `commandExecutionTimeout`,
+> `commandTimeoutAllowlist` and `preventCompletionWithOpenTodos` route through
+> the host-bridge config seam to globalSettings; `workers.loadBalancer` became
+> the `workersLoadBalancer` globalSettings key (WorkerRegistry reads/writes it
+> via ContextProxy); `shofer.codeIndex.embeddingBatchSize` was read by nothing
+> (the real knob is the rag-indexing plugin's config) and is deleted. Only the
+> two bootstrap keys remain in `contributes.configuration`. The vestigial
+> VS Code-config dual-writes for allowedCommands/deniedCommands/debug are
+> deleted too. **Open: item 10** (the per-write scope selector — writes always
+> target the user scope today).
 
 ### Phase 4 — delete the parallel paths
 

@@ -32,7 +32,7 @@ import {
 	loadLayeredOverlay,
 	loadLockedManifest,
 	resolveScopeRoots,
-	scopeSettingsFileExists,
+	seedScopeSettingsFile,
 	writeScopeSetting,
 	type ScopeRoots,
 } from "./layeredSettingsLoader"
@@ -177,6 +177,10 @@ export class ContextProxy {
 
 		// Migration: Clear old default condensing prompt so users get the improved v2 default
 		await this.migrateOldDefaultCondensingPrompt()
+
+		// One-time seed: materialize `globalState`-resident settings into the
+		// user scope's file so the file layer is complete (no-op once it exists).
+		await this.seedUserScopeFromGlobalState()
 
 		// Part E3: build the read-only layered `.shofer/settings.json` overlay.
 		// Additive — a failure or a total absence of files leaves it empty, so
@@ -394,30 +398,78 @@ export class ContextProxy {
 	}
 
 	/**
-	 * Part E4 write-through: mirror a globalSettings write into the **user**
-	 * scope's `~/.shofer/settings.json` so the file layer is authoritative on the
-	 * next read, then refresh the overlay so `getValue` reflects it immediately.
+	 * Write-through: mirror a globalSettings write into the **user** scope's
+	 * `~/.shofer/settings.json` so the file layer is authoritative on the next
+	 * read, then refresh the overlay so `getValue` reflects it immediately.
 	 *
-	 * Gated on the user file already existing ({@link scopeSettingsFileExists}):
-	 * the layered file path is strictly opt-in, so a deployment that has not
-	 * materialized `~/.shofer/settings.json` (every current install, and every
-	 * unit test that does not isolate `$HOME`) keeps pure `globalState` behavior
-	 * and this method is a no-op. A key locked by the global scope's `locked.json`
-	 * is not persisted (the read overlay makes global win anyway).
+	 * Unconditional (the file is created on the first write): the layered files
+	 * are the source of truth and `globalState` is the runtime cache, so every
+	 * install is file-backed from its first settings write. A key locked by the
+	 * global scope's `locked.json` is not persisted (the read overlay makes
+	 * global win anyway). Failure-isolated: a file-layer error (read-only home,
+	 * exotic filesystem) degrades to cache-only persistence for that write
+	 * rather than failing the setValue.
 	 */
 	private async writeThroughToUserScope<K extends ShoferSettingsKey>(
 		key: K,
 		value: ShoferSettings[K],
 	): Promise<void> {
-		const roots = this.resolveScopeRoots()
-		if (!roots.user || !(await scopeSettingsFileExists(roots.user))) {
-			return
-		}
+		try {
+			const roots = this.resolveScopeRoots()
+			if (!roots.user) {
+				return
+			}
 
-		const manifest = await loadLockedManifest(roots.global)
-		const result = await writeScopeSetting(roots.user, key as string, value, manifest)
-		if (result.persisted) {
-			await this.refreshLayeredOverlay()
+			const manifest = await loadLockedManifest(roots.global)
+			const result = await writeScopeSetting(roots.user, key as string, value, manifest)
+			if (result.persisted) {
+				await this.refreshLayeredOverlay()
+			}
+		} catch (error) {
+			logger.error(
+				`Failed to write-through ${String(key)} to ~/.shofer/settings.json: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * One-time migration seed (config-cleanup.md Decision 3): if the user scope
+	 * has no `settings.json` yet but `globalState` holds settings values, write
+	 * them all to the file once, so the file layer is complete and authoritative
+	 * from this session on — not only for keys touched after the cutover. A
+	 * fresh install (empty `globalState`) seeds nothing and the file appears on
+	 * the first real write instead. Create-only and failure-isolated.
+	 */
+	private async seedUserScopeFromGlobalState(): Promise<void> {
+		try {
+			const roots = this.resolveScopeRoots()
+			if (!roots.user) {
+				return
+			}
+
+			const values: Record<string, unknown> = {}
+			for (const key of GLOBAL_SETTINGS_KEYS) {
+				if (!this.isWriteThroughKey(key)) {
+					continue
+				}
+				const value = this.stateCache[key as GlobalStateKey]
+				if (value !== undefined) {
+					values[key] = value
+				}
+			}
+			if (Object.keys(values).length === 0) {
+				return
+			}
+
+			if (await seedScopeSettingsFile(roots.user, values)) {
+				logger.info(
+					`Seeded ~/.shofer/settings.json with ${Object.keys(values).length} settings from globalState`,
+				)
+			}
+		} catch (error) {
+			logger.error(
+				`Failed to seed ~/.shofer/settings.json: ${error instanceof Error ? error.message : String(error)}`,
+			)
 		}
 	}
 

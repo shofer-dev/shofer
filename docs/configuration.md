@@ -4,12 +4,10 @@ Reference for Shofer's runtime settings. **Most settings now live in
 `ContextProxy`/`globalState` (the `globalSettingsSchema` keys), not in
 `settings.json`** — they are edited through the Shofer **Settings** panel and read
 via `ContextProxy.getValue` (or, from `@shofer/core`, the `getHost().config` seam,
-which resolves them from `globalState`). Only a small set of **bootstrap** keys
+which resolves them from `globalState`). Only the two **bootstrap** keys
 that must be read before `ContextProxy` exists remain as `shofer.*` VS Code
-`settings.json` entries: `shofer.customStoragePath`, `shofer.autoImportSettingsPath`
-(plus `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist` /
-`shofer.preventCompletionWithOpenTodos` / `shofer.codeIndex.embeddingBatchSize` /
-`shofer.workers.loadBalancer`, pending migration). Non-secret configuration has a
+`settings.json` entries: `shofer.customStoragePath` and
+`shofer.autoImportSettingsPath`. Non-secret configuration has a
 single file-based source of truth under `.shofer/` — see
 [Layered `.shofer/` configuration](#layered-shofer-configuration) below.
 
@@ -106,13 +104,15 @@ flowchart TD
     LK --> EFF
 ```
 
-`globalState` remains the runtime cache: `ContextProxy` loads the merged overlay on
-top of it, and a `setValue` for a globalSettings key mirrors the write into the
-**user** scope's `~/.shofer/settings.json` (via `writeScopeSetting`). That
-write-through is opt-in — it fires only once a `~/.shofer/settings.json` exists
-(materialized by an import/unzip), so a deployment that has not adopted file-backed
-settings keeps the old `globalState`-only behavior. A key the global scope locks is
-never persisted downstream (the write is skipped).
+The files are the source of truth; `globalState` is only the runtime cache.
+`ContextProxy` loads the merged overlay on top of it, and every `setValue` for a
+globalSettings key mirrors the write into the **user** scope's
+`~/.shofer/settings.json` (via `writeScopeSetting`), creating the file on the
+first write. On activation, values still resident only in `globalState` (from
+before the file layer) are seeded into the user file once (`seedScopeSettingsFile`
+— create-only, never overwrites an existing file). A key the global scope locks
+is never persisted downstream (the write is skipped), and a file-layer failure
+degrades that write to cache-only rather than failing it.
 
 ```mermaid
 flowchart LR
@@ -125,7 +125,7 @@ flowchart LR
     MERGED -->|"loaded on top of"| GSTATE
     GSTATE --> CP
     SET --> CP
-    CP -.->|"writeScopeSetting — only once the file exists,<br/>skipped for keys the global scope locks"| USER
+    CP -->|"writeScopeSetting — created on first write,<br/>skipped for keys the global scope locks"| USER
 ```
 
 ### `locked.json` — the org-policy lock manifest
@@ -253,7 +253,7 @@ Two different things are documented below, and they are set in different places:
   `.shofer/settings.json` described above, and are edited through the Settings UI or
   delivered as org policy. They are **not** VS Code settings — putting
   `"shofer.allowedCommands"` in VS Code's `settings.json` does nothing.
-- **VS Code settings** (`shofer.*`, seven of them) are real
+- **VS Code settings** (`shofer.*`, two of them) are real
   `contributes.configuration` entries in `src/package.json`, set in VS Code's own
   settings UI/JSON. They are the ones that must be readable _before_ the extension's
   own config layer exists, or that VS Code itself consumes.
@@ -291,25 +291,25 @@ Command prefixes that are automatically denied without asking for
 approval. When conflicting with `allowedCommands`, the **longest
 prefix** wins. Use `"*"` to deny all commands.
 
-### `shofer.commandExecutionTimeout`
+### `commandExecutionTimeout`
 
-|         |                  |
-| ------- | ---------------- |
-| Type    | `number`         |
-| Default | `0` (no timeout) |
-| Range   | 0–600 seconds    |
-| Scope   | window           |
+|         |                                 |
+| ------- | ------------------------------- |
+| Type    | `number`                        |
+| Default | `0` (no timeout)                |
+| Range   | 0–600 seconds                   |
+| Where   | layered `.shofer/settings.json` |
 
 Maximum time to wait for a command to complete. `0` disables the
 timeout.
 
-### `shofer.commandTimeoutAllowlist`
+### `commandTimeoutAllowlist`
 
-|         |            |
-| ------- | ---------- |
-| Type    | `string[]` |
-| Default | `[]`       |
-| Scope   | window     |
+|         |                                 |
+| ------- | ------------------------------- |
+| Type    | `string[]`                      |
+| Default | `[]`                            |
+| Where   | layered `.shofer/settings.json` |
 
 Command prefixes exempt from the execution timeout. Commands matching
 these prefixes run without time restrictions.
@@ -318,13 +318,13 @@ these prefixes run without time restrictions.
 
 ## Task Behaviour
 
-### `shofer.preventCompletionWithOpenTodos`
+### `preventCompletionWithOpenTodos`
 
-|         |           |
-| ------- | --------- |
-| Type    | `boolean` |
-| Default | `false`   |
-| Scope   | window    |
+|         |                                 |
+| ------- | ------------------------------- |
+| Type    | `boolean`                       |
+| Default | `false`                         |
+| Where   | layered `.shofer/settings.json` |
 
 When enabled, `attempt_completion` is refused if the task has
 incomplete todo items.
@@ -464,16 +464,30 @@ extension startup. Supports absolute paths and home-relative paths
 Maximum number of files to index for the `@`-file search feature.
 Higher values improve search in large projects but consume more memory.
 
-### `shofer.codeIndex.embeddingBatchSize`
+### `embeddingBatchSize` (rag-indexing plugin config)
 
-|         |          |
-| ------- | -------- |
-| Type    | `number` |
-| Default | `60`     |
-| Scope   | window   |
+|         |                                                                                       |
+| ------- | ------------------------------------------------------------------------------------- |
+| Type    | `number`                                                                              |
+| Default | `60`                                                                                  |
+| Where   | `pluginConfigs["rag-indexing"].embeddingBatchSize` in layered `.shofer/settings.json` |
 
 Batch size for embedding operations during code indexing. Adjust to
-match your API provider's limits.
+match your API provider's limits. The former
+`shofer.codeIndex.embeddingBatchSize` VS Code setting was read by nothing —
+the real knob is the rag-indexing plugin's config.
+
+### `workersLoadBalancer`
+
+|         |                                                                           |
+| ------- | ------------------------------------------------------------------------- |
+| Type    | `"round-robin" \| "least-load-1m" \| "least-load-5m" \| "least-load-15m"` |
+| Default | `"round-robin"`                                                           |
+| Where   | layered `.shofer/settings.json` (+ the Workers panel)                     |
+
+How the Shofer Workers executor pool assigns each new task across the Local
+and remote executors: rotate evenly, or pick the executor with the lowest
+normalized CPU load average over the given window.
 
 ---
 
@@ -597,20 +611,6 @@ is stored in both backends, but the GlobalState copy is what ContextProxy
 serves to runtime code. The two copies can drift if a user edits
 `settings.json` directly for one but not the other.
 
-### `commandExecutionTimeout` / `commandTimeoutAllowlist` naming bug — ✅ fixed
-
-Previously, `contributes.configuration` registered these as
-`shofer.devmandExecutionTimeout` / `shofer.devmandTimeoutAllowlist` — a
-find-replace accident (`command` with `com`→`dev` becomes `devmand`). The
-runtime, however, reads `shofer.commandExecutionTimeout` /
-`shofer.commandTimeoutAllowlist` via
-`vscode.workspace.getConfiguration("shofer").get(...)`
-([`ExecuteCommandTool.ts`](../packages/core/src/tools/ExecuteCommandTool.ts)). So the
-registered setting (default/range/description) was dead and the key the
-runtime actually reads had no UI/schema row. The `package.json` keys were
-renamed to `shofer.commandExecutionTimeout` / `shofer.commandTimeoutAllowlist`,
-reconnecting the UI registration to the consumed key.
-
 ### `maxUsd: 0` is invalid per the schema
 
 The [`costLimitSchema`](../packages/types/src/history.ts:74) requires
@@ -625,11 +625,6 @@ default).
 
 No source file, changelog entry, or tag in the repository contains
 `3.56`. The version string appears only in this document.
-
-### `codeIndex.embeddingBatchSize` missing range
-
-The doc omits the Range row that `package.json` declares: `minimum: 1`,
-`maximum: 200` at [`src/package.json`](../src/package.json:440-442).
 
 ### Missing setting sections
 

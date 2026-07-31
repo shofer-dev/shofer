@@ -1,9 +1,9 @@
 // npx vitest core/config/__tests__/ContextProxy.write.spec.ts
 //
-// Part E4: the scope-aware write-through in ContextProxy.setValue. A
-// globalSettings write is mirrored into the user scope's
-// `~/.shofer/settings.json` (once that scope has been materialized), so the file
-// layer becomes authoritative and getValue reflects it through the E3 overlay. A
+// The scope-aware write-through in ContextProxy.setValue. A
+// globalSettings write is mirrored unconditionally into the user scope's
+// `~/.shofer/settings.json` (created on first write), so the file
+// layer is authoritative and getValue reflects it through the E3 overlay. A
 // key the global scope locks is not persisted and its effective value is
 // unchanged. These tests drive the real filesystem loader/writer against per-test
 // temp dirs (os.homedir mocked), mirroring ContextProxy.layered.spec.ts.
@@ -116,8 +116,7 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 	it("(a) setValue mirrors a globalSettings key into ~/.shofer/settings.json and getValue reflects it via the overlay", async () => {
 		const homeDir = await tmpDir()
 		hoisted.home = homeDir
-		// Materialize the user scope — write-through is opt-in on the file existing.
-		await writeSettings(path.join(homeDir, ".shofer"), {})
+		// No pre-existing user file: the first write creates it.
 
 		const proxy = new ContextProxy(mockContext)
 		await proxy.initialize()
@@ -132,20 +131,35 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 		expect(proxy.getValue("writeDelayMs")).toBe(555)
 	})
 
-	it("(a') setValue is a pure globalState write when the user scope has NOT been materialized (no file created)", async () => {
+	it("(a') initialize seeds ~/.shofer/settings.json from pre-existing globalState values", async () => {
 		const homeDir = await tmpDir()
 		hoisted.home = homeDir
-		// No user .shofer/settings.json → write-through is inert.
+
+		// A value that predates the file layer, resident only in globalState.
+		mockGlobalState.get.mockImplementation((key: string) => (key === "writeDelayMs" ? 777 : undefined))
 
 		const proxy = new ContextProxy(mockContext)
 		await proxy.initialize()
 
-		await proxy.setValue("writeDelayMs", 321)
+		// The one-time seed materialized it into the user file...
+		const onDisk = await readUserSettings(homeDir)
+		expect(onDisk.writeDelayMs).toBe(777)
+		// ...and the overlay serves it.
+		expect(proxy.getValue("writeDelayMs")).toBe(777)
+	})
 
-		// globalState still updated...
-		expect(proxy.getValue("writeDelayMs")).toBe(321)
-		// ...but no file was created under the user scope.
-		await expect(fs.access(path.join(homeDir, ".shofer", "settings.json"))).rejects.toBeTruthy()
+	it("(a'') the seed never overwrites an existing settings file", async () => {
+		const homeDir = await tmpDir()
+		hoisted.home = homeDir
+		await writeSettings(path.join(homeDir, ".shofer"), { writeDelayMs: 111 })
+
+		mockGlobalState.get.mockImplementation((key: string) => (key === "writeDelayMs" ? 777 : undefined))
+
+		const proxy = new ContextProxy(mockContext)
+		await proxy.initialize()
+
+		const onDisk = await readUserSettings(homeDir)
+		expect(onDisk.writeDelayMs).toBe(111)
 	})
 
 	it("(b) writing a global-locked key does not change the effective value and is not persisted to the user file", async () => {
@@ -156,7 +170,7 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 
 		await writeSettings(globalDir, { writeDelayMs: 100 })
 		await writeRaw(globalDir, "locked.json", JSON.stringify({ version: 1, locked: ["writeDelayMs"] }))
-		// Materialize the user scope so write-through would fire if not for the lock.
+		// A user file exists (so its absence cannot explain the missing key below).
 		await writeSettings(path.join(homeDir, ".shofer"), {})
 
 		const proxy = new ContextProxy(mockContext)
@@ -175,7 +189,6 @@ describe("ContextProxy — scope-aware write-through (Part E4)", () => {
 	it("(c) a bulk setValues does not lose keys to a read-modify-write race", async () => {
 		const homeDir = await tmpDir()
 		hoisted.home = homeDir
-		await writeSettings(path.join(homeDir, ".shofer"), {})
 
 		const proxy = new ContextProxy(mockContext)
 		await proxy.initialize()

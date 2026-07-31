@@ -37,6 +37,7 @@ import { loadWorkerDeclaration, readWorkerToken } from "../config/workerDeclarat
 import type { ScopeRoots } from "../config/layeredSettingsLoader.js"
 
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
+import { ContextProxy } from "../config/ContextProxy"
 
 /**
  * Controller-side orchestrator for Shofer Workers (v3-native, L1).
@@ -204,8 +205,6 @@ const tokenKey = (id: string): string => `shoferWorker.token.${id}`
 const WORKERS_FILE = "workers.json"
 const LOCKED_FILE = "locked.json"
 
-/** VS Code setting selecting the WorkerPool's new-task load-balancing policy. */
-const LOAD_BALANCER_SETTING = "shofer.workers.loadBalancer"
 /** Valid {@link LoadBalancerPolicy} values (guards the settings read). */
 const LOAD_BALANCER_POLICIES: readonly LoadBalancerPolicy[] = [
 	"round-robin",
@@ -237,8 +236,8 @@ export class WorkerRegistry {
 	 * reference, so no separate view id is needed.
 	 */
 	private readonly focusedShadows = new Map<WorkerProviderHost, string>()
-	/** Disposes the `onDidChangeConfiguration` subscription for the LB policy. */
-	private readonly configDisposable: vscode.Disposable
+	/** Disposes the settings-change subscription for the LB policy (absent in bare harnesses). */
+	private configDisposable?: { dispose(): void }
 	/** Controller-authoritative settings source (config_sync §4c); undefined disables sync. */
 	private readonly configSource?: SyncedConfigSource
 	/** Controller-authoritative plugin-state source; undefined ⇒ workers get no plugin slice. */
@@ -326,9 +325,13 @@ export class WorkerRegistry {
 
 		// Apply the persisted load-balancer policy + track config changes.
 		this.pool.setPolicy(this.readLoadBalancerPolicy())
-		this.configDisposable = vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration(LOAD_BALANCER_SETTING)) this.pool.setPolicy(this.readLoadBalancerPolicy())
-		})
+		try {
+			this.configDisposable = ContextProxy.instance.onDidChange(({ key }) => {
+				if (key === "workersLoadBalancer") this.pool.setPolicy(this.readLoadBalancerPolicy())
+			})
+		} catch {
+			// No initialized ContextProxy (bare test harness) — no live policy updates.
+		}
 
 		// L2: demux the merged pool feed into per-remote-task shadows + webview render.
 		this.pool.subscribe((event) => this.onPoolEvent(event))
@@ -378,9 +381,14 @@ export class WorkerRegistry {
 		}
 	}
 
-	/** Read the `shofer.workers.loadBalancer` setting (default `round-robin`). */
+	/** Read the `workersLoadBalancer` globalSettings key (default `round-robin`). */
 	private readLoadBalancerPolicy(): LoadBalancerPolicy {
-		const raw = vscode.workspace.getConfiguration().get<string>(LOAD_BALANCER_SETTING, "round-robin")
+		let raw: string | undefined
+		try {
+			raw = ContextProxy.instance.getValue("workersLoadBalancer")
+		} catch {
+			raw = undefined // no initialized proxy (bare test harness)
+		}
 		return LOAD_BALANCER_POLICIES.includes(raw as LoadBalancerPolicy) ? (raw as LoadBalancerPolicy) : "round-robin"
 	}
 
@@ -802,16 +810,18 @@ export class WorkerRegistry {
 
 	/**
 	 * Persist + apply the pool's new-task load-balancing policy. Writes the
-	 * `shofer.workers.loadBalancer` setting (Global) AND applies it to the pool
+	 * `workersLoadBalancer` globalSettings key AND applies it to the pool
 	 * immediately + fires a change, so the panel updates without waiting for the
-	 * `onDidChangeConfiguration` listener to round-trip. That listener re-reads
-	 * and re-applies the same policy (idempotent — {@link WorkerPool.setPolicy}
-	 * is a plain assignment), so the double-apply is harmless.
+	 * `onDidChange` listener to round-trip. That listener re-reads and re-applies
+	 * the same policy (idempotent — {@link WorkerPool.setPolicy} is a plain
+	 * assignment), so the double-apply is harmless.
 	 */
 	async setLoadBalancer(policy: LoadBalancerPolicy): Promise<void> {
-		await vscode.workspace
-			.getConfiguration("shofer.workers")
-			.update("loadBalancer", policy, vscode.ConfigurationTarget.Global)
+		try {
+			await ContextProxy.instance.setValue("workersLoadBalancer", policy)
+		} catch {
+			// No initialized ContextProxy (bare test harness) — apply without persisting.
+		}
 		this.pool.setPolicy(policy)
 		this.fireChange()
 	}
@@ -927,7 +937,7 @@ export class WorkerRegistry {
 	}
 
 	dispose(): void {
-		this.configDisposable.dispose()
+		this.configDisposable?.dispose()
 		this.configChangeDisposable?.dispose()
 		this.pluginChangeDisposable?.dispose()
 		this.scopeChangeDisposable?.dispose()

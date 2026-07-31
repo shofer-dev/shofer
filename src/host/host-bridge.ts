@@ -119,6 +119,9 @@ class NodeFileSystem implements HostFileSystem {
 // flatten). The package.json `contributes.configuration` rows are removed per key.
 const MIGRATED_SHOFER_CONFIG_KEYS: Record<string, keyof ShoferSettings> = {
 	apiRequestTimeout: "apiRequestTimeout",
+	commandExecutionTimeout: "commandExecutionTimeout",
+	commandTimeoutAllowlist: "commandTimeoutAllowlist",
+	preventCompletionWithOpenTodos: "preventCompletionWithOpenTodos",
 	maximumIndexedFilesForFileSearch: "maximumIndexedFilesForFileSearch",
 	newTaskRequireTodos: "newTaskRequireTodos",
 	enableCodeActions: "enableCodeActions",

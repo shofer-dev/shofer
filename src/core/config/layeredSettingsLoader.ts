@@ -34,15 +34,17 @@ export { resolveScopeRoots, type ScopeRootInputs, type ScopeRoots }
  * anywhere the merged overlay is `{}` and `ContextProxy.getValue` falls back to
  * `globalState` exactly as before.
  *
- * Part E4 adds the **write** side ({@link writeScopeSetting}): a single
- * globalSettings key is merged into a scope's `settings.json` (default: the
- * writable **user** scope) with an atomic, key-order-stable JSON write, so the
- * file layer becomes authoritative on the next {@link loadLayeredOverlay}. A key
- * the global scope's `locked.json` locks is **not** persisted — the read overlay
- * already makes the global value win, so persisting a shadowed user value would
- * only mislead; the writer skips it and reports `locked: true`. Concurrent writes
- * to the same file are serialized through an in-process lock so a bulk
- * `setValues` cannot lose keys to a read-modify-write race.
+ * The **write** side ({@link writeScopeSetting}) merges a single globalSettings
+ * key into a scope's `settings.json` (default: the writable **user** scope) with
+ * an atomic, key-order-stable JSON write, creating the file on first use — the
+ * file layer is the source of truth, `globalState` only the runtime cache.
+ * {@link seedScopeSettingsFile} performs the one-time create-only migration of
+ * pre-file `globalState` values. A key the global scope's `locked.json` locks is
+ * **not** persisted — the read overlay already makes the global value win, so
+ * persisting a shadowed user value would only mislead; the writer skips it and
+ * reports `locked: true`. Concurrent writes to the same file are serialized
+ * through an in-process lock so a bulk `setValues` cannot lose keys to a
+ * read-modify-write race.
  */
 
 /** The per-scope settings filename inside `.shofer/`. */
@@ -100,24 +102,36 @@ export function loadLockedManifest(globalRoot: string | undefined): Promise<Lock
 }
 
 /**
- * True when a scope's `.shofer/settings.json` already exists on disk. The
- * write-through in `ContextProxy.setValue` is gated on this so the layered file
- * path is **strictly opt-in**: until a scope has been materialized (by an
- * import/unzip, or a future migration seed), `setValue` stays byte-for-byte the
- * old `globalState`-only behavior and never creates a file under `~/.shofer` on
- * its own — which also keeps it inert (no real-home writes) in every unit test
- * that does not isolate `$HOME`.
+ * Create-only bulk seed of a scope's `settings.json` (Decision 3 of
+ * todos/done/config-cleanup.md): writes every given key at once, atomically and
+ * key-order-stable, and refuses to touch an existing file — the one-time
+ * migration of `globalState`-resident values into the file layer must never
+ * clobber a settings file that already exists.
+ *
+ * @returns true when the file was created; false when one already existed.
  */
-export async function scopeSettingsFileExists(root: string | undefined): Promise<boolean> {
-	if (!root) {
-		return false
-	}
-	try {
-		await fs.access(path.join(root, SETTINGS_FILE))
+export async function seedScopeSettingsFile(root: string, values: Record<string, unknown>): Promise<boolean> {
+	const filePath = path.join(root, SETTINGS_FILE)
+
+	return withFileLock(filePath, async () => {
+		try {
+			await fs.access(filePath)
+			return false // already materialized — never overwrite
+		} catch {
+			// absent — proceed
+		}
+
+		const sorted: Record<string, unknown> = {}
+		for (const key of Object.keys(values).sort()) {
+			sorted[key] = cloneValue(values[key])
+		}
+
+		await fs.mkdir(root, { recursive: true })
+		const tmpPath = `${filePath}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`
+		await fs.writeFile(tmpPath, `${JSON.stringify(sorted, null, 2)}\n`, "utf8")
+		await fs.rename(tmpPath, filePath)
 		return true
-	} catch {
-		return false
-	}
+	})
 }
 
 /**

@@ -27,6 +27,7 @@ import {
 	type PluginSyncSource,
 	type SyncedConfigSource,
 } from "../WorkerRegistry.js"
+import { ContextProxy } from "../../config/ContextProxy"
 
 /**
  * Controller-side registry (Shofer Workers L1). Driven with an in-memory
@@ -756,28 +757,45 @@ describe("WorkerRegistry — load-average LB policy (Shofer Workers)", () => {
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
 	})
 
-	it("applies the shofer.workers.loadBalancer setting on init", () => {
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-			get: (key: string, def: unknown) => (key === "shofer.workers.loadBalancer" ? "least-load-5m" : def),
-		} as unknown as vscode.WorkspaceConfiguration)
+	/** Stub an initialized ContextProxy exposing the LB policy key. */
+	function stubProxy(initial?: string) {
+		let value: string | undefined = initial
+		const listeners: Array<(e: { key: string }) => void> = []
+		const proxy = {
+			getValue: vi.fn((key: string) => (key === "workersLoadBalancer" ? value : undefined)),
+			setValue: vi.fn(async (key: string, v: unknown) => {
+				if (key === "workersLoadBalancer") value = v as string
+			}),
+			onDidChange: (cb: (e: { key: string }) => void) => {
+				listeners.push(cb)
+				return { dispose: () => {} }
+			},
+		}
+		const spy = vi.spyOn(ContextProxy, "instance", "get").mockReturnValue(proxy as unknown as ContextProxy)
+		return {
+			proxy,
+			set: (v: string) => (value = v),
+			fire: (key: string) => listeners.forEach((cb) => cb({ key })),
+			restore: () => spy.mockRestore(),
+		}
+	}
+
+	it("applies the workersLoadBalancer setting on init", () => {
+		const stub = stubProxy("least-load-5m")
 		const { registry } = makeRegistry()
 		expect(registry.executorPool.getPolicy()).toBe("least-load-5m")
+		stub.restore()
 	})
 
 	it("ignores an invalid setting value (falls back to round-robin)", () => {
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-			get: () => "bogus-policy",
-		} as unknown as vscode.WorkspaceConfiguration)
+		const stub = stubProxy("bogus-policy")
 		const { registry } = makeRegistry()
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
+		stub.restore()
 	})
 
 	it("setLoadBalancer persists the setting and applies it live to the pool + pushed state", async () => {
-		const update = vi.fn(async () => {})
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-			get: (_key: string, def: unknown) => def,
-			update,
-		} as unknown as vscode.WorkspaceConfiguration)
+		const stub = stubProxy()
 
 		const { registry } = makeRegistry()
 		expect(registry.getState().loadBalancer).toBe("round-robin")
@@ -786,39 +804,32 @@ describe("WorkerRegistry — load-average LB policy (Shofer Workers)", () => {
 		registry.onChange(() => changed++)
 		await registry.handleRequest({ action: "setLoadBalancer", policy: "least-load-5m" })
 
-		// Persisted to the Global config target…
-		expect(update).toHaveBeenCalledWith("loadBalancer", "least-load-5m", vscode.ConfigurationTarget.Global)
-		// …and applied immediately to the pool + surfaced in the pushed state (no wait
-		// for the onDidChangeConfiguration round-trip), with a change fired for the UI.
+		// Persisted to the workersLoadBalancer globalSettings key…
+		expect(stub.proxy.setValue).toHaveBeenCalledWith("workersLoadBalancer", "least-load-5m")
+		// …and applied immediately to the pool + surfaced in the pushed state, with
+		// at least one change fired for the UI (the onDidChange round-trip re-applies
+		// the same policy — idempotent).
 		expect(registry.executorPool.getPolicy()).toBe("least-load-5m")
 		expect(registry.getState().loadBalancer).toBe("least-load-5m")
-		expect(changed).toBe(1)
+		expect(changed).toBeGreaterThanOrEqual(1)
+		stub.restore()
 	})
 
-	it("re-reads the policy on a relevant configuration change", () => {
-		let changeCb: ((e: vscode.ConfigurationChangeEvent) => void) | undefined
-		vi.spyOn(vscode.workspace, "onDidChangeConfiguration").mockImplementation((cb) => {
-			changeCb = cb as (e: vscode.ConfigurationChangeEvent) => void
-			return { dispose: () => {} }
-		})
-		let policyValue = "round-robin"
-		vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-			get: (key: string, def: unknown) => (key === "shofer.workers.loadBalancer" ? policyValue : def),
-		} as unknown as vscode.WorkspaceConfiguration)
+	it("re-reads the policy on a relevant settings change", () => {
+		const stub = stubProxy("round-robin")
 
 		const { registry } = makeRegistry()
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
 
-		// A change touching an unrelated setting is ignored.
-		policyValue = "least-load-1m"
-		changeCb?.({ affectsConfiguration: () => false } as vscode.ConfigurationChangeEvent)
+		// A change touching an unrelated key is ignored.
+		stub.set("least-load-1m")
+		stub.fire("autoApprovalEnabled")
 		expect(registry.executorPool.getPolicy()).toBe("round-robin")
 
-		// A change touching our setting re-reads it.
-		changeCb?.({
-			affectsConfiguration: (s: string) => s === "shofer.workers.loadBalancer",
-		} as vscode.ConfigurationChangeEvent)
+		// A change touching our key re-reads it.
+		stub.fire("workersLoadBalancer")
 		expect(registry.executorPool.getPolicy()).toBe("least-load-1m")
+		stub.restore()
 	})
 })
 
