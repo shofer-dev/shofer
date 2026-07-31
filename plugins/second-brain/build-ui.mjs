@@ -21,6 +21,10 @@ for (const name of ["badge", "advisory", "panel"]) {
 	await esbuild.build({
 		entryPoints: [resolve(here, `ui/${name}.tsx`)],
 		outfile: resolve(here, `ui/${name}.js`),
+		// Pin the working dir: esbuild derives its banner path from cwd, so without
+		// this the bundle differs between a repo-root run and the extension build
+		// (which runs from the plugin dir) — and the committed artifact flip-flops.
+		absWorkingDir: here,
 		bundle: true,
 		format: "esm",
 		platform: "browser",

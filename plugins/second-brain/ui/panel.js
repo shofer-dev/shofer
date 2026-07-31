@@ -1,4 +1,4 @@
-// plugins/second-brain/ui/panel.tsx
+// ui/panel.tsx
 import { useCallback, useEffect, useState } from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 var box = {
