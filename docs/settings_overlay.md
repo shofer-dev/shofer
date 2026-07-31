@@ -17,11 +17,11 @@ the import/export mechanics.
 
 | Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                         |
 | ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
-| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                                      |
+| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 7             | —                                                      |
 | **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                           |
 | **Mode Definitions**     | `.shofer/shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | —             | `.shofer/shofermodes` > `custom_modes.yaml` > built-in |
 | **MCP Server Configs**   | `mcp_settings.json` + `.shofer/mcp.json`                                  | Per-extension + per-scope    | —             | Project file overlays the global one                   |
-| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | ~96           | Overlay wins in `getValue`; else `globalState`         |
+| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | 108           | Overlay wins in `getValue`; else `globalState`         |
 
 > **Layered `.shofer/` model.** Non-secret settings resolve through a three-scope
 > `.shofer/` overlay. For an **unlocked** key the more-specific scope wins —
@@ -1268,19 +1268,20 @@ not a hard-coded string.
 
 ### 14j. VS Code Settings Editor Only Exposes a Small Minority of Settings — and Cannot Replace the Webview
 
-[`configuration.md`](configuration.md:3) opens with "Complete reference for
-all `shofer.*` VS Code settings." This creates the false impression that most
-Shofer settings live in — or could be moved into — the VS Code Settings
-editor. In reality only **18 of ~140+ settings** appear there, and the rich
-Shofer webview Settings UI cannot be replaced by `package.json`
+Only **7 of ~175 settings** are reachable from the VS Code Settings editor, and
+the rich Shofer webview Settings UI cannot be replaced by `package.json`
 `contributes.configuration.properties` for fundamental expressivity reasons.
+Anyone reading a `shofer.`-prefixed key as "a VS Code setting" will be wrong
+nearly every time — see
+[`configuration.md`](configuration.md#settings-reference) for which names are
+which.
 
 #### Current distribution
 
 | Backend                                | Count | Visible in VS Code Settings Editor? |
 | -------------------------------------- | ----- | ----------------------------------- |
-| `contributes.configuration.properties` | 18    | ✅ Yes                              |
-| `globalSettingsSchema` (`globalState`) | ~96   | ❌ No                               |
+| `contributes.configuration.properties` | 7     | ✅ Yes                              |
+| `globalSettingsSchema` (`globalState`) | 108   | ❌ No                               |
 | `ProviderSettings` (`globalState`)     | ~30   | ❌ No                               |
 | `SecretStorage` (API keys)             | 30+   | ❌ No                               |
 
@@ -1328,7 +1329,7 @@ Schema with static rendering**, while the Shofer Settings UI is a **full
 React application** with async data fetching, conditional rendering, CRUD
 operations, and custom widget composition. These are not different backends
 for the same data — they are different capability tiers. Simple key-value
-settings already live in `package.json` (the 18 that fit). Everything else
+settings already live in `package.json` (the 7 that fit). Everything else
 lives in the webview because it _must_.
 
 ### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob — ✅ resolved
