@@ -15,99 +15,98 @@ the import/export mechanics.
 
 ## Config Types at a Glance
 
-| Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                         |
-| ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
-| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                                      |
-| **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                           |
-| **Mode Definitions**     | `.shofer/shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | —             | `.shofer/shofermodes` > `custom_modes.yaml` > built-in |
-| **MCP Server Configs**   | `mcp_settings.json` + `.shofer/mcp.json`                                  | Per-extension + per-scope    | —             | Project file overlays the global one                   |
-| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | ~96           | Overlay wins in `getValue`; else `globalState`         |
+| Category                 | Backend                                                                | Scope                        | Count | Merge Priority                                           |
+| ------------------------ | ---------------------------------------------------------------------- | ---------------------------- | ----- | -------------------------------------------------------- |
+| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`           | Per-extension (machine-wide) | 7     | —                                                        |
+| **API Provider Configs** | `.shofer/providers.json` (3 scopes) + `SecretStorage` blob (keys only) | Three scopes + machine-wide  | —     | project > user > org; blob key wins over file key        |
+| **Mode Definitions**     | `shofermodes` (YAML) in the three `.shofer/` scopes + built-in plugin  | Three scopes                 | —     | project > user > org (locked slug: org final) > built-in |
+| **MCP Server Configs**   | `mcp.json` in the three `.shofer/` scopes                              | Three scopes                 | —     | project > user > org (locked name: org final)            |
+| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                | Three scopes + machine-wide  | 108   | Overlay wins in `getValue`; else `globalState`           |
 
 > **Layered `.shofer/` model.** Non-secret settings resolve through a three-scope
 > `.shofer/` overlay. For an **unlocked** key the more-specific scope wins —
 > **project > user > global**; for a key the global scope **locks** (`locked.json`,
 > global scope only) that order **inverts**: the global value wins and is final.
 > The overlay takes precedence over `globalState` in `ContextProxy.getValue`, and
-> the profiles blob is the sole persisted store for provider secrets. See
+> the secrets blob is the sole Shofer-written store for provider secrets. See
 > [`configuration.md`](configuration.md#layered-shofer-configuration).
 
 ---
 
 ## 1. API Provider Configuration Storage
 
-API provider configurations (profiles, keys, models, base URLs) are stored across
-**two VS Code extension APIs**, managed primarily by
-[`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:57) and
-[`ContextProxy`](../src/core/config/ContextProxy.ts:40).
+Provider profiles are split across **two stores**, composed at runtime by
+[`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts):
 
-### 1a. Provider Profiles — VS Code `SecretStorage`
+- **`.shofer/providers.json`** (layered, three scopes) — every **non-secret**
+  field: provider, model id, base URLs, token limits, temperature, plus
+  `currentApiConfigName` and `modeApiConfigs`.
+- **`SecretStorage` blob** `shofer_config_api_config` (v2) — only each
+  profile's **locally-entered secret fields** plus migration flags.
 
-**Managed by:** [`ProviderSettingsManager`](../src/core/config/ProviderSettingsManager.ts:57)
+### 1a. `providers.json` — the layered profile files
 
-**Storage key:** `shofer_config_api_config` (constructed at
-[`ProviderSettingsManager.ts:577`](../src/core/config/ProviderSettingsManager.ts:577))
+Managed by [`providersFileLoader`](../src/core/config/providersFileLoader.ts).
+Merged **per profile name**: `project > user > org`, unless the org scope's
+`locked.json` names the profile (`providers/<name>`) or the collection
+(`providers`) — then the org entry is final. The **user** scope's file
+(`~/.shofer/providers.json`) is the writable one; every UI edit persists there
+with secrets stripped. A profile whose winning entry came from the org/project
+scope and is unchanged is _not_ copied into the user file (a copy would freeze
+upstream updates), and a locked profile is never persisted downstream.
 
-This is the **source of truth** for all provider/API configuration profiles. It stores a
-single JSON blob in VS Code's secure credential store with this schema:
-
-```typescript
+```jsonc
 {
-  currentApiConfigName: string,              // e.g. "default" or "my-anthropic-profile"
-  apiConfigs: {                              // all profiles keyed by name
-    "default": { id: "...", apiProvider: "anthropic", apiModelId: "...", apiKey: "sk-...", ... },
-    "my-profile": { id: "...", apiProvider: "openai", apiModelId: "gpt-5", apiKey: "sk-...", ... },
-  },
-  modeApiConfigs: {                          // per-mode profile assignments (by profile ID)
-    "code": "<profile-id>",
-    "architect": "<profile-id>",
-    ...
-  },
-  cloudProfileIds: ["..."],                 // IDs synced from Shofer Cloud
-  migrations: { ... }                       // migration tracking flags
+	"version": 1,
+	"currentApiConfigName": "default",
+	"modeApiConfigs": { "code": "<profile-id>" },
+	"profiles": {
+		"default": { "id": "…", "apiProvider": "anthropic", "apiModelId": "…" },
+	},
 }
 ```
 
-Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:670) /
-[`load()`](../src/core/config/ProviderSettingsManager.ts:581).
+The org scope **may** carry a secret field (an org-supplied `apiKey`): Shofer
+never writes a secret to any file, but honors one found there as the profile's
+**default credential**.
 
-### 1b. Individual API Keys — VS Code `SecretStorage`
+### 1b. The secrets blob — locally-entered keys only
 
-**Managed by:** [`ContextProxy`](../src/core/config/ContextProxy.ts:40)
+**Storage key:** `shofer_config_api_config` (v2):
 
-Each provider's API key is stored as a **separate** entry in VS Code's `SecretStorage`.
-The full list of secret keys is defined in
-[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:280):
+```jsonc
+{
+	"version": 2,
+	"secrets": { "default": { "apiKey": "sk-…" } },
+	"migrations": { "rateLimitSecondsMigrated": true /* … */ },
+}
+```
 
-| Key                                                                                                                                                                                           | Provider                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `apiKey`                                                                                                                                                                                      | Generic / Anthropic              |
-| `openRouterApiKey`                                                                                                                                                                            | OpenRouter                       |
-| `openAiApiKey`                                                                                                                                                                                | OpenAI (compatible)              |
-| `openAiNativeApiKey`                                                                                                                                                                          | OpenAI (native Responses API)    |
-| `geminiApiKey`                                                                                                                                                                                | Google Gemini                    |
-| `deepSeekApiKey`                                                                                                                                                                              | DeepSeek                         |
-| `mistralApiKey`                                                                                                                                                                               | Mistral                          |
-| `xaiApiKey`                                                                                                                                                                                   | xAI / Grok                       |
-| `moonshotApiKey`                                                                                                                                                                              | Moonshot                         |
-| `minimaxApiKey`                                                                                                                                                                               | MiniMax                          |
-| `zaiApiKey`                                                                                                                                                                                   | Z.AI                             |
-| `fireworksApiKey`                                                                                                                                                                             | Fireworks                        |
-| `basetenApiKey`                                                                                                                                                                               | Baseten                          |
-| `sambaNovaApiKey`                                                                                                                                                                             | SambaNova                        |
-| `vercelAiGatewayApiKey`                                                                                                                                                                       | Vercel AI Gateway                |
-| `requestyApiKey`                                                                                                                                                                              | Requesty                         |
-| `unboundApiKey`                                                                                                                                                                               | Unbound                          |
-| `litellmApiKey`                                                                                                                                                                               | LiteLLM                          |
-| `ollamaApiKey`                                                                                                                                                                                | Ollama                           |
-| `awsAccessKey`, `awsApiKey`, `awsSecretKey`, `awsSessionToken`                                                                                                                                | AWS Bedrock                      |
-| `openRouterImageApiKey`                                                                                                                                                                       | Image generation (global secret) |
-| `codeIndexOpenAiKey`, `codebaseIndexOpenAiCompatibleApiKey`, `codebaseIndexGeminiApiKey`, `codebaseIndexMistralApiKey`, `codebaseIndexVercelAiGatewayApiKey`, `codebaseIndexOpenRouterApiKey` | Codebase indexing                |
+Composition rule for a secret field: **the blob's value wins; the file's value
+is the fallback.** A key the user typed into this workspace beats an
+org-supplied default; a profile whose key the user never replaced follows org
+rotation. On save, a secret equal to the file's value is dropped from the blob
+(it stays file-sourced). The legacy version-less blob shape (full profiles) is
+detected on read and split into the two stores on the next write.
 
-### 1c. Non-Secret Provider Settings — VS Code `globalState`
+Besides the blob, exactly two secrets keep individual `SecretStorage` entries
+([`GLOBAL_SECRET_KEYS`](../packages/types/src/global-settings.ts)):
 
-Non-sensitive provider settings are stored in VS Code's `globalState` API (backed by
-a SQLite database at `~/.config/Code/User/globalStorage/shofer.dev/state.vscdb`
-on Linux). These include:
+| Key                     | Contents                                                               |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `openRouterImageApiKey` | Image-generation credential — a GlobalSettings secret, not a profile's |
+| `pluginSecrets`         | Every plugin's `secret: true` config values, as one JSON blob          |
+
+`ContextProxy`'s `secretCache` holds only the _currently active_ profile's
+secrets in memory, hydrated from the composed profile on activation and on
+restart.
+
+### 1c. The Active Profile's Echo — VS Code `globalState`
+
+The **active** profile's non-secret fields are hydrated into VS Code's
+`globalState` on activation (`ContextProxy.setProviderSettings`) so runtime
+reads are cheap; the persisted source of truth for them is `providers.json`
+(§1a). The echoed keys include:
 
 - `apiProvider`, `apiModelId` — selected provider and model
 - `anthropicBaseUrl`, `openAiBaseUrl`, `openAiNativeBaseUrl`, `googleGeminiBaseUrl`, etc. — custom base URLs
@@ -127,8 +126,9 @@ so `globalState` is the cache, not the authority, for non-secret settings.
 
 ```mermaid
 flowchart LR
-    BLOB[("SecretStorage<br/>shofer_config_api_config<br/>profiles blob")]
-    SEC[("SecretStorage<br/>global secret keys<br/>codebase-index keys, openRouterImageApiKey")]
+    PF[("layered .shofer/providers.json<br/>non-secret profile fields<br/>(+ org-supplied key defaults)")]
+    BLOB[("SecretStorage<br/>shofer_config_api_config<br/>v2: locally-entered keys")]
+    SEC[("SecretStorage<br/>openRouterImageApiKey, pluginSecrets")]
     LAY[("layered .shofer/settings.json<br/>global · user · project<br/>merged per key")]
     GS[("globalState<br/>apiProvider, apiModelId, base URLs, ...")]
 
@@ -141,6 +141,7 @@ flowchart LR
 
     OUT["ShoferSettings<br/>getValues() — unified runtime view"]
 
+    PF -->|"composed by ProviderSettingsManager"| BLOB
     BLOB -->|"setProviderSettings(profile)"| SC
     SEC --> SC
     LAY --> OV
@@ -216,42 +217,41 @@ customModes:
 > takes precedence over both `tools_allowed` and groups. Both are evaluated
 > in [`isToolAllowedForMode`](../packages/core/src/tools/validateToolUse.ts).
 
-### 2b. Extension Global Storage — User settings (`custom_modes.yaml`)
+### 2b. User scope — `~/.shofer/shofermodes`
 
-| Property       | Value                                                                |
-| -------------- | -------------------------------------------------------------------- |
-| **Path**       | `<globalStorage>/settings/custom_modes.yaml`                         |
-| **Format**     | YAML                                                                 |
-| **Scope**      | Per-extension install (shared across workspaces on the same machine) |
-| **Priority**   | Lower than `.shofer/shofermodes`, higher than built-in               |
-| **Purpose**    | User's personal modes and customizations via Settings UI             |
-| **Source tag** | `source: "global"`                                                   |
-| **In git?**    | **No** — runtime artifact, created fresh on each machine             |
-| **Editable**   | Via Settings UI (not recommended to edit directly)                   |
+| Property       | Value                                                    |
+| -------------- | -------------------------------------------------------- |
+| **Path**       | `~/.shofer/shofermodes`                                  |
+| **Format**     | YAML (JSON accepted as a fallback)                       |
+| **Scope**      | Per-user (shared across workspaces on the same machine)  |
+| **Priority**   | Lower than `.shofer/shofermodes`, higher than org-global |
+| **Purpose**    | User's personal modes and customizations via Settings UI |
+| **Source tag** | `source: "global"`                                       |
+| **In git?**    | **No** — runtime artifact, created fresh on each machine |
+| **Editable**   | Via Settings UI or direct file edit                      |
 
-Where `<globalStorage>` is `context.globalStorageUri.fsPath` (e.g.,
-`~/.config/Code/User/globalStorage/shofer.dev/` on Linux), overridable
-via the `shofer.customStoragePath` setting.
+Created with an empty `customModes: []` template on first access
+([`CustomModesManager.getCustomModesFilePath()`](../src/core/config/CustomModesManager.ts)).
+Every non-project mode write (Settings UI, marketplace "global" install,
+import at global level) targets this file.
 
-> **This file is NOT part of the Shofer source tree.** It is a runtime artifact created
-> on the user's machine when they first use the Settings UI to configure modes. The code
-> references it only as a filename constant in
-> [`GlobalFileNames`](../src/shared/globalFileNames.ts:5):
->
-> ```typescript
-> export const GlobalFileNames = {
-> 	customModes: "custom_modes.yaml", // just the filename, no content
-> }
-> ```
->
-> When the file doesn't exist yet,
-> [`CustomModesManager`](../src/core/config/CustomModesManager.ts:261) writes an empty template:
->
-> ```typescript
-> if (!fileExists) {
-> 	await fs.writeFile(filePath, yaml.stringify({ customModes: [] }, { lineWidth: 0 }))
-> }
-> ```
+### 2b-org. Org-global scope — `<org .shofer>/shofermodes`
+
+| Property       | Value                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| **Path**       | `$SHOFER_GLOBAL_DIR/shofermodes`, else `<globalStorage>/.shofer/shofermodes`                |
+| **Format**     | YAML (JSON accepted as a fallback)                                                          |
+| **Priority**   | **Lowest** of the file scopes — a default any scope may override, unless the slug is locked |
+| **Purpose**    | Org-supplied modes (a SaaS config bundle materializes its `modes` key here)                 |
+| **Source tag** | `source: "global"`                                                                          |
+| **Editable**   | No — read-only mount in SaaS; never written by Shofer                                       |
+
+A slug named by the org scope's `locked.json` (`modes/<slug>`, or `modes` for the
+whole collection) keeps the org version regardless of user/project overrides —
+the same locked-vs-default rule as `settings.json`
+(see [`configuration.md`](configuration.md#layered-shofer-configuration)). Deleting
+a user/project override of an unlocked org mode reverts to the org version on the
+next merge; the org entry itself cannot be deleted from the UI.
 
 ### 2c. VS Code `globalState` — Runtime persistence
 
@@ -269,7 +269,7 @@ Key globalState keys for modes:
 | Key                  | Contents                                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `customInstructions` | Global custom instructions (all modes)                                                                                         |
-| `customModes`        | The effective mode list: `.shofer/shofermodes` + settings file + plugin-contributed modes                                      |
+| `customModes`        | The effective mode list: the three scopes' `shofermodes` files + plugin-contributed modes (a cache of the merge, not a source) |
 | `customModePrompts`  | Per-mode prompt overrides (roleDefinition, customInstructions, whenToUse)                                                      |
 | `disabledTools`      | Global flat list of tool names hidden from the LLM (Settings → Tools) — applied across all modes by `filterNativeToolsForMode` |
 
@@ -293,29 +293,27 @@ separate built-in list in code.
 
 ## 3. MCP Server Configuration Storage
 
-MCP server configurations are stored in a **single JSON file** managed by
-[`McpHub`](../src/services/mcp/McpHub.ts). There is **no overlay/merge** — it is a
-flat file.
+MCP server configurations live in `mcp.json` files in the layered `.shofer/`
+scopes, managed by [`McpHub`](../packages/core/src/services/mcp/McpHub.ts):
 
-### 3a. `mcp_settings.json` — Global MCP config
+| Scope          | Path                                                                   | Connection `source` | Writable?                             |
+| -------------- | ---------------------------------------------------------------------- | ------------------- | ------------------------------------- |
+| **Org-global** | `$SHOFER_GLOBAL_DIR/mcp.json`, else `<globalStorage>/.shofer/mcp.json` | `global`            | No (RO mount in SaaS)                 |
+| **User**       | `~/.shofer/mcp.json`                                                   | `global`            | Yes — the file every edit path writes |
+| **Project**    | `<workspace>/.shofer/mcp.json`                                         | `project`           | Yes (committed to the repo)           |
 
-| Property       | Value                                                                  |
-| -------------- | ---------------------------------------------------------------------- |
-| **Path**       | `<globalStorage>/settings/mcp_settings.json`                           |
-| **Format**     | JSON                                                                   |
-| **Scope**      | Per-extension install (shared across workspaces)                       |
-| **Purpose**    | MCP server definitions (command, args, env, transport type, etc.)      |
-| **Editable**   | Via Settings UI (Tools tab → MCP Servers) or direct file edit          |
-| **Managed by** | [`McpHub.getMcpSettingsFilePath()`](../src/services/mcp/McpHub.ts:535) |
+The "global" connection source is the org-global and user files **merged per
+server name** (`McpHub.loadGlobalScopeServers()`): the user's entry wins unless
+the org scope's `locked.json` names the server (`mcp/<name>`) or the collection
+(`mcp`) — then the org entry is final. The project file remains a separate
+connection source layered above both (plus plugin-contributed servers,
+`syncProjectMcpServers()`). All scope files are watched; any change (including
+deletion) re-merges and reconciles connections.
 
-The file is watched for changes via `chokidar` at
-[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558). On any change,
-servers are re-read and connections re-established.
+`McpHub.getMcpSettingsFilePath()` returns the **user** file (creating an empty
+template on first access) — it is what the "Edit Global MCP" UI opens and what
+add/delete/toggle/timeout writes target.
 
-> **Note:** Project-level MCP servers can be defined in `.shofer/mcp.json`
-> (see §7 for the project file watcher). The global file constant is defined in
-> [`GlobalFileNames.mcpSettings`](../src/shared/globalFileNames.ts:4).
->
 > **Planned VS Code compatibility:** Shofer uses its own MCP config files and does not
 > yet read VS Code's `.vscode/mcp.json` or user-level MCP config. Servers configured
 > for Copilot/VS Code's LM must be manually re-entered in Shofer. See
@@ -328,7 +326,7 @@ MCP tools have their own visibility pipeline parallel to native tools, in
 [`filterMcpToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts):
 
 - Gated by per-tool group assignment (`McpHub.getMcpToolMetadata`)
-- Per-server `disabledTools` list in `mcp_settings.json`
+- Per-server `disabledTools` list in the scope `mcp.json` files
 - Allowed groups from the active mode
 
 ---
@@ -408,24 +406,24 @@ customModes.forEach((customMode) => {
 ### API Profile Assignment Per Mode
 
 Separately from mode definitions, each mode can be assigned a specific API provider
-profile via `modeApiConfigs` in the provider profiles blob (see §1a). This mapping
-is stored in the SecretStorage profiles blob, NOT in the mode definitions. Resolution
-happens at task creation time:
+profile via `modeApiConfigs` in the layered `providers.json` (see §1a). This mapping
+rides the providers file, NOT the mode definitions. Resolution happens at task
+creation time:
 
 ```
-active mode slug → modeApiConfigs[slug] → profile ID → apiConfigs[profileName]
+active mode slug → modeApiConfigs[slug] → profile ID → profiles[profileName]
 ```
 
-The blob is the **single source of truth** for this mapping — there is no
-`globalState` copy. `ProviderSettingsManager.getModeConfigs()` reads it and
+The composed provider store is the **single source of truth** for this mapping —
+there is no `globalState` copy. `ProviderSettingsManager.getModeConfigs()` reads it and
 `ShoferProvider.getStateToPostToWebview()` projects it to the webview read-only, so
 Settings → Modes and the chat API-config selector always show what
 `resolveModeApiConfigName()` will actually resolve for a new task or subtask. Writers
 are `setModeConfig()` (via `setModeApiConfig` on Save, `activateProviderProfile`, and
 the `handleUserModeSwitch` backfill); because they all write the one store, a profile
 activation can no longer drift the UI away from what task creation resolves. The
-headless host (`shofer serve`) reads the same blob through the vscode-shim's
-file-backed `SecretStorage`, and remote workers never resolve it themselves — the
+headless host (`shofer serve`) reads the same files (and its blob through the
+vscode-shim's file-backed `SecretStorage`), and remote workers never resolve it themselves — the
 controller resolves `resolveTaskApiConfiguration()` and ships the concrete
 `ProviderSettings` per task.
 
@@ -439,11 +437,11 @@ see the "Settings View Pattern" rule in [`AGENTS.md`](../AGENTS.md).
 
 ```mermaid
 flowchart TD
-    subgraph PERSIST["Persisted — profiles blob 'shofer_config_api_config' (SecretStorage)"]
+    subgraph PERSIST["Persisted — providers.json (+ secrets blob for keys)"]
         direction TB
         DEF["1. Default profile — NAME ONLY<br/>currentApiConfigName<br/>Settings, Providers tab"]
         LINK["3. Mode to API Configuration link<br/>modeApiConfigs[slug] = profile id<br/>Settings, Modes tab"]
-        CFG["apiConfigs[name]<br/>every profile's settings + secrets"]
+        CFG["profiles[name]<br/>every profile's settings; keys in the blob"]
     end
 
     START{{"new Task<br/>resolveTaskApiConfiguration()"}}
@@ -466,16 +464,18 @@ Changing the default profile is name-only: it must never touch a live
 ```mermaid
 flowchart LR
     PROJ["'.shofer/shofermodes' (workspace)<br/>source: project"]
-    GLOB["custom_modes.yaml (global storage)<br/>source: global"]
+    USR["~/.shofer/shofermodes<br/>source: global"]
+    ORG["org .shofer/shofermodes (RO)<br/>source: global"]
     BUILT["builtin-config plugin<br/>contributes.modes"]
-    S1["Stage 1 — CustomModesManager.getCustomModes()<br/>a global mode is kept only if its slug<br/>is not already a project mode"]
+    S1["Stage 1 — mergeLayeredConfig per slug<br/>project > user > org<br/>locked slug: org wins"]
     CM["customModes[]"]
     S2["Stage 2 — effectiveModes()<br/>same slug overrides in place, new slug appends"]
     FINAL["final ModeConfig[]"]
-    MAC["modeApiConfigs — resolved separately<br/>at task creation, from the profiles blob"]
+    MAC["modeApiConfigs — resolved separately<br/>at task creation, from providers.json"]
 
     PROJ --> S1
-    GLOB --> S1
+    USR --> S1
+    ORG --> S1
     S1 --> S2
     BUILT --> S2
     S2 --> CM
@@ -487,12 +487,12 @@ flowchart LR
 
 When the same slug exists in multiple sources:
 
-| Sources with same slug                  | Winner                          |
-| --------------------------------------- | ------------------------------- |
-| `.shofer/shofermodes` vs global storage | `.shofer/shofermodes` (Stage 1) |
-| `customModes` (merged) vs built-in      | `customModes` (Stage 2)         |
+| Sources with same slug               | Winner                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| project vs user vs org `shofermodes` | project > user > org — unless `locked.json` names the slug, then org (Stage 1) |
+| `customModes` (merged) vs built-in   | `customModes` (Stage 2)                                                        |
 
-👉 **`.shofer/shofermodes` > global storage > built-in**
+👉 **project > user > org (locked: org final) > built-in**
 
 ---
 
@@ -505,17 +505,18 @@ Settings UI
   ├── globalState.update("customInstructions", value)    // global instructions
   ├── globalState.update("customModePrompts", {...})      // per-mode overrides
   ├── globalState.update("customModes", merged)           // merged result
-  ├── Write to global storage YAML file                    // file-based backup
-  ├── ProviderSettingsManager.updateConfig(...)            // API profile changes → SecretStorage
-  └── McpHub writes mcp_settings.json                      // MCP server changes
+  ├── Write to ~/.shofer/shofermodes                       // the user scope's modes file
+  ├── ProviderSettingsManager.saveConfig(...)              // profile → providers.json + key → blob
+  └── McpHub writes ~/.shofer/mcp.json                     // MCP server changes
 ```
 
 ### API Profile Changes
 
 ```
 Settings UI (API Provider tab)
-  └── ProviderSettingsManager.updateConfig(name, config)
-       └── secrets.store("shofer_config_api_config", JSON)
+  └── ProviderSettingsManager.saveConfig(name, config)
+       ├── ~/.shofer/providers.json                       // non-secret fields
+       └── secrets.store("shofer_config_api_config", v2)  // locally-entered keys
             └── ContextProxy.setProviderSettings(config)  // sync cache
 ```
 
@@ -600,37 +601,22 @@ shofermodesWatcher.onDidCreate(handleShofermodesChange)
 shofermodesWatcher.onDidDelete(handleShofermodesChange)
 ```
 
-On any file change, the manager re-reads both sources, re-merges, and updates `globalState`.
+On any file change, the manager re-reads every scope, re-merges, and updates `globalState`.
 
 ### MCP Configs
 
-The [`McpHub`](../src/services/mcp/McpHub.ts) watches both global and project MCP configs:
+[`McpHub`](../packages/core/src/services/mcp/McpHub.ts) watches every scope's `mcp.json`:
 
-**Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) via
-[`watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558) using `FileSystemWatcher`.
+**Global source (org + user):** `watchMcpSettingsFile()` puts a host watcher on each
+scope root (`getHost().watcher.watch(root, "mcp.json")`); change, creation, and
+deletion all funnel into the same debounced re-merge (`loadGlobalScopeServers()`),
+since deleting the user file may leave org servers behind.
 
-**Project:** `.shofer/mcp.json` via
-[`watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:378) using `FileSystemWatcher`.
+**Project:** `.shofer/mcp.json` via `watchProjectMcpFile()`; deletion cleans up all
+project MCP servers.
 
-Both use a 500ms debounce. On file change, servers are re-read, validated against
-`McpSettingsSchema`, and connections are updated. File deletion triggers cleanup of
-all project MCP servers.
-
-```typescript
-// Global: watchMcpSettingsFile()
-const settingsPattern = new vscode.RelativePattern(
-    path.dirname(settingsPath), path.basename(settingsPath))
-this.settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPattern)
-this.settingsWatcher.onDidChange((uri) => this.debounceConfigChange(...))
-this.settingsWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
-
-// Project: watchProjectMcpFile()
-const projectMcpPattern = new vscode.RelativePattern(workspaceFolder, ".shofer/mcp.json")
-this.projectMcpWatcher = vscode.workspace.createFileSystemWatcher(projectMcpPattern)
-this.projectMcpWatcher.onDidChange((uri) => this.debounceConfigChange(...))
-this.projectMcpWatcher.onDidCreate((uri) => this.debounceConfigChange(...))
-this.projectMcpWatcher.onDidDelete(async () => this.cleanupProjectMcpServers())
-```
+All use a 500ms debounce. On change, servers are re-read, validated against
+`McpSettingsSchema`, and connections are updated.
 
 ---
 
@@ -643,10 +629,9 @@ restarting code-server or VS Code, and how changes are detected.
 
 | Config Type                                    | On-the-Fly?     | Detection Mechanism                    | Delay          | Notes                                                                                                                        |
 | ---------------------------------------------- | --------------- | -------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **MCP servers** (global `mcp_settings.json`)   | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                                                                  |
+| **MCP servers** (org + user `mcp.json`)        | ✅ Yes          | Host watcher per scope root            | 500ms debounce | Any event (incl. deletion) re-merges both scopes and reconnects                                                              |
 | **MCP servers** (project `.shofer/mcp.json`)   | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                                                                            |
-| **Mode definitions** (`.shofer/shofermodes`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                                                                  |
-| **Mode definitions** (`custom_modes.yaml`)     | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                                                                  |
+| **Mode definitions** (`shofermodes`, 3 scopes) | ✅ Yes          | `scopeWatcher` via `ContextProxy`      | Near-instant   | Any scope\'s file event triggers re-merge → `globalState` → `onUpdate` → UI refresh                                          |
 | **API profiles** (SecretStorage)               | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected                                                  |
 | **API keys** (SecretStorage)                   | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                                                                  |
 | **Layered settings** (`.shofer/settings.json`) | ✅ Yes          | `scopeWatcher` on the three scope dirs | Near-instant   | `ContextProxy` re-merges the overlay and fires `onDidRefreshOverlay`; plugins whose `pluginConfigs` entry moved are reloaded |
@@ -666,14 +651,13 @@ shim never fires. It watches the **directories**, since both writers that matter
 replace rather than mutate (an atomic temp-file rename, and a ConfigMap swapping its
 `..data` symlink):
 
-#### MCP Settings (Global + Project)
+#### MCP Settings (all scopes)
 
-**Global:** [`mcp_settings.json`](../src/shared/globalFileNames.ts:4) at
-`<globalStorage>/settings/mcp_settings.json`, watched by
-[`McpHub.watchMcpSettingsFile()`](../src/services/mcp/McpHub.ts:558).
+**Global source:** the org-global and user scopes\' `mcp.json`, each watched at its
+scope root by `McpHub.watchMcpSettingsFile()`.
 
 **Project:** `.shofer/mcp.json` at `<workspace>/.shofer/mcp.json`, watched by
-[`McpHub.watchProjectMcpFile()`](../src/services/mcp/McpHub.ts:378).
+`McpHub.watchProjectMcpFile()`.
 
 Both use a **500ms debounce** via [`debounceConfigChange()`](../src/services/mcp/McpHub.ts:317)
 to avoid redundant server restarts during rapid edits. Programmatic updates
@@ -687,30 +671,18 @@ On change:
 3. [`updateServerConnections()`](../src/services/mcp/McpHub.ts:364) reconnects affected servers
 4. WebView is notified of server changes
 
-#### Mode Definitions (`.shofer/shofermodes` + `custom_modes.yaml`)
+#### Mode Definitions (`shofermodes` in the three scopes)
 
-Both files are watched by [`CustomModesManager.watchCustomModesFiles()`](../src/core/config/CustomModesManager.ts:269):
-
-```typescript
-// .shofer/shofermodes watcher (per workspace folder)
-const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
-shofermodesWatcher.onDidChange(handleShofermodesChange)
-shofermodesWatcher.onDidCreate(handleShofermodesChange)
-shofermodesWatcher.onDidDelete(handleShofermodesChange)
-
-// custom_modes.yaml watcher (global settings)
-const settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPath)
-settingsWatcher.onDidChange(handleSettingsChange)
-settingsWatcher.onDidCreate(handleSettingsChange)
-settingsWatcher.onDidDelete(handleSettingsChange)
-```
+`CustomModesManager.watchCustomModesFiles()` subscribes to `ContextProxy`\'s
+scope-file stream (the `ScopeWatcher` directory watches now include
+`shofermodes`), so an edit in any scope — including a ConfigMap swap on the RO
+org root — funnels into one handler.
 
 On change:
 
-1. Both sources are re-read
-2. Stage 1 + Stage 2 merge re-executed
-3. `globalState.update("customModes", merged)` written
-4. `onUpdate()` callback triggers webview state refresh
+1. Every scope is re-read and the per-slug merge re-executed
+2. `globalState.update("customModes", merged)` written
+3. `onUpdate()` callback triggers webview state refresh
 
 ### ⚠️ SecretStorage / globalState: No External Detection
 
@@ -786,15 +758,15 @@ all native tools
 MCP tools follow a parallel pipeline via
 [`filterMcpToolsForMode`](../packages/core/src/prompts/tools/filter-tools-for-mode.ts),
 gated by per-tool group assignment (`McpHub.getMcpToolMetadata`) and the
-per-server `disabledTools` list in `mcp_settings.json`.
+per-server `disabledTools` list in the scope `mcp.json` files.
 
 ### Visibility kill-switches
 
-| Layer                        | Storage                                        | Scope                | Edited via                                                        |
-| ---------------------------- | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| Per-mode `tools` / `tools_*` | `.shofer/shofermodes` / `custom_modes.yaml`    | Per mode             | Mode editor / file                                                |
-| Global `disabledTools`       | `globalState["disabledTools"]: string[]`       | All modes            | Settings → Tools                                                  |
-| MCP per-tool visibility      | `mcp_settings.json` per-server `disabledTools` | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
+| Layer                        | Storage                                  | Scope                | Edited via                                                        |
+| ---------------------------- | ---------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| Per-mode `tools` / `tools_*` | `shofermodes` (any scope)                | Per mode             | Mode editor / file                                                |
+| Global `disabledTools`       | `globalState["disabledTools"]: string[]` | All modes            | Settings → Tools                                                  |
+| MCP per-tool visibility      | `mcp.json` per-server `disabledTools`    | All modes (per tool) | Settings → Tools (MCP rows dispatch `toggleToolEnabledForPrompt`) |
 
 `ALWAYS_AVAILABLE_TOOLS` (defined in [`packages/types/src/tool.ts`](../packages/types/src/tool.ts))
 bypasses mode/group restrictions — but **not** `disabledTools`. The execution-time
@@ -919,12 +891,12 @@ Includes:
 
 ### 10b. What Is NOT Exported
 
-| Item                                             | Reason                                                                                           |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| **MCP server configs** (`mcp_settings.json`)     | Managed independently by `McpHub`; stored as a separate JSON file in `<globalStorage>/settings/` |
-| **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })`  |
-| **Project `.shofer/shofermodes` modes**          | File-based, per-workspace; only `source: "global"` custom modes are exported                     |
-| **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                   |
+| Item                                             | Reason                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **MCP server configs** (`mcp.json`)              | Managed independently by `McpHub`; stored per `.shofer/` scope                                  |
+| **Task history**                                 | Per-task data; explicitly excluded via `globalSettingsExportSchema.omit({ taskHistory: true })` |
+| **Project `.shofer/shofermodes` modes**          | File-based, per-workspace; only `source: "global"` custom modes are exported                    |
+| **`currentApiConfigName` / `listApiConfigMeta`** | Derived from `providerProfiles` at import time                                                  |
 
 ### 10c. Import Flow
 
@@ -942,7 +914,7 @@ flowchart TD
     GSJ["globalSettings"]
     PSM["ProviderSettingsManager.import()"]
     CPX["ContextProxy.setValues()<br/>routes each key by kind"]
-    BLOB[("SecretStorage<br/>profiles blob")]
+    BLOB[("providers.json + secrets blob<br/>split by saveConfig")]
     GST[("globalState<br/>non-secret settings")]
     KEYS[("SecretStorage<br/>global secret keys")]
 
@@ -1010,7 +982,7 @@ User clicks Reset
   └── Confirmation dialog (modal Yes/No)
        └── [Yes]
             ├── contextProxy.resetAllState()           → clears ALL globalState keys + ALL SecretStorage keys
-            ├── providerSettingsManager.resetAllConfigs() → deletes the API profiles blob from SecretStorage
+            ├── providerSettingsManager.resetAllConfigs() → deletes the secrets blob + ~/.shofer/providers.json
             ├── customModesManager.resetCustomModes()     → resets custom modes to built-in defaults
             ├── removeShoferFromStack()                   → removes from workspace task stack
             └── postStateToWebview()                      → refreshes UI
@@ -1022,12 +994,12 @@ User clicks Reset
 | --------------------------------- | ------ | ----------------------------------------------------------- |
 | API profiles & keys               | ✅     | All `SecretStorage` entries deleted                         |
 | Global settings (globalState)     | ✅     | All keys in the SQLite database cleared                     |
-| Custom modes                      | ✅     | Reset to built-in defaults; `custom_modes.yaml` overwritten |
+| Custom modes                      | ✅     | Reset to built-in defaults; `~/.shofer/shofermodes` emptied |
 | Task history                      | ✅     | Part of globalState wipe                                    |
 | Auto-approval settings            | ✅     | Part of globalState wipe                                    |
 | Custom instructions (all modes)   | ✅     | Part of globalState wipe                                    |
 | Mode-specific custom prompts      | ✅     | Part of globalState wipe                                    |
-| **MCP server configs**            | ❌     | `mcp_settings.json` is **untouched**                        |
+| **MCP server configs**            | ❌     | the `mcp.json` files are **untouched**                      |
 | **Project `.shofer/shofermodes`** | ❌     | File on disk is **untouched**                               |
 | **VS Code `settings.json`**       | ❌     | Extension configuration in VS Code is **untouched**         |
 
@@ -1090,10 +1062,10 @@ The `Import` button in the Modes tab toolbar calls the `importMode` message
 
 It opens a file dialog for YAML files and lets the user choose where to import:
 
-| Level       | File Written To                      | Effect                                           |
-| ----------- | ------------------------------------ | ------------------------------------------------ |
-| **Project** | `.shofer/shofermodes`                | Mode available in this workspace only            |
-| **Global**  | `custom_modes.yaml` (global storage) | Mode available in all workspaces on this machine |
+| Level       | File Written To         | Effect                                           |
+| ----------- | ----------------------- | ------------------------------------------------ |
+| **Project** | `.shofer/shofermodes`   | Mode available in this workspace only            |
+| **Global**  | `~/.shofer/shofermodes` | Mode available in all workspaces on this machine |
 
 The imported mode is merged into the target file. If a mode with the same slug already
 exists, it is **overwritten**.
@@ -1130,12 +1102,12 @@ Mitigations:
 | File                        | Path                                              | Contents                                             |
 | --------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
 | `.shofer/shofermodes`       | `<workspace>/.shofer/shofermodes`                 | Project-specific mode overrides (YAML)               |
-| `custom_modes.yaml`         | `<globalStorage>/settings/custom_modes.yaml`      | Global user mode customizations (YAML)               |
-| `mcp_settings.json`         | `<globalStorage>/settings/mcp_settings.json`      | MCP server definitions (JSON)                        |
+| `shofermodes`               | `~/.shofer/shofermodes` (or any scope root)       | Mode customizations (YAML)                           |
+| `mcp.json`                  | `~/.shofer/mcp.json` (or any scope root)          | MCP server definitions (JSON)                        |
 | `shofer-code-settings.json` | Any path (referenced by `autoImportSettingsPath`) | Full export including API profiles + global settings |
 
-> **Note:** `mcp_settings.json` is NOT covered by the export/import flow. To pre-configure
-> MCP servers, place the file directly in the `<globalStorage>/settings/` directory.
+> **Note:** MCP servers are NOT covered by the export/import flow. To pre-configure
+> them, place an `mcp.json` in the target scope's `.shofer/` directory.
 
 ---
 
@@ -1147,8 +1119,6 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 | ------------------------ | ------------------------------- | ----------------------------------------- |
 | `apiConversationHistory` | `api_conversation_history.json` | Per-task API message history              |
 | `uiMessages`             | `ui_messages.json`              | Per-task UI message history               |
-| `mcpSettings`            | `mcp_settings.json`             | Global MCP server definitions             |
-| `customModes`            | `custom_modes.yaml`             | Global user mode customizations           |
 | `taskMetadata`           | `task_metadata.json`            | Per-task metadata (mode, workspace, etc.) |
 | `historyItem`            | `history_item.json`             | Per-task history item (for task list)     |
 | `historyIndex`           | `_index.json`                   | Task history index (listing all tasks)    |
@@ -1157,18 +1127,19 @@ Defined in [`GlobalFileNames`](../src/shared/globalFileNames.ts:1):
 
 ## 13. Complete Storage Summary
 
-| Layer                       | Backend         | Path / Key                                                    | Format             | Scope         | Priority        | Editable           |
-| --------------------------- | --------------- | ------------------------------------------------------------- | ------------------ | ------------- | --------------- | ------------------ |
-| **API Profiles (SoT)**      | `SecretStorage` | `shofer_config_api_config`                                    | JSON blob          | Per-extension | —               | Settings UI        |
-| **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —               | Settings UI        |
-| **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —               | Settings UI        |
-| **`.shofer/shofermodes`**   | File            | `<workspace>/.shofer/shofermodes`                             | YAML               | Per-project   | Highest (modes) | Direct edit        |
-| **Global modes**            | File            | `<globalStorage>/settings/custom_modes.yaml`                  | YAML               | Per-extension | Medium (modes)  | Settings UI        |
-| **MCP servers**             | File            | `<globalStorage>/settings/mcp_settings.json`                  | JSON               | Per-extension | —               | Settings UI / file |
-| **Global settings**         | `globalState`   | `mode`, `customInstructions`, `autoApprovalEnabled`, …        | Key-value (SQLite) | Per-extension | —               | Settings UI        |
-| **Built-in modes**          | Code            | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) | TypeScript         | Per-version   | Lowest (modes)  | Code change        |
-| **Task history**            | File            | `<globalStorage>/tasks/<id>/` (multiple JSON files)           | JSON               | Per-extension | —               | Task lifecycle     |
-| **Model cache**             | File            | `<globalStorage>/cache/<provider>_models.json`                | JSON               | Per-extension | —               | Auto-refreshed     |
+| Layer                       | Backend         | Path / Key                                                    | Format             | Scope         | Priority                            | Editable           |
+| --------------------------- | --------------- | ------------------------------------------------------------- | ------------------ | ------------- | ----------------------------------- | ------------------ |
+| **API Profiles (SoT)**      | `SecretStorage` | `shofer_config_api_config`                                    | JSON blob          | Per-extension | —                                   | Settings UI        |
+| **API Keys**                | `SecretStorage` | `apiKey`, `openRouterApiKey`, … (30+ keys)                    | String             | Per-extension | —                                   | Settings UI        |
+| **Non-secret API settings** | `globalState`   | `apiProvider`, `apiModelId`, `anthropicBaseUrl`, …            | Key-value          | Per-extension | —                                   | Settings UI        |
+| **Project modes**           | File            | `<workspace>/.shofer/shofermodes`                             | YAML               | Per-project   | Highest (modes)                     | Direct edit        |
+| **User modes**              | File            | `~/.shofer/shofermodes`                                       | YAML               | Per-user      | Medium (modes)                      | Settings UI / file |
+| **Org modes**               | File            | `<org .shofer>/shofermodes` (RO)                              | YAML               | Org-global    | Lowest file scope; locked slug wins | RO mount           |
+| **MCP servers**             | File            | `mcp.json` in each `.shofer/` scope                           | JSON               | Three scopes  | project > user > org                | Settings UI / file |
+| **Global settings**         | `globalState`   | `mode`, `customInstructions`, `autoApprovalEnabled`, …        | Key-value (SQLite) | Per-extension | —                                   | Settings UI        |
+| **Built-in modes**          | Code            | [`packages/types/src/mode.ts`](../packages/types/src/mode.ts) | TypeScript         | Per-version   | Lowest (modes)                      | Code change        |
+| **Task history**            | File            | `<globalStorage>/tasks/<id>/` (multiple JSON files)           | JSON               | Per-extension | —                                   | Task lifecycle     |
+| **Model cache**             | File            | `<globalStorage>/cache/<provider>_models.json`                | JSON               | Per-extension | —                                   | Auto-refreshed     |
 
 Where `<globalStorage>` defaults to `context.globalStorageUri.fsPath`, overridable
 via the `shofer.customStoragePath` VS Code setting.
@@ -1189,14 +1160,12 @@ fallback), `architect`, `debug`, `code-search`, `web-search`, `reviewer`. There 
 no `ask`, `orchestrator`, `search`, `opinion`, or `browser` mode. §2d's table and
 code example were corrected. (Authoritative source: [`plugins/builtin-config/docs/modes.md`](../plugins/builtin-config/docs/modes.md).)
 
-### 14b. `custom_modes.yaml` Merge Logic Duplicate Code — ✅ fixed
+### 14b. Mode Merge Logic Duplicate Code — ✅ superseded
 
-[`CustomModesManager.getCustomModes()`](../src/core/config/CustomModesManager.ts:364)
-previously built two maps (`projectModes`, `globalModes`) and _also_ produced the
-real result via a filter-and-spread (`mergedModes`). `globalModes` was never read
-(dead code). Removed the dead `globalModes` map and its loop; `projectModes` is
-retained because the merge consumes its `.has()` for precedence dedup. Behavior is
-unchanged (68 CustomModesManager tests pass).
+The hand-rolled two-map merge this item fixed is gone entirely:
+`CustomModesManager.getCustomModes()` now routes the three scopes\' `shofermodes`
+through the shared `mergeLayeredConfig` engine (per-slug, locked-aware) instead
+of owning its own precedence code.
 
 ### 14c. No Documentation of `ProviderSettingsManager.SCOPE_PREFIX`
 
@@ -1268,19 +1237,20 @@ not a hard-coded string.
 
 ### 14j. VS Code Settings Editor Only Exposes a Small Minority of Settings — and Cannot Replace the Webview
 
-[`configuration.md`](configuration.md:3) opens with "Complete reference for
-all `shofer.*` VS Code settings." This creates the false impression that most
-Shofer settings live in — or could be moved into — the VS Code Settings
-editor. In reality only **18 of ~140+ settings** appear there, and the rich
-Shofer webview Settings UI cannot be replaced by `package.json`
+Only **7 of ~175 settings** are reachable from the VS Code Settings editor, and
+the rich Shofer webview Settings UI cannot be replaced by `package.json`
 `contributes.configuration.properties` for fundamental expressivity reasons.
+Anyone reading a `shofer.`-prefixed key as "a VS Code setting" will be wrong
+nearly every time — see
+[`configuration.md`](configuration.md#settings-reference) for which names are
+which.
 
 #### Current distribution
 
 | Backend                                | Count | Visible in VS Code Settings Editor? |
 | -------------------------------------- | ----- | ----------------------------------- |
-| `contributes.configuration.properties` | 18    | ✅ Yes                              |
-| `globalSettingsSchema` (`globalState`) | ~96   | ❌ No                               |
+| `contributes.configuration.properties` | 7     | ✅ Yes                              |
+| `globalSettingsSchema` (`globalState`) | 108   | ❌ No                               |
 | `ProviderSettings` (`globalState`)     | ~30   | ❌ No                               |
 | `SecretStorage` (API keys)             | 30+   | ❌ No                               |
 
@@ -1328,17 +1298,18 @@ Schema with static rendering**, while the Shofer Settings UI is a **full
 React application** with async data fetching, conditional rendering, CRUD
 operations, and custom widget composition. These are not different backends
 for the same data — they are different capability tiers. Simple key-value
-settings already live in `package.json` (the 18 that fit). Everything else
+settings already live in `package.json` (the 7 that fit). Everything else
 lives in the webview because it _must_.
 
 ### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob — ✅ resolved
 
 The per-profile LLM API keys are no longer stored as individual `SecretStorage`
-entries: the profiles blob (`shofer_config_api_config`) is their sole persisted
-store, and the current profile's secrets are sourced from it. The 8 cross-profile
-global secrets (the 7 code-index `SYNCED_SECRET_KEYS` + `openRouterImageApiKey`)
-remain individual entries. The historical duplication is described below for
-context.
+entries: the v2 secrets blob (`shofer_config_api_config`) is their sole
+Shofer-written store (non-secret fields live in `providers.json` — §1a), and the
+current profile's secrets are sourced from the composed profile. Only
+`openRouterImageApiKey` and `pluginSecrets` remain individual entries (§1b) —
+`SYNCED_SECRET_KEYS` is now empty. The historical duplication is described below
+for context.
 
 API keys were previously stored in **two places** in `SecretStorage`:
 
@@ -1381,8 +1352,9 @@ Non-secret configuration is consolidated into the layered file-based `.shofer/`
 model — three scopes (global > user > project) merged with per-key org-policy
 locking, exported/imported as a `.tar.gz` of a scope's `.shofer/` tree. See
 [`configuration.md`](configuration.md#layered-shofer-configuration) for the full
-design. `globalState` is the runtime cache for those settings; the profiles blob
-(`shofer_config_api_config`) is the sole persisted store for provider secrets. Only
+design. `globalState` is the runtime cache for those settings; provider profiles
+follow the same model via `providers.json`, with the v2 secrets blob
+(`shofer_config_api_config`) holding only locally-entered keys. Only
 the bootstrap keys `customStoragePath` and `autoImportSettingsPath` remain in vscode
 config, because they are read before `ContextProxy` initializes. The historical
 consolidation plan is archived at

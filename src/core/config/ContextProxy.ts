@@ -45,7 +45,7 @@ import type { ProviderSettingsManager } from "./ProviderSettingsManager"
  * value of a file this host already read), and the node declaration (owned by
  * `WorkerRegistry`, watched here because the scope roots and the watcher live here).
  */
-const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "workers.json"] as const
+const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "workers.json", "shofermodes", "providers.json"] as const
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -692,8 +692,8 @@ export class ContextProxy {
 		// Part B: a per-profile LLM secret's sole persisted store is the profiles blob
 		// (written by ProviderSettingsManager). Do NOT mirror it into an individual
 		// SecretStorage entry — secretCache is its in-memory holder for the current
-		// profile only. The eight cross-profile secrets (SYNCED_SECRET_KEYS +
-		// openRouterImageApiKey) keep their individual entries below.
+		// profile only. Only the GLOBAL_SECRET_KEYS (openRouterImageApiKey,
+		// pluginSecrets) plus any SYNCED_SECRET_KEYS keep individual entries below.
 		if (isProfileSecretKey(key)) {
 			this._onDidChangeEmitter.fire({ key })
 			return Promise.resolve()
@@ -713,7 +713,7 @@ export class ContextProxy {
 	 * This is useful when you need to ensure the cache has the latest values
 	 */
 	async refreshSecrets(): Promise<void> {
-		// Part B: only the eight cross-profile secrets keep individual SecretStorage
+		// Part B: only the cross-profile secrets keep individual SecretStorage
 		// entries — reload those from storage. The per-profile LLM secrets
 		// (PROFILE_SECRET_KEYS) live in the profiles blob, so re-reading individual
 		// entries would clobber the cached current-profile values with `undefined`;

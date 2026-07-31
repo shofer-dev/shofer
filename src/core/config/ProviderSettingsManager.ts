@@ -6,7 +6,7 @@ import {
 	type ProviderSettingsWithId,
 	providerSettingsWithIdSchema,
 	discriminatedProviderSettingsWithIdSchema,
-	isSecretStateKey,
+	PROFILE_SECRET_KEYS,
 	ProviderSettingsEntry,
 	DEFAULT_CONSECUTIVE_MISTAKE_LIMIT,
 	getModelId,
@@ -19,6 +19,17 @@ import { TelemetryService } from "@shofer/telemetry"
 import { Mode } from "@shofer/core"
 import { buildApiHandler } from "@shofer/core"
 import { configLog } from "@shofer/core"
+import { getWorkspacePath } from "@shofer/core"
+
+import {
+	PROVIDERS_FILE_VERSION,
+	deleteUserProvidersFile,
+	fileSecretFields,
+	loadMergedProvidersFile,
+	resolveProviderScopeRoots,
+	writeUserProvidersFile,
+	type ProvidersFile,
+} from "./providersFileLoader"
 
 // Type-safe model migrations mapping
 type ModelMigrations = {
@@ -27,29 +38,38 @@ type ModelMigrations = {
 
 const MODEL_MIGRATIONS: ModelMigrations = {} as const satisfies ModelMigrations
 
-export interface SyncCloudProfilesResult {
-	hasChanges: boolean
-	activeProfileChanged: boolean
-	activeProfileId: string
-}
+const migrationsSchema = z.object({
+	rateLimitSecondsMigrated: z.boolean().optional(),
+	openAiHeadersMigrated: z.boolean().optional(),
+	consecutiveMistakeLimitMigrated: z.boolean().optional(),
+	todoListEnabledMigrated: z.boolean().optional(),
+	claudeCodeLegacySettingsMigrated: z.boolean().optional(),
+})
 
 export const providerProfilesSchema = z.object({
 	currentApiConfigName: z.string(),
 	apiConfigs: z.record(z.string(), providerSettingsWithIdSchema),
 	modeApiConfigs: z.record(z.string(), z.string()).optional(),
-	cloudProfileIds: z.array(z.string()).optional(),
-	migrations: z
-		.object({
-			rateLimitSecondsMigrated: z.boolean().optional(),
-			openAiHeadersMigrated: z.boolean().optional(),
-			consecutiveMistakeLimitMigrated: z.boolean().optional(),
-			todoListEnabledMigrated: z.boolean().optional(),
-			claudeCodeLegacySettingsMigrated: z.boolean().optional(),
-		})
-		.optional(),
+	migrations: migrationsSchema.optional(),
 })
 
 export type ProviderProfiles = z.infer<typeof providerProfilesSchema>
+
+/**
+ * The SecretStorage blob's on-disk shape (version 2): **only** each profile's
+ * locally-entered secret fields plus the migration flags. Everything non-secret
+ * lives in the layered `.shofer/providers.json`
+ * ([`providersFileLoader.ts`](providersFileLoader.ts)); `load()` composes the
+ * two and `store()` splits them again. The legacy version-less shape (full
+ * profiles in the blob) is detected on read and split out on the next store.
+ */
+const providerSecretsBlobSchema = z.object({
+	version: z.literal(2),
+	secrets: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+	migrations: migrationsSchema.optional(),
+})
+
+type ProviderSecretsBlob = z.infer<typeof providerSecretsBlobSchema>
 
 export class ProviderSettingsManager {
 	private static readonly SCOPE_PREFIX = "shofer_config_"
@@ -92,6 +112,13 @@ export class ProviderSettingsManager {
 		return Math.random().toString(36).substring(2, 15)
 	}
 
+	/**
+	 * Set when `load()` composed from a legacy full-profiles blob; `initialize`
+	 * treats it as dirty so the very next store splits the blob into the
+	 * providers file + v2 secrets blob instead of waiting for a user mutation.
+	 */
+	private legacyBlobSeen = false
+
 	// Synchronize readConfig/writeConfig operations to avoid data loss.
 	private _lock = Promise.resolve()
 	private lock<T>(cb: () => Promise<T>) {
@@ -114,6 +141,13 @@ export class ProviderSettingsManager {
 				}
 
 				let isDirty = false
+
+				// A legacy full-profiles blob is split into providers.json + the v2
+				// secrets blob on this very pass, not on the next user mutation.
+				if (this.legacyBlobSeen) {
+					this.legacyBlobSeen = false
+					isDirty = true
+				}
 
 				// Migrate existing installs to have a per-mode API config map. Starts
 				// empty: a mode records its association on the first switch, so there is
@@ -581,11 +615,16 @@ export class ProviderSettingsManager {
 	}
 
 	/**
-	 * Reset provider profiles by deleting them from secrets.
+	 * Reset provider profiles: delete the secrets blob and the user scope's
+	 * `providers.json` (org/project scope files are not ours to delete).
 	 */
 	public async resetAllConfigs() {
 		return await this.lock(async () => {
 			await this.context.secrets.delete(this.secretsKey)
+			const { user } = this.resolveRoots()
+			if (user) {
+				await deleteUserProvidersFile(user)
+			}
 		})
 	}
 
@@ -593,50 +632,134 @@ export class ProviderSettingsManager {
 		return `${ProviderSettingsManager.SCOPE_PREFIX}api_config`
 	}
 
+	/** The `.shofer/` scope roots the providers file is read from / written to. */
+	private resolveRoots() {
+		let workspaceFolder: string | undefined
+		try {
+			workspaceFolder = getWorkspacePath() || undefined
+		} catch {
+			workspaceFolder = undefined
+		}
+		return resolveProviderScopeRoots({
+			globalStorageFsPath: this.context.globalStorageUri?.fsPath,
+			workspaceFolder,
+		})
+	}
+
+	/**
+	 * Parse the SecretStorage blob. Returns the v2 secrets blob, or — when the
+	 * content still has the legacy full-profiles shape — the legacy profiles so
+	 * `load()` can compose from them once (`store()` then splits them out).
+	 */
+	private parseSecretsBlob(content: string): { blob: ProviderSecretsBlob; legacy?: ProviderProfiles } {
+		const parsed = JSON.parse(content)
+
+		const v2 = providerSecretsBlobSchema.safeParse(parsed)
+		if (v2.success) {
+			return { blob: v2.data }
+		}
+
+		// Legacy shape: full profiles in the blob (pre-providers.json).
+		const legacyRaw = providerProfilesSchema
+			.extend({ apiConfigs: z.record(z.string(), z.any()), cloudProfileIds: z.array(z.string()).optional() })
+			.parse(parsed)
+		const apiConfigs: Record<string, ProviderSettingsWithId> = {}
+		for (const [name, apiConfig] of Object.entries(legacyRaw.apiConfigs)) {
+			const validated = this.validateProfile(apiConfig)
+			if (validated) {
+				apiConfigs[name] = validated
+			}
+		}
+		const legacy: ProviderProfiles = {
+			currentApiConfigName: legacyRaw.currentApiConfigName,
+			apiConfigs,
+			modeApiConfigs: legacyRaw.modeApiConfigs,
+			migrations: legacyRaw.migrations,
+		}
+		return { blob: { version: 2, secrets: {}, migrations: legacyRaw.migrations }, legacy }
+	}
+
+	/** Sanitize + schema-validate one profile body; `undefined` when unusable. */
+	private validateProfile(apiConfig: unknown): ProviderSettingsWithId | undefined {
+		// First, sanitize invalid apiProvider values before parsing.
+		// This handles removed providers (like "glama") gracefully.
+		const sanitizedConfig = this.sanitizeProviderConfig(apiConfig)
+
+		// For retired providers, use passthrough() to preserve legacy
+		// provider-specific fields (e.g. groqApiKey, deepInfraModelId)
+		// that strict parse() would strip.
+		const providerValue =
+			typeof sanitizedConfig === "object" && sanitizedConfig !== null && "apiProvider" in sanitizedConfig
+				? (sanitizedConfig as Record<string, unknown>).apiProvider
+				: undefined
+		const schema =
+			typeof providerValue === "string" && isRetiredProvider(providerValue)
+				? providerSettingsWithIdSchema.passthrough()
+				: providerSettingsWithIdSchema
+		const result = schema.safeParse(sanitizedConfig)
+		return result.success ? result.data : undefined
+	}
+
+	/**
+	 * Compose the effective profiles: the merged three-scope
+	 * `.shofer/providers.json` supplies every non-secret field (and any
+	 * org-supplied secret default), the SecretStorage blob overlays each
+	 * profile's locally-entered secret fields (local key wins).
+	 */
 	private async load(): Promise<ProviderProfiles> {
 		try {
 			const content = await this.context.secrets.get(this.secretsKey)
+			const { blob, legacy } = content
+				? this.parseSecretsBlob(content)
+				: { blob: { version: 2, secrets: {} } as ProviderSecretsBlob, legacy: undefined }
 
-			if (!content) {
+			const merged = await loadMergedProvidersFile(this.resolveRoots())
+
+			if (legacy) {
+				this.legacyBlobSeen = true
+				// One-shot composition from the legacy blob: its profiles win over
+				// file entries (it was the sole source of truth when written); the
+				// next store() splits non-secret fields out to the user file.
+				const apiConfigs: Record<string, ProviderSettingsWithId> = {}
+				for (const [name, body] of Object.entries(merged.profiles)) {
+					const validated = this.validateProfile(body)
+					if (validated) {
+						apiConfigs[name] = validated
+					}
+				}
+				Object.assign(apiConfigs, legacy.apiConfigs)
+				return {
+					currentApiConfigName: legacy.currentApiConfigName,
+					apiConfigs,
+					modeApiConfigs: { ...merged.modeApiConfigs, ...(legacy.modeApiConfigs ?? {}) },
+					migrations: legacy.migrations,
+				}
+			}
+
+			const apiConfigs: Record<string, ProviderSettingsWithId> = {}
+			for (const [name, body] of Object.entries(merged.profiles)) {
+				const validated = this.validateProfile(body)
+				if (!validated) {
+					continue
+				}
+				const localSecrets = blob.secrets[name]
+				apiConfigs[name] = localSecrets ? { ...validated, ...localSecrets } : validated
+			}
+
+			if (Object.keys(apiConfigs).length === 0) {
 				return this.defaultProviderProfiles
 			}
 
-			const providerProfiles = providerProfilesSchema
-				.extend({
-					apiConfigs: z.record(z.string(), z.any()),
-				})
-				.parse(JSON.parse(content))
-
-			const apiConfigs = Object.entries(providerProfiles.apiConfigs).reduce(
-				(acc, [key, apiConfig]) => {
-					// First, sanitize invalid apiProvider values before parsing
-					// This handles removed providers (like "glama") gracefully
-					const sanitizedConfig = this.sanitizeProviderConfig(apiConfig)
-
-					// For retired providers, use passthrough() to preserve legacy
-					// provider-specific fields (e.g. groqApiKey, deepInfraModelId)
-					// that strict parse() would strip.
-					const providerValue =
-						typeof sanitizedConfig === "object" &&
-						sanitizedConfig !== null &&
-						"apiProvider" in sanitizedConfig
-							? (sanitizedConfig as Record<string, unknown>).apiProvider
-							: undefined
-					const schema =
-						typeof providerValue === "string" && isRetiredProvider(providerValue)
-							? providerSettingsWithIdSchema.passthrough()
-							: providerSettingsWithIdSchema
-					const result = schema.safeParse(sanitizedConfig)
-					return result.success ? { ...acc, [key]: result.data } : acc
-				},
-				{} as Record<string, ProviderSettingsWithId>,
-			)
+			const currentApiConfigName =
+				merged.currentApiConfigName && merged.currentApiConfigName in apiConfigs
+					? merged.currentApiConfigName
+					: Object.keys(apiConfigs)[0]
 
 			return {
-				...providerProfiles,
-				apiConfigs: Object.fromEntries(
-					Object.entries(apiConfigs).filter(([_, apiConfig]) => apiConfig !== null),
-				),
+				currentApiConfigName,
+				apiConfigs,
+				modeApiConfigs: merged.modeApiConfigs,
+				migrations: blob.migrations,
 			}
 		} catch (error) {
 			if (error instanceof ZodError) {
@@ -646,7 +769,7 @@ export class ProviderSettingsManager {
 				})
 			}
 
-			throw new Error(`Failed to read provider profiles from secrets: ${error}`)
+			throw new Error(`Failed to read provider profiles: ${error}`)
 		}
 	}
 
@@ -682,216 +805,100 @@ export class ProviderSettingsManager {
 		return apiConfig
 	}
 
+	/**
+	 * Split-write the composed profiles: non-secret fields to the **user**
+	 * scope's `.shofer/providers.json`, locally-entered secret fields to the
+	 * SecretStorage blob (v2).
+	 *
+	 * Scope discipline on the file side:
+	 *   - a profile the org scope **locks** is never persisted (the merge makes
+	 *     the org entry final; a shadowed user copy would only mislead);
+	 *   - a profile whose winning entry came from the org/project scope and is
+	 *     unchanged is not copied into the user file (a copy would freeze
+	 *     upstream updates);
+	 *   - everything else — user-created profiles and user edits of unlocked
+	 *     foreign-scope profiles — lands in the user file.
+	 *
+	 * Secret discipline: a secret field goes to the blob only when it differs
+	 * from the merged file's value for that profile, so an org-supplied key that
+	 * the user never replaced stays file-sourced (and org rotation of it takes
+	 * effect); a locally-entered key is stored and wins.
+	 */
 	private async store(providerProfiles: ProviderProfiles) {
 		try {
-			await this.context.secrets.store(this.secretsKey, JSON.stringify(providerProfiles, null, 2))
+			const roots = this.resolveRoots()
+			const merged = await loadMergedProvidersFile(roots)
+
+			const userDoc: ProvidersFile = {
+				version: PROVIDERS_FILE_VERSION,
+				currentApiConfigName: providerProfiles.currentApiConfigName,
+				modeApiConfigs: providerProfiles.modeApiConfigs ?? {},
+				profiles: {},
+			}
+			const blob: ProviderSecretsBlob = {
+				version: 2,
+				secrets: {},
+				migrations: providerProfiles.migrations,
+			}
+
+			for (const [name, profile] of Object.entries(providerProfiles.apiConfigs)) {
+				const fileEntry = merged.profiles[name]
+				const fileSecrets = fileSecretFields(fileEntry)
+
+				// Split: secret fields that differ from the file's value go to the
+				// blob; the file copy carries everything else.
+				const nonSecret: Record<string, unknown> = {}
+				const localSecrets: Record<string, string> = {}
+				for (const [key, value] of Object.entries(profile)) {
+					if (value === undefined) {
+						continue
+					}
+					if ((PROFILE_SECRET_KEYS as readonly string[]).includes(key)) {
+						if (typeof value === "string" && fileSecrets[key] !== value) {
+							localSecrets[key] = value
+						}
+						continue
+					}
+					nonSecret[key] = value
+				}
+				if (Object.keys(localSecrets).length > 0) {
+					blob.secrets[name] = localSecrets
+				}
+
+				if (merged.lockedNames.has(name)) {
+					continue
+				}
+				const origin = merged.originByName[name]
+				if (
+					(origin === "global" || origin === "project") &&
+					fileEntry &&
+					deepEqual(nonSecret, this.stripSecretFields(fileEntry))
+				) {
+					continue
+				}
+				userDoc.profiles[name] = nonSecret
+			}
+
+			if (!roots.user) {
+				throw new Error("No user scope root (~/.shofer) available")
+			}
+			await writeUserProvidersFile(roots.user, userDoc)
+			await this.context.secrets.store(this.secretsKey, JSON.stringify(blob, null, 2))
 		} catch (error) {
-			throw new Error(`Failed to write provider profiles to secrets: ${error}`)
+			throw new Error(`Failed to write provider profiles: ${error}`)
 		}
 	}
 
-	private findUniqueProfileName(baseName: string, existingNames: Set<string>): string {
-		if (!existingNames.has(baseName)) {
-			return baseName
+	/** A copy of `profile` without its secret fields (for file-diff comparisons). */
+	private stripSecretFields(profile: Record<string, unknown>): Record<string, unknown> {
+		const out: Record<string, unknown> = {}
+		for (const [key, value] of Object.entries(profile)) {
+			if (value === undefined || (PROFILE_SECRET_KEYS as readonly string[]).includes(key)) {
+				continue
+			}
+			out[key] = value
 		}
-
-		// Try _local first
-		const localName = `${baseName}_local`
-		if (!existingNames.has(localName)) {
-			return localName
-		}
-
-		// Try _1, _2, etc.
-		let counter = 1
-		let candidateName: string
-		do {
-			candidateName = `${baseName}_${counter}`
-			counter++
-		} while (existingNames.has(candidateName))
-
-		return candidateName
+		return out
 	}
 
-	public async syncCloudProfiles(
-		cloudProfiles: Record<string, ProviderSettingsWithId>,
-		currentActiveProfileName?: string,
-	): Promise<SyncCloudProfilesResult> {
-		try {
-			return await this.lock(async () => {
-				const providerProfiles = await this.load()
-				const changedProfiles: string[] = []
-				const existingNames = new Set(Object.keys(providerProfiles.apiConfigs))
-
-				let activeProfileChanged = false
-				let activeProfileId = ""
-
-				if (currentActiveProfileName && providerProfiles.apiConfigs[currentActiveProfileName]) {
-					activeProfileId = providerProfiles.apiConfigs[currentActiveProfileName].id || ""
-				}
-
-				const currentCloudIds = new Set(providerProfiles.cloudProfileIds || [])
-				const newCloudIds = new Set(
-					Object.values(cloudProfiles)
-						.map((p) => p.id)
-						.filter((id): id is string => Boolean(id)),
-				)
-
-				// Step 1: Delete profiles that are cloud-managed but not in the new cloud profiles
-				for (const [name, profile] of Object.entries(providerProfiles.apiConfigs)) {
-					if (profile.id && currentCloudIds.has(profile.id) && !newCloudIds.has(profile.id)) {
-						// Check if we're deleting the active profile
-						if (name === currentActiveProfileName) {
-							activeProfileChanged = true
-							activeProfileId = "" // Clear the active profile ID since it's being deleted
-						}
-						delete providerProfiles.apiConfigs[name]
-						changedProfiles.push(name)
-						existingNames.delete(name)
-					}
-				}
-
-				// Step 2: Process each cloud profile
-				for (const [cloudName, cloudProfile] of Object.entries(cloudProfiles)) {
-					if (!cloudProfile.id) {
-						continue // Skip profiles without IDs
-					}
-
-					// Find existing profile with matching ID
-					const existingEntry = Object.entries(providerProfiles.apiConfigs).find(
-						([_, profile]) => profile.id === cloudProfile.id,
-					)
-
-					if (existingEntry) {
-						// Step 3: Update existing profile
-						const [existingName, existingProfile] = existingEntry
-
-						// Check if this is the active profile
-						const isActiveProfile = existingName === currentActiveProfileName
-
-						// Merge settings, preserving secret keys
-						const updatedProfile: ProviderSettingsWithId = { ...cloudProfile }
-						for (const [key, value] of Object.entries(existingProfile)) {
-							if (isSecretStateKey(key) && value !== undefined) {
-								;(updatedProfile as any)[key] = value
-							}
-						}
-
-						// Check if the profile actually changed using deepEqual
-						const profileChanged = !deepEqual(existingProfile, updatedProfile)
-
-						// Handle name change
-						if (existingName !== cloudName) {
-							// Remove old entry
-							delete providerProfiles.apiConfigs[existingName]
-							existingNames.delete(existingName)
-
-							// Handle name conflict
-							let finalName = cloudName
-							if (existingNames.has(cloudName)) {
-								// There's a conflict - rename the existing non-cloud profile
-								const conflictingProfile = providerProfiles.apiConfigs[cloudName]
-								if (conflictingProfile.id !== cloudProfile.id) {
-									const newName = this.findUniqueProfileName(cloudName, existingNames)
-									providerProfiles.apiConfigs[newName] = conflictingProfile
-									existingNames.add(newName)
-									changedProfiles.push(newName)
-								}
-								delete providerProfiles.apiConfigs[cloudName]
-								existingNames.delete(cloudName)
-							}
-
-							// Add updated profile with new name
-							providerProfiles.apiConfigs[finalName] = updatedProfile
-							existingNames.add(finalName)
-							changedProfiles.push(finalName)
-							if (existingName !== finalName) {
-								changedProfiles.push(existingName) // Mark old name as changed (deleted)
-							}
-
-							// If this was the active profile, mark it as changed
-							if (isActiveProfile) {
-								activeProfileChanged = true
-								activeProfileId = cloudProfile.id || ""
-							}
-						} else if (profileChanged) {
-							// Same name, but profile content changed - update in place
-							providerProfiles.apiConfigs[existingName] = updatedProfile
-							changedProfiles.push(existingName)
-
-							// If this was the active profile and settings changed, mark it as changed
-							if (isActiveProfile) {
-								activeProfileChanged = true
-								activeProfileId = cloudProfile.id || ""
-							}
-						}
-						// If name is the same and profile hasn't changed, do nothing
-					} else {
-						// Step 4: Add new cloud profile
-						let finalName = cloudName
-
-						// Handle name conflict with existing non-cloud profile
-						if (existingNames.has(cloudName)) {
-							const existingProfile = providerProfiles.apiConfigs[cloudName]
-							if (existingProfile.id !== cloudProfile.id) {
-								// Rename the existing profile
-								const newName = this.findUniqueProfileName(cloudName, existingNames)
-								providerProfiles.apiConfigs[newName] = existingProfile
-								existingNames.add(newName)
-								changedProfiles.push(newName)
-
-								// Remove the old entry
-								delete providerProfiles.apiConfigs[cloudName]
-								existingNames.delete(cloudName)
-							}
-						}
-
-						// Add the new cloud profile (without secret keys)
-						const newProfile: ProviderSettingsWithId = { ...cloudProfile }
-						// Remove any secret keys from cloud profile
-						for (const key of Object.keys(newProfile)) {
-							if (isSecretStateKey(key)) {
-								delete (newProfile as any)[key]
-							}
-						}
-
-						providerProfiles.apiConfigs[finalName] = newProfile
-						existingNames.add(finalName)
-						changedProfiles.push(finalName)
-					}
-				}
-
-				// Step 5: Handle case where all profiles might be deleted
-				if (Object.keys(providerProfiles.apiConfigs).length === 0 && changedProfiles.length > 0) {
-					// Create a default profile only if we have changed profiles
-					const defaultProfile = { id: this.generateId() }
-					providerProfiles.apiConfigs["default"] = defaultProfile
-					activeProfileChanged = true
-					activeProfileId = defaultProfile.id || ""
-					changedProfiles.push("default")
-				}
-
-				// Step 6: If active profile was deleted, find a replacement
-				if (activeProfileChanged && !activeProfileId) {
-					const firstProfile = Object.values(providerProfiles.apiConfigs)[0]
-					if (firstProfile?.id) {
-						activeProfileId = firstProfile.id
-					}
-				}
-
-				// Step 7: Update cloudProfileIds
-				providerProfiles.cloudProfileIds = Array.from(newCloudIds)
-
-				// Save the updated profiles
-				await this.store(providerProfiles)
-
-				return {
-					hasChanges: changedProfiles.length > 0,
-					activeProfileChanged,
-					activeProfileId,
-				}
-			})
-		} catch (error) {
-			throw new Error(`Failed to sync cloud profiles: ${error}`)
-		}
-	}
 }

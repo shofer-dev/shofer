@@ -26,9 +26,22 @@ vi.mock("vscode", () => ({
 	},
 }))
 
-// Keep the layered `.shofer/settings.json` overlay inert by pointing homedir at a
-// nonexistent path (mirrors ContextProxy.write.spec.ts).
+// Point homedir at a per-run temp dir: it keeps the layered `.shofer/settings.json`
+// overlay inert (no settings file there), while the providers-file half of
+// ProviderSettingsManager.store() has a writable `~/.shofer` to land in.
 const hoisted = vi.hoisted(() => ({ home: "/nonexistent-home-profile-secrets" }))
+
+beforeAll(async () => {
+	const { mkdtemp } = await import("fs/promises")
+	const { tmpdir } = await vi.importActual<typeof import("os")>("os")
+	const { join } = await import("path")
+	hoisted.home = await mkdtemp(join(tmpdir(), "profile-secrets-home-"))
+})
+
+afterAll(async () => {
+	const { rm } = await import("fs/promises")
+	await rm(hoisted.home, { recursive: true, force: true })
+})
 vi.mock("os", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("os")>()
 	return {

@@ -461,6 +461,30 @@ export class ShoferProvider
 		// any number of keys, and several of them (a locked key taking over, a provider
 		// profile name) change derived state the webview computes from the whole
 		// snapshot. External edits are rare, so the escape-hatch cost is not paid often.
+		// A providers.json edit in any scope (org bundle re-materialized, hand edit)
+		// changes the composed profile set. The manager reads files per call so no
+		// cache invalidation is needed — but the active profile's non-secret fields
+		// are hydrated into globalState, so re-activate it and re-push state.
+		this.disposables.push(
+			this.contextProxy.onDidChangeScopeFiles(({ files }) => {
+				if (!files.includes("providers.json")) {
+					return
+				}
+				void (async () => {
+					try {
+						const name = await this.providerSettingsManager.getProfile({
+							name: this.contextProxy.getValue("currentApiConfigName") ?? "default",
+						})
+						await this.activateProviderProfile({ name: name.name })
+					} catch {
+						// Profile gone or renamed on disk — the state push below still
+						// refreshes the list; the user picks a profile from it.
+					}
+					await this.postInitState()
+				})()
+			}),
+		)
+
 		this.disposables.push(
 			this.contextProxy.onDidRefreshOverlay(({ keys }) => {
 				void this.postInitState()
@@ -3809,9 +3833,9 @@ export class ShoferProvider
 	 *
 	 * Targeting rule: if a workspace is open, the write always goes to the
 	 * project-scoped `.shofer/shofermodes` file, even when the mode is currently defined only
-	 * globally. This keeps per-project API-profile preferences out of the global
-	 * `custom_modes.yaml` (which is shared across workspaces) and creates a project
-	 * override on demand. With no workspace open, the global file is updated.
+	 * globally. This keeps per-project API-profile preferences out of the user
+	 * scope's `~/.shofer/shofermodes` (which is shared across workspaces) and creates
+	 * a project override on demand. With no workspace open, the user file is updated.
 	 *
 	 * No-op for built-in modes (they have no YAML representation) and when the
 	 * existing entry already matches `configName`, to avoid spurious file writes.

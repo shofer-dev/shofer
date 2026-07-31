@@ -36,7 +36,9 @@ value (see [`settings_overlay.md`](settings_overlay.md) §1 and
 | **project** | `<workspace>/.shofer/`                                                                                                                           | yes                        | committed to the repo, shared via git |
 
 The roots are resolved by `resolveScopeRoots` in
-[`layeredSettingsLoader.ts`](../src/core/config/layeredSettingsLoader.ts). The
+[`scope-roots.ts`](../packages/core/src/config/scope-roots.ts) (shared by the host
+config loaders and the portable services — settings, modes, MCP, commands, skills
+and rules all resolve the same three roots). The
 global root being **read-only and outside `/home`** is a hard requirement: it is
 what makes org-policy locking (below) enforceable rather than advisory — a global
 layer the workspace could edit would make locking meaningless.
@@ -48,12 +50,24 @@ Each scope's `.shofer/` holds the same file set:
 ├── settings.json        # the globalSettings keys (JSON)
 ├── locked.json          # (global scope only) org-policy lock manifest
 ├── plugins.json         # plugin declarations (see PLUGINS.md)
+├── providers.json       # provider profiles (non-secret fields; keys stay in SecretStorage)
 ├── workers.json           # Shofer Worker declarations (below)
 ├── mcp.json             # MCP servers
 ├── shofermodes          # custom modes (YAML)
+├── skills/  skills-<mode>/ # skills
 ├── commands/            # slash commands (*.md)
 └── rules/  rules-<mode>/ # rules / custom instructions
 ```
+
+Every file in the tree is read from **all three scopes**: `settings.json`,
+`plugins.json` and `workers.json` through their loaders, `shofermodes`,
+`mcp.json` and `providers.json` per named entity (slug / server name / profile
+name) through the same locked-vs-default rule, and `commands/`, `skills*/`,
+`rules*/` by directory order (org, then user, then project — later wins per
+filename). Provider profiles are the one split store: non-secret fields in
+`providers.json`, locally-entered API keys in `SecretStorage` (the local key
+wins over an org-supplied file default) — see
+[`settings_overlay.md`](settings_overlay.md) §1.
 
 ### Merge order — per-key locked-vs-default
 
@@ -246,6 +260,10 @@ Two different things are documented below, and they are set in different places:
 
 Headings below use each setting's real identity: a bare name is a `globalSettings`
 key, a `shofer.`-prefixed name is a VS Code setting.
+
+This document is the per-setting reference. For how the storage backends, merge
+order, write paths, file watchers and Settings View actually work, see
+[`settings_overlay.md`](settings_overlay.md).
 
 ## Command Execution
 

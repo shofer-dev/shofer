@@ -54,6 +54,7 @@ vi.mock("fs/promises", () => ({
 		F_OK: 0,
 		R_OK: 4,
 	},
+	rename: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("os", () => ({
