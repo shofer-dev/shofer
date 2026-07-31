@@ -247,10 +247,6 @@ Two different things are documented below, and they are set in different places:
 Headings below use each setting's real identity: a bare name is a `globalSettings`
 key, a `shofer.`-prefixed name is a VS Code setting.
 
-This document is the per-setting reference. For how the storage backends, merge
-order, write paths, file watchers and Settings View actually work, see
-[`settings_overlay.md`](settings_overlay.md).
-
 ## Command Execution
 
 ### `allowedCommands`

@@ -17,11 +17,11 @@ the import/export mechanics.
 
 | Category                 | Backend                                                                   | Scope                        | Count         | Merge Priority                                         |
 | ------------------------ | ------------------------------------------------------------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
-| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 7             | —                                                      |
+| **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                                      |
 | **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                           |
 | **Mode Definitions**     | `.shofer/shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | —             | `.shofer/shofermodes` > `custom_modes.yaml` > built-in |
 | **MCP Server Configs**   | `mcp_settings.json` + `.shofer/mcp.json`                                  | Per-extension + per-scope    | —             | Project file overlays the global one                   |
-| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | 108           | Overlay wins in `getValue`; else `globalState`         |
+| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | ~96           | Overlay wins in `getValue`; else `globalState`         |
 
 > **Layered `.shofer/` model.** Non-secret settings resolve through a three-scope
 > `.shofer/` overlay. For an **unlocked** key the more-specific scope wins —
@@ -70,28 +70,38 @@ single JSON blob in VS Code's secure credential store with this schema:
 Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:670) /
 [`load()`](../src/core/config/ProviderSettingsManager.ts:581).
 
-### 1b. Individual Secret Entries — VS Code `SecretStorage`
+### 1b. Individual API Keys — VS Code `SecretStorage`
 
 **Managed by:** [`ContextProxy`](../src/core/config/ContextProxy.ts:40)
 
-Only **two** secrets keep their own `SecretStorage` entry
-([`GLOBAL_SECRET_KEYS`](../packages/types/src/global-settings.ts)):
+Each provider's API key is stored as a **separate** entry in VS Code's `SecretStorage`.
+The full list of secret keys is defined in
+[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:280):
 
-| Key                     | Contents                                                               |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `openRouterImageApiKey` | Image-generation credential — a GlobalSettings secret, not a profile's |
-| `pluginSecrets`         | Every plugin's `secret: true` config values, as one JSON blob          |
-
-**Every per-profile LLM credential — all of `SECRET_STATE_KEYS` — is sourced from
-the profiles blob instead**, and is never written to an individual entry
-([`storeSecret`](../src/core/config/ContextProxy.ts:688) returns early for a
-profile secret). `secretCache` holds only the _currently active_ profile's copy in
-memory, hydrated from the blob on activation and on restart. `initialize()` still
-_reads_ the individual entries once, to migrate and then prune values written by
-older builds.
-
-`SYNCED_SECRET_KEYS` — the controller→node replicated subset — is currently
-**empty**, so `PROFILE_SECRET_KEYS` is the whole of `SECRET_STATE_KEYS`.
+| Key                                                                                                                                                                                           | Provider                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `apiKey`                                                                                                                                                                                      | Generic / Anthropic              |
+| `openRouterApiKey`                                                                                                                                                                            | OpenRouter                       |
+| `openAiApiKey`                                                                                                                                                                                | OpenAI (compatible)              |
+| `openAiNativeApiKey`                                                                                                                                                                          | OpenAI (native Responses API)    |
+| `geminiApiKey`                                                                                                                                                                                | Google Gemini                    |
+| `deepSeekApiKey`                                                                                                                                                                              | DeepSeek                         |
+| `mistralApiKey`                                                                                                                                                                               | Mistral                          |
+| `xaiApiKey`                                                                                                                                                                                   | xAI / Grok                       |
+| `moonshotApiKey`                                                                                                                                                                              | Moonshot                         |
+| `minimaxApiKey`                                                                                                                                                                               | MiniMax                          |
+| `zaiApiKey`                                                                                                                                                                                   | Z.AI                             |
+| `fireworksApiKey`                                                                                                                                                                             | Fireworks                        |
+| `basetenApiKey`                                                                                                                                                                               | Baseten                          |
+| `sambaNovaApiKey`                                                                                                                                                                             | SambaNova                        |
+| `vercelAiGatewayApiKey`                                                                                                                                                                       | Vercel AI Gateway                |
+| `requestyApiKey`                                                                                                                                                                              | Requesty                         |
+| `unboundApiKey`                                                                                                                                                                               | Unbound                          |
+| `litellmApiKey`                                                                                                                                                                               | LiteLLM                          |
+| `ollamaApiKey`                                                                                                                                                                                | Ollama                           |
+| `awsAccessKey`, `awsApiKey`, `awsSecretKey`, `awsSessionToken`                                                                                                                                | AWS Bedrock                      |
+| `openRouterImageApiKey`                                                                                                                                                                       | Image generation (global secret) |
+| `codeIndexOpenAiKey`, `codebaseIndexOpenAiCompatibleApiKey`, `codebaseIndexGeminiApiKey`, `codebaseIndexMistralApiKey`, `codebaseIndexVercelAiGatewayApiKey`, `codebaseIndexOpenRouterApiKey` | Codebase indexing                |
 
 ### 1c. Non-Secret Provider Settings — VS Code `globalState`
 
@@ -1258,20 +1268,19 @@ not a hard-coded string.
 
 ### 14j. VS Code Settings Editor Only Exposes a Small Minority of Settings — and Cannot Replace the Webview
 
-Only **7 of ~175 settings** are reachable from the VS Code Settings editor, and
-the rich Shofer webview Settings UI cannot be replaced by `package.json`
+[`configuration.md`](configuration.md:3) opens with "Complete reference for
+all `shofer.*` VS Code settings." This creates the false impression that most
+Shofer settings live in — or could be moved into — the VS Code Settings
+editor. In reality only **18 of ~140+ settings** appear there, and the rich
+Shofer webview Settings UI cannot be replaced by `package.json`
 `contributes.configuration.properties` for fundamental expressivity reasons.
-Anyone reading a `shofer.`-prefixed key as "a VS Code setting" will be wrong
-nearly every time — see
-[`configuration.md`](configuration.md#settings-reference) for which names are
-which.
 
 #### Current distribution
 
 | Backend                                | Count | Visible in VS Code Settings Editor? |
 | -------------------------------------- | ----- | ----------------------------------- |
-| `contributes.configuration.properties` | 7     | ✅ Yes                              |
-| `globalSettingsSchema` (`globalState`) | 108   | ❌ No                               |
+| `contributes.configuration.properties` | 18    | ✅ Yes                              |
+| `globalSettingsSchema` (`globalState`) | ~96   | ❌ No                               |
 | `ProviderSettings` (`globalState`)     | ~30   | ❌ No                               |
 | `SecretStorage` (API keys)             | 30+   | ❌ No                               |
 
@@ -1319,17 +1328,17 @@ Schema with static rendering**, while the Shofer Settings UI is a **full
 React application** with async data fetching, conditional rendering, CRUD
 operations, and custom widget composition. These are not different backends
 for the same data — they are different capability tiers. Simple key-value
-settings already live in `package.json` (the 7 that fit). Everything else
+settings already live in `package.json` (the 18 that fit). Everything else
 lives in the webview because it _must_.
 
 ### 14k. Individual SecretStorage API Keys Duplicate the Profiles Blob — ✅ resolved
 
 The per-profile LLM API keys are no longer stored as individual `SecretStorage`
 entries: the profiles blob (`shofer_config_api_config`) is their sole persisted
-store, and the current profile's secrets are sourced from it. Only
-`openRouterImageApiKey` and `pluginSecrets` remain individual entries (§1b) —
-`SYNCED_SECRET_KEYS` is now empty. The historical duplication is described below
-for context.
+store, and the current profile's secrets are sourced from it. The 8 cross-profile
+global secrets (the 7 code-index `SYNCED_SECRET_KEYS` + `openRouterImageApiKey`)
+remain individual entries. The historical duplication is described below for
+context.
 
 API keys were previously stored in **two places** in `SecretStorage`:
 
