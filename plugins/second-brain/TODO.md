@@ -30,6 +30,18 @@ file knows is missing.
   task that idles without any new observation runs no pass (nothing to judge) — same
   as the reference design's empty-episode rule, just stated here.
 
+- **A very large system prompt is unusual.** The digest rides the system block (that is
+  what makes the fan-out cache-cheap), so on a long task the system prompt grows into
+  the hundreds of KB. A few OpenAI-compatible endpoints rewrite or reject system
+  messages (converting them to user/developer turns); that degrades gracefully — the
+  content stays at the front of the token stream and implicit prefix caching still
+  works — but it has not been exercised against a real non-Anthropic endpoint yet.
+- **Cache hit rates are not measured.** `stats` reports tokens and cost, not cache
+  reads/writes, because the `ApiHandler` usage chunks do not expose the split
+  uniformly. So the caching properties are pinned structurally (byte-identical system
+  block across forks; strict prefix growth across passes — `observer.spec.ts`) rather
+  than observed live.
+
 ## Accepted trade-offs
 
 - **No `tool_choice` forcing** on the final fork iteration (the ApiHandler surface has

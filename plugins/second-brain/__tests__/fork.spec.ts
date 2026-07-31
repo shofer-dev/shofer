@@ -1,7 +1,7 @@
 // Fork behavior against a scripted client: the feedback call ends the fork; prose
 // with no call coerces to silent (never an invented finding); tool rounds dispatch
-// through the executor with the grant re-checked per call; the prefix is never
-// mutated; a hung provider is cancelled and reported as a timeout.
+// through the executor with the grant re-checked per call; the shared/private split
+// (system block vs messages) holds; a hung provider is cancelled as a timeout.
 
 import { FEEDBACK_TOOL_NAME, type DetectorDef } from "../src/types.js"
 import type { ChatMessage, ForkChatResult, ForkClient } from "../src/llm.js"
@@ -33,13 +33,18 @@ function feedbackCall(args: Record<string, unknown>): ForkChatResult {
 	}
 }
 
-function scriptedClient(replies: ForkChatResult[]): ForkClient & { requests: ChatMessage[][] } {
+function scriptedClient(
+	replies: ForkChatResult[],
+): ForkClient & { requests: ChatMessage[][]; systemPrompts: string[] } {
 	const requests: ChatMessage[][] = []
+	const systemPrompts: string[] = []
 	let i = 0
 	return {
 		requests,
+		systemPrompts,
 		async chat(opts) {
 			requests.push(opts.messages)
+			systemPrompts.push(opts.systemPrompt)
 			const reply = replies[Math.min(i, replies.length - 1)]!
 			i++
 			return reply
@@ -53,8 +58,6 @@ const noTools: ToolDispatcher = {
 	},
 }
 
-const basePrefix: readonly ChatMessage[] = [{ role: "user", content: "OBSERVATION LOG\n[1] user: hi" }]
-
 describe("runFork", () => {
 	it("returns the parsed feedback when the model calls the tool", async () => {
 		const client = scriptedClient([
@@ -63,7 +66,6 @@ describe("runFork", () => {
 		const outcome = await runFork({
 			detector: detector(),
 			systemPrompt: "sys",
-			prefix: basePrefix,
 			tail: "tail",
 			tools: [],
 			client,
@@ -82,7 +84,6 @@ describe("runFork", () => {
 		const outcome = await runFork({
 			detector: detector(),
 			systemPrompt: "sys",
-			prefix: basePrefix,
 			tail: "tail",
 			tools: [],
 			client,
@@ -112,7 +113,6 @@ describe("runFork", () => {
 		const outcome = await runFork({
 			detector: detector(),
 			systemPrompt: "sys",
-			prefix: basePrefix,
 			tail: "tail",
 			tools: [],
 			client,
@@ -121,28 +121,27 @@ describe("runFork", () => {
 		})
 		expect(executed).toEqual(['read_file:{"path":"a.go"}'])
 		expect(outcome.verdictKind).toBe("ok")
-		// The second request carries the tool round-trip after the merged tail.
+		// The second request carries the tool round-trip after the tail.
 		const second = client.requests[1]!
-		expect(second.length).toBe(3) // merged user, assistant tool_use, user tool_result
+		expect(second.length).toBe(3) // user tail, assistant tool_use, user tool_result
 	})
 
-	it("never mutates the shared prefix (the cache economics rest on this)", async () => {
-		const prefix: ChatMessage[] = [{ role: "user", content: "OBSERVATION LOG" }]
-		const snapshot = JSON.stringify(prefix)
+	it("sends the shared systemPrompt untouched and puts ONLY the tail in messages", async () => {
+		// The cache economics rest on this split: everything shared rides the system
+		// block (which every caching provider marks as a breakpoint), and the fork's
+		// messages carry nothing but its own private tail.
 		const client = scriptedClient([feedbackCall({ verdict: "silent" })])
 		await runFork({
 			detector: detector(),
-			systemPrompt: "sys",
-			prefix,
-			tail: "tail",
+			systemPrompt: "SHARED PROMPT + DIGEST",
+			tail: "my private tail",
 			tools: [],
 			client,
 			executor: noTools,
 			deadlineS: 5,
 		})
-		expect(JSON.stringify(prefix)).toBe(snapshot)
-		// The merged tail rode the request, not the prefix.
-		expect(client.requests[0]![0]!.content).toContain("tail")
+		expect(client.systemPrompts).toEqual(["SHARED PROMPT + DIGEST"])
+		expect(client.requests[0]).toEqual([{ role: "user", content: "my private tail" }])
 	})
 
 	it("a hung provider is cancelled at the hard deadline and reported as timeout", async () => {
@@ -160,7 +159,6 @@ describe("runFork", () => {
 		const outcome = await runFork({
 			detector: detector(),
 			systemPrompt: "sys",
-			prefix: basePrefix,
 			tail: "tail",
 			tools: [],
 			client,

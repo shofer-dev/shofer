@@ -172,15 +172,18 @@ export interface ForkOutcome {
 }
 
 /**
- * Run one detector fork to its feedback. The prefix is shared BY REFERENCE and never
- * mutated; if its last message and the tail are both user-role they are merged at
- * request build (providers require alternation), which preserves every earlier
- * message's bytes for the provider's prefix cache.
+ * Run one detector fork to its feedback.
+ *
+ * Everything shared — the observer's instructions and the whole digest — arrives in
+ * `systemPrompt`, byte-identical across every fork of a pass; the fork's own messages
+ * are just its private tail plus whatever tool rounds it runs. That split is what makes
+ * the fan-out cache-cheap: every caching provider in the host marks the SYSTEM block as
+ * a breakpoint unconditionally, so fork 2..N read the digest the pilot wrote instead of
+ * each writing their own copy (see DESIGN.md §The request at steady state).
  */
 export async function runFork(opts: {
 	detector: DetectorDef
 	systemPrompt: string
-	prefix: readonly ChatMessage[]
 	tail: string
 	tools: ToolDefinition[]
 	client: ForkClient
@@ -196,14 +199,10 @@ export async function runFork(opts: {
 	const hardMs = (opts.deadlineS + FORK_GRACE_S) * 1000
 	const timer = setTimeout(() => controller.abort(), hardMs)
 
-	// Merge an adjacent user tail into the prefix's last user message (alternation).
-	const local: ChatMessage[] = [...opts.prefix]
-	const last = local[local.length - 1]
-	if (last && last.role === "user" && typeof last.content === "string") {
-		local[local.length - 1] = { role: "user", content: `${last.content}\n\n====\n\n${opts.tail}` }
-	} else {
-		local.push({ role: "user", content: opts.tail })
-	}
+	// The fork's private conversation: its tail, then its own tool rounds. The shared
+	// digest is NOT here — it rides the system block, so these bytes are the only ones
+	// that differ between forks.
+	const local: ChatMessage[] = [{ role: "user", content: opts.tail }]
 
 	try {
 		for (let iteration = 0; iteration < MAX_FORK_ITERATIONS; iteration++) {

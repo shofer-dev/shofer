@@ -3,8 +3,8 @@
  * allowlist.
  *
  * Two-layer enforcement, same as the reference design: the wire-level tool list is the
- * pass UNION of the enabled detectors' grants (tools lead the provider cache key, so it
- * must be pass-uniform), and dispatch re-checks every call against the CALLING
+ * union of every ENABLED detector's grant (tools lead the provider cache key, so it must
+ * be stable across passes), and dispatch re-checks every call against the CALLING
  * detector's own grant — a model can name a tool it was never offered, so the executor
  * refuses anything outside the caller's list rather than trusting the request it
  * built. `execute_command` runs ONLY exact strings from the calling detector's
@@ -29,7 +29,7 @@ function capOut(s: string): string {
 	return `${s.slice(0, MAX_TOOL_OUTPUT_CHARS)}…[+${s.length - MAX_TOOL_OUTPUT_CHARS} chars]`
 }
 
-/** JSON-schema for each catalog tool (wire definitions — the pass union filters these). */
+/** JSON-schema for each catalog tool (wire definitions — {@link passToolUnion} selects these). */
 export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 	read_file: {
 		type: "function",
@@ -120,7 +120,15 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
 	},
 }
 
-/** The wire tools array for a pass: the union of the running detectors' grants, sorted. */
+/**
+ * The wire tools array: the union of the given detectors' grants, sorted by name.
+ *
+ * Callers pass every ENABLED detector, not the cadence-filtered set running this pass —
+ * tools lead the provider's cache key, so a list that oscillated with the running set
+ * would invalidate the shared prefix on alternating passes. Offering a tool costs
+ * nothing: {@link ForkToolExecutor.execute} re-checks every call against the calling
+ * detector's own grant.
+ */
 export function passToolUnion(defs: DetectorDef[]): ToolDefinition[] {
 	const names = new Set<string>()
 	for (const d of defs) for (const t of d.tools) names.add(t)

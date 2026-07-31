@@ -152,8 +152,8 @@
 			},
 			"maxIntervalS": {
 				"type": "number",
-				"default": 900,
-				"description": "Liveness ceiling: a pass at least this often (seconds) while input is pending."
+				"default": 300,
+				"description": "Liveness ceiling: a pass at least this often (seconds) while input is pending. Kept inside the tightest common provider cache lifetime (~5 min) — passes spaced further apart start cold, since the digest the previous pass cached has expired."
 			},
 			"ratePerHour": {
 				"type": "number",

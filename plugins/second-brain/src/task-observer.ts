@@ -39,7 +39,7 @@ import { renderForAgent, renderForUser } from "./advice.js"
 import { buildForkTail, FEEDBACK_TOOL, runFork, type ForkOutcome } from "./fork.js"
 import { passToolUnion } from "./tool-executor.js"
 import type { ToolDispatcher } from "./tool-executor.js"
-import type { ForkClient, ChatMessage } from "./llm.js"
+import type { ForkClient } from "./llm.js"
 import type { Collision } from "./collisions.js"
 
 /** The stable, cache-shared system prompt every fork of every pass receives. */
@@ -253,18 +253,25 @@ export class TaskObserver {
 			const running = this.selectDetectors(defs, startedAt)
 			if (running.length === 0) return undefined
 
-			// The pass union goes on the wire for every fork; grants enforce per detector.
-			const tools = [...passToolUnion(running), FEEDBACK_TOOL]
-			const systemPrompt = `${SHARED_SYSTEM_PROMPT}\n\nWorkspace: ${this.cwd ?? "(unknown)"}`
-			// The prefix is the digest alone. Judgment (advisories, suppression) stays in
-			// storage and rides each fork's private tail — putting the mutable ledger in
-			// the prefix would bust the byte-stable prefix on every delivery.
-			const prefix: ChatMessage[] = [
-				{
-					role: "user",
-					content: `OBSERVATION DIGEST (the complete conversation, stripped)\n${this.digest.render()}`,
-				},
-			]
+			// The wire tools list is the union of every ENABLED detector's grant — not just
+			// the ones running this pass. Tools lead the cache key, so deriving it from the
+			// cadence-filtered set would make it oscillate between passes and invalidate
+			// the whole prefix every time. Per-detector access is enforced at dispatch, so
+			// offering a tool costs nothing but stability.
+			const tools = [...passToolUnion(defs.filter((d) => d.enabled)), FEEDBACK_TOOL]
+
+			// EVERYTHING SHARED GOES IN THE SYSTEM BLOCK: the observer's instructions, the
+			// workspace, and the whole digest. Every caching provider in the host marks the
+			// system block as a breakpoint unconditionally (anthropic.ts, openai.ts,
+			// lite-llm.ts and the gemini/vertex/gateway transforms all do), so this is the
+			// one placement under which fork 2..N READ what the pilot wrote rather than
+			// each writing its own copy — and the next pass extends it instead of diverging.
+			// Judgment (advisories, suppression) stays in storage and reaches a fork only
+			// through its private tail; putting the mutable ledger here would rewrite these
+			// bytes on every delivery.
+			const systemPrompt =
+				`${SHARED_SYSTEM_PROMPT}\n\nWorkspace: ${this.cwd ?? "(unknown)"}\n\n` +
+				`OBSERVATION DIGEST (the complete conversation, stripped)\n${this.digest.render()}`
 
 			// Pilot first — the prefix must be written once regardless, so the write may
 			// as well come with useful output; the rest fan out against the warm prefix.
@@ -293,7 +300,6 @@ export class TaskObserver {
 				const outcome = await runFork({
 					detector,
 					systemPrompt,
-					prefix,
 					tail: buildForkTail(detector, openAdvisories, deadlineS, BODY_CAP, structuralNote),
 					tools,
 					client: this.seams.clientFor(detector.provider),

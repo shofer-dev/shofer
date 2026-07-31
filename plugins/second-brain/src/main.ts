@@ -86,7 +86,7 @@ function tunables(ctx: PluginContext): ObserverTunables {
 	return {
 		minIntervalS: num(ctx, "minIntervalS", 90),
 		triggerChars: num(ctx, "triggerChars", 6000),
-		maxIntervalS: num(ctx, "maxIntervalS", 900),
+		maxIntervalS: num(ctx, "maxIntervalS", 300),
 		forkDeadlineS: num(ctx, "forkDeadlineS", 20),
 		tokensPerTask: num(ctx, "tokensPerTask", 2_000_000),
 		tokensPerHour: num(ctx, "tokensPerHour", 600_000),

@@ -72,8 +72,10 @@ interface Script {
 	bySlug: Record<string, ForkChatResult>
 }
 
-function scriptedClient(script: Script): ForkClient & { calls: { slug: string; messages: ChatMessage[] }[] } {
-	const calls: { slug: string; messages: ChatMessage[] }[] = []
+function scriptedClient(
+	script: Script,
+): ForkClient & { calls: { slug: string; messages: ChatMessage[]; systemPrompt: string; tools: string[] }[] } {
+	const calls: { slug: string; messages: ChatMessage[]; systemPrompt: string; tools: string[] }[] = []
 	return {
 		calls,
 		async chat(opts) {
@@ -85,7 +87,12 @@ function scriptedClient(script: Script): ForkClient & { calls: { slug: string; m
 				)
 				.join("\n")
 			const slug = Object.keys(script.bySlug).find((s) => text.includes(`"${s}" detector`)) ?? "?"
-			calls.push({ slug, messages: opts.messages })
+			calls.push({
+				slug,
+				messages: opts.messages,
+				systemPrompt: opts.systemPrompt,
+				tools: opts.tools.map((t) => t.function.name),
+			})
 			return (
 				script.bySlug[slug] ?? {
 					text: "",
@@ -227,6 +234,70 @@ describe("a pass", () => {
 		expect(h.client.calls[0]!.slug).toBe("repeat-failure") // the pilot went first
 		expect(h.notifies).toEqual([])
 		expect(h.markers.filter((m) => m.kind === "advisory")).toEqual([])
+	})
+
+	it("every fork of a pass gets a BYTE-IDENTICAL systemPrompt (cross-fork cache sharing)", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		feed(h.observer, ["write_to_file a.ts", "execute_command\ngo build ./..."])
+		await h.observer.runPass("manual", () => T0)
+
+		const prompts = h.client.calls.map((c) => c.systemPrompt)
+		expect(prompts.length).toBe(2)
+		// Identical bytes ⇒ the pilot writes the cache entry and the rest read it.
+		expect(new Set(prompts).size).toBe(1)
+		// The digest rides the system block; nothing per-detector may leak into it.
+		expect(prompts[0]).toContain("OBSERVATION DIGEST")
+		expect(prompts[0]).toContain("go build ./...")
+		expect(prompts[0]).not.toContain("detector of the Second Brain")
+		// …and each fork's private tail is the ONLY message it sends.
+		expect(h.client.calls[0]!.messages.length).toBe(1)
+		expect(String(h.client.calls[0]!.messages[0]!.content)).toContain('"repeat-failure" detector')
+	})
+
+	it("each pass EXTENDS the previous pass's systemPrompt (cross-pass cache reads)", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		feed(h.observer, ["first observation"])
+		await h.observer.runPass("manual", () => T0)
+		const pass1 = h.client.calls[0]!.systemPrompt
+
+		feed(h.observer, ["second observation"])
+		await h.observer.runPass("manual", () => T0 + 200_000)
+		const pass2 = h.client.calls[h.client.calls.length - 1]!.systemPrompt
+
+		// Strict prefix growth is what lets pass N+1 read pass N's cached entry instead
+		// of paying full price for the accumulated digest again.
+		expect(pass2.startsWith(pass1)).toBe(true)
+		expect(pass2.length).toBeGreaterThan(pass1.length)
+		expect(pass2).toContain("second observation")
+	})
+
+	it("the tools array is stable across passes even when a cadence-2 detector skips", async () => {
+		// Tools lead the cache key: deriving the wire list from the cadence-filtered
+		// running set would invalidate the whole prefix on alternating passes.
+		const defs = detectors()
+		defs.push({
+			slug: "git-log",
+			enabled: true,
+			system: "history",
+			tools: ["read_file", "execute_command"],
+			exec: ["git status --short"],
+			cadenceNth: 2,
+			confidenceFloor: 0.65,
+			deadlineS: 0,
+			pilot: false,
+			structural: false,
+		})
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } }, defs)
+
+		feed(h.observer, ["a"])
+		await h.observer.runPass("manual", () => T0)
+		feed(h.observer, ["b"])
+		await h.observer.runPass("manual", () => T0 + 200_000)
+
+		const toolSets = h.client.calls.map((c) => c.tools.join(","))
+		expect(new Set(toolSets).size).toBe(1)
+		// git-log's grant is offered on every pass, including the ones it sits out.
+		expect(h.client.calls[0]!.tools).toContain("execute_command")
 	})
 
 	it("an advise says it to BOTH: notify and marker carry the same words", async () => {
