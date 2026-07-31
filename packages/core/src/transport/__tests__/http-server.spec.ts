@@ -337,7 +337,7 @@ describe("createRequestHandler (§11)", () => {
 		expect(res.statusCode).toBe(404)
 	})
 
-	describe("auth + version handshake (Shofer Nodes L1)", () => {
+	describe("auth + version handshake (Shofer Workers L1)", () => {
 		const authed = () => createRequestHandler(api, { token: "s3cret", version: "1.2.3" })
 		const call = async (h: ReturnType<typeof createRequestHandler>, req: IncomingMessage) => {
 			const res = mockRes()

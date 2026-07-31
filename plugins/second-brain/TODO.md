@@ -61,7 +61,7 @@ file knows is missing.
   survives in storage, so a reload costs the warm prefix, not judgment. Same trade as
   the reference design's worker restart (and see the resumed-task item above).
 - **Cross-HOST collision awareness is out of scope**: one plugin instance sees one
-  host's tasks; tasks on remote Shofer Nodes are invisible to the index.
+  host's tasks; tasks on remote Shofer Workers are invisible to the index.
 - **Uptake is self-reported** (evidence-required, `no_evidence` default) — it measures
   whether the primary acted, never whether acting helped.
 

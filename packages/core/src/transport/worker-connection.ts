@@ -1,15 +1,15 @@
-import type { AgentApi, LoadSample, ShoferNodeConnState } from "@shofer/types"
+import type { AgentApi, LoadSample, ShoferWorkerConnState } from "@shofer/types"
 import { TypedEmitter } from "@shofer/types"
 
 import { MAX_EXPONENTIAL_BACKOFF_SECONDS } from "../constants.js"
 import { ShoferHttpClient } from "./http-client.js"
 
 /**
- * Controller-side status layer for a single remote executor (Shofer Nodes L1).
+ * Controller-side status layer for a single remote executor (Shofer Workers L1).
  *
- * A remote node is a `shofer serve` process on another host running the same
- * bundle. This class owns the *connection lifecycle* to one such node over the
- * existing HTTP/SSE transport and projects it into the {@link ShoferNodeConnState}
+ * A remote worker is a `shofer serve` process on another host running the same
+ * bundle. This class owns the *connection lifecycle* to one such worker over the
+ * existing HTTP/SSE transport and projects it into the {@link ShoferWorkerConnState}
  * the webview renders (plus latency / agent version / error). It is fully
  * transport-agnostic: `fetch` and all timers are injectable, so every state
  * transition is unit-testable without real sockets or real time.
@@ -29,9 +29,9 @@ import { ShoferHttpClient } from "./http-client.js"
 export interface NodeConnectionOptions {
 	/** HTTP(S) base of the remote executor, e.g. `http://10.0.0.5:30099`. */
 	baseUrl: string
-	/** Bearer token stored for this node (SecretStorage on the Cat-II side). */
+	/** Bearer token stored for this worker (SecretStorage on the Cat-II side). */
 	token?: string
-	/** The controller's build version; the node must report the exact same one. */
+	/** The controller's build version; the worker must report the exact same one. */
 	controllerVersion: string
 	/** Injected fetch (tests / non-global). */
 	fetch?: typeof fetch
@@ -50,7 +50,7 @@ export interface NodeConnectionOptions {
 	now?: () => number
 }
 
-/** Default health-ping cadence while a node is connected. */
+/** Default health-ping cadence while a worker is connected. */
 export const DEFAULT_PING_INTERVAL_MS = 15_000
 /** Default first-retry delay; doubles per attempt up to the shared backoff ceiling. */
 export const DEFAULT_RECONNECT_BASE_MS = 1_000
@@ -70,7 +70,7 @@ function errMsg(e: unknown): string {
 /**
  * Best-effort {@link LoadSample} extraction from a `/health` (or `/whoami`) JSON
  * body. Returns `undefined` unless a well-formed `loadavg` triple + numeric
- * `cpus` are present, so a node that doesn't report metrics simply has no sample.
+ * `cpus` are present, so a worker that doesn't report metrics simply has no sample.
  */
 function parseLoadSample(body: unknown): LoadSample | undefined {
 	if (typeof body !== "object" || body === null) return undefined
@@ -81,8 +81,8 @@ function parseLoadSample(body: unknown): LoadSample | undefined {
 	return { loadavg: [loadavg[0], loadavg[1], loadavg[2]] as [number, number, number], cpus }
 }
 
-export class NodeConnection {
-	private _status: ShoferNodeConnState = "disconnected"
+export class WorkerConnection {
+	private _status: ShoferWorkerConnState = "disconnected"
 	private _latencyMs?: number
 	private _agentVersion?: string
 	private _error?: string
@@ -91,7 +91,7 @@ export class NodeConnection {
 	private _managed?: boolean
 	private _client?: ShoferHttpClient
 
-	private readonly emitter = new TypedEmitter<ShoferNodeConnState>()
+	private readonly emitter = new TypedEmitter<ShoferWorkerConnState>()
 	private pingHandle?: unknown
 	private reconnectHandle?: unknown
 	private reconnectAttempt = 0
@@ -99,7 +99,7 @@ export class NodeConnection {
 
 	constructor(private readonly opts: NodeConnectionOptions) {}
 
-	get status(): ShoferNodeConnState {
+	get status(): ShoferWorkerConnState {
 		return this._status
 	}
 	get latencyMs(): number | undefined {
@@ -112,28 +112,28 @@ export class NodeConnection {
 		return this._error
 	}
 	/**
-	 * The remote node's latest {@link LoadSample} (from the `GET /health` ping /
-	 * initial handshake), or `undefined` if the node hasn't reported one yet. Fed
-	 * into the controller's ExecutorPool for its load-average LB policy.
+	 * The remote worker's latest {@link LoadSample} (from the `GET /health` ping /
+	 * initial handshake), or `undefined` if the worker hasn't reported one yet. Fed
+	 * into the controller's WorkerPool for its load-average LB policy.
 	 */
 	get load(): LoadSample | undefined {
 		return this._load
 	}
 	/**
-	 * The node's last-applied config-sync version (config_sync §6), echoed on the
-	 * `whoami` handshake and every `GET /health` ping. The controller's ExecutorPool
+	 * The worker's last-applied config-sync version (config_sync §6), echoed on the
+	 * `whoami` handshake and every `GET /health` ping. The controller's WorkerPool
 	 * gates pool eligibility on `configVersion === desiredVersion` (drift detection);
-	 * `undefined` until the node reports one.
+	 * `undefined` until the worker reports one.
 	 */
 	get configVersion(): string | undefined {
 		return this._configVersion
 	}
 	/**
-	 * Whether this node accepts controller config (config_sync §Part A). A node that
+	 * Whether this worker accepts controller config (config_sync §Part A). A worker that
 	 * reports `managed: false` is self-administered (started with local CLI overrides):
 	 * it ignores config pushes and serves tasks on its own config, so the controller's
-	 * ExecutorPool EXEMPTS it from config-version gating. Defaults to `true` (gated —
-	 * the safe direction: a managed node that hasn't reported yet must not skip the gate).
+	 * WorkerPool EXEMPTS it from config-version gating. Defaults to `true` (gated —
+	 * the safe direction: a managed worker that hasn't reported yet must not skip the gate).
 	 */
 	get managed(): boolean {
 		return this._managed ?? true
@@ -144,8 +144,8 @@ export class NodeConnection {
 	}
 
 	/**
-	 * Mark this node as having applied `version` (config_sync §Part A). The controller
-	 * calls this right after a successful `applyConfig` push so a just-synced node
+	 * Mark this worker as having applied `version` (config_sync §Part A). The controller
+	 * calls this right after a successful `applyConfig` push so a just-synced worker
 	 * becomes pool-assignable immediately, without waiting for the next `/health` tick;
 	 * the health echo remains the ongoing source of truth (it overwrites this on ping).
 	 */
@@ -154,7 +154,7 @@ export class NodeConnection {
 	}
 
 	/** Subscribe to status changes (also fired on latency updates). Returns an unsubscribe. */
-	onStatusChange(cb: (state: ShoferNodeConnState) => void): () => void {
+	onStatusChange(cb: (state: ShoferWorkerConnState) => void): () => void {
 		const sub = this.emitter.event(cb)
 		return () => sub.dispose()
 	}
@@ -220,7 +220,7 @@ export class NodeConnection {
 		try {
 			const body = (await res.json()) as { version?: string }
 			version = body.version
-			// Accept load metrics from the handshake too, if the node volunteers them.
+			// Accept load metrics from the handshake too, if the worker volunteers them.
 			const sample = parseLoadSample(body)
 			if (sample) this._load = sample
 			const cv = (body as { configVersion?: unknown }).configVersion
@@ -234,7 +234,7 @@ export class NodeConnection {
 		if (version !== this.opts.controllerVersion) {
 			return {
 				kind: "version-mismatch",
-				error: `node v${version ?? "?"} ≠ controller v${this.opts.controllerVersion}`,
+				error: `worker v${version ?? "?"} ≠ controller v${this.opts.controllerVersion}`,
 			}
 		}
 		return { kind: "ok" }
@@ -367,7 +367,7 @@ export class NodeConnection {
 		this._client = undefined
 	}
 
-	private setStatus(status: ShoferNodeConnState, error?: string): void {
+	private setStatus(status: ShoferWorkerConnState, error?: string): void {
 		this._status = status
 		this._error = error
 		this.emitter.fire(status)

@@ -97,7 +97,7 @@ export interface AgentApi {
 		plugins?: SyncedPluginState,
 	): Promise<void>
 
-	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
+	// ── Reverse data channel (Shofer Workers L3) ──────────────────────────────────
 	// A plugin-owned per-task feature for a REMOTE (shadow) task: the controller reads
 	// and mutates it on the owning executor over the control plane, exactly like a local
 	// task drives its own in-process plugin. One generic method carries all of them —

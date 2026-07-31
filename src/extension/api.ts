@@ -480,7 +480,7 @@ export class API extends EventEmitter<ShoferEvents> implements ShoferAPI {
 		)
 	}
 
-	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────
+	// ─── Reverse data channel (Shofer Workers L3) ─────────────────────
 	// Executor side: resolve the managed task by id and drive the SAME in-process
 	// changed-files service (or plugin) a local task uses, so a controller can
 	// render/operate a remote task's state over the control plane.

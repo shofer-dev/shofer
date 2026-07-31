@@ -18,7 +18,7 @@ import type { ToolGroup } from "./tool.js"
 import type { OrganizationAllowList } from "./organization.js"
 import type { SerializedCustomToolDefinition } from "./custom-tool.js"
 import type { WebviewMetricsPush } from "./metrics.js"
-import type { ShoferNodesState, ShoferNodeRequest } from "./shofer-node.js"
+import type { ShoferWorkersState, ShoferWorkerRequest } from "./shofer-worker.js"
 import type { PluginsState, PluginRequest, PluginUiContributionsState, PluginUiMessageEnvelope } from "./plugin.js"
 
 // Types previously from cloud.ts, now defined inline
@@ -194,8 +194,8 @@ export interface ExtensionMessage {
 		| "skillSearchResults"
 		| "fileContent"
 		| "addContextFiles"
-		// Shofer Nodes (remote agents) — full nodes snapshot push
-		| "shoferNodes"
+		// Shofer Workers (remote agents) — full nodes snapshot push
+		| "shoferWorkers"
 		// Plugins (Settings → Plugins tab) — discovered plugins snapshot push
 		| "plugins"
 		// Plugin UI contributions (design §6.8) — per-region contributions snapshot push
@@ -210,8 +210,8 @@ export interface ExtensionMessage {
 	text?: string
 	/** For `browserDownload`: the file the browser should save client-side. */
 	browserDownload?: { fileName: string; content: string; mime: string }
-	/** For `shoferNodes`: registry + live status of every node (no secrets). */
-	shoferNodes?: ShoferNodesState
+	/** For `shoferWorkers`: registry + live status of every node (no secrets). */
+	shoferWorkers?: ShoferWorkersState
 	/** For `plugins`: discovered plugins + enabled state (design §12). */
 	plugins?: PluginsState
 	/** For `pluginUiContributions`: enabled plugins' UI contributions per region (design §6.8). */
@@ -546,8 +546,8 @@ export type ExtensionState = Pick<
 	taskSyncEnabled: boolean
 	openAiCodexIsAuthenticated?: boolean
 	debug?: boolean
-	/** Shofer Nodes registry + live status (Local + remotes) for cold-load render. */
-	shoferNodes?: ShoferNodesState
+	/** Shofer Workers registry + live status (Local + remotes) for cold-load render. */
+	shoferWorkers?: ShoferWorkersState
 }
 
 export interface Command {
@@ -785,16 +785,16 @@ export interface WebviewMessage {
 		| "requestWorkflowStats"
 		// Metrics push from webview → extension host registry (Phase 4)
 		| "pushMetrics"
-		// Shofer Nodes (remote agents) — registry CRUD + connect/disconnect/test
-		| "shoferNode"
+		// Shofer Workers (remote agents) — registry CRUD + connect/disconnect/test
+		| "shoferWorker"
 		// Plugins (Settings → Plugins tab) — list + enable/disable
 		| "plugin"
 		// Plugin UI channel (design §6.8) — a plugin's UI → its extension-side plugin (scoped)
 		| "pluginUiMessage"
 	text?: string
 	taskId?: string
-	/** For `shoferNode`: the node registry/connection request. */
-	shoferNode?: ShoferNodeRequest
+	/** For `shoferWorker`: the node registry/connection request. */
+	shoferWorker?: ShoferWorkerRequest
 	/** For `plugin`: list / enable-disable request (design §12). */
 	plugin?: PluginRequest
 	/** For `pluginUiMessage`: a scoped plugin-UI channel message (the plugin's UI → extension). */
@@ -917,11 +917,11 @@ export interface WebviewMessage {
 	flowName?: string
 	flowParams?: Record<string, string>
 	/**
-	 * Shofer Nodes L2: caller-preferred executor for this new task. When enabled +
+	 * Shofer Workers L2: caller-preferred executor for this new task. When enabled +
 	 * assignable it wins owner selection; otherwise the pool round-robins. Carried
 	 * on `newTask`; the picker UI that sets it is optional (L3).
 	 */
-	preferredNodeId?: string
+	preferredWorkerId?: string
 }
 
 export interface RequestOpenAiCodexRateLimitsMessage {

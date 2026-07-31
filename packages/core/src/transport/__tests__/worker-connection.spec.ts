@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 
-import { NodeConnection, type NodeConnectionOptions } from "../node-connection.js"
+import { WorkerConnection, type NodeConnectionOptions } from "../worker-connection.js"
 
 /**
- * Controller-side connection status layer (Shofer Nodes L1). Drives every state
+ * Controller-side connection status layer (Shofer Workers L1). Drives every state
  * transition with an injected fake `fetch` + injected timers, so nothing waits
  * real time and each branch (connected / version-mismatch / unauthorized /
  * error / reconnecting / give-up / disconnect) is deterministic.
@@ -34,7 +34,7 @@ function makeEnv(controllerVersion = "1.0.0") {
 	})
 
 	const opts: NodeConnectionOptions = {
-		baseUrl: "http://node:30099",
+		baseUrl: "http://worker:30099",
 		controllerVersion,
 		fetch: fetchMock as unknown as typeof fetch,
 		pingIntervalMs: 100,
@@ -62,14 +62,14 @@ function makeEnv(controllerVersion = "1.0.0") {
 	}
 }
 
-describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
+describe("WorkerConnection (Shofer Workers L1 status layer)", () => {
 	let env: ReturnType<typeof makeEnv>
-	let conn: NodeConnection
+	let conn: WorkerConnection
 	let states: string[]
 
 	beforeEach(() => {
 		env = makeEnv()
-		conn = new NodeConnection(env.opts)
+		conn = new WorkerConnection(env.opts)
 		states = []
 		conn.onStatusChange((s) => states.push(s))
 	})
@@ -83,7 +83,7 @@ describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
 		expect(states).toEqual(["connecting", "connected"])
 	})
 
-	it("goes version-mismatch when the node reports a different version (api withheld)", async () => {
+	it("goes version-mismatch when the worker reports a different version (api withheld)", async () => {
 		env.routes.whoami.mockResolvedValueOnce(json(200, { version: "2.0.0" }))
 		await conn.connect()
 		expect(conn.status).toBe("version-mismatch")
@@ -117,10 +117,10 @@ describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
 	it("sends the bearer token on the whoami handshake", async () => {
 		const withToken = makeEnv()
 		withToken.opts.token = "s3cret"
-		const c = new NodeConnection(withToken.opts)
+		const c = new WorkerConnection(withToken.opts)
 		await c.connect()
 		expect(withToken.fetchMock).toHaveBeenCalledWith(
-			"http://node:30099/api/v1/whoami",
+			"http://worker:30099/api/v1/whoami",
 			expect.objectContaining({ headers: { authorization: "Bearer s3cret" } }),
 		)
 	})
@@ -220,7 +220,7 @@ describe("NodeConnection (Shofer Nodes L1 status layer)", () => {
 		expect(conn.configVersion).toBe("v2")
 	})
 
-	it("managed defaults to true when the node never reports it (safe/gated direction)", async () => {
+	it("managed defaults to true when the worker never reports it (safe/gated direction)", async () => {
 		await conn.connect() // default whoami body has no managed field
 		expect(conn.managed).toBe(true)
 	})

@@ -32,6 +32,10 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
 		<div
 			role="switch"
 			aria-checked={checked}
+			// A role="switch" div cannot carry the `disabled` attribute, so the state has
+			// to be announced explicitly — otherwise assistive tech presents a control
+			// the user cannot actually operate as operable.
+			aria-disabled={disabled || undefined}
 			aria-label={ariaLabel}
 			tabIndex={disabled ? -1 : 0}
 			data-testid={dataTestId}

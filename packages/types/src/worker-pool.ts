@@ -21,17 +21,17 @@ import type { SyncedSecrets, SyncedSettings } from "./global-settings.js"
  * `os.loadavg()` + `os.cpus().length` on the executor host, but is produced by an
  * **injected accessor** ({@link PooledExecutor.load}) so this module stays
  * browser-safe (the webview imports `@shofer/types`; it must NOT pull in
- * `node:os`). The Node-side caller (`NodeRegistry`) supplies the accessor.
+ * `node:os`). The Node-side caller (`WorkerRegistry`) supplies the accessor.
  */
 export interface LoadSample {
 	/** `os.loadavg()` output — 1-, 5- and 15-minute run-queue averages. */
 	loadavg: [number, number, number]
-	/** Logical core count on the host, used to normalize `loadavg` across nodes. */
+	/** Logical core count on the host, used to normalize `loadavg` across workers. */
 	cpus: number
 }
 
 /**
- * New-task assignment strategy for {@link ExecutorPool.pickNext}.
+ * New-task assignment strategy for {@link WorkerPool.pickNext}.
  *  - `round-robin` — rotate over the assignable executors (the historical default).
  *  - `least-load-<W>` — pick the executor with the lowest **normalized** load
  *    (`loadavg[W] / max(cpus, 1)`) for the 1-, 5- or 15-minute window.
@@ -52,13 +52,13 @@ export interface PooledExecutor {
 	disabled?: boolean
 	/**
 	 * Optional load accessor returning this executor's latest {@link LoadSample}
-	 * (or `undefined` if none is available yet). Injected by the Node-side caller;
-	 * consumed by {@link ExecutorPool.pickNext} under a `least-load-*` policy.
+	 * (or `undefined` if none is available yet). Injected by the Worker-side caller;
+	 * consumed by {@link WorkerPool.pickNext} under a `least-load-*` policy.
 	 */
 	load?: () => LoadSample | undefined
 	/**
 	 * Optional accessor for this executor's last-applied config-sync version
-	 * (config_sync §6), read live so {@link ExecutorPool.assignable} can gate
+	 * (config_sync §6), read live so {@link WorkerPool.assignable} can gate
 	 * new-task assignment on `configVersion === desiredConfigVersion` (drift).
 	 */
 	configVersion?: () => string | undefined
@@ -71,7 +71,7 @@ export interface PooledExecutor {
 	managed?: () => boolean
 }
 
-export class ExecutorPool implements AgentApi {
+export class WorkerPool implements AgentApi {
 	private readonly executors: PooledExecutor[] = []
 	private readonly unsubs = new Map<string, () => void>()
 	private readonly taskOwner = new Map<string, string>()
@@ -81,7 +81,7 @@ export class ExecutorPool implements AgentApi {
 	/**
 	 * The controller's current desired config-sync version (config_sync §6). When set,
 	 * {@link assignable} excludes any managed executor NOT reporting this exact version
-	 * (stale config), so no new task is routed to a node running stale config. Read live
+	 * (stale config), so no new task is routed to a worker running stale config. Read live
 	 * by {@link configMatches}; `undefined` (no desired version yet) disables gating.
 	 */
 	private desiredConfigVersion?: string
@@ -130,7 +130,7 @@ export class ExecutorPool implements AgentApi {
 
 	/** Whether an executor's config is current enough to receive new tasks (config_sync §6). */
 	private configMatches(e: PooledExecutor): boolean {
-		// No desired version yet, or an unmanaged (self-administered) node → not gated.
+		// No desired version yet, or an unmanaged (self-administered) worker → not gated.
 		if (this.desiredConfigVersion === undefined) return true
 		if (e.managed && !e.managed()) return true
 		return e.configVersion?.() === this.desiredConfigVersion
@@ -193,7 +193,7 @@ export class ExecutorPool implements AgentApi {
 	 */
 	async createTaskOn(id: string, input: CreateTaskInput): Promise<{ taskId: string }> {
 		const executor = this.executors.find((e) => e.id === id)
-		if (!executor) throw new Error(`ExecutorPool: unknown executor ${id}`)
+		if (!executor) throw new Error(`WorkerPool: unknown executor ${id}`)
 		const result = await executor.api.createTask(input)
 		this.taskOwner.set(result.taskId, executor.id)
 		return result
@@ -210,7 +210,7 @@ export class ExecutorPool implements AgentApi {
 
 	async createTask(input: CreateTaskInput): Promise<{ taskId: string }> {
 		const id = this.pickNext()
-		if (id === undefined) throw new Error("ExecutorPool: no executor available")
+		if (id === undefined) throw new Error("WorkerPool: no executor available")
 		return this.createTaskOn(id, input)
 	}
 
@@ -226,12 +226,12 @@ export class ExecutorPool implements AgentApi {
 		await this.owner(taskId).api.respondToAsk(taskId, response)
 	}
 
-	/** Broadcast the node-scoped config + secret slices to every registered executor (config_sync §4c). */
+	/** Broadcast the worker-scoped config + secret slices to every registered executor (config_sync §4c). */
 	async applyConfig(config: SyncedSettings, version: string, secrets: SyncedSecrets): Promise<void> {
 		await Promise.all(this.executors.map((e) => e.api.applyConfig(config, version, secrets)))
 	}
 
-	// ── Reverse data channel (Shofer Nodes L3) — route to the owning executor ────
+	// ── Reverse data channel (Shofer Workers L3) — route to the owning executor ────
 
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.owner(taskId).api.pluginRequest(taskId, plugin, method, params)
@@ -245,11 +245,11 @@ export class ExecutorPool implements AgentApi {
 	private owner(taskId: string): PooledExecutor {
 		const id = this.taskOwner.get(taskId)
 		const executor = id ? this.executors.find((e) => e.id === id) : undefined
-		if (!executor) throw new Error(`ExecutorPool: no owner for task ${taskId}`)
+		if (!executor) throw new Error(`WorkerPool: no owner for task ${taskId}`)
 		return executor
 	}
 
-	// ── read / admin accessors (Shofer Nodes L1) ───────────────────────────────
+	// ── read / admin accessors (Shofer Workers L1) ───────────────────────────────
 
 	/** The executor id that owns `taskId`, or `undefined` if the pool never assigned it. */
 	ownerOf(taskId: string): string | undefined {

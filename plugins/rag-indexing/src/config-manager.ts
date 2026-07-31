@@ -455,7 +455,7 @@ export class CodeIndexConfigManager {
 
 	/**
 	 * Search-only mode: this host may query the index but MUST NOT run the scan or
-	 * the file-watcher. Set on remote Shofer Nodes, which read the controller's
+	 * the file-watcher. Set on remote Shofer Workers, which read the controller's
 	 * index over the shared vector store; the controller is the sole writer.
 	 */
 	public get isSearchOnly(): boolean {

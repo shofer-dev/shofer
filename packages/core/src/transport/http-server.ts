@@ -72,7 +72,7 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 	return JSON.parse(raw) as Record<string, unknown>
 }
 
-/** Options for the HTTP/SSE server (auth + version handshake, §Shofer Nodes L1). */
+/** Options for the HTTP/SSE server (auth + version handshake, §Shofer Workers L1). */
 export interface HttpServerOptions {
 	/**
 	 * Optional bearer token. When set, every `/api/v1/*` route requires
@@ -143,8 +143,8 @@ export function createRequestHandler(
 		const method = req.method ?? "GET"
 
 		// Open liveness probe — never gated by the bearer token. Also the
-		// load-metric channel: `loadavg`/`cpus` let a controller's ExecutorPool
-		// run a load-average LB policy (Shofer Nodes).
+		// load-metric channel: `loadavg`/`cpus` let a controller's WorkerPool
+		// run a load-average LB policy (Shofer Workers).
 		if (method === "GET" && path === "/health") {
 			return send(res, 200, {
 				ok: true,
@@ -249,7 +249,7 @@ export function createRequestHandler(
 			return send(res, 202, { taskId, cancelled: true })
 		}
 
-		// ── Reverse data channel (Shofer Nodes L3) — plugin requests ────────────────
+		// ── Reverse data channel (Shofer Workers L3) — plugin requests ────────────────
 		// One generic route carries every plugin-owned per-task feature (the file-changes
 		// panel, checkpoints, …): `plugin` + `method` + opaque `params` in, the plugin's
 		// JSON result out. Adding a feature never means adding a route.

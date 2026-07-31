@@ -64,7 +64,7 @@ export class ShoferHttpClient implements AgentApi {
 		await this.post("/config", { config, version, secrets, plugins })
 	}
 
-	// ── Reverse data channel (Shofer Nodes L3) ──────────────────────────────────
+	// ── Reverse data channel (Shofer Workers L3) ──────────────────────────────────
 
 	async pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		// Wrapped server-side (`{ result }`) so a plugin returning a bare value —

@@ -83,9 +83,9 @@ const TaskHeader = ({
 	isRunning = false,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
-	const { apiConfiguration, currentTaskItem, parallelTasks, shoferNodes } = useExtensionState()
-	const activeNode = shoferNodes?.nodes.find((n) => n.isActive)
-	const activeRemoteNode = activeNode && activeNode.kind === "remote" ? activeNode : undefined
+	const { apiConfiguration, currentTaskItem, parallelTasks, shoferWorkers } = useExtensionState()
+	const activeWorker = shoferWorkers?.workers.find((n) => n.isActive)
+	const activeRemoteWorker = activeWorker && activeWorker.kind === "remote" ? activeWorker : undefined
 	const wfMeta = workflowVizMeta
 	const { id: modelId, info: model } = useSelectedModel(apiConfiguration)
 	const [isTaskExpanded, setIsTaskExpanded] = useState(false)
@@ -228,14 +228,14 @@ const TaskHeader = ({
 							)}
 						</div>
 						<div className="flex items-center shrink-0 ml-2 gap-1.5" onClick={(e) => e.stopPropagation()}>
-							{activeRemoteNode && (
+							{activeRemoteWorker && (
 								<StandardTooltip
-									content={`Executing on remote node: ${activeRemoteNode.label}${
-										activeRemoteNode.agentVersion ? ` (v${activeRemoteNode.agentVersion})` : ""
+									content={`Executing on remote worker: ${activeRemoteWorker.label}${
+										activeRemoteWorker.agentVersion ? ` (v${activeRemoteWorker.agentVersion})` : ""
 									}`}>
 									<span className="flex items-center gap-1 text-xs text-vscode-descriptionForeground">
 										<Server className="size-3" />
-										<span className="truncate max-w-[7rem]">{activeRemoteNode.label}</span>
+										<span className="truncate max-w-[7rem]">{activeRemoteWorker.label}</span>
 									</span>
 								</StandardTooltip>
 							)}

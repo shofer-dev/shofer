@@ -25,10 +25,19 @@ vi.mock("../../plugins/PluginSlot", () => ({
 // The real `vscode-text-field` is a web component with no value setter under jsdom, so a
 // plain <input> stands in — enough to assert what the field is TYPED as and what it shows.
 vi.mock("@vscode/webview-ui-toolkit/react", () => ({
-	VSCodeTextField: ({ value, onInput, placeholder, type, children }: any) => (
+	VSCodeTextField: ({ value, onInput, placeholder, type, disabled, readOnly, children }: any) => (
 		<>
 			{children}
-			<input type={type ?? "text"} value={value ?? ""} placeholder={placeholder} onChange={(e) => onInput?.(e)} />
+			<input
+				type={type ?? "text"}
+				value={value ?? ""}
+				placeholder={placeholder}
+				// Forwarded so a test can assert a field is genuinely not editable —
+				// the real component supports both.
+				disabled={disabled}
+				readOnly={readOnly}
+				onChange={(e) => onInput?.(e)}
+			/>
 		</>
 	),
 }))
@@ -151,5 +160,43 @@ describe("PluginsSettings save-gating", () => {
 				config: { qdrantUrl: "http://qdrant:6333", qdrantApiKey: "replacement-key" },
 			},
 		})
+	})
+
+	it("renders a file-managed plugin's config read-only, with no reset affordance", async () => {
+		const ref = createRef<PluginsSettingsRef>()
+		renderPlugins(ref, {
+			configManagedBy: "file-layer",
+			configSchema: { properties: { minIntervalS: { type: "number", default: 90 }, mute: { type: "boolean" } } },
+			config: { minIntervalS: 120 },
+		})
+
+		fireEvent.click(await waitFor(() => screen.getByText("settings:plugins.configure")))
+
+		// The value the plugin is actually running with is shown…
+		const field = screen.getByDisplayValue("120") as HTMLInputElement
+		expect(field).toBeDisabled()
+		// …and it says where it comes from, instead of inviting an edit that the
+		// overlay would silently shadow.
+		expect(screen.getByText("settings:plugins.configManaged")).toBeInTheDocument()
+		// A role="switch" div cannot be `disabled`; it announces the state and, more
+		// importantly, does not act on a click.
+		const toggle = screen.getByLabelText("mute")
+		expect(toggle).toHaveAttribute("aria-disabled", "true")
+		fireEvent.click(toggle)
+		expect(toggle).toHaveAttribute("aria-checked", "false")
+		// Nothing local to reset while the file layer supplies the values.
+		expect(screen.getByText("settings:plugins.resetDefaults")).toHaveAttribute("hidden")
+	})
+
+	it("leaves an unmanaged plugin's config editable", async () => {
+		const ref = createRef<PluginsSettingsRef>()
+		renderPlugins(ref, {
+			configSchema: { properties: { minIntervalS: { type: "number", default: 90 } } },
+			config: { minIntervalS: 120 },
+		})
+
+		fireEvent.click(await waitFor(() => screen.getByText("settings:plugins.configure")))
+		expect(screen.getByDisplayValue("120")).not.toBeDisabled()
+		expect(screen.queryByText("settings:plugins.configManaged")).not.toBeInTheDocument()
 	})
 })

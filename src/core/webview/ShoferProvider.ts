@@ -38,7 +38,7 @@ import {
 	type ExtensionMessage,
 	type ExtensionState,
 	type ShoferAPI,
-	type ShoferNodesState,
+	type ShoferWorkersState,
 	type MarketplaceInstalledMetadata,
 	ShoferEventName,
 	requestyDefaultModelId,
@@ -49,7 +49,7 @@ import {
 	isRetiredProvider,
 } from "@shofer/types"
 import { aggregateTaskCostsRecursive, type AggregatedCosts } from "@shofer/core"
-import { NodeRegistry } from "../nodes/NodeRegistry"
+import { WorkerRegistry } from "../workers/WorkerRegistry"
 import { TelemetryService } from "@shofer/telemetry"
 
 import { Package } from "@shofer/core"
@@ -211,6 +211,12 @@ export class ShoferProvider
 	/** In-flight {@link getPluginManager} build, memoized so concurrent callers share one manager. */
 	private pluginManagerBuild?: Promise<PluginManager>
 	/**
+	 * The `pluginConfigs` map as it was last observed, so an external `.shofer/` edit can
+	 * be narrowed to the plugins whose own entry actually changed
+	 * ({@link reloadPluginsForConfigChange}).
+	 */
+	private lastSeenPluginConfigs?: Record<string, Record<string, unknown>>
+	/**
 	 * Opens plugin UI bundles as standalone `WebviewPanel` editor tabs (design §6.8 —
 	 * `ctx.ui.showPanel`). Lazily created; owns its panels' lifecycle.
 	 */
@@ -244,8 +250,8 @@ export class ShoferProvider
 	private recentTasksCache?: string[]
 	public readonly taskHistoryStore: TaskHistoryStore
 	public readonly taskManager: TaskManager
-	/** Shofer Nodes registry (Local + remote executors). Set post-construction via {@link initNodeRegistry}. */
-	public nodeRegistry?: NodeRegistry
+	/** Shofer Workers registry (Local + remote executors). Set post-construction via {@link initNodeRegistry}. */
+	public nodeRegistry?: WorkerRegistry
 	/** Unsubscribe from the shared registry's onChange (cleared on dispose). */
 	private nodeRegistryUnsub?: () => void
 	private taskHistoryStoreInitialized = false
@@ -456,8 +462,18 @@ export class ShoferProvider
 		// profile name) change derived state the webview computes from the whole
 		// snapshot. External edits are rare, so the escape-hatch cost is not paid often.
 		this.disposables.push(
-			this.contextProxy.onDidRefreshOverlay(() => {
+			this.contextProxy.onDidRefreshOverlay(({ keys }) => {
 				void this.postInitState()
+				// A plugin holds the `config` it was handed at load, so a `pluginConfigs`
+				// change on disk (a hand-edited `.shofer/settings.json`, another host
+				// sharing the volume, or a re-materialized org bundle) would otherwise
+				// never reach a running plugin — the overlay would report the new value
+				// while the plugin kept acting on the old one. Reload so `ctx.config` is
+				// rebuilt, which is what `docs/configuration.md` promises when it says an
+				// edit takes effect without a restart.
+				if (keys.includes("pluginConfigs")) {
+					void this.reloadPluginsForConfigChange()
+				}
 			}),
 		)
 
@@ -2103,11 +2119,11 @@ export class ShoferProvider
 	}
 
 	// ------------------------------------------------------------------
-	// Shofer Nodes registry (Local + remote executors).
+	// Shofer Workers registry (Local + remote executors).
 	// ------------------------------------------------------------------
 
 	/**
-	 * Attach the Shofer Nodes registry. Called by the extension once the live
+	 * Attach the Shofer Workers registry. Called by the extension once the live
 	 * {@link ShoferAPI} exists (the registry drives the Local node through it).
 	 * Idempotent: a second call is ignored so re-activation can't double-register.
 	 */
@@ -2118,7 +2134,7 @@ export class ShoferProvider
 		// provider retrieves the same instance via attachSharedNodeRegistry().
 		// config_sync §4c: the ContextProxy is the controller-authoritative settings
 		// source the registry reads + subscribes to, to replicate the synced slice to nodes.
-		const registry = NodeRegistry.getInstance({
+		const registry = WorkerRegistry.getInstance({
 			context: this.context,
 			localApi,
 			controllerVersion,
@@ -2130,7 +2146,7 @@ export class ShoferProvider
 				currentPluginSlice: () => this.buildSyncedPluginSlice(),
 				onDidChange: this.pluginSyncChanged.event,
 			},
-			// Nodes declared in `.shofer/nodes.json` — how a platform-provisioned pool
+			// Nodes declared in `.shofer/workers.json` — how a platform-provisioned pool
 			// reaches this host, and how it changes while it is running (§4).
 			scopeSource: this.contextProxy,
 		})!
@@ -2139,20 +2155,20 @@ export class ShoferProvider
 	}
 
 	/**
-	 * Attach to the already-constructed shared {@link NodeRegistry} (editor-tab
+	 * Attach to the already-constructed shared {@link WorkerRegistry} (editor-tab
 	 * provider path — it has no ShoferAPI of its own). No-op if the singleton isn't
 	 * up yet (sidebar activation hasn't run).
 	 */
 	public attachSharedNodeRegistry(): void {
 		if (this.nodeRegistry) return
-		const registry = NodeRegistry.getInstance()
+		const registry = WorkerRegistry.getInstance()
 		if (!registry) return
 		this.attachNodeRegistry(registry)
 		void this.pushShoferNodesState()
 	}
 
-	/** Wire this provider to a registry: render target + `shoferNodes` push listener. */
-	private attachNodeRegistry(registry: NodeRegistry): void {
+	/** Wire this provider to a registry: render target + `shoferWorkers` push listener. */
+	private attachNodeRegistry(registry: WorkerRegistry): void {
 		this.nodeRegistry = registry
 		registry.attachProvider(this)
 		this.nodeRegistryUnsub = registry.onChange(() => {
@@ -2160,11 +2176,11 @@ export class ShoferProvider
 		})
 	}
 
-	/** Push the current Shofer Nodes state (registry + live status, no secrets) to the webview. */
+	/** Push the current Shofer Workers state (registry + live status, no secrets) to the webview. */
 	public async pushShoferNodesState(): Promise<void> {
-		const shoferNodes = this.nodeRegistry?.getState()
-		if (!shoferNodes) return
-		await this.postMessageToWebview({ type: "shoferNodes", shoferNodes })
+		const shoferWorkers = this.nodeRegistry?.getState()
+		if (!shoferWorkers) return
+		await this.postMessageToWebview({ type: "shoferWorkers", shoferWorkers })
 	}
 
 	/**
@@ -2360,6 +2376,10 @@ export class ShoferProvider
 			},
 		})
 		await manager.discover()
+		// Baseline for the on-disk config diff: without it the first external edit looks
+		// like "every plugin changed" and would reload plugins whose config did not move.
+		this.lastSeenPluginConfigs =
+			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
 		this.pluginManager = manager
 		setSharedPluginManager(manager)
 		// Load code plugins asynchronously — must NOT block task start (owner decision
@@ -2924,6 +2944,38 @@ export class ShoferProvider
 	 * Reload several plugins at once, then re-sync the subsystems their contributions
 	 * feed — what a controller config push needs after rewriting plugin config on a node.
 	 */
+	/**
+	 * Reload every loaded plugin whose effective config changed on disk, so an external
+	 * `.shofer/settings.json` edit reaches a running plugin's `ctx.config`.
+	 *
+	 * Reloads only the plugins whose own entry actually moved: `pluginConfigs` merges
+	 * whole-value across scopes, so a change to ONE plugin's entry re-reports the whole
+	 * map, and reloading every plugin would tear down unrelated services and watchers
+	 * for nothing.
+	 */
+	private async reloadPluginsForConfigChange(): Promise<void> {
+		try {
+			const manager = await this.getPluginManager()
+			const next =
+				(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ??
+				{}
+			const previous = this.lastSeenPluginConfigs
+			this.lastSeenPluginConfigs = next
+			const names = manager
+				.listPlugins()
+				.map((p) => p.name)
+				.filter((name) => JSON.stringify(previous?.[name]) !== JSON.stringify(next[name]))
+			if (names.length === 0) {
+				return
+			}
+			this.log(`[plugins] config changed on disk, reloading: ${names.join(", ")}`)
+			await this.reloadPlugins(names)
+			await this.pushPluginsState()
+		} catch (error) {
+			this.log(`[plugins] config-change reload failed: ${error instanceof Error ? error.message : String(error)}`)
+		}
+	}
+
 	public async reloadPlugins(names: string[]): Promise<void> {
 		if (names.length === 0) return
 		const manager = await this.getPluginManager()
@@ -2959,6 +3011,10 @@ export class ShoferProvider
 		const manager = await this.getPluginManager()
 		const storedConfigs =
 			(this.contextProxy.getValue("pluginConfigs") as Record<string, Record<string, unknown>> | undefined) ?? {}
+		// `pluginConfigs` merges whole-value across the `.shofer/` scopes, so once ANY
+		// scope supplies it every plugin's config is served from the file layer and a
+		// panel edit would be shadowed. The panel is told so it can say that plainly.
+		const configFromFileLayer = this.contextProxy.isManagedByFileLayer("pluginConfigs")
 		const storedSecrets = this.readPluginSecrets()
 		const secretKeysOf = (p: { manifest: { config?: unknown } }) =>
 			pluginConfigSecretKeys(p.manifest.config as PluginConfigSchema | undefined)
@@ -2982,6 +3038,7 @@ export class ShoferProvider
 			aiConsented: manager.isAiConsented(p.name),
 			// Config schema (manifest `config`) + the user's stored overrides so the panel
 			// can render an editable form. Absent schema ⇒ the panel shows no config section.
+			configManagedBy: configFromFileLayer ? ("file-layer" as const) : undefined,
 			configSchema: p.manifest.config as PluginView["configSchema"],
 			// A `secret` property's VALUE never crosses to the webview — only whether one
 			// is stored, so the panel can say "set" instead of showing a key.
@@ -3699,7 +3756,7 @@ export class ShoferProvider
 	 *
 	 * This is what the controller ships to a REMOTE node so a distributed task runs
 	 * on the exact provider/model the front-end selected (see
-	 * {@link NodeRegistry.routeNewTask}). It resolves controller-side because remote
+	 * {@link WorkerRegistry.routeNewTask}). It resolves controller-side because remote
 	 * nodes don't share the front-end's saved profiles.
 	 */
 	public async resolveTaskApiConfiguration(seeds: {
@@ -4993,7 +5050,7 @@ export class ShoferProvider
 		const cwd = this.cwd
 		const currentTask = this.getCurrentTask()
 
-		// Shofer Nodes L2 — full-state clobber fix: when a REMOTE shadow task is the
+		// Shofer Workers L2 — full-state clobber fix: when a REMOTE shadow task is the
 		// focused task, the webview must render the shadow's reduced-but-real
 		// conversation + synthetic header, NOT the local current task's. Without
 		// this override, any global full-state push (settings, MCP lifecycle, focus
@@ -5036,7 +5093,7 @@ export class ShoferProvider
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
-			shoferNodes: this.nodeRegistry?.getState(),
+			shoferWorkers: this.nodeRegistry?.getState(),
 			apiConfiguration,
 			// editingApiConfiguration is intentionally NOT seeded here: it's a
 			// webview-only edit buffer set via a targeted configUpdate when the
@@ -6414,8 +6471,8 @@ export class ShoferProvider
 
 			await this.updateTaskHistory(historyItem)
 
-			// Shofer Nodes L2: a new LOCAL task takes focus in THIS view — drop this
-			// view's remote shadow focus so its render override + activeNodeId revert
+			// Shofer Workers L2: a new LOCAL task takes focus in THIS view — drop this
+			// view's remote shadow focus so its render override + activeWorkerId revert
 			// to Local before the full state push below.
 			this.nodeRegistry?.clearShadowFocus(this)
 
@@ -6446,9 +6503,9 @@ export class ShoferProvider
 	 */
 	public async focusTask(taskId: string): Promise<void> {
 		try {
-			// Shofer Nodes L2: focusing a task from the task list is always a LOCAL,
+			// Shofer Workers L2: focusing a task from the task list is always a LOCAL,
 			// in-process task (remote shadows aren't in taskHistory). Drop THIS view's
-			// remote shadow focus so its render override + activeNodeId revert to Local
+			// remote shadow focus so its render override + activeWorkerId revert to Local
 			// before the postInitState below recomputes the state.
 			this.nodeRegistry?.clearShadowFocus(this)
 

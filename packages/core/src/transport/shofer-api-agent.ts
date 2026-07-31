@@ -46,7 +46,7 @@ const FORWARDED_EVENTS = [
 	ShoferEventName.Message,
 	ShoferEventName.TaskModeSwitched,
 	ShoferEventName.TaskTitleChanged,
-	// Full-fidelity remote rendering (Shofer Nodes L2): the controller's token/context
+	// Full-fidelity remote rendering (Shofer Workers L2): the controller's token/context
 	// meter + TaskHeader summary need authoritative token usage from the executor.
 	ShoferEventName.TaskTokenUsageUpdated,
 ] as const
@@ -130,7 +130,7 @@ export class ShoferApiAgent implements AgentApi {
 		await this.api.respondToAsk(taskId, response)
 	}
 
-	// ── Reverse data channel (Shofer Nodes L3) — delegate to the in-process API ──
+	// ── Reverse data channel (Shofer Workers L3) — delegate to the in-process API ──
 
 	pluginRequest(taskId: string, plugin: string, method: string, params?: unknown): Promise<unknown> {
 		return this.api.pluginRequest(taskId, plugin, method, params)

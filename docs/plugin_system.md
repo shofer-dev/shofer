@@ -376,7 +376,7 @@ process** managed by `McpHub` — standard MCP protocol, no Shofer-specific code
 		"mcpServers": {
 			"my-database": {
 				"type": "stdio",
-				"command": "node",
+				"command": "worker",
 				"args": ["${SHOFER_PLUGIN_ROOT}/server.js"],
 				"env": { "DB_PATH": "${SHOFER_PLUGIN_DATA}/db.sqlite" },
 			},
@@ -1056,13 +1056,13 @@ in [`plugin-config-secrets.ts`](../packages/core/src/plugins/plugin-config-secre
 the write path, the read path and the manager cannot disagree about them.
 
 **Config on a remote executor.** A manifest may also declare `"syncConfig": true`, and the
-controller then replicates that plugin's config + secrets to every Shofer Node it drives
+controller then replicates that plugin's config + secrets to every Shofer Worker it drives
 (`AgentApi.applyConfig`'s `plugins` argument — [`config_sync.md` §4b-2](./config_sync.md)).
 Opt-in per plugin, because only the plugin knows whether its settings describe the machine
 it is on or the feature it provides. Before sending, the controller asks the plugin the
 `"node-config"` request so it can shape its own outgoing slice — how the bundled indexer
-pins nodes to search-only against the collection the controller resolved, without the host
-knowing what either means. The node merges per plugin and reloads the affected plugins.
+pins workers to search-only against the collection the controller resolved, without the host
+knowing what either means. The worker merges per plugin and reloads the affected plugins.
 
 ### Enable / Disable / Reload / Uninstall
 
@@ -1418,7 +1418,7 @@ interface TaskResult {
 
 A runner plugin connects to a **Temporal** server (gRPC) and a **NATS** bus (its own TCP protocol).
 `permissions.network` today is a **fetch/HTTP allowlist** governing `ctx.host.fetch`; it does not model
-gRPC/socket egress — and a code plugin can already open raw Node sockets in-process (the sandbox is a
+gRPC/socket egress — and a code plugin can already open raw Worker sockets in-process (the sandbox is a
 restricted _context_, not a hard VM — [§7](#7-security-model)). Two modest generalizations, both
 extending the existing allowlist concept rather than adding a trust boundary:
 

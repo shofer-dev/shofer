@@ -1,4 +1,4 @@
-# Per-view task focus (Shofer Nodes)
+# Per-view task focus (Shofer Workers)
 
 When a remote-node task runs, the extension can show it in one webview view while
 another view (the sidebar, or a separate editor tab) shows a _different_ task —
@@ -24,7 +24,7 @@ a Shofer _node_.
 
 ## How it works
 
-- `NodeRegistry` holds `focusedShadows: Map<NodeProviderHost, taskId>` (the provider
+- `WorkerRegistry` holds `focusedShadows: Map<WorkerProviderHost, taskId>` (the provider
   object reference is the key — no separate id). A view absent from the map renders
   the global local current task.
 - `ShoferProvider.getStateToPostToWebview` resolves the shadow override from _this_
@@ -35,7 +35,7 @@ a Shofer _node_.
   rebuild) **fan out** only to the view(s) focused on that shadow.
 - A view focuses a shadow by **starting** a remote task from it (the `routeNewTask`
   initiator). Closing a view (`detachProvider`) releases its shadow focus; the shadow
-  keeps buffering in `NodeRegistry.shadows` for any other view.
+  keeps buffering in `WorkerRegistry.shadows` for any other view.
 
 ## Performance / scale
 
@@ -43,20 +43,20 @@ Bounded by the number of open **views**, not the number of tasks:
 
 - The webview (FE) holds only the **focused** task's `shoferMessages` array;
   background tasks' messages live extension-side in their `Task` objects (local) or in
-  `RemoteTaskShadow` buffers inside `NodeRegistry` (remote). Streaming deltas reach the
+  `RemoteTaskShadow` buffers inside `WorkerRegistry` (remote). Streaming deltas reach the
   FE only for the focused task.
 - With per-view focus, each view holds _its own_ focused task's array, and each view is
   a separate webview with its own memory. So **N open views ⇒ N arrays** (N realistically
   1–3), independent of how many tasks run.
 - The real "hundreds of tasks" cost is **extension-side and already exists** independent
   of this feature: each running task is a `Task` object (local) or a shadow buffer + a
-  slot in the merged `ExecutorPool` event feed (remote). Mitigations (evict/cap idle
+  slot in the merged `WorkerPool` event feed (remote). Mitigations (evict/cap idle
   shadow buffers, `hasMoreShoferMessages` pagination) are extension-side and orthogonal
   to per-view focus.
 
 ## Tests
 
-`src/core/nodes/__tests__/NodeRegistry.spec.ts` covers the non-clobber invariant:
+`src/core/workers/__tests__/WorkerRegistry.spec.ts` covers the non-clobber invariant:
 focusing a remote shadow in view B leaves view A's focus empty and posts deltas only to
 B; detaching a view clears its shadow focus (the shadow keeps buffering); single-view
 behavior is unchanged (the map has ≤1 entry).

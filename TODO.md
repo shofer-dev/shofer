@@ -64,8 +64,8 @@
   service. Don't build more machinery on top of "the controller is special" than the
   sole-writer rule already requires.
 
-- **A withdrawn node is cut off, not drained.** `NodeRegistry` reconciles
-  `.shofer/nodes.json` by disconnecting a node the declaration no longer names (or has
+- **A withdrawn worker is cut off, not drained.** `WorkerRegistry` reconciles
+  `.shofer/workers.json` by disconnecting a worker the declaration no longer names (or has
   re-pointed) immediately, so a task running on it dies with the connection. Fine while
   pools are sized at workspace creation and resized by hand; not fine once scale-down is
   automatic, which is when this needs a drain: stop assigning, wait for in-flight tasks

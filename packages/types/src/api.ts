@@ -85,7 +85,7 @@ export interface ShoferAPI extends EventEmitter<ShoferAPIEvents> {
 		response: { askResponse: string; text?: string; images?: string[]; askId?: string; mode?: string },
 	): Promise<void>
 
-	// ─── Reverse data channel (Shofer Nodes L3) ─────────────────────
+	// ─── Reverse data channel (Shofer Workers L3) ─────────────────────
 	// Executor side of a plugin-owned per-task feature: resolve the managed task by id
 	// and drive the same in-process plugin a local task uses, so a controller can
 	// render and operate a REMOTE task's diffs, snapshots or change list.

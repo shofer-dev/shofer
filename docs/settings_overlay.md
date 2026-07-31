@@ -425,7 +425,7 @@ are `setModeConfig()` (via `setModeApiConfig` on Save, `activateProviderProfile`
 the `handleUserModeSwitch` backfill); because they all write the one store, a profile
 activation can no longer drift the UI away from what task creation resolves. The
 headless host (`shofer serve`) reads the same blob through the vscode-shim's
-file-backed `SecretStorage`, and remote nodes never resolve it themselves — the
+file-backed `SecretStorage`, and remote workers never resolve it themselves — the
 controller resolves `resolveTaskApiConfiguration()` and ships the concrete
 `ProviderSettings` per task.
 

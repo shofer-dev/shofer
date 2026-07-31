@@ -63,7 +63,7 @@ import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "@shofer/core"
-import { NodeRegistry } from "./core/nodes/NodeRegistry"
+import { WorkerRegistry } from "./core/workers/WorkerRegistry"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -472,7 +472,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const api = new API(outputChannel, provider, socketPath, enableLogging)
 
-	// Shofer Nodes: attach the controller-side registry now that the live ShoferAPI
+	// Shofer Workers: attach the controller-side registry now that the live ShoferAPI
 	// exists. It owns the executor pool (Local + remote nodes) and pushes node
 	// status to the webview; the Local node is driven through this API.
 	provider.initNodeRegistry(api, Package.version)
@@ -485,7 +485,7 @@ export async function deactivate() {
 	outputChannel.appendLine(`${Package.name} extension deactivated`)
 
 	await McpServerManager.cleanup(extensionContext)
-	NodeRegistry.resetInstance()
+	WorkerRegistry.resetInstance()
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
 }

@@ -224,7 +224,7 @@ Two guards live on this side of the seam:
   re-reads when the task's `messageCount` changes (throttled to once a second) and after
   every action.
 
-## Remote tasks (Shofer Nodes L3)
+## Remote tasks (Shofer Workers L3)
 
 A task running on a remote executor keeps its copies on that executor. The panel needs no
 branch for it: `PluginUIApi.request` is routed to the plugin instance on the task's own

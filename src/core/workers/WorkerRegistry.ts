@@ -12,17 +12,17 @@ import {
 	type ServerEvent,
 	type ShoferAPI,
 	type ShoferMessage,
-	type ShoferNodeConnState,
-	type ShoferNodeDef,
-	type ShoferNodeRequest,
-	type ShoferNodeView,
-	type ShoferNodesState,
+	type ShoferWorkerConnState,
+	type ShoferWorkerDef,
+	type ShoferWorkerRequest,
+	type ShoferWorkerView,
+	type ShoferWorkersState,
 	type SyncedPluginState,
 	type SyncedSecrets,
 	type SyncedSettings,
 	type TokenUsage,
-	ExecutorPool,
-	LOCAL_NODE_ID,
+	WorkerPool,
+	LOCAL_WORKER_ID,
 	ShoferEventName,
 	SYNCED_SECRET_KEYS,
 	SYNCED_SETTINGS_KEYS,
@@ -31,44 +31,44 @@ import {
 	pickSyncedSecrets,
 	pickSyncedSettings,
 } from "@shofer/types"
-import { NodeConnection, ShoferApiAgent, configLog, type NodeDeclarationEntry } from "@shofer/core"
+import { WorkerConnection, ShoferApiAgent, configLog, type WorkerDeclarationEntry } from "@shofer/core"
 
-import { loadNodeDeclaration, readNodeToken } from "../config/nodeDeclarationLoader.js"
+import { loadWorkerDeclaration, readWorkerToken } from "../config/workerDeclarationLoader.js"
 import type { ScopeRoots } from "../config/layeredSettingsLoader.js"
 
 import { RemoteTaskShadow } from "./RemoteTaskShadow.js"
 
 /**
- * Controller-side orchestrator for Shofer Nodes (v3-native, L1).
+ * Controller-side orchestrator for Shofer Workers (v3-native, L1).
  *
- * Owns the {@link ExecutorPool} and the lifecycle of every node: the built-in
+ * Owns the {@link WorkerPool} and the lifecycle of every worker: the built-in
  * **Local** in-process agent plus zero or more **remote** executors (`shofer
- * serve` on another host, driven over HTTP/SSE via {@link NodeConnection}). It
- * persists the non-secret {@link ShoferNodeDef}s in `globalState` and the
- * per-node bearer tokens in `secrets`, keeps the pool populated as remotes come
- * and go, and projects everything into the {@link ShoferNodesState} the webview
+ * serve` on another host, driven over HTTP/SSE via {@link WorkerConnection}). It
+ * persists the non-secret {@link ShoferWorkerDef}s in `globalState` and the
+ * per-worker bearer tokens in `secrets`, keeps the pool populated as remotes come
+ * and go, and projects everything into the {@link ShoferWorkersState} the webview
  * renders (never leaking a token — only its presence via `hasToken`).
  *
  * L1 scope: registry + connection status + pool population + UI state. Task
- * creation is NOT routed through the pool yet (Level 2), so `activeNodeId`
+ * creation is NOT routed through the pool yet (Level 2), so `activeWorkerId`
  * defaults to Local.
  */
 
-/** The minimal connection surface the registry drives (satisfied by {@link NodeConnection}). */
-export interface INodeConnection {
-	readonly status: ShoferNodeConnState
+/** The minimal connection surface the registry drives (satisfied by {@link WorkerConnection}). */
+export interface IWorkerConnection {
+	readonly status: ShoferWorkerConnState
 	readonly latencyMs?: number
 	readonly agentVersion?: string
 	readonly error?: string
-	/** The node's latest load sample (from the health ping), for the LB policy. */
+	/** The worker's latest load sample (from the health ping), for the LB policy. */
 	readonly load: LoadSample | undefined
-	/** The node's last-applied config-sync version (config_sync §6), echoed on /health. */
+	/** The worker's last-applied config-sync version (config_sync §6), echoed on /health. */
 	readonly configVersion: string | undefined
-	/** Whether the node accepts controller config (config_sync §Part A); `false` ⇒ exempt from gating. */
+	/** Whether the worker accepts controller config (config_sync §Part A); `false` ⇒ exempt from gating. */
 	readonly managed: boolean
 	readonly api: AgentApi | undefined
-	onStatusChange(cb: (state: ShoferNodeConnState) => void): () => void
-	/** Record a just-pushed config version so the node is pool-assignable without waiting for the next ping. */
+	onStatusChange(cb: (state: ShoferWorkerConnState) => void): () => void
+	/** Record a just-pushed config version so the worker is pool-assignable without waiting for the next ping. */
 	markConfigApplied(version: string): void
 	connect(): Promise<void>
 	disconnect(): void
@@ -97,22 +97,22 @@ export interface SyncedConfigSource {
  *
  * Separate from {@link SyncedConfigSource} because plugin state is not in the global
  * settings schema and is not the controller's to shape: the source asks each opted-in
- * plugin what a node should receive. Absent ⇒ nodes get no plugin state, which is the
+ * plugin what a worker should receive. Absent ⇒ workers get no plugin state, which is the
  * pre-plugin-sync behaviour.
  */
 export interface PluginSyncSource {
-	/** The controller→node slice for every plugin that declares `syncConfig`. */
+	/** The controller→worker slice for every plugin that declares `syncConfig`. */
 	currentPluginSlice(): Promise<SyncedPluginState>
 	/** Fires when a synced plugin's config or credentials changed. */
 	onDidChange?: Event<void>
 }
 
-/** Factory for a node connection (injectable so the registry is unit-testable). */
-export type NodeConnectionFactory = (opts: {
+/** Factory for a worker connection (injectable so the registry is unit-testable). */
+export type WorkerConnectionFactory = (opts: {
 	baseUrl: string
 	token?: string
 	controllerVersion: string
-}) => INodeConnection
+}) => IWorkerConnection
 
 /**
  * The minimal slice of {@link ShoferProvider} the registry drives (Level 2). Kept
@@ -121,7 +121,7 @@ export type NodeConnectionFactory = (opts: {
  * in-process new-task path and returns the new task id; `getCurrentTask` and
  * `postMessageToWebview` back the shadow render + focus logic (Stages B/C).
  */
-export interface NodeProviderHost {
+export interface WorkerProviderHost {
 	createManagedTask(
 		name?: string,
 		text?: string,
@@ -135,7 +135,7 @@ export interface NodeProviderHost {
 	postInitState(): Promise<void>
 }
 
-/** Options for {@link NodeRegistry.routeNewTask} (the pooled new-task entry point). */
+/** Options for {@link WorkerRegistry.routeNewTask} (the pooled new-task entry point). */
 export interface RouteNewTaskInput {
 	prompt: string
 	images?: string[]
@@ -143,25 +143,25 @@ export interface RouteNewTaskInput {
 	apiConfigName?: string
 	/** Directory the task runs in, when a plugin placed it somewhere other than the workspace. */
 	cwd?: string
-	/** Optional caller-preferred node; honored when enabled+assignable, else round-robin. */
-	preferredNodeId?: string
+	/** Optional caller-preferred worker; honored when enabled+assignable, else round-robin. */
+	preferredWorkerId?: string
 	/**
 	 * The controller-resolved API Configuration for this task, shipped to a REMOTE
-	 * owner so the task runs on the same provider/model the front-end picked (a node
+	 * owner so the task runs on the same provider/model the front-end picked (a worker
 	 * without a CLI override applies it; one with an override ignores it). Unused on
 	 * the Local path — the in-process task reads the provider's live config directly.
 	 */
 	apiConfiguration?: ProviderSettings
 }
 
-export interface NodeRegistryOptions {
+export interface WorkerRegistryOptions {
 	context: vscode.ExtensionContext
 	localApi: ShoferAPI
 	controllerVersion: string
 	/**
 	 * Controller-authoritative settings source (config_sync §4c). The registry reads
 	 * the synced slice from it and subscribes to changes to push config to remote
-	 * nodes. Optional so unit tests can construct the registry without a ContextProxy;
+	 * workers. Optional so unit tests can construct the registry without a ContextProxy;
 	 * when absent, config sync is inert (no desired version → the pool is never gated).
 	 */
 	configSource?: SyncedConfigSource
@@ -171,16 +171,16 @@ export interface NodeRegistryOptions {
 	 */
 	pluginSyncSource?: PluginSyncSource
 	/**
-	 * Where `.shofer/nodes.json` is read from and how a change to it is announced
+	 * Where `.shofer/workers.json` is read from and how a change to it is announced
 	 * (docs/workspace_agent_pool.md §4). Satisfied by `ContextProxy`. Absent ⇒ declared
-	 * nodes are not supported and only UI-created nodes exist, which is the pre-Phase-2
+	 * workers are not supported and only UI-created workers exist, which is the pre-Phase-2
 	 * behaviour.
 	 */
 	scopeSource?: ScopeDeclarationSource
 }
 
 /**
- * The minimal scope-file surface the registry needs to keep the declared node set in
+ * The minimal scope-file surface the registry needs to keep the declared worker set in
  * sync with disk: where the three `.shofer/` roots are, and a signal when one of their
  * files changed. Declared locally (rather than importing `ContextProxy`) for the same
  * reason as {@link SyncedConfigSource} — no import cycle, and tests inject a fake.
@@ -190,22 +190,22 @@ export interface ScopeDeclarationSource {
 	onDidChangeScopeFiles: Event<{ files: string[] }>
 }
 
-export interface NodeRegistryDeps {
+export interface WorkerRegistryDeps {
 	/** Override the connection factory (tests inject a fake). */
-	createConnection?: NodeConnectionFactory
+	createConnection?: WorkerConnectionFactory
 	/** Override the Local agent adapter (tests avoid needing a real ShoferAPI). */
 	localAgent?: AgentApi
 }
 
-const DEFS_KEY = "shoferNodes.defs"
-const tokenKey = (id: string): string => `shoferNode.token.${id}`
+const DEFS_KEY = "shoferWorkers.defs"
+const tokenKey = (id: string): string => `shoferWorker.token.${id}`
 
 /** The scope files this registry reconciles from (see {@link ScopeDeclarationSource}). */
-const NODES_FILE = "nodes.json"
+const WORKERS_FILE = "workers.json"
 const LOCKED_FILE = "locked.json"
 
-/** VS Code setting selecting the ExecutorPool's new-task load-balancing policy. */
-const LOAD_BALANCER_SETTING = "shofer.nodes.loadBalancer"
+/** VS Code setting selecting the WorkerPool's new-task load-balancing policy. */
+const LOAD_BALANCER_SETTING = "shofer.workers.loadBalancer"
 /** Valid {@link LoadBalancerPolicy} values (guards the settings read). */
 const LOAD_BALANCER_POLICIES: readonly LoadBalancerPolicy[] = [
 	"round-robin",
@@ -214,34 +214,34 @@ const LOAD_BALANCER_POLICIES: readonly LoadBalancerPolicy[] = [
 	"least-load-15m",
 ]
 
-export class NodeRegistry {
+export class WorkerRegistry {
 	private readonly context: vscode.ExtensionContext
 	private readonly controllerVersion: string
-	private readonly pool = new ExecutorPool()
+	private readonly pool = new WorkerPool()
 	private readonly localAgent: AgentApi
-	private readonly createConnection: NodeConnectionFactory
-	private readonly connections = new Map<string, INodeConnection>()
+	private readonly createConnection: WorkerConnectionFactory
+	private readonly connections = new Map<string, IWorkerConnection>()
 	private readonly hasTokenCache = new Set<string>()
 	private readonly listeners = new Set<() => void>()
-	private defs: ShoferNodeDef[] = []
-	/** Every attached provider (sidebar + editor-tab). All get `shoferNodes` via `onChange`. */
-	private readonly providers = new Set<NodeProviderHost>()
+	private defs: ShoferWorkerDef[] = []
+	/** Every attached provider (sidebar + editor-tab). All get `shoferWorkers` via `onChange`. */
+	private readonly providers = new Set<WorkerProviderHost>()
 	/** Per-remote-task render buffers (L2). Local tasks are NEVER shadowed. */
 	private readonly shadows = new Map<string, RemoteTaskShadow>()
 	/**
 	 * Per-view shadow focus: the remote-task shadow each view (provider) is currently
 	 * rendering. A view ABSENT from this map renders the GLOBAL local current task —
 	 * byte-for-byte the pre-per-view behavior. This split is what lets the sidebar
-	 * show a local task while a separate editor tab streams a remote-node shadow
+	 * show a local task while a separate editor tab streams a remote-worker shadow
 	 * without the two clobbering each other. The map key IS the provider object
 	 * reference, so no separate view id is needed.
 	 */
-	private readonly focusedShadows = new Map<NodeProviderHost, string>()
+	private readonly focusedShadows = new Map<WorkerProviderHost, string>()
 	/** Disposes the `onDidChangeConfiguration` subscription for the LB policy. */
 	private readonly configDisposable: vscode.Disposable
 	/** Controller-authoritative settings source (config_sync §4c); undefined disables sync. */
 	private readonly configSource?: SyncedConfigSource
-	/** Controller-authoritative plugin-state source; undefined ⇒ nodes get no plugin slice. */
+	/** Controller-authoritative plugin-state source; undefined ⇒ workers get no plugin slice. */
 	private readonly pluginSyncSource?: PluginSyncSource
 	/**
 	 * The last plugin slice built from {@link pluginSyncSource}.
@@ -255,7 +255,7 @@ export class NodeRegistry {
 	private pluginChangeDisposable?: { dispose(): void }
 	/** Disposes the `configSource.onDidChange` subscription for config-sync broadcasts. */
 	private configChangeDisposable?: { dispose(): void }
-	/** Where `.shofer/nodes.json` lives + its change signal; undefined ⇒ no declared nodes. */
+	/** Where `.shofer/workers.json` lives + its change signal; undefined ⇒ no declared workers. */
 	private readonly scopeSource?: ScopeDeclarationSource
 	/** Disposes the `scopeSource.onDidChangeScopeFiles` subscription. */
 	private scopeChangeDisposable?: { dispose(): void }
@@ -274,55 +274,55 @@ export class NodeRegistry {
 	])
 
 	// ── shared singleton (mirrors ContextProxy / CodeIndexManager) ───────────────
-	private static _instance: NodeRegistry | undefined
+	private static _instance: WorkerRegistry | undefined
 
 	/**
 	 * The process-wide shared registry. Constructed once (by the sidebar activation,
 	 * which owns the live {@link ShoferAPI}); the editor-tab provider retrieves the
-	 * SAME instance with no args so both webviews share one pool + node state. Pass
+	 * SAME instance with no args so both webviews share one pool + worker state. Pass
 	 * `opts` to lazily construct on first call; call with no args to fetch (or
 	 * `undefined` if not yet constructed).
 	 */
-	static getInstance(opts?: NodeRegistryOptions, deps?: NodeRegistryDeps): NodeRegistry | undefined {
-		if (!NodeRegistry._instance && opts) {
-			NodeRegistry._instance = new NodeRegistry(opts, deps)
+	static getInstance(opts?: WorkerRegistryOptions, deps?: WorkerRegistryDeps): WorkerRegistry | undefined {
+		if (!WorkerRegistry._instance && opts) {
+			WorkerRegistry._instance = new WorkerRegistry(opts, deps)
 		}
-		return NodeRegistry._instance
+		return WorkerRegistry._instance
 	}
 
 	/** Dispose + clear the shared instance (extension deactivation / test isolation). */
 	static resetInstance(): void {
-		NodeRegistry._instance?.dispose()
-		NodeRegistry._instance = undefined
+		WorkerRegistry._instance?.dispose()
+		WorkerRegistry._instance = undefined
 	}
 
-	constructor(opts: NodeRegistryOptions, deps: NodeRegistryDeps = {}) {
+	constructor(opts: WorkerRegistryOptions, deps: WorkerRegistryDeps = {}) {
 		this.context = opts.context
 		this.controllerVersion = opts.controllerVersion
 		this.configSource = opts.configSource
 		this.pluginSyncSource = opts.pluginSyncSource
 		this.scopeSource = opts.scopeSource
 		this.localAgent = deps.localAgent ?? new ShoferApiAgent(opts.localApi)
-		this.createConnection = deps.createConnection ?? ((o) => new NodeConnection(o))
+		this.createConnection = deps.createConnection ?? ((o) => new WorkerConnection(o))
 
 		// Load persisted defs and guarantee a Local entry (first).
 		this.defs = this.loadDefs()
-		if (!this.defs.some((d) => d.id === LOCAL_NODE_ID)) {
-			this.defs.unshift({ id: LOCAL_NODE_ID, kind: "local", label: "Local" })
+		if (!this.defs.some((d) => d.id === LOCAL_WORKER_ID)) {
+			this.defs.unshift({ id: LOCAL_WORKER_ID, kind: "local", label: "Local" })
 		}
 
 		// Register Local at construction; reflect its persisted disabled flag. The
 		// Local load accessor reads this host's live loadavg/cpu count on demand
-		// (node:os is fine here — NodeRegistry is Node-side, unlike @shofer/types).
+		// (node:os is fine here — WorkerRegistry is Node-side, unlike @shofer/types).
 		this.pool.add({
-			id: LOCAL_NODE_ID,
+			id: LOCAL_WORKER_ID,
 			api: this.localAgent,
 			load: (): LoadSample => ({ loadavg: os.loadavg() as [number, number, number], cpus: os.cpus().length }),
 			// The Local executor reads controller state in-process — NEVER version-gated
 			// (and never pushed config, which would re-apply the controller's own settings).
 			managed: () => false,
 		})
-		if (this.getDef(LOCAL_NODE_ID)?.disabled) this.pool.setDisabled(LOCAL_NODE_ID, true)
+		if (this.getDef(LOCAL_WORKER_ID)?.disabled) this.pool.setDisabled(LOCAL_WORKER_ID, true)
 
 		// Apply the persisted load-balancer policy + track config changes.
 		this.pool.setPolicy(this.readLoadBalancerPolicy())
@@ -345,13 +345,13 @@ export class NodeRegistry {
 			this.pool.setDesiredConfigVersion(this.desiredConfigVersion)
 			this.configChangeDisposable = this.configSource.onDidChange((e) => {
 				// Only react to keys that are actually synced (ignore frontend-only churn).
-				if (NodeRegistry.SYNCED_KEYS.has(e.key)) this.recomputeAndBroadcast()
+				if (WorkerRegistry.SYNCED_KEYS.has(e.key)) this.recomputeAndBroadcast()
 			})
 		}
 
 		// The plugin half of the same sync. Built asynchronously (each plugin may shape
 		// its own slice), so it lands via the cache and a re-broadcast rather than being
-		// read inline above; until it does, nodes simply hold no plugin state.
+		// read inline above; until it does, workers simply hold no plugin state.
 		if (this.pluginSyncSource) {
 			void this.refreshPluginSlice()
 			this.pluginChangeDisposable = this.pluginSyncSource.onDidChange?.(() => {
@@ -364,7 +364,7 @@ export class NodeRegistry {
 	 * Rebuild the cached plugin slice and re-broadcast if it changed.
 	 *
 	 * Compared by value, not fired blindly: a plugin reload or an unrelated settings save
-	 * would otherwise bump the config version and make every node re-apply an identical
+	 * would otherwise bump the config version and make every worker re-apply an identical
 	 * slice.
 	 */
 	private async refreshPluginSlice(): Promise<void> {
@@ -378,7 +378,7 @@ export class NodeRegistry {
 		}
 	}
 
-	/** Read the `shofer.nodes.loadBalancer` setting (default `round-robin`). */
+	/** Read the `shofer.workers.loadBalancer` setting (default `round-robin`). */
 	private readLoadBalancerPolicy(): LoadBalancerPolicy {
 		const raw = vscode.workspace.getConfiguration().get<string>(LOAD_BALANCER_SETTING, "round-robin")
 		return LOAD_BALANCER_POLICIES.includes(raw as LoadBalancerPolicy) ? (raw as LoadBalancerPolicy) : "round-robin"
@@ -390,7 +390,7 @@ export class NodeRegistry {
 	 * `onChange`. Safe to call once.
 	 */
 	async init(): Promise<void> {
-		// Declared nodes first: a `.shofer/nodes.json` entry may add a node, re-point one
+		// Declared workers first: a `.shofer/workers.json` entry may add a worker, re-point one
 		// this host persisted, or withdraw one — resolving that before connecting avoids
 		// dialling a host the declaration has already moved.
 		await this.reconcileDeclaredNodes({ connect: false })
@@ -402,9 +402,9 @@ export class NodeRegistry {
 		}
 
 		this.scopeChangeDisposable = this.scopeSource?.onDidChangeScopeFiles(({ files }) => {
-			// `locked.json` too: locking `nodes/<id>` changes which scope's entry wins,
-			// so a lock change re-points a node exactly as an edit to the entry would.
-			if (files.includes(NODES_FILE) || files.includes(LOCKED_FILE)) {
+			// `locked.json` too: locking `workers/<id>` changes which scope's entry wins,
+			// so a lock change re-points a worker exactly as an edit to the entry would.
+			if (files.includes(WORKERS_FILE) || files.includes(LOCKED_FILE)) {
 				void this.reconcileDeclaredNodes({ connect: true })
 			}
 		})
@@ -413,7 +413,7 @@ export class NodeRegistry {
 	}
 
 	/**
-	 * Bring the declared node set in line with `.shofer/nodes.json`
+	 * Bring the declared worker set in line with `.shofer/workers.json`
 	 * (docs/workspace_agent_pool.md §4) — the mechanism that lets a pool be provisioned
 	 * by *writing a file*: resource-manager rewrites it, every running host reconciles.
 	 *
@@ -422,47 +422,47 @@ export class NodeRegistry {
 	 *    typo must not empty a project's pool.
 	 *  - **The declaration owns identity, the user owns runtime flags.** `host`/`tls`/
 	 *    `tokenFile`/`label` come from the file each time; `disabled` and `autoConnect`
-	 *    come from the file only when it states them, so a node someone disabled in the
+	 *    come from the file only when it states them, so a worker someone disabled in the
 	 *    UI stays disabled across reconciles.
 	 *  - **Withdrawn ⇒ gone.** A def marked `declared` that the merged declaration no
-	 *    longer names is disconnected and dropped. Nodes the user created by hand are
+	 *    longer names is disconnected and dropped. Workers the user created by hand are
 	 *    never touched.
 	 *  - **Re-pointed ⇒ reconnected.** A changed `host`/`tls`/`tokenFile` tears the
 	 *    existing connection down, because it now points somewhere else.
 	 *
 	 * `connect: false` (start-up) leaves connecting to {@link init}'s own pass, so a
-	 * node is not dialled twice.
+	 * worker is not dialled twice.
 	 */
 	private async reconcileDeclaredNodes(opts: { connect: boolean }): Promise<void> {
 		if (!this.scopeSource) return
 
 		let loaded
 		try {
-			loaded = await loadNodeDeclaration(this.scopeSource.getScopeRoots())
+			loaded = await loadWorkerDeclaration(this.scopeSource.getScopeRoots())
 		} catch (e) {
-			configLog.warn(`node declaration load failed: ${e instanceof Error ? e.message : String(e)}`)
+			configLog.warn(`worker declaration load failed: ${e instanceof Error ? e.message : String(e)}`)
 			return
 		}
 
-		for (const error of loaded.errors) configLog.warn(`node declaration: ${error}`)
+		for (const error of loaded.errors) configLog.warn(`worker declaration: ${error}`)
 		if (!loaded.ok) return // Keep the last good set.
 
-		const declared = loaded.declaration.nodes
+		const declared = loaded.declaration.workers
 		let changed = false
-		const toConnect: ShoferNodeDef[] = []
+		const toConnect: ShoferWorkerDef[] = []
 
 		// Withdrawn declarations.
 		for (const def of [...this.defs]) {
 			if (!def.declared || declared[def.id]) continue
-			configLog.info(`node ${def.id} withdrawn from .shofer/nodes.json — removing`)
+			configLog.info(`worker ${def.id} withdrawn from .shofer/workers.json — removing`)
 			this.teardownConnection(def.id)
 			this.defs = this.defs.filter((d) => d.id !== def.id)
 			changed = true
 		}
 
 		for (const [id, entry] of Object.entries(declared)) {
-			if (id === LOCAL_NODE_ID) {
-				configLog.warn(`.shofer/nodes.json declares the reserved id "${LOCAL_NODE_ID}" — ignored`)
+			if (id === LOCAL_WORKER_ID) {
+				configLog.warn(`.shofer/workers.json declares the reserved id "${LOCAL_WORKER_ID}" — ignored`)
 				continue
 			}
 
@@ -495,8 +495,8 @@ export class NodeRegistry {
 	}
 
 	/** Build the def a declaration entry implies, preserving the user's runtime flags. */
-	private declaredDef(id: string, entry: NodeDeclarationEntry, existing?: ShoferNodeDef): ShoferNodeDef {
-		const def: ShoferNodeDef = {
+	private declaredDef(id: string, entry: WorkerDeclarationEntry, existing?: ShoferWorkerDef): ShoferWorkerDef {
+		const def: ShoferWorkerDef = {
 			id,
 			kind: "remote",
 			declared: true,
@@ -521,11 +521,11 @@ export class NodeRegistry {
 
 	/**
 	 * Attach a controller-side provider host (Level 2). Every attached provider
-	 * receives `shoferNodes` state (via its own `onChange` registration). A view
+	 * receives `shoferWorkers` state (via its own `onChange` registration). A view
 	 * that starts a remote task focuses its own shadow (see {@link routeNewTask});
 	 * an attached view with no focused shadow renders the global local current task.
 	 */
-	attachProvider(provider: NodeProviderHost): void {
+	attachProvider(provider: WorkerProviderHost): void {
 		this.providers.add(provider)
 	}
 
@@ -533,41 +533,41 @@ export class NodeRegistry {
 	 * Detach a provider (its webview closed). The closed view releases its shadow
 	 * focus; the shadow itself keeps buffering in {@link shadows} for any other view.
 	 */
-	detachProvider(provider: NodeProviderHost): void {
+	detachProvider(provider: WorkerProviderHost): void {
 		this.providers.delete(provider)
 		this.focusedShadows.delete(provider)
 	}
 
 	/** True when at least one *remote* executor is currently assignable (enabled + connected). */
 	hasEnabledRemote(): boolean {
-		return this.pool.assignableIds().some((id) => id !== LOCAL_NODE_ID)
+		return this.pool.assignableIds().some((id) => id !== LOCAL_WORKER_ID)
 	}
 
 	/**
 	 * True when the Local executor is admin-disabled. The controller itself stays fully
-	 * alive regardless (UI, node relay, indexing) — disabled means Local must not pick
+	 * alive regardless (UI, worker relay, indexing) — disabled means Local must not pick
 	 * up NEW tasks. Callers that would start a task in-process without consulting the
 	 * pool (the webview's local fast path) must check this and route instead, so the
 	 * refusal in {@link routeNewTask} is reachable.
 	 */
 	isLocalDisabled(): boolean {
-		return this.getDef(LOCAL_NODE_ID)?.disabled ?? false
+		return this.getDef(LOCAL_WORKER_ID)?.disabled ?? false
 	}
 
 	/**
 	 * Route a webview new-task through the pool (Level 2 load-balancing).
 	 *
-	 * Owner selection: an enabled+assignable `preferredNodeId` wins; otherwise the
+	 * Owner selection: an enabled+assignable `preferredWorkerId` wins; otherwise the
 	 * pool's round-robin (`pickNext`). The **Local** owner takes the IN-PROCESS
 	 * path (`provider.createManagedTask`) and bypasses the pool entirely — the pool
 	 * only records ownership via `assignOwner`. This is the recursion guard: the
 	 * webview→pool→ShoferApiAgent.createTask→api.startNewTask→provider.createTask
 	 * loop can never form for a Local pick. A remote owner dispatches through
-	 * `pool.createTaskOn`, which runs the task on that node.
+	 * `pool.createTaskOn`, which runs the task on that worker.
 	 *
 	 * Returns the new task id (or `undefined` if the Local path failed to create).
 	 */
-	async routeNewTask(input: RouteNewTaskInput, initiator?: NodeProviderHost): Promise<string | undefined> {
+	async routeNewTask(input: RouteNewTaskInput, initiator?: WorkerProviderHost): Promise<string | undefined> {
 		// The view that issued this newTask is where the task renders. Ensure it's
 		// tracked so its shadow focus (remote owner) / local render (Local owner)
 		// lands there. Falls back to the first attached view when unspecified.
@@ -575,34 +575,36 @@ export class NodeRegistry {
 		const view = initiator ?? this.providers.values().next().value
 		const assignable = this.pool.assignableIds()
 		const preferred =
-			input.preferredNodeId && assignable.includes(input.preferredNodeId) ? input.preferredNodeId : undefined
+			input.preferredWorkerId && assignable.includes(input.preferredWorkerId)
+				? input.preferredWorkerId
+				: undefined
 		// A preferred pick must NOT also advance the round-robin cursor.
-		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_NODE_ID
+		const owner = preferred ?? this.pool.pickNext() ?? LOCAL_WORKER_ID
 
 		// An admin-disabled Local is excluded from `assignable()`, so the only way it
 		// can become owner is this bare fallback — meaning nothing else was assignable.
 		// Refuse with a clear error (surfaced by the caller's notifier) instead of
 		// silently running the task on the executor the admin disabled.
-		if (owner === LOCAL_NODE_ID && this.isLocalDisabled()) {
+		if (owner === LOCAL_WORKER_ID && this.isLocalDisabled()) {
 			throw new Error(
-				"The Local executor is disabled and no remote node is available to run this task. " +
-					"Enable the Local executor or connect/enable a remote node in Settings → Shofer Nodes.",
+				"The Local executor is disabled and no remote worker is available to run this task. " +
+					"Enable the Local executor or connect/enable a remote worker in Settings → Shofer Workers.",
 			)
 		}
 
-		if (owner === LOCAL_NODE_ID) {
-			if (!view) throw new Error("NodeRegistry: no provider attached for the Local new-task path")
+		if (owner === LOCAL_WORKER_ID) {
+			if (!view) throw new Error("WorkerRegistry: no provider attached for the Local new-task path")
 			const taskId = await view.createManagedTask(undefined, input.prompt, input.images, input.cwd, {
 				mode: input.mode,
 				apiConfigName: input.apiConfigName,
 			})
-			// Record Local ownership so ownerOf()/activeNodeId() report Local. The
+			// Record Local ownership so ownerOf()/activeWorkerId() report Local. The
 			// task ran fully in-process — never through the pool's createTask.
-			if (taskId) this.pool.assignOwner(taskId, LOCAL_NODE_ID)
+			if (taskId) this.pool.assignOwner(taskId, LOCAL_WORKER_ID)
 			return taskId
 		}
 
-		// Remote owner: the node runs the task; we only buffer/render it (Stage B).
+		// Remote owner: the worker runs the task; we only buffer/render it (Stage B).
 		// The INITIATING view focuses the new shadow (per-view focus) — other views
 		// are untouched and keep showing whatever they were on.
 		const { taskId } = await this.pool.createTaskOn(owner, {
@@ -621,14 +623,14 @@ export class NodeRegistry {
 	// ── remote-task shadows (L2 render demux) ────────────────────────────────────
 
 	/** The remote shadow the given view is currently rendering, if any (per-view). */
-	getFocusedShadow(provider: NodeProviderHost): RemoteTaskShadow | undefined {
+	getFocusedShadow(provider: WorkerProviderHost): RemoteTaskShadow | undefined {
 		const id = this.focusedShadows.get(provider)
 		return id ? this.shadows.get(id) : undefined
 	}
 
 	/** Every view currently focused on `taskId` — the fan-out set for a shadow's deltas. */
-	private viewsFocusedOn(taskId: string): NodeProviderHost[] {
-		const views: NodeProviderHost[] = []
+	private viewsFocusedOn(taskId: string): WorkerProviderHost[] {
+		const views: WorkerProviderHost[] = []
 		for (const [p, id] of this.focusedShadows) if (id === taskId) views.push(p)
 		return views
 	}
@@ -651,7 +653,7 @@ export class NodeRegistry {
 		await this.pool.respondToAsk(taskId, response)
 	}
 
-	// ── remote reverse data channel (Shofer Nodes L3) ────────────────────────────
+	// ── remote reverse data channel (Shofer Workers L3) ────────────────────────────
 	// Route a plugin request for a shadow (remote) task over the pool to the owning
 	// executor — the one channel every plugin-owned per-task feature travels on.
 
@@ -662,7 +664,7 @@ export class NodeRegistry {
 
 	/**
 	 * Rebuild a shadow after the executor rewound its task — e.g. a snapshot plugin
-	 * restoring an earlier point (Shofer Nodes L3).
+	 * restoring an earlier point (Shofer Workers L3).
 	 * The executor rewound + reinitialized its task, so its stale post-rewind
 	 * `Message` stream will repopulate the shadow: clear the buffered conversation and
 	 * re-post init state for the focused shadow.
@@ -675,7 +677,7 @@ export class NodeRegistry {
 	}
 
 	/** Focus a remote shadow IN A SINGLE VIEW and switch that view's webview to it. */
-	focusShadow(provider: NodeProviderHost, taskId: string): void {
+	focusShadow(provider: WorkerProviderHost, taskId: string): void {
 		if (!this.shadows.has(taskId)) return
 		this.focusedShadows.set(provider, taskId)
 		void provider.postInitState()
@@ -686,7 +688,7 @@ export class NodeRegistry {
 	 * Clear a view's remote-shadow focus (e.g. it switched back to a local task).
 	 * Reverts THAT view to the global local current task via a fresh full-state push.
 	 */
-	clearShadowFocus(provider: NodeProviderHost): void {
+	clearShadowFocus(provider: WorkerProviderHost): void {
 		if (!this.focusedShadows.has(provider)) return
 		this.focusedShadows.delete(provider)
 		void provider.postInitState()
@@ -717,7 +719,7 @@ export class NodeRegistry {
 	 */
 	private onPoolEvent(event: ServerEvent): void {
 		const executorId = event.executorId as string | undefined
-		if (!executorId || executorId === LOCAL_NODE_ID) return
+		if (!executorId || executorId === LOCAL_WORKER_ID) return
 
 		const args = (event.args as unknown[]) ?? []
 		switch (event.type) {
@@ -777,14 +779,14 @@ export class NodeRegistry {
 		}
 	}
 
-	/** Dispatch a webview {@link ShoferNodeRequest}. */
-	async handleRequest(req: ShoferNodeRequest): Promise<void> {
+	/** Dispatch a webview {@link ShoferWorkerRequest}. */
+	async handleRequest(req: ShoferWorkerRequest): Promise<void> {
 		switch (req.action) {
 			case "list":
 				this.fireChange()
 				return
 			case "upsert":
-				return this.upsert(req.node, req.token)
+				return this.upsert(req.worker, req.token)
 			case "remove":
 				return this.remove(req.id)
 			case "connect":
@@ -800,15 +802,15 @@ export class NodeRegistry {
 
 	/**
 	 * Persist + apply the pool's new-task load-balancing policy. Writes the
-	 * `shofer.nodes.loadBalancer` setting (Global) AND applies it to the pool
+	 * `shofer.workers.loadBalancer` setting (Global) AND applies it to the pool
 	 * immediately + fires a change, so the panel updates without waiting for the
 	 * `onDidChangeConfiguration` listener to round-trip. That listener re-reads
-	 * and re-applies the same policy (idempotent — {@link ExecutorPool.setPolicy}
+	 * and re-applies the same policy (idempotent — {@link WorkerPool.setPolicy}
 	 * is a plain assignment), so the double-apply is harmless.
 	 */
 	async setLoadBalancer(policy: LoadBalancerPolicy): Promise<void> {
 		await vscode.workspace
-			.getConfiguration("shofer.nodes")
+			.getConfiguration("shofer.workers")
 			.update("loadBalancer", policy, vscode.ConfigurationTarget.Global)
 		this.pool.setPolicy(policy)
 		this.fireChange()
@@ -816,30 +818,30 @@ export class NodeRegistry {
 
 	// ── request handlers ───────────────────────────────────────────────────────
 
-	list(): ShoferNodeView[] {
-		return this.buildNodeViews()
+	list(): ShoferWorkerView[] {
+		return this.buildWorkerViews()
 	}
 
-	async upsert(node: ShoferNodeDef, token?: string): Promise<void> {
-		const existing = this.getDef(node.id)
+	async upsert(worker: ShoferWorkerDef, token?: string): Promise<void> {
+		const existing = this.getDef(worker.id)
 		// Preserve runtime flags (autoConnect/disabled) the UI form doesn't carry.
-		const merged: ShoferNodeDef = { ...existing, ...node, kind: "remote" }
+		const merged: ShoferWorkerDef = { ...existing, ...worker, kind: "remote" }
 		this.setDef(merged)
 		if (token !== undefined) {
-			await this.context.secrets.store(tokenKey(node.id), token)
-			this.hasTokenCache.add(node.id)
+			await this.context.secrets.store(tokenKey(worker.id), token)
+			this.hasTokenCache.add(worker.id)
 		}
 		await this.persist()
 		this.fireChange()
 	}
 
 	async remove(id: string): Promise<void> {
-		if (id === LOCAL_NODE_ID) return // Local is non-removable.
+		if (id === LOCAL_WORKER_ID) return // Local is non-removable.
 		if (this.getDef(id)?.declared) {
-			// A declared node is a projection of `.shofer/nodes.json`; deleting the
+			// A declared worker is a projection of `.shofer/workers.json`; deleting the
 			// projection would resurrect it on the next reconcile. Disabling is the
 			// runtime control the user has here; withdrawing it is an edit to the file.
-			configLog.warn(`node ${id} is declared in .shofer/nodes.json — not removable from the UI`)
+			configLog.warn(`worker ${id} is declared in .shofer/workers.json — not removable from the UI`)
 			return
 		}
 		this.teardownConnection(id)
@@ -875,24 +877,24 @@ export class NodeRegistry {
 		def.disabled = disabled
 		await this.persist()
 		// Disabling a connected remote also disconnects it (drops it from the pool).
-		if (id !== LOCAL_NODE_ID && disabled) this.teardownConnection(id)
+		if (id !== LOCAL_WORKER_ID && disabled) this.teardownConnection(id)
 		this.pool.setDisabled(id, disabled)
 		this.fireChange()
 	}
 
 	// ── view model ─────────────────────────────────────────────────────────────
 
-	buildNodeViews(): ShoferNodeView[] {
-		const activeNodeId = this.activeNodeId()
+	buildWorkerViews(): ShoferWorkerView[] {
+		const activeWorkerId = this.activeWorkerId()
 		return this.defs.map((def) => {
 			const disabled = def.disabled ?? false
 			if (def.kind === "local") {
 				return {
 					...def,
 					status: disabled ? "disconnected" : "running",
-					// A disabled node is out of the pool — never "active", even if it was
-					// the last-resolved active node (avoids showing active + disabled at once).
-					isActive: !disabled && activeNodeId === LOCAL_NODE_ID,
+					// A disabled worker is out of the pool — never "active", even if it was
+					// the last-resolved active worker (avoids showing active + disabled at once).
+					isActive: !disabled && activeWorkerId === LOCAL_WORKER_ID,
 					disabled,
 					agentVersion: this.controllerVersion,
 				}
@@ -904,23 +906,23 @@ export class NodeRegistry {
 				latencyMs: conn?.latencyMs,
 				agentVersion: conn?.agentVersion,
 				error: conn?.error,
-				isActive: !disabled && activeNodeId === def.id,
+				isActive: !disabled && activeWorkerId === def.id,
 				disabled,
 				hasToken: this.hasTokenCache.has(def.id),
 			}
 		})
 	}
 
-	getState(): ShoferNodesState {
+	getState(): ShoferWorkersState {
 		return {
-			nodes: this.buildNodeViews(),
-			activeNodeId: this.activeNodeId(),
+			workers: this.buildWorkerViews(),
+			activeWorkerId: this.activeWorkerId(),
 			loadBalancer: this.pool.getPolicy(),
 		}
 	}
 
 	/** The pool the controller drives (Level 2 routes task creation through it). */
-	get executorPool(): ExecutorPool {
+	get executorPool(): WorkerPool {
 		return this.pool
 	}
 
@@ -937,30 +939,30 @@ export class NodeRegistry {
 
 	// ── internals ──────────────────────────────────────────────────────────────
 
-	private activeNodeId(): string {
-		// L2: the single global `shoferNodes` badge shows ONE active node. With per-view
+	private activeWorkerId(): string {
+		// L2: the single global `shoferWorkers` badge shows ONE active worker. With per-view
 		// shadow focus this is inherently ambiguous, so we resolve it deterministically:
-		// if ANY view focuses a remote shadow, the active node owns that shadow (first
+		// if ANY view focuses a remote shadow, the active worker owns that shadow (first
 		// map entry); otherwise it owns the global local current task (first attached
 		// view). A task the pool never assigned (the pure local-only path) has no owner
-		// → Local. This lights `isActive` in buildNodeViews + the TaskHeader badge.
+		// → Local. This lights `isActive` in buildWorkerViews + the TaskHeader badge.
 		const firstFocusedShadowId = this.focusedShadows.values().next().value as string | undefined
 		const localTaskId = this.providers.values().next().value?.getCurrentTask()?.taskId
 		const focusedTaskId = firstFocusedShadowId ?? localTaskId
-		if (!focusedTaskId) return LOCAL_NODE_ID
-		return this.pool.ownerOf(focusedTaskId) ?? LOCAL_NODE_ID
+		if (!focusedTaskId) return LOCAL_WORKER_ID
+		return this.pool.ownerOf(focusedTaskId) ?? LOCAL_WORKER_ID
 	}
 
-	private async startConnection(def: ShoferNodeDef): Promise<void> {
+	private async startConnection(def: ShoferWorkerDef): Promise<void> {
 		if (def.kind !== "remote" || !def.host) return
 		this.teardownConnection(def.id)
-		// A declared node names its token by reference (a projected Secret file, or the
+		// A declared worker names its token by reference (a projected Secret file, or the
 		// env var a secretKeyRef fills), so it is resolved at connect time and a rotation
 		// lands on the next connection with no state of ours to invalidate. UI-created
-		// nodes keep their SecretStorage entry.
+		// workers keep their SecretStorage entry.
 		const token =
 			def.tokenFile || def.tokenEnv
-				? await readNodeToken(def)
+				? await readWorkerToken(def)
 				: ((await this.context.secrets.get(tokenKey(def.id))) ?? undefined)
 		const baseUrl = `${def.tls ? "https" : "http"}://${def.host}`
 		const conn = this.createConnection({ baseUrl, token, controllerVersion: this.controllerVersion })
@@ -986,7 +988,7 @@ export class NodeRegistry {
 		} else if (!eligible && inPool) {
 			this.pool.remove(id)
 		}
-		// config_sync §4c: push the current slice to a node that (re)connected and isn't
+		// config_sync §4c: push the current slice to a worker that (re)connected and isn't
 		// already at the desired version. Idempotent; the health-ping loop re-sends on drift.
 		if (this.configSource && conn.status === "connected" && conn.api) {
 			const slice = this.currentSyncedSlice()
@@ -997,15 +999,15 @@ export class NodeRegistry {
 		this.fireChange()
 	}
 
-	// ── controller→node config sync (config_sync §4c) ────────────────────────────
+	// ── controller→worker config sync (config_sync §4c) ────────────────────────────
 
 	/**
 	 * The controller-authoritative synced settings slice, resolved live from the source.
 	 *
 	 * Nothing is rewritten on the way out any more. The one rule that used to live here —
-	 * "a node queries the shared code index but never writes to it" — belongs to the
+	 * "a worker queries the shared code index but never writes to it" — belongs to the
 	 * plugin that owns the index, and it applies that itself when the controller asks it
-	 * for its node slice (`"node-config"`, `config_sync` §4b-2).
+	 * for its worker slice (`"worker-config"`, `config_sync` §4b-2).
 	 */
 	private currentSyncedSlice(): SyncedSettings {
 		return pickSyncedSettings(this.configSource?.getValues() ?? {})
@@ -1028,7 +1030,7 @@ export class NodeRegistry {
 
 	/**
 	 * Recompute the desired config version, update the pool's gate, and broadcast the new
-	 * slice to every connected REMOTE node. Never touches the Local executor (it reads
+	 * slice to every connected REMOTE worker. Never touches the Local executor (it reads
 	 * controller state in-process). Called on every synced-settings change.
 	 */
 	private recomputeAndBroadcast(): void {
@@ -1044,13 +1046,13 @@ export class NodeRegistry {
 	}
 
 	/**
-	 * Push one config slice to a single remote node. On success, mark the connection as
+	 * Push one config slice to a single remote worker. On success, mark the connection as
 	 * applied so it becomes pool-assignable promptly (the health echo stays the ongoing
 	 * source of truth). On failure, log and let the health-ping reconciliation retry.
 	 */
 	private async pushConfig(
 		id: string,
-		conn: INodeConnection,
+		conn: IWorkerConnection,
 		slice: SyncedSettings,
 		version: string,
 		secrets: SyncedSecrets,
@@ -1059,7 +1061,7 @@ export class NodeRegistry {
 			await conn.api!.applyConfig(slice, version, secrets, this.pluginSlice)
 			conn.markConfigApplied(version)
 		} catch (e) {
-			configLog.warn(`config sync push to node ${id} failed: ${e instanceof Error ? e.message : String(e)}`)
+			configLog.warn(`config sync push to worker ${id} failed: ${e instanceof Error ? e.message : String(e)}`)
 		}
 	}
 
@@ -1071,8 +1073,8 @@ export class NodeRegistry {
 		if (this.pool.has(id)) this.pool.remove(id)
 	}
 
-	private loadDefs(): ShoferNodeDef[] {
-		const stored = this.context.globalState.get<ShoferNodeDef[]>(DEFS_KEY)
+	private loadDefs(): ShoferWorkerDef[] {
+		const stored = this.context.globalState.get<ShoferWorkerDef[]>(DEFS_KEY)
 		return Array.isArray(stored) ? stored.map((d) => ({ ...d })) : []
 	}
 
@@ -1080,11 +1082,11 @@ export class NodeRegistry {
 		await this.context.globalState.update(DEFS_KEY, this.defs)
 	}
 
-	private getDef(id: string): ShoferNodeDef | undefined {
+	private getDef(id: string): ShoferWorkerDef | undefined {
 		return this.defs.find((d) => d.id === id)
 	}
 
-	private setDef(def: ShoferNodeDef): void {
+	private setDef(def: ShoferWorkerDef): void {
 		const idx = this.defs.findIndex((d) => d.id === def.id)
 		if (idx === -1) this.defs.push(def)
 		else this.defs[idx] = def

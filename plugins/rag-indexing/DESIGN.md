@@ -140,7 +140,7 @@ Files are ingested only if their extension appears in [`CODEBASE_INDEX_FILE_EXTE
 
 #### Capture Filtering
 
-Tree-sitter queries produce two captures per definition node — a bare `@name.definition.xxx` capture (the identifier substring, e.g. `"setupQuietMode"` at 14 chars) and a `@definition.xxx` capture (the full node). The parser in [`parser.ts`](src/engine/processors/parser.ts:179) filters out any capture whose name starts with `"name."` before queueing nodes for embedding. The identifier string is re-extracted from the full definition node via `childForFieldName("name")` — no metadata is lost.
+Tree-sitter queries produce two captures per definition worker — a bare `@name.definition.xxx` capture (the identifier substring, e.g. `"setupQuietMode"` at 14 chars) and a `@definition.xxx` capture (the full worker). The parser in [`parser.ts`](src/engine/processors/parser.ts:179) filters out any capture whose name starts with `"name."` before queueing workers for embedding. The identifier string is re-extracted from the full definition worker via `childForFieldName("name")` — no metadata is lost.
 
 This filter is **language-agnostic** and works across all 28 languages because every query file uses one of these naming patterns:
 
@@ -177,7 +177,7 @@ All interfaces are defined under `src/interfaces/`:
 {
 	file_path: string
 	identifier: string | null // function/class name
-	type: string // AST node type
+	type: string // AST worker type
 	start_line: number
 	end_line: number
 	content: string
@@ -400,12 +400,12 @@ Both storage names are hashed from **one** value, the **index key**, resolved by
 
 `_resolveIndexKeyPath()` resolves in two steps:
 
-1. **A controller-assigned `key` wins** when present (surfaced by `CodeIndexConfigManager.indexKey`). This is the logical identity of the index, not a path — see [Multi-node — search-only nodes](#multi-node--search-only-nodes) for why index identity must not be host-derived.
+1. **A controller-assigned `key` wins** when present (surfaced by `CodeIndexConfigManager.indexKey`). This is the logical identity of the index, not a path — see [Multi-node — search-only workers](#multi-node--search-only-nodes) for why index identity must not be host-derived.
 2. **Otherwise fall back to the local derivation.** Git worktrees are separate directories and would normally get separate collections and cache files, so [`GitSource.resolveWorktreeMainRepoPath()`](src/git/git-source.ts) reads the `.git` file in a worktree directory, parses the `gitdir:` line (`gitdir: /path/to/main/.git/worktrees/name`), and derives the main repository root. For regular repos this returns the workspace path unchanged.
 
 So all worktrees of the same repository share one collection (`ws-<sha256(main-repo-path)[:16]>`) and one cache file (`shofer-index-cache-<sha256(main-repo-path)>.json`), and switching between them re-indexes nothing.
 
-Whichever branch is taken, the resolved value is recorded and exposed as `CodeIndexManager.resolvedIndexKey` — that getter is what a controller publishes to its nodes.
+Whichever branch is taken, the resolved value is recorded and exposed as `CodeIndexManager.resolvedIndexKey` — that getter is what a controller publishes to its workers.
 
 #### Reboot Behavior
 
@@ -581,7 +581,7 @@ Nothing in core reaches into the indexer any more; the plugin reaches OUT throug
 | `CustomToolDefinition.group`              | Declares both tools `read`, so "auto-approve reads" covers them                              |
 | `handleRequest("search" \| "git-search")` | Answers `ctx.host.search` for other plugins (Live Memory)                                    |
 | `handleRequest("embed")`                  | Answers `ctx.ai.embed` — the host has no embedder of its own                                 |
-| `handleRequest("node-config")`            | Shapes what a Shofer Node receives (search-only + the resolved index key)                    |
+| `handleRequest("node-config")`            | Shapes what a Shofer Worker receives (search-only + the resolved index key)                  |
 | `handleRequest(status/start/stop/clear)`  | The settings panel's actions                                                                 |
 | `ctx.host.watch`                          | The file watcher and the `**/.gitignore` watcher                                             |
 | `ctx.storage`                             | The scan cache, and per-workspace enablement                                                 |
@@ -662,11 +662,11 @@ Defined in `src/constants/index.ts`:
 
 ---
 
-## Multi-node — search-only nodes
+## Multi-node — search-only workers
 
-In the [Shofer Nodes](v3_architecture.md#distributed-execution-horizontal-scaling) model several hosts share one workspace filesystem: the **controller** (the VS Code front-end) and N remote executors running `shofer serve`. The code index is a workspace-scoped shared resource, so it needs exactly one writer.
+In the [Shofer Workers](v3_architecture.md#distributed-execution-horizontal-scaling) model several hosts share one workspace filesystem: the **controller** (the VS Code front-end) and N remote executors running `shofer serve`. The code index is a workspace-scoped shared resource, so it needs exactly one writer.
 
-**The model: the controller is the sole indexer; nodes are search-only readers.**
+**The model: the controller is the sole indexer; workers are search-only readers.**
 
 ```mermaid
 flowchart LR
@@ -675,7 +675,7 @@ flowchart LR
         CO["CodeIndexManager — full indexer<br/>scanner plus file watcher plus search"]
         CK["resolvedIndexKey"]
     end
-    subgraph NODE["Shofer Node — shofer serve, one of N"]
+    subgraph NODE["Shofer Worker — shofer serve, one of N"]
         direction TB
         NO["CodeIndexManager<br/>searchOnly true<br/>initialize stops the watcher at step 7<br/>startIndexing returns early"]
         NS["CodeIndexSearchService — rag_search answers<br/>systemStatus stays Standby"]
@@ -693,42 +693,42 @@ flowchart LR
 
 ### Why it is race-free
 
-The controller shares the workspace filesystem, so its scanner and file-watcher already observe **every** change — including edits a remote node's task makes. A second indexer would therefore add nothing: it would re-embed content the controller is already embedding (duplicated API cost) while racing it as a concurrent writer into the same collection. Making the controller the only writer removes the race by construction rather than by locking.
+The controller shares the workspace filesystem, so its scanner and file-watcher already observe **every** change — including edits a remote worker's task makes. A second indexer would therefore add nothing: it would re-embed content the controller is already embedding (duplicated API cost) while racing it as a concurrent writer into the same collection. Making the controller the only writer removes the race by construction rather than by locking.
 
 ### `searchOnly` — where the constraint is enforced
 
-The controller asks THIS plugin what a node should receive — the `"node-config"` request
+The controller asks THIS plugin what a worker should receive — the `"node-config"` request
 in `src/main.ts` ([`config_sync.md` §4b-2](../../docs/config_sync.md)) — and the plugin
 answers with `searchOnly: true` and the index key it resolved. The rewrite is outbound-only:
-the controller never applies its own answer, so it stays a full indexer while every node it
-feeds is pinned to search-only. The flag then holds the node in two places, so neither entry
+the controller never applies its own answer, so it stays a full indexer while every worker it
+feeds is pinned to search-only. The flag then holds the worker in two places, so neither entry
 point can sneak past it:
 
 | Entry point                        | Behavior when `isSearchOnly`                                                                                                                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CodeIndexManager.initialize()`    | Step 7 calls `this._orchestrator?.stopWatcher()` and returns early. Steps 5–6 already ran, so the cache manager, embedder, vector store and **search service** exist — `rag_search` answers normally. |
-| `CodeIndexManager.startIndexing()` | Returns early. This is the path a settings change or a manual re-index command reaches, so a node cannot be talked into scanning after the fact.                                                      |
+| `CodeIndexManager.startIndexing()` | Returns early. This is the path a settings change or a manual re-index command reaches, so a worker cannot be talked into scanning after the fact.                                                    |
 
-Because service creation completes, `isInitialized` is true on a node, so `registerTools()` still contributes `rag_search` there. Nothing drives the orchestrator's state machine, though, so a search-only host's reported `systemStatus` stays `Standby`.
+Because service creation completes, `isInitialized` is true on a worker, so `registerTools()` still contributes `rag_search` there. Nothing drives the orchestrator's state machine, though, so a search-only host's reported `systemStatus` stays `Standby`.
 
 `CodeIndexConfigManager` exposes the flag as the `isSearchOnly` getter (and the key below as `indexKey`).
 
-> **Not a headless-vs-VS-Code distinction.** `shofer serve` loads the same extension bundle through `ExtensionHost.activate()` ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts), [`extension-host.ts`](../apps/cli/src/agent/extension-host.ts)), so a served node **does** register the code-index factory and construct a real `CodeIndexManager`. What holds a node to querying is `searchOnly`, not a missing factory.
+> **Not a headless-vs-VS-Code distinction.** `shofer serve` loads the same extension bundle through `ExtensionHost.activate()` ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts), [`extension-host.ts`](../apps/cli/src/agent/extension-host.ts)), so a served worker **does** register the code-index factory and construct a real `CodeIndexManager`. What holds a worker to querying is `searchOnly`, not a missing factory.
 
 ### `key` — why index identity cannot be host-derived
 
-A search-only node has to open **the controller's collection**. Since both the collection name and the cache filename are hashed from the index key ([Index Identity](#index-identity-_resolveindexkeypath)), deriving that key from the local workspace path is wrong in both directions:
+A search-only worker has to open **the controller's collection**. Since both the collection name and the cache filename are hashed from the index key ([Index Identity](#index-identity-_resolveindexkeypath)), deriving that key from the local workspace path is wrong in both directions:
 
-- **False miss** — a node that mounts the shared workspace at a different path than the controller hashes a different name and finds an empty collection, so `rag_search` returns nothing on a fully-indexed repo.
+- **False miss** — a worker that mounts the shared workspace at a different path than the controller hashes a different name and finds an empty collection, so `rag_search` returns nothing on a fully-indexed repo.
 - **False collision** — unrelated hosts that merely happen to share a container path land in the _same_ collection holding entirely different content. This is structural rather than hypothetical for a deployed executor image, which runs every pod with the same `--workspace /home/node/workspace`.
 
 So the controller publishes its own `CodeIndexManager.resolvedIndexKey` on the synced slice as `key`, and `_resolveIndexKeyPath()` prefers it over any local derivation. Both sides then name the same collection no matter where each mounted the workspace. Absent a controller key (the standalone case) the local git-worktree fallback applies unchanged.
 
-### How the config and credentials reach a node
+### How the config and credentials reach a worker
 
 The plugin declares `syncConfig` in its manifest, so the controller replicates its config
-**and** its `secret: true` values to every node (`AgentApi.applyConfig`'s `plugins`
-argument). The node merges them per plugin and reloads it, so `ctx.config` is current
+**and** its `secret: true` values to every worker (`AgentApi.applyConfig`'s `plugins`
+argument). The worker merges them per plugin and reloads it, so `ctx.config` is current
 without a restart. Credentials never ride the settings channel — `SYNCED_SECRET_KEYS` is
 empty now, precisely because these keys became the plugin's.
 

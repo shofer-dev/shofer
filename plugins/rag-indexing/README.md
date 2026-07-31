@@ -45,7 +45,7 @@ and a per-workspace toggle. The chip in the chat input carries the same state wh
 type, because a search that silently returns nothing looks like a bad model rather than an
 index that never finished.
 
-## With Shofer Nodes
+## With Shofer Workers
 
 Enable it on the controller only. The controller replicates the settings and credentials
 to every node it drives and pins those nodes to **search-only** against the collection it

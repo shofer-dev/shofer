@@ -43,9 +43,9 @@ import type { ProviderSettingsManager } from "./ProviderSettingsManager"
  * The `.shofer/` filenames whose change must reach a running host: the settings
  * layers, the global scope's lock manifest (unlocking a key changes the effective
  * value of a file this host already read), and the node declaration (owned by
- * `NodeRegistry`, watched here because the scope roots and the watcher live here).
+ * `WorkerRegistry`, watched here because the scope roots and the watcher live here).
  */
-const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "nodes.json"] as const
+const WATCHED_SCOPE_FILES = ["settings.json", "locked.json", "workers.json"] as const
 
 type GlobalStateKey = keyof GlobalState
 type SecretStateKey = keyof SecretState
@@ -115,7 +115,7 @@ export class ContextProxy {
 
 	// Fires with the watched `.shofer/` filenames a change touched, whatever they hold.
 	// This is the seam for the scope files ContextProxy does not itself own — today
-	// `nodes.json`, which NodeRegistry reconciles from (docs/workspace_agent_pool.md §4).
+	// `workers.json`, which WorkerRegistry reconciles from (docs/workspace_agent_pool.md §4).
 	private readonly _onDidChangeScopeFilesEmitter = new TypedEmitter<{ files: string[] }>()
 	public readonly onDidChangeScopeFiles = this._onDidChangeScopeFilesEmitter.event
 
@@ -334,11 +334,24 @@ export class ContextProxy {
 
 	/**
 	 * The three `.shofer/` scope roots this host reads. Exposed so a component that
-	 * owns its own scope file (NodeRegistry and `nodes.json`) resolves the same roots
+	 * owns its own scope file (WorkerRegistry and `workers.json`) resolves the same roots
 	 * rather than re-deriving them and drifting.
 	 */
 	public getScopeRoots(): ScopeRoots {
 		return this.resolveScopeRoots()
+	}
+
+	/**
+	 * Whether `key`'s effective value comes from the layered `.shofer/` overlay rather
+	 * than this host's own `globalState`.
+	 *
+	 * The overlay wins in {@link getValue}, so a `true` here means a local write to that
+	 * key would be shadowed and never take effect. Surfaces are expected to use this to
+	 * present the value as read-only instead of offering an edit that silently does
+	 * nothing (a control the user cannot change must not look like one they can).
+	 */
+	public isManagedByFileLayer(key: ShoferSettingsKey): boolean {
+		return Object.prototype.hasOwnProperty.call(this.layeredOverlay, key)
 	}
 
 	/** Re-read the overlay after a watched file changed, and announce what moved. */
@@ -907,7 +920,7 @@ export class ContextProxy {
 		// The layered `.shofer/` overlay wins over globalState here for the same reason
 		// it does in getValue — otherwise the two disagree, and every consumer that reads
 		// the whole snapshot rather than a key silently ignores file-based settings. That
-		// is not academic: `NodeRegistry.currentSyncedSlice()` builds the controller→node
+		// is not academic: `WorkerRegistry.currentSyncedSlice()` builds the controller→node
 		// config slice from this, so a settings file would reach the IDE and never reach
 		// the pool. Secrets stay last: they are never in the overlay by construction.
 		return { ...globalState, ...this.layeredOverlay, ...secretState }

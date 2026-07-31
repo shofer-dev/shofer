@@ -100,7 +100,7 @@ shofer plugin list
 
 The plugin's default export must be a `ShoferPlugin` object whose `name` matches the manifest. The
 entry may be `.ts`/`.tsx`/`.js`/`.mjs`; TypeScript is transpiled with the same esbuild path custom
-tools use (Node built-ins external, deps bundled).
+tools use (Worker built-ins external, deps bundled).
 
 > A purely **declarative** plugin needs no `main` and no code — just a manifest with a `contributes`
 > block. See [§4](#4-extension-points).
@@ -186,10 +186,10 @@ credentials alone — losing a key to a button labelled "reset defaults" would b
 ### `syncConfig`
 
 `"syncConfig": true` replicates this plugin's config **and** its secret properties from a controller
-to the Shofer Nodes it drives. Default off: plugin settings are host-local, which is right for
+to the Shofer Workers it drives. Default off: plugin settings are host-local, which is right for
 anything describing the machine it runs on. Turn it on when your feature actually runs on the
 executor — an indexer answering a search there is useless without its embedder settings and store
-credentials, and those are not in the settings schema the node sync already carries.
+credentials, and those are not in the settings schema the worker sync already carries.
 
 Your plugin can shape what leaves the controller by answering the **`"node-config"`** request:
 
@@ -197,13 +197,13 @@ Your plugin can shape what leaves the controller by answering the **`"node-confi
 async handleRequest(method, params) {
 	if (method === "node-config") {
 		const { config, secrets } = params as { config: Record<string, unknown>; secrets: Record<string, string> }
-		// A node queries the shared index; it must never scan or watch (the controller does).
+		// A worker queries the shared index; it must never scan or watch (the controller does).
 		return { config: { ...config, searchOnly: true, indexKey: resolvedKey() }, secrets }
 	}
 }
 ```
 
-Answer nothing and your stored values go as they are. The node **merges** the slice per plugin and
+Answer nothing and your stored values go as they are. The worker **merges** the slice per plugin and
 per key — it may hold local config for plugins the controller does not sync — and reloads your
 plugin so `ctx.config` is live without a restart.
 

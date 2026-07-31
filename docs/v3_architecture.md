@@ -219,22 +219,22 @@ built-in `node:sqlite` — no flat files, no native dependency.
 
 ## Distributed execution (horizontal scaling)
 
-> **✅ Implemented — Shofer Nodes.** Horizontal scaling ships end-to-end. Remote
+> **✅ Implemented — Shofer Workers.** Horizontal scaling ships end-to-end. Remote
 > executors run as `shofer serve` (HTTP/SSE over `ShoferApiAgent`); the controller drives
-> them with `ShoferHttpClient` (which implements `AgentApi`) through the **`NodeRegistry`**,
-> which owns the `ExecutorPool`, persists node definitions (+ tokens in SecretStorage), and
+> them with `ShoferHttpClient` (which implements `AgentApi`) through the **`WorkerRegistry`**,
+> which owns the `WorkerPool`, persists worker definitions (+ tokens in SecretStorage), and
 > handles the connect/auth/version handshake, live status, and load-balancing. Tasks run on
-> remote nodes and render in the webview with interactive approvals, token/context metering,
+> remote workers and render in the webview with interactive approvals, token/context metering,
 > and plugin-owned features like the changed-files panel and checkpoints (over the reverse data channel,
 > below); focus is per-view so the sidebar and an editor tab can watch two different tasks at
-> once. The Shofer Nodes UI is wired in (Settings panel, header status, a composer
+> once. The Shofer Workers UI is wired in (Settings panel, header status, a composer
 > node-picker, and the load-balancer selector). The split-host RPC (`host-rpc.ts`) + session
 > transport (`serveSession`/`connectSession`) remain available substrate for the future
-> "executor uses the _controller's_ host over RPC" model; the **shipped** node model instead
+> "executor uses the _controller's_ host over RPC" model; the **shipped** worker model instead
 > assumes a **shared workspace filesystem** (each remote `shofer serve` has the same mounted
 > workspace) and serves fs executor-locally, while node-scoped **settings and the
 > allow-listed credential slice are replicated from the controller** and gate pool
-> eligibility on a config version ([`config_sync.md`](./config_sync.md)). With **zero remote nodes registered,
+> eligibility on a config version ([`config_sync.md`](./config_sync.md)). With **zero remote workers registered,
 > everything runs on the Local executor exactly as today**.
 
 The Category I/II split is also what makes Shofer **horizontally scalable**: the
@@ -247,9 +247,9 @@ from the user's UI. The vocabulary:
 - **Controller** — the front-end that owns the user session: the UI, the executor
   registry, task→executor routing, and ownership of workspace-shared services (e.g.
   the code index). Always present.
-- **Node** — a registered executor (Local or Remote). With **zero remote nodes
+- **Worker** — a registered executor (Local or Remote). With **zero remote workers
   registered, everything runs on the Local executor exactly as today** — the
-  distributed machinery is dormant until a node is added (backward-compatible by
+  distributed machinery is dormant until a worker is added (backward-compatible by
   construction).
 
 The shipped topology — the controller drives every executor through one
@@ -260,16 +260,16 @@ flowchart LR
     subgraph CTRL["Controller — the VS Code front-end"]
         direction TB
         UI["webview UI<br/>per-view task focus"]
-        NR["NodeRegistry<br/>node defs + SecretStorage tokens<br/>connect/auth/version handshake · status"]
-        POOL["ExecutorPool implements AgentApi<br/>root-task assignment · per-task routing<br/>merged event feed tagged by executorId"]
+        NR["WorkerRegistry<br/>worker defs + SecretStorage tokens<br/>connect/auth/version handshake · status"]
+        POOL["WorkerPool implements AgentApi<br/>root-task assignment · per-task routing<br/>merged event feed tagged by executorId"]
         LOCAL["Local executor<br/>in-process core"]
         UI --> NR
         NR --> POOL
         POOL --> LOCAL
     end
 
-    N1["Remote node — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
-    N2["Remote node — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
+    N1["Remote worker — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
+    N2["Remote worker — 'shofer serve'<br/>ShoferApiAgent over HTTP/SSE"]
     FS[("shared workspace filesystem")]
 
     POOL -->|"ShoferHttpClient implements AgentApi"| N1
@@ -280,7 +280,7 @@ flowchart LR
     N2 --- FS
 ```
 
-With zero remote nodes registered the pool holds only the Local executor, and
+With zero remote workers registered the pool holds only the Local executor, and
 behaviour is identical to driving the core directly.
 
 ### Two seams — and why Category I pays off here
@@ -325,12 +325,12 @@ Distributing execution uses two boundaries that the v3 split already defines:
    which the controller **rebuilds the shadow** so its buffered conversation matches the
    executor's post-rewind state.
 
-    The controller-side `NodeRegistry` routes the call through the `ExecutorPool` to the
+    The controller-side `WorkerRegistry` routes the call through the `WorkerPool` to the
     task's owner, and the routing gates **mutating** requests on "no other active task in
     this worktree" (shared-workspace safety — an executor `git clean -fd`/`reset --hard`
     must not race a local task's writes).
 
-The three channels, and which of them the shipped node model actually uses:
+The three channels, and which of them the shipped worker model actually uses:
 
 ```mermaid
 flowchart LR
@@ -340,13 +340,13 @@ flowchart LR
 
     CTRL -->|"1 · session transport (AgentApi control plane)<br/>createTask · sendMessage · cancelTask<br/>respondToAsk · subscribe — version-locked"| EXEC
     CTRL -->|"3 · reverse data channel<br/>pluginRequest — every plugin-owned<br/>per-task feature"| EXEC
-    EXEC -.->|"2 · host-callback channel over Category I (createSplitHost)<br/>notifier · lsp · workspace · private-tool commands<br/>substrate — NOT used by the shipped node model"| CTRL
+    EXEC -.->|"2 · host-callback channel over Category I (createSplitHost)<br/>notifier · lsp · workspace · private-tool commands<br/>substrate — NOT used by the shipped worker model"| CTRL
     EXEC --> LOC
 ```
 
 Channels 1 and 3 are shipped. Channel 2 — an executor borrowing the
 _controller's_ host over RPC — remains available substrate (`host-rpc.ts` +
-`serveSession`/`connectSession`); the shipped node model instead assumes a shared
+`serveSession`/`connectSession`); the shipped worker model instead assumes a shared
 workspace filesystem and serves that whole slice executor-locally.
 
 ### Routing and invariants
@@ -377,14 +377,14 @@ executors. The governing principles:
   indexer), and `CodeIndexManager` honours the flag at both its `initialize()` and
   `startIndexing()` entry points. The same slice carries a controller-owned
   `codebaseIndexKey` — the logical index identity the collection name is hashed from —
-  so a node addresses the exact collection the controller indexed instead of hashing
+  so a worker addresses the exact collection the controller indexed instead of hashing
   its own mount path, which would both miss the shared index and collide with
   unrelated hosts that happen to share a container path. The embedder/Qdrant
   credentials ride the synced-secrets slice of the same `applyConfig` call, since
-  the config alone would describe a store the node cannot open. Details:
+  the config alone would describe a store the worker cannot open. Details:
   [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md#multi-node--search-only-nodes) and
   [`config_sync.md`](./config_sync.md). (End state: extract the
-  index/embeddings/memory into standalone services every node queries — at which
+  index/embeddings/memory into standalone services every worker queries — at which
   point even the controller is just a client.)
 - **Serialize shared-repo mutations.** Worktree and shadow-git creation on the shared
   `.git` must be serialized and per-executor-namespaced to avoid ref/object races.
@@ -411,20 +411,20 @@ single-host story.)
 The v3 architecture is delivered as a set of initiatives. Current status (initiative
 numbers are local to this document):
 
-| #   | Initiative                                                                                     | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 56 tools migrated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ complete — `Task` + all 56 tools + `presentAssistantMessage` in `@shofer/core`; every seam abstracted and shipped (below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`), plus the seams a plugin needs to own a whole feature — lifecycle hooks, `ctx.task` timeline markers/rewind, `ctx.host.editor`, `handleRequest`/`pluginRequest`. Proven by extracting **checkpoints** out of core into a bundled plugin                                                                                                                                                                                                                                                                                          |
-| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Nodes)** — remote `shofer serve` executors over HTTP/SSE, `NodeRegistry`-wired `ExecutorPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + the plugin-request reverse data channel, per-view shadow focus, controller→node config sync incl. search-only RAG (nodes answer `rag_search` against the controller's index). Split-host RPC/session-transport substrate remains for the controller-host model; serializing shadow-git/worktree creation on the shared repo is the remaining hardening |
+| #   | Initiative                                                                                     | Status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Strangler discipline + maturity hygiene                                                        | ✅ governing practice                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 2   | Schema-as-contract for tools (one Zod schema → OpenAI def + arg type, golden-snapshot guarded) | ✅ all 56 tools migrated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 3   | One permission engine (tool access / categories / per-model prefs / auto-approval unified)     | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 4   | Durable, incremental persistence (SQLite, flat files removed)                                  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 5   | Structured cancellation (process-tree teardown, partial-message reconciliation)                | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 6   | Data-driven model/provider catalog                                                             | ✅ abstraction; live/config data backing deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 7   | Standards-based observability (OpenTelemetry) + honest cost/limits; no bespoke metrics server  | ✅                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| 8   | **Host-agnostic core (Category I/II split)**                                                   | ✅ complete — `Task` + all 56 tools + `presentAssistantMessage` in `@shofer/core`; every seam abstracted and shipped (below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 9   | Typed plugin API (tools, prompt transform, events)                                             | ✅ wired (`collectTools`, `transformSystemPrompt`, `dispatchEvent`), plus the seams a plugin needs to own a whole feature — lifecycle hooks, `ctx.task` timeline markers/rewind, `ctx.host.editor`, `handleRequest`/`pluginRequest`. Proven by extracting **checkpoints** out of core into a bundled plugin                                                                                                                                                                                                                                                                                                |
+| 10  | HTTP API + SDK + headless parity                                                               | ✅ server + typed SDK + `shofer serve`; headless parity unblocked now the core move has landed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 11  | Editor-agnostic agent protocol (ACP) backend                                                   | ✅ adapter + `shofer acp`; upstream SDK + live-client validation deferred                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 12  | **Distributed execution (controllers/executors, horizontal scaling)**                          | ✅ **shipped (Shofer Workers)** — remote `shofer serve` executors over HTTP/SSE, `WorkerRegistry`-wired `WorkerPool` (connect/auth/version, status, load-balancing: round-robin + load-average), interactive approvals + full-fidelity render + the plugin-request reverse data channel, per-view shadow focus, controller→worker config sync incl. search-only RAG (workers answer `rag_search` against the controller's index). Split-host RPC/session-transport substrate remains for the controller-host model; serializing shadow-git/worktree creation on the shared repo is the remaining hardening |
 
 ### What "done" means, per initiative
 
@@ -472,7 +472,7 @@ numbers are local to this document):
   `shofer acp` entrypoint. The method map, event/permission mapping, and how ACP differs
   from `AgentApi` are in **[`acp.md`](./acp.md)**; deferred items are tracked there.
 - **§12 distributed** — see below; the Category-I-over-RPC split adapter, the session
-  transport, and the controller-side `ExecutorPool` (root-task routing + merged view)
+  transport, and the controller-side `WorkerPool` (root-task routing + merged view)
   are built.
 
 ---
@@ -569,28 +569,28 @@ prerequisites:
   `serveSession`/`connectSession` (the **session transport** that carries both the
   agent channel and the host-callback channel). Category I is DTO-based, so it
   serializes for free.
-- **Controller-side routing is built**: `ExecutorPool` implements `AgentApi` over one
+- **Controller-side routing is built**: `WorkerPool` implements `AgentApi` over one
   or more executors — pluggable root-task assignment, per-task routing, and a merged
   event feed tagged by `executorId` (the unified view). Single-executor behaviour is
   identical to driving one directly.
     - **Load-balancing policy** (`LoadBalancerPolicy`, `setPolicy`/`getPolicy`): the
       default `round-robin` rotates evenly; the `least-load-1m`/`5m`/`15m` policies pick the
       assignable executor with the lowest **normalized** load average
-      (`loadavg[window] / max(cpus, 1)`) for the chosen window, so a bigger-core node can
+      (`loadavg[window] / max(cpus, 1)`) for the chosen window, so a bigger-core worker can
       absorb more work. The load metric is an **injected accessor**
       (`PooledExecutor.load?: () => LoadSample`) — `@shofer/types` stays browser-safe and
-      never imports `node:os`. The Node-side `NodeRegistry` supplies it: the Local executor
+      never imports `node:os`. The Node-side `WorkerRegistry` supplies it: the Local executor
       reads this host's live `os.loadavg()`/`os.cpus().length`; each remote reads the sample
-      from its `NodeConnection` (carried on the periodic `GET /health` ping, which now
+      from its `WorkerConnection` (carried on the periodic `GET /health` ping, which now
       returns `loadavg` + `cpus`). Fallbacks keep it robust: executors with no sample are
       excluded from the comparison, an all-no-sample pool degrades to round-robin, and ties
       (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
-      the round-robin cursor. The policy is selected by the `shofer.nodes.loadBalancer`
+      the round-robin cursor. The policy is selected by the `shofer.workers.loadBalancer`
       setting (read on init + on configuration change).
 - **Shipped**: the remote executor process (`shofer serve`, HTTP/SSE over
-  `ShoferApiAgent`), the `NodeRegistry` that wires the `ExecutorPool` into the extension
-  (node registry + SecretStorage tokens, connect/auth/version handshake, live status,
-  load-balancing), the full Shofer Nodes UI (Settings panel, header status, composer
+  `ShoferApiAgent`), the `WorkerRegistry` that wires the `WorkerPool` into the extension
+  (worker registry + SecretStorage tokens, connect/auth/version handshake, live status,
+  load-balancing), the full Shofer Workers UI (Settings panel, header status, composer
   node-picker, load-balancer selector), interactive approvals (`respondToAsk`),
   full-fidelity remote render, per-view shadow focus, and the reverse data channel
   (plugin requests).

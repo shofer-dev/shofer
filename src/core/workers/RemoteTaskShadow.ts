@@ -3,13 +3,13 @@ import type { HistoryItem, ShoferMessage, TokenUsage } from "@shofer/types"
 /**
  * Lifecycle state of a remote-owned task, as observed from the controller side.
  * A shadow never "runs" locally — it only reflects the `Message`/lifecycle event
- * stream the owning node emits over the pool feed.
+ * stream the owning worker emits over the pool feed.
  */
 export type RemoteTaskStatus = "created" | "running" | "completed" | "aborted" | "error"
 
 /**
- * A lightweight, controller-side buffer for a task that RUNS on a remote node
- * (Shofer Nodes L2). It is deliberately **not** a `taskManager`-managed {@link
+ * A lightweight, controller-side buffer for a task that RUNS on a remote worker
+ * (Shofer Workers L2). It is deliberately **not** a `taskManager`-managed {@link
  * import("../task/Task.js")} — it holds no agent, no tools, no file-diff
  * machinery. It exists only to reconstruct the reduced-but-real conversation the
  * webview renders from the remote's high-fidelity `Message` stream, plus a
@@ -23,7 +23,7 @@ export type RemoteTaskStatus = "created" | "running" | "completed" | "aborted" |
 export class RemoteTaskShadow {
 	readonly taskId: string
 	readonly executorId: string
-	/** Human-friendly node label (for the synthetic summary / notices). */
+	/** Human-friendly worker label (for the synthetic summary / notices). */
 	readonly nodeLabel: string
 	readonly createdAt = Date.now()
 	/** The originating prompt, when known (remote lifecycle events don't carry it). */
@@ -54,7 +54,7 @@ export class RemoteTaskShadow {
 	 *
 	 * A non-auto-approved `ask` is buffered like any other message: the webview
 	 * renders the normal approve/deny affordance and the answer round-trips to the
-	 * executor via the reverse ask channel (NodeRegistry.respondToAsk).
+	 * executor via the reverse ask channel (WorkerRegistry.respondToAsk).
 	 */
 	applyMessageDelta(action: "created" | "updated", message: ShoferMessage): void {
 		const idx = this.messages.findIndex((m) => m.ts === message.ts)
@@ -87,7 +87,7 @@ export class RemoteTaskShadow {
 	}
 
 	/**
-	 * Drop the buffered conversation (Shofer Nodes L3 rebuild). When the executor
+	 * Drop the buffered conversation (Shofer Workers L3 rebuild). When the executor
 	 * rewinds its task it reinitializes and re-emits the
 	 * post-rewind `Message` stream; clearing here lets those deltas repopulate the
 	 * shadow so its conversation matches the executor, with no stale tail.

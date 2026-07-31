@@ -28,7 +28,7 @@ export type SessionClientFrame =
 	// Node-scoped config replication (config_sync §4a). `secrets` carries the
 	// allow-listed credential slice alongside the settings slice.
 	| { t: "cmd"; id: number; method: "applyConfig"; config: SyncedSettings; version: string; secrets: SyncedSecrets }
-	// Reverse data channel (Shofer Nodes L3): reach a plugin-owned feature on the
+	// Reverse data channel (Shofer Workers L3): reach a plugin-owned feature on the
 	// task's own host.
 	| {
 			t: "cmd"

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
 
 import type { AgentApi, ServerEvent } from "../agent-api.js"
-import type { LoadSample } from "../executor-pool.js"
-import { ExecutorPool } from "../executor-pool.js"
+import type { LoadSample } from "../worker-pool.js"
+import { WorkerPool } from "../worker-pool.js"
 
 /** A mock executor whose task ids are namespaced + whose event stream is drivable. */
 function makeExecutor(id: string) {
@@ -25,11 +25,11 @@ function makeExecutor(id: string) {
 	return { id, api, emit: (e: ServerEvent) => emit(e) }
 }
 
-describe("ExecutorPool (§13 controller side)", () => {
+describe("WorkerPool (§13 controller side)", () => {
 	it("round-robins new root tasks across executors and remembers the owner", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
@@ -56,7 +56,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 	it("routes a plugin request to the executor that owns the task", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
@@ -73,7 +73,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 	it("merges executor event streams, tagging each with executorId", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 		const seen: ServerEvent[] = []
@@ -90,7 +90,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 	it("skips disabled executors and stops forwarding events after remove", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api, disabled: true })
 		pool.add({ id: b.id, api: b.api })
 
@@ -105,14 +105,14 @@ describe("ExecutorPool (§13 controller side)", () => {
 	})
 
 	it("throws when no executor is available", async () => {
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		await expect(pool.createTask({ prompt: "x", mode: "code" })).rejects.toThrow(/no executor/)
 	})
 
 	it("exposes ids/has and ownerOf for assigned tasks", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
@@ -130,7 +130,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 	it("pickNext advances round-robin without dispatching; createTaskOn dispatches to a specific executor", async () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 
@@ -153,7 +153,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 	it("assignOwner records ownership for an out-of-band task (Local bypass) without dispatch", async () => {
 		const a = makeExecutor("A")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.assignOwner("local-task-1", "A")
 		expect(pool.ownerOf("local-task-1")).toBe("A")
@@ -161,7 +161,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 	})
 
 	it("pickNext returns undefined when no executor is assignable", () => {
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		expect(pool.pickNext()).toBeUndefined()
 		expect(pool.assignableIds()).toEqual([])
 	})
@@ -183,7 +183,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("picks the executor with the lowest normalized load for the selected window", async () => {
 			const a = loadExecutor("A", { loadavg: [4, 4, 4], cpus: 4 }) // 1.0 normalized
 			const b = loadExecutor("B", { loadavg: [1, 2, 3], cpus: 4 }) // 0.25 / 0.5 / 0.75
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 
@@ -202,7 +202,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 			// A wins on 1m; B wins on 5m and 15m.
 			const a = loadExecutor("A", { loadavg: [1, 9, 9], cpus: 1 })
 			const b = loadExecutor("B", { loadavg: [9, 1, 1], cpus: 1 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 
@@ -214,11 +214,11 @@ describe("ExecutorPool (§13 controller side)", () => {
 			expect(pool.pickNext()).toBe("B")
 		})
 
-		it("normalizes by cpu count — a high-core node with higher raw load can still win", () => {
+		it("normalizes by cpu count — a high-core worker with higher raw load can still win", () => {
 			// A: raw 8 over 16 cores = 0.5. B: raw 3 over 4 cores = 0.75. A wins despite higher raw load.
 			const a = loadExecutor("A", { loadavg: [8, 8, 8], cpus: 16 })
 			const b = loadExecutor("B", { loadavg: [3, 3, 3], cpus: 4 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 
@@ -230,7 +230,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 			// One with a sample, one without → the sampled one is chosen.
 			const a = loadExecutor("A", { loadavg: [5, 5, 5], cpus: 1 })
 			const b = loadExecutor("B", undefined)
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 			pool.setPolicy("least-load-1m")
@@ -240,7 +240,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 			// Neither exposes a sample → degrade to round-robin over the pool.
 			const c = loadExecutor("C", undefined)
 			const d = loadExecutor("D", undefined)
-			const rr = new ExecutorPool()
+			const rr = new WorkerPool()
 			rr.add({ id: c.id, api: c.api, load: c.load })
 			rr.add({ id: d.id, api: d.api, load: d.load })
 			rr.setPolicy("least-load-5m")
@@ -253,7 +253,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 			const a = loadExecutor("A", { loadavg: [0, 0, 0], cpus: 8 })
 			const b = loadExecutor("B", { loadavg: [0, 0, 0], cpus: 4 })
 			const c = loadExecutor("C", { loadavg: [0, 0, 0], cpus: 2 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 			pool.add({ id: c.id, api: c.api, load: c.load })
@@ -265,7 +265,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("excludes disabled executors from the least-load comparison", () => {
 			const a = loadExecutor("A", { loadavg: [0.1, 0.1, 0.1], cpus: 1 }) // lowest, but disabled
 			const b = loadExecutor("B", { loadavg: [1, 1, 1], cpus: 1 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load, disabled: true })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 			pool.setPolicy("least-load-1m")
@@ -274,7 +274,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 		it("loadOf exposes an executor's current sample and is undefined for unknown ids", () => {
 			const a = loadExecutor("A", { loadavg: [2, 2, 2], cpus: 2 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			expect(pool.loadOf("A")).toEqual({ loadavg: [2, 2, 2], cpus: 2 })
 			a.setLoad(undefined)
@@ -285,7 +285,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("default policy is round-robin (unchanged behavior)", async () => {
 			const a = loadExecutor("A", { loadavg: [9, 9, 9], cpus: 1 })
 			const b = loadExecutor("B", { loadavg: [0, 0, 0], cpus: 1 })
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, load: a.load })
 			pool.add({ id: b.id, api: b.api, load: b.load })
 			expect(pool.getPolicy()).toBe("round-robin")
@@ -313,7 +313,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("no desired version → all non-disabled executors assignable (baseline)", () => {
 			const a = cfgExecutor("A", "v0")
 			const b = cfgExecutor("B", undefined)
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 			// desiredConfigVersion unset → gating disabled regardless of reported versions.
@@ -324,7 +324,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 			const a = cfgExecutor("A", "v1") // matches
 			const b = cfgExecutor("B", "v0") // stale
 			const c = cfgExecutor("C", undefined) // never reported → not current
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 			pool.add({ id: c.id, api: c.api, configVersion: c.configVersion, managed: c.managed })
@@ -336,7 +336,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("routes new tasks only to a matching managed executor", async () => {
 			const a = cfgExecutor("A", "v1")
 			const b = cfgExecutor("B", "v0")
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 
@@ -353,14 +353,14 @@ describe("ExecutorPool (§13 controller side)", () => {
 			// B is unmanaged and its version does NOT match — still assignable.
 			const a = cfgExecutor("A", "v1", true)
 			const b = cfgExecutor("B", "v0", false)
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 
 			pool.setDesiredConfigVersion("v1")
 			expect(pool.assignableIds()).toEqual(["A", "B"])
 
-			// Even when the unmanaged node reports no version at all, it stays exempt.
+			// Even when the unmanaged worker reports no version at all, it stays exempt.
 			b.setVersion(undefined)
 			expect(pool.assignableIds()).toEqual(["A", "B"])
 		})
@@ -368,7 +368,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		it("re-includes everyone when the desired version is cleared back to undefined", () => {
 			const a = cfgExecutor("A", "v1")
 			const b = cfgExecutor("B", "v0")
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 			pool.add({ id: b.id, api: b.api, configVersion: b.configVersion, managed: b.managed })
 
@@ -381,19 +381,19 @@ describe("ExecutorPool (§13 controller side)", () => {
 
 		it("a stale executor becomes assignable once it reports the desired version", () => {
 			const a = cfgExecutor("A", "v0")
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed })
 
 			pool.setDesiredConfigVersion("v1")
 			expect(pool.assignableIds()).toEqual([]) // stale → excluded
 
-			a.setVersion("v1") // node applied the new config
+			a.setVersion("v1") // worker applied the new config
 			expect(pool.assignableIds()).toEqual(["A"])
 		})
 
 		it("still excludes a disabled executor even when its config matches", () => {
 			const a = cfgExecutor("A", "v1")
-			const pool = new ExecutorPool()
+			const pool = new WorkerPool()
 			pool.add({ id: a.id, api: a.api, configVersion: a.configVersion, managed: a.managed, disabled: true })
 			pool.setDesiredConfigVersion("v1")
 			expect(pool.assignableIds()).toEqual([]) // matching version, but admin-disabled
@@ -404,7 +404,7 @@ describe("ExecutorPool (§13 controller side)", () => {
 		const a = makeExecutor("A")
 		const b = makeExecutor("B")
 		const c = makeExecutor("C")
-		const pool = new ExecutorPool()
+		const pool = new WorkerPool()
 		pool.add({ id: a.id, api: a.api })
 		pool.add({ id: b.id, api: b.api })
 		pool.add({ id: c.id, api: c.api })

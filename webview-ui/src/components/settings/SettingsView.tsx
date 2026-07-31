@@ -74,7 +74,7 @@ import { ToolsSettings, type ToolsSettingsRef } from "./ToolsSettings"
 import { UISettings } from "./UISettings"
 import ModesView, { type ModesViewRef } from "../modes/ModesView"
 import McpView from "../mcp/McpView"
-import { ShoferNodesSettings, ShoferNodesSettingsRef } from "./ShoferNodesSettings"
+import { ShoferWorkersSettings, ShoferWorkersSettingsRef } from "./ShoferWorkersSettings"
 import { PluginsSettings, type PluginsSettingsRef } from "./PluginsSettings"
 import { SettingsSearch } from "./SettingsSearch"
 import { useSearchIndexRegistry, SearchIndexProvider } from "./useSettingsSearch"
@@ -100,7 +100,7 @@ export const sectionNames = [
 	"terminal",
 	"modes",
 	"mcp",
-	"shoferNodes",
+	"shoferWorkers",
 	"plugins",
 	"prompts",
 	"ui",
@@ -173,7 +173,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const modesViewRef = useRef<ModesViewRef>(null)
 	const toolsSettingsRef = useRef<ToolsSettingsRef>(null)
 	const pluginsSettingsRef = useRef<PluginsSettingsRef>(null)
-	const shoferNodesRef = useRef<ShoferNodesSettingsRef>(null)
+	const shoferNodesRef = useRef<ShoferWorkersSettingsRef>(null)
 
 	const [cachedState, setCachedState] = useState(() => extensionState)
 
@@ -529,7 +529,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			// Apply staged plugin config edits (Plugins tab) — persists + reloads each plugin.
 			pluginsSettingsRef.current?.commitConfigBuffers()
 
-			// Apply staged node-pool edits (Shofer Nodes tab): load-balancer policy
+			// Apply staged node-pool edits (Shofer Workers tab): load-balancer policy
 			// and per-node enable/disable.
 			shoferNodesRef.current?.commitNodeBuffers()
 
@@ -647,7 +647,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "autoApprove", icon: CheckCheck },
 			{ id: "tools", icon: Wrench },
 			{ id: "mcp", icon: Server },
-			{ id: "shoferNodes", icon: Network },
+			{ id: "shoferWorkers", icon: Network },
 			{ id: "plugins", icon: Blocks },
 			{ id: "contextManagement", icon: Database },
 			{ id: "terminal", icon: SquareTerminal },
@@ -1029,9 +1029,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 						{/* MCP Section */}
 						{renderTab === "mcp" && <McpView />}
 
-						{/* Shofer Nodes (remote agents) Section */}
-						{renderTab === "shoferNodes" && (
-							<ShoferNodesSettings ref={shoferNodesRef} onNodesDirty={() => setChangeDetected(true)} />
+						{/* Shofer Workers (remote agents) Section */}
+						{renderTab === "shoferWorkers" && (
+							<ShoferWorkersSettings ref={shoferNodesRef} onNodesDirty={() => setChangeDetected(true)} />
 						)}
 						{renderTab === "plugins" && (
 							<PluginsSettings ref={pluginsSettingsRef} onConfigDirty={() => setChangeDetected(true)} />

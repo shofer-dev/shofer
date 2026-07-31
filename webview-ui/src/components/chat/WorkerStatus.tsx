@@ -1,14 +1,14 @@
 import { useMemo } from "react"
 import { Server } from "lucide-react"
 
-import type { ShoferNodeConnState, ShoferNodeView } from "@shofer/types"
+import type { ShoferWorkerConnState, ShoferWorkerView } from "@shofer/types"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { vscode } from "@src/utils/vscode"
 import { Button, Popover, PopoverTrigger, PopoverContent } from "@src/components/ui"
 import { cn } from "@src/lib/utils"
 
-const STATUS_DOT: Record<ShoferNodeConnState, string> = {
+const STATUS_DOT: Record<ShoferWorkerConnState, string> = {
 	running: "bg-green-500",
 	connected: "bg-green-500",
 	connecting: "bg-amber-500 animate-pulse",
@@ -19,7 +19,7 @@ const STATUS_DOT: Record<ShoferNodeConnState, string> = {
 	error: "bg-red-500",
 }
 
-const STATUS_LABEL: Record<ShoferNodeConnState, string> = {
+const STATUS_LABEL: Record<ShoferWorkerConnState, string> = {
 	running: "running (local)",
 	connected: "connected",
 	connecting: "connecting…",
@@ -31,38 +31,38 @@ const STATUS_LABEL: Record<ShoferNodeConnState, string> = {
 }
 
 function post(action: "connect" | "disconnect", id: string) {
-	vscode.postMessage({ type: "shoferNode", shoferNode: { action, id } })
+	vscode.postMessage({ type: "shoferWorker", shoferWorker: { action, id } })
 }
 
 /**
- * Compact "Nodes" button + popover surfacing the live state of every Shofer
- * Node (Local first, then remotes). Sits in the chat header next to the task
+ * Compact "Workers" button + popover surfacing the live state of every Shofer
+ * Worker (Local first, then remotes). Sits in the chat header next to the task
  * title. See `docs/remote-agents.md` §4b.
  */
-export const NodeStatus = () => {
-	const { shoferNodes } = useExtensionState()
-	const nodes = useMemo<ShoferNodeView[]>(() => shoferNodes?.nodes ?? [], [shoferNodes])
+export const WorkerStatus = () => {
+	const { shoferWorkers } = useExtensionState()
+	const workers = useMemo<ShoferWorkerView[]>(() => shoferWorkers?.workers ?? [], [shoferWorkers])
 
 	// Only surface the control once there's something beyond the built-in Local
-	// node — keeps the header clean for users who never register a remote.
-	const hasRemotes = nodes.some((n) => n.kind === "remote")
+	// worker — keeps the header clean for users who never register a remote.
+	const hasRemotes = workers.some((n) => n.kind === "remote")
 	const aggregate = useMemo(() => {
-		// Count every node that's up — Local (running, unless disabled) plus any
+		// Count every worker that's up — Local (running, unless disabled) plus any
 		// connected remotes — so a Local-only-plus-one-remote setup reads "2".
-		const count = nodes.filter((n) => !n.disabled && (n.status === "running" || n.status === "connected")).length
+		const count = workers.filter((n) => !n.disabled && (n.status === "running" || n.status === "connected")).length
 
-		// Health dot considers every non-disabled node (Local + remotes):
-		//   red    — all nodes down or disabled (nothing is up)
-		//   yellow — at least one non-disabled node in a failed/error state
-		//   green  — all non-disabled nodes are up
-		const active = nodes.filter((n) => !n.disabled)
+		// Health dot considers every non-disabled worker (Local + remotes):
+		//   red    — all workers down or disabled (nothing is up)
+		//   yellow — at least one non-disabled worker in a failed/error state
+		//   green  — all non-disabled workers are up
+		const active = workers.filter((n) => !n.disabled)
 		const up = active.filter((n) => n.status === "running" || n.status === "connected")
 		const failed = active.filter(
 			(n) => n.status === "error" || n.status === "unauthorized" || n.status === "version-mismatch",
 		)
 		const dot = up.length === 0 ? "bg-red-500" : failed.length > 0 ? "bg-yellow-500" : "bg-green-500"
 		return { count, dot }
-	}, [nodes])
+	}, [workers])
 
 	if (!hasRemotes) return null
 
@@ -72,8 +72,8 @@ export const NodeStatus = () => {
 				<Button
 					variant="ghost"
 					size="sm"
-					title="Shofer Nodes"
-					aria-label="Shofer Nodes"
+					title="Shofer Workers"
+					aria-label="Shofer Workers"
 					className={cn(
 						"relative h-5 w-5 p-0",
 						"text-vscode-foreground opacity-85",
@@ -86,7 +86,7 @@ export const NodeStatus = () => {
 						className={cn("absolute top-0 right-0 w-1.5 h-1.5 rounded-full", aggregate.dot)}
 						aria-hidden
 					/>
-					{/* Node count overlaid bottom-right to save horizontal space. */}
+					{/* Worker count overlaid bottom-right to save horizontal space. */}
 					<span className="absolute -bottom-1 -right-1 min-w-[12px] rounded-full bg-vscode-editor-background px-0.5 text-center text-[9px] font-semibold leading-[12px]">
 						{aggregate.count}
 					</span>
@@ -94,10 +94,10 @@ export const NodeStatus = () => {
 			</PopoverTrigger>
 			<PopoverContent align="end" className="w-72 p-0">
 				<div className="px-3 py-2 border-b border-vscode-dropdown-border text-xs font-medium uppercase tracking-wide text-vscode-descriptionForeground">
-					Shofer Nodes
+					Shofer Workers
 				</div>
 				<div className="max-h-80 overflow-y-auto">
-					{nodes.map((n) => (
+					{workers.map((n) => (
 						<div key={n.id} className={cn("flex items-center gap-2 px-3 py-2", n.disabled && "opacity-50")}>
 							<span
 								className={cn("w-2 h-2 rounded-full flex-shrink-0", STATUS_DOT[n.status])}

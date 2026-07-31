@@ -4,10 +4,10 @@ import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type {
 	LoadBalancerPolicy,
-	ShoferNodeConnState,
-	ShoferNodeDef,
-	ShoferNodeRequest,
-	ShoferNodeView,
+	ShoferWorkerConnState,
+	ShoferWorkerDef,
+	ShoferWorkerRequest,
+	ShoferWorkerView,
 } from "@shofer/types"
 
 import { useAppTranslation } from "@/i18n/TranslationContext"
@@ -30,7 +30,7 @@ import { SectionHeader } from "./SectionHeader"
 import { Section } from "./Section"
 
 /** Tailwind classes for the status dot, by connection state. */
-const STATUS_DOT: Record<ShoferNodeConnState, string> = {
+const STATUS_DOT: Record<ShoferWorkerConnState, string> = {
 	running: "bg-green-500",
 	connected: "bg-green-500",
 	connecting: "bg-amber-500 animate-pulse",
@@ -53,45 +53,45 @@ function emptyForm(): NodeForm {
 	return { id: "", label: "", host: "", tls: false, token: "" }
 }
 
-function post(shoferNode: ShoferNodeRequest) {
-	vscode.postMessage({ type: "shoferNode", shoferNode })
+function post(shoferWorker: ShoferWorkerRequest) {
+	vscode.postMessage({ type: "shoferWorker", shoferWorker })
 }
 
 /** The load-balancer policies in menu order, paired with their i18n label key. */
 const LOAD_BALANCER_POLICIES: { value: LoadBalancerPolicy; labelKey: string }[] = [
-	{ value: "round-robin", labelKey: "settings:shoferNodes.loadBalancer.roundRobin" },
-	{ value: "least-load-1m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad1m" },
-	{ value: "least-load-5m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad5m" },
-	{ value: "least-load-15m", labelKey: "settings:shoferNodes.loadBalancer.leastLoad15m" },
+	{ value: "round-robin", labelKey: "settings:shoferWorkers.loadBalancer.roundRobin" },
+	{ value: "least-load-1m", labelKey: "settings:shoferWorkers.loadBalancer.leastLoad1m" },
+	{ value: "least-load-5m", labelKey: "settings:shoferWorkers.loadBalancer.leastLoad5m" },
+	{ value: "least-load-15m", labelKey: "settings:shoferWorkers.loadBalancer.leastLoad15m" },
 ]
 
-export interface ShoferNodesSettingsRef {
+export interface ShoferWorkersSettingsRef {
 	/** Flush staged policy/disabled edits to the host. Called by SettingsView on Save. */
 	commitNodeBuffers: () => void
 	/** Drop staged edits without applying. Called by SettingsView on Discard. */
 	discardNodeBuffers: () => void
 }
 
-interface ShoferNodesSettingsProps extends HTMLAttributes<HTMLDivElement> {
+interface ShoferWorkersSettingsProps extends HTMLAttributes<HTMLDivElement> {
 	/** Fired when a save-gated value is staged, so the parent enables Save. */
 	onNodesDirty?: () => void
 }
 
-export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNodesSettingsProps>(
+export const ShoferWorkersSettings = forwardRef<ShoferWorkersSettingsRef, ShoferWorkersSettingsProps>(
 	({ onNodesDirty, ...props }, ref) => {
 		const { t } = useAppTranslation()
-		const { shoferNodes } = useExtensionState()
+		const { shoferWorkers } = useExtensionState()
 		const [form, setForm] = useState<NodeForm | null>(null)
 
 		// Save-gated staged values (see AGENTS.md "Settings View Pattern"): the
-		// load-balancer policy and per-node enable/disable are settings VALUES, so
+		// load-balancer policy and per-worker enable/disable are settings VALUES, so
 		// they must not apply on change. `undefined` / missing key = "no edit;
 		// show live value". Committed via `commitNodeBuffers` on Save.
 		const [pendingLoadBalancer, setPendingLoadBalancer] = useState<LoadBalancerPolicy | undefined>(undefined)
 		const [pendingDisabled, setPendingDisabled] = useState<Record<string, boolean>>({})
 		const pendingLoadBalancerRef = useRef(pendingLoadBalancer)
 		const pendingDisabledRef = useRef(pendingDisabled)
-		const liveShoferNodesRef = useRef(shoferNodes)
+		const liveShoferNodesRef = useRef(shoferWorkers)
 		useEffect(() => {
 			pendingLoadBalancerRef.current = pendingLoadBalancer
 		}, [pendingLoadBalancer])
@@ -99,12 +99,12 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 			pendingDisabledRef.current = pendingDisabled
 		}, [pendingDisabled])
 		useEffect(() => {
-			liveShoferNodesRef.current = shoferNodes
-		}, [shoferNodes])
+			liveShoferNodesRef.current = shoferWorkers
+		}, [shoferWorkers])
 
 		useImperativeHandle(
 			ref,
-			(): ShoferNodesSettingsRef => ({
+			(): ShoferWorkersSettingsRef => ({
 				commitNodeBuffers: () => {
 					const live = liveShoferNodesRef.current
 					const policy = pendingLoadBalancerRef.current
@@ -112,8 +112,8 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 						post({ action: "setLoadBalancer", policy })
 					}
 					for (const [id, disabled] of Object.entries(pendingDisabledRef.current)) {
-						const liveNode = live?.nodes?.find((n) => n.id === id)
-						if (liveNode && Boolean(liveNode.disabled) !== disabled) {
+						const liveWorker = live?.workers?.find((n) => n.id === id)
+						if (liveWorker && Boolean(liveWorker.disabled) !== disabled) {
 							post({ action: "setDisabled", id, disabled })
 						}
 					}
@@ -133,10 +133,10 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 			post({ action: "list" })
 		}, [])
 
-		const nodes = useMemo<ShoferNodeView[]>(() => shoferNodes?.nodes ?? [], [shoferNodes])
+		const workers = useMemo<ShoferWorkerView[]>(() => shoferWorkers?.workers ?? [], [shoferWorkers])
 
 		const startAdd = () => setForm(emptyForm())
-		const startEdit = (n: ShoferNodeView) =>
+		const startEdit = (n: ShoferWorkerView) =>
 			setForm({
 				id: n.id,
 				label: n.label,
@@ -148,34 +148,34 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 		const save = () => {
 			if (!form) return
 			const id = form.id || `remote-${Date.now()}`
-			const node: ShoferNodeDef = {
+			const worker: ShoferWorkerDef = {
 				id,
 				kind: "remote",
 				label: form.label.trim() || form.host || id,
 				host: form.host.trim(),
 				tls: form.tls,
 			}
-			post({ action: "upsert", node, token: form.token ? form.token : undefined })
+			post({ action: "upsert", worker, token: form.token ? form.token : undefined })
 			setForm(null)
 		}
 
 		return (
 			<div {...props}>
-				<SectionHeader>{t("settings:sections.shoferNodes")}</SectionHeader>
+				<SectionHeader>{t("settings:sections.shoferWorkers")}</SectionHeader>
 				<Section>
 					<div className="text-vscode-descriptionForeground text-sm mb-3">
-						Run the Shofer agent locally (built-in) or on a remote node. Remote nodes must run the{" "}
+						Run the Shofer agent locally (built-in) or on a remote worker. Remote workers must run the{" "}
 						<span className="font-medium">exact same shofer version</span> as this controller. The
 						connection token is stored in VS Code SecretStorage and never synced or exported. Connecting a
-						node also makes it reconnect automatically on the next start; disabling a node takes it out of
-						the pool entirely.
+						worker also makes it reconnect automatically on the next start; disabling a worker takes it out
+						of the pool entirely.
 					</div>
 
-					{/* Load balancing: how new tasks are spread across enabled nodes. */}
+					{/* Load balancing: how new tasks are spread across enabled workers. */}
 					<label className="flex flex-col gap-1 text-sm mb-3">
-						<span className="font-medium">{t("settings:shoferNodes.loadBalancer.label")}</span>
+						<span className="font-medium">{t("settings:shoferWorkers.loadBalancer.label")}</span>
 						<Select
-							value={pendingLoadBalancer ?? shoferNodes?.loadBalancer ?? "round-robin"}
+							value={pendingLoadBalancer ?? shoferWorkers?.loadBalancer ?? "round-robin"}
 							onValueChange={(value) => {
 								setPendingLoadBalancer(value as LoadBalancerPolicy)
 								onNodesDirty?.()
@@ -194,12 +194,12 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 							</SelectContent>
 						</Select>
 						<span className="text-xs text-vscode-descriptionForeground">
-							{t("settings:shoferNodes.loadBalancer.description")}
+							{t("settings:shoferWorkers.loadBalancer.description")}
 						</span>
 					</label>
 
 					<div className="flex flex-col gap-2">
-						{nodes.map((n) => {
+						{workers.map((n) => {
 							const connectedish = n.status === "connected" || n.status === "connecting"
 							// Staged-first so an unsaved toggle renders; live actions
 							// (connect/disconnect) still key off the LIVE disabled flag.
@@ -251,7 +251,7 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 												</Button>
 											))}
 
-										{/* Administrative enable / disable — applies to every node.
+										{/* Administrative enable / disable — applies to every worker.
 									    Save-gated: staged here, applied on Save via commitNodeBuffers. */}
 										<Button
 											variant="ghost"
@@ -272,8 +272,8 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 											)}
 										</Button>
 
-										{/* Edit / Remove — remote only, and never for a node declared in
-										    `.shofer/nodes.json`: the file is its source of truth, so an
+										{/* Edit / Remove — remote only, and never for a worker declared in
+										    `.shofer/workers.json`: the file is its source of truth, so an
 										    edit here would be overwritten and a delete would come back on
 										    the next reconcile. Disable, above, still applies. */}
 										{n.kind === "remote" && !n.declared && (
@@ -325,7 +325,7 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 					{/* Add / edit form */}
 					{form ? (
 						<div className="mt-4 rounded-md border border-vscode-dropdown-border p-3 flex flex-col gap-3">
-							<div className="text-sm font-medium">{form.id ? "Edit node" : "Add remote node"}</div>
+							<div className="text-sm font-medium">{form.id ? "Edit worker" : "Add remote worker"}</div>
 							<label className="flex flex-col gap-1 text-sm">
 								<span className="font-medium">Label</span>
 								<Input
@@ -372,7 +372,7 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 						</div>
 					) : (
 						<Button variant="secondary" size="sm" className="mt-4 self-start" onClick={startAdd}>
-							<Plus className="size-3.5 mr-1" /> Add remote node
+							<Plus className="size-3.5 mr-1" /> Add remote worker
 						</Button>
 					)}
 				</Section>
@@ -381,4 +381,4 @@ export const ShoferNodesSettings = forwardRef<ShoferNodesSettingsRef, ShoferNode
 	},
 )
 
-ShoferNodesSettings.displayName = "ShoferNodesSettings"
+ShoferWorkersSettings.displayName = "ShoferWorkersSettings"

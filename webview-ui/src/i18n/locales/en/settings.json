@@ -19,10 +19,10 @@
 		"placeholder": "Search settings...",
 		"noResults": "No settings found"
 	},
-	"shoferNodes": {
+	"shoferWorkers": {
 		"loadBalancer": {
 			"label": "Load balancing",
-			"description": "How new tasks are distributed across the enabled nodes.",
+			"description": "How new tasks are distributed across the enabled workers.",
 			"roundRobin": "Round-robin",
 			"leastLoad1m": "Least load (1m)",
 			"leastLoad5m": "Least load (5m)",
@@ -61,7 +61,8 @@
 			"commands": "{{count}} commands",
 			"mcpServers": "{{count}} MCP servers",
 			"rules": "{{count}} rules"
-		}
+		},
+		"configManaged": "Configuration is supplied by a .shofer/ config bundle and cannot be changed here. These are the values the plugin is running with."
 	},
 	"unsavedChangesDialog": {
 		"title": "Unsaved Changes",
@@ -73,7 +74,7 @@
 		"providers": "Providers",
 		"modes": "Modes",
 		"mcp": "MCP Servers",
-		"shoferNodes": "Shofer Nodes",
+		"shoferWorkers": "Shofer Workers",
 		"plugins": "Plugins",
 		"skills": "Skills",
 		"autoApprove": "Auto-Approve",

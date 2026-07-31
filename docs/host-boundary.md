@@ -113,8 +113,8 @@ need no host setup at all.
 Because Category I is DTO-based, a `HostBridge` can be split across a wire.
 [`host-rpc.ts`](../packages/types/src/host-rpc.ts) (`createSplitHost` /
 `dispatchHostCall`) makes the front-end-bound host slice remoteable, and
-[`executor-pool.ts`](../packages/types/src/executor-pool.ts) builds on that: an
-`ExecutorPool` is itself an `AgentApi` that fans a front-end across one or more
+[`worker-pool.ts`](../packages/types/src/worker-pool.ts) builds on that: an
+`WorkerPool` is itself an `AgentApi` that fans a front-end across one or more
 **executors** (a local in-process agent, or remote ones), each running the core
 against its own local host while proxying UI-bound calls back to the controller.
 With a single executor it is behaviourally identical to driving the core directly.
@@ -122,7 +122,7 @@ With a single executor it is behaviourally identical to driving the core directl
 ```mermaid
 flowchart LR
     FE["front-end (controller)<br/>its real HostBridge adapter"]
-    POOL["ExecutorPool — itself an AgentApi<br/>packages/types/src/executor-pool.ts"]
+    POOL["WorkerPool — itself an AgentApi<br/>packages/types/src/worker-pool.ts"]
 
     subgraph EX["Executor — core + createSplitHost bridge"]
         direction TB

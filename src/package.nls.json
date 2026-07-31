@@ -46,7 +46,7 @@
 	"settings.debugProxy.tlsInsecure.description": "Accept self-signed certificates from the proxy. Required for MITM inspection. Use only for local debugging.",
 	"settings.enableCodeActions.description": "Enable Shofer Quick Fix code actions.",
 	"settings.enableLlmProviderIntegration.description": "Enable integration with the Shofer LLM Model Provider extension (requires llm-provider to be installed). When enabled, the vscode-lm provider queries shofer.llm.getModelPricing and shofer.llm.getRequestCost for per-token pricing and per-conversation cost tracking — required for cost-limit enforcement and accurate API Cost display. When disabled (default), only token counts are available.",
-	"settings.nodes.loadBalancer.description": "How the Shofer Nodes executor pool assigns each new task across the Local and remote executors. 'round-robin' rotates evenly (default). The 'least-load-*' policies pick the executor with the lowest CPU load average (normalized by core count) over the given window, reported by each node's health ping.",
+	"settings.nodes.loadBalancer.description": "How the Shofer Workers executor pool assigns each new task across the Local and remote executors. 'round-robin' rotates evenly (default). The 'least-load-*' policies pick the executor with the lowest CPU load average (normalized by core count) over the given window, reported by each node's health ping.",
 	"settings.nodes.loadBalancer.roundRobin": "Rotate new tasks evenly across executors (default).",
 	"settings.nodes.loadBalancer.leastLoad1m": "Assign to the executor with the lowest 1-minute normalized CPU load average.",
 	"settings.nodes.loadBalancer.leastLoad5m": "Assign to the executor with the lowest 5-minute normalized CPU load average.",

@@ -6,7 +6,7 @@
  * path another live task touched fires the cross-task-collision detector directly —
  * the model is only asked to write the advisory, so it cannot hallucinate a conflict.
  * Entries expire on a TTL so a dead task's paths stop warning; tasks on other hosts
- * (remote Shofer Nodes) are invisible by scope.
+ * (remote Shofer Workers) are invisible by scope.
  */
 
 /** How long a touched path stays visible to other tasks. */

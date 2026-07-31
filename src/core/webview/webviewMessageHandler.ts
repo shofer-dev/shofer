@@ -737,9 +737,9 @@ export const webviewMessageHandler = async (
 					return
 				}
 
-				// Shofer Nodes L2: route through the executor pool ONLY when there is a
+				// Shofer Workers L2: route through the executor pool ONLY when there is a
 				// real distributed decision to make — at least one enabled remote node,
-				// an explicit preferredNodeId, or an admin-disabled Local executor.
+				// an explicit preferredWorkerId, or an admin-disabled Local executor.
 				// Otherwise (the overwhelmingly common local-only case) the existing
 				// in-process createManagedTask path is used UNCHANGED, so local behavior
 				// is byte-for-byte identical. The disabled-Local case MUST route even
@@ -751,7 +751,7 @@ export const webviewMessageHandler = async (
 					!!registry &&
 					(registry.hasEnabledRemote() ||
 						registry.isLocalDisabled() ||
-						typeof message.preferredNodeId === "string")
+						typeof message.preferredWorkerId === "string")
 				if (shouldRoute) {
 					// Resolve the task's API Configuration controller-side and ship it
 					// with the task, so a remote owner runs on the same provider/model
@@ -768,7 +768,7 @@ export const webviewMessageHandler = async (
 							mode: message.mode,
 							apiConfigName: message.apiConfigName,
 							cwd,
-							preferredNodeId: message.preferredNodeId,
+							preferredWorkerId: message.preferredWorkerId,
 							apiConfiguration,
 						},
 						// This provider is the render target — the task renders in the
@@ -804,7 +804,7 @@ export const webviewMessageHandler = async (
 
 				const messageText = resolved.text
 
-				// Shofer Nodes: a remote shadow task's ask is answered over the pool
+				// Shofer Workers: a remote shadow task's ask is answered over the pool
 				// (reverse ask channel → executor), NOT the in-process path. The
 				// webview posts the shadow's taskId as message.taskId (currentTaskItem.id).
 				if (message.taskId && provider.nodeRegistry?.isShadow(message.taskId)) {
@@ -857,7 +857,7 @@ export const webviewMessageHandler = async (
 					// outside-workspace allowlist. A write grant lands in
 					// `allowedWritePaths` (write ⊇ read); a read grant in
 					// `allowedReadPaths`. The `contextProxy.setValue` fires
-					// `onDidChange`, which drives NodeRegistry's config-sync
+					// `onDidChange`, which drives WorkerRegistry's config-sync
 					// broadcast to remote nodes (config_sync §4c).
 					const key = trustedAccess === "write" ? "allowedWritePaths" : "allowedReadPaths"
 					const current = provider.contextProxy.getValue(key) ?? []
@@ -1028,10 +1028,10 @@ export const webviewMessageHandler = async (
 				await provider.postInitState()
 			}
 			break
-		case "shoferNode":
-			// Shofer Nodes registry request (list/upsert/remove/connect/disconnect/setDisabled).
-			if (message.shoferNode) {
-				await provider.nodeRegistry?.handleRequest(message.shoferNode)
+		case "shoferWorker":
+			// Shofer Workers registry request (list/upsert/remove/connect/disconnect/setDisabled).
+			if (message.shoferWorker) {
+				await provider.nodeRegistry?.handleRequest(message.shoferWorker)
 				await provider.pushShoferNodesState()
 			}
 			break

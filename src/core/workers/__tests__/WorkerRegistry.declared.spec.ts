@@ -4,13 +4,13 @@ import os from "os"
 import * as path from "path"
 import * as vscode from "vscode"
 
-import type { AgentApi, LoadSample, ShoferAPI, ShoferNodeConnState, ShoferNodeDef } from "@shofer/types"
+import type { AgentApi, LoadSample, ShoferAPI, ShoferWorkerConnState, ShoferWorkerDef } from "@shofer/types"
 import { TypedEmitter } from "@shofer/types"
 
-import { NodeRegistry, type INodeConnection, type NodeConnectionFactory } from "../NodeRegistry.js"
+import { WorkerRegistry, type IWorkerConnection, type WorkerConnectionFactory } from "../WorkerRegistry.js"
 
 /**
- * Declared nodes — `.shofer/nodes.json` reconciled into the registry
+ * Declared workers — `.shofer/workers.json` reconciled into the registry
  * (docs/workspace_agent_pool.md §4). This is the mechanism a platform-provisioned pool
  * arrives through, so the tests drive the real loader against real files and assert the
  * four rules that matter operationally: a corrupt file changes nothing, a withdrawn
@@ -56,8 +56,8 @@ function makeContext() {
 	}
 }
 
-class FakeConn implements INodeConnection {
-	status: ShoferNodeConnState = "disconnected"
+class FakeConn implements IWorkerConnection {
+	status: ShoferWorkerConnState = "disconnected"
 	latencyMs?: number
 	agentVersion?: string
 	error?: string
@@ -66,14 +66,14 @@ class FakeConn implements INodeConnection {
 	managed = true
 	api: AgentApi | undefined
 	disposed = false
-	private cbs = new Set<(s: ShoferNodeConnState) => void>()
+	private cbs = new Set<(s: ShoferWorkerConnState) => void>()
 
 	constructor(readonly opts: { baseUrl: string; token?: string; controllerVersion: string }) {}
 
 	markConfigApplied(version: string): void {
 		this.configVersion = version
 	}
-	onStatusChange(cb: (s: ShoferNodeConnState) => void): () => void {
+	onStatusChange(cb: (s: ShoferWorkerConnState) => void): () => void {
 		this.cbs.add(cb)
 		return () => this.cbs.delete(cb)
 	}
@@ -89,11 +89,11 @@ class FakeConn implements INodeConnection {
 	}
 }
 
-describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
+describe("WorkerRegistry — declared workers (.shofer/workers.json)", () => {
 	let tmp: string
 	let globalDir: string
 	let userDir: string
-	const registries: NodeRegistry[] = []
+	const registries: WorkerRegistry[] = []
 
 	beforeEach(async () => {
 		tmp = await fs.mkdtemp(path.join(os.tmpdir(), "shofer-nodesdecl-"))
@@ -108,21 +108,21 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		await fs.rm(tmp, { recursive: true, force: true })
 	})
 
-	async function writeNodes(scopeDir: string, nodes: Record<string, unknown>): Promise<void> {
-		await fs.writeFile(path.join(scopeDir, "nodes.json"), JSON.stringify({ version: 1, nodes }))
+	async function writeWorkers(scopeDir: string, workers: Record<string, unknown>): Promise<void> {
+		await fs.writeFile(path.join(scopeDir, "workers.json"), JSON.stringify({ version: 1, workers }))
 	}
 
-	function makeRegistry(seedDefs?: ShoferNodeDef[]) {
+	function makeRegistry(seedDefs?: ShoferWorkerDef[]) {
 		const { context, globals, secrets } = makeContext()
-		if (seedDefs) globals.set("shoferNodes.defs", seedDefs)
+		if (seedDefs) globals.set("shoferWorkers.defs", seedDefs)
 		const conns: FakeConn[] = []
-		const createConnection: NodeConnectionFactory = (o) => {
+		const createConnection: WorkerConnectionFactory = (o) => {
 			const c = new FakeConn(o)
 			conns.push(c)
 			return c
 		}
 		const scopeFiles = new TypedEmitter<{ files: string[] }>()
-		const registry = new NodeRegistry(
+		const registry = new WorkerRegistry(
 			{
 				context,
 				localApi: {} as ShoferAPI,
@@ -136,45 +136,45 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		)
 		registries.push(registry)
 		/** Fire the watcher signal and let the async reconcile settle. */
-		const touch = async (files = ["nodes.json"]) => {
+		const touch = async (files = ["workers.json"]) => {
 			scopeFiles.fire({ files })
 			await new Promise((resolve) => setTimeout(resolve, 20))
 		}
 		return { registry, globals, secrets, conns, touch }
 	}
 
-	const defOf = (registry: NodeRegistry, id: string) => registry.list().find((n) => n.id === id)
+	const defOf = (registry: WorkerRegistry, id: string) => registry.list().find((n) => n.id === id)
 
-	it("registers a node declared in the global scope, and connects it", async () => {
-		await writeNodes(globalDir, { "pool-0": { label: "runner-0", host: "runner-0.ws.svc:30099" } })
+	it("registers a worker declared in the global scope, and connects it", async () => {
+		await writeWorkers(globalDir, { "pool-0": { label: "runner-0", host: "runner-0.ws.svc:30099" } })
 		const { registry, conns } = makeRegistry()
 
 		await registry.init()
 
-		const node = defOf(registry, "pool-0")
-		expect(node).toMatchObject({ kind: "remote", label: "runner-0", declared: true })
-		// autoConnect defaults to true: a declared node exists to be used.
+		const worker = defOf(registry, "pool-0")
+		expect(worker).toMatchObject({ kind: "remote", label: "runner-0", declared: true })
+		// autoConnect defaults to true: a declared worker exists to be used.
 		expect(conns[0]?.opts.baseUrl).toBe("http://runner-0.ws.svc:30099")
 	})
 
-	it("adds a node when the file changes while running — no restart", async () => {
+	it("adds a worker when the file changes while running — no restart", async () => {
 		const { registry, conns, touch } = makeRegistry()
 		await registry.init()
 		expect(defOf(registry, "pool-1")).toBeUndefined()
 
-		await writeNodes(globalDir, { "pool-1": { host: "runner-1.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-1": { host: "runner-1.ws.svc:30099" } })
 		await touch()
 
 		expect(defOf(registry, "pool-1")).toBeDefined()
 		expect(conns.some((c) => c.opts.baseUrl === "http://runner-1.ws.svc:30099")).toBe(true)
 	})
 
-	it("withdraws a node the declaration no longer names, disconnecting it", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+	it("withdraws a worker the declaration no longer names, disconnecting it", async () => {
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		const { registry, conns, touch } = makeRegistry()
 		await registry.init()
 
-		await writeNodes(globalDir, {})
+		await writeWorkers(globalDir, {})
 		await touch()
 
 		expect(defOf(registry, "pool-0")).toBeUndefined()
@@ -182,24 +182,24 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 	})
 
 	it("keeps the last good set when the file is corrupted", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		const { registry, touch } = makeRegistry()
 		await registry.init()
 
 		// A typo must not empty the pool — the deliberate deviation from "corrupt ⇒ empty".
-		await fs.writeFile(path.join(globalDir, "nodes.json"), "{ nodes: oops")
+		await fs.writeFile(path.join(globalDir, "workers.json"), "{ workers: oops")
 		await touch()
 
 		expect(defOf(registry, "pool-0")).toBeDefined()
 	})
 
-	it("re-points a node whose host changed, tearing the old connection down", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "old.ws.svc:30099" } })
+	it("re-points a worker whose host changed, tearing the old connection down", async () => {
+		await writeWorkers(globalDir, { "pool-0": { host: "old.ws.svc:30099" } })
 		const { registry, conns, touch } = makeRegistry()
 		await registry.init()
 		const first = conns[0]
 
-		await writeNodes(globalDir, { "pool-0": { host: "new.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "new.ws.svc:30099" } })
 		await touch()
 
 		expect(first.disposed).toBe(true)
@@ -207,31 +207,31 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 	})
 
 	it("preserves a disable the user made, across reconciles", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		const { registry, touch } = makeRegistry()
 		await registry.init()
 
 		await registry.setDisabled("pool-0", true)
-		// An unrelated rewrite of the same file must not silently re-enable the node.
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", label: "renamed" } })
+		// An unrelated rewrite of the same file must not silently re-enable the worker.
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", label: "renamed" } })
 		await touch()
 
 		expect(defOf(registry, "pool-0")).toMatchObject({ label: "renamed", disabled: true })
 	})
 
 	it("lets the declaration state `disabled` explicitly and win", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		const { registry, touch } = makeRegistry()
 		await registry.init()
 
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", disabled: true } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", disabled: true } })
 		await touch()
 
 		expect(defOf(registry, "pool-0")?.disabled).toBe(true)
 	})
 
-	it("refuses to delete a declared node from the UI", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+	it("refuses to delete a declared worker from the UI", async () => {
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		const { registry } = makeRegistry()
 		await registry.init()
 
@@ -241,9 +241,9 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 	})
 
 	it("reads the bearer token from the file the declaration names", async () => {
-		const tokenFile = path.join(tmp, "node-token")
+		const tokenFile = path.join(tmp, "worker-token")
 		await fs.writeFile(tokenFile, "  s3cret\n")
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", tokenFile } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", tokenFile } })
 		const { registry, conns } = makeRegistry()
 
 		await registry.init()
@@ -255,7 +255,7 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		// The k8s shape: a `secretKeyRef` puts the value in the environment, so the
 		// declaration names the variable rather than a path.
 		process.env.TEST_NODE_TOKEN = " env-s3cret "
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", tokenEnv: "TEST_NODE_TOKEN" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099", tokenEnv: "TEST_NODE_TOKEN" } })
 		const { registry, conns } = makeRegistry()
 
 		await registry.init()
@@ -264,8 +264,8 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		delete process.env.TEST_NODE_TOKEN
 	})
 
-	it("still connects when the token file is missing, so the failure is the node's to report", async () => {
-		await writeNodes(globalDir, {
+	it("still connects when the token file is missing, so the failure is the worker's to report", async () => {
+		await writeWorkers(globalDir, {
 			"pool-0": { host: "runner-0.ws.svc:30099", tokenFile: path.join(tmp, "absent") },
 		})
 		const { registry, conns } = makeRegistry()
@@ -275,13 +275,13 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		expect(conns[0].opts.token).toBeUndefined()
 	})
 
-	it("leaves a hand-added node alone", async () => {
+	it("leaves a hand-added worker alone", async () => {
 		const { registry, touch } = makeRegistry([
 			{ id: "mine", kind: "remote", label: "My box", host: "192.168.1.5:30099" },
 		])
 		await registry.init()
 
-		await writeNodes(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
+		await writeWorkers(globalDir, { "pool-0": { host: "runner-0.ws.svc:30099" } })
 		await touch()
 
 		expect(defOf(registry, "mine")).toBeDefined()
@@ -289,7 +289,7 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 	})
 
 	it("ignores an attempt to declare the reserved Local id", async () => {
-		await writeNodes(globalDir, { local: { host: "somewhere:30099" } })
+		await writeWorkers(globalDir, { local: { host: "somewhere:30099" } })
 		const { registry } = makeRegistry()
 
 		await registry.init()
@@ -297,12 +297,12 @@ describe("NodeRegistry — declared nodes (.shofer/nodes.json)", () => {
 		expect(defOf(registry, "local")).toMatchObject({ kind: "local" })
 	})
 
-	it("honours a `locked.json` lock on a node id", async () => {
-		await writeNodes(globalDir, { "pool-0": { host: "platform.ws.svc:30099" } })
-		await writeNodes(userDir, { "pool-0": { host: "user-hijack:30099" } })
+	it("honours a `locked.json` lock on a worker id", async () => {
+		await writeWorkers(globalDir, { "pool-0": { host: "platform.ws.svc:30099" } })
+		await writeWorkers(userDir, { "pool-0": { host: "user-hijack:30099" } })
 		await fs.writeFile(
 			path.join(globalDir, "locked.json"),
-			JSON.stringify({ version: 1, locked: ["nodes/pool-0"] }),
+			JSON.stringify({ version: 1, locked: ["workers/pool-0"] }),
 		)
 		const { registry, conns } = makeRegistry()
 

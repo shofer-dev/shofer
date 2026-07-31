@@ -1,5 +1,5 @@
 import { HTMLAttributes, forwardRef, useEffect, useImperativeHandle, useMemo, useState } from "react"
-import { Blocks, ChevronDown, ChevronRight } from "lucide-react"
+import { Blocks, ChevronDown, ChevronRight, Lock } from "lucide-react"
 import { VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 
 import type { PluginRequest, PluginView } from "@shofer/types"
@@ -55,6 +55,11 @@ function PluginConfigForm({
 	const { t } = useAppTranslation()
 	const props = plugin.configSchema?.properties
 	const [open, setOpen] = useState(false)
+	// Supplied by a `.shofer/` file layer (an org config bundle, or a hand-written
+	// settings.json). That layer WINS over anything stored locally, so every control
+	// below is disabled: offering an edit that would be silently shadowed is worse than
+	// showing none at all.
+	const managed = plugin.configManagedBy === "file-layer"
 
 	if (!props || Object.keys(props).length === 0) return null
 
@@ -72,6 +77,12 @@ function PluginConfigForm({
 			</button>
 			{open && (
 				<div className="mt-2 flex flex-col gap-3 pl-3 border-l border-vscode-panel-border">
+					{managed && (
+						<div className="text-xs text-vscode-descriptionForeground flex items-start gap-1.5">
+							<Lock className="size-3.5 shrink-0 mt-0.5" />
+							<span>{t("settings:plugins.configManaged")}</span>
+						</div>
+					)}
 					{Object.entries(props).map(([key, spec]) => {
 						const val = valueOf(key)
 						// A credential the host keeps in its secret store: its value never
@@ -88,7 +99,10 @@ function PluginConfigForm({
 									{spec.type === "boolean" && (
 										<ToggleSwitch
 											checked={!!val}
-											onChange={() => onChange(key, !val)}
+											onChange={() => {
+												if (!managed) onChange(key, !val)
+											}}
+											disabled={managed}
 											size="small"
 											aria-label={key}
 										/>
@@ -102,7 +116,10 @@ function PluginConfigForm({
 								{spec.type !== "boolean" && !isSecret && (
 									<VSCodeTextField
 										value={val === undefined || val === null ? "" : String(val)}
+										readOnly={managed}
+										disabled={managed}
 										onInput={(e) => {
+											if (managed) return
 											const raw = (e.target as HTMLInputElement).value
 											onChange(
 												key,
@@ -115,13 +132,17 @@ function PluginConfigForm({
 									<>
 										<VSCodeTextField
 											type="password"
+											readOnly={managed}
+											disabled={managed}
 											value={typeof staged === "string" ? staged : ""}
 											placeholder={
 												secretStored
 													? t("settings:plugins.secretSet")
 													: t("settings:plugins.secretUnset")
 											}
-											onInput={(e) => onChange(key, (e.target as HTMLInputElement).value)}
+											onInput={(e) => {
+												if (!managed) onChange(key, (e.target as HTMLInputElement).value)
+											}}
 										/>
 										{secretStored && (
 											<span className="text-xs text-vscode-descriptionForeground">
@@ -134,9 +155,12 @@ function PluginConfigForm({
 						)
 					})}
 					{/* Staging affordance (not a Save): clears all overrides back to schema
-					    defaults; applied when the shared Settings Save button is clicked. */}
+					    defaults; applied when the shared Settings Save button is clicked.
+					    Hidden while the file layer supplies the config — there is no local
+					    override to reset, and the layer would win regardless. */}
 					<button
 						type="button"
+						hidden={managed}
 						onClick={onReset}
 						className="self-start text-xs text-vscode-descriptionForeground hover:text-vscode-foreground underline">
 						{t("settings:plugins.resetDefaults")}

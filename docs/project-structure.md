@@ -74,7 +74,7 @@ extensions/shofer/
 │   │   └── src/
 │   │       ├── host.ts           # Category I host interfaces (HostFileSystem, HostEditor, …)
 │   │       ├── host-registry.ts  # getHost() / setHost()
-│   │       ├── host-rpc.ts session-transport.ts executor-pool.ts  # distributed-execution substrate
+│   │       ├── host-rpc.ts session-transport.ts worker-pool.ts  # distributed-execution substrate
 │   │       ├── history.ts        # HistoryItem, TaskNotification schemas
 │   │       └── vscode-extension-host.ts  # ExtensionState interface
 │   └── ...                       # Other shared packages (telemetry, ipc, …)
