@@ -120,6 +120,38 @@ After Phase 1, every key the bundle can carry is a key the mount can deliver.
     scope archives (E5 left it in place for callers).
 12. Subsume `autoImportSettingsPath` into "read the global root" (E6).
 
+## Net effect on the codebase
+
+This should remove more than it adds, because the duplication being deleted is
+structural rather than incidental.
+
+**Collapses.** There are four near-identical per-scope loaders today —
+`layeredSettingsLoader`, `pluginDeclarationLoader`, `workerDeclarationLoader`, and
+`McpHub`'s own file handling — each re-implementing "resolve three roots, read a
+file per scope, fail closed on parse error, consult `locked.json`, merge". Adding
+modes, MCP and providers by copying that shape a fifth, sixth and seventh time would
+be the wrong move; the phases assume one generic scope-file loader parameterised by
+filename and schema, with `mergeLayeredConfig` behind all of them. Likewise the
+ad-hoc "where is my global directory" resolvers (`getGlobalShoferDirectory` and its
+callers in `commands.ts`, `SkillsManager`, `CustomModesManager`,
+`custom-instructions.ts`) collapse onto the one `resolveScopeRoots`.
+
+**Deletes outright.** `custom_modes.yaml` and its watcher, empty-template writer and
+dual-source merge in `CustomModesManager`; `mcp_settings.json` and the same
+apparatus in `McpHub`; two `GlobalFileNames` entries; `SimpleInstaller`'s
+`target === "global"` branch (which writes a third spelling, `custom-modes.yaml`);
+the JSON export/import path; the `autoImportSettingsPath` bootstrap; five
+`contributes.configuration` entries; and most of `ProviderSettingsManager`'s
+persistence, which reduces to a profile-name → key map once the profile shape lives
+in a file.
+
+**Adds.** One `providers.json` schema, one scope-selector UI, and the generic loader
+that replaces the four.
+
+The bigger win is conceptual: "what is my effective configuration and where does it
+come from" becomes one answer — read the three roots, apply one merge rule — instead
+of the current three storage mechanisms and two unrelated overlay systems.
+
 ## Open decision: secrets in a mounted bundle
 
 Phase 2 lets a bundle carry `apiKey` values, which is what makes org-supplied

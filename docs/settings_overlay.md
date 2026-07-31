@@ -70,38 +70,28 @@ single JSON blob in VS Code's secure credential store with this schema:
 Write/read methods: [`store()`](../src/core/config/ProviderSettingsManager.ts:670) /
 [`load()`](../src/core/config/ProviderSettingsManager.ts:581).
 
-### 1b. Individual API Keys — VS Code `SecretStorage`
+### 1b. Individual Secret Entries — VS Code `SecretStorage`
 
 **Managed by:** [`ContextProxy`](../src/core/config/ContextProxy.ts:40)
 
-Each provider's API key is stored as a **separate** entry in VS Code's `SecretStorage`.
-The full list of secret keys is defined in
-[`SECRET_STATE_KEYS`](../packages/types/src/global-settings.ts:280):
+Only **two** secrets keep their own `SecretStorage` entry
+([`GLOBAL_SECRET_KEYS`](../packages/types/src/global-settings.ts)):
 
-| Key                                                                                                                                                                                           | Provider                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `apiKey`                                                                                                                                                                                      | Generic / Anthropic              |
-| `openRouterApiKey`                                                                                                                                                                            | OpenRouter                       |
-| `openAiApiKey`                                                                                                                                                                                | OpenAI (compatible)              |
-| `openAiNativeApiKey`                                                                                                                                                                          | OpenAI (native Responses API)    |
-| `geminiApiKey`                                                                                                                                                                                | Google Gemini                    |
-| `deepSeekApiKey`                                                                                                                                                                              | DeepSeek                         |
-| `mistralApiKey`                                                                                                                                                                               | Mistral                          |
-| `xaiApiKey`                                                                                                                                                                                   | xAI / Grok                       |
-| `moonshotApiKey`                                                                                                                                                                              | Moonshot                         |
-| `minimaxApiKey`                                                                                                                                                                               | MiniMax                          |
-| `zaiApiKey`                                                                                                                                                                                   | Z.AI                             |
-| `fireworksApiKey`                                                                                                                                                                             | Fireworks                        |
-| `basetenApiKey`                                                                                                                                                                               | Baseten                          |
-| `sambaNovaApiKey`                                                                                                                                                                             | SambaNova                        |
-| `vercelAiGatewayApiKey`                                                                                                                                                                       | Vercel AI Gateway                |
-| `requestyApiKey`                                                                                                                                                                              | Requesty                         |
-| `unboundApiKey`                                                                                                                                                                               | Unbound                          |
-| `litellmApiKey`                                                                                                                                                                               | LiteLLM                          |
-| `ollamaApiKey`                                                                                                                                                                                | Ollama                           |
-| `awsAccessKey`, `awsApiKey`, `awsSecretKey`, `awsSessionToken`                                                                                                                                | AWS Bedrock                      |
-| `openRouterImageApiKey`                                                                                                                                                                       | Image generation (global secret) |
-| `codeIndexOpenAiKey`, `codebaseIndexOpenAiCompatibleApiKey`, `codebaseIndexGeminiApiKey`, `codebaseIndexMistralApiKey`, `codebaseIndexVercelAiGatewayApiKey`, `codebaseIndexOpenRouterApiKey` | Codebase indexing                |
+| Key                     | Contents                                                               |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `openRouterImageApiKey` | Image-generation credential — a GlobalSettings secret, not a profile's |
+| `pluginSecrets`         | Every plugin's `secret: true` config values, as one JSON blob          |
+
+**Every per-profile LLM credential — all of `SECRET_STATE_KEYS` — is sourced from
+the profiles blob instead**, and is never written to an individual entry
+([`storeSecret`](../src/core/config/ContextProxy.ts:688) returns early for a
+profile secret). `secretCache` holds only the _currently active_ profile's copy in
+memory, hydrated from the blob on activation and on restart. `initialize()` still
+_reads_ the individual entries once, to migrate and then prune values written by
+older builds.
+
+`SYNCED_SECRET_KEYS` — the controller→node replicated subset — is currently
+**empty**, so `PROFILE_SECRET_KEYS` is the whole of `SECRET_STATE_KEYS`.
 
 ### 1c. Non-Secret Provider Settings — VS Code `globalState`
 
@@ -1336,10 +1326,10 @@ lives in the webview because it _must_.
 
 The per-profile LLM API keys are no longer stored as individual `SecretStorage`
 entries: the profiles blob (`shofer_config_api_config`) is their sole persisted
-store, and the current profile's secrets are sourced from it. The 8 cross-profile
-global secrets (the 7 code-index `SYNCED_SECRET_KEYS` + `openRouterImageApiKey`)
-remain individual entries. The historical duplication is described below for
-context.
+store, and the current profile's secrets are sourced from it. Only
+`openRouterImageApiKey` and `pluginSecrets` remain individual entries (§1b) —
+`SYNCED_SECRET_KEYS` is now empty. The historical duplication is described below
+for context.
 
 API keys were previously stored in **two places** in `SecretStorage`:
 
