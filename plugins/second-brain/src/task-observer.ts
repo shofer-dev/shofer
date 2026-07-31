@@ -20,6 +20,8 @@ import {
 	DEMOTE_STRIDE,
 	DIGEST_HARD_CAP_CHARS,
 	DISABLE_AFTER_TIMEOUTS,
+	addUsage,
+	emptyUsage,
 	FINISH_GATE_CONFIDENCE_FLOOR,
 	FINISH_GATE_PER_TASK_CAP,
 	MAX_PARALLEL_FORKS,
@@ -30,6 +32,7 @@ import {
 	type PassResult,
 	type PassVerdict,
 	type TaskLedger,
+	type TokenUsage,
 } from "./types.js"
 import { BODY_CAP } from "./types.js"
 import { ConversationDigest } from "./digest.js"
@@ -160,6 +163,7 @@ export class TaskObserver {
 			lastPassAt: this.lastPass?.at,
 			lastVerdicts: this.lastPass?.verdicts,
 			costUsd: this.ledger?.costUsd ?? 0,
+			tokens: this.ledger?.tokens ?? emptyUsage(),
 		}
 	}
 
@@ -218,7 +222,7 @@ export class TaskObserver {
 					at: startedAt,
 					trigger,
 					verdicts: [{ detector: "*", verdict: "skipped", note: "(budget exhausted)" }],
-					tokens: { prompt: 0, completion: 0 },
+					tokens: emptyUsage(),
 					costUsd: 0,
 					durationMs: 0,
 				}
@@ -241,7 +245,7 @@ export class TaskObserver {
 							note: "(digest exceeds the observer's practical context)",
 						},
 					],
-					tokens: { prompt: 0, completion: 0 },
+					tokens: emptyUsage(),
 					costUsd: 0,
 					durationMs: 0,
 				}
@@ -279,8 +283,12 @@ export class TaskObserver {
 			const rest = running.filter((d) => d !== pilot)
 
 			const verdicts: PassVerdict[] = []
-			const tokens = { prompt: 0, completion: 0 }
+			const tokens = emptyUsage()
 			let costUsd = 0
+			// Per-detector usage, for the pass summary the debug capture writes: at steady
+			// state the pilot shows a cacheWrite and every other fork a comparable
+			// cacheRead. That is the direct evidence the shared prefix is being cached.
+			const perDetector: Record<string, { tokens: TokenUsage; costUsd: number; ms: number }> = {}
 			const advisoriesOut: Advisory[] = []
 
 			const runOne = async (detector: DetectorDef): Promise<void> => {
@@ -297,6 +305,7 @@ export class TaskObserver {
 								.join("; ")
 						: undefined
 				const deadlineS = detector.deadlineS || t.forkDeadlineS
+				const forkStartedAt = now()
 				const outcome = await runFork({
 					detector,
 					systemPrompt,
@@ -306,9 +315,10 @@ export class TaskObserver {
 					executor: this.seams.executor(),
 					deadlineS,
 				})
-				tokens.prompt += outcome.tokens.prompt
-				tokens.completion += outcome.tokens.completion
+				const forkMs = now() - forkStartedAt
+				addUsage(tokens, outcome.tokens)
 				costUsd += outcome.costUsd
+				perDetector[detector.slug] = { tokens: outcome.tokens, costUsd: outcome.costUsd, ms: forkMs }
 				this.absorbForkOutcome(detector, outcome, ledger, episodeStart, verdicts, advisoriesOut, startedAt)
 				await this.seams.debugCapture(this.taskId, this.passCount, detector.slug, outcome.trace.join("\n\n"))
 			}
@@ -328,10 +338,33 @@ export class TaskObserver {
 			// Self-close stale outcome records: ambiguity resolves against the observer.
 			this.closeLapsedOutcomes(ledger, startedAt)
 
-			ledger.tokens.prompt += tokens.prompt
-			ledger.tokens.completion += tokens.completion
+			addUsage(ledger.tokens, tokens)
 			ledger.costUsd += costUsd
 			this.hourTokens.push({ at: startedAt, total: tokens.prompt + tokens.completion })
+			// Debug capture: the shared block itself, once per pass — the "context window
+			// for the Second Brain" — beside the per-fork files, plus a machine-readable
+			// summary. Diffing pass N's digest.txt against pass N+1's is how the
+			// append-only/prefix-growth property gets VERIFIED rather than asserted.
+			await this.seams.debugCapture(this.taskId, this.passCount, "digest", systemPrompt)
+			await this.seams.debugCapture(
+				this.taskId,
+				this.passCount,
+				"pass",
+				JSON.stringify(
+					{
+						pass: this.passCount,
+						at: new Date(startedAt).toISOString(),
+						trigger,
+						systemPromptChars: systemPrompt.length,
+						digestChars: this.digest.chars,
+						pilot: pilot.slug,
+						detectors: perDetector,
+						total: { tokens, costUsd },
+					},
+					null,
+					2,
+				),
+			)
 			await this.ledgers.save(ledger, now())
 
 			// Deliver what survived the gate (delivery-time staleness re-checked).

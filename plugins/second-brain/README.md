@@ -68,6 +68,27 @@ badge in the chat toolbar shows watching/muted/needs-approval, passes, and cost;
 Second Brain sidebar panel shows the advisories with evidence and adjudicated
 outcomes, plus what the gate dropped and why.
 
+## Verifying it is actually cheap
+
+The fan-out is only affordable if the shared digest is being read from the provider's
+cache rather than re-sent every time, so that is measured rather than assumed.
+`/second-brain:stats` (and the panel) report the provider's own cache read/write tokens
+and a **hit ratio**; cost is computed with the cached-token rates, not the input rate.
+
+Switch on `debug` in Settings → Plugins and every pass also lands on disk under the
+plugin's storage (`stats` prints the exact directory):
+
+| File             | Contents                                                                        |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `digest.txt`     | the exact system block every fork of that pass received                         |
+| `pass.json`      | trigger, pilot, sizes, and per-detector tokens / cost / duration                |
+| `<detector>.txt` | that fork's whole loop — tail, replies, full tool results, final verdict, usage |
+
+`diff` one pass's `digest.txt` against the next: the earlier one must be a strict
+**prefix** of the later one. In the per-fork usage footers the pilot should show a
+`cacheWrite` and the other detectors a comparable `cacheRead`. A steady state of
+`cacheRead≈0` with a large `prompt` means the sharing is broken.
+
 ## Skills & commands
 
 `/second-brain:stats` · `/second-brain:run` · `/second-brain:why` ·

@@ -46,6 +46,7 @@ interface StatsResult {
 	consent: boolean
 	muted: boolean
 	cataloguePath: string
+	debug?: { enabled: boolean; dir?: string }
 	tasks: {
 		taskId: string
 		passes: number
@@ -53,6 +54,8 @@ interface StatsResult {
 		spoolChars: number
 		advisoriesDelivered: number
 		costUsd: number
+		cacheHitRatio: number
+		tokens: { prompt: number; completion: number; cacheRead: number; cacheWrite: number }
 		uptake: Record<string, { delivered: number; adopted: number }>
 	}[]
 }
@@ -101,6 +104,11 @@ export default function SecondBrainPanel({ api }: { api: PluginUIApi }) {
 								{Math.round(t.digestChars / 1000)}k chars · observed {Math.round(t.spoolChars / 1000)}k
 								· {t.advisoriesDelivered} advisories · ${t.costUsd.toFixed(3)}
 							</div>
+							<div style={{ paddingLeft: 10, opacity: 0.75 }}>
+								cache: {Math.round(t.cacheHitRatio * 100)}% of input read from cache (
+								{t.tokens.cacheRead.toLocaleString()} read / {t.tokens.cacheWrite.toLocaleString()}{" "}
+								written / {t.tokens.prompt.toLocaleString()} uncached)
+							</div>
 							{Object.entries(t.uptake).map(([detector, u]) => (
 								<div key={detector} style={{ paddingLeft: 10, opacity: 0.75 }}>
 									{detector}: {u.adopted}/{u.delivered} adopted
@@ -109,6 +117,7 @@ export default function SecondBrainPanel({ api }: { api: PluginUIApi }) {
 						</div>
 					))}
 					<div style={{ marginTop: 6, opacity: 0.6 }}>overrides: {stats.cataloguePath}</div>
+					{stats.debug?.enabled && <div style={{ opacity: 0.6 }}>debug captures: {stats.debug.dir}</div>}
 				</div>
 			)}
 			{why.map((entry) => (

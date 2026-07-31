@@ -468,6 +468,42 @@ plain string, and each provider decides where its `cache_control` marks go. Land
 shared content on the block every provider already marks is therefore the whole strategy —
 and it needs no new host API.
 
+#### Verifying the cache
+
+The properties above are claims about bytes, so they are checkable rather than
+believed. Two instruments:
+
+**Measurement, always on.** The provider's own `usage` chunks carry `cacheReadTokens`,
+`cacheWriteTokens` and sometimes `totalCost`; `llm.ts` keeps all three (they used to be
+discarded) and they accumulate per fork, per pass and per task. `stats` and the panel
+report them with a **cache hit ratio** — `cacheRead / (prompt + cacheRead + cacheWrite)`.
+Cost uses them too: cached tokens are not billed at the input rate, so pricing them as
+if they were would hide the exact saving this design exists to produce. The plugin
+prefers the provider's reported cost and otherwise applies the model's
+`cacheWritesPrice`/`cacheReadsPrice` (falling back to Anthropic's 1.25× / 0.1×).
+
+**Capture, on demand.** With `debug: true`, every pass writes to
+`<plugin storage>/debug/<taskId>/<pass>/` — the directory is printed in `stats` output,
+since it is the plugin's private storage rather than a path anyone would guess:
+
+| File             | Contents                                                                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `digest.txt`     | the **exact** system block every fork of that pass received — byte-for-byte what went on the wire                                                  |
+| `pass.json`      | trigger, pilot, system-prompt and digest sizes, and per-detector `{tokens, costUsd, ms}`                                                           |
+| `<detector>.txt` | that fork's whole private loop: its tail, every model reply, every tool call with its **full** result, the final feedback JSON, and a usage footer |
+
+What to look for, and what each answer means:
+
+- `diff <pass N>/digest.txt <pass N+1>/digest.txt` — pass N's must be a strict **prefix**
+  of pass N+1's. Any change above the append point is a cache-invalidating bug.
+- All forks of one pass must show the same `systemPromptChars` in `pass.json`; the file
+  is written once because the block is shared, so a per-fork difference is impossible by
+  construction — but the per-fork usage lines are where sharing shows up empirically:
+  **the pilot should report a `cacheWrite` and every other fork a comparable
+  `cacheRead`.**
+- A steady state of `cacheRead≈0` with a large `prompt` means the shared prefix is not
+  being reused — the failure this shape was built to prevent.
+
 **Cache lifetime bounds the cadence.** The host marks `cache_control: { type: "ephemeral" }`,
 a ~5-minute TTL, and other providers' idle-eviction windows are comparable. `maxIntervalS`
 therefore defaults to **300 s**: a pass spaced further out than the TTL starts cold no
@@ -587,15 +623,15 @@ what it costs **the primary**.
 
 ## Storage topology
 
-| Data                             | Location                                                                                                | Survives                                                                                    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Task ledgers                     | `ctx.storage`: `ledgers/<taskId>.json`                                                                  | restart; TTL-swept; dropped on task delete                                                  |
-| Gate history (for `/why`)        | `ctx.storage`: `history/<taskId>.jsonl`                                                                 | restart; swept with the ledger                                                              |
-| Status snapshot (badge/skills)   | `ctx.storage`: `status.json`, written through every pass                                                | stale-but-readable, says so with a timestamp                                                |
-| Debug captures (`debug: true`)   | `ctx.storage`: `debug/<taskId>/<pass>/` — the byte-exact shared prefix + one file per fork's whole loop | until manually cleared; never TTL-swept                                                     |
-| Windows, spools, collision index | memory only                                                                                             | no — a restart costs the warm cache and the uncompacted tail (accepted, as in the original) |
-| Tunables                         | `ctx.config` (ContextProxy)                                                                             | yes                                                                                         |
-| Workspace catalogue              | `.shofer/second-brain/catalogue.json` (the repo)                                                        | committed                                                                                   |
+| Data                             | Location                                                                                                                  | Survives                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Task ledgers                     | `ctx.storage`: `ledgers/<taskId>.json`                                                                                    | restart; TTL-swept; dropped on task delete                                                  |
+| Gate history (for `/why`)        | `ctx.storage`: `history/<taskId>.jsonl`                                                                                   | restart; swept with the ledger                                                              |
+| Status snapshot (badge/skills)   | `ctx.storage`: `status.json`, written through every pass                                                                  | stale-but-readable, says so with a timestamp                                                |
+| Debug captures (`debug: true`)   | `ctx.storage`: `debug/<taskId>/<pass>/` — `digest.txt`, `pass.json`, one `<detector>.txt` per fork (§Verifying the cache) | until manually cleared; never TTL-swept                                                     |
+| Windows, spools, collision index | memory only                                                                                                               | no — a restart costs the warm cache and the uncompacted tail (accepted, as in the original) |
+| Tunables                         | `ctx.config` (ContextProxy)                                                                                               | yes                                                                                         |
+| Workspace catalogue              | `.shofer/second-brain/catalogue.json` (the repo)                                                                          | committed                                                                                   |
 
 ## Human surfaces
 

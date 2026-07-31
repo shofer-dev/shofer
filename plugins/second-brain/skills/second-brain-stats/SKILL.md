@@ -14,6 +14,12 @@ result readably:
 
 - **consent / muted** — whether it can run at all, and whether the user silenced it.
 - **per task** — passes run, window/spool sizes, advisories delivered, cost in USD.
+- **cache** — the provider's own `cacheRead`/`cacheWrite` tokens and the hit ratio. The
+  fan-out shares one cached prefix across detectors, so at steady state most input
+  should be cached reads; a large uncached `prompt` with `cacheRead≈0` means the sharing
+  is broken (see the plugin's DESIGN.md §Verifying the cache).
+- **debug** — when on, the directory each pass's `digest.txt` / `pass.json` /
+  `<detector>.txt` are written to.
 - **uptake per detector** — `adopted/delivered`: whether advice is being acted on.
   A detector whose advice is persistently ignored is a detector to disable in
   `.shofer/second-brain/catalogue.json`.

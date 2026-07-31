@@ -86,6 +86,37 @@ export interface GateDrop {
 		| "budget_exhausted"
 }
 
+/**
+ * Token accounting for one call / fork / pass / task. `cacheRead` and `cacheWrite` are
+ * the provider's own numbers (the `usage` chunk's `cacheReadTokens`/`cacheWriteTokens`),
+ * not an estimate — they are the ONLY direct evidence that the fan-out's shared prefix
+ * is actually being cached: at steady state the pilot should show a write and every
+ * other fork of that pass a read of comparable size.
+ */
+export interface TokenUsage {
+	prompt: number
+	completion: number
+	cacheRead: number
+	cacheWrite: number
+}
+
+export function emptyUsage(): TokenUsage {
+	return { prompt: 0, completion: 0, cacheRead: 0, cacheWrite: 0 }
+}
+
+/**
+ * Accumulate provider usage. Every field is guarded: usage reporting is the least
+ * reliable part of any provider's stream (a handler may omit the cache split, or the
+ * whole chunk), and a missing number must degrade to "counted nothing" rather than
+ * poisoning the running total with NaN.
+ */
+export function addUsage(into: TokenUsage, add: Partial<TokenUsage>): void {
+	into.prompt += add.prompt ?? 0
+	into.completion += add.completion ?? 0
+	into.cacheRead += add.cacheRead ?? 0
+	into.cacheWrite += add.cacheWrite ?? 0
+}
+
 /** One pass's per-detector verdict line (the turn-end report / `run` output). */
 export interface PassVerdict {
 	detector: string
@@ -98,7 +129,7 @@ export interface PassResult {
 	at: number
 	trigger: "volume" | "clock" | "salience" | "turn_end" | "manual"
 	verdicts: PassVerdict[]
-	tokens: { prompt: number; completion: number }
+	tokens: TokenUsage
 	costUsd: number
 	durationMs: number
 }
@@ -143,7 +174,7 @@ export interface TaskLedger {
 	/** Finish-gate firings (budget accounting). */
 	finishGateFirings: number[]
 	/** Observer token spend for this task. */
-	tokens: { prompt: number; completion: number }
+	tokens: TokenUsage
 	costUsd: number
 	passes: number
 }
@@ -163,6 +194,8 @@ export interface StatusSnapshot {
 		lastPassAt?: number
 		lastVerdicts?: PassVerdict[]
 		costUsd: number
+		/** Provider-reported cache activity — the KV-cache evidence. */
+		tokens: TokenUsage
 	}[]
 }
 

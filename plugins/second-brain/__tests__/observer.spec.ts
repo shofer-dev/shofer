@@ -5,7 +5,7 @@
 
 import type { PluginStorage } from "@shofer/types"
 
-import { FEEDBACK_TOOL_NAME, type DetectorDef, type Observation } from "../src/types.js"
+import { FEEDBACK_TOOL_NAME, type DetectorDef, type Observation, type TokenUsage } from "../src/types.js"
 import type { ChatMessage, ForkChatResult, ForkClient } from "../src/llm.js"
 import type { ToolDispatcher } from "../src/tool-executor.js"
 import { LedgerStore } from "../src/ledger.js"
@@ -97,7 +97,7 @@ function scriptedClient(
 				script.bySlug[slug] ?? {
 					text: "",
 					toolCalls: [{ id: "f", name: FEEDBACK_TOOL_NAME, arguments: '{"verdict":"silent"}' }],
-					tokens: { prompt: 5, completion: 2 },
+					tokens: usage(5, 2),
 					costUsd: 0,
 				}
 			)
@@ -105,10 +105,14 @@ function scriptedClient(
 	}
 }
 
+function usage(prompt: number, completion: number, cacheRead = 0, cacheWrite = 0): TokenUsage {
+	return { prompt, completion, cacheRead, cacheWrite }
+}
+
 const silentReply: ForkChatResult = {
 	text: "",
 	toolCalls: [{ id: "f", name: FEEDBACK_TOOL_NAME, arguments: '{"verdict":"silent"}' }],
-	tokens: { prompt: 5, completion: 2 },
+	tokens: usage(5, 2),
 	costUsd: 0.0001,
 }
 
@@ -129,12 +133,13 @@ function adviseReply(args: Record<string, unknown> = {}): ForkChatResult {
 				}),
 			},
 		],
-		tokens: { prompt: 5, completion: 3 },
+		tokens: usage(5, 3),
 		costUsd: 0.0002,
 	}
 }
 
 interface Harness {
+	debug: { taskId: string; pass: number; name: string; content: string }[]
 	observer: TaskObserver
 	notifies: string[]
 	queues: string[]
@@ -149,6 +154,7 @@ function makeHarness(script: Script, defs: DetectorDef[] = detectors()): Harness
 	const notifies: string[] = []
 	const queues: string[] = []
 	const markers: { kind: string; text: string }[] = []
+	const debug: { taskId: string; pass: number; name: string; content: string }[] = []
 	const client = scriptedClient(script)
 	const tunables: ObserverTunables = {
 		minIntervalS: 90,
@@ -188,11 +194,13 @@ function makeHarness(script: Script, defs: DetectorDef[] = detectors()): Harness
 		tunables() {
 			return tunables
 		},
-		async debugCapture() {},
+		async debugCapture(taskId, pass, name, content) {
+			debug.push({ taskId, pass, name, content })
+		},
 		log() {},
 	}
 	const observer = new TaskObserver("task-1", "/ws", new LedgerStore(storage), seams)
-	return { observer, notifies, queues, markers, storage, client, tunables }
+	return { observer, notifies, queues, markers, storage, client, tunables, debug }
 }
 
 function feed(observer: TaskObserver, texts: string[], kind: Observation["kind"] = "tool"): void {
@@ -358,7 +366,7 @@ describe("a pass", () => {
 					}),
 				},
 			],
-			tokens: { prompt: 5, completion: 2 },
+			tokens: usage(5, 2),
 			costUsd: 0,
 		}
 		feed(h.observer, ["more work"])
@@ -366,6 +374,57 @@ describe("a pass", () => {
 		const ledger = h.observer.currentLedger!
 		expect(ledger.advisories[0]!.outcome?.verdict).toBe("rejected")
 		expect(ledger.suppressed).toContain(ledger.advisories[0]!.dedupKey)
+	})
+
+	it("captures the shared digest, a pass summary and every fork's loop for verification", async () => {
+		const h = makeHarness({ bySlug: { "repeat-failure": silentReply, "standard-questions": silentReply } })
+		feed(h.observer, ["write_to_file services/foo/health.go"])
+		await h.observer.runPass("manual", () => T0)
+
+		const names = h.debug.map((d) => d.name).sort()
+		expect(names).toEqual(["digest", "pass", "repeat-failure", "standard-questions"])
+
+		// digest.txt is the EXACT block every fork received — that is what makes
+		// "diff pass N against pass N+1" a real verification of prefix growth.
+		const digest = h.debug.find((d) => d.name === "digest")!.content
+		expect(digest).toBe(h.client.calls[0]!.systemPrompt)
+		expect(digest).toContain("OBSERVATION DIGEST")
+		expect(digest).toContain("services/foo/health.go")
+
+		// pass.json carries the per-detector cache evidence.
+		const summary = JSON.parse(h.debug.find((d) => d.name === "pass")!.content) as {
+			pass: number
+			pilot: string
+			systemPromptChars: number
+			detectors: Record<string, { tokens: { cacheRead: number; cacheWrite: number } }>
+		}
+		expect(summary.pass).toBe(1)
+		expect(summary.pilot).toBe("repeat-failure")
+		expect(summary.systemPromptChars).toBe(digest.length)
+		expect(Object.keys(summary.detectors).sort()).toEqual(["repeat-failure", "standard-questions"])
+
+		// Each fork's file holds its own loop: its tail, its verdict, and its usage.
+		const fork = h.debug.find((d) => d.name === "standard-questions")!.content
+		expect(fork).toContain('"standard-questions" detector')
+		expect(fork).toContain("final second_brain_detector_feedback:")
+		expect(fork).toMatch(/usage: prompt=\d+ completion=\d+ cacheRead=\d+ cacheWrite=\d+ cost=\$/)
+	})
+
+	it("reports provider cache tokens on the ledger, so hit ratios are measurable", async () => {
+		const cached: ForkChatResult = {
+			...silentReply,
+			tokens: usage(120, 8, 4200, 0),
+		}
+		const writing: ForkChatResult = {
+			...silentReply,
+			tokens: usage(120, 8, 0, 4200),
+		}
+		const h = makeHarness({ bySlug: { "repeat-failure": writing, "standard-questions": cached } })
+		feed(h.observer, ["some work"])
+		await h.observer.runPass("manual", () => T0)
+
+		// The shape the design predicts: the pilot writes the prefix, the rest read it.
+		expect(h.observer.stats.tokens).toEqual({ prompt: 240, completion: 16, cacheRead: 4200, cacheWrite: 4200 })
 	})
 
 	it("budget exhaustion degrades to silence and says so", async () => {

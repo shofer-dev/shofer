@@ -41,6 +41,18 @@ function SecondBrainPanel({ api }) {
           " advisories \xB7 $",
           t.costUsd.toFixed(3)
         ] }),
+        /* @__PURE__ */ jsxs("div", { style: { paddingLeft: 10, opacity: 0.75 }, children: [
+          "cache: ",
+          Math.round(t.cacheHitRatio * 100),
+          "% of input read from cache (",
+          t.tokens.cacheRead.toLocaleString(),
+          " read / ",
+          t.tokens.cacheWrite.toLocaleString(),
+          " written /",
+          " ",
+          t.tokens.prompt.toLocaleString(),
+          " uncached)"
+        ] }),
         Object.entries(t.uptake).map(([detector, u]) => /* @__PURE__ */ jsxs("div", { style: { paddingLeft: 10, opacity: 0.75 }, children: [
           detector,
           ": ",
@@ -53,6 +65,10 @@ function SecondBrainPanel({ api }) {
       /* @__PURE__ */ jsxs("div", { style: { marginTop: 6, opacity: 0.6 }, children: [
         "overrides: ",
         stats.cataloguePath
+      ] }),
+      stats.debug?.enabled && /* @__PURE__ */ jsxs("div", { style: { opacity: 0.6 }, children: [
+        "debug captures: ",
+        stats.debug.dir
       ] })
     ] }),
     why.map((entry) => /* @__PURE__ */ jsxs("div", { style: box, children: [

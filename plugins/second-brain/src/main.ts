@@ -13,7 +13,7 @@
 import type { PluginContext, ShoferPlugin } from "@shofer/types"
 import { isIdleAsk, type ShoferAsk } from "@shofer/types"
 
-import { STATUS_INTERVAL_MS, TICK_MS, type Observation, type StatusSnapshot } from "./types.js"
+import { STATUS_INTERVAL_MS, TICK_MS, type Observation, type StatusSnapshot, type TokenUsage } from "./types.js"
 import {
 	looksLikeError,
 	projectAsk,
@@ -349,12 +349,22 @@ const plugin: ShoferPlugin = {
 				}
 			}
 			case "stats": {
+				const debugOn = bool(ctx, "debug", false)
 				return {
 					consent: isReady(ctx),
 					muted: bool(ctx, "mute", false),
 					cataloguePath: CATALOGUE_PATH,
+					// Where the per-pass digest.txt / pass.json / <detector>.txt land when
+					// `debug` is on — undiscoverable otherwise, since it is the plugin's
+					// private storage rather than a path the user chose.
+					debug: debugOn
+						? { enabled: true, dir: `${ctx.storage?.dir ?? "<plugin storage>"}/debug` }
+						: { enabled: false },
 					tasks: [...state.observers.values()].map((o) => ({
 						...o.stats,
+						// Cache efficiency, from the provider's own usage numbers: at steady
+						// state cacheRead should dominate prompt as the digest grows.
+						cacheHitRatio: cacheHitRatio(o.stats.tokens),
 						uptake: uptakeOf(o),
 					})),
 				}
@@ -400,6 +410,16 @@ const plugin: ShoferPlugin = {
 			void writeStatus(ctx, Date.now())
 		}
 	},
+}
+
+/**
+ * Share of billable input tokens that came from the cache. 1.0 means every prompt token
+ * was a cached read; 0 means the fan-out is paying full price for the digest every time
+ * (which is what a broken shared prefix looks like from the outside).
+ */
+function cacheHitRatio(tokens: TokenUsage): number {
+	const billableInput = tokens.prompt + tokens.cacheRead + tokens.cacheWrite
+	return billableInput === 0 ? 0 : tokens.cacheRead / billableInput
 }
 
 function uptakeOf(observer: TaskObserver): Record<string, { delivered: number; adopted: number }> {

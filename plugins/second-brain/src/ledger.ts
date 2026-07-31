@@ -10,7 +10,14 @@
 
 import type { PluginStorage } from "@shofer/types"
 
-import { LEDGER_MAX_DROPS, LEDGER_TTL_DAYS, type Advisory, type GateDrop, type TaskLedger } from "./types.js"
+import {
+	emptyUsage,
+	LEDGER_MAX_DROPS,
+	LEDGER_TTL_DAYS,
+	type Advisory,
+	type GateDrop,
+	type TaskLedger,
+} from "./types.js"
 
 const LEDGER_DIR = "ledgers"
 
@@ -28,7 +35,7 @@ export function emptyLedger(taskId: string, now: number): TaskLedger {
 		drops: [],
 		suppressed: [],
 		finishGateFirings: [],
-		tokens: { prompt: 0, completion: 0 },
+		tokens: emptyUsage(),
 		costUsd: 0,
 		passes: 0,
 	}

@@ -36,11 +36,12 @@ file knows is missing.
   messages (converting them to user/developer turns); that degrades gracefully — the
   content stays at the front of the token stream and implicit prefix caching still
   works — but it has not been exercised against a real non-Anthropic endpoint yet.
-- **Cache hit rates are not measured.** `stats` reports tokens and cost, not cache
-  reads/writes, because the `ApiHandler` usage chunks do not expose the split
-  uniformly. So the caching properties are pinned structurally (byte-identical system
-  block across forks; strict prefix growth across passes — `observer.spec.ts`) rather
-  than observed live.
+- **Cache measurement is wired but unproven against a live provider.** `stats` and the
+  panel report the provider's own `cacheReadTokens`/`cacheWriteTokens` and a hit ratio,
+  and `debug: true` writes each pass's digest and per-fork usage — but no real session
+  has been run against a billed provider yet, so the predicted shape (pilot writes,
+  the rest read) is pinned only by tests with scripted usage. A provider that reports
+  no cache split shows as all-uncached rather than as an error.
 
 ## Accepted trade-offs
 

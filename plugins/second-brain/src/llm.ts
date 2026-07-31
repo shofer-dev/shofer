@@ -15,11 +15,16 @@
 
 import type { PluginAi } from "@shofer/types"
 
+import { emptyUsage, type TokenUsage } from "./types.js"
+
 export interface StreamChunk {
 	type: string
 	text?: string
 	inputTokens?: number
 	outputTokens?: number
+	cacheReadTokens?: number
+	cacheWriteTokens?: number
+	totalCost?: number
 	message?: string
 	error?: string
 	id?: string
@@ -53,13 +58,20 @@ export interface ToolCallRequest {
 export interface ForkChatResult {
 	text: string
 	toolCalls: ToolCallRequest[]
-	tokens: { prompt: number; completion: number }
+	tokens: TokenUsage
 	costUsd: number
 }
 
 interface HandlerModel {
 	id: string
-	info?: { contextWindow?: number; inputPrice?: number; outputPrice?: number }
+	info?: {
+		contextWindow?: number
+		inputPrice?: number
+		outputPrice?: number
+		/** Per-1M prices for cached tokens; Anthropic bills writes ~1.25x and reads ~0.1x. */
+		cacheWritesPrice?: number
+		cacheReadsPrice?: number
+	}
 }
 
 interface ForkHandler {
@@ -125,8 +137,10 @@ export class ForkLlmClient implements ForkClient {
 		const handler = await this.getHandler()
 
 		let text = ""
-		let promptTokens = 0
-		let completionTokens = 0
+		const tokens = emptyUsage()
+		// Providers that price the call themselves report it; prefer that over our own
+		// arithmetic, which cannot know every multiplier.
+		let providerCost: number | undefined
 		const toolCallsById = new Map<string, ToolCallRequest>()
 
 		const stream = handler.createMessage(opts.systemPrompt, opts.messages, {
@@ -145,8 +159,11 @@ export class ForkLlmClient implements ForkClient {
 					text += chunk.text ?? ""
 					break
 				case "usage":
-					promptTokens += chunk.inputTokens ?? 0
-					completionTokens += chunk.outputTokens ?? 0
+					tokens.prompt += chunk.inputTokens ?? 0
+					tokens.completion += chunk.outputTokens ?? 0
+					tokens.cacheRead += chunk.cacheReadTokens ?? 0
+					tokens.cacheWrite += chunk.cacheWriteTokens ?? 0
+					if (typeof chunk.totalCost === "number") providerCost = (providerCost ?? 0) + chunk.totalCost
 					break
 				case "tool_call":
 				case "tool_call_partial": {
@@ -182,20 +199,31 @@ export class ForkLlmClient implements ForkClient {
 			}
 		}
 
-		let costUsd = 0
-		try {
-			const info = handler.getModel?.()?.info
-			const inPrice = info?.inputPrice ?? FALLBACK_INPUT_PRICE
-			const outPrice = info?.outputPrice ?? FALLBACK_OUTPUT_PRICE
-			costUsd = (promptTokens * inPrice + completionTokens * outPrice) / 1_000_000
-		} catch {
-			// Pricing is reporting, never gating.
+		let costUsd = providerCost ?? 0
+		if (providerCost === undefined) {
+			try {
+				const info = handler.getModel?.()?.info
+				const inPrice = info?.inputPrice ?? FALLBACK_INPUT_PRICE
+				const outPrice = info?.outputPrice ?? FALLBACK_OUTPUT_PRICE
+				// Cached tokens are NOT billed at the input rate: pricing them as if they
+				// were would hide the very saving this design exists to produce.
+				const writePrice = info?.cacheWritesPrice ?? inPrice * 1.25
+				const readPrice = info?.cacheReadsPrice ?? inPrice * 0.1
+				costUsd =
+					(tokens.prompt * inPrice +
+						tokens.completion * outPrice +
+						tokens.cacheWrite * writePrice +
+						tokens.cacheRead * readPrice) /
+					1_000_000
+			} catch {
+				// Pricing is reporting, never gating.
+			}
 		}
 
 		return {
 			text,
 			toolCalls: [...toolCallsById.values()].filter((c) => c.name),
-			tokens: { prompt: promptTokens, completion: completionTokens },
+			tokens,
 			costUsd,
 		}
 	}

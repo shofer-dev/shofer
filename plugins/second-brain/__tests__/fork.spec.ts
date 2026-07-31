@@ -3,7 +3,7 @@
 // through the executor with the grant re-checked per call; the shared/private split
 // (system block vs messages) holds; a hung provider is cancelled as a timeout.
 
-import { FEEDBACK_TOOL_NAME, type DetectorDef } from "../src/types.js"
+import { FEEDBACK_TOOL_NAME, type DetectorDef, type TokenUsage } from "../src/types.js"
 import type { ChatMessage, ForkChatResult, ForkClient } from "../src/llm.js"
 import type { ToolDispatcher } from "../src/tool-executor.js"
 import { buildForkTail, parseFeedback, runFork } from "../src/fork.js"
@@ -24,11 +24,16 @@ function detector(overrides: Partial<DetectorDef> = {}): DetectorDef {
 	}
 }
 
+/** A complete usage record — providers always report all four through ForkLlmClient. */
+function usage(prompt: number, completion: number, cacheRead = 0, cacheWrite = 0): TokenUsage {
+	return { prompt, completion, cacheRead, cacheWrite }
+}
+
 function feedbackCall(args: Record<string, unknown>): ForkChatResult {
 	return {
 		text: "",
 		toolCalls: [{ id: "t1", name: FEEDBACK_TOOL_NAME, arguments: JSON.stringify(args) }],
-		tokens: { prompt: 10, completion: 5 },
+		tokens: usage(10, 5),
 		costUsd: 0.001,
 	}
 }
@@ -74,12 +79,12 @@ describe("runFork", () => {
 		})
 		expect(outcome.verdictKind).toBe("ok")
 		expect(outcome.feedback).toMatchObject({ verdict: "advise", headline: "h", confidence: 0.8 })
-		expect(outcome.tokens).toEqual({ prompt: 10, completion: 5 })
+		expect(outcome.tokens).toEqual(usage(10, 5))
 	})
 
 	it("prose with no tool call coerces to silent", async () => {
 		const client = scriptedClient([
-			{ text: "everything looks fine to me!", toolCalls: [], tokens: { prompt: 1, completion: 1 }, costUsd: 0 },
+			{ text: "everything looks fine to me!", toolCalls: [], tokens: usage(1, 1), costUsd: 0 },
 		])
 		const outcome = await runFork({
 			detector: detector(),
@@ -105,7 +110,7 @@ describe("runFork", () => {
 			{
 				text: "",
 				toolCalls: [{ id: "r1", name: "read_file", arguments: '{"path":"a.go"}' }],
-				tokens: { prompt: 1, completion: 1 },
+				tokens: usage(1, 1),
 				costUsd: 0,
 			},
 			feedbackCall({ verdict: "silent" }),

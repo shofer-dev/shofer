@@ -16,10 +16,13 @@ import {
 	FEEDBACK_TOOL_NAME,
 	FORK_GRACE_S,
 	MAX_FORK_ITERATIONS,
+	addUsage,
+	emptyUsage,
 	type AdviceOutcome,
 	type Advisory,
 	type DetectorFeedback,
 	type OutcomeVerdict,
+	type TokenUsage,
 } from "./types.js"
 import type { ChatMessage, ContentBlock, ForkClient, ToolDefinition } from "./llm.js"
 import type { ToolDispatcher } from "./tool-executor.js"
@@ -165,9 +168,14 @@ export function buildForkTail(
 export interface ForkOutcome {
 	feedback: DetectorFeedback
 	verdictKind: "ok" | "timeout" | "error"
-	tokens: { prompt: number; completion: number }
+	tokens: TokenUsage
 	costUsd: number
-	/** Debug capture: the fork's whole private loop (tail, replies, tool rounds). */
+	/**
+	 * Debug capture: the fork's whole private loop — its tail, every model reply, every
+	 * tool call with its full result, and the final verdict with token usage. Written
+	 * verbatim to disk when `debug` is on, so a confident-but-wrong advisory can be
+	 * adjudicated from files instead of guessed at.
+	 */
 	trace: string[]
 }
 
@@ -191,7 +199,7 @@ export async function runFork(opts: {
 	deadlineS: number
 }): Promise<ForkOutcome> {
 	const { detector, client, executor } = opts
-	const tokens = { prompt: 0, completion: 0 }
+	const tokens = emptyUsage()
 	let costUsd = 0
 	const trace: string[] = [`tail:\n${opts.tail}`]
 
@@ -212,8 +220,7 @@ export async function runFork(opts: {
 				tools: opts.tools,
 				signal: controller.signal,
 			})
-			tokens.prompt += result.tokens.prompt
-			tokens.completion += result.tokens.completion
+			addUsage(tokens, result.tokens)
 			costUsd += result.costUsd
 			trace.push(
 				`reply ${iteration}: ${result.text || "(no text)"} tools:[${result.toolCalls.map((c) => c.name).join(",")}]`,
@@ -222,11 +229,13 @@ export async function runFork(opts: {
 			const feedbackCall = result.toolCalls.find((c) => c.name === FEEDBACK_TOOL_NAME)
 			if (feedbackCall) {
 				clearTimeout(timer)
+				trace.push(`final ${FEEDBACK_TOOL_NAME}: ${feedbackCall.arguments}`, usageLine(tokens, costUsd))
 				return { feedback: parseFeedback(feedbackCall.arguments), verdictKind: "ok", tokens, costUsd, trace }
 			}
 			if (result.toolCalls.length === 0) {
 				// Prose with no call coerces to silent — never to an invented finding.
 				clearTimeout(timer)
+				trace.push("final: prose with no feedback call ⇒ coerced to silent", usageLine(tokens, costUsd))
 				return { feedback: { verdict: "silent" }, verdictKind: "ok", tokens, costUsd, trace }
 			}
 
@@ -243,7 +252,7 @@ export async function runFork(opts: {
 			const results: ContentBlock[] = []
 			for (const call of result.toolCalls) {
 				const outcome = await executor.execute(detector, call.name, call.arguments)
-				trace.push(`tool ${call.name}: ${outcome.content.slice(0, 500)}`)
+				trace.push(`tool ${call.name}(${call.arguments}) →\n${outcome.content}`)
 				results.push({
 					type: "tool_result",
 					tool_use_id: call.id,
@@ -261,11 +270,12 @@ export async function runFork(opts: {
 			local.push({ role: "user", content: results })
 		}
 		clearTimeout(timer)
+		trace.push("final: iteration cap reached ⇒ silent", usageLine(tokens, costUsd))
 		return { feedback: { verdict: "silent" }, verdictKind: "ok", tokens, costUsd, trace }
 	} catch (error) {
 		clearTimeout(timer)
 		const aborted = error instanceof Error && error.name === "AbortError"
-		trace.push(aborted ? "hard deadline cancelled the fork" : `error: ${String(error)}`)
+		trace.push(aborted ? "hard deadline cancelled the fork" : `error: ${String(error)}`, usageLine(tokens, costUsd))
 		return {
 			feedback: { verdict: "silent" },
 			verdictKind: aborted ? "timeout" : "error",
@@ -274,6 +284,14 @@ export async function runFork(opts: {
 			trace,
 		}
 	}
+}
+
+/** The usage footer every captured fork ends with — the per-fork cache evidence. */
+function usageLine(tokens: TokenUsage, costUsd: number): string {
+	return (
+		`usage: prompt=${tokens.prompt} completion=${tokens.completion} ` +
+		`cacheRead=${tokens.cacheRead} cacheWrite=${tokens.cacheWrite} cost=$${costUsd.toFixed(6)}`
+	)
 }
 
 function safeParse(raw: string): Record<string, unknown> {
