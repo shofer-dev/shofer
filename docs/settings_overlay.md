@@ -694,14 +694,14 @@ Similarly, `globalState` is backed by a SQLite database with no change events.
 
 This means:
 
-| Change Method                       | Detected?                                                                                                          |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Settings UI** (user clicks Save)  | ✅ Immediate — `ProviderSettingsManager.updateConfig()` → `secrets.store()` → `ContextProxy.setProviderSettings()` |
-| **Import flow**                     | ✅ Immediate — `importSettingsFromPath()` → `ProviderSettingsManager.import()` → `ContextProxy.setValues()`        |
-| **Auto-import at startup**          | ✅ On activation — `autoImportSettings()` → full import                                                            |
-| **Direct OS keychain edit**         | ❌ Not detected                                                                                                    |
-| **Direct globalState SQLite write** | ❌ Not detected                                                                                                    |
-| **External `secrets.store()` call** | ❌ Not detected (no cross-process notification)                                                                    |
+| Change Method                       | Detected?                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Settings UI** (user clicks Save)  | ✅ Immediate — `ProviderSettingsManager.saveConfig()` → providers.json + secrets blob → `setProviderSettings()` |
+| **Import flow**                     | ✅ Immediate — scope archive unpacked into `~/.shofer`, overlay + modes refreshed (`applyScopeArchive`)         |
+| **Auto-import at startup**          | ✅ On activation — `autoImportSettings()` → full import                                                         |
+| **Direct OS keychain edit**         | ❌ Not detected                                                                                                 |
+| **Direct globalState SQLite write** | ❌ Not detected                                                                                                 |
+| **External `secrets.store()` call** | ❌ Not detected (no cross-process notification)                                                                 |
 
 ### 🔄 Auto-Import: Startup Only
 

@@ -14,8 +14,8 @@ VS Code 1.99+ introduced built-in MCP support:
 
 Shofer currently has its own parallel MCP config system:
 
-- **Global:** `<globalStorage>/settings/mcp_settings.json`
-- **Project:** `.shofer/mcp.json`
+- **Global source:** org + user scopes' `.shofer/mcp.json` (merged per server name)
+- **Project:** `<workspace>/.shofer/mcp.json`
 
 If a user has already configured MCP servers in VS Code (for Copilot or other LM
 features), they must re-enter them in Shofer. This is redundant work.
@@ -39,7 +39,7 @@ features), they must re-enter them in Shofer. This is redundant work.
 }
 ```
 
-### Shofer's `mcp_settings.json` / `.shofer/mcp.json` schema
+### Shofer's `.shofer/mcp.json` schema
 
 ```json
 {
@@ -104,7 +104,7 @@ Key differences:
     - If a server is in BOTH `.shofer/mcp.json` and `.vscode/mcp.json`:
         - Shofer's config wins (allows override of Shofer-specific metadata)
         - Show informational note: "Also defined in VS Code config — Shofer settings take precedence"
-    - Same for `mcp_settings.json` vs user-level VS Code config
+    - Same for the user scope's `mcp.json` vs user-level VS Code config
 
 - [ ] **Re-read on VS Code config changes**
     - Extend [`debounceConfigChange()`](extensions/shofer/src/services/mcp/McpHub.ts:580) to also handle

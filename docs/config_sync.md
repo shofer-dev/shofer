@@ -134,9 +134,9 @@ exclusions: a key already shipped per-task via `apiConfiguration` (`rateLimitSec
 (not synced): in the shipped shared-workspace-FS worker model the worker already has the mirrored
 project `.shofer/mcp.json` and launches **stdio** servers node-locally, so it _self-determines_
 MCP — syncing the global toggle is unnecessary and could override a locally-correct node. The
-genuine cross-host gaps are narrow — the **global** `mcp_settings.json` (in globalStorage,
-outside the workspace, so not mirrored) and **loopback/controller-hosted** HTTP servers a
-remote worker can't reach — and both are out of config-sync's scope; revisit with remote-MCP
+genuine cross-host gaps are narrow — the user/org scopes' `mcp.json` (in `~/.shofer` and
+the org mount, outside the workspace, so not mirrored) and **loopback/controller-hosted**
+HTTP servers a remote worker can't reach — and both are out of config-sync's scope; revisit with remote-MCP
 support. These calls are pinned by the `SETTING_SYNC_SCOPE` classification tests.
 
 Both allow-lists, and where a key that is _not_ on them goes instead:

@@ -489,18 +489,18 @@ exist, it falls back to the legacy name(s). For rules, the directory form
 
 ## Settings Export/Import
 
-### `shofer-code-settings.json`
+### `shofer-settings.tgz` — scope archive
 
-| Property        | Details                                       |
-| --------------- | --------------------------------------------- |
-| **Format**      | JSON                                          |
-| **Purpose**     | Export/import of Shofer settings              |
-| **Auto-import** | Supported via `shofer.autoImportSettingsPath` |
+| Property        | Details                                                       |
+| --------------- | ------------------------------------------------------------- |
+| **Format**      | gzipped tar of a `.shofer/` scope tree                        |
+| **Purpose**     | Export/import of Shofer settings (Settings → About)           |
+| **Auto-import** | `shofer.autoImportSettingsPath` — one-time fresh-install seed |
 
-The settings export file bundles API provider configs, custom modes,
-MCP server definitions, and other settings. The VS Code setting
-`shofer.autoImportSettingsPath` can point to such a file for automatic
-import on extension startup.
+The archive carries the user scope's `.shofer/` — settings, provider profiles
+(non-secret fields only), modes, MCP servers, commands, rules, skills. API keys
+are never in it. On auto-import it unpacks into `~/.shofer` only while that
+scope has no `settings.json` yet.
 
 ---
 

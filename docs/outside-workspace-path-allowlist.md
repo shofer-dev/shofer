@@ -362,32 +362,28 @@ and `AutoApprovalStateOptions`
 ### 8b. External / automated setup: auto-import (the recommended channel)
 
 Because the keys live in `globalSettingsSchema`, they flow **for free** through the
-existing full-settings export/import and, crucially, **auto-import on startup**
+existing scope-archive export/import and, crucially, the layered `.shofer/` scopes
 ([`importExport.ts`](../src/core/config/importExport.ts),
-[`autoImportSettings`](../src/utils/autoImportSettings.ts)). An external service or a
-provisioned code-server image sets one VS Code bootstrap key,
-`shofer.autoImportSettingsPath` (e.g. `/etc/shofer/settings.json`), and drops a
-`shofer-code-settings.json` whose `globalSettings` block carries the trusted paths:
+[`autoImportSettings`](../src/utils/autoImportSettings.ts)). An external service mounts a
+`.shofer/` tree at `SHOFER_GLOBAL_DIR` whose `settings.json` carries the trusted paths —
+the standing, centrally-updatable channel — or, for a one-time fresh-install seed, sets
+`shofer.autoImportSettingsPath` to a scope archive containing them:
 
 ```jsonc
+// settings.json inside the mounted org scope (or the seeded archive)
 {
-	"globalSettings": {
-		"autoApprovalEnabled": true,
-		"alwaysAllowReadOnly": true,
-		"alwaysAllowWrite": true,
-		"allowedReadPaths": ["/data/reference"],
-		"allowedWritePaths": ["/workspace/generated"],
-	},
+	"autoApprovalEnabled": true,
+	"alwaysAllowReadOnly": true,
+	"alwaysAllowWrite": true,
+	"allowedReadPaths": ["/data/reference"],
+	"allowedWritePaths": ["/workspace/generated"],
 }
 ```
 
-On activation, `autoImportSettings()` → `importSettingsFromPath()` →
-`ContextProxy.setValues(globalSettings)` writes them to globalState — no interactive step,
-survives restarts, and unifies with any interactively-granted paths already there. This is
+The layered overlay serves them on every read — no interactive step, survives restarts,
+and org-scope values unify with any interactively-granted paths in `globalState`. This is
 exactly the mechanism [`settings_overlay.md` §11](settings_overlay.md) prescribes for
-code-server / automated deployments. Confirm the two keys are **not** excluded by
-`globalSettingsExportSchema` ([`ContextProxy.ts:34`](../src/core/config/ContextProxy.ts))
-so they round-trip through export/import as well.
+code-server / automated deployments.
 
 > **Caveat (matches all globalState settings):** auto-import is **startup-only** — there is
 > no external-change watcher on globalState ([`settings_overlay.md` §8 table](settings_overlay.md)).
@@ -459,7 +455,7 @@ each executor's `provider.getState()` serves to the gate (dashed = deferred):
 flowchart TB
     SETUI["Settings — AutoApproveSettings.tsx<br/>updateSettings"]
     INLINE["inline 'Trust path (always)'<br/>outsideWorkspacePersist: true"]
-    AUTO["auto-import<br/>shofer.autoImportSettingsPath to<br/>importSettingsFromPath() to ContextProxy.setValues()<br/>startup-only, no watcher"]
+    AUTO["org scope mount / seed archive<br/>SHOFER_GLOBAL_DIR settings.json, or<br/>autoImportSettingsPath one-time unpack to ~/.shofer<br/>overlay re-read on change"]
     PROJ["'.shofer/allowed-paths.json'<br/>per-workspace, live reload — DEFERRED, not in v1"]
 
     STORE["controller globalState — globalSettingsSchema<br/>allowedReadPaths / allowedWritePaths<br/>the source of truth"]

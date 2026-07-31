@@ -120,7 +120,7 @@ Shofer's settings are organized by tab in the Settings panel (⚙️ gear icon):
 
 ### Settings Backup & Reset
 
-Settings → About → **Export** saves your full configuration as `shofer-code-settings.json` (API profiles, keys, modes, auto-approval). **Import** restores from a previous export. **Reset** wipes everything to defaults. MCP server configs are NOT included in export — copy `mcp_settings.json` separately from your data directory.
+Settings → About → **Export** archives your user scope's `.shofer/` tree as `shofer-settings.tgz` — settings, provider profiles (never their API keys), modes, MCP servers, commands, rules and skills. **Import** unpacks such an archive into `~/.shofer`. **Reset** wipes everything to defaults. API keys are never in the archive; re-enter them after an import.
 
 ---
 
