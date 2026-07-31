@@ -4,8 +4,9 @@
 
 Shofer stores configuration across several backends — VS Code `globalState`,
 `SecretStorage`, and files. Non-secret configuration has a single file-based source
-of truth under a layered `.shofer/` tree (global > user > project, with per-key
-org-policy locking); `globalState` serves as its runtime cache. See
+of truth under a layered `.shofer/` tree — **project > user > global** for an
+ordinary key, inverted to global-wins-and-is-final for a key the global scope
+locks; `globalState` serves as its runtime cache. See
 [`configuration.md`](configuration.md#layered-shofer-configuration) for the layered
 model. This document explains all storage layers, how they merge at runtime, and
 the import/export mechanics.
@@ -19,11 +20,14 @@ the import/export mechanics.
 | **VS Code Config**       | `package.json` `contributes.configuration` → `settings.json`              | Per-extension (machine-wide) | 18            | —                                                      |
 | **API Provider Configs** | VS Code `SecretStorage` (profiles blob + individual keys) + `globalState` | Per-extension (machine-wide) | ~30 + 31 keys | Profile IDs resolve per-mode                           |
 | **Mode Definitions**     | `.shofer/shofermodes` (YAML) + `custom_modes.yaml` (YAML) + built-in (TS) | Per-project + per-extension  | —             | `.shofer/shofermodes` > `custom_modes.yaml` > built-in |
-| **MCP Server Configs**   | `mcp_settings.json` (JSON file)                                           | Per-extension (machine-wide) | —             | Single file; no overlay                                |
-| **Global Settings**      | VS Code `globalState` (SQLite-backed)                                     | Per-extension (machine-wide) | ~96           | Flat key-value; no overlay                             |
+| **MCP Server Configs**   | `mcp_settings.json` + `.shofer/mcp.json`                                  | Per-extension + per-scope    | —             | Project file overlays the global one                   |
+| **Global Settings**      | `.shofer/settings.json` (layered) → `globalState` cache                   | Three scopes + machine-wide  | ~96           | Overlay wins in `getValue`; else `globalState`         |
 
 > **Layered `.shofer/` model.** Non-secret settings resolve through a three-scope
-> `.shofer/` overlay (global > user > project) with per-key org-policy locking, and
+> `.shofer/` overlay. For an **unlocked** key the more-specific scope wins —
+> **project > user > global**; for a key the global scope **locks** (`locked.json`,
+> global scope only) that order **inverts**: the global value wins and is final.
+> The overlay takes precedence over `globalState` in `ContextProxy.getValue`, and
 > the profiles blob is the sole persisted store for provider secrets. See
 > [`configuration.md`](configuration.md#layered-shofer-configuration).
 
@@ -115,19 +119,23 @@ on Linux). These include:
 
 ### 1d. Runtime Merge (ContextProxy)
 
-[`ContextProxy`](../src/core/config/ContextProxy.ts:40) acts as a caching layer that
-merges `SecretStorage` (API keys) and `globalState` (non-secret settings) into a unified
-`ShoferSettings` object at [`getValues()`](../src/core/config/ContextProxy.ts:515):
+[`ContextProxy`](../src/core/config/ContextProxy.ts) merges three inputs into a
+unified `ShoferSettings` view: `SecretStorage` (API keys), the layered `.shofer/`
+overlay, and `globalState`. **The overlay wins**: `getValue` returns the overlay's
+value for any key a scope supplies and only falls back to `globalState` otherwise,
+so `globalState` is the cache, not the authority, for non-secret settings.
 
 ```mermaid
 flowchart LR
     BLOB[("SecretStorage<br/>shofer_config_api_config<br/>profiles blob")]
     SEC[("SecretStorage<br/>global secret keys<br/>codebase-index keys, openRouterImageApiKey")]
+    LAY[("layered .shofer/settings.json<br/>global · user · project<br/>merged per key")]
     GS[("globalState<br/>apiProvider, apiModelId, base URLs, ...")]
 
     subgraph CP["ContextProxy — one cache, one event stream"]
         direction TB
         SC["secretCache"]
+        OV["layeredOverlay"]
         ST["stateCache"]
     end
 
@@ -135,10 +143,17 @@ flowchart LR
 
     BLOB -->|"setProviderSettings(profile)"| SC
     SEC --> SC
+    LAY --> OV
     GS --> ST
     SC --> OUT
-    ST --> OUT
+    OV -->|"wins when the key is present"| OUT
+    ST -->|"fallback"| OUT
 ```
+
+A key served by the overlay cannot be changed locally — a write to it would be
+shadowed on the next read — so surfaces ask
+`ContextProxy.isManagedByFileLayer(key)` and present such a value read-only with
+its source rather than offering an edit that does nothing.
 
 The `ContextProxy` maintains an in-memory cache (`stateCache` + `secretCache`) for
 fast access and lazily syncs with the backing stores. Every extension read of a
@@ -626,22 +641,30 @@ restarting code-server or VS Code, and how changes are detected.
 
 ### Summary Table
 
-| Config Type                                  | On-the-Fly?     | Detection Mechanism                    | Delay          | Notes                                                                       |
-| -------------------------------------------- | --------------- | -------------------------------------- | -------------- | --------------------------------------------------------------------------- |
-| **MCP servers** (global `mcp_settings.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                 |
-| **MCP servers** (project `.shofer/mcp.json`) | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                           |
-| **Mode definitions** (`.shofer/shofermodes`) | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
-| **Mode definitions** (`custom_modes.yaml`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                 |
-| **API profiles** (SecretStorage)             | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected |
-| **API keys** (SecretStorage)                 | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                 |
-| **Global settings** (globalState)            | ⚠️ UI only      | No external change detection           | —              | VS Code `globalState` does not emit change events for external writes       |
-| **Auto-import**                              | 🔄 Startup only | Runs on extension `activate()`         | —              | Triggered only at extension activation; not re-triggerable without restart  |
-| **Slash commands / rules** (`.shofer/`)      | ✅ Yes          | Read at task start / on-demand         | —              | Not cached — read fresh when constructing system prompt                     |
+| Config Type                                    | On-the-Fly?     | Detection Mechanism                    | Delay          | Notes                                                                                                                        |
+| ---------------------------------------------- | --------------- | -------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **MCP servers** (global `mcp_settings.json`)   | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | Servers restarted/reconnected automatically                                                                                  |
+| **MCP servers** (project `.shofer/mcp.json`)   | ✅ Yes          | VS Code `FileSystemWatcher` (chokidar) | 500ms debounce | File deletion triggers cleanup of project servers                                                                            |
+| **Mode definitions** (`.shofer/shofermodes`)   | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                                                                  |
+| **Mode definitions** (`custom_modes.yaml`)     | ✅ Yes          | VS Code `FileSystemWatcher`            | Near-instant   | Triggers re-merge → `globalState` → `onUpdate` → UI refresh                                                                  |
+| **API profiles** (SecretStorage)               | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow; OS keychain changes undetected                                                  |
+| **API keys** (SecretStorage)                   | ⚠️ UI only      | No external change detection           | —              | Only changed via Settings UI or Import flow                                                                                  |
+| **Layered settings** (`.shofer/settings.json`) | ✅ Yes          | `scopeWatcher` on the three scope dirs | Near-instant   | `ContextProxy` re-merges the overlay and fires `onDidRefreshOverlay`; plugins whose `pluginConfigs` entry moved are reloaded |
+| **Org lock manifest** (`.shofer/locked.json`)  | ✅ Yes          | `scopeWatcher`                         | Near-instant   | Re-merges: a newly locked key stops accepting user/project values                                                            |
+| **Global settings** (globalState cache)        | ⚠️ UI only      | No external change detection           | —              | Only the fallback store: an external SQLite write is undetected. The authoritative file layer above IS watched               |
+| **Auto-import**                                | 🔄 Startup only | Runs on extension `activate()`         | —              | Triggered only at extension activation; not re-triggerable without restart                                                   |
+| **Slash commands / rules** (`.shofer/`)        | ✅ Yes          | Read at task start / on-demand         | —              | Not cached — read fresh when constructing system prompt                                                                      |
 
 ### ✅ File-Based Configs: Instant Reload
 
-All JSON/YAML file-based configs use VS Code's `FileSystemWatcher` API (backed by
-`chokidar` for MCP settings) and reload **immediately** when the file changes on disk:
+Most JSON/YAML file-based configs use VS Code's `FileSystemWatcher` API (backed by
+`chokidar` for MCP settings) and reload **immediately** when the file changes on disk.
+The three `.shofer/` scopes are the exception: they are watched by
+[`scopeWatcher.ts`](../src/core/config/scopeWatcher.ts) instead, because two of the
+three live outside the workspace and the headless host's `createFileSystemWatcher`
+shim never fires. It watches the **directories**, since both writers that matter
+replace rather than mutate (an atomic temp-file rename, and a ConfigMap swapping its
+`..data` symlink):
 
 #### MCP Settings (Global + Project)
 
@@ -1396,7 +1419,7 @@ around a **staged-save (buffered) pattern**:
   [`PluginsSettings`](../webview-ui/src/components/settings/PluginsSettings.tsx)
   (`commitConfigBuffers()` / `discardConfigBuffers()` — plugin config, enable, and
   billed-AI consent),
-  [`ShoferNodesSettings`](../webview-ui/src/components/settings/ShoferNodesSettings.tsx)
+  [`ShoferWorkersSettings`](../webview-ui/src/components/settings/ShoferWorkersSettings.tsx)
   (`commitNodeBuffers()` / `discardNodeBuffers()` — load-balancer policy and per-node
   enable/disable), and
   [`RagIndexerSettings`](../webview-ui/src/components/settings/RagIndexerSettings.tsx)
@@ -1418,7 +1441,7 @@ around a **staged-save (buffered) pattern**:
 flowchart TD
     IN["a control in Settings<br/>onChange / onValueChange / onClick"]
     CS["cachedState<br/>setCachedStateField / setApiConfigurationField"]
-    PB["dedicated pending buffers<br/>pendingDefaultConfigName · ModesView · ToolsSettings<br/>PluginsSettings · ShoferNodesSettings · RagIndexerSettings"]
+    PB["dedicated pending buffers<br/>pendingDefaultConfigName · ModesView · ToolsSettings<br/>PluginsSettings · ShoferWorkersSettings · RagIndexerSettings"]
     DIRTY{"isChangeDetected — the Save button enables"}
     SAVE["Save — handleSubmit()"]
     HOST["updateSettings · upsertApiConfiguration ·<br/>setDefaultApiConfiguration ·<br/>commitBuffers() / commitToolBuffers() /<br/>commitConfigBuffers() / commitNodeBuffers() /<br/>saveCodeIndexSecrets()"]

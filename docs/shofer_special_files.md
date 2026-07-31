@@ -427,6 +427,8 @@ The global configuration directory at `~/.shofer/` (Linux/macOS) or
 
 ```
 ~/.shofer/
+├── settings.json         # globalSettings keys — the user scope of the layered config
+├── plugins.json          # Plugin declarations for this user
 ├── rules/                # Global mode-agnostic rules
 ├── rules-<mode>/         # Global mode-specific rules
 ├── commands/             # Global slash commands
@@ -434,6 +436,9 @@ The global configuration directory at `~/.shofer/` (Linux/macOS) or
 ├── skills-<mode>/        # Global mode-specific skills
 └── custom-instructions.md # Global custom instructions
 ```
+
+`settings.json` here is where `ContextProxy`'s write-through lands: a setting changed
+in the UI is mirrored into the **user** scope, not the read-only global one.
 
 Global paths are loaded **before** project paths, so project-level
 configuration can override global settings.
