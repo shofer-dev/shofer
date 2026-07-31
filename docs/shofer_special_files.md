@@ -76,13 +76,13 @@ Implementation: [`ShoferIgnoreController`](../packages/core/src/ignore/ShoferIgn
 
 ### `.shofer/shofermodes`
 
-| Property            | Details                                        |
-| ------------------- | ---------------------------------------------- |
-| **Format**          | YAML                                           |
-| **Scope**           | Workspace root                                 |
-| **Priority**        | Highest — overrides global `custom_modes.yaml` |
-| **Watched**         | Yes — changes reload automatically             |
-| **Write-protected** | Yes                                            |
+| Property            | Details                                                         |
+| ------------------- | --------------------------------------------------------------- |
+| **Format**          | YAML                                                            |
+| **Scope**           | Workspace root                                                  |
+| **Priority**        | Highest — overrides `~/.shofer/shofermodes` and the org scope's |
+| **Watched**         | Yes — changes reload automatically                              |
+| **Write-protected** | Yes                                                             |
 
 Defines project-specific custom mode overrides. Example:
 
@@ -383,9 +383,9 @@ Example:
 }
 ```
 
-The global equivalent lives in the VS Code user settings directory
-(typically `~/.config/Code/User/globalStorage/shofer.shofer/mcp_settings.json`).
-It can also be managed through the Settings UI.
+The user-scope equivalent lives at `~/.shofer/mcp.json` (org policy can supply a
+third, read-only layer at the org-global scope root). It can also be managed
+through the Settings UI.
 
 When installing MCP servers from the Shofer Marketplace, they are added
 to `.shofer/mcp.json` for project-scoped installs.

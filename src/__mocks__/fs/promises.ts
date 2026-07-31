@@ -158,21 +158,6 @@ const mockFs = {
 
 	// Helper to set up initial mock data
 	_setInitialMockData: () => {
-		// Set up default MCP settings
-		mockFiles.set(
-			"/mock/settings/path/mcp_settings.json",
-			JSON.stringify({
-				mcpServers: {
-					"test-server": {
-						command: "node",
-						args: ["test.js"],
-						disabled: false,
-						disabledTools: [],
-					},
-				},
-			}),
-		)
-
 		// Ensure all base directories exist
 		baseTestDirs.forEach((dir) => {
 			const parts = dir.split("/")

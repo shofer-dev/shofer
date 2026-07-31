@@ -3,6 +3,7 @@
 import type { Mock } from "vitest"
 
 import * as path from "path"
+import * as os from "os"
 import * as fs from "fs/promises"
 
 import * as yaml from "yaml"
@@ -13,10 +14,11 @@ import type { ModeConfig } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getWorkspacePath, arePathsEqual } from "@shofer/core"
-import { GlobalFileNames } from "@shofer/core"
 import { setSharedPluginManager } from "@shofer/core"
 
 import { CustomModesManager } from "../CustomModesManager"
+import { ContextProxy } from "../ContextProxy"
+import { TypedEmitter } from "@shofer/types"
 
 vi.mock("vscode", () => ({
 	workspace: {
@@ -66,7 +68,7 @@ describe("CustomModesManager", () => {
 
 	// Use path.sep to ensure correct path separators for the current platform
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
-	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+	const mockSettingsPath = path.join(os.homedir(), ".shofer", "shofermodes")
 	const mockWorkspacePath = path.resolve("/mock/workspace")
 	const mockRoomodes = path.join(mockWorkspacePath, ".shofer/shofermodes")
 
@@ -759,15 +761,17 @@ describe("CustomModesManager", () => {
 	})
 
 	describe("File Operations", () => {
-		it("creates settings directory if it doesn't exist", async () => {
-			const settingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+		it("creates the user .shofer directory when the modes file is missing", async () => {
+			const settingsPath = path.join(os.homedir(), ".shofer", "shofermodes")
+			;(fileExistsAtPath as Mock).mockResolvedValue(false)
+
 			await manager.getCustomModesFilePath()
 
 			expect(fs.mkdir).toHaveBeenCalledWith(path.dirname(settingsPath), { recursive: true })
 		})
 
 		it("creates default config if file doesn't exist", async () => {
-			const settingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+			const settingsPath = path.join(os.homedir(), ".shofer", "shofermodes")
 
 			// Mock fileExists to return false first time, then true
 			let firstCall = true
@@ -784,47 +788,35 @@ describe("CustomModesManager", () => {
 			expect(fs.writeFile).toHaveBeenCalledWith(settingsPath, expect.stringMatching(/^customModes: \[\]/))
 		})
 
-		it("watches file for changes", async () => {
-			const configPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+		it("re-merges on a shofermodes scope-file event", async () => {
+			const configPath = path.join(os.homedir(), ".shofer", "shofermodes")
 
 			;(fs.readFile as Mock).mockResolvedValue(yaml.stringify({ customModes: [] }))
-			;(arePathsEqual as Mock).mockImplementation(
-				(path1: string, path2: string) => path.normalize(path1) === path.normalize(path2),
-			)
 
-			// Mock createFileSystemWatcher to return a mock watcher
-			const mockWatcher = {
-				onDidChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-				onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-				onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-				dispose: vi.fn(),
-			}
-			const createFileSystemWatcherMock = vi.fn().mockReturnValue(mockWatcher)
-			;(vscode.workspace as any).createFileSystemWatcher = createFileSystemWatcherMock
+			// Watching goes through ContextProxy's ScopeWatcher stream: stub an
+			// initialized ContextProxy exposing the onDidChangeScopeFiles event.
+			const emitter = new TypedEmitter<{ files: string[] }>()
+			const proxyStub = { onDidChangeScopeFiles: emitter.event } as unknown as ContextProxy
+			const instanceSpy = vi.spyOn(ContextProxy, "instance", "get").mockReturnValue(proxyStub)
 
 			// Temporarily set NODE_ENV to allow file watching
 			const originalNodeEnv = process.env.NODE_ENV
 			process.env.NODE_ENV = "development"
 
 			try {
-				// Create a new manager to trigger the file watcher setup
+				// Create a new manager to trigger the watcher subscription
 				const testManager = new CustomModesManager(mockContext, mockOnUpdate)
-
-				// Wait a bit for the async watchCustomModesFiles to complete
 				await new Promise((resolve) => setTimeout(resolve, 10))
 
-				// Verify createFileSystemWatcher was called
-				expect(createFileSystemWatcherMock).toHaveBeenCalled()
+				// An unrelated scope file must not trigger a re-merge
+				emitter.fire({ files: ["settings.json"] })
+				await new Promise((resolve) => setTimeout(resolve, 10))
+				expect(mockOnUpdate).not.toHaveBeenCalled()
 
-				// Get the onChange callback that was registered
-				const onChangeCall = mockWatcher.onDidChange.mock.calls[0]
-				expect(onChangeCall).toBeDefined()
-				const [onChangeCallback] = onChangeCall
+				// A shofermodes event re-reads every scope and refreshes consumers
+				emitter.fire({ files: ["shofermodes"] })
+				await new Promise((resolve) => setTimeout(resolve, 10))
 
-				// Simulate file change event
-				await onChangeCallback()
-
-				// Verify file was processed
 				expect(fs.readFile).toHaveBeenCalledWith(configPath, "utf-8")
 				expect(mockContext.globalState.update).toHaveBeenCalled()
 				expect(mockOnUpdate).toHaveBeenCalled()
@@ -834,6 +826,7 @@ describe("CustomModesManager", () => {
 			} finally {
 				// Restore original NODE_ENV
 				process.env.NODE_ENV = originalNodeEnv
+				instanceSpy.mockRestore()
 			}
 		})
 	})

@@ -8,8 +8,7 @@ import * as yaml from "yaml"
 import type { MarketplaceItem, MarketplaceItemType, McpMarketplaceItem } from "@shofer/types"
 import { TelemetryService } from "@shofer/telemetry"
 
-import { GlobalFileNames } from "@shofer/core"
-import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
+import { getGlobalShoferDirectory } from "@shofer/core"
 import { t } from "@shofer/core"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 
@@ -282,10 +281,8 @@ export class MarketplaceManager {
 	 */
 	private async checkGlobalInstallations(metadata: Record<string, { type: string }>): Promise<void> {
 		try {
-			const globalSettingsPath = await ensureSettingsDirectoryExists(this.context)
-
-			// Check global modes
-			const globalModesPath = path.join(globalSettingsPath, GlobalFileNames.customModes)
+			// Check global modes (the user scope's `~/.shofer/shofermodes`)
+			const globalModesPath = path.join(getGlobalShoferDirectory(), "shofermodes")
 			try {
 				const content = await fs.readFile(globalModesPath, "utf-8")
 				const data = yaml.parse(content)
@@ -302,8 +299,8 @@ export class MarketplaceManager {
 				// File doesn't exist or can't be read, skip
 			}
 
-			// Check global MCPs
-			const globalMcpPath = path.join(globalSettingsPath, GlobalFileNames.mcpSettings)
+			// Check global MCPs (the user scope's `~/.shofer/mcp.json`)
+			const globalMcpPath = path.join(getGlobalShoferDirectory(), "mcp.json")
 			try {
 				const content = await fs.readFile(globalMcpPath, "utf-8")
 				const data = JSON.parse(content)

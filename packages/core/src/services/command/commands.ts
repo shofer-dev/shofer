@@ -3,6 +3,7 @@ import * as path from "path"
 import { Dirent } from "fs"
 import matter from "gray-matter"
 import { getGlobalShoferDirectory, getProjectShoferDirectoryForCwd } from "../shofer-config/index.js"
+import { getOrgShoferDirectory } from "../../config/scope-roots.js"
 import { getBuiltInCommands, getBuiltInCommand } from "./built-in-commands.js"
 import { configLog } from "../../logging/subsystems.js"
 import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
@@ -160,7 +161,13 @@ export async function getCommands(cwd: string): Promise<Command[]> {
 		}
 	}
 
-	// Scan global commands (override built-in)
+	// Scan org-global commands (override built-in; overridden by user/project)
+	const orgShoferDir = getOrgShoferDirectory()
+	if (orgShoferDir) {
+		await scanCommandDirectory(path.join(orgShoferDir, "commands"), "global", commands)
+	}
+
+	// Scan user-scope commands (override org-global and built-in)
 	const globalDir = path.join(getGlobalShoferDirectory(), "commands")
 	await scanCommandDirectory(globalDir, "global", commands)
 
@@ -226,6 +233,15 @@ export async function getCommand(cwd: string, name: string): Promise<Command | u
 	const globalCommand = await tryLoadCommand(globalDir, name, "global")
 	if (globalCommand) {
 		return globalCommand
+	}
+
+	// Check the org-global scope if the user scope has no override
+	const orgShoferDir = getOrgShoferDirectory()
+	if (orgShoferDir) {
+		const orgCommand = await tryLoadCommand(path.join(orgShoferDir, "commands"), name, "global")
+		if (orgCommand) {
+			return orgCommand
+		}
 	}
 
 	// Check built-in commands if not found anywhere else (lowest priority)

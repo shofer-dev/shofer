@@ -2,6 +2,7 @@
    normalizes arbitrary user MCP config JSON (mcp.json / settings) whose shape is
    dynamic by nature; the parsed values are `any` until Zod-validated. */
 import * as fs from "fs/promises"
+import * as os from "os"
 import * as path from "path"
 
 import { getHost } from "@shofer/types"
@@ -46,11 +47,11 @@ import { t } from "../../i18n/index.js"
 import type { TaskProviderLike } from "../../task-provider/index.js"
 import { mcpLog as mcpSysLog } from "../../logging/subsystems.js"
 
-import { GlobalFileNames } from "../../shared/globalFileNames.js"
-
 import { fileExistsAtPath } from "../../fs/fs.js"
 import { getWorkspacePath } from "../../path/path.js"
 import { injectVariables } from "../../utils/config.js"
+import { isPathLocked, type LockedManifest } from "../../config/layered-config.js"
+import { loadLockedManifestFromDisk, resolveScopeRoots, type ScopeRoots } from "../../config/scope-roots.js"
 import { safeWriteJson } from "../../utils/safeWriteJson.js"
 import { sanitizeMcpName, toolNamesMatch } from "../../utils/mcp-name.js"
 import { getSharedPluginManager } from "../../plugins/plugin-manager.js"
@@ -167,7 +168,7 @@ const McpSettingsSchema = z.object({
 export class McpHub {
 	private providerRef: WeakRef<TaskProviderLike>
 	private disposables: HostDisposable[] = []
-	private settingsWatcher?: HostFileWatcher
+	private settingsWatchers: HostFileWatcher[] = []
 	private fileWatchers: Map<string, FSWatcher[]> = new Map()
 	private projectMcpWatcher?: HostFileWatcher
 	private isDisposed: boolean = false
@@ -350,6 +351,18 @@ export class McpHub {
 	}
 
 	private async handleConfigFileChange(filePath: string, source: "global" | "project"): Promise<void> {
+		if (source === "global") {
+			// Any global-scope file event (org or user, incl. deletion) re-merges
+			// both scopes; per-file errors are surfaced inside the merged read.
+			try {
+				const servers = await this.loadGlobalScopeServers()
+				await this.updateServerConnections(servers, source)
+			} catch (error) {
+				this.showErrorMessage(`Failed to update global MCP servers`, error)
+			}
+			return
+		}
+
 		try {
 			const content = await fs.readFile(filePath, "utf-8")
 			let config: any
@@ -579,17 +592,18 @@ export class McpHub {
 		return mcpServersPath
 	}
 
+	/**
+	 * The **user** scope's MCP config (`~/.shofer/mcp.json`) — the writable home
+	 * of every "global"-source server, and the file every edit path (add/delete/
+	 * toggle/timeout) writes. Created with an empty template on first access so
+	 * the "Edit Global MCP" UI can open it.
+	 */
 	async getMcpSettingsFilePath(): Promise<string> {
-		const provider = this.providerRef.deref()
-		if (!provider) {
-			throw new Error("Provider not available")
-		}
-		const mcpSettingsFilePath = path.join(
-			await provider.ensureSettingsDirectoryExists(),
-			GlobalFileNames.mcpSettings,
-		)
+		const userRoot = path.join(os.homedir(), ".shofer")
+		const mcpSettingsFilePath = path.join(userRoot, "mcp.json")
 		const fileExists = await fileExistsAtPath(mcpSettingsFilePath)
 		if (!fileExists) {
+			await fs.mkdir(userRoot, { recursive: true })
 			await fs.writeFile(
 				mcpSettingsFilePath,
 				`{
@@ -602,41 +616,141 @@ export class McpHub {
 		return mcpSettingsFilePath
 	}
 
+	/**
+	 * The `.shofer/` scope roots for MCP files — the same resolution the layered
+	 * settings overlay uses. `globalStorageFsPath` is derived from the provider's
+	 * settings directory (its parent is the — possibly custom — storage base), so
+	 * the org-global default agrees with every other scope-file consumer.
+	 */
+	private async resolveMcpScopeRoots(): Promise<ScopeRoots> {
+		let globalStorageFsPath: string | undefined
+		try {
+			const settingsDir = await this.providerRef.deref()?.ensureSettingsDirectoryExists()
+			globalStorageFsPath = settingsDir ? path.dirname(settingsDir) : undefined
+		} catch {
+			globalStorageFsPath = undefined
+		}
+
+		let workspaceFolder: string | undefined
+		try {
+			workspaceFolder = (this.providerRef.deref()?.cwd ?? getWorkspacePath()) || undefined
+		} catch {
+			workspaceFolder = undefined
+		}
+
+		return resolveScopeRoots({ globalStorageFsPath, homeDir: os.homedir(), workspaceFolder })
+	}
+
+	/**
+	 * Read + validate one scope's `.shofer/mcp.json`. A missing file is the
+	 * normal empty layer; a malformed or schema-invalid file is surfaced to the
+	 * user and contributes its raw `mcpServers` best-effort (each server is
+	 * re-validated individually in `updateServerConnections`).
+	 */
+	private async readScopeMcpServers(root: string | undefined): Promise<Record<string, any>> {
+		if (!root) {
+			return {}
+		}
+		const filePath = path.join(root, "mcp.json")
+
+		let content: string
+		try {
+			content = await fs.readFile(filePath, "utf-8")
+		} catch {
+			return {}
+		}
+
+		let config: any
+		try {
+			config = JSON.parse(content)
+		} catch (parseError) {
+			const errorMessage = t("mcp:errors.invalid_settings_syntax")
+			mcpSysLog.error(`${errorMessage} (${filePath})`, parseError)
+			getHost().notifier.error(errorMessage)
+			return {}
+		}
+
+		const result = McpSettingsSchema.safeParse(config)
+		if (!result.success) {
+			const errorMessages = result.error.errors.map((err) => `${err.path.join(".")}: ${err.message}`).join("\n")
+			mcpSysLog.error(`Invalid MCP settings format (${filePath}):`, errorMessages)
+			getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
+			// Best-effort: per-server validation still happens downstream.
+			return config?.mcpServers && typeof config.mcpServers === "object" ? config.mcpServers : {}
+		}
+
+		return result.data.mcpServers || {}
+	}
+
+	/**
+	 * The effective "global"-source server set: the org-global and user scopes'
+	 * `.shofer/mcp.json` merged per server name. The user's entry wins unless the
+	 * org-global scope's `locked.json` names the server (`mcp/<name>`) or the
+	 * whole collection (`mcp`) — then the org entry is final, matching the
+	 * layered-config rule everywhere else.
+	 */
+	private async loadGlobalScopeServers(): Promise<Record<string, any>> {
+		const roots = await this.resolveMcpScopeRoots()
+		const [orgServers, userServers, manifest] = await Promise.all([
+			this.readScopeMcpServers(roots.global),
+			this.readScopeMcpServers(roots.user),
+			loadLockedManifestFromDisk(roots.global),
+		])
+
+		const merged: Record<string, any> = { ...orgServers }
+		for (const [name, config] of Object.entries(userServers)) {
+			if (name in orgServers && this.isMcpServerLocked(name, manifest)) {
+				continue
+			}
+			merged[name] = config
+		}
+		return merged
+	}
+
+	/** True when the org-global scope locks this server name (or all of `mcp`). */
+	private isMcpServerLocked(name: string, manifest: LockedManifest): boolean {
+		return isPathLocked("mcp", manifest) || isPathLocked(`mcp/${name}`, manifest)
+	}
+
 	private async watchMcpSettingsFile(): Promise<void> {
 		// Skip if test environment is detected
 		if (process.env.NODE_ENV === "test") {
 			return
 		}
 
-		// Clean up existing settings watcher if it exists
-		if (this.settingsWatcher) {
-			this.settingsWatcher.dispose()
-			this.settingsWatcher = undefined
+		// Clean up existing settings watchers if they exist
+		for (const watcher of this.settingsWatchers) {
+			watcher.dispose()
 		}
+		this.settingsWatchers = []
 
-		const settingsPath = await this.getMcpSettingsFilePath()
+		// Watch the user and org-global scopes' mcp.json. Deletion matters too: a
+		// removed user file may leave org servers behind, so every event re-merges.
+		const roots = await this.resolveMcpScopeRoots()
+		const watchRoots = [...new Set([roots.user, roots.global].filter((root): root is string => !!root))]
 
-		// Create a file system watcher for the global MCP settings file. The
-		// watcher is scoped to this exact file, so every event refers to it.
-		this.settingsWatcher = getHost().watcher.watch(path.dirname(settingsPath), path.basename(settingsPath))
-
-		// Watch for file changes
-		this.settingsWatcher.onChange(() => {
-			this.debounceConfigChange(settingsPath, "global")
-		})
-
-		// Watch for file creation
-		this.settingsWatcher.onCreate(() => {
-			this.debounceConfigChange(settingsPath, "global")
-		})
-
-		this.disposables.push(this.settingsWatcher)
+		for (const root of watchRoots) {
+			const filePath = path.join(root, "mcp.json")
+			const watcher = getHost().watcher.watch(root, "mcp.json")
+			watcher.onChange(() => this.debounceConfigChange(filePath, "global"))
+			watcher.onCreate(() => this.debounceConfigChange(filePath, "global"))
+			watcher.onDelete(() => this.debounceConfigChange(filePath, "global"))
+			this.settingsWatchers.push(watcher)
+			this.disposables.push(watcher)
+		}
 	}
 
 	private async initializeMcpServers(source: "global" | "project"): Promise<void> {
 		try {
-			const configPath =
-				source === "global" ? await this.getMcpSettingsFilePath() : await this.getProjectMcpPath()
+			if (source === "global") {
+				// The merged org-global + user server set; scope files that are
+				// missing or invalid have already been handled (empty layer + notify).
+				const servers = await this.loadGlobalScopeServers()
+				await this.updateServerConnections(servers, source, false)
+				return
+			}
+
+			const configPath = await this.getProjectMcpPath()
 
 			if (!configPath) {
 				return
@@ -655,15 +769,6 @@ export class McpHub {
 					.join("\n")
 				mcpSysLog.error(`Invalid ${source} MCP settings format:`, errorMessages)
 				getHost().notifier.error(t("mcp:errors.invalid_settings_validation", { errorMessages }))
-
-				if (source === "global") {
-					// Still try to connect with the raw config, but show warnings
-					try {
-						await this.updateServerConnections(config.mcpServers || {}, source, false)
-					} catch (error) {
-						this.showErrorMessage(`Failed to initialize ${source} MCP servers with raw config`, error)
-					}
-				}
 			}
 		} catch (error) {
 			if (error instanceof SyntaxError) {
@@ -2300,10 +2405,10 @@ export class McpHub {
 
 		this.connections = []
 
-		if (this.settingsWatcher) {
-			this.settingsWatcher.dispose()
-			this.settingsWatcher = undefined
+		for (const watcher of this.settingsWatchers) {
+			watcher.dispose()
 		}
+		this.settingsWatchers = []
 
 		if (this.projectMcpWatcher) {
 			this.projectMcpWatcher.dispose()

@@ -121,6 +121,30 @@ describe("ContextProxy — layered .shofer overlay (Part E3)", () => {
 		expect(proxy.getValue("autoApprovalEnabled")).toBe(proxy.getGlobalState("autoApprovalEnabled"))
 	})
 
+	it("(a2) isManagedByFileLayer reports which keys the overlay serves", async () => {
+		// A key the overlay serves cannot be changed locally (getValue prefers the
+		// overlay), so surfaces must be able to ask — and present it read-only rather
+		// than offering an edit that would be silently shadowed.
+		const homeDir = await tmpDir()
+		hoisted.home = homeDir
+		await writeSettings(path.join(homeDir, ".shofer"), { writeDelayMs: 200 })
+
+		const proxy = new ContextProxy(mockContext)
+		await proxy.initialize()
+
+		expect(proxy.isManagedByFileLayer("writeDelayMs")).toBe(true)
+		expect(proxy.getValue("writeDelayMs")).toBe(200)
+		// A key no scope sets stays locally owned.
+		expect(proxy.isManagedByFileLayer("autoApprovalEnabled")).toBe(false)
+	})
+
+	it("(a3) with no .shofer files, nothing is reported as file-managed", async () => {
+		hoisted.home = await tmpDir()
+		const proxy = new ContextProxy(mockContext)
+		await proxy.initialize()
+		expect(proxy.isManagedByFileLayer("pluginConfigs")).toBe(false)
+	})
+
 	it("(b) a user .shofer/settings.json overrides an unlocked key over global", async () => {
 		const globalDir = await tmpDir()
 		const homeDir = await tmpDir()
@@ -168,7 +192,7 @@ describe("ContextProxy — layered .shofer overlay (Part E3)", () => {
 	})
 
 	it("(e) getValues() resolves the overlay too, so bulk readers agree with getValue", async () => {
-		// Not a cosmetic consistency point: `NodeRegistry.currentSyncedSlice()` builds the
+		// Not a cosmetic consistency point: `WorkerRegistry.currentSyncedSlice()` builds the
 		// controller→node config slice from getValues(), so an overlay-only value that this
 		// snapshot omitted would reach the IDE and never reach the pool — file-based
 		// settings would silently stop at the controller.

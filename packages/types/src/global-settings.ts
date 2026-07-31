@@ -442,7 +442,7 @@ export const SETTING_SYNC_SCOPE = {
 
 	language: "frontend",
 	telemetrySetting: "frontend",
-	mcpEnabled: "frontend", // HELD, not synced: in the shared-workspace-FS node model the node already has the mirrored .shofer/mcp.json and runs stdio servers node-locally, so it self-determines MCP — syncing the global toggle is unnecessary and could override a locally-correct node. Genuine cross-host gaps (global mcp_settings.json outside the workspace; loopback/controller-hosted servers) are out of scope — revisit with remote-MCP.
+	mcpEnabled: "frontend", // HELD, not synced: in the shared-workspace-FS node model the node already has the mirrored .shofer/mcp.json and runs stdio servers node-locally, so it self-determines MCP — syncing the global toggle is unnecessary and could override a locally-correct node. Genuine cross-host gaps (the user/org scopes' mcp.json outside the workspace; loopback/controller-hosted servers) are out of scope — revisit with remote-MCP.
 
 	// ── Mode/prompt config (own file-based channel) & UI state ──
 	mode: "frontend",

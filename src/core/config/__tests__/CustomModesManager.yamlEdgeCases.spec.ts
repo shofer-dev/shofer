@@ -3,6 +3,7 @@
 import type { Mock } from "vitest"
 
 import * as path from "path"
+import * as os from "os"
 import * as fs from "fs/promises"
 
 import * as yaml from "yaml"
@@ -13,7 +14,6 @@ import type { ModeConfig } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
-import { GlobalFileNames } from "@shofer/core"
 
 import { CustomModesManager } from "../CustomModesManager"
 
@@ -48,7 +48,7 @@ describe("CustomModesManager - YAML Edge Cases", () => {
 	let mockWorkspaceFolders: { uri: { fsPath: string } }[]
 
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
-	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+	const mockSettingsPath = path.join(os.homedir(), ".shofer", "shofermodes")
 	const mockRoomodes = `${path.sep}mock${path.sep}workspace${path.sep}.shofer/shofermodes`
 
 	// Helper function to reduce duplication in fs.readFile mocks

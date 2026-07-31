@@ -13,13 +13,19 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
 import { getGlobalShoferDirectory } from "@shofer/core"
 import { configLog as logger } from "@shofer/core"
-import { GlobalFileNames } from "@shofer/core"
-import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
+import { mergeLayeredConfig } from "@shofer/core"
 import { t } from "@shofer/core"
 import { configLog } from "@shofer/core"
 import { effectiveModes } from "@shofer/core"
 
-const SHOFERMODES_FILENAME = path.join(".shofer", "shofermodes")
+import { ContextProxy } from "./ContextProxy"
+import { loadLockedManifest, resolveScopeRoots, type ScopeRoots } from "./layeredSettingsLoader"
+
+/** A scope's modes file, named relative to that scope's `.shofer/` root. */
+const SHOFERMODES_BASENAME = "shofermodes"
+
+/** The project scope's modes file, relative to the workspace root. */
+const SHOFERMODES_FILENAME = path.join(".shofer", SHOFERMODES_BASENAME)
 
 // Type definitions for import/export functionality
 interface RuleFile {
@@ -157,40 +163,29 @@ export class CustomModesManager {
 			// Ensure we never return null or undefined
 			return parsed ?? {}
 		} catch (yamlError) {
-			// For .shofermodes files, try JSON as fallback
-			if (filePath.endsWith(SHOFERMODES_FILENAME)) {
-				try {
-					// Try parsing the original content as JSON (not the cleaned content)
-					return JSON.parse(content)
-				} catch (jsonError) {
-					// JSON also failed, show the original YAML error
-					const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
-					configLog.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
+			// Try JSON as a fallback (a shofermodes file may be hand-written as JSON).
+			try {
+				// Parse the original content, not the cleaned content.
+				return JSON.parse(content)
+			} catch {
+				// JSON also failed — surface the original YAML error. Silently dropping
+				// to `{}` would make every custom mode disappear from the UI with no
+				// in-product feedback, historically a major source of "my modes
+				// vanished" reports.
+				const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
+				configLog.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
 
-					const lineMatch = errorMsg.match(/at line (\d+)/)
-					const line = lineMatch ? lineMatch[1] : "unknown"
-					getHost().notifier.error(t("common:customModes.errors.yamlParseError", { line }))
+				const lineMatch = errorMsg.match(/at line (\d+)/)
+				const line = lineMatch ? lineMatch[1] : "unknown"
+				getHost().notifier.error(t("common:customModes.errors.yamlParseError", { line }))
 
-					// Return empty object to prevent duplicate error handling
-					return {}
-				}
+				// Return empty object to prevent duplicate error handling
+				return {}
 			}
-
-			// For non-.shofermodes files (i.e. the global custom_modes.yaml), still surface
-			// a user-visible error. Silently dropping to `{}` would make every custom mode
-			// disappear from the UI with no in-product feedback — historically a major
-			// source of "my modes vanished" reports. The same i18n string is reused since
-			// the affected file is functionally equivalent from the user's perspective.
-			const errorMsg = yamlError instanceof Error ? yamlError.message : String(yamlError)
-			configLog.error(`[CustomModesManager] Failed to parse YAML from ${filePath}:`, errorMsg)
-			const lineMatch = errorMsg.match(/at line (\d+)/)
-			const line = lineMatch ? lineMatch[1] : "unknown"
-			getHost().notifier.error(t("common:customModes.errors.yamlParseError", { line }))
-			return {}
 		}
 	}
 
-	private async loadModesFromFile(filePath: string): Promise<ModeConfig[]> {
+	private async loadModesFromFile(filePath: string, source: "global" | "project"): Promise<ModeConfig[]> {
 		try {
 			const content = await fs.readFile(filePath, "utf-8")
 			const settings = this.parseYamlSafely(content, filePath)
@@ -205,8 +200,7 @@ export class CustomModesManager {
 			if (!result.success) {
 				configLog.error(`[CustomModesManager] Schema validation failed for ${filePath}:`, result.error)
 
-				// Surface schema-validation failures for both .shofermodes and the global
-				// custom_modes.yaml. A silent failure on the global file used to make
+				// Surface schema-validation failures. A silent failure used to make
 				// every custom mode disappear from the UI with no feedback.
 				const issues = result.error.issues
 					.map((issue) => `• ${issue.path.join(".")}: ${issue.message}`)
@@ -217,15 +211,12 @@ export class CustomModesManager {
 				return []
 			}
 
-			// Determine source based on file path
-			const isShofermodes = filePath.endsWith(SHOFERMODES_FILENAME)
-			const source = isShofermodes ? ("project" as const) : ("global" as const)
-
-			// Add source to each mode
+			// Tag each mode with the scope it was loaded from.
 			return result.data.customModes.map((mode) => ({ ...mode, source }))
 		} catch (error) {
-			// Only log if the error wasn't already handled in parseYamlSafely
-			if (!(error as any).alreadyHandled) {
+			// A missing scope file is the normal empty-layer case, not an error.
+			// Only log if the error wasn't already handled in parseYamlSafely.
+			if ((error as NodeJS.ErrnoException)?.code !== "ENOENT" && !(error as any).alreadyHandled) {
 				const errorMsg = `Failed to load modes from ${filePath}: ${error instanceof Error ? error.message : String(error)}`
 				configLog.error(`[CustomModesManager] ${errorMsg}`)
 			}
@@ -233,134 +224,94 @@ export class CustomModesManager {
 		}
 	}
 
-	private async mergeCustomModes(projectModes: ModeConfig[], globalModes: ModeConfig[]): Promise<ModeConfig[]> {
-		const slugs = new Set<string>()
-		const merged: ModeConfig[] = []
-
-		// Add project mode (takes precedence)
-		for (const mode of projectModes) {
-			if (!slugs.has(mode.slug)) {
-				slugs.add(mode.slug)
-				merged.push({ ...mode, source: "project" })
-			}
+	/**
+	 * The three `.shofer/` scope roots for mode files — the same resolution the
+	 * layered settings overlay uses (env `SHOFER_GLOBAL_DIR` / extension
+	 * global-storage for org-global, `~/.shofer` for user, the open workspace for
+	 * project), so a mode file and a settings file always agree on where each
+	 * scope lives.
+	 */
+	private resolveModeScopeRoots(): ScopeRoots {
+		let workspaceFolder: string | undefined
+		try {
+			workspaceFolder = getWorkspacePath() || undefined
+		} catch {
+			workspaceFolder = undefined
 		}
 
-		// Add non-duplicate global modes
-		for (const mode of globalModes) {
-			if (!slugs.has(mode.slug)) {
-				slugs.add(mode.slug)
-				merged.push({ ...mode, source: "global" })
-			}
-		}
-
-		return effectiveModes(merged)
+		return resolveScopeRoots({
+			globalStorageFsPath: this.context.globalStorageUri?.fsPath,
+			homeDir: os.homedir(),
+			workspaceFolder,
+		})
 	}
 
+	/**
+	 * Load one scope's `shofermodes` file, tagging each mode with the UI-facing
+	 * source (`"project"` for the project scope, `"global"` for both the user and
+	 * org-global scopes — the org layer is invisible to the UI beyond the merge
+	 * outcome). A missing root or file contributes an empty layer.
+	 */
+	private async loadScopeModes(root: string | undefined, source: "global" | "project"): Promise<ModeConfig[]> {
+		if (!root) {
+			return []
+		}
+		return this.loadModesFromFile(path.join(root, SHOFERMODES_BASENAME), source)
+	}
+
+	/**
+	 * The **user** scope's modes file (`~/.shofer/shofermodes`) — the writable
+	 * home of every non-project custom mode. Created with an empty template on
+	 * first access so the Settings UI can open it for editing.
+	 */
 	public async getCustomModesFilePath(): Promise<string> {
-		const settingsDir = await ensureSettingsDirectoryExists(this.context)
-		const filePath = path.join(settingsDir, GlobalFileNames.customModes)
+		const userRoot = path.join(os.homedir(), ".shofer")
+		const filePath = path.join(userRoot, SHOFERMODES_BASENAME)
 		const fileExists = await fileExistsAtPath(filePath)
 
 		if (!fileExists) {
-			await this.queueWrite(() => fs.writeFile(filePath, yaml.stringify({ customModes: [] }, { lineWidth: 0 })))
+			await this.queueWrite(async () => {
+				await fs.mkdir(userRoot, { recursive: true })
+				await fs.writeFile(filePath, yaml.stringify({ customModes: [] }, { lineWidth: 0 }))
+			})
 		}
 
 		return filePath
 	}
 
+	/**
+	 * React to on-disk edits of any scope's `shofermodes` file.
+	 *
+	 * The three scope roots are already watched by `ContextProxy`'s `ScopeWatcher`
+	 * (directory watches, so a ConfigMap symlink swap on the org-global root and an
+	 * atomic temp+rename both register) — this manager subscribes to that stream
+	 * rather than owning bespoke per-file watchers. Every event funnels into one
+	 * handler: re-read all scopes, re-merge, refresh consumers.
+	 */
 	private async watchCustomModesFiles(): Promise<void> {
 		// Skip if test environment is detected
 		if (process.env.NODE_ENV === "test") {
 			return
 		}
 
-		const settingsPath = await this.getCustomModesFilePath()
-
-		// Watch settings file
-		const settingsWatcher = vscode.workspace.createFileSystemWatcher(settingsPath)
-
-		const handleSettingsChange = async () => {
-			try {
-				// Ensure that the settings file exists (especially important for delete events)
-				await this.getCustomModesFilePath()
-				const content = await fs.readFile(settingsPath, "utf-8")
-
-				const errorMessage = t("common:customModes.errors.invalidFormat")
-
-				let config: any
-
-				try {
-					config = this.parseYamlSafely(content, settingsPath)
-				} catch (error) {
-					configLog.error(error instanceof Error ? error : String(error))
-					getHost().notifier.error(errorMessage)
-					return
-				}
-
-				const result = customModesSettingsSchema.safeParse(config)
-
-				if (!result.success) {
-					getHost().notifier.error(errorMessage)
-					return
-				}
-
-				// Get modes from .shofermodes if it exists (takes precedence)
-				const shofermodesPath = await this.getWorkspaceRoomodes()
-				const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
-
-				// Merge modes from both sources (.shofermodes takes precedence)
-				const mergedModes = await this.mergeCustomModes(shofermodesModes, result.data.customModes)
-				await this.context.globalState.update("customModes", mergedModes)
-				this.clearCache()
-				await this.onUpdate()
-			} catch (error) {
-				configLog.error(`[CustomModesManager] Error handling settings file change:`, error)
-			}
+		let proxy: ContextProxy
+		try {
+			proxy = ContextProxy.instance
+		} catch {
+			// No initialized ContextProxy (bare test harness) — no file watching.
+			return
 		}
 
-		this.disposables.push(settingsWatcher.onDidChange(handleSettingsChange))
-		this.disposables.push(settingsWatcher.onDidCreate(handleSettingsChange))
-		this.disposables.push(settingsWatcher.onDidDelete(handleSettingsChange))
-		this.disposables.push(settingsWatcher)
-
-		// Watch .shofermodes file - watch the path even if it doesn't exist yet
-		const workspaceFolders = vscode.workspace.workspaceFolders
-		if (workspaceFolders && workspaceFolders.length > 0) {
-			const workspaceRoot = getWorkspacePath()
-			const shofermodesPath = path.join(workspaceRoot, SHOFERMODES_FILENAME)
-			const shofermodesWatcher = vscode.workspace.createFileSystemWatcher(shofermodesPath)
-
-			const handleShofermodesChange = async () => {
-				try {
-					const settingsModes = await this.loadModesFromFile(settingsPath)
-					const shofermodesModes = await this.loadModesFromFile(shofermodesPath)
-					// .shofermodes takes precedence
-					const mergedModes = await this.mergeCustomModes(shofermodesModes, settingsModes)
-					await this.context.globalState.update("customModes", mergedModes)
-					this.clearCache()
-					await this.onUpdate()
-				} catch (error) {
-					configLog.error(`[CustomModesManager] Error handling .shofermodes file change:`, error)
+		this.disposables.push(
+			proxy.onDidChangeScopeFiles(({ files }) => {
+				if (!files.includes(SHOFERMODES_BASENAME)) {
+					return
 				}
-			}
-
-			this.disposables.push(shofermodesWatcher.onDidChange(handleShofermodesChange))
-			this.disposables.push(shofermodesWatcher.onDidCreate(handleShofermodesChange))
-			this.disposables.push(
-				shofermodesWatcher.onDidDelete(async () => {
-					// When .shofermodes is deleted, refresh with only settings modes
-					try {
-						const settingsModes = await this.loadModesFromFile(settingsPath)
-						await this.context.globalState.update("customModes", settingsModes)
-						this.clearCache()
-						await this.onUpdate()
-					} catch (error) {
-						configLog.error(`[CustomModesManager] Error handling .shofermodes file deletion:`, error)
-					}
-				}),
-			)
-			this.disposables.push(shofermodesWatcher)
-		}
+				this.refreshMergedState().catch((error) => {
+					configLog.error(`[CustomModesManager] Error handling shofermodes change:`, error)
+				})
+			}),
+		)
 	}
 
 	public async getCustomModes(): Promise<ModeConfig[]> {
@@ -371,30 +322,26 @@ export class CustomModesManager {
 			return this.cachedModes
 		}
 
-		// Get modes from settings file.
-		const settingsPath = await this.getCustomModesFilePath()
-		const settingsModes = await this.loadModesFromFile(settingsPath)
+		// Read every scope's `shofermodes` and merge per slug through the shared
+		// layered-config engine: unlocked slugs follow project > user > org-global
+		// (more-specific wins, whole-entity); a slug the org-global scope's
+		// `locked.json` names (`modes/<slug>`) keeps the org version regardless.
+		const roots = this.resolveModeScopeRoots()
+		const [orgModes, userModes, projectModes, manifest] = await Promise.all([
+			this.loadScopeModes(roots.global, "global"),
+			this.loadScopeModes(roots.user, "global"),
+			this.loadScopeModes(roots.project, "project"),
+			loadLockedManifest(roots.global),
+		])
 
-		// Get modes from .shofermodes if it exists.
-		const shofermodesPath = await this.getWorkspaceRoomodes()
-		const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
-
-		// Track project mode slugs so global modes with the same slug are dropped
-		// (project modes take precedence). The Set is the only structure the merge
-		// below consumes — an earlier revision also built a parallel `globalModes`
-		// map that was never read (dead code); it has been removed.
-		const projectModes = new Map<string, ModeConfig>()
-		for (const mode of shofermodesModes) {
-			projectModes.set(mode.slug, { ...mode, source: "project" as const })
-		}
-
-		// Combine modes in the correct order: project modes first, then global modes.
-		const mergedModes = [
-			...shofermodesModes.map((mode) => ({ ...mode, source: "project" as const })),
-			...settingsModes
-				.filter((mode) => !projectModes.has(mode.slug))
-				.map((mode) => ({ ...mode, source: "global" as const })),
-		]
+		const mergedModes = (mergeLayeredConfig(
+			{
+				global: { customModes: orgModes },
+				user: { customModes: userModes },
+				project: { customModes: projectModes },
+			},
+			manifest,
+		).customModes ?? []) as ModeConfig[]
 
 		// Fold in plugin-contributed modes (design §6.3) — including Shofer's own six,
 		// which the bundled `builtin-config` plugin contributes.
@@ -479,6 +426,10 @@ export class CustomModesManager {
 			content = yaml.stringify({ customModes: [] }, { lineWidth: 0 })
 		}
 
+		// The scope's `.shofer/` directory may not exist yet (fresh ~/.shofer or a
+		// workspace without one) — the write below must not fail on that.
+		await fs.mkdir(path.dirname(filePath), { recursive: true })
+
 		let settings
 
 		try {
@@ -501,27 +452,26 @@ export class CustomModesManager {
 	}
 
 	private async refreshMergedState(): Promise<void> {
-		const settingsPath = await this.getCustomModesFilePath()
-		const shofermodesPath = await this.getWorkspaceRoomodes()
-
-		const settingsModes = await this.loadModesFromFile(settingsPath)
-		const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
-		const mergedModes = await this.mergeCustomModes(shofermodesModes, settingsModes)
-
-		await this.context.globalState.update("customModes", mergedModes)
-
+		// getCustomModes() re-reads every scope, re-merges, and refreshes the
+		// globalState cache; clearing first forces it past the TTL cache. The
+		// trailing clear keeps the long-standing contract that the next external
+		// getCustomModes() after an update reads from disk rather than the cache.
 		this.clearCache()
-
+		await this.getCustomModes()
 		await this.onUpdate()
+		this.clearCache()
 	}
 
 	public async deleteCustomMode(slug: string, fromMarketplace = false): Promise<void> {
 		try {
+			// Only the user and project scopes are writable — an org-global mode
+			// cannot be deleted from here (and if it exists, deleting a user/project
+			// override simply reverts to the org version on the next merge).
 			const settingsPath = await this.getCustomModesFilePath()
 			const shofermodesPath = await this.getWorkspaceRoomodes()
 
-			const settingsModes = await this.loadModesFromFile(settingsPath)
-			const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath) : []
+			const settingsModes = await this.loadModesFromFile(settingsPath, "global")
+			const shofermodesModes = shofermodesPath ? await this.loadModesFromFile(shofermodesPath, "project") : []
 
 			// Find the mode in either file
 			const projectMode = shofermodesModes.find((m) => m.slug === slug)

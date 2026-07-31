@@ -3,8 +3,7 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import * as yaml from "yaml"
 import type { MarketplaceItem, MarketplaceItemType, InstallMarketplaceItemOptions, McpParameter } from "@shofer/types"
-import { GlobalFileNames } from "@shofer/core"
-import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
+import { getGlobalShoferDirectory } from "@shofer/core"
 import type { CustomModesManager } from "../../core/config/CustomModesManager"
 
 export interface InstallOptions extends InstallMarketplaceItemOptions {
@@ -102,7 +101,7 @@ export class SimpleInstaller {
 				existingData = { customModes: [] }
 			} else if (error.name === "YAMLParseError" || error.message?.includes("YAML")) {
 				// YAML parsing error - don't overwrite the file!
-				const fileName = target === "project" ? ".shofer/shofermodes" : "custom-modes.yaml"
+				const fileName = target === "project" ? ".shofer/shofermodes" : "~/.shofer/shofermodes"
 				throw new Error(
 					`Cannot install mode: The ${fileName} file contains invalid YAML. ` +
 						`Please fix the syntax errors in the file before installing new modes.`,
@@ -364,8 +363,8 @@ export class SimpleInstaller {
 			}
 			return path.join(workspaceFolder.uri.fsPath, ".shofer", "shofermodes")
 		} else {
-			const globalSettingsPath = await ensureSettingsDirectoryExists(this.context)
-			return path.join(globalSettingsPath, GlobalFileNames.customModes)
+			// The user scope's modes file.
+			return path.join(getGlobalShoferDirectory(), "shofermodes")
 		}
 	}
 
@@ -377,8 +376,8 @@ export class SimpleInstaller {
 			}
 			return path.join(workspaceFolder.uri.fsPath, ".shofer", "mcp.json")
 		} else {
-			const globalSettingsPath = await ensureSettingsDirectoryExists(this.context)
-			return path.join(globalSettingsPath, GlobalFileNames.mcpSettings)
+			// The user scope's MCP config.
+			return path.join(getGlobalShoferDirectory(), "mcp.json")
 		}
 	}
 }

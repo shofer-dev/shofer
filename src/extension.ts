@@ -34,6 +34,7 @@ if (fs.existsSync(envPath)) {
 import { TelemetryService, PostHogTelemetryClient, OtelTelemetryClient } from "@shofer/telemetry"
 import { setHost, createVsCodeHost } from "./host/host-bridge"
 import { customToolRegistry, pluginRegistry } from "@shofer/core"
+import { registerGlobalStorageFsPath } from "@shofer/core"
 
 import "@shofer/core" // Necessary to install String.prototype.toPosix at runtime (implementation lives in @shofer/core).
 import { createDualLogger, createOutputChannelLogger } from "@shofer/core"
@@ -64,7 +65,6 @@ import { McpServerManager } from "./services/mcp/McpServerManager"
 import { MARKETPLACE_ENABLED } from "@shofer/types"
 import { setMcpOutputChannel } from "@shofer/core"
 import { WorkerRegistry } from "./core/workers/WorkerRegistry"
-import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
 import { syncExperimentContextKeys } from "./activate/experimentContextKeys"
@@ -170,9 +170,6 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Set extension path for custom tool registry to find bundled esbuild
 	customToolRegistry.setExtensionPath(context.extensionPath)
 
-	// Migrate old settings to new
-	await migrateSettings(context, outputChannel)
-
 	// Initialize telemetry service.
 	const telemetryService = TelemetryService.createInstance()
 
@@ -213,6 +210,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	const contextProxy = await ContextProxy.getInstance(context)
+
+	// Let the context-free core loaders (commands/skills/rules) resolve the
+	// org-global scope's standalone default (`<globalStorage>/.shofer`); the
+	// SHOFER_GLOBAL_DIR env still wins when set.
+	registerGlobalStorageFsPath(context.globalStorageUri.fsPath)
 
 	// Apply `.shofer/` edits made outside this host without a restart — the mechanism a
 	// multi-host workspace converges on (docs/workspace_agent_pool.md §5). Started here

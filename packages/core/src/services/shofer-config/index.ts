@@ -5,6 +5,7 @@ import * as childProcess from "child_process"
 import * as readline from "readline"
 import { getHost } from "@shofer/types"
 import { getBinPath } from "../../ripgrep/index.js"
+import { getOrgShoferDirectory } from "../../config/scope-roots.js"
 
 /**
  * Gets the global .shofer directory path based on the current platform
@@ -303,10 +304,17 @@ export async function discoverSubfolderRooDirectories(cwd: string): Promise<stri
 export function getRooDirectoriesForCwd(cwd: string): string[] {
 	const directories: string[] = []
 
-	// Add global directory first
+	// Org-global scope first (least specific): SHOFER_GLOBAL_DIR / registered
+	// global storage. Absent in a bare standalone install.
+	const orgDir = getOrgShoferDirectory()
+	if (orgDir) {
+		directories.push(orgDir)
+	}
+
+	// User scope (`~/.shofer`) second
 	directories.push(getGlobalShoferDirectory())
 
-	// Add project-local directory second
+	// Project-local scope last (most specific)
 	directories.push(getProjectShoferDirectoryForCwd(cwd))
 
 	return directories
@@ -334,10 +342,16 @@ export function getRooDirectoriesForCwd(cwd: string): string[] {
 export async function getAllRooDirectoriesForCwd(cwd: string): Promise<string[]> {
 	const directories: string[] = []
 
-	// Add global directory first
+	// Org-global scope first (least specific), when one is configured
+	const orgDir = getOrgShoferDirectory()
+	if (orgDir) {
+		directories.push(orgDir)
+	}
+
+	// User scope (`~/.shofer`) second
 	directories.push(getGlobalShoferDirectory())
 
-	// Add project-local directory second
+	// Project-local scope next
 	directories.push(getProjectShoferDirectoryForCwd(cwd))
 
 	// Discover and add subfolder .shofer directories

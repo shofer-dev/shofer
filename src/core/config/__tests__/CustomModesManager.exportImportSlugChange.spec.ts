@@ -3,6 +3,7 @@
 import type { Mock } from "vitest"
 
 import * as path from "path"
+import * as os from "os"
 import * as fs from "fs/promises"
 
 import * as yaml from "yaml"
@@ -12,7 +13,6 @@ import type { ModeConfig } from "@shofer/types"
 
 import { fileExistsAtPath } from "../../../utils/fs"
 import { getWorkspacePath } from "@shofer/core"
-import { GlobalFileNames } from "@shofer/core"
 
 import { CustomModesManager } from "../CustomModesManager"
 
@@ -55,7 +55,7 @@ describe("CustomModesManager - Export/Import with Slug Changes", () => {
 
 	// Use path.sep to ensure correct path separators for the current platform
 	const mockStoragePath = `${path.sep}mock${path.sep}settings`
-	const mockSettingsPath = path.join(mockStoragePath, "settings", GlobalFileNames.customModes)
+	const mockSettingsPath = path.join(os.homedir(), ".shofer", "shofermodes")
 	const mockWorkspacePath = path.resolve("/mock/workspace")
 	const mockRoomodes = path.join(mockWorkspacePath, ".shofer/shofermodes")
 

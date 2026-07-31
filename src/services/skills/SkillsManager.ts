@@ -5,6 +5,7 @@ import matter from "gray-matter"
 
 import type { ShoferProvider } from "../../core/webview/ShoferProvider"
 import { getGlobalShoferDirectory, getGlobalAgentsDirectory, getProjectAgentsDirectoryForCwd } from "@shofer/core"
+import { getOrgShoferDirectory } from "@shofer/core"
 import { directoryExists, fileExists } from "@shofer/core"
 import { getSharedPluginManager } from "@shofer/core"
 import { SkillMetadata, SkillContent, qualifiedSkillName } from "@shofer/types"
@@ -667,7 +668,16 @@ Add your skill instructions here.
 			}
 		}
 
-		// Global .shofer directories (Shofer-specific, higher priority than .agents)
+		// Org-global .shofer directories (below the user scope: later dirs override)
+		const orgShoferDir = getOrgShoferDirectory()
+		if (orgShoferDir) {
+			dirs.push({ dir: path.join(orgShoferDir, "skills"), source: "global" })
+			for (const mode of modesList) {
+				dirs.push({ dir: path.join(orgShoferDir, `skills-${mode}`), source: "global", mode })
+			}
+		}
+
+		// User-scope .shofer directories (Shofer-specific, higher priority than .agents)
 		dirs.push({ dir: path.join(globalShoferDir, "skills"), source: "global" })
 		for (const mode of modesList) {
 			dirs.push({ dir: path.join(globalShoferDir, `skills-${mode}`), source: "global", mode })
