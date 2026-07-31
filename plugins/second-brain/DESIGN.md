@@ -378,25 +378,75 @@ Ported intact; only the substrate changes. Per root task, single-flight:
 ### Fork fan-out — one digest, N detector forks
 
 A pass snapshots the digest and runs one fork per enabled detector, all on the cheap
-model, sharing one byte-identical prefix:
+model, sharing one byte-identical prefix.
+
+#### The request at steady state
+
+What each fork actually sends, as `task-observer.ts` and `fork.ts` build it — every
+line below is a literal the code emits:
 
 ```
-[ shared system prompt + workspace block ]   ← stable for the task's lifetime
-[ the digest: every observation + prior     ← append-only, the complete
-  detector feedback line ]                     conversation, stripped
-────────────────── prefix ends here ──────────────────
-[ per-fork tail: the detector mode's roleDefinition + customInstructions,
-  its grant, its open advisories, its stated time/length budget ]
+tools:  [ <pass union of the running detectors' grants, sorted by name> ,
+          second_brain_detector_feedback ]        ← pass-uniform: tools lead the cache key
+
+system: "You are the Second Brain: … The expected steady state is silence."
+        ""
+        "Workspace: /home/u/proj"                 ← stable for the task's lifetime
+
+messages[0]  role=user
+        "OBSERVATION DIGEST (the complete conversation, stripped)"
+        "[13:41:02] user: port the plugin into extensions/shofer"        ┐
+        "[13:41:19] narration: I'll start with the manifest…"            │
+        "[13:41:20] tool: write_to_file plugins/x/plugin.json …"         │ pass 1
+        "[13:42:07] error: execute_command FAILED: …/main.ts:12: …"      │
+        "[pass 1, 13:42:11] repeat-failure → silent"                     │ ← pass 1 feedback
+        "[pass 1, 13:42:11] standard-questions → silent"                 ┘
+        "[13:44:31] tool: apply_diff plugins/x/src/main.ts …"            ┐ pass 2
+        "[13:45:02] ask(completion_result): ported and building"         │
+        "[pass 2, 13:45:40] default → advise "no test run…" (0.72)"      ┘ ← pass 2 feedback
+        …every later pass appends the same way, forever…
+        ─────────────── everything above is byte-identical ───────────────
+        ""
+        "===="                                    ← the per-fork boundary
+        ""
+        "You are the "git-log" detector of the Second Brain, examining the
+         observation log above."
+        <the detector mode's roleDefinition [+ customInstructions]>
+        "You have ~20s and ~700 characters for your answer. You MUST conclude
+         by calling second_brain_detector_feedback…"
+        "Tools you may use: read_file, execute_command. Calls outside this list
+         are refused."
+        "execute_command allowlist (exact strings): git log --oneline -20 | …"
+        "Your configuration: {…}"                 ← only when the catalogue set one
+        "Structural trigger (already established…)"  ← cross-task-collision only
+        "Your outstanding advisories to adjudicate in `outcomes`…"
+
+messages[1..] role=assistant / user                ← only if the fork calls tools:
+        assistant: [ text?, tool_use … ]             its own rounds, local to this
+        user:      [ tool_result … ]                 fork, discarded on return
 ```
 
+Four consequences of that exact shape, each deliberate:
+
+- **The per-fork tail is inside `messages[0]`, not a message of its own.** Providers
+  require role alternation, and a second consecutive `user` message would be rejected —
+  so `fork.ts` concatenates the tail onto the digest message behind a `====` separator.
+  The bytes before that separator are identical across every fork of the pass and across
+  passes, which is what a raw-prefix (implicit) cache keys on; a provider that caches
+  only at explicit block boundaries sees one large user block instead. The plugin owns
+  the bytes, the host `ApiHandler` owns whether and where a breakpoint is marked.
+- **There is no ledger block in the prompt.** Judgment (delivered advisories, their
+  adjudicated outcomes, suppressed keys) lives in `ctx.storage` and reaches a fork only
+  as the short "outstanding advisories" list in its own tail. Putting the mutable ledger
+  in the prefix would rewrite those bytes on every delivery — the one thing the
+  append-only discipline exists to prevent.
+- **A fork's tool rounds never touch the shared prefix.** They are appended to that
+  fork's local copy of the message array and thrown away when it returns, so
+  `git-log`'s `git log` output can never land in `standard-questions`' reasoning — or in
+  the digest.
 - **Pilot-then-fan-out**: the pilot (declared: `repeat-failure`; fallback: first tool-less
   enabled detector; else any) runs first and warms the provider's prefix cache; the rest
   launch on its completion.
-- **The plugin controls prefix bytes, not breakpoint placement.** `ctx.ai.buildHandler()`
-  returns the host `ApiHandler`, whose provider implementation owns `cache_control` /
-  implicit prefix caching. The plugin's obligation is byte-identical
-  `(systemPrompt, messages-prefix)` across forks and passes — the handler does the rest.
-  This is a fidelity note, not a loss: append-only discipline is what earns the hits.
 - **Grants are enforced at dispatch.** The wire-level tool list is the pass union of the
   enabled detectors' expanded mode grants; `tool-executor.ts` re-checks every call
   against the _calling_ detector's own grant, and exec runs only exact allowlisted
