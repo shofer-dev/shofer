@@ -189,6 +189,23 @@ describe("ProviderSettingsManager", () => {
 			expect(hoisted.files.user.profiles.noid.id).toBeTruthy()
 		})
 
+		it("derives a stable id for an org-layer profile it cannot write back", async () => {
+			// The org mount is read-only, so the initialize() backfill above never
+			// reaches an org-only profile — yet the UI keys on ids (a ModesView
+			// SelectItem with value="" crashes React) and per-mode associations
+			// reference them. load() must therefore synthesize one, and it must
+			// be the NAME so every workspace derives the same id.
+			wireSecretsRoundTrip()
+			hoisted.files.org.profiles = { "llm-router": { apiProvider: "shofer" } }
+
+			const configs = await providerSettingsManager.listConfig()
+
+			const org = configs.find((c) => c.name === "llm-router")
+			expect(org?.id).toBe("llm-router")
+			// and nothing was copied into the user file to achieve it
+			expect(hoisted.files.user.profiles["llm-router"]).toBeUndefined()
+		})
+
 		it("strips removed claude-code CLI keys via the legacy migration", async () => {
 			const { seed } = wireSecretsRoundTrip()
 			seed(

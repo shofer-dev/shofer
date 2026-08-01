@@ -764,6 +764,16 @@ export class ProviderSettingsManager {
 				}
 				const localSecrets = blob.secrets[name]
 				apiConfigs[name] = localSecrets ? { ...validated, ...localSecrets } : validated
+				// A profile that exists only in the layered files (e.g. an
+				// org-bundle profile) never went through saveConfig, so it has no
+				// id — but ids are what the UI keys on (a ModesView SelectItem
+				// with value="" crashes React) and what per-mode associations
+				// reference. Derive a stable one from the name: the name IS the
+				// profile's identity across the file layers, so the same org
+				// profile gets the same id in every workspace.
+				if (!apiConfigs[name].id) {
+					apiConfigs[name] = { ...apiConfigs[name], id: name }
+				}
 			}
 
 			if (Object.keys(apiConfigs).length === 0) {
