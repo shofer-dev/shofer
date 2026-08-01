@@ -1,9 +1,9 @@
 /**
  * Capability tag expressions: canonical form, hashing and matching.
  *
- * A `requires:` clause selects which runner an agent's stakes may execute on.
+ * A `requires:` clause selects which worker an agent's stakes may execute on.
  * This module is the pure algebra behind it — no dispatch, no queues, no
- * Temporal — so the same code answers "does this runner satisfy this
+ * Temporal — so the same code answers "does this worker satisfy this
  * requirement" in the interpreter, in a validator, and in whatever routes work.
  *
  * # This file is a MIRROR, not an implementation
@@ -38,8 +38,8 @@
  * There is no `not`. A declared tag from a semi-trusted workspace is an
  * ADVISORY scheduling hint, and matching on a tag's absence would quietly turn
  * it into a security signal — "runs only where `secure-enclave` is missing" is a
- * sentence nobody should be able to write against a set the runner controls. It
- * also goes stale the instant a runner gains a tag. Allow-only, like every other
+ * sentence nobody should be able to write against a set the worker controls. It
+ * also goes stale the instant a worker gains a tag. Allow-only, like every other
  * selection algebra on the platform.
  */
 
@@ -131,11 +131,11 @@ export function dnfToString(dnf: TagDNF): string {
  * It names Temporal task queues and dedups registry entries, so it MUST stay
  * stable across releases and identical to `shared/tagexpr`'s `Expr.Hash()` — a
  * change silently re-partitions live work, and a divergence means the queue a
- * runner polls is not the queue the interpreter dispatches to.
+ * worker polls is not the queue the interpreter dispatches to.
  *
  * The strength is irrelevant to security here; it names a queue. A collision
- * would cost two unrelated requirements sharing a queue, which the runner-side
- * match filters anyway, because a runner re-checks that it satisfies the
+ * would cost two unrelated requirements sharing a queue, which the worker-side
+ * match filters anyway, because a worker re-checks that it satisfies the
  * expression before accepting work.
  */
 export function tagExprHash(expr: TagExpr): string {

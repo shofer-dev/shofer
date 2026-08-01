@@ -114,24 +114,24 @@ export interface AgentMeta {
 	apiConfiguration?: string
 	tools?: string[]
 	/**
-	 * Slang `requires:` — a boolean expression over runner capability TAGS,
-	 * selecting which runner an agent's stakes may execute on.
+	 * Slang `requires:` — a boolean expression over worker capability TAGS,
+	 * selecting which worker an agent's stakes may execute on.
 	 *
 	 *     requires: browser and (gpu or highmem)
 	 *     requires: [browser, gpu]          -- sugar for `browser and gpu`
 	 *
 	 * `and` / `or` / parentheses, and deliberately **no negation**: matching on
 	 * the ABSENCE of a self-declared tag would turn an advisory scheduling signal
-	 * into a security-relevant one, and it goes stale the moment a runner gains a
+	 * into a security-relevant one, and it goes stale the moment a worker gains a
 	 * tag. The model stays allow-only, like every other selection algebra on the
 	 * platform (`docs/tag_matching.md`).
 	 *
 	 * Agent-level rather than per-stake, because a stake dispatches to an agent
-	 * SESSION pinned to one runner for its lifetime — output-contract reprompts
+	 * SESSION pinned to one worker for its lifetime — output-contract reprompts
 	 * resume the same session — so the requirement is naturally per-agent.
 	 *
 	 * **Backend-specific semantics.** The Temporal backend routes on this. The
-	 * native single-process backend has no runners, so it is parsed and analysed
+	 * native single-process backend has no workers, so it is parsed and analysed
 	 * but ignored at dispatch — the same forward-compatible precedent as
 	 * `deliver` / `expect` / `import`.
 	 */
@@ -195,7 +195,7 @@ export type Operation =
  * Where it runs is the trust decision, expressed as placement: a pure or
  * platform transform with no project data can run on the trusted worker, while
  * anything touching a project's data, credentials or filesystem runs on that
- * project's own (semi-trusted, contained) runner.
+ * project's own (semi-trusted, contained) worker.
  */
 export interface CallOp extends BaseNode {
 	type: "CallOp"
@@ -521,7 +521,7 @@ export function exprAsStringList(expr: Expr): string[] | undefined {
  * Deliberately a tiny closed union rather than reusing `Expr`: `Expr` carries
  * comparisons, member access and literals, none of which mean anything over a
  * tag set, and admitting them would invite a `requires:` that reads like a
- * predicate but cannot be evaluated against a runner's flat list of strings.
+ * predicate but cannot be evaluated against a worker's flat list of strings.
  *
  * There is no `Not` node. See `AgentMeta.requires`.
  */

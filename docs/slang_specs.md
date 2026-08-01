@@ -712,7 +712,7 @@ deliberately anemic expression layer (no arithmetic, scalar-only contracts).
 
 **Placement is the trust decision.** A pure or platform transform with no
 project data can run on the trusted worker; anything touching a project's data,
-credentials or filesystem runs on that project's own contained runner. Same
+credentials or filesystem runs on that project's own contained worker. Same
 grammar either way — the registry decides.
 
 `call` **blocks**, exactly as `stake` does. It is tempting to imagine the VM
@@ -732,14 +732,14 @@ agent Screenshotter {
 }
 ```
 
-Some runners are special — a GPU box, a browser-enabled sandbox, a host holding
-a bespoke tool — and an agent needing that capability must land on such a runner
-rather than any runner. `requires:` is a boolean expression over runner
+Some workers are special — a GPU box, a browser-enabled sandbox, a host holding
+a bespoke tool — and an agent needing that capability must land on such a worker
+rather than any worker. `requires:` is a boolean expression over worker
 capability **tags**.
 
 - **`and`, `or`, parentheses. No negation.** Matching on the ABSENCE of a tag
   would turn an advisory capability claim into a security signal — and a
-  workspace declares its own tags. It also goes stale the moment a runner gains
+  workspace declares its own tags. It also goes stale the moment a worker gains
   one. The algebra is allow-only, like every other selector on the platform.
   `not` is refused at parse time with that reason.
 - **`requires: [a, b]`** is sugar for `a and b`. An EMPTY list is refused: an
@@ -754,7 +754,7 @@ capability **tags**.
   and admitting one here would blur two vocabularies kept distinct on purpose.
   The charset is the security boundary, validated before an atom is ever matched.
 - **Agent-level, not per-stake.** A stake dispatches to an agent SESSION pinned
-  to one runner for its lifetime — output-contract reprompts resume that same
+  to one worker for its lifetime — output-contract reprompts resume that same
   session — so the requirement is naturally per-agent.
 
 ### Canonical form, and why it matters
@@ -763,13 +763,13 @@ An expression canonicalises to **sorted DNF** and hashes to a stable short
 string. That is not tidiness: under the Temporal backend the hash names a task
 queue, and an activity goes to exactly one queue — there is no "post to either".
 So `a or b` cannot be resolved by the sender, and the resolution is inverted:
-**runners** evaluate every active expression against their own tags and poll the
+**workers** evaluate every active expression against their own tags and poll the
 queues they satisfy.
 
 This only works if the same requirement always produces the same queue.
 `browser and (gpu or highmem)` and `(browser and gpu) or (browser and highmem)`
 are the same requirement, and canonicalisation makes them the same string —
-otherwise they would name two queues, and one of them would have no runner
+otherwise they would name two queues, and one of them would have no worker
 polling it: a pipeline that hangs with no error. Canonicalisation therefore
 includes **absorption** (`a or (a and b)` is just `a`) as well as sorting and
 deduplication.
@@ -786,7 +786,7 @@ different services in different languages.
 
 **Temporal backend** — routes on it, as above.
 
-**Native (in-editor) backend** — has no runners at all, so `requires:` is parsed
+**Native (in-editor) backend** — has no workers at all, so `requires:` is parsed
 and analysed but **ignored at dispatch**. This is the established
 forward-compatible precedent (`deliver`, `expect`, `import` are parsed-not-
 executed), and it is stated here so the clause's meaning is unambiguous per
