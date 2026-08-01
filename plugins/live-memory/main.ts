@@ -22,7 +22,17 @@
 import { defineCustomTool, parametersSchema as z } from "@shofer/types"
 import type { HostDisposable, PluginContext, PluginEvent, ShoferPlugin } from "@shofer/types"
 
-import { DEFAULT_MAX_CONTEXT_TOKENS, DEFAULT_CONTEXT_FILL_THRESHOLD } from "./types.js"
+import {
+	DEFAULT_MAX_CONTEXT_TOKENS,
+	DEFAULT_CONTEXT_FILL_THRESHOLD,
+	DEFAULT_PRELOAD_MAX_TOTAL_BYTES,
+	PRELOAD_MAX_FILE_BYTES,
+	PRELOAD_BUDGET_FRACTION,
+	DEFAULT_KEEP_WARM_INTERVAL_MS,
+	KEEP_WARM_MAX_IDLE_MS,
+	QUESTION_TIMEOUT_MS,
+	type PreloadedDoc,
+} from "./types.js"
 
 import { MemoryStore, type Observation, type ObservationKind } from "./memory-store.js"
 import { renderMemoryContext, summarizeMemory, MemoryLlmClient } from "./memory-llm.js"
@@ -53,8 +63,40 @@ interface PluginState {
 	agents: Map<string, LiveMemoryAgent>
 	watchDisposable?: HostDisposable
 	serviceDisposable?: HostDisposable
+	keepWarmDisposable?: HostDisposable
 }
 const state: PluginState = { stores: new Map(), agents: new Map() }
+
+/**
+ * fnmatch-style glob matching for the `fileGlobs` monitoring scope. `*` and `**`
+ * both cross `/` (mirroring Python's fnmatch, which the server-side Live Memory
+ * uses for the same setting); `?` matches one character. Comma-separated in config.
+ */
+export function matchesFileGlobs(path: string, globs: string[]): boolean {
+	if (globs.length === 0) return true
+	return globs.some((g) => {
+		const rx = new RegExp(
+			`^${g
+				.split(/(\*\*|\*|\?)/)
+				.map((piece) => {
+					if (piece === "**" || piece === "*") return ".*"
+					if (piece === "?") return "."
+					return piece.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+				})
+				.join("")}$`,
+		)
+		return rx.test(path)
+	})
+}
+
+/** Parse a comma-separated glob-list config value. Empty ⇒ [] (match everything). */
+function parseGlobList(value: unknown): string[] {
+	if (typeof value !== "string") return []
+	return value
+		.split(",")
+		.map((g) => g.trim())
+		.filter((g) => g.length > 0)
+}
 
 /** The workspace key used for both the store + agent maps. */
 function workspaceKey(ctx: PluginContext): string {
@@ -93,7 +135,74 @@ function cfg(ctx: PluginContext) {
 			typeof c.contextFillThreshold === "number" && c.contextFillThreshold > 0 && c.contextFillThreshold <= 1
 				? c.contextFillThreshold
 				: DEFAULT_CONTEXT_FILL_THRESHOLD,
+		preloadGlobs: parseGlobList(c.preloadGlobs),
+		preloadMaxTotalBytes:
+			typeof c.preloadMaxTotalBytes === "number" && c.preloadMaxTotalBytes > 0
+				? c.preloadMaxTotalBytes
+				: DEFAULT_PRELOAD_MAX_TOTAL_BYTES,
+		fileGlobs: parseGlobList(c.fileGlobs),
+		questionTimeoutMs:
+			typeof c.questionTimeoutMs === "number" && c.questionTimeoutMs > 0
+				? c.questionTimeoutMs
+				: QUESTION_TIMEOUT_MS,
+		keepWarm: c.keepWarm === true,
+		keepWarmIntervalMs:
+			typeof c.keepWarmIntervalMs === "number" && c.keepWarmIntervalMs > 0
+				? c.keepWarmIntervalMs
+				: DEFAULT_KEEP_WARM_INTERVAL_MS,
 	}
+}
+
+/**
+ * Expand + read the `preloadGlobs` config: every match is loaded verbatim for the
+ * agent's system prompt. Deterministic order (per glob, sorted); binary files
+ * (NUL in the head) skipped; per-file cap {@link PRELOAD_MAX_FILE_BYTES}; total
+ * clamped to min(`preloadMaxTotalBytes`, {@link PRELOAD_BUDGET_FRACTION} of the
+ * window budget in chars) — preloading past that would leave no room to converse
+ * and force immediate eviction of the very docs the user configured as verbatim.
+ */
+async function loadPreloadedDocs(ctx: PluginContext): Promise<PreloadedDoc[]> {
+	const c = cfg(ctx)
+	const fs = ctx.host?.fs
+	const workspace = workspaceKey(ctx)
+	if (!fs || c.preloadGlobs.length === 0) return []
+	const { createHash } = await import("node:crypto")
+	const { relative } = await import("node:path")
+	const budgetCap = Math.floor(c.maxContextTokens * PRELOAD_BUDGET_FRACTION) * 4 // chars ~= tokens x 4
+	const totalCap = Math.min(c.preloadMaxTotalBytes, budgetCap)
+	const docs: PreloadedDoc[] = []
+	const seen = new Set<string>()
+	let total = 0
+	for (const glob of c.preloadGlobs) {
+		let matches: string[]
+		try {
+			matches = [...(await fs.findFiles(glob, { cwd: workspace }))].sort()
+		} catch {
+			continue
+		}
+		for (const abs of matches) {
+			if (total >= totalCap) return docs
+			const rel = relative(workspace, abs)
+			if (!rel || rel.startsWith("..") || seen.has(rel)) continue
+			let content: string
+			try {
+				content = await fs.readFile(abs)
+			} catch {
+				continue
+			}
+			if (content.includes("\u0000")) continue // binary
+			const capped = content.slice(0, Math.min(PRELOAD_MAX_FILE_BYTES, totalCap - total))
+			seen.add(rel)
+			docs.push({
+				filePath: rel,
+				content: capped,
+				contentHash: createHash("sha256").update(capped).digest("hex"),
+				tokenEstimate: Math.ceil(capped.length / 4),
+			})
+			total += capped.length
+		}
+	}
+	return docs
 }
 
 /** Lazily create (once per workspace) the workspace-scoped store from `ctx.storage`. */
@@ -228,17 +337,31 @@ async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined
 		}
 	}
 
+	// Preloaded reference docs (verbatim) are a fixed prompt overhead outside the
+	// evictable window — subtract their estimate from the window budget so eviction
+	// math stays honest (floor: a fifth of the configured budget).
+	const preloadedDocs = await loadPreloadedDocs(ctx)
+	const preloadTokens = preloadedDocs.reduce((sum, d) => sum + d.tokenEstimate, 0)
+	const effectiveWindowBudget = Math.max(Math.floor(maxContextTokens * 0.2), maxContextTokens - preloadTokens)
+
 	const agent = new LiveMemoryAgent({
 		llm: new MemoryLlmClient(ctx.ai, c.profileRef),
 		executor: LiveMemoryToolExecutor.fromContext(ctx),
 		workspacePath: workspace,
-		maxContextTokens,
+		maxContextTokens: effectiveWindowBudget,
 		contextFillThreshold: c.contextFillThreshold,
 		directoryTree: await buildTree(),
 		rebuildDirectoryTree: buildTree,
-		// Fold the live observation/Q&A log into the system prompt each question (the
-		// plugin's "memory" is the passive activity log; the built-in's is its window).
+		// Folded into the volatile block when it is (re)FROZEN — not per question
+		// (mutating the prompt would truncate the provider's KV cache).
 		memoryContextProvider: async () => renderMemoryContext(await store.snapshot()),
+		// Observations recorded after the freeze ride as appended delta messages.
+		memoryDeltaProvider: async (sinceAt) => {
+			const data = await store.snapshot()
+			return renderObservationDelta(data.observations, sinceAt)
+		},
+		preloadedDocs,
+		reloadPreloadedDocs: () => loadPreloadedDocs(ctx),
 		// Sandboxed reads for contextFiles, scoped by `permissions.filesystem`.
 		readFile: (abs) => fs.readFile(abs),
 		persist: (snapshot) => store.saveConversation(snapshot),
@@ -256,6 +379,15 @@ async function getAgent(ctx: PluginContext): Promise<LiveMemoryAgent | undefined
 
 	state.agents.set(workspace, agent)
 	return agent
+}
+
+/** Render the observations recorded after `sinceAt` as delta lines ("" ⇒ none). */
+function renderObservationDelta(observations: Observation[], sinceAt: number): string {
+	const fresh = observations.filter((o) => o.at > sinceAt)
+	if (fresh.length === 0) return ""
+	return fresh
+		.map((o) => `- [${o.kind}] ${o.subject}${o.via ? ` (via ${o.via})` : ""}${o.note ? `: ${o.note}` : ""}`)
+		.join("\n")
 }
 
 /** Best-effort extraction of a file path from a tool call's arguments. */
@@ -306,6 +438,8 @@ const plugin: ShoferPlugin = {
 		if (ctx.host?.watch) {
 			const pending = new Map<string, ReturnType<typeof setTimeout>>()
 			state.watchDisposable = ctx.host.watch(c.watchGlob, (event) => {
+				// Monitoring scope: with `fileGlobs` set, only matching paths are tracked.
+				if (!matchesFileGlobs(event.path, c.fileGlobs)) return
 				const prior = pending.get(event.path)
 				if (prior) clearTimeout(prior)
 				pending.set(
@@ -339,6 +473,10 @@ const plugin: ShoferPlugin = {
 								const data = await store.snapshot()
 								const summary = await summarizeMemory(ctx.ai, c.profileRef, data)
 								if (summary) await store.setSummary(summary)
+								// The summary is part of the frozen volatile block — re-freeze on the
+								// next question (the prompt changes here anyway, so the one-time cache
+								// re-write is amortized, exactly like a compaction event).
+								peekAgent(ctx)?.invalidateFrozenPrefix()
 							} catch {
 								// Best-effort maintenance; never surface to the host.
 							}
@@ -348,6 +486,37 @@ const plugin: ShoferPlugin = {
 				},
 				stop: () => {
 					if (timer) clearInterval(timer)
+				},
+			})
+		}
+
+		// ── KV/prompt-cache keep-warm heartbeat (opt-in, default OFF) ───────────
+		// Re-sends the SAME prompt prefix a real question uses (via the agent's frozen
+		// volatile block) so the provider's cache TTL refreshes across idle gaps — a
+		// cold cache means the next question re-reads the whole prefix at full rate.
+		// Only warms a workspace whose last real question is recent (KEEP_WARM_MAX_IDLE_MS)
+		// and only when the agent is idle; every ping is billed, hence opt-in.
+		if (ctx.registerService && c.keepWarm && c.keepWarmIntervalMs > 0) {
+			let warmTimer: ReturnType<typeof setInterval> | undefined
+			state.keepWarmDisposable = ctx.registerService({
+				name: "live-memory-keepwarm",
+				start: () => {
+					warmTimer = setInterval(() => {
+						void (async () => {
+							const agent = peekAgent(ctx)
+							if (!agent) return
+							if (Date.now() - agent.lastQueryAt > KEEP_WARM_MAX_IDLE_MS) return
+							try {
+								await agent.keepWarmPing()
+							} catch {
+								// Best-effort warming; never surface to the host.
+							}
+						})()
+					}, c.keepWarmIntervalMs)
+					if (typeof warmTimer.unref === "function") warmTimer.unref()
+				},
+				stop: () => {
+					if (warmTimer) clearInterval(warmTimer)
 				},
 			})
 		}
@@ -371,12 +540,6 @@ const plugin: ShoferPlugin = {
 						.array(z.string())
 						.describe("Optional workspace-relative file paths to load into the memory's context window.")
 						.optional(),
-					timeoutMs: z
-						.number()
-						.describe(
-							"HARD limit (ms) for the whole call, covering queue-wait + processing. Default 300000.",
-						)
-						.optional(),
 					softTimeoutSec: z
 						.number()
 						.describe(
@@ -390,13 +553,7 @@ const plugin: ShoferPlugin = {
 						)
 						.optional(),
 				}),
-				async execute({
-					question,
-					contextFiles,
-					timeoutMs,
-					softTimeoutSec,
-					softResultLength,
-				}): Promise<string> {
+				async execute({ question, contextFiles, softTimeoutSec, softResultLength }): Promise<string> {
 					if (!store) return "Live Memory error: no persistent storage is available (ctx.storage unwired)."
 					if (!ctx.ai) {
 						return "Live Memory error: this plugin is not granted host AI access (ctx.ai absent). Grant permissions.ai."
@@ -408,8 +565,10 @@ const plugin: ShoferPlugin = {
 						if (!agent) {
 							return "Live Memory error: the agent could not start (ctx.host.fs is unavailable — grant permissions.filesystem)."
 						}
+						// The hard timeout is the `questionTimeoutMs` CONFIG option — no
+						// longer a tool argument the caller has to pick.
 						const result = await agent.askQuestion(question, contextFiles ?? undefined, {
-							timeoutMs: timeoutMs ?? undefined,
+							timeoutMs: cfg(ctx).questionTimeoutMs,
 							softTimeoutSec: softTimeoutSec ?? undefined,
 							softResultLength: softResultLength ?? undefined,
 						})
@@ -482,6 +641,8 @@ Files in context: ${result.contextFiles.length}`
 	 *  - `ready` / `getState` → push the current state (panel mount / manual refresh).
 	 *  - `clear`  → clear the memory agent's context window (keeps the observation/Q&A log),
 	 *               mirroring the built-in `liveMemory.clearContext`.
+	 *  - `reset`  → clear like `clear` AND re-read the configured preload globs fresh from
+	 *               disk (the verbatim reference docs come back current).
 	 *  - `empty`  → wipe the persisted store (`ctx.storage.delete`) and drop the live agent
 	 *               so the next question re-initializes from a blank slate.
 	 */
@@ -510,6 +671,14 @@ Files in context: ${result.contextFiles.length}`
 			case "clear": {
 				const agent = peekAgent(ctx)
 				if (agent) await agent.clearContext()
+				await pushPanelState(ctx)
+				return
+			}
+			case "reset": {
+				// Start this workspace's memory over: drop the history trail (like clear)
+				// AND re-read the configured preload globs fresh from disk.
+				const agent = peekAgent(ctx)
+				if (agent) await agent.resetContext()
 				await pushPanelState(ctx)
 				return
 			}
@@ -585,6 +754,9 @@ Files in context: ${result.contextFiles.length}`
 			const store = getStore(ctx)
 			if (!store) return
 			const subject = extractPath(args) ?? "(unknown file)"
+			// Monitoring scope: with `fileGlobs` set, activity on non-matching paths is
+			// dropped at this boundary — no observation, no recently-modified hint.
+			if (subject !== "(unknown file)" && !matchesFileGlobs(subject, cfg(ctx).fileGlobs)) return
 			const observation: Observation = {
 				at: Date.now(),
 				kind,

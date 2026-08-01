@@ -139,6 +139,18 @@ export class ContextWindow {
 	}
 
 	/**
+	 * Remove specific messages (by id) from the window. Used to unwind a question
+	 * whose answer came back EMPTY: persisting an empty assistant turn poisons the
+	 * history — some providers reject a conversation containing an empty assistant
+	 * message on every subsequent request.
+	 */
+	public removeMessagesById(ids: string[]): void {
+		if (ids.length === 0) return
+		const drop = new Set(ids)
+		this._messages = this._messages.filter((m) => !drop.has(m.id))
+	}
+
+	/**
 	 * Insert or refresh a file context entry. If a hash mismatch is
 	 * detected for an existing entry, the entry's lastReferencedAt is
 	 * bumped so it survives eviction longer.

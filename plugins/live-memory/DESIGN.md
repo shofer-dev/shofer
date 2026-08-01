@@ -64,25 +64,25 @@ Core knows nothing about knowledge logs, memory agents or context windows. It pr
 generic plugin seams the feature is built from, all documented in
 [`plugin_system.md`](../../docs/plugin_system.md):
 
-| Seam                                                 | What Live Memory uses it for                                                                               |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `registerTools` (`permissions.tools`)                | Contributes `ask_live_memory` via `defineCustomTool` — returns `[]` while unconsented                      |
-| `transformSystemPrompt` (`permissions.systemPrompt`) | Appends the live "LIVE MEMORY" section, rebuilt from the store on every prompt build                       |
-| `ctx.ai.buildHandler()` (`permissions.ai`)           | The memory LLM. The plugin never sees provider keys; the handler is the host's                             |
-| `ctx.ai.hasConsent()`                                | The billed-AI consent gate — readable without making a billed call                                         |
-| `ctx.storage`                                        | The traversal-blocked per-plugin directory holding `memory-<hash>.json`                                    |
-| `ctx.host.watch(glob, cb)`                           | External edits, with the changed path and change kind carried through to the callback                      |
-| `ctx.host.fs` (`permissions.filesystem: ["."]`)      | Sandboxed reads: `contextFiles`, the directory-tree glob, on-load file-context validation                  |
-| `ctx.host.search` (`permissions.search`)             | The memory agent's search-backed read tools (`rag_search`, `git_search`, `list_code_usages`, `get_errors`) |
-| `ctx.registerService` (`permissions.lifecycle`)      | The supervised `live-memory-compactor` maintenance service                                                 |
-| `lifecycle.afterToolCall`                            | Observing Shofer's own file activity — tool name, args **and** result                                      |
-| `lifecycle.beforeTaskStart` / `afterTaskComplete`    | Task markers in the knowledge log (the start marker carries a truncated prompt)                            |
-| `onEvent`                                            | Coarse markers for anything else in the telemetry catalog                                                  |
-| `ctx.ui` (`permissions.ui`)                          | The `sidebar-panel` chat view and the `chat-input-toolbar` badge, plus `openSettings` / `showPanel`        |
-| `onUiMessage`                                        | The panel/badge command vocabulary: `ready`, `getState`, `openSettings`, `showChat`, `clear`, `empty`      |
-| `ctx.config` + manifest `config`                     | All settings, rendered in Settings → Plugins — the plugin touches no `ContextProxy` key                    |
-| `contributes.skills` / `contributes.commands`        | The three human-facing skills and three slash commands — no host command registry involved                 |
-| `ctx.host.telemetry`                                 | `capture("agent_error", { kind })` on a failed question, tagged `plugin: "live-memory"`                    |
+| Seam                                                 | What Live Memory uses it for                                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `registerTools` (`permissions.tools`)                | Contributes `ask_live_memory` via `defineCustomTool` — returns `[]` while unconsented                          |
+| `transformSystemPrompt` (`permissions.systemPrompt`) | Appends the live "LIVE MEMORY" section, rebuilt from the store on every prompt build                           |
+| `ctx.ai.buildHandler()` (`permissions.ai`)           | The memory LLM. The plugin never sees provider keys; the handler is the host's                                 |
+| `ctx.ai.hasConsent()`                                | The billed-AI consent gate — readable without making a billed call                                             |
+| `ctx.storage`                                        | The traversal-blocked per-plugin directory holding `memory-<hash>.json`                                        |
+| `ctx.host.watch(glob, cb)`                           | External edits, with the changed path and change kind carried through to the callback                          |
+| `ctx.host.fs` (`permissions.filesystem: ["."]`)      | Sandboxed reads: `contextFiles`, the directory-tree glob, on-load file-context validation                      |
+| `ctx.host.search` (`permissions.search`)             | The memory agent's search-backed read tools (`rag_search`, `git_search`, `list_code_usages`, `get_errors`)     |
+| `ctx.registerService` (`permissions.lifecycle`)      | The supervised `live-memory-compactor` maintenance service                                                     |
+| `lifecycle.afterToolCall`                            | Observing Shofer's own file activity — tool name, args **and** result                                          |
+| `lifecycle.beforeTaskStart` / `afterTaskComplete`    | Task markers in the knowledge log (the start marker carries a truncated prompt)                                |
+| `onEvent`                                            | Coarse markers for anything else in the telemetry catalog                                                      |
+| `ctx.ui` (`permissions.ui`)                          | The `sidebar-panel` chat view and the `chat-input-toolbar` badge, plus `openSettings` / `showPanel`            |
+| `onUiMessage`                                        | The panel/badge command vocabulary: `ready`, `getState`, `openSettings`, `showChat`, `clear`, `reset`, `empty` |
+| `ctx.config` + manifest `config`                     | All settings, rendered in Settings → Plugins — the plugin touches no `ContextProxy` key                        |
+| `contributes.skills` / `contributes.commands`        | The three human-facing skills and four slash commands — no host command registry involved                      |
+| `ctx.host.telemetry`                                 | `capture("agent_error", { kind })` on a failed question, tagged `plugin: "live-memory"`                        |
 
 Every one of those is feature-agnostic. In particular, `afterToolCall` gives **strictly
 more** signal than a bespoke core coupling would: it fires for every tool with the tool
@@ -386,7 +386,11 @@ caller to narrow the scope, so the turn still ends with something usable.
 
 ### Staying aware of file changes
 
-Two complementary mechanisms keep the memory aware of modifications.
+Two complementary mechanisms keep the memory aware of modifications. Both are scoped
+by the **`fileGlobs`** config when set: a path matching none of the patterns is dropped
+at the hook boundary — no observation, no recently-modified hint — keeping the memory
+(and its delta stream) focused on the files that matter (e.g. a docs-only memory with
+`preloadGlobs=docs/*.md fileGlobs=docs/*.md`).
 
 **External edits — `ctx.host.watch`.** Changes originating outside Shofer (an edit in
 another editor, a `git checkout`, a script) arrive through the host watcher on the
@@ -410,9 +414,47 @@ ignored), and on the next question that set is drained into a note:
 > system-prompt prefix. Providers cache on the longest stable prefix; injecting
 > per-question-varying content into the system prefix would invalidate the cache on every
 > question — defeating the very eviction-avoidance this mechanism exists to protect.
-> `_buildSystemPrompt()` therefore carries only cross-question-stable content (directory
-> tree, file-context manifest, accumulated memory context, folded system markers), and
 > `_buildQuestionHints()` produces the volatile suffix that rides on the question.
+
+### The frozen volatile block + observation deltas
+
+The system prompt is two zones. The **stable prefix** (`_buildStablePrompt`) is the fixed
+instructions + directory tree. The **volatile block** — accumulated memory context,
+preloaded reference docs, the file-context manifest, folded system markers — would
+naturally mutate whenever anything is observed, and an in-place mutation truncates the
+provider's prefix cache at the first changed byte. So `_prepareSystemPrompt()` **freezes**
+it: the block is rendered once (`_renderVolatileBlock`), stored on the agent
+(`_frozenVolatile`) with a watermark (`_freezeAt`), and re-sent **byte-identical** on every
+subsequent question. Changes after the freeze reach the model as **appended
+memory-update delta messages** instead: observations recorded since the watermark are
+rendered (`memoryDeltaProvider`) into a history message flagged
+`metadata.observation: true` — append-only, so the prefix cache _extends_ rather than
+truncates. Newly-loaded `contextFiles` are announced on the volatile question turn (their
+manifest entry lands in the block at the next re-freeze).
+
+The block re-freezes only at moments the prompt legitimately changes wholesale — the
+compactor rewriting the running summary (`invalidateFrozenPrefix`), `clearContext` /
+`resetContext`, or a snapshot restore — amortizing the one-time cache re-write.
+
+### Preloaded reference documents (`preloadGlobs`)
+
+`loadPreloadedDocs` (main.ts) expands the configured globs through `ctx.host.fs.findFiles`,
+reads each match (sorted, deduplicated; binary files skipped; per-file cap
+`PRELOAD_MAX_FILE_BYTES`), and clamps the total to
+min(`preloadMaxTotalBytes`, `PRELOAD_BUDGET_FRACTION` of the window budget in chars) —
+preloading past that would leave no room to converse. The docs render **verbatim** in the
+frozen volatile block under a "PRE-LOADED REFERENCE DOCUMENTS" heading; they live outside
+the evictable `ContextWindow` (a fixed prompt overhead), and their token estimate is
+subtracted from the window budget passed to the agent so eviction math stays honest. The
+`reset` command re-reads them fresh from disk.
+
+### Keep-warm heartbeat (`keepWarm`, opt-in)
+
+A second supervised service (`live-memory-keepwarm`) periodically calls
+`agent.keepWarmPing()`, which re-sends the **same** stable-plus-frozen prompt a real
+question would use with a minimal trailing turn — refreshing the provider cache's TTL
+across idle gaps. It only fires for an idle agent whose last real question is within
+`KEEP_WARM_MAX_IDLE_MS`, and every ping is a billed call, hence off by default.
 
 ```mermaid
 flowchart LR
@@ -567,13 +609,16 @@ the snapshot on reboot; it surfaces in the badge popover and the chat panel.
 Registered through `registerTools`, so an unconsented plugin contributes nothing rather than
 a tool that would only fail.
 
-| Parameter          | Type       | Required | Meaning                                                                                        |
-| ------------------ | ---------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `question`         | `string`   | yes      | The investigative question to answer from accumulated memory                                   |
-| `contextFiles`     | `string[]` | no       | Workspace-relative paths to load into the memory's context window first                        |
-| `timeoutMs`        | `number`   | no       | HARD limit for the whole call, covering queue wait + processing. Default `QUESTION_TIMEOUT_MS` |
-| `softTimeoutSec`   | `number`   | no       | Advisory wall-time recommendation, embedded in the prompt. Default 60                          |
-| `softResultLength` | `number`   | no       | Advisory answer-length recommendation in characters, embedded in the prompt. Default 2000      |
+| Parameter          | Type       | Required | Meaning                                                                                   |
+| ------------------ | ---------- | -------- | ----------------------------------------------------------------------------------------- |
+| `question`         | `string`   | yes      | The investigative question to answer from accumulated memory                              |
+| `contextFiles`     | `string[]` | no       | Workspace-relative paths to load into the memory's context window first                   |
+| `softTimeoutSec`   | `number`   | no       | Advisory wall-time recommendation, embedded in the prompt. Default 60                     |
+| `softResultLength` | `number`   | no       | Advisory answer-length recommendation in characters, embedded in the prompt. Default 2000 |
+
+The **hard timeout is not a tool argument**: it is the `questionTimeoutMs` config
+option (default `QUESTION_TIMEOUT_MS`), covering queue wait + processing — callers
+just ask, and the configured budget applies.
 
 The soft limits are prompt guidance only — nothing cancels on `softTimeoutSec` and nothing
 truncates on `softResultLength`. The tool returns a text block carrying the answer followed
@@ -683,41 +728,53 @@ operations), and **predictability** (a caller knows the answer is purely informa
 Everything is declared in the manifest `config` schema and rendered in Settings → Plugins.
 The plugin owns no `ContextProxy` key and no global setting.
 
-| Key                    | Default  | Meaning                                                                                        |
-| ---------------------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `profileRef`           | `""`     | Provider-profile name/id the memory LLM uses (`ctx.ai.buildHandler`). Empty ⇒ the host default |
-| `maxObservations`      | `400`    | Retained activity observations per workspace (FIFO eviction)                                   |
-| `maxQuestions`         | `50`     | Retained question/answer pairs per workspace (FIFO eviction)                                   |
-| `watchGlob`            | `**/*`   | Glob (under the granted filesystem roots) watched for external edits                           |
-| `compactIntervalMs`    | `300000` | Maintenance-service interval for compacting the log into a running summary; `0` disables it    |
-| `maxContextTokens`     | `128000` | The memory agent's context-window budget                                                       |
-| `contextFillThreshold` | `0.8`    | Fraction of the budget past which the window is flagged "nearly full"                          |
+| Key                    | Default   | Meaning                                                                                                                                                                                                                                                         |
+| ---------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `profileRef`           | `""`      | Provider-profile name/id the memory LLM uses (`ctx.ai.buildHandler`). Empty ⇒ the host default                                                                                                                                                                  |
+| `maxObservations`      | `400`     | Retained activity observations per workspace (FIFO eviction)                                                                                                                                                                                                    |
+| `maxQuestions`         | `50`      | Retained question/answer pairs per workspace (FIFO eviction)                                                                                                                                                                                                    |
+| `watchGlob`            | `**/*`    | Glob (under the granted filesystem roots) watched for external edits                                                                                                                                                                                            |
+| `compactIntervalMs`    | `300000`  | Maintenance-service interval for compacting the log into a running summary; `0` disables it                                                                                                                                                                     |
+| `maxContextTokens`     | `128000`  | The memory agent's context-window budget                                                                                                                                                                                                                        |
+| `contextFillThreshold` | `0.8`     | Fraction of the budget past which the window is flagged "nearly full"                                                                                                                                                                                           |
+| `preloadGlobs`         | `""`      | Comma-separated globs (e.g. `docs/*.md`) loaded **verbatim** into the system prompt on agent creation and on the `reset` command. Clamped to `preloadMaxTotalBytes` and 60% of the window budget; the docs' token estimate is subtracted from the window budget |
+| `preloadMaxTotalBytes` | `2097152` | Total byte cap across all preloaded reference documents                                                                                                                                                                                                         |
+| `fileGlobs`            | `""`      | Monitoring scope: when set, the file-change feed (edit/read observations, external watch, recently-modified hints) applies only to matching workspace-relative paths (fnmatch; `*` crosses `/`). Empty = everything                                             |
+| `questionTimeoutMs`    | `300000`  | HARD per-question timeout — the only timeout source; `ask_live_memory` takes no timeout arg                                                                                                                                                                     |
+| `keepWarm`             | `false`   | KV/prompt-cache heartbeat: re-send the frozen prompt prefix periodically so the provider cache stays hot. Billed per ping — opt-in                                                                                                                              |
+| `keepWarmIntervalMs`   | `240000`  | Heartbeat period (4 minutes — just under typical provider cache TTLs)                                                                                                                                                                                           |
 
 The system prompt is deliberately **not** configurable — it is fixed in `types.ts`. The
 user-facing controls are the provider profile, the tuning values above, and the Clear
 Context / Empty actions.
 
 Three human-facing skills (`live-memory-stats`, `live-memory-config`, `live-memory-empty`)
-and three slash commands (`show-chat`, `clear-context`, `empty`) come from the manifest's
-`contributes` block.
+and four slash commands (`show-chat`, `clear-context`, `reset`, `empty`) come from the
+manifest's `contributes` block. `reset` drops the in-flight window like `clear-context`
+AND re-reads the `preloadGlobs` fresh from disk (the observation/Q&A log is kept).
 
 ## Key constants
 
 Declared in `types.ts` unless noted:
 
-| Constant                                     | Value    | Purpose                                                         |
-| -------------------------------------------- | -------- | --------------------------------------------------------------- |
-| `DEFAULT_MAX_CONTEXT_TOKENS`                 | `128000` | Fallback context-window budget when the config supplies none    |
-| `DEFAULT_CONTEXT_FILL_THRESHOLD`             | `0.8`    | Fallback "nearly full" fraction                                 |
-| `MAX_QUESTION_QUEUE_SIZE`                    | `50`     | Maximum pending questions (`question-queue.ts` default)         |
-| `QUESTION_TIMEOUT_MS`                        | `300000` | Default hard timeout for one question (5 min)                   |
-| `DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC`       | `60`     | Default advisory wall-time hint embedded in the prompt          |
-| `DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH`     | `2000`   | Default advisory answer-length hint embedded in the prompt      |
-| `DIRECTORY_TREE_MAX_CONTEXT_FRACTION`        | `0.1`    | Share of the window the directory tree may occupy               |
-| `MAX_AGENT_ITERATIONS` (`agent.ts`)          | `25`     | Tool-call iterations before the loop answers "could not finish" |
-| `MEMORY_STORE_VERSION` (`memory-store.ts`)   | `2`      | Persisted document version                                      |
-| `MAX_TOOL_OUTPUT_BYTES` (`tool-executor.ts`) | `200000` | Cap on a single tool result fed back to the model               |
-| `SKIP_PARTS` (`directory-tree.ts`)           | 11 dirs  | Directories pruned from the workspace scan                      |
+| Constant                                     | Value     | Purpose                                                         |
+| -------------------------------------------- | --------- | --------------------------------------------------------------- |
+| `DEFAULT_MAX_CONTEXT_TOKENS`                 | `128000`  | Fallback context-window budget when the config supplies none    |
+| `DEFAULT_CONTEXT_FILL_THRESHOLD`             | `0.8`     | Fallback "nearly full" fraction                                 |
+| `MAX_QUESTION_QUEUE_SIZE`                    | `50`      | Maximum pending questions (`question-queue.ts` default)         |
+| `QUESTION_TIMEOUT_MS`                        | `300000`  | Default hard timeout for one question (5 min)                   |
+| `DEFAULT_LIVE_MEMORY_SOFT_TIMEOUT_SEC`       | `60`      | Default advisory wall-time hint embedded in the prompt          |
+| `DEFAULT_LIVE_MEMORY_SOFT_RESULT_LENGTH`     | `2000`    | Default advisory answer-length hint embedded in the prompt      |
+| `DIRECTORY_TREE_MAX_CONTEXT_FRACTION`        | `0.1`     | Share of the window the directory tree may occupy               |
+| `MAX_AGENT_ITERATIONS` (`agent.ts`)          | `25`      | Tool-call iterations before the loop answers "could not finish" |
+| `MEMORY_STORE_VERSION` (`memory-store.ts`)   | `2`       | Persisted document version                                      |
+| `MAX_TOOL_OUTPUT_BYTES` (`tool-executor.ts`) | `200000`  | Cap on a single tool result fed back to the model               |
+| `SKIP_PARTS` (`directory-tree.ts`)           | 11 dirs   | Directories pruned from the workspace scan                      |
+| `DEFAULT_PRELOAD_MAX_TOTAL_BYTES`            | `2097152` | Default total byte cap for preloaded reference docs             |
+| `PRELOAD_MAX_FILE_BYTES`                     | `262144`  | Per-file byte cap on a preloaded doc                            |
+| `PRELOAD_BUDGET_FRACTION`                    | `0.6`     | Window-budget fraction preload may occupy                       |
+| `DEFAULT_KEEP_WARM_INTERVAL_MS`              | `240000`  | Keep-warm heartbeat period (4 min)                              |
+| `KEEP_WARM_MAX_IDLE_MS`                      | `1800000` | Stop warming after this long without a real question            |
 
 ## UI: badge and chat panel
 

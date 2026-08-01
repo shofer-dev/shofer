@@ -1,6 +1,6 @@
 {
 	"name": "live-memory",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"shoferPluginApiVersion": "1.0.0",
 	"description": "Persistent, LLM-backed codebase memory. Observes Shofer's own file activity and external edits, accumulates a per-workspace knowledge log, and answers investigative questions from it via the `ask_live_memory` tool — a first-party dogfood of the plugin architecture.",
 	"author": "Shofer",
@@ -49,6 +49,10 @@
 				"description": "Clear the Live Memory agent's in-flight context window (keeps the accumulated observation/Q&A log)."
 			},
 			{
+				"name": "reset",
+				"description": "Reset the Live Memory for this workspace — drop the in-flight context window AND re-read the configured preload globs (verbatim reference docs) fresh from disk. Keeps the observation/Q&A log."
+			},
+			{
 				"name": "empty",
 				"description": "Empty the Live Memory for this workspace — wipe the accumulated observation/Q&A log, the persisted conversation, and the cost ledger."
 			}
@@ -91,6 +95,36 @@
 				"type": "number",
 				"default": 0.8,
 				"description": "Fraction of maxContextTokens past which the context window is flagged 'nearly full' (ContextWindow.contextFillThreshold), 0..1."
+			},
+			"preloadGlobs": {
+				"type": "string",
+				"default": "",
+				"description": "Comma-separated globs (e.g. docs/*.md) whose matching files are loaded VERBATIM into the memory agent's system prompt on agent creation and on the reset command. Empty = no preload. Total clamped to preloadMaxTotalBytes and to 60% of the window budget."
+			},
+			"preloadMaxTotalBytes": {
+				"type": "number",
+				"default": 2097152,
+				"description": "Total byte cap across all preloaded reference documents per workspace."
+			},
+			"fileGlobs": {
+				"type": "string",
+				"default": "",
+				"description": "Comma-separated fnmatch patterns (`*` also crosses `/`) scoping the file-change feed: with this set, only matching workspace-relative paths are observed (edits/reads/external changes) or produce recently-modified hints. Empty = monitor everything."
+			},
+			"questionTimeoutMs": {
+				"type": "number",
+				"default": 300000,
+				"description": "HARD per-question timeout (ms), covering queue-wait + processing. This is the only timeout source — ask_live_memory takes no timeout argument."
+			},
+			"keepWarm": {
+				"type": "boolean",
+				"default": false,
+				"description": "KV/prompt-cache keep-warm heartbeat: periodically re-send the memory agent's (frozen) prompt prefix so the provider's cache stays hot between questions. Every ping is billed — off by default."
+			},
+			"keepWarmIntervalMs": {
+				"type": "number",
+				"default": 240000,
+				"description": "Keep-warm heartbeat period in ms (default 4 minutes — just under typical provider cache TTLs)."
 			}
 		}
 	}

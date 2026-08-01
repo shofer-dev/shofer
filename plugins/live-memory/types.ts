@@ -71,6 +71,14 @@ export const agentMessageSchema = z.object({
 		.object({
 			sourceTaskId: z.string().optional(),
 			fileReferences: z.array(z.string()).optional(),
+			/**
+			 * Marks a **memory-update delta** appended to the history so a change
+			 * (new observations since the volatile block was frozen) reaches the
+			 * model WITHOUT mutating the frozen prefix — mutation would truncate
+			 * the provider's KV cache at the first changed byte. Delta messages
+			 * are rendered by the panel like any other turn.
+			 */
+			observation: z.boolean().optional(),
 		})
 		.optional(),
 })
@@ -86,6 +94,23 @@ export const fileContextEntrySchema = z.object({
 	lastReferencedAt: z.number(), // Unix ms — for eviction priority
 })
 export type FileContextEntry = z.infer<typeof fileContextEntrySchema>
+
+// ─── Pre-loaded Reference Documents ─────────────────────────────────────────
+
+/**
+ * A document loaded VERBATIM into the memory agent's system prompt from the
+ * `preloadGlobs` config — reference material the memory starts out knowing
+ * (e.g. `docs/*.md`). Preloaded docs live outside the evictable ContextWindow:
+ * they are a fixed prompt overhead, re-read fresh from disk on agent creation
+ * and on the `reset` command, and their token estimate is subtracted from the
+ * window budget so eviction math stays honest.
+ */
+export interface PreloadedDoc {
+	filePath: string
+	content: string
+	contentHash: string // SHA-256 at load time
+	tokenEstimate: number
+}
 
 // ─── Cost Tracking ──────────────────────────────────────────────────────────
 
@@ -172,6 +197,29 @@ export const TRUNCATION_MARKER_MESSAGE = "[{N} earlier messages were truncated d
 
 /** Version for the persistence format. */
 export const CONVERSATION_STORE_VERSION = 2
+
+// ─── Preload (verbatim reference docs) ──────────────────────────────────────
+
+/** Default total byte cap across all preloaded docs (`preloadMaxTotalBytes` config). */
+export const DEFAULT_PRELOAD_MAX_TOTAL_BYTES = 2_097_152
+
+/** Per-file byte cap on a single preloaded doc (files larger than this are truncated). */
+export const PRELOAD_MAX_FILE_BYTES = 262_144
+
+/**
+ * Preload is additionally clamped to this fraction of the context-window budget:
+ * preloading past it would leave no room for conversation and force immediate
+ * eviction of the very docs the user configured to be verbatim.
+ */
+export const PRELOAD_BUDGET_FRACTION = 0.6
+
+// ─── KV/prompt-cache keep-warm heartbeat ────────────────────────────────────
+
+/** Default heartbeat period (4 minutes — just under typical provider cache TTLs). */
+export const DEFAULT_KEEP_WARM_INTERVAL_MS = 240_000
+
+/** Stop warming a workspace whose last real question is older than this (30 min). */
+export const KEEP_WARM_MAX_IDLE_MS = 1_800_000
 
 // ─── System Prompt ──────────────────────────────────────────────────────────
 

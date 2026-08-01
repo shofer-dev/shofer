@@ -44,6 +44,7 @@ import {
 	type AgentMessage,
 	type AgentMessagePart,
 	type FileContextEntry,
+	type PreloadedDoc,
 	type QuestionResult,
 	type LiveMemoryCostTracking,
 } from "./types.js"
@@ -108,12 +109,26 @@ export interface LiveMemoryAgentOptions {
 	/** Rebuild the directory tree (invoked by {@link clearContext}). */
 	rebuildDirectoryTree?: () => string | Promise<string>
 	/**
-	 * Fresh accumulated-memory context (observation/Q&A log) injected into the system
-	 * prompt for each question. The plugin supplies `renderMemoryContext(snapshot)`; the
-	 * built-in's "memory" is its persisted conversation window, so folding the plugin's
-	 * passive observation log in here is the faithful plugin adaptation.
+	 * Accumulated-memory context (observation/Q&A log) folded into the system prompt.
+	 * Consulted only when the volatile block is (re)FROZEN — not per question: in-place
+	 * mutation of the prompt would truncate the provider's KV cache at the first changed
+	 * byte. Changes after the freeze arrive via {@link memoryDeltaProvider} instead.
 	 */
 	memoryContextProvider?: () => string | Promise<string>
+	/**
+	 * Renders the observations recorded AFTER the given timestamp — the delta appended
+	 * to the history as a memory-update message while the frozen prefix stays
+	 * byte-identical (cache-preserving). Empty string ⇒ nothing new.
+	 */
+	memoryDeltaProvider?: (sinceAt: number) => string | Promise<string>
+	/**
+	 * Documents preloaded VERBATIM into the system prompt from the `preloadGlobs`
+	 * config. Fixed prompt overhead outside the evictable window; re-read via
+	 * {@link LiveMemoryAgentOptions.reloadPreloadedDocs} on the reset command.
+	 */
+	preloadedDocs?: PreloadedDoc[]
+	/** Re-read the preload globs fresh from disk (invoked by {@link resetContext}). */
+	reloadPreloadedDocs?: () => Promise<PreloadedDoc[]>
 	/** Read a workspace file's UTF-8 content for contextFiles loading. Defaults to node fs. */
 	readFile?: (absolutePath: string) => Promise<string>
 	/** Persist the conversation snapshot after each answered question. */
@@ -148,6 +163,8 @@ export class LiveMemoryAgent {
 	private readonly _readFile: (absolutePath: string) => Promise<string>
 	private readonly _rebuildDirectoryTree?: () => string | Promise<string>
 	private readonly _memoryContextProvider?: () => string | Promise<string>
+	private readonly _memoryDeltaProvider?: (sinceAt: number) => string | Promise<string>
+	private readonly _reloadPreloadedDocs?: () => Promise<PreloadedDoc[]>
 	private readonly _persist?: (snapshot: ConversationSnapshot) => void | Promise<void>
 	private readonly _onStateChange?: AgentStateCallback
 	private readonly _onConversationUpdate?: AgentConversationCallback
@@ -155,6 +172,19 @@ export class LiveMemoryAgent {
 	private _directoryTreeString: string
 	private _recentlyModifiedFiles = new Set<string>()
 	private _costTracking: LiveMemoryCostTracking = emptyCostTracking()
+	private _preloadedDocs: PreloadedDoc[]
+	/**
+	 * The FROZEN volatile system block (accumulated memory + preloaded docs +
+	 * file-context manifest + folded system markers). Rendered once and re-sent
+	 * byte-identical every question so the provider's prefix cache keeps matching;
+	 * changes since the freeze are APPENDED to the history as memory-update delta
+	 * messages instead of mutating this block. `null` ⇒ re-freeze on next use.
+	 */
+	private _frozenVolatile: string | null = null
+	/** Watermark: observations at/before this are represented in the frozen block. */
+	private _freezeAt = 0
+	/** Wall time of the last REAL question (keep-warm idle gate). */
+	private _lastQueryAt = 0
 
 	constructor(opts: LiveMemoryAgentOptions) {
 		this._llm = opts.llm
@@ -164,6 +194,9 @@ export class LiveMemoryAgent {
 		this._readFile = opts.readFile ?? ((p) => nodeReadFile(p, "utf-8"))
 		this._rebuildDirectoryTree = opts.rebuildDirectoryTree
 		this._memoryContextProvider = opts.memoryContextProvider
+		this._memoryDeltaProvider = opts.memoryDeltaProvider
+		this._preloadedDocs = opts.preloadedDocs ?? []
+		this._reloadPreloadedDocs = opts.reloadPreloadedDocs
 		this._persist = opts.persist
 		this._onStateChange = opts.onStateChange
 		this._onConversationUpdate = opts.onConversationUpdate
@@ -256,6 +289,19 @@ export class LiveMemoryAgent {
 	restore(snapshot: ConversationSnapshot): void {
 		this._window.restore(snapshot.messages, snapshot.fileContexts)
 		this._costTracking = snapshot.costTracking ?? emptyCostTracking()
+		this._frozenVolatile = null // re-freeze from the restored state on first use
+	}
+
+	get preloadedDocCount(): number {
+		return this._preloadedDocs.length
+	}
+
+	get preloadedTokenEstimate(): number {
+		return this._preloadedDocs.reduce((sum, d) => sum + d.tokenEstimate, 0)
+	}
+
+	get lastQueryAt(): number {
+		return this._lastQueryAt
 	}
 
 	/**
@@ -282,6 +328,7 @@ export class LiveMemoryAgent {
 	/** Reset the context window + rebuild the directory tree (mirrors the built-in). */
 	async clearContext(): Promise<void> {
 		this._window.clear()
+		this._frozenVolatile = null
 		if (this._rebuildDirectoryTree) {
 			try {
 				this._directoryTreeString = await this._rebuildDirectoryTree()
@@ -292,6 +339,61 @@ export class LiveMemoryAgent {
 		await this._doPersist()
 		this._fireConversationUpdate()
 		this._setState("Ready", "Context cleared. Agent is ready.")
+	}
+
+	/**
+	 * Start this workspace's memory over (the `reset` command): drop the history
+	 * trail like {@link clearContext} AND re-read the configured preload globs fresh
+	 * from disk, so the verbatim reference docs come back current.
+	 */
+	async resetContext(): Promise<void> {
+		if (this._reloadPreloadedDocs) {
+			try {
+				this._preloadedDocs = await this._reloadPreloadedDocs()
+			} catch {
+				// Keep the docs from the last successful load — a transient read failure
+				// must not silently degrade the memory to no reference material.
+			}
+		}
+		await this.clearContext()
+		this._setState("Ready", "Memory reset — preloaded docs re-read. Agent is ready.")
+	}
+
+	/**
+	 * Invalidate the frozen volatile block so the next question re-renders it (used
+	 * by the compactor after it rewrote the running summary — the prompt changes
+	 * there anyway, so the one-time cache re-write is amortized).
+	 */
+	invalidateFrozenPrefix(): void {
+		this._frozenVolatile = null
+	}
+
+	/**
+	 * KV/prompt-cache keep-warm heartbeat: re-send the SAME prompt prefix a real
+	 * question would use, with a minimal trailing turn, refreshing the provider
+	 * cache's TTL. No-ops unless idle-and-warm-worthy: Ready state, nothing queued,
+	 * a non-empty window, and a real question asked within the last
+	 * {@link KEEP_WARM_MAX_IDLE_MS} (checked by the caller, which owns the config).
+	 */
+	async keepWarmPing(): Promise<void> {
+		if (this._state !== "Ready" || this._queue.pendingCount > 0) return
+		if (this._window.messages.length === 0 && this._preloadedDocs.length === 0) return
+		const systemPrompt = await this._prepareSystemPrompt()
+		const conversation = this._buildBaseConversation(
+			"(keep-warm ping — reply with a single token and nothing else)",
+		)
+		const controller = new AbortController()
+		const timer = setTimeout(() => controller.abort(), 60_000)
+		try {
+			await this._llm.chatWithTools({
+				systemPrompt,
+				messages: conversation,
+				tools: this._tools,
+				signal: controller.signal,
+			})
+		} finally {
+			clearTimeout(timer)
+		}
 	}
 
 	/**
@@ -315,21 +417,26 @@ export class LiveMemoryAgent {
 		softLimits: QuestionSoftLimits = {},
 	): Promise<QuestionResult> {
 		const startTime = Date.now()
+		this._lastQueryAt = startTime // keep-warm idle gate: a real question ran
 		this._setState("Busy", "Processing question...")
 		try {
 			const recentlyModified = this._drainRecentlyModifiedFiles()
 
+			const newContextPaths: string[] = []
 			if (contextFiles && contextFiles.length > 0) {
+				const before = new Set(this._window.fileContextPaths)
 				for (const filePath of contextFiles) {
 					await this._loadFileIntoContext(filePath)
+					if (!before.has(filePath)) newContextPaths.push(filePath)
 				}
 			}
 
-			// Stable-across-questions system prompt (directory tree + accumulated memory +
-			// file-context manifest + folded system markers) — cache-friendly. Per-question
-			// volatile hints ride the trailing question turn instead.
-			const systemPrompt = await this._buildSystemPrompt()
-			const questionHints = this._buildQuestionHints(recentlyModified, softLimits)
+			// KV-cache-preserving system prompt: stable prefix + the FROZEN volatile block
+			// (accumulated memory + preloaded docs + manifest). Changes since the freeze are
+			// appended to the history as delta messages by _prepareSystemPrompt; per-question
+			// volatile hints ride the trailing question turn.
+			const systemPrompt = await this._prepareSystemPrompt()
+			const questionHints = this._buildQuestionHints(recentlyModified, softLimits, newContextPaths)
 			let baseConversation = this._buildBaseConversation(question, questionHints)
 			const tools = this._tools
 			const executor = this._executor
@@ -480,6 +587,11 @@ export class LiveMemoryAgent {
 					const hasText = parts.some((p) => p.kind === "text" && p.text.includes(finalAnswer))
 					if (!hasText) parts.push({ kind: "text", text: finalAnswer })
 				}
+			} else {
+				// An EMPTY answer must not be persisted: some providers reject a history
+				// containing an empty assistant message on every subsequent request, so one
+				// failed/empty answer would poison the whole workspace until a clear.
+				this._window.removeMessagesById([userMsg.id, assistantMsg.id])
 			}
 
 			this._window.enforceLimit()
@@ -518,18 +630,37 @@ export class LiveMemoryAgent {
 		return files
 	}
 
-	private async _buildSystemPrompt(): Promise<string> {
+	/** The cross-question-stable prefix: instructions + directory tree. */
+	private _buildStablePrompt(): string {
 		const treeContent = this._directoryTreeString
 			? `[Workspace structure:\n${this._directoryTreeString}\n\nshoferignore and .gitignore patterns are respected.]`
 			: "[No workspace structure available]"
+		return LIVE_MEMORY_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)
+	}
 
-		const parts = [LIVE_MEMORY_SYSTEM_PROMPT.replace("{directoryTree}", treeContent)]
+	/**
+	 * Render the volatile block from the CURRENT state: accumulated memory,
+	 * preloaded reference docs (verbatim), the file-context manifest, and folded
+	 * system markers. Only called when (re)freezing — between freezes the block is
+	 * re-sent byte-identical and changes ride as appended delta messages.
+	 */
+	private async _renderVolatileBlock(): Promise<string> {
+		const parts: string[] = []
 
 		if (this._memoryContextProvider) {
 			const memory = await this._memoryContextProvider()
 			if (memory && memory.trim()) {
 				parts.push(`==== ACCUMULATED MEMORY ====\n${memory}`)
 			}
+		}
+
+		if (this._preloadedDocs.length > 0) {
+			const docs = this._preloadedDocs.map((d) => `#### ${d.filePath}\n${d.content}`).join("\n\n")
+			parts.push(
+				`==== PRE-LOADED REFERENCE DOCUMENTS (configured for this workspace) ====\n` +
+					`These files were loaded verbatim from disk when your memory started — treat them as ` +
+					`current, authoritative reference material and answer from them without re-reading.\n\n${docs}`,
+			)
 		}
 
 		for (const fc of this._window.fileContexts) {
@@ -545,12 +676,62 @@ export class LiveMemoryAgent {
 		return parts.join("\n\n")
 	}
 
-	private _buildQuestionHints(recentlyModifiedFiles: string[], softLimits: QuestionSoftLimits = {}): string {
+	/**
+	 * The full system prompt for a request, KV-cache-preserving: stable prefix +
+	 * the FROZEN volatile block. On first use (or after an invalidation) the block
+	 * is rendered and frozen with a watermark; afterwards, observations recorded
+	 * since the watermark are APPENDED to the history as a memory-update delta
+	 * message ({@link AgentMessage.metadata.observation}) — the model learns of the
+	 * change while the prefix stays byte-identical, so the provider's cache extends
+	 * instead of truncating at the first mutated byte.
+	 */
+	private async _prepareSystemPrompt(): Promise<string> {
+		if (this._frozenVolatile === null) {
+			const freezeAt = Date.now()
+			this._frozenVolatile = await this._renderVolatileBlock()
+			this._freezeAt = freezeAt
+		} else if (this._memoryDeltaProvider) {
+			const sinceAt = this._freezeAt
+			this._freezeAt = Date.now()
+			try {
+				const delta = await this._memoryDeltaProvider(sinceAt)
+				if (delta && delta.trim()) {
+					this._window.appendMessage({
+						id: randomUUID(),
+						role: "user",
+						content: `[Memory update — activity observed since your context was last rendered]\n${delta}`,
+						timestamp: Date.now(),
+						metadata: { observation: true },
+					})
+					this._fireConversationUpdate()
+				}
+			} catch {
+				// Best-effort delta; a failed render loses awareness, never the question.
+			}
+		}
+		const stable = this._buildStablePrompt()
+		return this._frozenVolatile ? `${stable}\n\n${this._frozenVolatile}` : stable
+	}
+
+	private _buildQuestionHints(
+		recentlyModifiedFiles: string[],
+		softLimits: QuestionSoftLimits = {},
+		newContextPaths: string[] = [],
+	): string {
 		const parts: string[] = []
 
 		if (recentlyModifiedFiles.length > 0) {
 			parts.push(
 				`[Note: the following files have been modified since you last read them: ${recentlyModifiedFiles.join(", ")}. Consider re-reading them if relevant to this question.]`,
+			)
+		}
+
+		if (newContextPaths.length > 0) {
+			// Newly-loaded context files land in the frozen manifest only at the next
+			// re-freeze (mutating it now would truncate the provider's prefix cache), so
+			// tell the model about them on the volatile question turn instead.
+			parts.push(
+				`[Note: the caller loaded these files into your context for this question: ${newContextPaths.join(", ")}. Read them with read_file if their contents matter here.]`,
 			)
 		}
 
@@ -566,9 +747,12 @@ export class LiveMemoryAgent {
 	private _buildBaseConversation(question: string, questionHints = ""): ConversationMessage[] {
 		const conv: ConversationMessage[] = []
 		for (const msg of this._window.messages) {
-			if (msg.role !== "system") {
-				conv.push({ role: msg.role as "user" | "assistant", content: msg.content })
-			}
+			if (msg.role === "system") continue
+			// Skip empty turns: the in-flight assistant placeholder (filled at finalize),
+			// and any empty assistant message a legacy snapshot may carry — providers can
+			// reject a conversation containing an empty assistant message outright.
+			if (!msg.content.trim()) continue
+			conv.push({ role: msg.role as "user" | "assistant", content: msg.content })
 		}
 		const questionContent = questionHints ? `${question}\n\n${questionHints}` : question
 		conv.push({ role: "user", content: questionContent })
