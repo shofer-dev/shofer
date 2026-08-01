@@ -32,6 +32,12 @@ export interface StreamChunk {
 	name?: string
 	toolName?: string
 	arguments?: string | Record<string, unknown>
+	/** `tool_call_delta` argument fragment (ApiStreamToolCallDeltaChunk.delta). */
+	delta?: string
+	/** `tool_call_partial` stream position — the ONLY stable key across an
+	 *  OpenAI-compatible provider's argument fragments (id/name usually ride
+	 *  the first fragment alone). */
+	index?: number
 }
 
 export type ContentBlock =
@@ -105,18 +111,21 @@ export interface ForkClient {
 }
 
 export class ForkLlmClient implements ForkClient {
-	private handlerPromise?: Promise<ForkHandler>
-
 	constructor(
 		private readonly ai: PluginAi,
 		private readonly profileRef?: string,
 	) {}
 
+	// Resolved PER CALL, never cached: an empty profileRef means "the host's
+	// CURRENT default profile", which the user can repoint at any time — a
+	// handler built once pinned the fork to whatever the default was when the
+	// first pass ran, and a misconfigured build poisoned every later pass until
+	// a plugin reload (both bit the Phase-0 live verification, TODO.md).
+	// buildHandler is a local construction, so per-call resolution costs
+	// nothing that matters; provider-side prefix caching keys on request BYTES,
+	// not handler identity.
 	private async getHandler(): Promise<ForkHandler> {
-		if (!this.handlerPromise) {
-			this.handlerPromise = this.ai.buildHandler(this.profileRef || undefined) as Promise<ForkHandler>
-		}
-		return this.handlerPromise
+		return (await this.ai.buildHandler(this.profileRef || undefined)) as ForkHandler
 	}
 
 	async modelLabel(): Promise<string | undefined> {
@@ -165,8 +174,8 @@ export class ForkLlmClient implements ForkClient {
 					tokens.cacheWrite += chunk.cacheWriteTokens ?? 0
 					if (typeof chunk.totalCost === "number") providerCost = (providerCost ?? 0) + chunk.totalCost
 					break
-				case "tool_call":
-				case "tool_call_partial": {
+				case "tool_call": {
+					// A COMPLETE call in one chunk — replace wholesale.
 					const id = chunk.id ?? chunk.toolCallId ?? `tc_${toolCallsById.size}`
 					toolCallsById.set(id, {
 						id,
@@ -175,17 +184,38 @@ export class ForkLlmClient implements ForkClient {
 					})
 					break
 				}
+				case "tool_call_partial": {
+					// A raw OpenAI-compatible streaming delta: `index` is the only
+					// stable key (id/name usually arrive on the FIRST fragment
+					// only) and `arguments` is a FRAGMENT to APPEND — the same
+					// semantics NativeToolCallParser.processRawChunk implements.
+					// The previous id-keyed, replace-wholesale handling scattered
+					// each fragment into its own nameless entry, so every fork's
+					// feedback call came back with EMPTY arguments and coerced to
+					// silent (TODO.md, Phase-0 blocker 3).
+					const key = `idx_${chunk.index ?? 0}`
+					const entry = toolCallsById.get(key) ?? { id: "", name: "", arguments: "" }
+					if (chunk.id && !entry.id) entry.id = chunk.id
+					if (!entry.name) entry.name = chunk.name ?? chunk.toolName ?? ""
+					if (typeof chunk.arguments === "string") entry.arguments += chunk.arguments
+					if (!entry.id) entry.id = key
+					toolCallsById.set(key, entry)
+					break
+				}
 				case "tool_call_start": {
 					const id = chunk.id ?? chunk.toolCallId ?? `tc_${toolCallsById.size}`
 					toolCallsById.set(id, { id, name: chunk.name ?? chunk.toolName ?? "", arguments: "" })
 					break
 				}
 				case "tool_call_delta": {
+					// ApiStreamToolCallDeltaChunk carries the fragment in `delta`
+					// (the old code read `chunk.arguments`, which this chunk shape
+					// never has — dropping every argument byte).
 					const id = chunk.id ?? chunk.toolCallId
 					if (id) {
 						const entry = toolCallsById.get(id) ?? { id, name: chunk.name ?? "", arguments: "" }
 						if (chunk.name && !entry.name) entry.name = chunk.name
-						entry.arguments += typeof chunk.arguments === "string" ? chunk.arguments : ""
+						entry.arguments += chunk.delta ?? (typeof chunk.arguments === "string" ? chunk.arguments : "")
 						toolCallsById.set(id, entry)
 					}
 					break

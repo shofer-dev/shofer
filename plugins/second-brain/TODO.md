@@ -14,11 +14,12 @@ file knows is missing.
   **turn-end report row renders in chat** and the 🧠 badge live-updates
   (watching/passes/cost). What it could NOT reach: no advisory ever cleared the
   gate, so neither `notify` injection nor `queue` re-trigger was observed. Blockers
-  found, in order:
-  1. **Empty `profileRef` resolves the host default profile and the broken client is
-     cached forever.** With the org shipping only a keyless llm-router profile, the
-     first passes died on the Anthropic SDK's "Could not resolve authentication
-     method" — and `state.clients` kept the dead client until a plugin reload.
+  found, and where they stand:
+  1. **FIXED — `ForkLlmClient` resolves the handler per call.** Empty `profileRef`
+     means the host's *current* default profile; the client used to build the
+     handler once and pin it (a keyless org profile made every pass die on the
+     Anthropic SDK's "Could not resolve authentication method" until a plugin
+     reload). `getHandler` no longer caches.
   2. **The workspace catalogue override never loads in the VS Code host.**
      `catalogueReader` passes the workspace-relative `CATALOGUE_PATH` to
      `host.fs.readFile`, which resolves against the extension host's cwd (not the
@@ -26,13 +27,15 @@ file knows is missing.
      picked up, so the only override surface is unusable exactly where a
      deterministic always-advise detector was needed. (The pluginConfigs-keyed
      catalogue rework in flight replaces this path.)
-  3. **Streamed tool-call arguments appear to be dropped by the fork client**: every
-     pass's debug shows `final second_brain_detector_feedback:` with EMPTY args
-     despite 300+ completion tokens, across kimi-k2.7-code (which llm-router logs
-     show streaming the arguments in deltas). If real, a genuine advisory would
-     coerce to `silent` and delivery could never fire — verify against the ApiStream
-     chunk handling before trusting any live silence.
-  Until (2)/(3) are resolved and an advisory is observed end-to-end, keep treating
+  3. **FIXED — streamed tool-call arguments were dropped by the fork client.**
+     Confirmed, not just suspected: OpenAI-compatible providers stream a call as
+     `tool_call_partial` fragments keyed by `index` (id/name on the first
+     fragment only, arguments as append-fragments), and `tool_call_delta`
+     carries its fragment in `delta` — the client keyed by id and REPLACED
+     arguments, scattering fragments into nameless entries, so every feedback
+     call arrived empty and coerced to silent. `llm.ts` now accumulates
+     index-keyed fragments (llm.spec.ts covers the observed shapes).
+  Until (2) is resolved and an advisory is observed end-to-end, keep treating
   the finish gate as experimental; it degrades to user-only surfaces by design.
 - **Digest-overflow fallback.** The digest is the complete conversation and is never
   truncated (owner directive); past `DIGEST_HARD_CAP_CHARS` passes skip with a visible
