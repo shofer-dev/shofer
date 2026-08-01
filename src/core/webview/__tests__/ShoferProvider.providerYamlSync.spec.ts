@@ -368,6 +368,29 @@ describe("ShoferProvider - custom-mode YAML provider sync", () => {
 			expect(updateSpy).not.toHaveBeenCalled()
 		})
 
+		it("skips an org-locked mode silently — the sync runs on profile restore, so the guard's toast would spam a user who touched nothing", async () => {
+			const { getModeBySlug } = await import("@shofer/core")
+			vi.mocked(getModeBySlug).mockReturnValue({
+				slug: "code",
+				name: "Code",
+				roleDefinition: "code",
+				tools: ["read"],
+				source: "global",
+				provider: "old-profile",
+			})
+			vi.spyOn(provider.customModesManager, "getCustomModes").mockResolvedValue([])
+			vi.spyOn(provider.customModesManager, "getLockedModeSlugs").mockResolvedValue(["code"])
+			const updateSpy = vi.spyOn(provider.customModesManager, "updateCustomMode").mockResolvedValue(undefined)
+
+			workspaceFolders = [{}]
+
+			await callSync("code", "new-profile")
+
+			// No write attempt at all — updateCustomMode's lock guard raises a
+			// user-visible error, which must never fire from this system path.
+			expect(updateSpy).not.toHaveBeenCalled()
+		})
+
 		it("writes to project (.shofer/shofermodes) when a workspace is open", async () => {
 			const { getModeBySlug } = await import("@shofer/core")
 			vi.mocked(getModeBySlug).mockReturnValue({

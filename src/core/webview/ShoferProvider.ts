@@ -3853,6 +3853,17 @@ export class ShoferProvider
 				return
 			}
 
+			// An org-locked mode's YAML is org-owned: the mutation guard would
+			// refuse the write with a user-visible error — and this sync runs on
+			// profile RESTORE during webview init, so a user who touched nothing
+			// would get spammed with "locked by org policy" toasts on every load.
+			// Skip silently; the association still lives in modeApiConfigs, which
+			// is what task startup resolves.
+			const lockedSlugs = await this.customModesManager.getLockedModeSlugs()
+			if (lockedSlugs.includes(mode)) {
+				return
+			}
+
 			// Always prefer writing to the project file when a workspace is open, so
 			// per-project provider preferences override (and don't pollute) the global file.
 			const hasWorkspace = (vscode.workspace.workspaceFolders?.length ?? 0) > 0
@@ -5813,8 +5824,15 @@ export class ShoferProvider
 			// setValues writes to global state, but the manager overwrites that
 			// when it merges .shofer/shofermodes + global settings on refresh.  Persisting
 			// via updateCustomMode ensures modes survive the merge cycle.
+			// Org-locked slugs are skipped: their definitions come from the org
+			// mount already, and persisting them would trip the mutation guard's
+			// user-visible refusal for a write no user asked for.
 			if (configuration.customModes?.length) {
+				const lockedSlugs = await this.customModesManager.getLockedModeSlugs()
 				for (const mode of configuration.customModes) {
+					if (lockedSlugs.includes(mode.slug)) {
+						continue
+					}
 					await this.customModesManager.updateCustomMode(mode.slug, mode)
 				}
 			}
