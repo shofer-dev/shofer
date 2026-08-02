@@ -91,9 +91,9 @@ Workers. All routes under `/api/v1` except `/health`; bearer-token auth + versio
 ```
 GET  /health                      liveness + version + load metrics (open)
 GET  /api/v1/whoami               { version } (authed; one-shot liveness+auth)
-GET  /api/v1/event                SSE event stream (node-wide: ALL tasks) → subscribe()
+GET  /api/v1/event                SSE event stream (worker-wide: ALL tasks) → subscribe()
 GET  /api/v1/task/:id/event       SSE event stream filtered to ONE task   → subscribe() + filter
-POST /api/v1/config               { config, version, secrets }  → applyConfig()
+POST /api/v1/config               { config, version, secrets, plugins? } → applyConfig()
 POST /api/v1/task                 { prompt, mode, taskId?, apiConfiguration? } → createTask()
 POST /api/v1/task/:id/message     { message }                 → sendMessage()
 POST /api/v1/task/:id/cancel                                  → cancelTask()
@@ -105,7 +105,7 @@ POST /api/v1/task/:id/plugin-request        { plugin, method, params? } → { re
 /api/v1/task/:id/event` is the same SSE filtered to one task (by `args[0]` /
 `args[0].taskId`). A controller multiplexing many users' tasks on a **shared**
 executor subscribes per authorized task, so it never receives — or has to demux —
-other tenants' content; the node-wide stream stays for single-tenant / whole-node
+other tenants' content; the worker-wide stream stays for single-tenant / whole-worker
 consumers.
 
 ## Running `shofer serve`
@@ -125,7 +125,7 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 | `-m, --model <model>`    | provider default                                 | Model id. The `shofer` provider has **no** default model — pass one or task creation errors.                                                                                                                                                                                                                                                                                                                                            |
 | `-k, --api-key <key>`    | –                                                | Provider API key.                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `--base-url <url>`       | –                                                | Provider base URL (e.g. `http://llm-router:3000/v1`).                                                                                                                                                                                                                                                                                                                                                                                   |
-| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) node. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                       |
+| `-t, --token <token>`    | `$SHOFER_NODE_TOKEN`                             | Bearer token required on every `/api/v1/*` call. Omit for an open (dev) worker. **Machine trust** (authenticates the controller, not the end user).                                                                                                                                                                                                                                                                                     |
 | `--require-user-auth`    | off _(proposed)_                                 | **User-identity enforcement (launch-time only).** When on, the worker trusts a **validated end-user identity** injected upstream (Istio `RequestAuthentication` → header — see _User-identity enforcement_) and **blocks** any AgentApi call whose user is not the task's owner. Operator-set at launch like `--provider`; **no in-session user or agent can change it.** The `--token` worker bearer is unaffected and still required. |
 | `--interactive`          | off                                              | **Approval mode.** Off = non-interactive: the worker **auto-approves every tool** (no local user to ask). On = the worker surfaces approvals — `autoApprovalEnabled` is off, so a dangerous tool raises an `ask` over AgentApi that the controller brokers to its user via `respondToAsk`.                                                                                                                                              |
 | `-q, --quiet`            | off                                              | Suppress the per-task activity log on stderr.                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -135,7 +135,7 @@ connects with `ShoferHttpClient`. Every option is a CLI flag (defined in
 resolves interactive asks locally** — tool/command/MCP approvals _and_ `followup`
 questions are left outstanding for the controller to surface and answer via
 `respondToAsk`. (Idle / flow-control asks — `api_req_failed`, `resume_task`, … — are
-worker policy and are still handled on the node.) A controller that drives a served
+worker policy and are still handled on the worker.) A controller that drives a served
 worker MUST answer brokered asks, or the task blocks: approvals with
 `yesButtonClicked`/`noButtonClicked`, a `followup` with `messageResponse` + `text`.
 `--interactive` only decides whether _approvals arise at all_ (auto-approve vs

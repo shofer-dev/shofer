@@ -228,11 +228,11 @@ built-in `node:sqlite` — no flat files, no native dependency.
 > and plugin-owned features like the changed-files panel and checkpoints (over the reverse data channel,
 > below); focus is per-view so the sidebar and an editor tab can watch two different tasks at
 > once. The Shofer Workers UI is wired in (Settings panel, header status, a composer
-> node-picker, and the load-balancer selector). The split-host RPC (`host-rpc.ts`) + session
+> worker-picker, and the load-balancer selector). The split-host RPC (`host-rpc.ts`) + session
 > transport (`serveSession`/`connectSession`) remain available substrate for the future
 > "executor uses the _controller's_ host over RPC" model; the **shipped** worker model instead
 > assumes a **shared workspace filesystem** (each remote `shofer serve` has the same mounted
-> workspace) and serves fs executor-locally, while node-scoped **settings and the
+> workspace) and serves fs executor-locally, while worker-scoped **settings and the
 > allow-listed credential slice are replicated from the controller** and gate pool
 > eligibility on a config version ([`config_sync.md`](./config_sync.md)). With **zero remote workers registered,
 > everything runs on the Local executor exactly as today**.
@@ -382,7 +382,7 @@ executors. The governing principles:
   unrelated hosts that happen to share a container path. The embedder/Qdrant
   credentials ride the synced-secrets slice of the same `applyConfig` call, since
   the config alone would describe a store the worker cannot open. Details:
-  [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md#multi-node--search-only-nodes) and
+  [`plugins/rag-indexing/DESIGN.md`](../plugins/rag-indexing/DESIGN.md#multi-node--search-only-workers) and
   [`config_sync.md`](./config_sync.md). (End state: extract the
   index/embeddings/memory into standalone services every worker queries — at which
   point even the controller is just a client.)
@@ -585,13 +585,13 @@ prerequisites:
       returns `loadavg` + `cpus`). Fallbacks keep it robust: executors with no sample are
       excluded from the comparison, an all-no-sample pool degrades to round-robin, and ties
       (including the all-zeros Windows `os.loadavg()` case) spread across the tied set via
-      the round-robin cursor. The policy is selected by the `shofer.workers.loadBalancer`
-      setting (read on init + on configuration change).
+      the round-robin cursor. The policy is selected by the `workersLoadBalancer`
+      globalSettings key (read on init + re-applied when the setting changes).
 - **Shipped**: the remote executor process (`shofer serve`, HTTP/SSE over
   `ShoferApiAgent`), the `WorkerRegistry` that wires the `WorkerPool` into the extension
   (worker registry + SecretStorage tokens, connect/auth/version handshake, live status,
   load-balancing), the full Shofer Workers UI (Settings panel, header status, composer
-  node-picker, load-balancer selector), interactive approvals (`respondToAsk`),
+  worker-picker, load-balancer selector), interactive approvals (`respondToAsk`),
   full-fidelity remote render, per-view shadow focus, and the reverse data channel
   (plugin requests).
 

@@ -400,7 +400,7 @@ Both storage names are hashed from **one** value, the **index key**, resolved by
 
 `_resolveIndexKeyPath()` resolves in two steps:
 
-1. **A controller-assigned `key` wins** when present (surfaced by `CodeIndexConfigManager.indexKey`). This is the logical identity of the index, not a path — see [Multi-node — search-only workers](#multi-node--search-only-nodes) for why index identity must not be host-derived.
+1. **A controller-assigned `key` wins** when present (surfaced by `CodeIndexConfigManager.indexKey`). This is the logical identity of the index, not a path — see [Multi-node — search-only workers](#multi-node--search-only-workers) for why index identity must not be host-derived.
 2. **Otherwise fall back to the local derivation.** Git worktrees are separate directories and would normally get separate collections and cache files, so [`GitSource.resolveWorktreeMainRepoPath()`](src/git/git-source.ts) reads the `.git` file in a worktree directory, parses the `gitdir:` line (`gitdir: /path/to/main/.git/worktrees/name`), and derives the main repository root. For regular repos this returns the workspace path unchanged.
 
 So all worktrees of the same repository share one collection (`ws-<sha256(main-repo-path)[:16]>`) and one cache file (`shofer-index-cache-<sha256(main-repo-path)>.json`), and switching between them re-indexes nothing.

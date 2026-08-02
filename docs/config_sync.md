@@ -19,7 +19,7 @@ sets in the controller's UI:
   executor. Without replication, a path or command the user trusts in the controller's
   Settings UI is invisible to a remote worker, which re-prompts (RPC an ask back to the
   controller) or diverges from what the user asked for.
-- Every other node-scoped setting the front-end owns (context-management thresholds,
+- Every other worker-scoped setting the front-end owns (context-management thresholds,
   write-delay, followup timeout, disabled tools, …) would be stranded the same way.
 - A plugin that owns a workspace-scoped resource has the same problem one level up: the
   bundled `rag-indexing` plugin must reach a worker with the controller's index identity and
@@ -30,7 +30,7 @@ The narrow precedent this generalizes is **per-task provider config**:
 applied by `ShoferApiAgent.createTask`
 ([`shofer-api-agent.ts`](../packages/core/src/transport/shofer-api-agent.ts)) so a task runs
 on the provider/model the front-end picked. That is per-task; this channel is the
-node-scoped, continuous equivalent.
+worker-scoped, continuous equivalent.
 
 The goal is a worker that requires **zero local administration**: the user (or an external
 service) configures once, **on the controller**, and it propagates.
@@ -39,33 +39,33 @@ service) configures once, **on the controller**, and it propagates.
 
 **Controller-authoritative configuration; workers are replicas.**
 
-- Configure trust/behavior **once on the controller**; it replicates to every node.
+- Configure trust/behavior **once on the controller**; it replicates to every worker.
 - **On registration** and **on every change** — so a worker is correct the moment it connects
-  and stays correct as settings change mid-session (no restart, no node-side edit).
+  and stays correct as settings change mid-session (no restart, no worker-side edit).
 - **Generalize the existing `apiConfiguration` pattern** — same idea (controller-resolved
-  state the executor must honor), lifted from _per-task provider config_ to _node-scoped
+  state the executor must honor), lifted from _per-task provider config_ to _worker-scoped
   settings replicated continuously_.
 - **No new source of truth.** The controller's globalState (`globalSettingsSchema`) stays
   authoritative; this is a _transport_ that mirrors a slice of it onto workers.
 
 Non-goals: syncing per-task provider config (that stays on `CreateTaskInput.apiConfiguration`
-— it is per-task, not node-scoped); a bidirectional/merge model (workers never push settings
+— it is per-task, not worker-scoped); a bidirectional/merge model (workers never push settings
 up); the future split-host `HostConfig`-over-RPC model ([§9](#9-relationship-to-other-mechanisms)).
 
 ## 3. What is synced (and what is not)
 
 Two axes decide whether a setting belongs on this channel:
 
-| Setting kind                                          | Channel                                                                            |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **Per-task** provider/model/key/base-url              | Stays on `CreateTaskInput.apiConfiguration` (already shipped; can differ per task) |
-| **Node-scoped** behavior settings (auto-approval, …)  | **This channel** — one node-wide config, replicated on registration + on change    |
-| **LLM provider keys**                                 | _Not_ on this channel — per-task via `apiConfiguration` (see below)                |
-| **Code-index (RAG) credentials**                      | **This channel**, as the separate `SyncedSecrets` argument → SecretStorage         |
-| **A plugin's config + credentials**                   | **This channel**, as the separate `SyncedPluginState` argument — opt-in per plugin |
-| **Front-end-only** UI state (pinned tabs, dismissals) | Not synced (no executor effect)                                                    |
+| Setting kind                                           | Channel                                                                            |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **Per-task** provider/model/key/base-url               | Stays on `CreateTaskInput.apiConfiguration` (already shipped; can differ per task) |
+| **Worker-scoped** behavior settings (auto-approval, …) | **This channel** — one worker-wide config, replicated on registration + on change  |
+| **LLM provider keys**                                  | _Not_ on this channel — per-task via `apiConfiguration` (see below)                |
+| **Code-index (RAG) credentials**                       | **This channel**, as the separate `SyncedSecrets` argument → SecretStorage         |
+| **A plugin's config + credentials**                    | **This channel**, as the separate `SyncedPluginState` argument — opt-in per plugin |
+| **Front-end-only** UI state (pinned tabs, dismissals)  | Not synced (no executor effect)                                                    |
 
-**In scope: the whole node-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
+**In scope: the whole worker-scoped `globalSettings` set** — _every_ `globalSettingsSchema`
 field that changes how the agent core behaves on the executor, not just the auto-approval
 ones. Concretely that includes:
 
@@ -132,8 +132,8 @@ its own value, still excluded (e.g. `execaShellPath`, a host shell path). Two fu
 exclusions: a key already shipped per-task via `apiConfiguration` (`rateLimitSeconds` — also a
 `ProviderSettings` field) is left out to avoid a double source; and `mcpEnabled` is **held**
 (not synced): in the shipped shared-workspace-FS worker model the worker already has the mirrored
-project `.shofer/mcp.json` and launches **stdio** servers node-locally, so it _self-determines_
-MCP — syncing the global toggle is unnecessary and could override a locally-correct node. The
+project `.shofer/mcp.json` and launches **stdio** servers worker-locally, so it _self-determines_
+MCP — syncing the global toggle is unnecessary and could override a locally-correct worker. The
 genuine cross-host gaps are narrow — the user/org scopes' `mcp.json` (in `~/.shofer` and
 the org mount, outside the workspace, so not mirrored) and **loopback/controller-hosted**
 HTTP servers a remote worker can't reach — and both are out of config-sync's scope; revisit with remote-MCP
@@ -186,10 +186,10 @@ One method on the transport-agnostic surface
 ([`AgentApi`](../packages/types/src/agent-api.ts)):
 
 ```ts
-/** Node-scoped settings + secrets the controller replicates to this executor (§config_sync).
+/** Worker-scoped settings + secrets the controller replicates to this executor (§config_sync).
  *  A Partial<GlobalSettings> restricted to the synced allowlist; authoritative
  *  (last-write-wins) for the keys present. `version` is the controller-assigned,
- *  node-opaque token (a content hash of the canonical slice, §6) the worker stores
+ *  worker-opaque token (a content hash of the canonical slice, §6) the worker stores
  *  and echoes back on /health so the controller can detect drift. `secrets` is the
  *  allow-listed credential slice the worker needs to act on `config` — `{}` when there
  *  is nothing to replicate. Both are ignored when the worker has local CLI overrides
@@ -202,7 +202,7 @@ applyConfig(
 ): Promise<void>
 ```
 
-`SyncedSettings` is a `Pick<GlobalSettings, …node-scoped keys…>` in `@shofer/types`
+`SyncedSettings` is a `Pick<GlobalSettings, …worker-scoped keys…>` in `@shofer/types`
 (vscode-free, so both sides share it) — the positive allowlist defined in
 [§3](#3-what-is-synced-and-what-is-not) (auto-approval + behavioral/context-management keys),
 not just the auto-approval subset. `SyncedSecrets` is its credential counterpart: a
@@ -250,8 +250,8 @@ Reuse the **same `allowClientConfig` gate** that already governs `apiConfigurati
 started with explicit CLI config is self-administered and ignores controller pushes; a
 "managed" worker (no overrides) is a pure replica. **For a `shofer serve` worker the gate
 defaults open** (accept controller config) — see [§10](#10-decisions--open-questions); it
-flips closed only when the operator supplies explicit local config, so the zero-node-admin
-replica is the default and self-administration is the opt-out. The node-side apply is a `ContextProxy.setValues`
+flips closed only when the operator supplies explicit local config, so the zero-worker-admin
+replica is the default and self-administration is the opt-out. The worker-side apply is a `ContextProxy.setValues`
 of the slice (the same write path `importConfiguration` uses,
 [`settings_overlay.md` §10c](settings_overlay.md)), **not** a full import (no provider
 profiles; the only secrets written are the `SYNCED_SECRET_KEYS` allow-list).
@@ -343,12 +343,12 @@ sequenceDiagram
 
 - **Authoritative, last-write-wins** for the keys present in a payload. Every push carries
   the full slice (small, simple, idempotent); diffing is a possible later optimization.
-- **Node-override precedence.** `allowClientConfig === false` (worker launched with CLI
+- **Worker-override precedence.** `allowClientConfig === false` (worker launched with CLI
   provider/model/key/base-url overrides) ⇒ the worker ignores pushes entirely, consistent with
   `apiConfiguration`. (Whether _settings_ overrides should be independent of _provider_
   overrides is a decided trade-off, not an open one — [§10](#10-decisions--open-questions).)
 - **Union with local grants?** No. Unlike the [path-allowlist doc's](outside-workspace-path-allowlist.md)
-  intra-controller union of config + interactive grants, the _controller→node_ relationship
+  intra-controller union of config + interactive grants, the _controller→worker_ relationship
   is **replace**: the worker mirrors the controller's resolved state. A managed worker has no
   independent grants to preserve (interactive approvals on a worker RPC back to the controller,
   which then re-broadcasts).
@@ -493,7 +493,7 @@ this section is what it implies.
   version, gets pushed, and is version-gated back in.
 - **Delivery guarantee** — at-least-once is sufficient: the slice is tiny and `applyConfig` is
   idempotent, and the periodic health-ping reconciliation is the backstop that eventually
-  converges every reachable node. No exactly-once machinery.
+  converges every reachable worker. No exactly-once machinery.
 - **Malformed payload** — the worker validates against the `SyncedSettings` Zod pick, rejects
   (`4xx`) **without** advancing its applied version, and logs. It therefore stays out of the
   pool (still echoing the old version) rather than partially applying — a rejected push can't
@@ -506,7 +506,7 @@ this section is what it implies.
 
 | Mechanism                               | Role                                                                                                                                                                                                                                              |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`CreateTaskInput.apiConfiguration`**  | Per-task provider config. Stays. This channel is its node-scoped, continuously-synced sibling.                                                                                                                                                    |
+| **`CreateTaskInput.apiConfiguration`**  | Per-task provider config. Stays. This channel is its worker-scoped, continuously-synced sibling.                                                                                                                                                  |
 | **Auto-import / `importConfiguration`** | Bootstrap/whole-config import on a standalone executor (CLI, or a worker pre-seed _stopgap_). Not controller-driven.                                                                                                                              |
 | **`HostConfig` over RPC (future)**      | The split-host model where an executor reads the _controller's_ config live over Category I RPC. Would **supersede** this push model (config becomes pull-through, no replication). Deferred substrate; this channel is the shipped-model answer. |
 | **CLI overrides (`allowClientConfig`)** | Escape hatch: a self-administered worker opts out of controller config entirely.                                                                                                                                                                  |
@@ -523,13 +523,13 @@ of pull-through.
   after it has applied the current config and echoes `desiredVersion`; connected-but-stale
   workers are excluded until they converge. This is the version-gating in
   [§6](#6-convergence--config-version--pool-gating) — there is no "defaults window."
-- **The broader node-scoped `globalSettings` set is synced**, not just the auto-approval
+- **The broader worker-scoped `globalSettings` set is synced**, not just the auto-approval
   slice — defined as the positive allowlist in [§3](#3-what-is-synced-and-what-is-not).
 - **One gate, not two — and it opens by default.** `allowClientConfig` governs whether a worker
   honors _both_ the controller's per-task provider config and these synced settings; there is
   no separate `allowClientSettings` opt-out. `shofer serve` passes `allowClientConfig: !hasOverride`
   ([`serve.ts`](../apps/cli/src/commands/cli/serve.ts)), so a freshly-provisioned worker is an
-  open, managed replica with zero node-side setup and flips closed only when the operator
+  open, managed replica with zero worker-side setup and flips closed only when the operator
   supplies explicit local config (CLI provider/model/key/base-url). The option's own default is
   `false`, which is the in-process/local adapter's value — it never receives a remote config
   anyway ([`shofer-api-agent.ts`](../packages/core/src/transport/shofer-api-agent.ts)). A closed
