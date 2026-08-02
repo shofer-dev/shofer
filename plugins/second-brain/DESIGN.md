@@ -5,10 +5,9 @@
 The Second Brain is a **cheap background model that watches a task over its shoulder** and,
 when — and only when — it sees something worth saying, drops one short advisory into the
 task: asynchronously, without blocking, interrupting, or being asked. It is the Shofer port
-of the standalone Claude Code plugin of the same name
-([`claude-code/second-brain/DESIGN.md`](../../../../claude-code/second-brain/DESIGN.md) in
-the parent workspace is the reference design; this document supersedes it for the Shofer
-implementation and only re-argues decisions the port changes).
+of the standalone Claude Code plugin of the same name (whose design is the reference;
+this document supersedes it for the Shofer implementation and only re-argues decisions
+the port changes).
 
 Its three defining properties survive the port unchanged:
 
@@ -627,8 +626,7 @@ what it costs **the primary**.
 An admin authors a **Shofer config bundle** in admin-console; it is anchored on the
 object tree, inherited down it, and materialized by resource-manager into the
 workspace's read-only global `.shofer/`
-([`docs/shofer_bundles.md`](../../../../docs/shofer_bundles.md);
-[`docs/configuration.md`](../../docs/configuration.md) for the three scopes and the
+([`docs/configuration.md`](../../docs/configuration.md) for the three scopes and the
 merge). For that to reach this plugin, **the parameter has to be a key a bundle can
 express** — the bundle's `config` tree has a closed key set (`settings`, `modes`,
 `mcp`, `commands`, `rules`, `skills`, `workflows`, `plugins`) mapped to fixed

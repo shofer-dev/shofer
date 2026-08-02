@@ -61,8 +61,8 @@ in the plugin's `detectors` config, keyed by mode slug:
 ```
 
 Every parameter lives in the plugin's config for a reason: a Shofer **config bundle**
-([`docs/shofer_bundles.md`](../../../../docs/shofer_bundles.md)) has a closed key set
-that materializes to fixed `.shofer/` paths and silently drops anything else, so a
+has a closed key set that materializes to fixed `.shofer/` paths and silently drops
+anything else, so a
 bespoke file of our own could never be authored by an admin. Riding `pluginConfigs`
 means an admin can control **every** Second Brain parameter — thresholds, budgets,
 which detectors run, even their prompts — from admin-console, delivered as
