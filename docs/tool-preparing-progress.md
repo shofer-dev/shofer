@@ -1,6 +1,6 @@
 # Tool Preparation Progress Indicator
 
-> Source: [`../../extensions/llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts)
+> Source: `../../extensions/llm-provider/src/language-model-provider.ts`
 > Source: [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)
 > Source: [`packages/core/src/api/transform/stream.ts`](packages/core/src/api/transform/stream.ts)
 > Source: [`packages/core/src/task/Task.ts`](packages/core/src/task/Task.ts)
@@ -98,15 +98,15 @@ The row renders only while `message.partial === true` and a valid JSON payload
 
 ## Files changed
 
-| File                                                                                                                     | Change                                                                                                                          |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| [`extensions/llm-provider/src/language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts) | Replace announcement + dot heartbeat with `buildPreparingMarker()` emitting `\x00`-delimited markers on first name and every 5s |
-| [`packages/types/src/message.ts`](packages/types/src/message.ts)                                                         | Add `"tool_preparing"` to `shoferSays` / `ShoferSay` union                                                                      |
-| [`packages/core/src/api/transform/stream.ts`](packages/core/src/api/transform/stream.ts)                                 | Add `ApiStreamToolPreparingChunk` interface and union member                                                                    |
-| [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)                                                       | Detect `\x00tool_preparing\x00…` via regex in `LanguageModelThinkingPart`, yield `tool_preparing` chunk                         |
-| [`packages/core/src/task/Task.ts`](packages/core/src/task/Task.ts)                                                       | Add `case "tool_preparing"` in stream consumer, posts partial via `say("tool_preparing", …, true)`                              |
-| [`webview-ui/src/components/chat/ChatRow.tsx`](webview-ui/src/components/chat/ChatRow.tsx)                               | Render inline row with spinner, monospace tool name, and formatted byte count                                                   |
-| [`webview-ui/src/i18n/locales/en/chat.json`](webview-ui/src/i18n/locales/en/chat.json)                                   | Add `toolPreparing.preparing` key                                                                                               |
+| File                                                                                       | Change                                                                                                                          |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `extensions/llm-provider/src/language-model-provider.ts`                                   | Replace announcement + dot heartbeat with `buildPreparingMarker()` emitting `\x00`-delimited markers on first name and every 5s |
+| [`packages/types/src/message.ts`](packages/types/src/message.ts)                           | Add `"tool_preparing"` to `shoferSays` / `ShoferSay` union                                                                      |
+| [`packages/core/src/api/transform/stream.ts`](packages/core/src/api/transform/stream.ts)   | Add `ApiStreamToolPreparingChunk` interface and union member                                                                    |
+| [`src/api/providers/vscode-lm.ts`](src/api/providers/vscode-lm.ts)                         | Detect `\x00tool_preparing\x00…` via regex in `LanguageModelThinkingPart`, yield `tool_preparing` chunk                         |
+| [`packages/core/src/task/Task.ts`](packages/core/src/task/Task.ts)                         | Add `case "tool_preparing"` in stream consumer, posts partial via `say("tool_preparing", …, true)`                              |
+| [`webview-ui/src/components/chat/ChatRow.tsx`](webview-ui/src/components/chat/ChatRow.tsx) | Render inline row with spinner, monospace tool name, and formatted byte count                                                   |
+| [`webview-ui/src/i18n/locales/en/chat.json`](webview-ui/src/i18n/locales/en/chat.json)     | Add `toolPreparing.preparing` key                                                                                               |
 
 ## Design decisions
 
@@ -130,7 +130,7 @@ row instead of appending. Reusing this avoids duplicating the
 ### Missing timer-based heartbeat
 
 The original design described a 5s re-emission heartbeat, but
-[`language-model-provider.ts`](../../extensions/llm-provider/src/language-model-provider.ts)
+`language-model-provider.ts`
 does not include a timer. The `lastVisibleEmitMs` variable (line 365) is
 assigned in four places but never read. Re-emission piggybacks on every
 tool call delta carrying a `function.name` — this works while deltas flow

@@ -480,7 +480,7 @@ Without layers 1 and 5 this would be 50,000 readFile + 50,000 SHA-256 + 50,000 e
 
 Per the **Versioned Snapshot Rule** and **No Backward Compatibility Unless Asked** rule, schema bumps (cache `version`, Qdrant metadata fields) discard old state rather than migrate. Each layer was shipped as its own minor-version bump.
 
-Phase 3 (an "optimistic `Indexed` state" that flips the badge green immediately and reconciles in the background) is tracked in [`todos/code-indexer-optimistic-indexed.md`](../../../todos/code-indexer-optimistic-indexed.md).
+Phase 3 (an "optimistic `Indexed` state" that flips the badge green immediately and reconciles in the background) is tracked in [`todos/code-indexer-optimistic-indexed.md`](../../todos/code-indexer-optimistic-indexed.md).
 
 ### 4. Search (the plugin's `rag_search` tool → `search-service.ts`)
 

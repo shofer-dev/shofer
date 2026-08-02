@@ -206,7 +206,7 @@ credentials possible — but `shared/shoferbundle` materializes into a **ConfigM
 which is not a Secret. Anyone who can read ConfigMaps in the workspace namespace would
 read the keys.
 
-The repo's [Secrets](../../CLAUDE.md#secrets) rule accepts plaintext credentials in the
+The repo's [Secrets](../CLAUDE.md#secrets) rule accepts plaintext credentials in the
 kapitan inventory because it stays inside infrastructure we control — a workspace
 namespace shared with user-namespace agents is a weaker boundary than that, so the
 trade-off does not automatically carry over. Options, in preference order:

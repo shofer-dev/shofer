@@ -72,7 +72,7 @@ It does **not** detect:
 
 ### Our Specific Trigger
 
-The file [`extensions/shofer/.git`](../../extensions/shofer/.git) contains:
+The file `extensions/shofer/.git` contains:
 
 ```
 gitdir: ../../.git/modules/shofer
@@ -229,7 +229,7 @@ bearing on the file-changes panel — it always used the working-directory backe
 - [`CheckpointServiceRegistry.ts`](../plugins/basics/src/checkpoints/service-registry.ts) — per-task shadow git instance (extends `ShadowGitRepo`)
 - [`plugins/basics/src/file-changes/`](../plugins/basics/src/file-changes/) — file changes panel (per-task file copies, no git dependency)
 - [`FileContextTracker.ts`](../packages/core/src/context-tracking/FileContextTracker.ts) — per-task file snapshots and `base/`/`final/` copy management
-- [`extensions/shofer/.git`](../../extensions/shofer/.git) — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
+- `extensions/shofer/.git` — our submodule trigger (`gitdir: ../../.git/modules/shofer`)
 
 ## Open Issues
 

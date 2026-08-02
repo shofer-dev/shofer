@@ -317,7 +317,7 @@ add/delete/toggle/timeout writes target.
 > **Planned VS Code compatibility:** Shofer uses its own MCP config files and does not
 > yet read VS Code's `.vscode/mcp.json` or user-level MCP config. Servers configured
 > for Copilot/VS Code's LM must be manually re-entered in Shofer. See
-> [`todos/vscode-mcp-compatibility.md`](../../todos/vscode-mcp-compatibility.md) for
+> [`todos/vscode-mcp-compatibility.md`](../todos/vscode-mcp-compatibility.md) for
 > the auto-discovery plan.
 
 ### 3b. MCP Tool Visibility
@@ -1252,13 +1252,13 @@ Acknowledged as debt at [`importExport.ts:172-174`](../src/core/config/importExp
 
 This was resolved by routing the current profile's secret reads through the blob
 rather than individual SecretStorage entries. See
-[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md) Part B.
+[`todos/done/config-cleanup.md`](../todos/done/config-cleanup.md) Part B.
 
 ### 14l. `allowedCommands` and `deniedCommands` Are Dual-Written — ✅ resolved
 
 These are now single-sourced in `globalState` (with their Settings UI rows in the
 Auto-Approve tab); the vscode-config dual-write and its init-seed were removed. See
-[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md) Part A1–A2.
+[`todos/done/config-cleanup.md`](../todos/done/config-cleanup.md) Part A1–A2.
 
 ---
 
@@ -1274,7 +1274,7 @@ follow the same model via `providers.json`, with the v2 secrets blob
 the bootstrap keys `customStoragePath` and `autoImportSettingsPath` remain in vscode
 config, because they are read before `ContextProxy` initializes. The historical
 consolidation plan is archived at
-[`todos/done/config-cleanup.md`](../../todos/done/config-cleanup.md).
+[`todos/done/config-cleanup.md`](../todos/done/config-cleanup.md).
 
 ---
 

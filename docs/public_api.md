@@ -243,8 +243,8 @@ shoferApi.on("message", ({ taskId, action, message }) => {
 
 ## Reference Consumer: Arkware Orchestrator
 
-The [`arkware-orchestrator`](../../orchestrator/) extension is the canonical
-consumer of the public API. Its [`main.ts`](../../orchestrator/src/main.ts:96)
+The `arkware-orchestrator` extension is the canonical
+consumer of the public API. Its `main.ts`
 demonstrates:
 
 - Acquiring the API via `vscode.extensions.getExtension('shoferdev.shofer')`
@@ -340,4 +340,4 @@ WebviewMessage protocols. Companion extensions can use it instead of wiring
 | [`src/extension.ts`](../src/extension.ts:457)                                           | Returns `new API(...)` from `activate()`             |
 | [`apps/cli/src/agent/extension-host.ts`](../apps/cli/src/agent/extension-host.ts)       | CLI consumer of `ShoferAPI`                          |
 | [`apps/cli/src/agent/extension-client.ts`](../apps/cli/src/agent/extension-client.ts)   | Reusable state-machine SDK over ShoferEvents         |
-| [`extensions/orchestrator/src/main.ts`](../../orchestrator/src/main.ts)                 | Reference consumer of the public API                 |
+| `extensions/orchestrator/src/main.ts`                                                   | Reference consumer of the public API                 |

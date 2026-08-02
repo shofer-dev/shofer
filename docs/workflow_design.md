@@ -2,16 +2,16 @@
 
 Design for the **Workflow** abstraction in Shofer: a container for coordinated Tasks executed by a formal, non-LLM-driven executor following a `.slang` specification.
 
-> **Implementation Status**: ✅ Slang parser (vendored from @riktar/slang, MIT) — [`packages/core/src/workflow/slang-lexer.ts`](../../extensions/shofer/packages/core/src/workflow/slang-lexer.ts), [`slang-parser-upstream.ts`](../../extensions/shofer/packages/core/src/workflow/slang-parser-upstream.ts), [`slang-resolver.ts`](../../extensions/shofer/packages/core/src/workflow/slang-resolver.ts)  
-> ✅ WorkflowTask class — [`packages/core/src/workflow/WorkflowTask.ts`](../../extensions/shofer/packages/core/src/workflow/WorkflowTask.ts)  
+> **Implementation Status**: ✅ Slang parser (vendored from @riktar/slang, MIT) — `packages/core/src/workflow/slang-lexer.ts`, `slang-parser-upstream.ts`, `slang-resolver.ts`  
+> ✅ WorkflowTask class — `packages/core/src/workflow/WorkflowTask.ts`  
 > ✅ .slang file discovery (`discoverWorkflows()`)  
-> ✅ `+` button dropdown (QuickPick: New Task / New Workflow → workflow picker) — [`registerCommands.ts`](../../extensions/shofer/src/activate/registerCommands.ts#L82)  
+> ✅ `+` button dropdown (QuickPick: New Task / New Workflow → workflow picker) — `registerCommands.ts`  
 > ✅ `escalate @Human` support  
 > ✅ Agent-to-task dispatch (spawn + resume via message queue)  
 > ✅ Stake routing + mailbox routing  
 > ✅ FlowState persistence via HistoryItem (`isWorkflow`, `slangSource`, `flowState` fields)  
 > ✅ i18n (`plus.json` locale)  
-> ✅ Example workflow — [`.shofer/workflows/implement-feature.slang`](../../.shofer/workflows/implement-feature.slang)  
+> ✅ Example workflow — `.shofer/workflows/implement-feature.slang`  
 > ✅ Least-privilege peer scope (`knownPeers` default-deny — `SendMessageToTaskTool`, `WaitForTaskTool`, `CheckTaskStatusTool`, `ListBackgroundTasksTool`)  
 > ✅ Declared peers in slang (`peers: [@Ref]` meta field — `slang-ast.ts`, parser, resolver, `WorkflowTask.spawnAgentTask`)  
 > ✅ Event-driven `waitForStakes` (shared [`wait-for-task-helper.ts`](../packages/core/src/workflow/wait-for-task-helper.ts) with `WaitForTaskTool`)  
@@ -1355,33 +1355,33 @@ All under [`packages/core/src/workflow/`](../packages/core/src/workflow/):
 | [`ShoferProvider.ts`](../src/core/webview/ShoferProvider.ts)                         | `createTask()` — spawns agent Tasks with `initialMode`                              |
 | [`webviewMessageHandler.ts`](../src/core/webview/webviewMessageHandler.ts)           | `listWorkflows` / `createWorkflow` IPC handlers                                     |
 | [`SlangVisualizationProvider.ts`](../src/core/webview/SlangVisualizationProvider.ts) | `.slang` file visualizer webview panel (agent cards, flow arrows, diagnostics)      |
-| [`history.ts`](../../packages/types/src/history.ts)                                  | `HistoryItem` extensions: `isWorkflow`, `slangSource`, `flowState`                  |
+| [`history.ts`](../packages/types/src/history.ts)                                     | `HistoryItem` extensions: `isWorkflow`, `slangSource`, `flowState`                  |
 | [`package.json`](../package.json)                                                    | Command + menu contributions for `slangVisualization.show`                          |
 
 ### Webview UI
 
-| File                                                                            | Purpose                                                                                                                                                        |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`WorkflowView.tsx`](../../webview-ui/src/components/chat/WorkflowView.tsx)     | **Dedicated workflow chat surface** — mirrors ChatView for WorkflowTasks, toggled via `isHidden` to preserve scroll/draft/expansion state across task switches |
-| [`TaskSelector.tsx`](../../webview-ui/src/components/chat/TaskSelector.tsx)     | Workflow-aware task tree (codicon-organization icon, "Workflow: name" titles)                                                                                  |
-| [`ChatView.tsx`](../../webview-ui/src/components/chat/ChatView.tsx)             | Defers to WorkflowView when `currentTaskItem.isWorkflow`; hides own TodoList/ContextWindow/cost for workflow roots                                             |
-| [`LauncherView.tsx`](../../webview-ui/src/components/launcher/LauncherView.tsx) | Workflow picker UI — lists discovered `.slang` workflows as launchable cards                                                                                   |
-| [`App.tsx`](../../webview-ui/src/App.tsx)                                       | Mounts `WorkflowView` beside `ChatView`, routes based on `currentTaskItem.isWorkflow`                                                                          |
+| File                                                                         | Purpose                                                                                                                                                        |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`WorkflowView.tsx`](../webview-ui/src/components/chat/WorkflowView.tsx)     | **Dedicated workflow chat surface** — mirrors ChatView for WorkflowTasks, toggled via `isHidden` to preserve scroll/draft/expansion state across task switches |
+| [`TaskSelector.tsx`](../webview-ui/src/components/chat/TaskSelector.tsx)     | Workflow-aware task tree (codicon-organization icon, "Workflow: name" titles)                                                                                  |
+| [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)             | Defers to WorkflowView when `currentTaskItem.isWorkflow`; hides own TodoList/ContextWindow/cost for workflow roots                                             |
+| [`LauncherView.tsx`](../webview-ui/src/components/launcher/LauncherView.tsx) | Workflow picker UI — lists discovered `.slang` workflows as launchable cards                                                                                   |
+| [`App.tsx`](../webview-ui/src/App.tsx)                                       | Mounts `WorkflowView` beside `ChatView`, routes based on `currentTaskItem.isWorkflow`                                                                          |
 
 ### i18n
 
-| File                                                                  | Purpose                                                                                                                                                                                |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`launcher.json`](../../webview-ui/src/i18n/locales/en/launcher.json) | "Choose a workflow" / "Discovering workflows…" / "No workflows found" strings                                                                                                          |
-| [`chat.json`](../../webview-ui/src/i18n/locales/en/chat.json)         | `workflowStarting` string (the `workflow` / `workflowReadonly` strings are now orphaned — the workflow input bar no longer shows a name chip; the name is in the **TaskHeader** title) |
+| File                                                               | Purpose                                                                                                                                                                                |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`launcher.json`](../webview-ui/src/i18n/locales/en/launcher.json) | "Choose a workflow" / "Discovering workflows…" / "No workflows found" strings                                                                                                          |
+| [`chat.json`](../webview-ui/src/i18n/locales/en/chat.json)         | `workflowStarting` string (the `workflow` / `workflowReadonly` strings are now orphaned — the workflow input bar no longer shows a name chip; the name is in the **TaskHeader** title) |
 
 ### Example Workflows
 
-| File                                                                                                 | Purpose                                                                     |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| [`.shofer/workflows/hello-world.slang`](../../../../.shofer/workflows/hello-world.slang)             | Minimal single-agent flow                                                   |
-| [`.shofer/workflows/feature-test.slang`](../../../../.shofer/workflows/feature-test.slang)           | Exhaustive feature test                                                     |
-| [`.shofer/workflows/implement-feature.slang`](../../../../.shofer/workflows/implement-feature.slang) | Realistic 5-agent flow (Architect, Codebase, Internet, Developer, Reviewer) |
+| File                                        | Purpose                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------- |
+| `.shofer/workflows/hello-world.slang`       | Minimal single-agent flow                                                   |
+| `.shofer/workflows/feature-test.slang`      | Exhaustive feature test                                                     |
+| `.shofer/workflows/implement-feature.slang` | Realistic 5-agent flow (Architect, Codebase, Internet, Developer, Reviewer) |
 
 ### Documentation
 
@@ -1397,5 +1397,5 @@ All under [`packages/core/src/workflow/`](../packages/core/src/workflow/):
 - [`task_messaging.md`](task_messaging.md) — Peer-to-peer task messaging (future foundation for agent communication)
 - [Slang Specification v0.7.5](https://github.com/riktar/slang/blob/master/SPEC.md) — Full Slang language spec
 - [Slang Grammar](https://github.com/riktar/slang/blob/master/GRAMMAR.md) — Formal EBNF grammar
-- [`todos/done/Shofer-parallel-tasks.md`](../../../todos/done/Shofer-parallel-tasks.md) — Original parallel task design
-- [`todos/done/Shofer-async-newtask.md`](../../../todos/done/Shofer-async-newtask.md) — Async `new_task` design
+- `todos/done/Shofer-parallel-tasks.md` — Original parallel task design
+- `todos/done/Shofer-async-newtask.md` — Async `new_task` design

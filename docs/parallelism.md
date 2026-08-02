@@ -586,6 +586,6 @@ Discovered during source-code verification. These are areas where the documentat
 
 - [`native_tools.md`](native_tools.md) — Complete tool reference with parameter schemas
 - [`task_states.md`](task_states.md) — Task lifecycle state model and visual mapping
-- [`todos/done/Shofer-async-newtask.md`](../../../todos/done/Shofer-async-newtask.md) — Original async `new_task` design proposal
-- [`todos/done/Shofer-parallel-tasks.md`](../../../todos/done/Shofer-parallel-tasks.md) — Parallel task execution implementation plan
-- [`todos/done/shofer-background-task-titles.md`](../../../todos/done/shofer-background-task-titles.md) — Title propagation design for background task tools
+- `todos/done/Shofer-async-newtask.md` — Original async `new_task` design proposal
+- `todos/done/Shofer-parallel-tasks.md` — Parallel task execution implementation plan
+- `todos/done/shofer-background-task-titles.md` — Title propagation design for background task tools

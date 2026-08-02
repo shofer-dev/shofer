@@ -709,7 +709,7 @@ Rejected at scope validation: `target.rootTaskId !== caller.rootTaskId`.
 `send_message_to_task` is a new native tool and `peer_task_ids` / `scope` are new parameters on existing tools. Per the repo Native Tool Implementation Rule, this is a coordinated multi-file change — follow [`adding-new-tools.md`](adding-new-tools.md) rather than copying older tools. Checklist:
 
 - **Schema-first types.** Declare the `send_message_to_task` params, `PendingPeerMessage`, the `scope` enum, and `peer_task_ids` as Zod schemas in `@shofer/types` (cross-boundary shapes), consumed via `z.infer<>`. No hand-written interfaces duplicated per consumer.
-- **`ToolName` + group.** Add `"send_message_to_task"` to the `ToolName` union and assign it a `ToolGroup` in `TOOL_GROUPS` ([`packages/types/src/tool.ts`](../../packages/types/src/tool.ts)) — the single source of truth for mode filtering and auto-approval. Do **not** branch on `mode` inside `execute()`.
+- **`ToolName` + group.** Add `"send_message_to_task"` to the `ToolName` union and assign it a `ToolGroup` in `TOOL_GROUPS` ([`packages/types/src/tool.ts`](../packages/types/src/tool.ts)) — the single source of truth for mode filtering and auto-approval. Do **not** branch on `mode` inside `execute()`.
 - **Handler.** Implement `SendMessageToTaskTool extends BaseTool<"send_message_to_task">`. Approval goes through `BaseTool.askToolApproval()` so even auto-approved (async) invocations render in chat.
 - **Router / parser.** Wire the tool into the native-tool router and argument parser.
 - **UI + i18n.** If the tool renders a chat row, add the `ShoferSayTool` case + `ChatRow` rendering, and add all user-facing strings (tool-result errors, confirmations) to the locale files — no hard-coded English literals (i18n String Rule). The injected `PEER MESSAGE` / `PEER PROMPT` bodies are agent-facing system text and are exempt.
@@ -725,7 +725,7 @@ Rejected at scope validation: `target.rootTaskId !== caller.rootTaskId`.
 - [`task_states.md`](task_states.md) — Task lifecycle state model
 - [`notifications.md`](notifications.md) — the `peerNotificationQueue` / Form-A injection machinery this uses
 - [`plugin_system.md`](plugin_system.md) — `ctx.agent.notify` / `PluginAgentNotifyOptions` (the `notify` mode that also uses this queue)
-- [`todos/done/Shofer-parallel-tasks.md`](../../todos/done/Shofer-parallel-tasks.md) — Original parallel task execution design
+- `todos/done/Shofer-parallel-tasks.md` — Original parallel task execution design
 
 > **Also carries generic notifications.** Beyond peer messages, the same `peerNotificationQueue`
 > (Form A) delivers **one-way notifications** enqueued via the host plugin API `ctx.agent.notify`

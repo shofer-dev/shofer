@@ -422,7 +422,7 @@ Both capture points call [`snapshotApiReqError()`](../packages/core/src/task/Tas
 
 ## Comparison with Chrome Extension Trace
 
-The JSON export mirrors the chrome-extension's in-task trace format ([`sidepanel.js`](../../chrome-extension/sidepanel.js)). Key differences:
+The JSON export mirrors the chrome-extension's in-task trace format (`sidepanel.js`). Key differences:
 
 |                       | Shofer JSON                                             | Chrome Extension JSON                        |
 | --------------------- | ------------------------------------------------------- | -------------------------------------------- |

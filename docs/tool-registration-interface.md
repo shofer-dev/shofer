@@ -142,7 +142,7 @@ Example provider config in `settings.json`:
 
 ## Example: vscode-tools
 
-See [`extensions/vscode-tools/src/tools/registry.ts`](../../vscode-tools/src/tools/registry.ts)
+See `extensions/vscode-tools/src/tools/registry.ts`
 for the reference implementation.
 
 1. Tools are stored in a private registry (`registerIdeTool()`).
@@ -165,7 +165,7 @@ channel:
 
 ### Config namespace mismatch between shofer and vscode-tools
 
-The [`vscode-tools` `package.json`](../../vscode-tools/package.json) contributes its
+The `vscode-tools` `package.json` contributes its
 private-tool-provider defaults under the `arkware.privateToolProviders` config key, but
 [`build-tools.ts`](../packages/core/src/task/build-tools.ts:107-108) reads from
 `shofer.privateToolProviders`. Since these are different VS Code configuration
@@ -176,7 +176,7 @@ agree on one standard config key.
 
 ### `getAllDefinitions()` does not include `group`
 
-The reference implementation's [`getAllDefinitions()`](../../vscode-tools/src/tools/registry.ts:52)
+The reference implementation's `getAllDefinitions()`
 returns `IdeToolDefinition[]` which has no `group` field. The Tool Group Assignment
 resolution order places "Tool-level `group`" first, but no vscode-tools definitions
 will ever carry a group. The three-tier resolution therefore always falls through to

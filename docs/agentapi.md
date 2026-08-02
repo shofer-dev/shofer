@@ -210,7 +210,7 @@ flowchart LR
 Everything dashed above is _proposed_. What exists today is the `--token` worker
 bearer, which this layers on top of and does not replace.
 
-Full model + rationale: [`docs/authnz_arch.md`](../../../docs/authnz_arch.md) §11.2.
+Full model + rationale: `docs/authnz_arch.md` §11.2.
 
 ## Per-task API Configuration
 

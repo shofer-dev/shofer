@@ -2,7 +2,7 @@
 
 **Status:** Implemented (Lever 1 — per-task `attempt_completion` schema swap)
 **Created:** 2026-06-10 **Updated:** 2026-06-11
-**Context:** [`todos/fixing_tests.md`](../../../todos/fixing_tests.md) issue #5 — "DS contract non-compliance"
+**Context:** `todos/fixing_tests.md` issue #5 — "DS contract non-compliance"
 
 ---
 
@@ -503,7 +503,7 @@ Run with `scripts/smoke/harness.sh [mock|ds]`. `SKIP_PART2=1` to skip.
 | [`api/index.ts`](packages/core/src/api/index.ts)                                              | `buildApiHandler()` provider switch; `tool_choice` plumbing                                               |
 | [`Task.ts`](packages/core/src/task/Task.ts)                                                   | `tool_choice` call sites (hardcoded `"auto"`)                                                             |
 | [`harness.sh`](scripts/smoke/harness.sh)                                                      | Part 1 CLI scenarios + Part 2 workflow conformance with xargs parallelism                                 |
-| [`tools.go`](../../llm-router/internal/types/tools.go)                                        | router `FunctionTool.Strict` / `ChatFunctionDefinition.Strict` passthrough fields                         |
-| [`requests.go`](../../llm-router/internal/types/requests.go)                                  | router `response_format` validation (`oneof=text json_object json_schema`)                                |
-| [`provider.go`](../../llm-router/internal/services/provider.go)                               | router outbound POST to upstream with tools intact                                                        |
-| [`config.go`](../../llm-router/internal/types/config.go)                                      | `DEEPSEEK_API_BASE` default (`https://api.deepseek.com`)                                                  |
+| `tools.go`                                                                                    | router `FunctionTool.Strict` / `ChatFunctionDefinition.Strict` passthrough fields                         |
+| `requests.go`                                                                                 | router `response_format` validation (`oneof=text json_object json_schema`)                                |
+| `provider.go`                                                                                 | router outbound POST to upstream with tools intact                                                        |
+| `config.go`                                                                                   | `DEEPSEEK_API_BASE` default (`https://api.deepseek.com`)                                                  |

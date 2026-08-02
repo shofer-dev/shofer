@@ -10,11 +10,11 @@ The test suite is a three-layer pyramid; each layer is faster and more
 deterministic than the one above, so you only pay the slow layer for what it
 uniquely covers:
 
-| Layer                    | What                                                                                                                                                                                               | Runtime                                            | Doc                                                                                                                                  |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **L0 — Unit**            | `*.spec.ts` / `*.test.ts` via vitest                                                                                                                                                               | in-process                                         | (co-located with source)                                                                                                             |
-| **L1 — CLI harness**     | **the subject of this doc** — drives Shofer core headlessly via the CLI `ExtensionHost`. Three parts (below).                                                                                      | headless CLI, no code-server, no browser           | this file + [`../TESTING.md`](../TESTING.md)                                                                                         |
-| **L2 — code-server E2E** | Python/pytest runner driving Shofer **inside a real code-server** (orchestrator control endpoint + Playwright webview checks). Covers what L1 structurally can't: the web runtime + React webview. | code-server (Docker/native/k3s) + headless browser | **separate package** → [`extensions/integration/README.md`](../../integration/README.md), [`DESIGN.md`](../../integration/DESIGN.md) |
+| Layer                    | What                                                                                                                                                                                               | Runtime                                            | Doc                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| **L0 — Unit**            | `*.spec.ts` / `*.test.ts` via vitest                                                                                                                                                               | in-process                                         | (co-located with source)                                               |
+| **L1 — CLI harness**     | **the subject of this doc** — drives Shofer core headlessly via the CLI `ExtensionHost`. Three parts (below).                                                                                      | headless CLI, no code-server, no browser           | this file + [`../TESTING.md`](../TESTING.md)                           |
+| **L2 — code-server E2E** | Python/pytest runner driving Shofer **inside a real code-server** (orchestrator control endpoint + Playwright webview checks). Covers what L1 structurally can't: the web runtime + React webview. | code-server (Docker/native/k3s) + headless browser | **separate package** → `extensions/integration/README.md`, `DESIGN.md` |
 
 L0 and L1 are the fast inner loop and run hermetically by default. **Only L2
 touches the k3s-deployed code-server / Shofer** (or a local-Docker code-server) —
@@ -810,6 +810,6 @@ provider note under [L1](#l1--cli-harness)).
 Full reference — run instructions, env matrix, lanes, and the test catalog —
 lives in its own docs (the source of truth; not duplicated here):
 
-- Package: [`extensions/integration/`](../../integration/)
-- How to run + env + test catalog: [`README.md`](../../integration/README.md)
-- Architecture + pyramid rationale: [`DESIGN.md`](../../integration/DESIGN.md)
+- Package: `extensions/integration/`
+- How to run + env + test catalog: `README.md`
+- Architecture + pyramid rationale: `DESIGN.md`

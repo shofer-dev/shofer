@@ -74,7 +74,7 @@ primary mechanism for out-of-band metadata exchange.
 - Called from `fetchShoferRequestCost()`: `vscode.commands.executeCommand("llmLocalRouter.getRequestCost", this.taskId)`
 - Called once at conversation/task completion
 
-**Shofer Router source**: Commands registered in `activate()` in [`main.ts`](../../llm-local-router/src/main.ts).
+**Shofer Router source**: Commands registered in `activate()` in `main.ts`.
 
 ---
 
@@ -98,7 +98,7 @@ All markers follow this pattern:
 - **Type**: `tool_preparing\x00<toolName>\x00<byteCount>`
 - **Example**: `\x00tool_preparing\x00read_file\x00420\x00`
 - **Purpose**: Informs Shofer that a tool call with `toolName` is accumulating arguments (currently `byteCount` bytes received). Shofer displays an inline progress indicator.
-- **Origin**: [`language-model-provider.ts`](../../llm-local-router/src/language-model-provider.ts) — emitted per-chunk during tool call streaming
+- **Origin**: `language-model-provider.ts` — emitted per-chunk during tool call streaming
 - **Consumer**: [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) — parsed in `createMessage()`, yields `{ type: "tool_preparing", toolName, byteCount }`
 
 ### `response_metadata`
@@ -106,7 +106,7 @@ All markers follow this pattern:
 - **Type**: `response_metadata\x00<json>`
 - **Example**: `\x00response_metadata\x00{"model":"shofer/code","actualModel":"deepseek-v4-pro","ttfbMs":123,"ttlbMs":456,"promptTokens":1000,"completionTokens":500,"costUsd":0.001234,"attempts":1}\x00`
 - **Purpose**: Carries per-request metadata (actual model used, latency, tokens, cost, failover info) back to Shofer at stream end.
-- **Origin**: [`language-model-provider.ts`](../../llm-local-router/src/language-model-provider.ts) — emitted once at stream end (success or error)
+- **Origin**: `language-model-provider.ts` — emitted once at stream end (success or error)
 - **Consumer**: [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) — detected and consumed in `createMessage()`; NOT yielded as a user-visible chunk
 
 ### Marker Lifecycle

@@ -45,11 +45,11 @@ images per message reached") rather than the generic "Add images" label.
 
 ## Model-Aware Gating
 
-Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../../packages/core/src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
+Images are automatically disabled when the selected model doesn't support vision input. This is controlled by the [`supportsImages`](../packages/core/src/api/providers/fetchers/vercel-ai-gateway.ts) property on each model's metadata.
 
-For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `llmLocalRouter.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `llm-local-router` extension ([`llm-local-router/src/main.ts`](../../llm-local-router/src/main.ts)), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
+For the `vscode-lm` provider this flag is **not** hardcoded — it is sourced from the active provider extension via the `llmLocalRouter.getModelCapabilities` side-channel command (since VS Code's `LanguageModelChatProviderCapabilities` only carries `imageInput` and `toolCalling`). The command is registered by the `llm-local-router` extension (`llm-local-router/src/main.ts`), which resolves per-model `imageInput` from its model registry. See [`refreshShoferCapabilities()`](../src/api/providers/vscode-lm.ts:245) (which invokes the command at [`vscode-lm.ts:255`](../src/api/providers/vscode-lm.ts:255)) and [`useSelectedModel.ts`](../webview-ui/src/components/ui/hooks/useSelectedModel.ts) (`dynamicModel.shoferCapabilities.imageInput`).
 
-The lookup is **fail-closed**: if the side-channel command is unavailable (provider extension not installed, not activated, or it throws), `shoferCapabilities` is left untouched and [`supportsImages` resolves to `false`](../../src/api/providers/vscode-lm.ts:939) (`this.shoferCapabilities?.imageInput ?? false`). A vision-capable model therefore has its images stripped whenever the capability lookup cannot complete, rather than risking an API error by sending image blocks to a model whose support is unknown.
+The lookup is **fail-closed**: if the side-channel command is unavailable (provider extension not installed, not activated, or it throws), `shoferCapabilities` is left untouched and [`supportsImages` resolves to `false`](../src/api/providers/vscode-lm.ts:939) (`this.shoferCapabilities?.imageInput ?? false`). A vision-capable model therefore has its images stripped whenever the capability lookup cannot complete, rather than risking an API error by sending image blocks to a model whose support is unknown.
 
 When `shouldDisableImages` is `true`:
 
@@ -138,19 +138,19 @@ Internally, Shofer uses Anthropic's content block format as the canonical repres
 
 Shofer converts the internal Anthropic-format image blocks to each provider's expected format:
 
-| Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                                       |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **Anthropic**            | `image` content block (native)                                                                                                                                                    | No transformation needed                                                                 |
-| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                                                                                                                  | [`openai-format.ts`](../../packages/core/src/api/transform/openai-format.ts)             |
-| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                                                                                                                                 | [`responses-api-input.ts`](../../packages/core/src/api/transform/responses-api-input.ts) |
-| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                                                                                                                          | [`ai-sdk.ts`](../../packages/core/src/api/transform/ai-sdk.ts)                           |
-| **VS Code LM**           | `vscode.LanguageModelDataPart.image(bytes, mime)` for user messages; text placeholder fallback when the API surface is unavailable or for image blocks nested inside tool results | [`vscode-lm-format.ts`](../../src/api/transform/vscode-lm-format.ts)                     |
-| **Gemini**               | Native multimodal support via Google AI SDK                                                                                                                                       | [`gemini-format.ts`](../../packages/core/src/api/transform/gemini-format.ts)             |
-| **Bedrock**              | Native Converse API image blocks                                                                                                                                                  | [`bedrock.ts`](../../packages/core/src/api/providers/bedrock.ts)                         |
+| Provider                 | Image Format                                                                                                                                                                      | Transform Location                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Anthropic**            | `image` content block (native)                                                                                                                                                    | No transformation needed                                                              |
+| **OpenAI**               | `image_url` with `data:image/...;base64,...` URL                                                                                                                                  | [`openai-format.ts`](../packages/core/src/api/transform/openai-format.ts)             |
+| **OpenAI Responses API** | `input_image` with `image_url` + `detail: "auto"`                                                                                                                                 | [`responses-api-input.ts`](../packages/core/src/api/transform/responses-api-input.ts) |
+| **AI SDK**               | `image` with `data:...` URL + `mimeType`                                                                                                                                          | [`ai-sdk.ts`](../packages/core/src/api/transform/ai-sdk.ts)                           |
+| **VS Code LM**           | `vscode.LanguageModelDataPart.image(bytes, mime)` for user messages; text placeholder fallback when the API surface is unavailable or for image blocks nested inside tool results | [`vscode-lm-format.ts`](../src/api/transform/vscode-lm-format.ts)                     |
+| **Gemini**               | Native multimodal support via Google AI SDK                                                                                                                                       | [`gemini-format.ts`](../packages/core/src/api/transform/gemini-format.ts)             |
+| **Bedrock**              | Native Converse API image blocks                                                                                                                                                  | [`bedrock.ts`](../packages/core/src/api/providers/bedrock.ts)                         |
 
 ### Non-Vision Models
 
-When the model does NOT support images, the [`image-cleaning.ts`](../../packages/core/src/api/transform/image-cleaning.ts) module converts image blocks to text placeholders before sending to the provider:
+When the model does NOT support images, the [`image-cleaning.ts`](../packages/core/src/api/transform/image-cleaning.ts) module converts image blocks to text placeholders before sending to the provider:
 
 ```
 [Referenced image in conversation]
@@ -162,7 +162,7 @@ This prevents API errors while preserving the conversational context that images
 
 When the model supports images, the system prompt includes guidance about image handling in tool descriptions:
 
-- [`read_file` tool prompt](../../packages/core/src/prompts/tools/native-tools/read_file.ts) includes `supportsImages` parameter
+- [`read_file` tool prompt](../packages/core/src/prompts/tools/native-tools/read_file.ts) includes `supportsImages` parameter
 - Native tools accept a `supportsImages` option in their constructor
 - The tool prompt dynamically adapts to show/hide image-related capabilities
 
@@ -189,7 +189,7 @@ flowchart TD
 
 ## Multi-Turn Image Handling
 
-Images from previous user turns are preserved in the conversation history (`apiConversationHistory`). When a model supports images, past user images are included in subsequent API requests as part of the message history. When a model does NOT support images (e.g., after switching from a vision model to a non-vision model), image blocks are converted to `[Referenced image in conversation]` placeholders via [`maybeRemoveImageBlocks`](../../packages/core/src/api/transform/image-cleaning.ts).
+Images from previous user turns are preserved in the conversation history (`apiConversationHistory`). When a model supports images, past user images are included in subsequent API requests as part of the message history. When a model does NOT support images (e.g., after switching from a vision model to a non-vision model), image blocks are converted to `[Referenced image in conversation]` placeholders via [`maybeRemoveImageBlocks`](../packages/core/src/api/transform/image-cleaning.ts).
 
 ## Image Generation
 
@@ -199,7 +199,7 @@ Image generation uses provider-specific endpoints (not the chat completions API)
 
 ## `view_image` Tool (Model-Initiated Image Reading)
 
-While the sections above describe the **user → model** image flow (user pastes/drops/picks an image), the [`view_image`](../../packages/core/src/tools/ViewImageTool.ts) native tool handles the **model → disk** direction: the AI reads an image file from the workspace to include it in its own content for visual analysis.
+While the sections above describe the **user → model** image flow (user pastes/drops/picks an image), the [`view_image`](../packages/core/src/tools/ViewImageTool.ts) native tool handles the **model → disk** direction: the AI reads an image file from the workspace to include it in its own content for visual analysis.
 
 ### What It Does
 
@@ -243,15 +243,15 @@ flowchart TD
 
 ### Streaming (`handlePartial`)
 
-During streaming, the tool uses [`hasPathStabilized(filePath)`](../../packages/core/src/tools/BaseTool.ts) to gate against mid-stream path truncation. Once the path is stable, it posts a partial `"tool"` ask so the user sees a "Viewing image…" placeholder in the chat before the file is read.
+During streaming, the tool uses [`hasPathStabilized(filePath)`](../packages/core/src/tools/BaseTool.ts) to gate against mid-stream path truncation. Once the path is stable, it posts a partial `"tool"` ask so the user sees a "Viewing image…" placeholder in the chat before the file is read.
 
 ### Tool Group & Auto-Approval
 
-`view_image` belongs to [`TOOL_GROUPS.read`](../../packages/types/src/tool.ts) and is gated by the **alwaysAllowReadOnly** auto-approval toggle. It is unconditionally read-only — it never modifies files, runs commands, or accesses the network.
+`view_image` belongs to [`TOOL_GROUPS.read`](../packages/types/src/tool.ts) and is gated by the **alwaysAllowReadOnly** auto-approval toggle. It is unconditionally read-only — it never modifies files, runs commands, or accesses the network.
 
 ### Live Memory Variant
 
-The live memory has a separate implementation in [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts) that returns **metadata only** (file path and size). It explicitly notes that the live memory cannot render images inline and suggests using context clues instead. This is because the live memory's cost-optimized model context does not surface multimodal content blocks.
+The live memory has a separate implementation in [`tool-executor.ts`](../plugins/live-memory/tool-executor.ts) that returns **metadata only** (file path and size). It explicitly notes that the live memory cannot render images inline and suggests using context clues instead. This is because the live memory's cost-optimized model context does not surface multimodal content blocks.
 
 ### Relationship to User Image Input
 
@@ -272,13 +272,13 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 | [`Thumbnails.tsx`](../webview-ui/src/components/common/Thumbnails.tsx)                                               | Image thumbnail display with delete                      |
 | [`ImageViewer.tsx`](../webview-ui/src/components/common/ImageViewer.tsx)                                             | Full-size image viewer (generated images)                |
 | [`ChatView.tsx`](../webview-ui/src/components/chat/ChatView.tsx)                                                     | Image state management, `MAX_IMAGES_PER_MESSAGE`         |
-| [`ViewImageTool.ts`](../../packages/core/src/tools/ViewImageTool.ts)                                                 | `view_image` native tool: model reads image files        |
-| [`view_image.ts`](../../packages/core/src/prompts/tools/native-tools/view_image.ts)                                  | JSON Schema for `view_image` tool                        |
-| [`resolveImageMentions.ts`](../../packages/core/src/mentions/resolveImageMentions.ts)                                | Image mention resolution                                 |
-| [`image-cleaning.ts`](../../packages/core/src/api/transform/image-cleaning.ts)                                       | Removal/conversion of image blocks for non-vision models |
-| [`openai-format.ts`](../../packages/core/src/api/transform/openai-format.ts)                                         | Image block → OpenAI `image_url` conversion              |
-| [`responses-api-input.ts`](../../packages/core/src/api/transform/responses-api-input.ts)                             | Image block → Responses API `input_image` conversion     |
-| [`tool-executor.ts`](../../src/services/live-memory/tool-executor.ts)                                                | Live Memory's metadata-only `_viewImage` variant         |
+| [`ViewImageTool.ts`](../packages/core/src/tools/ViewImageTool.ts)                                                    | `view_image` native tool: model reads image files        |
+| [`view_image.ts`](../packages/core/src/prompts/tools/native-tools/view_image.ts)                                     | JSON Schema for `view_image` tool                        |
+| [`resolveImageMentions.ts`](../packages/core/src/mentions/resolveImageMentions.ts)                                   | Image mention resolution                                 |
+| [`image-cleaning.ts`](../packages/core/src/api/transform/image-cleaning.ts)                                          | Removal/conversion of image blocks for non-vision models |
+| [`openai-format.ts`](../packages/core/src/api/transform/openai-format.ts)                                            | Image block → OpenAI `image_url` conversion              |
+| [`responses-api-input.ts`](../packages/core/src/api/transform/responses-api-input.ts)                                | Image block → Responses API `input_image` conversion     |
+| [`tool-executor.ts`](../plugins/live-memory/tool-executor.ts)                                                        | Live Memory's metadata-only `_viewImage` variant         |
 | [`ChatView.preserve-images.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatView.preserve-images.spec.tsx) | Test suite for image preservation behavior               |
 | [`ChatTextArea.spec.tsx`](../webview-ui/src/components/chat/__tests__/ChatTextArea.spec.tsx)                         | Test suite for textarea image behavior                   |
 
@@ -332,13 +332,13 @@ The live memory has a separate implementation in [`tool-executor.ts`](../../src/
 - **Capability side-channel namespace — diagnostics fixed; architecture wart remains.** The
   `vscode-lm` capability/pricing lookup invokes `llmLocalRouter.*` commands
   ([`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) `executeCommand("llmLocalRouter.getModelCapabilities"…)`),
-  registered by the **`llm-local-router`** extension ([`llm-local-router/src/main.ts:679-680`](../../llm-local-router/src/main.ts:679)).
+  registered by the **`llm-local-router`** extension (`llm-local-router/src/main.ts:679-680`).
   Previously the doc-comments and all three catch-block warning strings inside `vscode-lm.ts` still named
   `shofer.llm.*` and "Shofer LLM Model Provider extension" (12 occurrences), so a developer debugging
   "images disabled on a vision model" saw a log naming a command the code never calls. **✅ Fixed** — the
   warnings/comments now name `llmLocalRouter.*` / the Shofer Router extension, matching the executed command.
   **Remaining wart (not fixed here):** a **second** extension, `llm-provider`, registers the same logical
-  commands under `shofer.llm.*` ([`llm-provider/src/main.ts:467,477`](../../llm-provider/src/main.ts:467)),
+  commands under `shofer.llm.*` (`llm-provider/src/main.ts:467,477`),
   and the gating setting is still named `enableLlmProviderIntegration`. Whether the canonical companion is
   `llm-local-router` (what the code calls) or `llm-provider` (what the setting name and registry suggest) is an
   unresolved architectural ambiguity; if a deployment ships only `llm-provider`, the `llmLocalRouter.*`

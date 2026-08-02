@@ -275,7 +275,7 @@ When the extension host dies and VS Code restarts it:
 4. The new host may or may not call `resolveWebviewView` again
 5. Even if the host pushes new state, it goes to a new view, not the orphaned iframe
 
-This is the subject of [`todos/webview-ui-blank-page.md`](../../todos/webview-ui-blank-page.md).
+This is the subject of [`todos/webview-ui-blank-page.md`](../todos/webview-ui-blank-page.md).
 
 ## Key Files
 

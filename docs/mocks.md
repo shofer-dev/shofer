@@ -450,8 +450,8 @@ await providerSettingsManager.upsertApiConfiguration("custom-ai-profile", {
 
 ## 3. Complete Test Example
 
-The functional test suite in [`todos/test_cli.md`](../../todos/test_cli.md) and
-[`todos/cli-tests/test_cli.sh`](../../todos/cli-tests/test_cli.sh) exercises the
+The functional test suite in `todos/test_cli.md` and
+`todos/cli-tests/test_cli.sh` exercises the
 mock provider across 25 scenarios including:
 
 - Basic print roundtrip (built-in scenario match)
@@ -480,6 +480,6 @@ bash todos/cli-tests/test_cli.sh
 | [`packages/types/src/provider-settings.ts`](../packages/types/src/provider-settings.ts)       | `fauxProviders` array, `FakeAI` schema, `mockSchema` |
 | [`src/shared/checkExistApiConfig.ts`](../src/shared/checkExistApiConfig.ts)                   | Credential skip for `fake-ai` and `mock`             |
 | [`apps/cli/src/commands/cli/run.ts`](../apps/cli/src/commands/cli/run.ts)                     | CLI API-key exemption for `mock`                     |
-| [`todos/test_cli.md`](../../todos/test_cli.md)                                                | Test scenario specifications                         |
-| [`todos/cli-tests/test_cli.sh`](../../todos/cli-tests/test_cli.sh)                            | Executable test suite                                |
-| [`todos/cli-tests/mock_llm_server.py`](../../todos/cli-tests/mock_llm_server.py)              | Alternative: HTTP mock server (OpenAI-compatible)    |
+| `todos/test_cli.md`                                                                           | Test scenario specifications                         |
+| `todos/cli-tests/test_cli.sh`                                                                 | Executable test suite                                |
+| `todos/cli-tests/mock_llm_server.py`                                                          | Alternative: HTTP mock server (OpenAI-compatible)    |

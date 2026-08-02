@@ -243,8 +243,7 @@ tokens locally (VS Code LM API) and has no per-token cache metadata.
 #### Path 2 — `usage.cost` from llm-router (all providers with streaming usage)
 
 `llm-router` computes and stamps `usage.cost` (USD float, OpenRouter
-convention) on the final streaming chunk via generic `stampUsageCost`
-in [`provider.go`](../../../llm-router/internal/services/provider.go) →
+convention) on the final streaming chunk →
 `llm-provider` accumulates per-`taskId` in a bounded LRU
 ledger → `vscode-lm` snapshots the ledger before and after the stream,
 yielding the **delta** as `totalCost` in the usage chunk.
@@ -253,26 +252,10 @@ Originally added for composite (`shofer/*`) models where the
 underlying is selected per-attempt. Now applied **universally** to
 every provider whose upstream returns a `usage` object in the
 streaming response (OpenAI, Google, Zhipu, Xiaomi, Moonshot, MiniMax,
-DeepSeek). The stamping normalises across field-name variations:
-
-| Upstream field                                      | Canonical meaning  |
-| --------------------------------------------------- | ------------------ |
-| `prompt_tokens_details.cached_tokens` (OpenAI)      | Cache-hit tokens   |
-| `cache_read_input_tokens` (Anthropic non-streaming) | Cache-hit tokens   |
-| `prompt_cache_hit_tokens` (DeepSeek)                | Cache-hit tokens   |
-| `prompt_tokens_details.cache_creation_tokens`       | Cache-write tokens |
-| `cache_creation_input_tokens`                       | Cache-write tokens |
-
-Cache-write tokens are billed at `ContextCacheWrite` (or `Prompt` if
-unset); cache-read tokens at `ContextCacheRead` (or `Prompt` if
-unset). When no cache breakdown is reported, all prompt tokens are
-billed at the base `Prompt` rate — correct behaviour.
-
-Anthropic streaming splits usage across two SSE events
-(`message_start` carries input tokens, `message_delta` carries output
-tokens). The router accumulates these and emits a synthetic usage
-chunk after the final `finish_reason` chunk, which `stampUsageCost`
-then processes normally.
+DeepSeek). The router normalises the several upstream spellings of cached-token usage
+before pricing, and assembles Anthropic's split streaming usage into a single
+synthetic chunk. Those mechanics belong to llm-router and are documented there
+(`llm-router/DESIGN.md` § Cost stamping) rather than restated here.
 
 **When Path 2 is active, `totalCost` arrives in the chunk and
 `calculateApiCostOpenAI` is NOT called** — the chunk's value wins
@@ -284,11 +267,11 @@ double-counting.
 Path 2 always wins when `totalCost` is present in the usage chunk
 (ledger delta available). Path 1 is the fallback, still needed for:
 
-- **Non-streaming requests** — [`handleNonStreamingRequest`](../../../llm-router/internal/handlers/chat.go:310)
+- **Non-streaming requests** — `handleNonStreamingRequest`
   does not stamp `usage.cost` on the response (only the streaming path
   does). Non-streaming requests always use Path 1.
 - **Unknown models** — if `GetModelByID` returns nil (model not in
-  [`model_registry.go`](../../../llm-router/internal/types/model_registry.go:49)),
+  `model_registry.go`),
   `stampUsageCost` returns the chunk unchanged and Path 1 takes over.
 - **Defense in depth** — if stamping fails for any reason (malformed
   chunk, pricing not available), Path 1 provides a reasonable estimate.
@@ -436,43 +419,14 @@ operators debugging "my limit never fired" know where to look.
    `usage.cost` (the normal case) this is fine; if stamping is missing
    the local fallback is `0`. Depends on llm-router behavior below.
 
-**llm-router side (cost accuracy when traffic transits the router):**
-verified in [`internal/services/provider.go`](../../../llm-router/internal/services/provider.go)
-and [`internal/services/cost_stamper.go`](../../../llm-router/internal/services/cost_stamper.go).
-
-3. **Non-streaming requests are not cost-stamped.**
-   `handleNonStreamingRequest`
-   ([`chat.go`](../../../llm-router/internal/handlers/chat.go)) never
-   calls `stampUsageCost`/`stampCostInChatBody` (only the composite
-   layer and the streaming loop stamp). A non-streaming direct request
-   returns `usage` with no `cost`. Shofer's local fallback covers the
-   cap **if** the model is priced; the displayed cost relies on the
-   fallback too. **Recommended fix:** stamp cost in the non-streaming
-   handler, mirroring the streaming path.
-
-4. **OpenRouter-via-llm-router is uncosted.** `GetProviderForModel`
-   defaults any unknown model id to OpenRouter, and the model registry
-   has **zero** OpenRouter entries, so `GetModelByID` returns nil and
-   `stampUsageCost` leaves the chunk uncosted. The router also does not
-   set `usage: { include: true }` on the outbound OpenRouter request,
-   so OpenRouter's own cost is never requested or passed through.
-   **Recommended fix:** request OpenRouter usage-accounting and pass
-   through its `cost`, or recompute from a registry entry.
-
-5. **Discount divergence (needs an owner decision, NOT yet changed).**
-   The streaming stamper `stampUsageCost` (provider.go) does **not**
-   apply the registry's `Discount` field; the composite stamper
-   `computeCostUSD` (cost_stamper.go) multiplies by `(1 - Discount)`
-   unconditionally. The registry comments label these as "50% **batch**
-   discount", which implies the discount should apply only to
-   batch-API traffic — making the composite path's unconditional
-   `(1 - Discount)` the likely bug (under-billing real-time traffic by
-   ~2×), not the streaming path's omission. Because the correct
-   semantics depend on whether composite/real-time traffic ever uses
-   the batch API, this is flagged for the router owner rather than
-   "fixed" here. Either way the two paths must agree.
-
-**llm-local-router vs llm-provider (the VS Code LM side-channel):**
+**llm-router side (cost accuracy when traffic transits the router).** Three
+paths through the router emit no `usage.cost` at all — non-streaming requests,
+OpenRouter-routed traffic, and an inconsistently-applied registry discount. They
+are defects in that service rather than in Shofer, and they are recorded where
+they can be fixed: `llm-router/TODO.md` § Cost stamping, with the mechanism in
+`llm-router/DESIGN.md` § Cost stamping. What matters here is only the
+consequence: when the router does not stamp, Path 1 (local estimate) carries the
+cap, and an unpriced model leaves it at `0`.
 
 6. **The live cost path recomputes; it does not read the router's
    stamped `usage.cost`.** `vscode-lm.ts` calls the **`llmLocalRouter.*`**
@@ -930,13 +884,13 @@ are available but USD pricing and cost-limit enforcement are not.
 
 When enabled, both cost paths depend on well-known VS Code commands
 registered by the **Shofer LLM Model Provider** extension
-([`extensions/llm-provider/`](../../../extensions/llm-provider/)):
+(`extensions/llm-provider/`):
 
-| Command                               | Registers in                                                                   | Consumed by                                         | Role                                                     |
-| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------------------------- |
-| `llmLocalRouter.getModelPricing`      | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
-| `llmLocalRouter.getRequestCost`       | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
-| `llmLocalRouter.getModelCapabilities` | [`llm-local-router/main.ts`](../../../extensions/llm-local-router/src/main.ts) | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
+| Command                               | Registers in               | Consumed by                                         | Role                                                     |
+| ------------------------------------- | -------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
+| `llmLocalRouter.getModelPricing`      | `llm-local-router/main.ts` | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 1: per-token USD rates for `calculateApiCostOpenAI` |
+| `llmLocalRouter.getRequestCost`       | `llm-local-router/main.ts` | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Path 2: per-conversation cumulative USD cost             |
+| `llmLocalRouter.getModelCapabilities` | `llm-local-router/main.ts` | [`vscode-lm.ts`](../src/api/providers/vscode-lm.ts) | Tool calling, image input, prompt cache flags            |
 
 > **Naming wart:** `vscode-lm.ts` actually calls the **`llmLocalRouter.*`** commands
 > registered by the **`llm-local-router`** extension (verified in source), not the

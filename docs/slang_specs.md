@@ -15,7 +15,7 @@ Where the two differ, this document wins.
 > - Interpreter VM (compiler + `advanceAgent` + `MAX_CONTROL_FLOW_STEPS`): [`packages/core/src/workflow/slang-interpreter.ts`](../packages/core/src/workflow/slang-interpreter.ts)
 > - Runtime types (`FlowState`, `AgentState`, `FlowStatus`): [`packages/core/src/workflow/slang-types.ts`](../packages/core/src/workflow/slang-types.ts)
 > - Round-based orchestrator: [`packages/core/src/workflow/WorkflowTask.ts`](../packages/core/src/workflow/WorkflowTask.ts)
-> - Worked examples: [`.shofer/workflows/`](../../../.shofer/workflows/) (`hello-world.slang`, `test-slang-basics.slang`)
+> - Worked examples: `.shofer/workflows/` (`hello-world.slang`, `test-slang-basics.slang`)
 
 How those pieces chain from source text to a running flow:
 
@@ -1119,7 +1119,7 @@ agentref       = '@' ident ;
 ## Related Documents
 
 - [`workflow_design.md`](workflow_design.md) — the Workflow abstraction design and `WorkflowTask` architecture.
-- Worked examples in [`.shofer/workflows/`](../../../.shofer/workflows/):
+- Worked examples in `.shofer/workflows/`:
   `hello-world.slang` (liveliness — one agent, one stake, one commit) and
   `test-slang-basics.slang` (exhaustive feature coverage — multi-agent stake
   routing, await, escalate, repeat-until, when-otherwise, let/set, output

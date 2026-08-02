@@ -152,7 +152,7 @@ When `signal` aborts, the SDK:
 2. Sends a `notifications/cancelled` JSON-RPC message to the server with the
    original request id, per the MCP spec.
 
-### 5. mcp-server — [`mcp.go`](../../../mcp-server/internal/handlers/mcp.go)
+### 5. mcp-server — `mcp.go`
 
 The Go server keeps an **in-flight request registry** keyed by
 `(sessionId, requestId)`:
